@@ -6,7 +6,6 @@ module CrystalClick
     MAX_FRAME_COMPRESSED_BYTES   = 64 * 1024 * 1024
     MAX_FRAME_DECOMPRESSED_BYTES = 64 * 1024 * 1024
     MARK_SIZE                    = 24
-    FRAME_HEADER_SIZE            = 25
 
     getter path : String
     getter row_count : UInt64
@@ -38,8 +37,8 @@ module CrystalClick
       end_index = first_mark + mark_count
       end_mark = end_index == @marks.size ? @sentinel : @marks[end_index]
       expected_rows = rows_in_range(first_mark, mark_count)
-      bytes = read_mark_range(start_mark, end_mark)
       expected_bytes = checked_byte_count(expected_rows)
+      bytes = read_mark_range(start_mark, end_mark, expected_bytes)
       raise CorruptPartError.new("mark range byte count mismatch") unless bytes.size == expected_bytes
       decode_uint64(bytes)
     end
@@ -53,10 +52,10 @@ module CrystalClick
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
       @column, @row_count = parse_metadata
-      @data_path, @mark_path = resolve_stream(@column)
+      @data_path, @mark_path, compressed_marks = resolve_stream(@column)
       data_size = File.size(@data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
-      @marks, @sentinel = parse_marks(@mark_path, data_size)
+      @marks, @sentinel = parse_marks(@mark_path, data_size, compressed_marks)
       validate_rows
     end
 
@@ -79,7 +78,9 @@ module CrystalClick
       raise UnsupportedFormatError.new("unsupported columns_substreams.txt") unless substream_lines == expected_substreams
 
       codec = File.read(File.join(@path, "default_compression_codec.txt")).strip
-      raise UnsupportedFormatError.new("only CODEC(LZ4) is supported") unless codec == "CODEC(LZ4)"
+      unless codec == "CODEC(LZ4)" || codec == "CODEC(ZSTD(1))"
+        raise UnsupportedFormatError.new("only CODEC(LZ4) and CODEC(ZSTD(1)) are supported")
+      end
 
       count_text = File.read(File.join(@path, "count.txt")).strip
       row_count = count_text.to_u64?
@@ -90,18 +91,29 @@ module CrystalClick
       raise CorruptPartError.new("invalid metadata")
     end
 
-    private def resolve_stream(column : String) : {String, String}
+    private def resolve_stream(column : String) : {String, String, Bool}
       reject_unsupported_mark_extensions
       names = [column, StreamName.hash(column)]
       saw_partial = false
+      candidates = Array({String, String, Bool}).new
       names.each do |name|
         data = File.join(@path, "#{name}.bin")
-        marks = File.join(@path, "#{name}.mrk2")
+        plain_marks = File.join(@path, "#{name}.mrk2")
+        compressed_marks = File.join(@path, "#{name}.cmrk2")
         data_exists = File.file?(data)
-        marks_exists = File.file?(marks)
+        plain_marks_exists = File.file?(plain_marks)
+        compressed_marks_exists = File.file?(compressed_marks)
+        if plain_marks_exists && compressed_marks_exists
+          raise CorruptPartError.new("ambiguous mark streams")
+        end
+        marks_exists = plain_marks_exists || compressed_marks_exists
         saw_partial ||= data_exists != marks_exists
-        return {data, marks} if data_exists && marks_exists
+        if data_exists && marks_exists
+          candidates << {data, plain_marks_exists ? plain_marks : compressed_marks, compressed_marks_exists}
+        end
       end
+      raise CorruptPartError.new("ambiguous data and mark streams") if candidates.size > 1
+      return candidates.first.not_nil! if candidates.size == 1
       if saw_partial
         raise CorruptPartError.new("data and mark streams do not form a pair")
       end
@@ -110,17 +122,30 @@ module CrystalClick
 
     private def reject_unsupported_mark_extensions
       Dir.each_child(@path) do |entry|
-        if entry.ends_with?(".mrk") || entry.ends_with?(".mrk3") || entry.ends_with?(".mrk4") || entry.starts_with?(".") && entry.includes?(".cmrk") || entry.includes?(".cmrk")
+        if entry.includes?(".cmrk") && !entry.ends_with?(".cmrk2")
+          raise UnsupportedFormatError.new("unsupported mark extension")
+        end
+        if entry.includes?(".mrk") && !entry.ends_with?(".mrk2")
           raise UnsupportedFormatError.new("unsupported mark extension")
         end
       end
     end
 
-    private def parse_marks(file : String, data_size : Int64) : {Array(Mark), Mark}
+    private def parse_marks(file : String, data_size : Int64, compressed : Bool) : {Array(Mark), Mark}
       size = File.size(file)
       raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
-      raise CorruptPartError.new("mark file is empty or truncated") if size <= 0 || size % MARK_SIZE != 0
-      bytes = File.read(file).to_slice
+      bytes = if compressed
+                compressed_bytes = File.read(file).to_slice
+                CompressedBlock.decode_all(
+                  compressed_bytes,
+                  MAX_FRAME_COMPRESSED_BYTES,
+                  MAX_FRAME_DECOMPRESSED_BYTES,
+                  MAX_MARK_FILE_BYTES
+                )
+              else
+                File.read(file).to_slice
+              end
+      raise CorruptPartError.new("mark file is empty or truncated") if bytes.empty? || bytes.size % MARK_SIZE != 0
       records = Array(Mark).new(bytes.size // MARK_SIZE)
       previous_compressed = 0_u64
       previous_decompressed = 0_u64
@@ -180,7 +205,7 @@ module CrystalClick
       (rows * 8).to_i
     end
 
-    private def read_mark_range(start_mark : Mark?, end_mark : Mark) : Bytes
+    private def read_mark_range(start_mark : Mark?, end_mark : Mark, max_output_bytes : Int) : Bytes
       raise BoundsError.new("empty mark range") unless start_mark
       data_size = File.size(@data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
@@ -192,44 +217,39 @@ module CrystalClick
       raise CorruptPartError.new("mark frame offsets are reversed") if start_offset > end_offset
 
       selected = IO::Memory.new
+      selected_bytes = 0_i64
       frame_offset = start_offset.to_i64
       started = false
       loop do
-        frame = decode_frame(data, frame_offset)
+        frame = CompressedBlock.decode_frame(
+          data,
+          frame_offset,
+          MAX_FRAME_COMPRESSED_BYTES,
+          MAX_FRAME_DECOMPRESSED_BYTES
+        )
         current = frame_offset.to_u64
         started ||= current == start_offset
         raise CorruptPartError.new("mark does not start at a frame") unless started
         local_start = current == start_offset ? start_mark.not_nil!.decompressed_offset : 0_u64
-        local_end = current == end_offset ? end_mark.decompressed_offset : frame[1].size.to_u64
-        raise CorruptPartError.new("mark offset exceeds frame output") if local_start > frame[1].size || local_end > frame[1].size || local_start > local_end
-        selected.write(frame[1][local_start.to_i, (local_end - local_start).to_i])
+        local_end = current == end_offset ? end_mark.decompressed_offset : frame.output.size.to_u64
+        raise CorruptPartError.new("mark offset exceeds frame output") if local_start > frame.output.size || local_end > frame.output.size || local_start > local_end
+        if current == end_offset && end_mark == @sentinel && !eof_sentinel
+          raise CorruptPartError.new("non-EOF sentinel must end at frame output") unless end_mark.decompressed_offset == frame.output.size
+        end
+        selected_size = (local_end - local_start).to_i64
+        raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > max_output_bytes.to_i64 - selected_bytes
+        selected.write(frame.output[local_start.to_i, selected_size.to_i])
+        selected_bytes += selected_size
         if current == end_offset
-          raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == @sentinel && frame[0] != data_size
+          raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == @sentinel && frame.end_offset != data_size
           break
         end
-        next_offset = frame[0]
+        next_offset = frame.end_offset
         break if eof_sentinel && next_offset == data_size
         raise CorruptPartError.new("mark frame offset was not found") if next_offset <= frame_offset || next_offset > data_size
         frame_offset = next_offset
       end
       selected.to_slice
-    end
-
-    private def decode_frame(data : Bytes, offset : Int64) : {Int64, Bytes}
-      raise CorruptPartError.new("frame offset out of bounds") if offset < 0 || offset > data.size - FRAME_HEADER_SIZE
-      method = data[offset.to_i + 16]
-      raise UnsupportedFormatError.new("only ClickHouse LZ4 frames are supported") unless method == 0x82
-      compressed_size = u32(data, offset.to_i + 17).to_i64
-      decompressed_size = u32(data, offset.to_i + 21).to_i64
-      raise CorruptPartError.new("compressed frame size is invalid") if compressed_size < 9 || compressed_size > MAX_FRAME_COMPRESSED_BYTES
-      raise CorruptPartError.new("decompressed frame size is invalid") if decompressed_size <= 0 || decompressed_size > MAX_FRAME_DECOMPRESSED_BYTES
-      frame_end = offset + 16 + compressed_size
-      raise CorruptPartError.new("compressed frame is truncated") if frame_end > data.size
-      payload_offset = offset.to_i + FRAME_HEADER_SIZE
-      payload_size = compressed_size.to_i - 9
-      payload = data[payload_offset, payload_size]
-      output = LZ4.decode(payload, decompressed_size.to_i)
-      {frame_end, output}
     end
 
     private def decode_uint64(bytes : Bytes) : Array(UInt64)
@@ -241,14 +261,6 @@ module CrystalClick
         offset += 8
       end
       values
-    end
-
-    private def u32(bytes : Bytes, offset : Int) : UInt32
-      raise CorruptPartError.new("truncated integer") if offset < 0 || offset > bytes.size - 4
-      bytes[offset].to_u32 |
-        (bytes[offset + 1].to_u32 << 8) |
-        (bytes[offset + 2].to_u32 << 16) |
-        (bytes[offset + 3].to_u32 << 24)
     end
 
     private def u64(bytes : Bytes, offset : Int) : UInt64

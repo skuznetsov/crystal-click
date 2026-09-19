@@ -28,9 +28,9 @@ describe CrystalClick::WidePart do
     end
   end
 
-  it "rejects a non-LZ4 default codec" do
+  it "rejects an unsupported default codec" do
     with_fixture_copy do |path|
-      File.write(File.join(path, "default_compression_codec.txt"), "CODEC(ZSTD)\n")
+      File.write(File.join(path, "default_compression_codec.txt"), "CODEC(NONE)\n")
       expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::WidePart.open(path) }
     end
   end
@@ -58,6 +58,23 @@ describe CrystalClick::WidePart do
       bytes[0, 8].fill(0xff_u8)
       File.open(mark, "wb") { |io| io.write(bytes) }
       expect_raises(CrystalClick::CorruptPartError) { CrystalClick::WidePart.open(path) }
+    end
+  end
+
+  it "bounds selected decoded bytes before appending beyond the mark range" do
+    with_fixture_copy do |path|
+      mark = Dir.glob(File.join(path, "*.mrk2")).first.not_nil!
+      bytes = writable_file_bytes(mark)
+      bytes[16, 8].fill(0_u8)
+      bytes[16] = 1_u8
+      File.open(mark, "wb") { |io| io.write(bytes) }
+      File.write(File.join(path, "count.txt"), "198977\n")
+
+      part = CrystalClick::WidePart.open(path)
+      error = expect_raises(CrystalClick::CorruptPartError) do
+        part.read_uint64_mark_range("value", 0, 1)
+      end
+      error.message.not_nil!.should contain("selected data exceeds expected byte count")
     end
   end
 
@@ -119,6 +136,25 @@ describe CrystalClick::WidePart do
       part = CrystalClick::WidePart.open(path)
       part.read_uint64_mark_range("value", 195, 1).should eq((199_680_u64...200_000_u64).to_a)
       part.read_uint64.should eq((0_u64...200_000_u64).to_a)
+    end
+  end
+
+  it "rejects a non-EOF sentinel that stops before the final frame output" do
+    with_fixture_copy do |path|
+      mark = Dir.glob(File.join(path, "*.mrk2")).first.not_nil!
+      bytes = writable_file_bytes(mark)
+      data_mark = (bytes.size - 48) + 16
+      sentinel = bytes.size - 24
+      bytes[data_mark, 8].fill(0_u8)
+      bytes[data_mark] = 1_u8
+      bytes[sentinel + 8, 8].fill(0_u8)
+      bytes[sentinel + 8] = 0x08_u8
+      bytes[sentinel + 9] = 0x60_u8
+      File.open(mark, "wb") { |io| io.write(bytes) }
+      File.write(File.join(path, "count.txt"), "199681\n")
+
+      part = CrystalClick::WidePart.open(path)
+      expect_raises(CrystalClick::CorruptPartError) { part.read_uint64 }
     end
   end
 

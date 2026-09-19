@@ -1,8 +1,9 @@
 # Wide Part Reader Frontier SDD
 
-Document status: verified bounded slice
+Document status: verified historical slice; superseded by
+`COMPRESSED_MARKS_ZSTD_FRONTIER.md`
 
-Current frontier: read one local immutable ClickHouse Wide part containing a
+Historical frontier: read one local immutable ClickHouse Wide part containing a
 plain `UInt64` column encoded with `CODEC(LZ4)` and adaptive, uncompressed
 `.mrk2` marks. The fixture producer is ClickHouse `26.7.1.1315`, revision
 `54512`.
