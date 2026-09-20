@@ -1,6 +1,7 @@
 require "file_utils"
 
 require "./crystal_click/errors"
+require "./crystal_click/uint64_slab_vector"
 require "./crystal_click/stream_name"
 require "./crystal_click/metadata"
 require "./crystal_click/lz4"
