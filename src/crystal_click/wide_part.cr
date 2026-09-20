@@ -39,19 +39,36 @@ module CrystalClick
     end
 
     def read_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt64)
-      ensure_column(column)
-      raise BoundsError.new("negative mark range") if first_mark < 0 || mark_count < 0
-      raise BoundsError.new("empty mark range") if mark_count == 0
-      raise BoundsError.new("mark range exceeds data marks") if first_mark > @marks.size || mark_count > @marks.size - first_mark
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
+      values = Array(UInt64).new
+      each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
+        values << value
+      end
+      values
+    end
 
-      start_mark = @marks[first_mark] if first_mark < @marks.size
-      end_index = first_mark + mark_count
-      end_mark = end_index == @marks.size ? @sentinel : @marks[end_index]
-      expected_rows = rows_in_range(first_mark, mark_count)
-      expected_bytes = checked_byte_count(expected_rows)
-      bytes = read_mark_range(start_mark, end_mark, expected_bytes)
-      raise CorruptPartError.new("mark range byte count mismatch") unless bytes.size == expected_bytes
-      decode_uint64(bytes)
+    def scan_uint64_mark_range_into(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      scratch : Slice(UInt64),
+      & : Slice(UInt64) -> Nil
+    ) : Nil
+      raise BoundsError.new("empty scratch") if scratch.size == 0
+      raise BoundsError.new("scratch must be writable") if scratch.read_only?
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
+      chunk_size = 0
+      each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
+        scratch[chunk_size] = value
+        chunk_size += 1
+        if chunk_size == scratch.size
+          yield scratch[0, chunk_size]
+          chunk_size = 0
+        end
+      end
+      yield scratch[0, chunk_size] if chunk_size > 0
+      nil
     end
 
     @column : String
@@ -446,6 +463,20 @@ module CrystalClick
       raise UnsupportedFormatError.new("column is not present") unless column == @column
     end
 
+    private def checked_mark_range(column : String, first_mark : Int, mark_count : Int) : {Mark?, Mark, Int32}
+      ensure_column(column)
+      raise BoundsError.new("negative mark range") if first_mark < 0 || mark_count < 0
+      raise BoundsError.new("empty mark range") if mark_count == 0
+      raise BoundsError.new("mark range exceeds data marks") if first_mark > @marks.size || mark_count > @marks.size - first_mark
+
+      start_mark = @marks[first_mark] if first_mark < @marks.size
+      end_index = first_mark + mark_count
+      end_mark = end_index == @marks.size ? @sentinel : @marks[end_index]
+      expected_rows = rows_in_range(first_mark, mark_count)
+      expected_bytes = checked_byte_count(expected_rows).to_i32
+      {start_mark, end_mark, expected_bytes}
+    end
+
     private def rows_in_range(first_mark : Int, count : Int) : UInt64
       total = 0_u64
       count.times do |index|
@@ -461,11 +492,10 @@ module CrystalClick
       (rows * 8).to_i
     end
 
-    private def read_mark_range(start_mark : Mark?, end_mark : Mark, max_output_bytes : Int) : Bytes
+    private def each_uint64_mark_range(start_mark : Mark?, end_mark : Mark, expected_bytes : Int, & : UInt64 -> Nil) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
       data_size = File.size(@data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
-      selected = IO::Memory.new
       MMapDataSource.with_file(@data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
         start_offset = start_mark.not_nil!.compressed_offset
         end_offset = end_mark.compressed_offset
@@ -493,8 +523,14 @@ module CrystalClick
             raise CorruptPartError.new("non-EOF sentinel must end at frame output") unless end_mark.decompressed_offset == frame.output.size
           end
           selected_size = (local_end - local_start).to_i64
-          raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > max_output_bytes.to_i64 - selected_bytes
-          selected.write(frame.output[local_start.to_i, selected_size.to_i])
+          raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > expected_bytes.to_i64 - selected_bytes
+          raise CorruptPartError.new("UInt64 bytes are not aligned") unless selected_size % 8 == 0
+          output_offset = local_start.to_i
+          output_end = local_end.to_i
+          while output_offset < output_end
+            yield u64(frame.output, output_offset)
+            output_offset += 8
+          end
           selected_bytes += selected_size
           if current == end_offset
             raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == @sentinel && frame.end_offset != data_size
@@ -505,19 +541,8 @@ module CrystalClick
           raise CorruptPartError.new("mark frame offset was not found") if next_offset <= frame_offset || next_offset > data_size
           frame_offset = next_offset
         end
+        raise CorruptPartError.new("mark range byte count mismatch") unless selected_bytes == expected_bytes
       end
-      selected.to_slice
-    end
-
-    private def decode_uint64(bytes : Bytes) : Array(UInt64)
-      raise CorruptPartError.new("UInt64 bytes are not aligned") unless bytes.size % 8 == 0
-      values = Array(UInt64).new(bytes.size // 8)
-      offset = 0
-      while offset < bytes.size
-        values << u64(bytes, offset)
-        offset += 8
-      end
-      values
     end
 
     private def u64(bytes : Bytes, offset : Int) : UInt64
