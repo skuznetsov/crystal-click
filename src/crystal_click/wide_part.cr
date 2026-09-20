@@ -62,8 +62,8 @@ module CrystalClick
     ) : UInt64SlabVector
       start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
       values = UInt64SlabVector.new(slab_shift: slab_shift)
-      each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
-        values << value
+      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes) do |bytes|
+        values.concat_le_bytes(bytes)
       end
       values
     end
@@ -514,6 +514,16 @@ module CrystalClick
     end
 
     private def each_uint64_mark_range(start_mark : Mark?, end_mark : Mark, expected_bytes : Int, & : UInt64 -> Nil) : Nil
+      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          yield u64(bytes, offset)
+          offset += 8
+        end
+      end
+    end
+
+    private def each_uint64_mark_range_bytes(start_mark : Mark?, end_mark : Mark, expected_bytes : Int, & : Bytes -> Nil) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
       data_size = File.size(@data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
@@ -546,12 +556,7 @@ module CrystalClick
           selected_size = (local_end - local_start).to_i64
           raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > expected_bytes.to_i64 - selected_bytes
           raise CorruptPartError.new("UInt64 bytes are not aligned") unless selected_size % 8 == 0
-          output_offset = local_start.to_i
-          output_end = local_end.to_i
-          while output_offset < output_end
-            yield u64(frame.output, output_offset)
-            output_offset += 8
-          end
+          yield frame.output[local_start.to_i, selected_size.to_i] if selected_size > 0
           selected_bytes += selected_size
           if current == end_offset
             raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == @sentinel && frame.end_offset != data_size

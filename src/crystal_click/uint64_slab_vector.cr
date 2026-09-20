@@ -126,6 +126,54 @@ module CrystalClick
       self
     end
 
+    # Appends little-endian UInt64 values from a borrowed byte slice.
+    #
+    # The source is copied synchronously and is never retained. On a
+    # little-endian system this copies raw bytes directly into the slab
+    # storage, which also keeps source alignment irrelevant. A big-endian
+    # system decodes each value explicitly instead.
+    def concat_le_bytes(bytes : Bytes) : self
+      byte_size = bytes.size
+      raise ArgumentError.new("byte size cannot be negative") if byte_size < 0
+      raise ArgumentError.new("byte size must be a multiple of 8") unless byte_size % 8 == 0
+      return self if byte_size == 0
+
+      count = byte_size // 8
+      raise ArgumentError.new("append count exceeds Int32::MAX") if count > MAX_INT32
+      new_size = checked_size_after_append(count.to_i32)
+      required_slab_count = slab_count_for_size(new_size)
+      ensure_directory_capacity(required_slab_count)
+
+      source_offset = 0
+      remaining = count
+      while remaining > 0
+        allocate_slab if @slab_count == 0 || @tail_used == @slab_size
+
+        available = @slab_size - @tail_used
+        copied = remaining < available ? remaining : available
+        copied_bytes = copied * 8
+
+        {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+          destination = (@tail_pointer + @tail_used).unsafe_as(Pointer(UInt8))
+          destination.move_from(bytes.to_unsafe + source_offset, copied_bytes)
+        {% else %}
+          copied.times do |index|
+            value = 0_u64
+            8.times do |byte_index|
+              value |= bytes[source_offset + index * 8 + byte_index].to_u64 << (byte_index * 8)
+            end
+            @tail_pointer[@tail_used + index] = value
+          end
+        {% end %}
+
+        @tail_used = (@tail_used.to_i64 + copied).to_i32
+        @size = (@size.to_i64 + copied).to_i32
+        source_offset += copied_bytes
+        remaining -= copied
+      end
+      self
+    end
+
     # Returns a checked value at a zero-based logical index.
     def [](index : Int) : UInt64
       raise BoundsError.new("index out of bounds") if index < 0 || index >= @size

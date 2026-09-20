@@ -4,10 +4,27 @@ def slab_vector_slice(values : Array(UInt64)) : Slice(UInt64)
   values.to_unsafe.to_slice(values.size)
 end
 
+def slab_vector_le_bytes(values : Array(UInt64)) : Bytes
+  bytes = Bytes.new(values.size * 8)
+  values.each_with_index do |value, index|
+    8.times do |byte_index|
+      bytes[index * 8 + byte_index] = ((value >> (byte_index * 8)) & 0xff_u64).to_u8
+    end
+  end
+  bytes
+end
+
 def build_gc_slab_vector : CrystalClick::UInt64SlabVector
   source = Array(UInt64).new(65) { |index| (index.to_u64 &* 31_u64) ^ 0xa5a5_u64 }
   vector = CrystalClick::UInt64SlabVector.new(slab_shift: 4)
   vector.concat(slab_vector_slice(source))
+  vector
+end
+
+def build_gc_byte_slab_vector : CrystalClick::UInt64SlabVector
+  source = Array(UInt64).new(65) { |index| (index.to_u64 &* 31_u64) ^ 0xa5a5_u64 }
+  vector = CrystalClick::UInt64SlabVector.new(slab_shift: 4)
+  vector.concat_le_bytes(slab_vector_le_bytes(source))
   vector
 end
 
@@ -64,6 +81,7 @@ describe "CrystalClick::UInt64SlabVector" do
     vector = CrystalClick::UInt64SlabVector.new(slab_shift: 4)
 
     vector.concat(Slice(UInt64).empty)
+    vector.concat_le_bytes(Bytes.empty)
 
     vector.size.should eq(0)
     vector.capacity.should eq(0)
@@ -108,6 +126,48 @@ describe "CrystalClick::UInt64SlabVector" do
     observed.should eq(values)
   end
 
+  it "concatenates owned little-endian bytes across slab boundaries" do
+    values = Array(UInt64).new(34) { |index| (index.to_u64 &* 17_u64) ^ 0xfeed_u64 }
+    aligned_bytes = slab_vector_le_bytes(values)
+    storage = Bytes.new(aligned_bytes.size + 1)
+    storage[1, aligned_bytes.size].copy_from(aligned_bytes)
+    bytes = storage[1, aligned_bytes.size]
+    vector = CrystalClick::UInt64SlabVector.new(slab_shift: 4)
+
+    vector.concat_le_bytes(bytes)
+    bytes.fill(0_u8)
+
+    vector.to_a.should eq(values)
+    vector.size.should eq(values.size)
+    vector.slab_count.should eq(3)
+  end
+
+  it "rejects malformed byte alignment before mutating" do
+    vector = CrystalClick::UInt64SlabVector.new(slab_shift: 4)
+    vector << 11_u64
+    before = vector.to_a
+    before_size = vector.size
+    before_capacity = vector.capacity
+    before_slab_count = vector.slab_count
+
+    expect_raises(ArgumentError) { vector.concat_le_bytes(Bytes.new(7)) }
+
+    vector.to_a.should eq(before)
+    vector.size.should eq(before_size)
+    vector.capacity.should eq(before_capacity)
+    vector.slab_count.should eq(before_slab_count)
+  end
+
+  it "uses an overlap-safe primitive for byte copies" do
+    source = File.read(File.expand_path("../src/crystal_click/uint64_slab_vector.cr", __DIR__))
+    slab_start = source.index("def concat_le_bytes").not_nil!
+    slab_end = source.index("def []", slab_start).not_nil!
+    byte_append = source[slab_start, slab_end - slab_start]
+
+    byte_append.should contain("destination.move_from")
+    byte_append.should_not contain("destination.copy_from")
+  end
+
   it "checks indexes and yields non-empty read-only chunks including a partial tail" do
     values = (0_u64...34_u64).to_a
     vector = CrystalClick::UInt64SlabVector.new(slab_shift: 4)
@@ -132,6 +192,15 @@ describe "CrystalClick::UInt64SlabVector" do
   it "retains copied values after GC.collect" do
     expected = Array(UInt64).new(65) { |index| (index.to_u64 &* 31_u64) ^ 0xa5a5_u64 }
     vector = build_gc_slab_vector
+
+    GC.collect
+
+    vector.to_a.should eq(expected)
+  end
+
+  it "retains copied byte values after the source is gone and GC.collect" do
+    expected = Array(UInt64).new(65) { |index| (index.to_u64 &* 31_u64) ^ 0xa5a5_u64 }
+    vector = build_gc_byte_slab_vector
 
     GC.collect
 

@@ -251,4 +251,14 @@ describe "WidePart UInt64 slab reader" do
       source.should_not contain("UInt64SlabVector.new(expected_rows")
     end
   end
+
+  it "uses byte chunks instead of scalar pushes in the slab reader" do
+    source = File.read(File.expand_path("../src/crystal_click/wide_part.cr", __DIR__))
+    slab_start = source.index("def read_uint64_mark_range_slab").not_nil!
+    slab_end = source.index("def scan_uint64_mark_range_into", slab_start).not_nil!
+    slab_reader = source[slab_start, slab_end - slab_start]
+
+    slab_reader.should contain("concat_le_bytes")
+    slab_reader.should_not contain("values << value")
+  end
 end
