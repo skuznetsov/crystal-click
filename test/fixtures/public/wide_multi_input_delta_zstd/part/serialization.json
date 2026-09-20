@@ -1,0 +1,1 @@
+{"columns":[{"kind":"Default","name":"input","num_defaults":0,"num_rows":4096},{"kind":"Default","name":"prefix","num_defaults":0,"num_rows":4096}],"propagate_types_serialization_versions_to_nested_types":true,"types_serialization_versions":{"string":1},"version":1}
