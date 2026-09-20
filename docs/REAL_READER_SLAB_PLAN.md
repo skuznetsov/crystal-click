@@ -1,37 +1,49 @@
 # Real Reader Slab Integration Plan
 
-Status: **IMPLEMENTATION VERIFIED; PERFORMANCE CLAIM SCOPED; ADVERSARY REVIEW COMPLETE (SCOPED ROBUST)**.
+Status: **IMPLEMENTATION VERIFIED; REAL-WORKLOAD BENCHMARK GATE PASS (SCOPED ROBUST)**.
 
-Risk: **CAUTION**. The slice adds public owning reader methods and a byte-chunk
-append path plus performance evidence, but does not change existing Array or
-borrowed-reader behavior, decoder behavior, mmap behavior, or the default slab
-shift.
+Risk: **CAUTION**. The slice adds public owning reader methods, a byte-chunk
+append path, and a retained multi-column benchmark boundary, but does not
+change existing Array or borrowed-reader behavior, decoder behavior, mmap
+behavior, or the default slab shift. Manifest integrity remains scoped to the
+macOS regular-local path; hostile transient swap/restore and non-macOS
+portability are not claimed.
 
-Rollback: revert the bulk optimization commit containing the source, focused
-specs, and synchronized frontier evidence. The benchmark and runner pre-existed
-and are not modified by this commit.
+Rollback: revert the bulk optimization change containing the source, focused
+specs, and synchronized frontier evidence. Treat benchmark/runner hardening as
+a separate measurement surface; review its fail-closed manifest and privacy
+boundaries independently if that surface is reverted.
 
 Definition of done:
 
 - [x] the initial focused RED (undefined `concat_le_bytes`) is closed; focused
   slab-reader specs pass in debug and release: 21 examples, 0 failures in each;
 - [x] existing Array and borrowed-reader suites plus the full repository suite
-  pass in debug and release: 97 examples, 0 failures in each;
+  pass in the current debug and release runs: 108 examples, 0 failures in each;
+- [x] manifest-focused suite passes: 11 examples, 0 failures;
 - [x] format, shell syntax, and diff checks pass;
-- [x] smoke benchmark preserves parity on the 200,000-row public fixture;
-- [x] all controlled tracks validate the independent row count and benchmark
-  roll checksum across seven paired repetitions at shifts 12, 14, 16, 18, and
-  20 in each cache regime (140/140 observations);
+- [x] public smoke benchmark preserves parity and reports
+  `threshold_met=false`; it is not performance evidence;
+- [x] manifest v2 uses a bounded 64 KiB JSON/stat+snapshot path, stdin child
+  delivery, strict schema/bounds, an absolute non-root fixture, and an
+  aggregate fixture digest without persisting private identifiers/results in
+  repository artifacts;
+- [x] the retained private workload has three exact `UInt64` columns, 3,917,920
+  rows each, and 94,030,080 decoded bytes (about 89.67 MiB);
+- [x] all controlled tracks record harness-observed expected row counts and
+  aggregate checksums, plus parity/geometry/threshold/immutability guards,
+  across seven paired repetitions at shifts 12, 14, 16, 18, and 20 in each
+  cache regime (70 observations per regime, 140/140 overall, RSS available);
 - [x] post-fix natural shift-18 countercheck preserves parity: 14/14
   observations, Array/slab medians 147.585/118.007 ms, ratio median 0.799585
   with range 0.7681..0.8342; GC metrics were available and RSS was unavailable
   only for this countercheck because of a time-metadata warning;
 - [x] any performance observation is limited to the declared
   fixture/cache/host/current-Array-growth-policy scope;
-- [x] proportionate adversary review is **ROBUST within the declared
-  reader/vector scope**; big-endian execution remains untested, representative
-  real workloads remain next, and generalized/default-shift winners remain
-  rejected.
+- [x] adversary trail is recorded: first manifest review **VULNERABLE** for
+  unbounded hashing, bounded stat+snapshot fix, then **ROBUST** only within the
+  macOS regular-local-manifest and immutable-fixture scope; generalized/cold-
+  cache/default-shift winners remain rejected.
 
 ## Steps
 
@@ -54,12 +66,18 @@ Definition of done:
 3. **Completed — benchmark.** Array and slab tracks time `WidePart.open` plus
    the complete owning read, then validate the live result using independent
    row/checksum inputs and emit GC/container metrics.
-4. **Completed — runner.** The release runner uses fresh subprocesses, an
-   immutable per-run manifest, rotated track order, parity fail-closed checks,
-   and RSS collection when available. Its only cache labels are
+4. **Completed — manifest and runner hardening.** Manifest v2 is bounded to
+   64 KiB, parsed as strict JSON with bounded nesting/columns/names/rows/derived
+   bytes, and requires an absolute non-root fixture. The caller file is checked
+   with `stat`, captured as one bounded in-memory snapshot, hashed, and sent by
+   stdin to validation, warmup, and timed children. The runner rechecks the
+   snapshot and an aggregate fixture-tree digest around observations. Repository
+   artifacts record no private fixture identifiers (path, names, raw values,
+   exact checksums) or result payloads; transient local operational
+   paths/metadata are outside this claim. Its only cache labels are
    `warm_shared` and `natural_unknown`; it makes no cold-cache claim.
 5. **Completed — correctness/smoke.** Public fixtures and the private
-   150,414-row Tokenomics `input` column preserve parity. Tokenomics had seven
+   150,414-row Tokenomics single-column sample preserve parity. Tokenomics had seven
    paired observations but is explicitly too small for a performance verdict;
    its median Array/slab-shift-12 times were 3.502458/3.745792 ms and its GC
    bytes were 8,542,048/3,716,944.
@@ -67,11 +85,13 @@ Definition of done:
    temporary-only 10,000,000-row `value=number` Delta(8)/ZSTD(1) `.cmrk2`
    fixture with compressed marks: benchmark roll checksum
    `3960830973137314304`, compressed data 3,874,486 bytes, compressed marks
-   14,186 bytes, and 80,000,000 decoded bytes (76.3 MiB). The fixture and raw
-   results were not committed.
-7. **Completed — measurements.** Seven paired repetitions at shifts 12, 14,
-   16, 18, and 20 in each cache regime passed row/checksum parity with RSS
-   available. Times and paired ratios (slab/Array) are:
+   14,186 bytes, and 80,000,000 bytes (76.3 MiB) of decoded data. The fixture
+   and raw results were not committed.
+7. **Historical context — synthetic one-column measurements.** The earlier
+   deterministic public 10M one-column fixture remains useful for comparison,
+   but is not the retained real-workload gate. Seven paired repetitions at
+   shifts 12, 14, 16, 18, and 20 in each cache regime passed row/checksum
+   parity with RSS available. Times and paired ratios (slab/Array) were:
 
    | shift | natural Array/slab ms | natural ratio | warm Array/slab ms | warm ratio |
    | --- | ---: | ---: | ---: | ---: |
@@ -96,23 +116,73 @@ Definition of done:
    constraints, while GC cycles and tail capacity are explicit trade-off
    signals. The older overlapping baselines had different host/order
    conditions, and one was slab-only, so no exact cross-run delta is attributed
-   solely to bulk byte append. The small Tokenomics input was slower previously;
+   solely to bulk byte append. The small Tokenomics sample was slower previously;
    the default shift remains unchanged and no adaptive policy is admitted.
-8. **Completed — adversary/closure.** The final adversary verdict is
-   **ROBUST within the declared reader/vector scope**: the overlap-safe
-   little-endian copy, source regression guard, focused/full parity, and post-fix
-   shift-18 countercheck introduce no observed blocker. Big-endian execution is
-   untested, benchmark conclusions remain fixture/host/cache scoped, and
-   representative real workloads are the next transition. A generalized or
-   default-shift winner remains rejected, and no leak, long-lived-workload, or
-   cryptographic ClickHouse checksum result is claimed.
+8. **Completed — retained multi-column real-workload gate.** The final
+   workload is one private Wide part with three exact `UInt64` columns,
+   3,917,920 rows per column, and 94,030,080 decoded bytes (about 89.67 MiB).
+   Independent ClickHouse checksums were used per column, but the fixture path,
+   column names, raw values, and exact private checksum values are intentionally
+   not recorded in repository artifacts. Seven repetitions covered shifts 12,
+   14, 16, 18, and 20 in both `natural_unknown` and `warm_shared`: 70
+   observations per regime and **140/140 overall**. RSS was available for all
+   observations. The 140/140 result certifies only harness-observed expected
+   row counts, aggregate checksums, and the row/parity, geometry, threshold,
+   and fixture-immutability guards; it is not exhaustive value-by-value
+   validation or cryptographic proof. The public smoke result remains
+   `threshold_met=false`; it is not performance evidence.
 
-Premortem: the most likely false win is a cache/order or fixture-size artifact;
-the guard is subprocess isolation, rotated order, independent checksum, two
-cache labels, the older overlapping baseline warning, the post-fix countercheck,
-and refusal to generalize
-from the small Tokenomics fixture. Allocation volume fell in the controlled
-run, but GC cycle count rose and tail capacity grows with shift; both trade-offs
-remain explicit follow-ups. The adversary review is now closed within scope;
-the next transition is representative real workloads before any default or
-adaptive-shift decision.
+   The table reports `Array median / p95` and `slab median / p95` in
+   milliseconds. p95 is the nearest-rank value over seven paired observations;
+   `slab/Array` is median / p95 and `slab-vs-shift12` is the median slab ratio:
+
+   | regime | shift | Array ms | slab ms | slab/Array | slab-vs-shift12 |
+   | --- | ---: | ---: | ---: | ---: | ---: |
+   | `natural_unknown` | 12 | 145.355 / 149.929 | 124.564 / 126.912 | 0.849 / 0.869 | 1.000 |
+   | `natural_unknown` | 14 | 146.138 / 152.567 | 120.092 / 126.514 | 0.823 / 0.867 | 0.964 |
+   | `natural_unknown` | 16 | 145.951 / 154.387 | 115.793 / 116.708 | 0.784 / 0.819 | 0.930 |
+   | `natural_unknown` | 18 | 146.117 / 147.812 | 109.801 / 119.048 | 0.751 / 0.817 | 0.881 |
+   | `natural_unknown` | 20 | 148.421 / 172.024 | 110.308 / 110.792 | 0.745 / 0.755 | 0.886 |
+   | `warm_shared` | 12 | 145.517 / 148.994 | 123.589 / 125.741 | 0.859 / 0.865 | 1.000 |
+   | `warm_shared` | 14 | 145.778 / 148.242 | 118.448 / 122.078 | 0.807 / 0.840 | 0.958 |
+   | `warm_shared` | 16 | 146.267 / 149.527 | 115.041 / 118.344 | 0.789 / 0.813 | 0.931 |
+   | `warm_shared` | 18 | 146.717 / 152.324 | 109.341 / 116.309 | 0.742 / 0.808 | 0.885 |
+   | `warm_shared` | 20 | 147.558 / 148.914 | 110.407 / 118.393 | 0.751 / 0.809 | 0.893 |
+
+   Matched per-rep latency ratio ranges (`slab/Array`) were natural shift 12
+   `.8308..0.8692`, natural shift 14 `.7757..0.8669`, warm shift 12
+   `.8188..0.8655`, and warm shift 14 `.8005..0.8404`. Across the current
+   matrix, global matched per-rep slab/Array ratios were RSS
+   `0.449087..0.797326`, GC bytes `0.392571..0.401681`, and GC collections
+   `1.235294..4.466667`. These are ratio claims only; no absolute RSS unit claim
+   is made. Exact tail waste, computed as `(capacity - retained_values) /
+   capacity`, was shift 12 `0.049798%`, shifts 14/16/18 `0.362142%`, and shift
+   20 `6.589508%`. Shift 18 is the strongest median candidate in this workload,
+   but the benchmark
+   gate is **PASS / ROBUST** only for this host, workload, and the two named
+   cache labels. It is not a default/adaptive-policy decision, cold-cache
+   evidence, or a general winner claim.
+
+   Historical geometry context: the prior one-column 10M fixture used 9,766
+   slabs / 16,384 directory entries at shift 10, 2,442 / 4,096 at shift 12,
+   and 611 / 1,024 at shift 14. Thus the proposed 1,024-entry directory exactly
+   covered the 10M shift-14 case, with 10,624 unused values (about 83 KiB).
+9. **Completed — adversary/closure.** The first manifest review was
+   **VULNERABLE** because unbounded manifest hashing made validation cost
+   unbounded. The bounded `stat` + one in-memory snapshot fix, stdin delivery
+   to validation/warmup/timed children, strict v2 JSON/schema bounds, and
+   aggregate fixture digest were re-reviewed **ROBUST** only for a macOS
+   regular local manifest and immutable fixture. A hostile transient
+   swap/restore between checks and non-macOS portability remain explicit
+   nonclaims. Big-endian execution is untested; no leak, long-lived-workload,
+   or cryptographic ClickHouse checksum claim is made.
+
+Premortem: the most likely false win is a cache/order or fixture-shape artifact;
+the guards are bounded manifest snapshotting, subprocess isolation, rotated
+order, independent per-column checksums, aggregate fixture digest, seven paired
+repetitions, two named cache labels, p95 reporting, and refusal to generalize
+from one private part. Allocation volume fell in the retained run, but GC cycle
+count rose and shift-20 tail capacity is materially higher; both are explicit
+trade-offs. Shift 18 remains a workload-local candidate only. The next
+transition is additional diverse real parts, codecs, and query shapes with
+repeatability checks before any default or adaptive-shift decision.
