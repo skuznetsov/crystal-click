@@ -465,45 +465,46 @@ module CrystalClick
       raise BoundsError.new("empty mark range") unless start_mark
       data_size = File.size(@data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
-      data = File.read(@data_path).to_slice
-      start_offset = start_mark.not_nil!.compressed_offset
-      end_offset = end_mark.compressed_offset
-      eof_sentinel = end_mark == @sentinel && end_offset == data_size.to_u64 && end_mark.decompressed_offset == 0
-      raise CorruptPartError.new("mark frame offset exceeds data") if start_offset >= data_size || end_offset > data_size || end_offset == data_size && !eof_sentinel
-      raise CorruptPartError.new("mark frame offsets are reversed") if start_offset > end_offset
-
       selected = IO::Memory.new
-      selected_bytes = 0_i64
-      frame_offset = start_offset.to_i64
-      started = false
-      loop do
-        frame = CompressedBlock.decode_frame(
-          data,
-          frame_offset,
-          MAX_FRAME_COMPRESSED_BYTES,
-          MAX_FRAME_DECOMPRESSED_BYTES
-        )
-        current = frame_offset.to_u64
-        started ||= current == start_offset
-        raise CorruptPartError.new("mark does not start at a frame") unless started
-        local_start = current == start_offset ? start_mark.not_nil!.decompressed_offset : 0_u64
-        local_end = current == end_offset ? end_mark.decompressed_offset : frame.output.size.to_u64
-        raise CorruptPartError.new("mark offset exceeds frame output") if local_start > frame.output.size || local_end > frame.output.size || local_start > local_end
-        if current == end_offset && end_mark == @sentinel && !eof_sentinel
-          raise CorruptPartError.new("non-EOF sentinel must end at frame output") unless end_mark.decompressed_offset == frame.output.size
+      MMapDataSource.with_file(@data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
+        start_offset = start_mark.not_nil!.compressed_offset
+        end_offset = end_mark.compressed_offset
+        eof_sentinel = end_mark == @sentinel && end_offset == data_size.to_u64 && end_mark.decompressed_offset == 0
+        raise CorruptPartError.new("mark frame offset exceeds data") if start_offset >= data_size || end_offset > data_size || end_offset == data_size && !eof_sentinel
+        raise CorruptPartError.new("mark frame offsets are reversed") if start_offset > end_offset
+
+        selected_bytes = 0_i64
+        frame_offset = start_offset.to_i64
+        started = false
+        loop do
+          frame = CompressedBlock.decode_frame(
+            data,
+            frame_offset,
+            MAX_FRAME_COMPRESSED_BYTES,
+            MAX_FRAME_DECOMPRESSED_BYTES
+          )
+          current = frame_offset.to_u64
+          started ||= current == start_offset
+          raise CorruptPartError.new("mark does not start at a frame") unless started
+          local_start = current == start_offset ? start_mark.not_nil!.decompressed_offset : 0_u64
+          local_end = current == end_offset ? end_mark.decompressed_offset : frame.output.size.to_u64
+          raise CorruptPartError.new("mark offset exceeds frame output") if local_start > frame.output.size || local_end > frame.output.size || local_start > local_end
+          if current == end_offset && end_mark == @sentinel && !eof_sentinel
+            raise CorruptPartError.new("non-EOF sentinel must end at frame output") unless end_mark.decompressed_offset == frame.output.size
+          end
+          selected_size = (local_end - local_start).to_i64
+          raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > max_output_bytes.to_i64 - selected_bytes
+          selected.write(frame.output[local_start.to_i, selected_size.to_i])
+          selected_bytes += selected_size
+          if current == end_offset
+            raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == @sentinel && frame.end_offset != data_size
+            break
+          end
+          next_offset = frame.end_offset
+          break if eof_sentinel && next_offset == data_size
+          raise CorruptPartError.new("mark frame offset was not found") if next_offset <= frame_offset || next_offset > data_size
+          frame_offset = next_offset
         end
-        selected_size = (local_end - local_start).to_i64
-        raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > max_output_bytes.to_i64 - selected_bytes
-        selected.write(frame.output[local_start.to_i, selected_size.to_i])
-        selected_bytes += selected_size
-        if current == end_offset
-          raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == @sentinel && frame.end_offset != data_size
-          break
-        end
-        next_offset = frame.end_offset
-        break if eof_sentinel && next_offset == data_size
-        raise CorruptPartError.new("mark frame offset was not found") if next_offset <= frame_offset || next_offset > data_size
-        frame_offset = next_offset
       end
       selected.to_slice
     end
