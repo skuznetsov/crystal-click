@@ -38,9 +38,30 @@ module CrystalClick
       read_uint64_mark_range(column, 0, mark_count)
     end
 
+    def read_uint64_slab(
+      column : String = @column,
+      slab_shift : Int = UInt64SlabVector::DEFAULT_SLAB_SHIFT,
+    ) : UInt64SlabVector
+      read_uint64_mark_range_slab(column, 0, mark_count, slab_shift)
+    end
+
     def read_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt64)
       start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
       values = Array(UInt64).new
+      each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
+        values << value
+      end
+      values
+    end
+
+    def read_uint64_mark_range_slab(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      slab_shift : Int = UInt64SlabVector::DEFAULT_SLAB_SHIFT,
+    ) : UInt64SlabVector
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
+      values = UInt64SlabVector.new(slab_shift: slab_shift)
       each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
         values << value
       end
