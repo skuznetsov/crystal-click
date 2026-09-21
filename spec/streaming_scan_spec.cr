@@ -140,6 +140,48 @@ describe "borrowed UInt64 mark-range scanning" do
     first[0].should_not eq(copied[0])
   end
 
+  it "preserves mark and part provenance without crossing mark boundaries" do
+    part = CrystalClick::WidePart.open(FIXTURE)
+    scratch = Slice(UInt64).new(257)
+    expected_value = 0_u64
+    previous_mark = -1_i32
+    mark_start = 0_u64
+    mark_values = 0_u64
+    callback_count = 0
+
+    part.scan_uint64_marks_into("value", scratch) do |mark_index, mark_row_offset, part_row_offset, values|
+      mark_index.should be >= 0
+      mark_index.should be < part.mark_count
+      if mark_index != previous_mark
+        if previous_mark >= 0
+          mark_values.should eq(BORROWED_MARK_ROWS.to_u64)
+        end
+        mark_start = part_row_offset
+        mark_values = 0_u64
+        previous_mark = mark_index
+        mark_row_offset.should eq(0_u64)
+      end
+
+      mark_row_offset.should eq(mark_values)
+      part_row_offset.should eq(mark_start &+ mark_values)
+      values.size.should be > 0
+      values.size.should be <= scratch.size
+      (mark_row_offset &+ values.size.to_u64).should be <= BORROWED_MARK_ROWS.to_u64
+      values.to_unsafe.should eq(scratch.to_unsafe)
+      values.each do |value|
+        value.should eq(expected_value)
+        expected_value += 1
+      end
+      mark_values += values.size.to_u64
+      callback_count += 1
+    end
+
+    mark_values.should eq((part.row_count % BORROWED_MARK_ROWS.to_u64))
+    previous_mark.should eq((part.mark_count - 1).to_i32)
+    expected_value.should eq(part.row_count)
+    callback_count.should be > part.mark_count
+  end
+
   it "rejects empty and read-only scratch before mapping or decoding" do
     with_fixture_copy do |path|
       data = Dir.glob(File.join(path, "*.bin")).first.not_nil!
@@ -186,6 +228,21 @@ describe "borrowed UInt64 mark-range scanning" do
       error.message.not_nil!.should contain("unsupported")
       prefix.empty?.should be_false
       prefix.should eq((0_u64...prefix.size.to_u64).to_a)
+    end
+  end
+
+  it "keeps range decoding fail-closed for a non-frame compressed mark offset" do
+    with_fixture_copy do |path|
+      mark = Dir.glob(File.join(path, "*.mrk2")).first.not_nil!
+      mark_bytes = writable_file_bytes(mark)
+      mark_bytes.size.should be > 216
+      write_borrowed_u64(mark_bytes, 192, 1_u64)
+      File.open(mark, "wb") { |io| io.write(mark_bytes) }
+
+      part = CrystalClick::WidePart.open(path)
+      expect_raises(CrystalClick::CorruptPartError) do
+        part.read_uint64_mark_range("value", 8, 1)
+      end
     end
   end
 

@@ -1,6 +1,7 @@
 module CrystalClick
   enum ChecksumVerification
     Unverified
+    SizeChecked
   end
 
   struct Mark

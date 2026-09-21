@@ -92,6 +92,52 @@ module CrystalClick
       nil
     end
 
+    # Scan a complete selected column while preserving physical mark
+    # provenance.  A callback receives only values from one mark, and every
+    # slice aliases the caller-owned scratch storage.
+    def scan_uint64_marks_into(
+      column : String,
+      scratch : Slice(UInt64),
+      & : Int32, UInt64, UInt64, Slice(UInt64) -> Nil
+    ) : Nil
+      raise BoundsError.new("empty scratch") if scratch.size == 0
+      raise BoundsError.new("scratch must be writable") if scratch.read_only?
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, 0, mark_count)
+      chunk_size = 0
+      active_mark = 0_i32
+      mark_rows = @marks[active_mark].rows
+      mark_values = 0_u64
+      mark_start = 0_u64
+
+      each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
+        scratch[chunk_size] = value
+        chunk_size += 1
+        mark_values += 1
+
+        if chunk_size == scratch.size || mark_values == mark_rows
+          mark_row_offset = mark_values - chunk_size.to_u64
+          yield active_mark, mark_row_offset, mark_start &+ mark_row_offset, scratch[0, chunk_size]
+          chunk_size = 0
+        end
+
+        if mark_values == mark_rows
+          mark_start = mark_start &+ mark_rows
+          active_mark += 1
+          if active_mark < @marks.size
+            mark_rows = @marks[active_mark].rows
+            mark_values = 0_u64
+          end
+        end
+      end
+
+      if chunk_size > 0
+        mark_row_offset = mark_values - chunk_size.to_u64
+        yield active_mark, mark_row_offset, mark_start &+ mark_row_offset, scratch[0, chunk_size]
+      end
+      nil
+    end
+
     @column : String
     @marks : Array(Mark)
     @sentinel : Mark
