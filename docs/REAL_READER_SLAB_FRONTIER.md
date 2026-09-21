@@ -1,14 +1,18 @@
 # Real Reader Slab Integration Frontier SDD
 
-Document status: **IMPLEMENTATION VERIFIED; REAL-WORKLOAD BENCHMARK GATE PASS (SCOPED ROBUST)**.
+Document status: **VERIFIED / SCOPED ROBUST; IMPLEMENTATION UNCHANGED**.
 
 Current frontier: the opt-in owning `UInt64SlabVector` result is implemented in
 the existing `WidePart` UInt64 reader. The current `Array(UInt64)` API and the
 shared mmap/compressed-frame decoder remain unchanged. The new slab path moves
 decoded bytes in chunks before materializing them into slabs; correctness,
-manifest hardening, and the retained multi-column real-workload gate are
-recorded below. The benchmark gate is robust only within the declared
-host/workload/cache scope; no policy change is admitted.
+manifest hardening, the retained multi-column real-workload gate, and the
+completed multi-workload campaign are recorded below. The benchmark evidence is
+scoped to the declared host/workload/cache labels; no policy change is admitted.
+
+Campaign status: **VERIFIED / SCOPED ROBUST; IMPLEMENTATION UNCHANGED** within
+the declared host, workload, cache-label, manifest, and immutable-fixture
+scope. This is not a general performance, cold-cache, or policy claim.
 
 Bounded context: `src/crystal_click/wide_part.cr`,
 `src/crystal_click/uint64_slab_vector.cr`,
@@ -77,16 +81,17 @@ is unverified.
 
 ## Evidence recorded
 
-- The initial RED was a focused compile failure because
-  `concat_le_bytes` was undefined. After the implementation and overlap-safe
-  copy fix, the focused slab specs pass **21/0** in debug and release, and the
-  full suites pass **97/0** in debug and release. Release evidence used the
-  host's system linker override; the default `ld64.lld` rejects the installed
-  Xcode TAPI files.
-- The current manifest-focused suite passes **11/0**. The current full debug
-  and release suites each pass **108/0**. Format, Bash, and diff checks pass. Public smoke
-  parity is verified, but its manifest reports `threshold_met=false`; it is
-  not a performance result.
+- Earlier intermediate evidence recorded the focused slab specs at **21/0** in
+  debug and release and the full suites at **97/0**, followed by a **108/0**
+  full-suite run; those counts remain historical snapshots. The initial RED was
+  a focused compile failure because `concat_le_bytes` was undefined. Release
+  evidence used the host's system linker override; the default `ld64.lld`
+  rejects the installed Xcode TAPI files.
+- Current fixture-generator focused specs pass **3/0**, reader/slab focused
+  specs pass **20/0**, manifest-focused specs pass **11/0**, and the current
+  full debug and release suites each pass **111/0**. Format, Bash, and diff
+  checks pass. Public smoke parity is verified, but its manifest reports
+  `threshold_met=false`; it is not a performance result.
 - The implementation does not reserve from claimed rows or copy an Array into
   slabs. The slab reader consumes byte chunks from the existing frame traversal;
   the Array and borrowed paths still decode scalar values.
@@ -117,7 +122,7 @@ is unverified.
 ### Historical synthetic one-column measurements
 
 The following older public 10M one-column results remain as historical context;
-they are not the current retained multi-column gate. Ratios are slab/Array
+they are not the current retained real-workload campaign. Ratios are slab/Array
 (lower is faster). Times are median milliseconds; ranges are the seven paired
 ratios for that shift.
 
@@ -152,7 +157,7 @@ therefore unchanged and no adaptive policy is admitted. The benchmark roll is
 not a cryptographic ClickHouse checksum and makes no leak or long-lived-workload
 claim.
 
-### Current retained multi-column real-workload gate
+### Historical retained multi-column real-workload gate
 
 The final workload is one private Wide part with three exact `UInt64` columns,
 3,917,920 rows per column, and 94,030,080 decoded bytes (about 89.67 MiB).
@@ -207,6 +212,97 @@ slabs / 16,384 directory entries at shift 10, 2,442 / 4,096 at shift 12, and
 611 / 1,024 at shift 14. The user-proposed 1,024-entry directory exactly
 covered the 10M shift-14 case, leaving 10,624 unused values (about 83 KiB).
 
+## Measured campaign — implementation unchanged
+
+Status: **VERIFIED / SCOPED ROBUST; IMPLEMENTATION UNCHANGED** within the
+declared host, workload, cache-label, manifest, and immutable-fixture scope.
+The campaign closes the admitted measurement slice only. It does not promote a
+default shift, adaptive policy, source change, cold-cache result, or general
+winner.
+
+The campaign used 14 admitted invocations and 980 unique observations (70 per
+invocation); all declared row, checksum, geometry, threshold, and fixture
+immutability guards passed. The escalated canary is admitted; the sandbox
+canary is excluded. Host GUI noise was observed in a canary, and a retained
+outlier remains in the aggregate evidence rather than being silently trimmed;
+matched-pair medians remained discriminating.
+
+### A–D best-shift summary
+
+The four anonymized retained workloads span the admitted real-part shape
+matrix. Gaps are shift-18 slab median latency versus that regime's best shift.
+
+| workload | natural best | warm best | shift 18 vs best, natural | shift 18 vs best, warm |
+| --- | ---: | ---: | ---: | ---: |
+| A | 20 | 18 | +1.463573% | 0% |
+| B | 18 | 18 | 0% | 0% |
+| C | 18 | 18 | 0% | 0% |
+| D | 16 | 18 | +2.650768% | 0% |
+
+For this campaign, each paired ratio is computed per matched observation as
+`slab_elapsed / array_elapsed`. With seven matched observations, nearest-rank
+p95 is the maximum ratio (rank 7); it is not the ratio of slab p95 latency to
+Array p95 latency.
+
+At shift 18, slab/Array median latency ratios across A–D cells were
+`0.723242..0.793787`; across all A–D matrix cells they were
+`0.723242..0.866610`. Paired latency p95 ratios across all A–D cells were
+`0.751065..1.164694` (shift 18 rows: `0.751065..0.823574`). These are a
+vector of observations, not a scalar winner.
+
+### Resource and tail trade-offs
+
+Overall matched RSS max ratios (slab/Array, natural/warm) were:
+
+| workload | natural | warm |
+| --- | ---: | ---: |
+| A | 0.562759 | 0.559788 |
+| B | 0.781814 | 0.771023 |
+| C | 1.008334 | 1.001399 |
+| D | 0.994493 | 0.967432 |
+
+These are ratios only; no absolute RSS unit claim is made. Aggregate GC-byte
+median ratios ranged `0.378266..0.407006` (paired minimum fields
+`0.372790..0.401260`; maximum fields `0.401680..0.480011`). GC-collection
+median ratios ranged `1.904762..3.600000` (paired minimum fields
+`0.809524..1.312500`; maximum fields `3.166667..4.857143`). GC bytes,
+collection counts, and p95 latency are non-scalar trade-offs. Shift-20 tail
+waste across A–D was `6.589508%..43.166208%`; shift-18 tail waste was
+`0.362142%..16.361872%`.
+
+### Public codec controls and policy boundary
+
+The public direct-LZ4, direct-ZSTD, and Delta(8)+ZSTD controls all selected
+shift 20; shift 18 remained within `0.399159..1.023979%` of each control's
+best shift. They are attribution controls only, not real-data generalization.
+The shift-18 >5% falsifier did not trigger. The adaptive-policy criterion
+failed: no two repeatable workload classes preferred different shifts by more
+than 5% in both regimes via pre-read static shape while beating the best fixed
+shift under the constraints. Therefore the default shift, adaptive policy, and
+source remain unchanged.
+
+The final campaign adversary verdict is **ROBUST** within the declared host,
+workload, cache-label, manifest, and immutable-fixture scope. Fixture checks are
+structural and do not prove full semantic decoding. Hostile TOCTOU, cold-cache,
+non-macOS, general-performance, default-shift, and adaptive-policy claims remain
+explicit nonclaims.
+
+The cache labels remain `warm_shared` and `natural_unknown`/process-fresh; no
+`cold_cache` label is admitted. The read-only macOS eviction probe still found
+that `F_NOCACHE`, `MAP_NOCACHE`, and `MADV_DONTNEED` did not evict mapped pages.
+`MAP_SHARED` + `MS_INVALIDATE` + `mincore` can at most support a future
+`os_page_cache_invalidated` label through a separate mmap frontier;
+storage/controller cache remains unknown, and purge/global flush remains
+rejected. No hostile transient swap/restore or non-macOS portability claim is
+made.
+
+Rollback remains measurement-only: remove the campaign workload/control
+artifacts and evidence without changing the reader/API or prior results. The
+privacy boundary remains repository artifacts only: omit private fixture
+identifiers, paths, column names, raw values, exact private checksums, and
+private result payloads; transient local paths and metadata are not claimed
+absent.
+
 ## Rejected surface
 
 - Caller-owned slab destinations, rollback, `clear`, or partial-result exposure.
@@ -215,7 +311,7 @@ covered the 10M shift-14 case, leaving 10,624 unused values (about 83 KiB).
 - A default-shift change or adaptive shift policy based on the current fixture;
   the general/default-shift winner remains rejected.
 - A cold-cache claim, a general real-workload winner, or a policy decision from
-  this one private part and its two named cache regimes.
+  this campaign's anonymized workloads and its two named cache regimes.
 - Big-endian correctness as a verified capability; the fallback is present but
   untested on this host.
 - A guarantee against a hostile process that swaps and restores the manifest or
@@ -262,43 +358,50 @@ A historical performance gate used a deterministic public
 8,388,608-10,000,000-row `UInt64 CODEC(Delta(8), ZSTD(1))` Wide part with
 compressed marks, an independent expected checksum, and an immutable manifest.
 Those synthetic results remain above for context. The current retained
-real-workload gate instead uses one private three-column Wide part described
-above, with an independent ClickHouse checksum per column and an immutable
-fixture-tree digest. Each observation ran in a fresh release subprocess and
-recorded elapsed nanoseconds, GC bytes, GC cycles, retained rows/container
-geometry, threshold state, and peak RSS. Track order was rotated. Report
-`warm_shared` and `natural_unknown` separately; do not claim cold-cache
-behavior. No private raw fixture or timing artifact is retained in the
-repository.
+real-workload evidence above used one private three-column Wide part. The
+completed campaign expands the measurement to four anonymized real workloads
+plus public codec controls, with immutable fixtures, aggregate integrity
+signals, and no source/API change. Each observation ran in a fresh release
+subprocess and recorded elapsed nanoseconds, GC bytes, GC cycles, retained
+rows/container geometry, threshold state, and peak RSS. Track order was
+rotated. Report `warm_shared` and `natural_unknown` separately; do not claim
+cold-cache behavior. No private raw fixture or timing artifact is retained in
+the repository.
 
 Abstain from a winner if there are fewer than seven valid repetitions, decoded
 payload is below roughly 64 MiB, rows/checksum/manifest differ, critical metrics
 are unavailable, paired results are unstable, manifest/fixture immutability is
 not established, or the claim is widened beyond the declared
-fixture/host/cache scope. The current gate passes only for this macOS host, one
-private workload, and the two named cache regimes.
+fixture/host/cache scope. The measured campaign is scoped to this macOS host,
+four anonymized real workloads, public codec controls, and the two named cache
+regimes; the final adversary verdict is scoped **ROBUST** as stated above.
 
 ## Implementation seal
 
 - RED: the initial focused compile failed on undefined `concat_le_bytes`; the
   implementation now closes that missing method, the overlap-safe copy is
   source-guarded, and the focused checks pass.
-- Observed DoD: focused correctness specs (21/0 debug and release), manifest
-  focused specs (11/0), current full debug and release suites (108/0 each), format/Bash/diff checks,
+- Observed DoD: current fixture-generator focused specs (3/0), reader/slab
+  focused specs (20/0), manifest focused specs (11/0), current full debug and
+  release suites (111/0 each), format/Bash/diff checks,
   public smoke parity with `threshold_met=false`, the retained multi-column
-  140/140 observation matrix, and manifest/fixture integrity checks pass within
-  the evidence boundary above.
+  140/140 observation matrix, the campaign's 14 admitted invocations and 980
+  unique observations (70 each), and manifest/fixture integrity checks pass
+  within the evidence boundary above.
 - Adversary status: the first manifest review was **VULNERABLE** for unbounded
   manifest hashing. After the bounded stat+snapshot fix, the repeat review is
   **ROBUST within the declared macOS regular-local-manifest and immutable-
   fixture scope**. Residual hostile transient swap/restore and non-macOS
-  portability are explicit non-claims. Big-endian execution remains untested;
-  a general/default-shift winner remains rejected.
+  portability are explicit non-claims. The final campaign adversary verdict is
+  **ROBUST within the declared scope**; its fixture checks are structural and
+  do not prove full semantic decoding. Hostile TOCTOU, cold-cache,
+  non-macOS, general-performance, default-shift, and adaptive-policy claims
+  remain rejected. Big-endian execution remains untested.
 - Rollback: revert the bulk optimization change containing the source, focused
   specs, and synchronized docs. The benchmark/runner hardening is a separate
   measurement surface; its fail-closed manifest and privacy boundaries must be
   reviewed independently if that surface is reverted. Existing APIs remain
   intact.
-- Next transition: exercise additional diverse real parts, codecs, and query
-  shapes with repeatability checks before deciding whether to change the
-  default shift or admit an adaptive policy.
+- Current transition: the campaign is **VERIFIED / SCOPED ROBUST / IMPLEMENTATION
+  UNCHANGED** within the declared scope. No default-shift or adaptive-policy
+  decision is admitted.
