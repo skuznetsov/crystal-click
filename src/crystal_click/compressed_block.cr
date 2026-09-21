@@ -18,6 +18,21 @@ module CrystalClick
       end
     end
 
+    # Operation-local high-water storage for borrowed frame output.
+    # A slice returned by `decode_frame_into` is stable only until this
+    # workspace is used again.
+    class DecodeWorkspace
+      def initialize
+        @buffer = Bytes.new(0)
+      end
+
+      def buffer_for(size : Int) : Bytes
+        raise CorruptPartError.new("negative decode workspace size") if size < 0
+        @buffer = Bytes.new(size) if size > @buffer.size
+        @buffer
+      end
+    end
+
     def self.decode_frame(
       data : Bytes,
       offset : Int64,
@@ -54,6 +69,47 @@ module CrystalClick
       Frame.new(frame_end, output)
     end
 
+    # Decodes into workspace-owned storage. `Frame#output` is borrowed until
+    # the next decode that uses the same workspace.
+    def self.decode_frame_into(
+      data : Bytes,
+      offset : Int64,
+      workspace : DecodeWorkspace,
+      max_compressed_size : Int64 = DEFAULT_MAX_FRAME,
+      max_decompressed_size : Int64 = DEFAULT_MAX_FRAME,
+    ) : Frame
+      raise CorruptPartError.new("invalid compressed frame limit") if max_compressed_size < HEADER_SIZE
+      raise CorruptPartError.new("invalid decompressed frame limit") if max_decompressed_size <= 0
+      raise CorruptPartError.new("frame offset out of bounds") if offset < 0 || offset > data.size.to_i64 - FRAME_HEADER_SIZE
+
+      header_offset = offset.to_i
+      method = data[header_offset + CHECKSUM_SIZE]
+      compressed_size = u32(data, header_offset + CHECKSUM_SIZE + 1).to_i64
+      decompressed_size = u32(data, header_offset + CHECKSUM_SIZE + 5).to_i64
+      raise CorruptPartError.new("compressed frame size is invalid") if compressed_size < HEADER_SIZE || compressed_size > max_compressed_size
+      raise CorruptPartError.new("decompressed frame size is invalid") if decompressed_size <= 0 || decompressed_size > max_decompressed_size
+
+      remaining = data.size.to_i64 - offset - CHECKSUM_SIZE
+      raise CorruptPartError.new("compressed frame is truncated") if compressed_size > remaining
+      frame_end = offset + CHECKSUM_SIZE + compressed_size
+      payload_size = compressed_size - HEADER_SIZE
+      payload = data[header_offset + FRAME_HEADER_SIZE, payload_size.to_i]
+      output = case method
+               when METHOD_LZ4
+                 destination = workspace.buffer_for(decompressed_size.to_i)
+                 LZ4.decode_into(payload, destination, decompressed_size.to_i)
+               when METHOD_ZSTD
+                 destination = workspace.buffer_for(decompressed_size.to_i)
+                 ZSTD.decode_into(payload, destination, decompressed_size.to_i, max_decompressed_size)
+               when METHOD_MULTIPLE
+                 decode_multiple_into(payload, decompressed_size.to_i, max_decompressed_size, workspace)
+               else
+                 raise UnsupportedFormatError.new("unsupported ClickHouse compression method")
+               end
+      raise CorruptPartError.new("compressed frame output size mismatch") unless output.size == decompressed_size
+      Frame.new(frame_end, output)
+    end
+
     def self.decode_all(
       data : Bytes,
       max_compressed_size : Int64 = DEFAULT_MAX_FRAME,
@@ -64,10 +120,11 @@ module CrystalClick
       raise CorruptPartError.new("invalid aggregate decompressed limit") if max_output_size < 0
 
       output = IO::Memory.new
+      workspace = DecodeWorkspace.new
       offset = 0_i64
       total_output = 0_i64
       while offset < data.size.to_i64
-        frame = decode_frame(data, offset, max_compressed_size, max_decompressed_size)
+        frame = decode_frame_into(data, offset, workspace, max_compressed_size, max_decompressed_size)
         frame_output_size = frame.output.size.to_i64
         raise CorruptPartError.new("decompressed stream exceeds limit") if frame_output_size > max_output_size - total_output
         total_output += frame_output_size
@@ -102,6 +159,48 @@ module CrystalClick
       current = decode_nested_stage(current, METHOD_DELTA, max_size)
       raise CorruptPartError.new("Multiple output size mismatch") unless current.size == expected_size
       current
+    end
+
+    private def self.decode_multiple_into(input : Bytes, expected_size : Int, max_size : Int64, workspace : DecodeWorkspace) : Bytes
+      raise CorruptPartError.new("Multiple payload is empty") if input.empty?
+
+      method_count = input[0].to_i
+      raise CorruptPartError.new("Multiple method count exceeds limit") if method_count > MAX_MULTIPLE_METHODS
+      raise CorruptPartError.new("truncated Multiple method list") if input.size < 1 + method_count
+      unless method_count == 2 && input[1] == METHOD_DELTA && input[2] == METHOD_ZSTD
+        raise UnsupportedFormatError.new("unsupported ClickHouse Multiple codec list")
+      end
+
+      nested = input[1 + method_count, input.size - 1 - method_count]
+      raise CorruptPartError.new("nested compressed block header is truncated") if nested.size < HEADER_SIZE
+      raise UnsupportedFormatError.new("unexpected nested ClickHouse compression method") unless nested[0] == METHOD_ZSTD
+
+      nested_compressed_size = u32(nested, 1).to_i64
+      nested_decompressed_size = u32(nested, 5).to_i64
+      raise CorruptPartError.new("nested compressed block size is invalid") if nested_compressed_size < HEADER_SIZE || nested_compressed_size != nested.size
+      raise CorruptPartError.new("nested decompressed block size is invalid") if nested_decompressed_size <= 0 || nested_decompressed_size > max_size
+
+      nested_payload = nested[HEADER_SIZE, (nested_compressed_size - HEADER_SIZE).to_i]
+      destination = workspace.buffer_for(nested_decompressed_size.to_i)
+      decoded = ZSTD.decode_into(nested_payload, destination, nested_decompressed_size.to_i, max_size)
+
+      raise CorruptPartError.new("nested compressed block header is truncated") if decoded.size < HEADER_SIZE
+      raise UnsupportedFormatError.new("unexpected nested ClickHouse compression method") unless decoded[0] == METHOD_DELTA
+
+      delta_compressed_size = u32(decoded, 1).to_i64
+      delta_decompressed_size = u32(decoded, 5).to_i64
+      raise CorruptPartError.new("nested compressed block size is invalid") if delta_compressed_size < HEADER_SIZE || delta_compressed_size != decoded.size
+      raise CorruptPartError.new("nested decompressed block size is invalid") if delta_decompressed_size <= 0 || delta_decompressed_size > max_size
+      raise CorruptPartError.new("Multiple output size mismatch") unless delta_decompressed_size == expected_size
+
+      delta_payload = decoded[HEADER_SIZE, (delta_compressed_size - HEADER_SIZE).to_i]
+      raise CorruptPartError.new("Delta payload header is truncated") if delta_payload.size < 2
+      raise UnsupportedFormatError.new("unsupported Delta width") unless delta_payload[0] == 8_u8
+      raise CorruptPartError.new("Delta skip byte is invalid") unless delta_payload[1] == 0_u8
+      raise CorruptPartError.new("Delta output size is not UInt64-aligned") unless expected_size % 8 == 0
+      raise CorruptPartError.new("Delta payload size mismatch") unless delta_payload.size == 2 + expected_size
+
+      decode_delta_in_place(decoded, expected_size)
     end
 
     private def self.decode_nested_stage(input : Bytes, expected_method : UInt8, max_size : Int64) : Bytes
@@ -145,6 +244,19 @@ module CrystalClick
         output_offset += 8
       end
       output
+    end
+
+    private def self.decode_delta_in_place(input : Bytes, expected_size : Int) : Bytes
+      accumulator = 0_u64
+      input_offset = HEADER_SIZE + 2
+      output_offset = 0
+      while output_offset < expected_size
+        accumulator = accumulator &+ u64(input, input_offset)
+        write_u64(input, output_offset, accumulator)
+        input_offset += 8
+        output_offset += 8
+      end
+      input[0, expected_size]
     end
 
     private def self.u64(bytes : Bytes, offset : Int) : UInt64

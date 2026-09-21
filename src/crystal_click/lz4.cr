@@ -3,6 +3,14 @@ module CrystalClick
     def self.decode(input : Bytes, expected_size : Int) : Bytes
       raise CorruptPartError.new("negative LZ4 output size") if expected_size < 0
       output = Bytes.new(expected_size)
+      decode_into(input, output, expected_size)
+    end
+
+    def self.decode_into(input : Bytes, output : Bytes, expected_size : Int) : Bytes
+      raise CorruptPartError.new("negative LZ4 output size") if expected_size < 0
+      raise CorruptPartError.new("LZ4 destination is too small") if output.size < expected_size
+      raise BoundsError.new("LZ4 destination must be writable") if output.read_only?
+      output = output[0, expected_size]
       input_index = 0
       output_index = 0
 

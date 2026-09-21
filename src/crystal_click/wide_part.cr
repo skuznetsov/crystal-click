@@ -583,10 +583,12 @@ module CrystalClick
         selected_bytes = 0_i64
         frame_offset = start_offset.to_i64
         started = false
+        workspace = CompressedBlock::DecodeWorkspace.new
         loop do
-          frame = CompressedBlock.decode_frame(
+          frame = CompressedBlock.decode_frame_into(
             data,
             frame_offset,
+            workspace,
             MAX_FRAME_COMPRESSED_BYTES,
             MAX_FRAME_DECOMPRESSED_BYTES
           )

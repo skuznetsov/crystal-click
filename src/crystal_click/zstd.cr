@@ -16,12 +16,25 @@ module CrystalClick
       raise CorruptPartError.new("ZSTD output exceeds limit") if expected_size.to_i64 > max_size
       raise CorruptPartError.new("empty ZSTD payload") if input.empty?
 
+      output = Bytes.new(expected_size)
+      decode_into(input, output, expected_size, max_size)
+    end
+
+    def self.decode_into(input : Bytes, output : Bytes, expected_size : Int, max_size : Int64) : Bytes
+      raise CorruptPartError.new("negative ZSTD output size") if expected_size < 0
+      raise CorruptPartError.new("ZSTD output size is invalid") if expected_size == 0
+      raise CorruptPartError.new("invalid ZSTD output limit") if max_size < 0
+      raise CorruptPartError.new("ZSTD output exceeds limit") if expected_size.to_i64 > max_size
+      raise CorruptPartError.new("ZSTD destination is too small") if output.size < expected_size
+      raise BoundsError.new("ZSTD destination must be writable") if output.read_only?
+      raise CorruptPartError.new("empty ZSTD payload") if input.empty?
+
       input_size = input.size.to_u64
       frame_size = LibZSTD.ZSTD_findFrameCompressedSize(input.to_unsafe.as(Void*), input_size)
       raise CorruptPartError.new("invalid ZSTD frame") unless LibZSTD.ZSTD_isError(frame_size) == 0
       raise CorruptPartError.new("ZSTD payload has trailing bytes") unless frame_size == input_size
 
-      output = Bytes.new(expected_size)
+      output = output[0, expected_size]
       decoded_size = LibZSTD.ZSTD_decompress(
         output.to_unsafe.as(Void*),
         expected_size.to_u64,
