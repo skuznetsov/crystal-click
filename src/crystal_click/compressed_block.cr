@@ -136,6 +136,45 @@ module CrystalClick
       output.to_slice
     end
 
+    # Decodes `count` little-endian UInt64 delta words into `destination` and
+    # returns the final wrapping accumulator. Frame decoders validate their
+    # framing before calling this kernel; the public entry point also checks
+    # that both slices contain at least `count * 8` bytes for benchmark use.
+    #
+    # Forward overlap (destination at or before input) is safe for the normal
+    # Multiple/Delta in-place path. If destination starts inside the source,
+    # a backward two-pass scalar path is selected so no unread delta word is
+    # overwritten. `delta_byte_scalar` preserves the original byte-wise
+    # baseline, `delta_scalar` selects the portable typed scalar path, and
+    # `delta_neon` selects the AArch64 inline-assembly pair kernel. The default
+    # is the typed scalar path so the optimized backend remains an experiment.
+    def self.decode_delta_words(
+      input : Bytes,
+      destination : Bytes,
+      count : Int,
+      initial_accumulator : UInt64 = 0_u64,
+    ) : UInt64
+      raise ArgumentError.new("negative Delta word count") if count < 0
+      raise ArgumentError.new("Delta input is too short") if count > input.size // 8
+      raise ArgumentError.new("Delta destination is too short") if count > destination.size // 8
+      return initial_accumulator if count == 0
+
+      input_address = input.to_unsafe.address
+      destination_address = destination.to_unsafe.address
+      input_end = input_address &+ (count * 8).to_u64
+      if destination_address > input_address && destination_address < input_end
+        return decode_delta_words_backward(input, destination, count, initial_accumulator)
+      end
+
+      {% if flag?(:delta_byte_scalar) %}
+        decode_delta_words_byte_scalar(input, destination, count, initial_accumulator)
+      {% elsif flag?(:delta_neon) && flag?(:aarch64) %}
+        decode_delta_words_neon(input, destination, count, initial_accumulator)
+      {% else %}
+        decode_delta_words_scalar(input, destination, count, initial_accumulator)
+      {% end %}
+    end
+
     private def self.u32(bytes : Bytes, offset : Int) : UInt32
       raise CorruptPartError.new("truncated compressed header") if offset < 0 || offset > bytes.size - 4
       bytes[offset].to_u32 |
@@ -234,29 +273,169 @@ module CrystalClick
       raise CorruptPartError.new("Delta payload size mismatch") unless input.size == 2 + expected_size
 
       output = Bytes.new(expected_size)
-      accumulator = 0_u64
-      input_offset = 2
-      output_offset = 0
-      while input_offset < input.size
-        accumulator = accumulator &+ u64(input, input_offset)
-        write_u64(output, output_offset, accumulator)
-        input_offset += 8
-        output_offset += 8
-      end
+      {% if flag?(:delta_byte_scalar) %}
+        accumulator = 0_u64
+        input_offset = 2
+        output_offset = 0
+        while input_offset < input.size
+          accumulator = accumulator &+ u64(input, input_offset)
+          write_u64(output, output_offset, accumulator)
+          input_offset += 8
+          output_offset += 8
+        end
+      {% elsif flag?(:delta_neon) && flag?(:aarch64) %}
+        decode_delta_words_neon_pointers(input.to_unsafe + 2, output.to_unsafe, expected_size // 8, 0_u64)
+      {% else %}
+        decode_delta_words_scalar_pointers(input.to_unsafe + 2, output.to_unsafe, expected_size // 8, 0_u64)
+      {% end %}
       output
     end
 
     private def self.decode_delta_in_place(input : Bytes, expected_size : Int) : Bytes
-      accumulator = 0_u64
-      input_offset = HEADER_SIZE + 2
-      output_offset = 0
-      while output_offset < expected_size
-        accumulator = accumulator &+ u64(input, input_offset)
-        write_u64(input, output_offset, accumulator)
-        input_offset += 8
-        output_offset += 8
-      end
+      {% if flag?(:delta_byte_scalar) %}
+        accumulator = 0_u64
+        input_offset = HEADER_SIZE + 2
+        output_offset = 0
+        while output_offset < expected_size
+          accumulator = accumulator &+ u64(input, input_offset)
+          write_u64(input, output_offset, accumulator)
+          input_offset += 8
+          output_offset += 8
+        end
+      {% elsif flag?(:delta_neon) && flag?(:aarch64) %}
+        input_pointer = input.to_unsafe
+        decode_delta_words_neon_pointers(input_pointer + HEADER_SIZE + 2, input_pointer, expected_size // 8, 0_u64)
+      {% else %}
+        input_pointer = input.to_unsafe
+        decode_delta_words_scalar_pointers(input_pointer + HEADER_SIZE + 2, input_pointer, expected_size // 8, 0_u64)
+      {% end %}
       input[0, expected_size]
+    end
+
+    private def self.decode_delta_words_byte_scalar(
+      input : Bytes,
+      destination : Bytes,
+      count : Int,
+      accumulator : UInt64,
+    ) : UInt64
+      count.times do |index|
+        offset = index * 8
+        accumulator = accumulator &+ u64(input, offset)
+        write_u64(destination, offset, accumulator)
+      end
+      accumulator
+    end
+
+    private def self.decode_delta_words_scalar_pointers(
+      input_pointer : Pointer(UInt8),
+      destination_pointer : Pointer(UInt8),
+      count : Int,
+      accumulator : UInt64,
+    ) : UInt64
+      remaining = count
+      while remaining > 0
+        accumulator = accumulator &+ IO::ByteFormat::LittleEndian.decode(UInt64, input_pointer.to_slice(8))
+        IO::ByteFormat::LittleEndian.encode(accumulator, destination_pointer.to_slice(8))
+        input_pointer += 8
+        destination_pointer += 8
+        remaining -= 1
+      end
+      accumulator
+    end
+
+    private def self.decode_delta_words_scalar(
+      input : Bytes,
+      destination : Bytes,
+      count : Int,
+      accumulator : UInt64,
+    ) : UInt64
+      decode_delta_words_scalar_pointers(input.to_unsafe, destination.to_unsafe, count, accumulator)
+    end
+
+    private def self.decode_delta_words_backward(
+      input : Bytes,
+      destination : Bytes,
+      count : Int,
+      initial_accumulator : UInt64,
+    ) : UInt64
+      final_accumulator = initial_accumulator
+      count.times do |index|
+        final_accumulator = final_accumulator &+ u64(input, index * 8)
+      end
+
+      accumulator = final_accumulator
+      index = count
+      while index > 0
+        index -= 1
+        offset = index * 8
+        delta = u64(input, offset)
+        write_u64(destination, offset, accumulator)
+        accumulator = accumulator &- delta
+      end
+      final_accumulator
+    end
+
+    private def self.decode_delta_words_neon(
+      input : Bytes,
+      destination : Bytes,
+      count : Int,
+      accumulator : UInt64,
+    ) : UInt64
+      decode_delta_words_neon_pointers(input.to_unsafe, destination.to_unsafe, count, accumulator)
+    end
+
+    private def self.decode_delta_words_neon_pointers(
+      input_pointer : Pointer(UInt8),
+      destination_pointer : Pointer(UInt8),
+      count : Int,
+      accumulator : UInt64,
+    ) : UInt64
+      pair_count = count // 2
+      if pair_count > 0
+        input_address = input_pointer.address
+        destination_address = destination_pointer.address
+        pair_count_u64 = pair_count.to_u64
+        input_address_after = uninitialized UInt64
+        destination_address_after = uninitialized UInt64
+        pair_count_after = uninitialized UInt64
+        accumulator_after = uninitialized UInt64
+
+        asm(
+          "
+          1:
+            ld1     {v0.2d}, [$0], #16
+            movi    v1.2d, #0
+            ins     v1.d[1], v0.d[0]
+            add     v0.2d, v0.2d, v1.2d
+            dup     v1.2d, $3
+            add     v0.2d, v0.2d, v1.2d
+            st1     {v0.2d}, [$1], #16
+            umov    $3, v0.d[1]
+            subs    $2, $2, #1
+            b.ne    1b
+          "
+                : "=r"(input_address_after), "=r"(destination_address_after), "=r"(pair_count_after), "=r"(accumulator_after)
+                : "0"(input_address), "1"(destination_address), "2"(pair_count_u64), "3"(accumulator)
+                : "v0", "v1", "cc", "memory"
+                : "volatile"
+        )
+
+        # Keep every tied output live across the asm expression. The first
+        # three values are not needed by the caller, but declaring and using
+        # them makes the pointer/counter mutation explicit to LLVM.
+        input_address = input_address_after
+        destination_address = destination_address_after
+        pair_count_u64 = pair_count_after
+        accumulator = accumulator_after
+      end
+
+      if count.odd?
+        input_pointer += pair_count * 16
+        destination_pointer += pair_count * 16
+        accumulator = accumulator &+ IO::ByteFormat::LittleEndian.decode(UInt64, input_pointer.to_slice(8))
+        IO::ByteFormat::LittleEndian.encode(accumulator, destination_pointer.to_slice(8))
+      end
+      accumulator
     end
 
     private def self.u64(bytes : Bytes, offset : Int) : UInt64

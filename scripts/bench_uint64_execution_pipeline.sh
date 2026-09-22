@@ -43,10 +43,37 @@ else
 fi
 : "${BENCH_CACHE_REGIME:=natural_unknown}"
 
+: "${BENCH_DELTA_BACKEND:=scalar}"
+
 die() {
   printf 'bench_uint64_execution_pipeline: %s\n' "$*" >&2
   exit 1
 }
+
+delta_backend_flags=()
+delta_backend_compile_flags=-Ddelta_scalar
+delta_backend_effective="$BENCH_DELTA_BACKEND"
+case "$BENCH_DELTA_BACKEND" in
+  neon)
+    delta_backend_flags=(-Ddelta_neon)
+    delta_backend_compile_flags=-Ddelta_neon
+    # The NEON selector is admitted only on AArch64.  On other targets the
+    # checked decoder retains its portable scalar fallback.
+    case "$(uname -m 2>/dev/null || true)" in
+      arm64|aarch64) ;;
+      *) delta_backend_effective=scalar_fallback ;;
+    esac
+    ;;
+  scalar)
+    delta_backend_flags=(-Ddelta_scalar)
+    delta_backend_compile_flags=-Ddelta_scalar
+    ;;
+  byte_scalar)
+    delta_backend_flags=(-Ddelta_byte_scalar)
+    delta_backend_compile_flags=-Ddelta_byte_scalar
+    ;;
+  *) die "BENCH_DELTA_BACKEND must be neon, scalar, or byte_scalar" ;;
+esac
 
 is_nonnegative_integer() {
   [[ "$1" =~ ^[0-9]+$ ]]
@@ -238,7 +265,7 @@ trap 'rm -rf "$binary_dir"' EXIT
 
 export CRYSTAL_CACHE_DIR="${CRYSTAL_CACHE_DIR:-$run_dir/crystal_cache}"
 crystal_link_flags="${CRYSTAL_LINK_FLAGS:--fuse-ld=ld}"
-crystal build --release "$root_dir/benchmarks/uint64_execution_pipeline.cr" -o "$binary_path" \
+crystal build --release "${delta_backend_flags[@]}" "$root_dir/benchmarks/uint64_execution_pipeline.cr" -o "$binary_path" \
   --link-flags="$crystal_link_flags"
 
 tree_digest() {
@@ -556,6 +583,9 @@ expected_observations=$(( BENCH_REPETITIONS * ${#scratch_values[@]} * track_coun
 printf 'verified=true\n'
 printf 'schema_version=1\n'
 printf 'smoke=%s\n' "$smoke"
+printf 'delta_backend=%s\n' "$BENCH_DELTA_BACKEND"
+printf 'delta_backend_effective=%s\n' "$delta_backend_effective"
+printf 'delta_backend_compile_flags=%s\n' "$delta_backend_compile_flags"
 printf 'performance_observations_eligible=%s\n' "$([[ "$smoke" == true ]] && printf false || printf true)"
 printf 'performance_winner_claim=false\n'
 printf 'tracks=%s\n' "${tracks[*]}"
