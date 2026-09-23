@@ -34,6 +34,12 @@ module CrystalClick
       @marks.size
     end
 
+    # Return the complete ordered row counts for this column's data marks.
+    # The returned array is independent of the reader's cached mark records.
+    def mark_row_counts : Array(UInt64)
+      @marks.map(&.rows)
+    end
+
     def read_uint64(column : String = @column) : Array(UInt64)
       read_uint64_mark_range(column, 0, mark_count)
     end
