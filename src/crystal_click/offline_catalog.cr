@@ -115,9 +115,9 @@ module CrystalClick
       reader.scan_numeric(batch_rows: batch_rows, &block)
     end
 
-    # Scan exact String, primitive numeric, and Nullable(primitive numeric)
-    # columns. Selected part types must exactly match this table's DDL before
-    # the first callback is allowed to run.
+    # Scan exact String, Nullable(String), primitive numeric, and
+    # Nullable(primitive numeric) columns. Selected part types must exactly
+    # match this table's DDL before the first callback is allowed to run.
     def scan_typed(
       columns : Array(String),
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,

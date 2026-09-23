@@ -1,0 +1,8 @@
+columns substreams version: 1
+2 columns:
+1 substreams for column `seq`:
+	seq
+3 substreams for column `payload`:
+	payload.null
+	payload.size
+	payload

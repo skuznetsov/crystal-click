@@ -30,8 +30,12 @@ module CrystalClick
       supports_numeric_type?(inner)
     end
 
+    def self.supports_nullable_string_type?(type : String) : Bool
+      type == "Nullable(String)"
+    end
+
     def self.supports_typed_type?(type : String) : Bool
-      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type)
+      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type)
     end
 
     def self.json_type?(type : String) : Bool
@@ -203,6 +207,16 @@ module CrystalClick
       total_bytes
     end
 
+    # Return nested String bytes for an exact Nullable(String) mark range,
+    # including encoded slots beneath NULL map entries. The nested stream must
+    # still be consumed to preserve row-position alignment.
+    def nullable_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(String) accessor requires an exact Nullable(String) column") unless @column_type == "Nullable(String)"
+      _, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      total_bytes
+    end
+
     # Read a bounded mark range from an exact String column. At most 64 MiB of
     # raw bytes are materialized per call (the whole range, not each mark).
     # Empty values are zero-length; embedded NUL bytes are preserved.
@@ -223,6 +237,44 @@ module CrystalClick
       end
       raise CorruptPartError.new("String sizes do not consume selected raw bytes") unless offset == raw_bytes.size
       values
+    end
+
+    # Read a bounded range from the three BASIC Nullable(String) streams.
+    # Even NULL rows consume their nested size and raw bytes before nil is
+    # surfaced, matching ClickHouse's nested NullableElements storage.
+    def read_nullable_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String?)
+      read_nullable_string_mark_range_with_raw_bytes(column, first_mark, mark_count)[0]
+    end
+
+    # Internal table-scan form that returns the encoded raw byte count from
+    # the same size vector used to decode values, including slots under NULL.
+    def read_nullable_string_mark_range_with_raw_bytes(column : String, first_mark : Int, mark_count : Int) : {Array(String?), UInt64}
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(String) accessor requires an exact Nullable(String) column") unless @column_type == "Nullable(String)"
+
+      null_stream = @streams["#{column}.null"]
+      string_stream = @streams[column]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      sizes, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable(String) substream mark rows differ") unless null_rows == sizes.size.to_u64
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(null_rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(string_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable(String) raw mark rows differ") unless raw_rows == sizes.size.to_u64
+      raw_bytes = read_mark_range_bytes(string_stream, raw_start, raw_end, total_bytes.to_i, 1)
+      values = Array(String?).new(sizes.size)
+      offset = 0
+      sizes.each_with_index do |size, index|
+        length = size.to_i
+        values << (null_map[index] == 1 ? nil : String.new(raw_bytes[offset, length]))
+        offset += length
+      end
+      raise CorruptPartError.new("Nullable(String) sizes do not consume nested raw bytes") unless offset == raw_bytes.size
+      {values, total_bytes}
     end
 
     # Read a bounded range from basic Nullable(T) streams. The separate null
@@ -460,7 +512,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || WidePart.supports_nullable_numeric_type?(column_type)
+      elsif column_type == "String" || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -622,6 +674,8 @@ module CrystalClick
     private def expected_physical_streams(column : String, type : String) : Array(String)
       if type == "String"
         ["#{column}.size", column]
+      elsif WidePart.supports_nullable_string_type?(type)
+        ["#{column}.null", "#{column}.size", column]
       elsif WidePart.supports_nullable_numeric_type?(type)
         ["#{column}.null", column]
       else
@@ -651,13 +705,19 @@ module CrystalClick
       raise UnsupportedFormatError.new("serialization.json nested-version flag is unsupported") unless propagated == true
       versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
       versions.each_key do |key|
-        raise UnsupportedFormatError.new("unsupported serialization type version") unless key == "string"
+        allowed = key == "string" || key == "nullable" && WidePart.supports_nullable_string_type?(type)
+        raise UnsupportedFormatError.new("unsupported serialization type version") unless allowed
       end
 
       if type == "String"
         string_version = versions["string"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
       elsif WidePart.supports_nullable_numeric_type?(type)
+        nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
+        raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
+      elsif WidePart.supports_nullable_string_type?(type)
+        string_version = versions["string"]?.try(&.as_i) || 0_i64
+        raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
       end
@@ -1019,6 +1079,8 @@ module CrystalClick
 
     private def stream_element_width(stream_name : String) : Int32
       if @column_type == "String"
+        stream_name == "#{@column}.size" ? 8 : 1
+      elsif WidePart.supports_nullable_string_type?(@column_type)
         stream_name == "#{@column}.size" ? 8 : 1
       elsif WidePart.supports_nullable_numeric_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
