@@ -1,0 +1,6 @@
+columns format version: 1
+4 columns:
+`label` String
+`maybe_u64` Nullable(UInt64)
+`maybe_i16` Nullable(Int16)
+`maybe_f32` Nullable(Float32)

@@ -1,3 +1,5 @@
+require "json"
+
 module CrystalClick
   class WidePart
     MAX_ROWS                     = 100_000_000_u64
@@ -5,6 +7,7 @@ module CrystalClick
     MAX_MARK_FILE_BYTES          = 64_i64 * 1024 * 1024
     MAX_FRAME_COMPRESSED_BYTES   = 64 * 1024 * 1024
     MAX_FRAME_DECOMPRESSED_BYTES = 64 * 1024 * 1024
+    MAX_STRING_RANGE_BYTES       = 64 * 1024 * 1024
     MAX_CODEC_FILE_BYTES         = 64
     MAX_METADATA_FILE_BYTES      = 4 * 1024 * 1024
     MAX_METADATA_LINE_BYTES      = 64 * 1024
@@ -19,6 +22,16 @@ module CrystalClick
       else
         false
       end
+    end
+
+    def self.supports_nullable_numeric_type?(type : String) : Bool
+      return false unless type.starts_with?("Nullable(") && type.ends_with?(")")
+      inner = type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
+      supports_numeric_type?(inner)
+    end
+
+    def self.supports_typed_type?(type : String) : Bool
+      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type)
     end
 
     def self.numeric_type_name(type : T.class) : String forall T
@@ -54,14 +67,22 @@ module CrystalClick
     getter mark_path : String
     getter checksum_verification : ChecksumVerification
 
+    # Physical checksum targets for every selected substream, including
+    # String size streams and Nullable null maps.
+    def selected_checksum_names : Array(String)
+      @streams.values.flat_map do |stream|
+        [File.basename(stream.data_path), File.basename(stream.mark_path)]
+      end
+    end
+
     def self.open(path : String) : WidePart
-      new(path, nil, false)
+      new(path, nil, :uint64)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
 
     def self.open(path : String, column : String) : WidePart
-      new(path, column, false)
+      new(path, column, :uint64)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
@@ -69,7 +90,15 @@ module CrystalClick
     # Open a supported fixed-width numeric column. Existing open/read_uint64
     # entry points remain UInt64-only.
     def self.open_numeric(path : String, column : String) : WidePart
-      new(path, column, true)
+      new(path, column, :numeric)
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot read part")
+    end
+
+    # Open an exact String or primitive numeric column, including Nullable(T).
+    # Serialization version metadata and every physical substream are checked.
+    def self.open_typed(path : String, column : String) : WidePart
+      new(path, column, :typed)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
@@ -103,6 +132,73 @@ module CrystalClick
           offset += element_width
         end
       end
+      values
+    end
+
+    # Return the raw-byte sum for an exact String mark range without
+    # materializing its String values. WidePartTable uses this to preflight an
+    # aggregate bound across selected String columns before reading raw streams.
+    def string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_type == "String"
+      _, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      total_bytes
+    end
+
+    # Read a bounded mark range from an exact String column. At most 64 MiB of
+    # raw bytes are materialized per call (the whole range, not each mark).
+    # Empty values are zero-length; embedded NUL bytes are preserved.
+    def read_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_type == "String"
+      string_stream = @streams[column]
+      sizes, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(string_stream, first_mark, mark_count)
+      raise CorruptPartError.new("selected String substream marks changed") unless raw_rows == sizes.size.to_u64
+      raw_bytes = read_mark_range_bytes(string_stream, raw_start, raw_end, total_bytes.to_i, 1)
+      values = Array(String).new(sizes.size)
+      offset = 0
+      sizes.each do |size|
+        length = size.to_i
+        values << String.new(raw_bytes[offset, length])
+        offset += length
+      end
+      raise CorruptPartError.new("String sizes do not consume selected raw bytes") unless offset == raw_bytes.size
+      values
+    end
+
+    # Read a bounded range from basic Nullable(T) streams. The separate null
+    # map and nested-value substreams retain their own compressed offsets and
+    # are decoded independently at identical mark indices.
+    def read_nullable_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(T?) forall T
+      ensure_column(column)
+      expected_type = "Nullable(#{WidePart.numeric_type_name(type)})"
+      raise UnsupportedFormatError.new("typed accessor does not match selected Nullable column type") unless @column_type == expected_type
+      element_width = numeric_type_width(WidePart.numeric_type_name(type))
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable substream mark rows differ") unless rows == value_rows
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+
+      encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(rows, element_width), element_width)
+      values = Array(T?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        values << (is_null == 1 ? nil : decode_numeric_value(encoded_values, offset, type))
+        offset += element_width
+      end
+      raise CorruptPartError.new("Nullable values do not consume nested bytes") unless offset == encoded_values.size
       values
     end
 
@@ -231,22 +327,53 @@ module CrystalClick
     @element_width : Int32
     @marks : Array(Mark)
     @sentinel : Mark
+    @streams : Hash(String, PhysicalStream)
 
-    private def initialize(path : String, requested_column : String?, allow_numeric : Bool)
+    private struct PhysicalStream
+      getter name : String
+      getter data_path : String
+      getter mark_path : String
+      getter marks : Array(Mark)
+      getter sentinel : Mark
+
+      def initialize(@name : String, @data_path : String, @mark_path : String, @marks : Array(Mark), @sentinel : Mark)
+      end
+    end
+
+    private def initialize(path : String, requested_column : String?, mode : Symbol)
       @path = path
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
-      @column, @column_type, @row_count, physical_stream = parse_metadata(requested_column, allow_numeric)
-      @element_width = numeric_type_width(@column_type)
-      validate_selected_stream_name(physical_stream)
-      @data_path, @mark_path, compressed_marks = resolve_stream(physical_stream)
-      data_size = File.size(@data_path)
-      raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
-      @marks, @sentinel = parse_marks(@mark_path, data_size, compressed_marks, @element_width)
-      validate_rows
+      @column, @column_type, @row_count, physical_streams = parse_metadata(requested_column, mode)
+      @streams = Hash(String, PhysicalStream).new
+      expected_mark_rows = nil.as(Array(UInt64)?)
+      physical_streams.each do |stream_name|
+        validate_selected_stream_name(stream_name)
+        data_path, mark_path, compressed_marks = resolve_stream(stream_name)
+        data_size = File.size(data_path)
+        raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
+        element_width = stream_element_width(stream_name)
+        marks, sentinel = parse_marks(mark_path, data_size, compressed_marks, element_width)
+        validate_rows(marks)
+        mark_rows = marks.map(&.rows)
+        if expected = expected_mark_rows
+          raise CorruptPartError.new("selected substreams have different mark row counts") unless mark_rows == expected
+        else
+          expected_mark_rows = mark_rows
+        end
+        @streams[stream_name] = PhysicalStream.new(stream_name, data_path, mark_path, marks, sentinel)
+      end
+
+      primary_stream = primary_stream_name(physical_streams)
+      selected_stream = @streams[primary_stream]
+      @data_path = selected_stream.data_path
+      @mark_path = selected_stream.mark_path
+      @marks = selected_stream.marks
+      @sentinel = selected_stream.sentinel
+      @element_width = stream_element_width(primary_stream)
     end
 
-    private def parse_metadata(requested_column : String?, allow_numeric : Bool) : {String, String, UInt64, String}
+    private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, UInt64, Array(String)}
       columns_text = read_metadata_file("columns.txt")
       columns = parse_columns(columns_text)
       if columns.empty?
@@ -259,10 +386,17 @@ module CrystalClick
       selected = columns.find { |entry| entry[0] == column }
       raise UnsupportedFormatError.new("column is not present") unless selected
       column_type = selected.not_nil![1]
-      if allow_numeric
+      case mode
+      when :numeric
         numeric_type_width(column_type)
+      when :typed
+        raise UnsupportedFormatError.new("unsupported exact typed column") unless WidePart.supports_typed_type?(column_type)
       else
         raise UnsupportedFormatError.new("only exact UInt64 columns are supported") unless column_type == "UInt64"
+      end
+
+      if column_type == "String" || WidePart.supports_nullable_numeric_type?(column_type)
+        validate_type_serialization_version(column_type)
       end
 
       validate_default_codec
@@ -270,8 +404,8 @@ module CrystalClick
       row_count = parse_count_file("count.txt")
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
 
-      physical_stream = parse_substreams(columns, column)
-      {column, column_type, row_count, physical_stream}
+      physical_streams = parse_substreams(columns, column, column_type)
+      {column, column_type, row_count, physical_streams}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
     end
@@ -317,11 +451,13 @@ module CrystalClick
       columns
     end
 
-    private def parse_substreams(columns : Array({String, String}), selected_column : String) : String
+    private def parse_substreams(columns : Array({String, String}), selected_column : String, selected_type : String) : Array(String)
       file = File.join(@path, "columns_substreams.txt")
       unless File.exists?(file)
         raise UnsupportedFormatError.new("columns_substreams.txt is required for multi-column parts") unless columns.size == 1
-        return selected_column
+        expected_streams = expected_physical_streams(selected_column, selected_type)
+        raise UnsupportedFormatError.new("columns_substreams.txt is required for this serialization shape") unless expected_streams == [selected_column]
+        return [selected_column]
       end
       text = read_metadata_file("columns_substreams.txt")
       bytes = text.to_slice
@@ -335,7 +471,7 @@ module CrystalClick
 
       seen_columns = Set(String).new
       seen_streams = Set(String).new
-      selected_stream = nil
+      selected_streams = nil.as(Array(String)?)
       count.times do |index|
         line = metadata_line(bytes, cursor, "columns_substreams.txt")
         cursor += line_length(bytes, cursor)
@@ -357,13 +493,60 @@ module CrystalClick
           streams << stream
         end
         if column == selected_column
-          raise UnsupportedFormatError.new("selected column must have one physical substream") unless streams.size == 1
-          raise UnsupportedFormatError.new("selected physical substream does not match column") unless streams[0] == selected_column
-          selected_stream = streams[0]
+          expected_streams = expected_physical_streams(column, selected_type)
+          raise UnsupportedFormatError.new("selected physical substreams do not match exact serialization shape") unless streams == expected_streams
+          selected_streams = streams
         end
       end
       raise UnsupportedFormatError.new("trailing columns_substreams.txt data") unless cursor == bytes.size
-      selected_stream || raise UnsupportedFormatError.new("selected column substreams are missing")
+      selected_streams || raise UnsupportedFormatError.new("selected column substreams are missing")
+    end
+
+    private def expected_physical_streams(column : String, type : String) : Array(String)
+      if type == "String"
+        ["#{column}.size", column]
+      elsif WidePart.supports_nullable_numeric_type?(type)
+        ["#{column}.null", column]
+      else
+        [column]
+      end
+    end
+
+    private def validate_type_serialization_version(type : String) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for this type") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      info.each_key do |key|
+        unless ["version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types", "missing_columns"].includes?(key)
+          raise UnsupportedFormatError.new("unsupported serialization.json field")
+        end
+      end
+
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("serialization.json nested-version flag is unsupported") unless propagated == true
+      versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      versions.each_key do |key|
+        raise UnsupportedFormatError.new("unsupported serialization type version") unless key == "string"
+      end
+
+      if type == "String"
+        string_version = versions["string"]?.try(&.as_i) || 0_i64
+        raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
+      elsif WidePart.supports_nullable_numeric_type?(type)
+        nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
+        raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
+      end
+      nil
+    rescue ex : JSON::ParseException | TypeCastError
+      raise CorruptPartError.new("serialization.json is malformed")
     end
 
     private def parse_count_file(name : String) : UInt64
@@ -613,13 +796,51 @@ module CrystalClick
       {records, sentinel}
     end
 
-    private def validate_rows
+    private def validate_rows(marks : Array(Mark))
       total = 0_u64
-      @marks.each do |mark|
+      marks.each do |mark|
         total = total &+ mark.rows
         raise CorruptPartError.new("row count overflow") if total < mark.rows
       end
       raise CorruptPartError.new("row count does not match marks") unless total == @row_count
+    end
+
+    private def primary_stream_name(stream_names : Array(String)) : String
+      raise CorruptPartError.new("selected primary stream is missing") unless stream_names.includes?(@column)
+      @column
+    end
+
+    private def stream_element_width(stream_name : String) : Int32
+      if @column_type == "String"
+        stream_name == "#{@column}.size" ? 8 : 1
+      elsif WidePart.supports_nullable_numeric_type?(@column_type)
+        stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
+      else
+        numeric_type_width(@column_type)
+      end
+    end
+
+    private def nullable_inner_type(type : String) : String
+      raise UnsupportedFormatError.new("exact Nullable primitive type required") unless WidePart.supports_nullable_numeric_type?(type)
+      type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
+    end
+
+    private def read_string_sizes(column : String, first_mark : Int, mark_count : Int) : {Array(UInt64), UInt64}
+      size_stream = @streams["#{column}.size"]
+      size_start, size_end, rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      encoded_sizes = read_mark_range_bytes(size_stream, size_start, size_end, checked_byte_count(rows, 8), 8)
+      sizes = Array(UInt64).new(rows.to_i)
+      total_bytes = 0_u64
+      offset = 0
+      while offset < encoded_sizes.size
+        size = u64(encoded_sizes, offset)
+        raise CorruptPartError.new("String size exceeds selected data limit") if size > MAX_DATA_FILE_BYTES.to_u64 - total_bytes
+        raise CorruptPartError.new("String read range exceeds materialization limit") if size > MAX_STRING_RANGE_BYTES.to_u64 - total_bytes
+        total_bytes += size
+        sizes << size
+        offset += 8
+      end
+      {sizes, total_bytes}
     end
 
     private def ensure_column(column : String)
@@ -661,10 +882,45 @@ module CrystalClick
       {start_mark, end_mark, expected_bytes}
     end
 
+    private def checked_stream_mark_range(stream : PhysicalStream, first_mark : Int, mark_count : Int) : {Mark, Mark, UInt64}
+      raise BoundsError.new("negative mark range") if first_mark < 0 || mark_count < 0
+      raise BoundsError.new("empty mark range") if mark_count == 0
+      marks = stream.marks
+      raise BoundsError.new("mark range exceeds data marks") if first_mark > marks.size || mark_count > marks.size - first_mark
+      start_mark = marks[first_mark]
+      end_index = first_mark + mark_count
+      end_mark = end_index == marks.size ? stream.sentinel : marks[end_index]
+      expected_rows = rows_in_range(marks, first_mark, mark_count)
+      {start_mark, end_mark, expected_rows}
+    end
+
+    private def read_mark_range_bytes(
+      stream : PhysicalStream,
+      start_mark : Mark,
+      end_mark : Mark,
+      expected_bytes : Int,
+      element_width : Int32,
+    ) : Bytes
+      raise CorruptPartError.new("selected byte count exceeds limit") if expected_bytes < 0 || expected_bytes > MAX_DATA_FILE_BYTES
+      output = Bytes.new(expected_bytes)
+      offset = 0
+      each_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, element_width) do |chunk|
+        raise CorruptPartError.new("selected byte count exceeds allocation") if chunk.size > output.size - offset
+        chunk.copy_to(output.to_unsafe + offset, chunk.size)
+        offset += chunk.size
+      end
+      raise CorruptPartError.new("selected byte count mismatch") unless offset == output.size
+      output
+    end
+
     private def rows_in_range(first_mark : Int, count : Int) : UInt64
+      rows_in_range(@marks, first_mark, count)
+    end
+
+    private def rows_in_range(marks : Array(Mark), first_mark : Int, count : Int) : UInt64
       total = 0_u64
       count.times do |index|
-        rows = @marks[first_mark + index].rows
+        rows = marks[first_mark + index].rows
         total = total &+ rows
         raise CorruptPartError.new("mark range row count overflow") if total < rows
       end
@@ -742,12 +998,25 @@ module CrystalClick
       & : Bytes -> Nil
     ) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
-      data_size = File.size(@data_path)
+      each_mark_range_bytes(@streams[@column], start_mark.not_nil!, end_mark, expected_bytes, element_width) do |bytes|
+        yield bytes
+      end
+    end
+
+    private def each_mark_range_bytes(
+      stream : PhysicalStream,
+      start_mark : Mark,
+      end_mark : Mark,
+      expected_bytes : Int,
+      element_width : Int32,
+      & : Bytes -> Nil
+    ) : Nil
+      data_size = File.size(stream.data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
-      MMapDataSource.with_file(@data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
-        start_offset = start_mark.not_nil!.compressed_offset
+      MMapDataSource.with_file(stream.data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
+        start_offset = start_mark.compressed_offset
         end_offset = end_mark.compressed_offset
-        eof_sentinel = end_mark == @sentinel && end_offset == data_size.to_u64 && end_mark.decompressed_offset == 0
+        eof_sentinel = end_mark == stream.sentinel && end_offset == data_size.to_u64 && end_mark.decompressed_offset == 0
         raise CorruptPartError.new("mark frame offset exceeds data") if start_offset >= data_size || end_offset > data_size || end_offset == data_size && !eof_sentinel
         raise CorruptPartError.new("mark frame offsets are reversed") if start_offset > end_offset
 
@@ -766,10 +1035,10 @@ module CrystalClick
           current = frame_offset.to_u64
           started ||= current == start_offset
           raise CorruptPartError.new("mark does not start at a frame") unless started
-          local_start = current == start_offset ? start_mark.not_nil!.decompressed_offset : 0_u64
+          local_start = current == start_offset ? start_mark.decompressed_offset : 0_u64
           local_end = current == end_offset ? end_mark.decompressed_offset : frame.output.size.to_u64
           raise CorruptPartError.new("mark offset exceeds frame output") if local_start > frame.output.size || local_end > frame.output.size || local_start > local_end
-          if current == end_offset && end_mark == @sentinel && !eof_sentinel
+          if current == end_offset && end_mark == stream.sentinel && !eof_sentinel
             raise CorruptPartError.new("non-EOF sentinel must end at frame output") unless end_mark.decompressed_offset == frame.output.size
           end
           selected_size = (local_end - local_start).to_i64
@@ -778,7 +1047,7 @@ module CrystalClick
           yield frame.output[local_start.to_i, selected_size.to_i] if selected_size > 0
           selected_bytes += selected_size
           if current == end_offset
-            raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == @sentinel && frame.end_offset != data_size
+            raise CorruptPartError.new("data has trailing bytes after final frame") if end_mark == stream.sentinel && frame.end_offset != data_size
             break
           end
           next_offset = frame.end_offset

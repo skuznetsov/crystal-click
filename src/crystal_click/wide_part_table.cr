@@ -5,6 +5,12 @@ module CrystalClick
   alias WidePartNumericSlice = Slice(UInt8) | Slice(UInt16) | Slice(UInt32) | Slice(UInt64) |
                                Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) |
                                Slice(Float32) | Slice(Float64)
+  alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
+                                Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) |
+                                Array(Float32?) | Array(Float64?)
+  alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
+                                Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) |
+                                Slice(Float32?) | Slice(Float64?)
 
   # A callback view over aligned numeric columns from one bounded table batch.
   # Column slices alias per-mark arrays and are valid only until the callback
@@ -21,6 +27,9 @@ module CrystalClick
     @column_names : Array(String)
     @column_types : Array(String)
     @column_values : Array(WidePartNumericSlice)
+    @typed_numeric_values : Hash(String, WidePartNumericSlice)
+    @string_values : Hash(String, Slice(String))
+    @nullable_values : Hash(String, WidePartNullableSlice)
 
     def initialize(
       @part_index : Int32,
@@ -35,6 +44,9 @@ module CrystalClick
       @column_values : Array(WidePartNumericSlice),
     )
       @column_types = column_types
+      @typed_numeric_values = Hash(String, WidePartNumericSlice).new
+      @string_values = Hash(String, Slice(String)).new
+      @nullable_values = Hash(String, WidePartNullableSlice).new
     end
 
     # Preserve the original UInt64 batch construction contract.
@@ -51,6 +63,26 @@ module CrystalClick
     )
       @column_types = Array(String).new(column_values.size, "UInt64")
       @column_values = column_values.map { |values| values.as(WidePartNumericSlice) }
+      @typed_numeric_values = Hash(String, WidePartNumericSlice).new
+      @string_values = Hash(String, Slice(String)).new
+      @nullable_values = Hash(String, WidePartNullableSlice).new
+    end
+
+    def initialize(
+      @part_index : Int32,
+      @part_name : String,
+      @part_path : String,
+      @mark_index : Int32,
+      @mark_row_offset : UInt64,
+      @part_row_offset : UInt64,
+      @source_row_offset : UInt64,
+      @column_names : Array(String),
+      @column_types : Array(String),
+      @typed_numeric_values : Hash(String, WidePartNumericSlice),
+      @string_values : Hash(String, Slice(String)),
+      @nullable_values : Hash(String, WidePartNullableSlice),
+    )
+      @column_values = [] of WidePartNumericSlice
     end
 
     def column_names : Array(String)
@@ -60,6 +92,7 @@ module CrystalClick
     def values_for(column : String) : Slice(UInt64)
       index = column_index(column)
       raise UnsupportedFormatError.new("UInt64 accessor requires an exact UInt64 column") unless @column_types[index] == "UInt64"
+      return @typed_numeric_values[column].as(Slice(UInt64)) if @typed_numeric_values.has_key?(column)
       @column_values[index].as(Slice(UInt64))
     end
 
@@ -72,7 +105,21 @@ module CrystalClick
       unless WidePart.supports_numeric_type?(type_name) && @column_types[index] == type_name
         raise UnsupportedFormatError.new("typed accessor does not match selected column type")
       end
+      return @typed_numeric_values[column].as(Slice(T)) if @typed_numeric_values.has_key?(column)
       @column_values[index].as(Slice(T))
+    end
+
+    def strings_for(column : String) : Slice(String)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_types[index] == "String"
+      @string_values[column]? || raise(UnsupportedFormatError.new("String column was not materialized in this batch"))
+    end
+
+    def nullable_values_for(column : String, type : T.class) : Slice(T?) forall T
+      index = column_index(column)
+      type_name = "Nullable(#{WidePart.numeric_type_name(type)})"
+      raise UnsupportedFormatError.new("typed accessor does not match selected Nullable column type") unless @column_types[index] == type_name
+      (@nullable_values[column]? || raise(UnsupportedFormatError.new("Nullable column was not materialized in this batch"))).as(Slice(T?))
     end
 
     private def column_index(column : String) : Int
@@ -84,8 +131,8 @@ module CrystalClick
 
   # A correctness-first reader over caller-selected immutable Wide-part paths.
   # It does not discover active parts or execute a query language. Each mark is
-  # materialized for selected numeric columns, checked for row alignment, then
-  # exposed in bounded callback slices.
+  # materialized for selected columns, checked for row alignment, then exposed
+  # in bounded callback slices.
   class WidePartTable
     MAX_PARTS             = 1_024
     MAX_COLUMNS           =    16
@@ -95,10 +142,13 @@ module CrystalClick
     MAX_MARKS_PER_READER  =        65_536
     MAX_TOTAL_MARKS       = 1_000_000_u64
     # At the 16-column limit a full mark is capped at 8 MiB for the widest types.
-    MAX_MARK_ROWS      =          65_536_u64
-    MAX_TOTAL_ROWS     = 100_000_000_000_u64
-    DEFAULT_BATCH_ROWS =               4_096
-    MAX_BATCH_ROWS     =               4_096
+    MAX_MARK_ROWS = 65_536_u64
+    # Variable-width selected String data is preflighted and then rechecked
+    # after materialization; one mark is capped independently of batch_rows.
+    MAX_MARK_MATERIALIZED_BYTES = 64 * 1024 * 1024
+    MAX_TOTAL_ROWS              = 100_000_000_000_u64
+    DEFAULT_BATCH_ROWS          =               4_096
+    MAX_BATCH_ROWS              =               4_096
 
     getter part_count : Int32
     getter total_row_count : UInt64
@@ -138,13 +188,18 @@ module CrystalClick
     @columns : Array(String)
     @entries : Array(PartEntry)
     @numeric_mode : Bool
+    @typed_mode : Bool
 
     def self.open_selected(parts : Array(String), columns : Array(String)) : WidePartTable
-      new(parts, columns, false)
+      new(parts, columns, false, false)
     end
 
     def self.open_selected_numeric(parts : Array(String), columns : Array(String)) : WidePartTable
-      new(parts, columns, true)
+      new(parts, columns, true, false)
+    end
+
+    def self.open_selected_typed(parts : Array(String), columns : Array(String)) : WidePartTable
+      new(parts, columns, false, true)
     end
 
     def columns : Array(String)
@@ -171,8 +226,112 @@ module CrystalClick
     # retrieved from each batch with values_for(column, CrystalType).
     def scan_numeric(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
+      unless @entries.all? { |part| part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
+        raise UnsupportedFormatError.new("numeric scan requires exact primitive numeric columns")
+      end
 
       scan_rows(batch_rows) { |batch| yield batch }
+    end
+
+    # Scan exact String, fixed-width primitive numeric, and Nullable(primitive
+    # numeric) columns. Each selected column's declared type is retained in the
+    # callback; no equal-width reinterpretation is permitted.
+    def scan_typed(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
+      raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
+      scan_typed_rows(batch_rows) { |batch| yield batch }
+    end
+
+    private def scan_typed_rows(batch_rows : Int, & : WidePartTableBatch -> Nil) : Nil
+      source_row_offset = 0_u64
+      @entries.each_with_index do |part, part_index|
+        part_row_offset = 0_u64
+        part.mark_row_counts.each_with_index do |mark_rows, mark_index|
+          # The selected String size streams are read first. This preflight
+          # bounds raw variable-width materialization before any String array
+          # is allocated. The immutable-parts contract is not transactional;
+          # the actual aggregate is checked again before callback exposure.
+          preflight_string_bytes = 0_u64
+          part.readers.each do |selected|
+            if selected.column_type == "String"
+              bytes = selected.reader.string_mark_range_raw_bytes(selected.name, mark_index, 1)
+              if bytes > (MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes)
+                raise CorruptPartError.new("selected String mark exceeds aggregate materialization limit")
+              end
+              preflight_string_bytes += bytes
+            end
+          end
+
+          numeric_values = Hash(String, WidePartNumericArray).new
+          string_values = Hash(String, Array(String)).new
+          nullable_values = Hash(String, WidePartNullableArray).new
+          actual_string_bytes = 0_u64
+          part.readers.each do |selected|
+            case selected.column_type
+            when "String"
+              values = selected.reader.read_string_mark_range(selected.name, mark_index, 1)
+              raise CorruptPartError.new("selected String mark row count changed") unless values.size.to_u64 == mark_rows
+              values.each do |value|
+                bytes = value.bytesize.to_u64
+                raise CorruptPartError.new("selected String mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+              end
+              string_values[selected.name] = values
+            when .starts_with?("Nullable(")
+              values = read_nullable_values(selected, mark_index)
+              raise CorruptPartError.new("selected Nullable mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
+              nullable_values[selected.name] = values
+            else
+              values = read_numeric_values(selected, mark_index)
+              raise CorruptPartError.new("selected column mark row count changed") unless values.size.to_u64 == mark_rows
+              numeric_values[selected.name] = values
+            end
+          end
+
+          mark_row_offset = 0_u64
+          while mark_row_offset < mark_rows
+            remaining = mark_rows - mark_row_offset
+            size = remaining < batch_rows.to_u64 ? remaining.to_i : batch_rows
+            numeric_slices = Hash(String, WidePartNumericSlice).new
+            string_slices = Hash(String, Slice(String)).new
+            nullable_slices = Hash(String, WidePartNullableSlice).new
+            part.readers.each do |selected|
+              if values = numeric_values[selected.name]?
+                numeric_slices[selected.name] = slice_numeric_values(values, mark_row_offset.to_i, size)
+              elsif values = string_values[selected.name]?
+                string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+              elsif values = nullable_values[selected.name]?
+                nullable_slices[selected.name] = slice_nullable_values(values, mark_row_offset.to_i, size)
+              else
+                raise CorruptPartError.new("selected typed column was not materialized")
+              end
+            end
+            batch = WidePartTableBatch.new(
+              part_index.to_i32,
+              part.name,
+              part.path,
+              mark_index.to_i32,
+              mark_row_offset,
+              part_row_offset &+ mark_row_offset,
+              source_row_offset &+ part_row_offset &+ mark_row_offset,
+              @columns,
+              part.column_types,
+              numeric_slices,
+              string_slices,
+              nullable_slices
+            )
+            yield batch
+            mark_row_offset &+= size.to_u64
+          end
+
+          part_row_offset &+= mark_rows
+        end
+
+        raise CorruptPartError.new("part row count changed during scan") unless part_row_offset == part.row_count
+        source_row_offset &+= part.row_count
+      end
+
+      raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count
+      nil
     end
 
     private def scan_rows(batch_rows : Int, & : WidePartTableBatch -> Nil) : Nil
@@ -279,7 +438,59 @@ module CrystalClick
       end
     end
 
-    private def initialize(parts : Array(String), columns : Array(String), @numeric_mode : Bool)
+    private def read_nullable_values(selected : ColumnReader, mark_index : Int) : WidePartNullableArray
+      reader = selected.reader
+      case selected.column_type
+      when "Nullable(UInt8)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt8)
+      when "Nullable(UInt16)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt16)
+      when "Nullable(UInt32)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt32)
+      when "Nullable(UInt64)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt64)
+      when "Nullable(Int8)"    then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int8)
+      when "Nullable(Int16)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int16)
+      when "Nullable(Int32)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int32)
+      when "Nullable(Int64)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int64)
+      when "Nullable(Float32)" then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Float32)
+      when "Nullable(Float64)" then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Float64)
+      else
+        raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
+      end
+    end
+
+    private def nullable_array_size(values : WidePartNullableArray) : Int
+      case values
+      when Array(UInt8?)   then values.size
+      when Array(UInt16?)  then values.size
+      when Array(UInt32?)  then values.size
+      when Array(UInt64?)  then values.size
+      when Array(Int8?)    then values.size
+      when Array(Int16?)   then values.size
+      when Array(Int32?)   then values.size
+      when Array(Int64?)   then values.size
+      when Array(Float32?) then values.size
+      when Array(Float64?) then values.size
+      else
+        raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
+      end
+    end
+
+    private def slice_nullable_values(values : WidePartNullableArray, offset : Int, size : Int) : WidePartNullableSlice
+      case values
+      when Array(UInt8?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt16?)  then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt32?)  then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt64?)  then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int8?)    then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int16?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int32?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int64?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Float32?) then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Float64?) then values.to_unsafe.to_slice(values.size)[offset, size]
+      else
+        raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
+      end
+    end
+
+    private def initialize(parts : Array(String), columns : Array(String), @numeric_mode : Bool, @typed_mode : Bool)
       raise BoundsError.new("no parts selected") if parts.empty?
       raise BoundsError.new("part count exceeds limit") if parts.size > MAX_PARTS
       raise BoundsError.new("no columns selected") if columns.empty?
@@ -322,6 +533,8 @@ module CrystalClick
         @columns.each do |column|
           reader = if @numeric_mode
                      WidePart.open_numeric(path, column)
+                   elsif @typed_mode
+                     WidePart.open_typed(path, column)
                    else
                      WidePart.open(path, column)
                    end
@@ -343,11 +556,9 @@ module CrystalClick
             expected_mark_rows = mark_rows
           end
 
-          checksums.validate_selected_entries(
-            path,
-            File.basename(reader.data_path),
-            File.basename(reader.mark_path)
-          )
+          reader.selected_checksum_names.each do |checksum_name|
+            checksums.validate_selected_entries(path, checksum_name)
+          end
           readers << ColumnReader.new(column, reader)
           total_marks = checked_total_marks(total_marks, reader.mark_count.to_u64)
         end

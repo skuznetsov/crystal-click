@@ -1,0 +1,14 @@
+columns substreams version: 1
+4 columns:
+2 substreams for column `label`:
+	label.size
+	label
+2 substreams for column `maybe_u64`:
+	maybe_u64.null
+	maybe_u64
+2 substreams for column `maybe_i16`:
+	maybe_i16.null
+	maybe_i16
+2 substreams for column `maybe_f32`:
+	maybe_f32.null
+	maybe_f32
