@@ -3,8 +3,15 @@ module CrystalClick
   struct OfflineColumn
     getter name : String
     getter type : String
+    getter alias_column : Bool
+    getter key_candidate_column : Bool
 
-    def initialize(@name : String, @type : String)
+    def initialize(
+      @name : String,
+      @type : String,
+      @alias_column : Bool = false,
+      @key_candidate_column : Bool = true,
+    )
     end
   end
 
@@ -28,6 +35,7 @@ module CrystalClick
 
     @columns : Array(OfflineColumn)
     @part_candidates : Array(OfflinePartCandidate)?
+    @primary_key_column : String?
 
     def initialize(
       @name : String,
@@ -35,6 +43,7 @@ module CrystalClick
       @engine : String,
       @columns : Array(OfflineColumn),
       @part_candidates : Array(OfflinePartCandidate)?,
+      @primary_key_column : String? = nil,
     )
     end
 
@@ -124,6 +133,61 @@ module CrystalClick
       paths = candidates.map(&.path)
       reader = WidePartTable.open_selected(paths, columns)
       reader.scan(batch_rows: batch_rows, &block)
+    end
+
+    # Select candidate granules for an inclusive range on one simple
+    # ascending UInt64 ORDER BY key. The callback receives whole granules;
+    # callers must apply the exact key predicate to each returned batch.
+    def scan_uint64_pk_candidates(
+      columns : Array(String),
+      lower_bound : UInt64? = nil,
+      upper_bound : UInt64? = nil,
+      &block : WidePartTableBatch -> Nil
+    ) : Nil
+      raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
+      raise BoundsError.new("at least one primary-key bound is required") unless lower_bound || upper_bound
+      if lower = lower_bound
+        if upper = upper_bound
+          raise BoundsError.new("primary-key lower bound exceeds upper bound") if lower > upper
+        end
+      end
+      raise BoundsError.new("no columns selected") if columns.empty?
+      raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
+
+      selected = Set(String).new
+      columns.each do |column_name|
+        raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
+        raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
+        selected << column_name
+
+        column = @columns.find { |entry| entry.name == column_name }
+        raise UnsupportedFormatError.new("selected column is not declared by table DDL") unless column
+        raise UnsupportedFormatError.new("selected table column is not UInt64") unless column.type == "UInt64"
+      end
+
+      key_column = @primary_key_column || raise(UnsupportedFormatError.new("table does not have a supported simple ascending UInt64 ORDER BY key"))
+      raise UnsupportedFormatError.new("selected columns must include the ORDER BY key") unless selected.includes?(key_column)
+
+      candidates = resolved_scan_parts
+      return nil if candidates.empty?
+
+      reader = WidePartTable.open_selected(candidates.map(&.path), columns)
+      reader.column_types.each do |column_name, part_type|
+        ddl_column = @columns.find { |entry| entry.name == column_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
+        unless ddl_column.type == part_type
+          raise UnsupportedFormatError.new("table DDL and selected part column types differ")
+        end
+      end
+
+      part_mark_rows = reader.part_mark_row_counts
+      raise CorruptPartError.new("selected part mark inventory changed") unless part_mark_rows.size == candidates.size
+      candidate_marks = Array(Array(Int32)).new(candidates.size)
+      candidates.each_with_index do |candidate, part_index|
+        checksums = PartChecksums.open(candidate.path)
+        index = PrimaryKeyIndex.open(candidate.path, part_mark_rows[part_index].size, checksums)
+        candidate_marks << index.candidate_marks(lower_bound, upper_bound)
+      end
+      reader.scan_candidate_marks(candidate_marks, &block)
     end
 
     # Scan selected exact primitive numeric columns. The type declared by the
@@ -431,10 +495,11 @@ module CrystalClick
   # It reads local files only and does not emulate system.* tables or server
   # lifecycle state.
   class OfflineCatalog
-    MAX_METADATA_ENTRIES =    10_000
-    MAX_METADATA_BYTES   = 1_048_576
-    MAX_IDENTIFIER_BYTES =     4_096
-    MAX_COUNT_BYTES      =        32
+    MAX_METADATA_ENTRIES      =    10_000
+    MAX_METADATA_BYTES        = 1_048_576
+    MAX_IDENTIFIER_BYTES      =     4_096
+    MAX_COUNT_BYTES           =        32
+    TABLE_TAIL_CLAUSE_PATTERN = /\A(PARTITION\s+BY|ORDER\s+BY|PRIMARY\s+KEY|SAMPLE\s+BY|TTL|SETTINGS|COMMENT)\b/i
 
     private struct DatabaseLocation
       getter uuid : String
@@ -543,7 +608,7 @@ module CrystalClick
 
       ddl_path = File.join(location.metadata_path, "#{encode_identifier(name)}.sql")
       ddl = read_bounded_file(ddl_path, MAX_METADATA_BYTES, "table DDL")
-      uuid, columns, engine = parse_table_ddl(ddl)
+      uuid, columns, engine, primary_key_column = parse_table_ddl(ddl)
 
       part_candidates = if engine == "MergeTree"
                           table_path = validate_store_directory(uuid)
@@ -552,7 +617,7 @@ module CrystalClick
                           nil
                         end
 
-      OfflineTable.new(name, uuid, engine, columns, part_candidates)
+      OfflineTable.new(name, uuid, engine, columns, part_candidates, primary_key_column)
     end
 
     private def resolve_database(name : String) : DatabaseLocation
@@ -600,7 +665,7 @@ module CrystalClick
       normalize_uuid(match[1])
     end
 
-    private def parse_table_ddl(ddl : String) : {String, Array(OfflineColumn), String}
+    private def parse_table_ddl(ddl : String) : {String, Array(OfflineColumn), String, String?}
       header = /\A\s*ATTACH\s+TABLE\s+_\s+UUID\s+'([^']+)'\s*\(/i.match(ddl)
       raise UnsupportedFormatError.new("unsupported table DDL header") unless header
       uuid = normalize_uuid(header[1])
@@ -618,13 +683,164 @@ module CrystalClick
       end
 
       columns = parse_columns(columns_text)
-      {uuid, columns, engine}
+      primary_key_column = engine.compare("MergeTree", case_insensitive: true) == 0 ? parse_simple_order_key(trailing, columns) : nil
+      {uuid, columns, engine, primary_key_column}
     end
 
     private def supported_table_tail?(trailing : String) : Bool
       return false unless /\A(?:ORDER\s+BY|PRIMARY\s+KEY|PARTITION\s+BY|SAMPLE\s+BY|TTL|SETTINGS|COMMENT)\b/i.matches?(trailing)
 
       !contains_unsupported_table_tail_control?(trailing)
+    end
+
+    # Extract only an exact one-column ascending ORDER BY key and optional
+    # identical PRIMARY KEY. Other recognized MergeTree clauses are split at
+    # top-level boundaries but never interpreted for pruning.
+    private def parse_simple_order_key(trailing : String, columns : Array(OfflineColumn)) : String?
+      return nil if trailing.empty?
+      clauses = split_table_tail_clauses(trailing)
+      return nil unless clauses
+
+      order_clauses = clauses.not_nil!.select { |clause| clause[0] == "ORDER BY" }
+      return nil unless order_clauses.size == 1
+      order_column = parse_simple_ascending_key_expression(order_clauses[0][1])
+      return nil unless order_column
+
+      primary_clauses = clauses.not_nil!.select { |clause| clause[0] == "PRIMARY KEY" }
+      return nil if primary_clauses.size > 1
+      if primary_clause = primary_clauses.first?
+        primary_column = parse_simple_ascending_key_expression(primary_clause[1])
+        return nil unless primary_column == order_column
+      end
+
+      column = columns.find { |entry| entry.name == order_column }
+      return nil unless column && column.type == "UInt64" && !column.alias_column && column.key_candidate_column
+      return nil unless supported_pk_suffix_clauses?(clauses.not_nil!)
+      order_column
+    end
+
+    private def supported_pk_suffix_clauses?(clauses : Array({String, String})) : Bool
+      previous_rank = -1
+      clauses.each do |keyword, content|
+        rank = case keyword
+               when "PARTITION BY"            then 0
+               when "PRIMARY KEY", "ORDER BY" then 1
+               when "SAMPLE BY"               then 2
+               when "TTL"                     then 3
+               when "SETTINGS"                then 4
+               when "COMMENT"                 then 5
+               else                                return false
+               end
+        # ClickHouse accepts PRIMARY KEY on either side of ORDER BY. Those
+        # two clauses may therefore share a rank, but other suffix clauses
+        # must remain in their canonical increasing order.
+        return false if rank < previous_rank || (rank == previous_rank && rank != 1)
+        return false unless supported_pk_suffix_clause?(keyword, content)
+        previous_rank = rank
+      end
+      true
+    end
+
+    # This is intentionally a narrow suffix validator, not a general DDL
+    # parser. It prevents opaque clause text from swallowing trailing tokens
+    # while retaining common partitioned tables and simple SETTINGS metadata.
+    private def supported_pk_suffix_clause?(keyword : String, content : String) : Bool
+      case keyword
+      when "PARTITION BY"
+        supported_simple_partition_expression?(content)
+      when "ORDER BY", "PRIMARY KEY", "SAMPLE BY"
+        !!parse_simple_ascending_key_expression(content)
+      when "SETTINGS"
+        supported_simple_settings?(content)
+      when "COMMENT"
+        /\A'(?:[^']|'')*'\z/m.matches?(content)
+      else
+        false
+      end
+    end
+
+    private def supported_simple_partition_expression?(content : String) : Bool
+      identifier = "(?:`[A-Za-z_][A-Za-z0-9_]*`|[A-Za-z_][A-Za-z0-9_]*)"
+      return true if Regex.new("\\A#{identifier}\\z").matches?(content.strip)
+      return true if /\Atuple\s*\(\s*\)\z/i.matches?(content.strip)
+      Regex.new("\\A[A-Za-z_][A-Za-z0-9_]*\\s*\\(\\s*#{identifier}(?:\\s*,\\s*#{identifier})*\\s*\\)\\z").matches?(content.strip)
+    end
+
+    private def supported_simple_settings?(content : String) : Bool
+      setting = "[A-Za-z_][A-Za-z0-9_]*"
+      value = "(?:'[^']*'|\"[^\"]*\"|[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\\.[0-9]+)?)"
+      Regex.new("\\A#{setting}\\s*=\\s*#{value}(?:\\s*,\\s*#{setting}\\s*=\\s*#{value})*\\z").matches?(content.strip)
+    end
+
+    private def split_table_tail_clauses(text : String) : Array({String, String})?
+      clauses = Array({String, String}).new
+      cursor = 0
+      while cursor < text.bytesize
+        while cursor < text.bytesize && whitespace?(text.to_slice[cursor])
+          cursor += 1
+        end
+        break if cursor == text.bytesize
+
+        match = TABLE_TAIL_CLAUSE_PATTERN.match(text.byte_slice(cursor, text.bytesize - cursor))
+        return nil unless match
+        keyword = match[1].gsub(/\s+/, " ").upcase
+        content_start = cursor + match.end(0)
+        next_clause = find_next_table_tail_clause(text, content_start)
+        content_end = next_clause || text.bytesize
+        content = text.byte_slice(content_start, content_end - content_start).strip
+        return nil if content.empty?
+        return nil if clauses.any? { |clause| clause[0] == keyword }
+
+        clauses << {keyword, content}
+        cursor = content_end
+      end
+      clauses
+    end
+
+    private def find_next_table_tail_clause(text : String, start : Int32) : Int32?
+      bytes = text.to_slice
+      depth = 0
+      quote = 0_u8
+      escaped = false
+      index = start
+      while index < bytes.size
+        byte = bytes[index]
+        if quote != 0
+          if escaped
+            escaped = false
+          elsif quote == '`'.ord && byte == '`'.ord && index + 1 < bytes.size && bytes[index + 1] == '`'.ord
+            index += 1
+          elsif byte == '\\'.ord
+            escaped = true
+          elsif byte == quote
+            quote = 0_u8
+          end
+        elsif byte == '\''.ord || byte == '"'.ord || byte == '`'.ord
+          quote = byte
+        elsif byte == '('.ord
+          depth += 1
+        elsif byte == ')'.ord
+          depth -= 1
+          return nil if depth < 0
+        elsif depth == 0 && whitespace?(byte)
+          candidate = index
+          while candidate < bytes.size && whitespace?(bytes[candidate])
+            candidate += 1
+          end
+          if candidate > index && candidate < bytes.size && TABLE_TAIL_CLAUSE_PATTERN.matches?(text.byte_slice(candidate, bytes.size - candidate))
+            return candidate
+          end
+        end
+        index += 1
+      end
+
+      nil if depth != 0 || quote != 0 || escaped
+    end
+
+    private def parse_simple_ascending_key_expression(expression : String) : String?
+      match = /\A(?:`([A-Za-z_][A-Za-z0-9_]*)`|([A-Za-z_][A-Za-z0-9_]*))(?:\s+ASC)?\z/i.match(expression.strip)
+      return nil unless match
+      match[1]? || match[2]?
     end
 
     # This guards the supported generated-DDL subset; it is not a general SQL
@@ -695,15 +911,15 @@ module CrystalClick
       columns = Array(OfflineColumn).new(definitions.size)
       seen = Set(String).new
       definitions.each do |definition|
-        name, type = parse_column_definition(definition)
+        name, type, alias_column, key_candidate_column = parse_column_definition(definition)
         raise UnsupportedFormatError.new("duplicate table column name: #{name}") if seen.includes?(name)
         seen << name
-        columns << OfflineColumn.new(name, type)
+        columns << OfflineColumn.new(name, type, alias_column, key_candidate_column)
       end
       columns
     end
 
-    private def parse_column_definition(definition : String) : {String, String}
+    private def parse_column_definition(definition : String) : {String, String, Bool, Bool}
       source = definition.strip
       bytes = source.to_slice
       raise UnsupportedFormatError.new("unsupported table column definition") if bytes.empty? || bytes[0] != '`'.ord
@@ -746,7 +962,7 @@ module CrystalClick
         raise UnsupportedFormatError.new("unsupported table column modifier")
       end
 
-      {name, type}
+      {name, type, /\AALIAS\b/i.matches?(modifier), modifier.empty?}
     end
 
     private def find_column_type_end(source : String, start : Int32) : Int32

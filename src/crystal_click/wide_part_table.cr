@@ -254,6 +254,11 @@ module CrystalClick
       end
     end
 
+    # Return each selected part's data-mark row counts in physical part order.
+    def part_mark_row_counts : Array(Array(UInt64))
+      @entries.map { |part| part.mark_row_counts.dup }
+    end
+
     # The callback receives one row-aligned slice per selected column. Slices
     # alias the current mark arrays and must not be retained past the callback.
     def scan(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
@@ -263,6 +268,69 @@ module CrystalClick
       end
 
       scan_rows(batch_rows) { |batch| yield batch }
+    end
+
+    # Scan only the caller-selected data marks. Each callback receives one
+    # complete candidate granule; skipped marks still advance physical row
+    # offsets and are never materialized.
+    def scan_candidate_marks(mark_indices : Array(Array(Int32)), & : WidePartTableBatch -> Nil) : Nil
+      unless @entries.all? { |part| part.readers.all? { |selected| selected.column_type == "UInt64" } }
+        raise UnsupportedFormatError.new("UInt64 candidate scan requires exact UInt64 columns")
+      end
+      raise BoundsError.new("candidate mark list does not match selected parts") unless mark_indices.size == @entries.size
+
+      # Validate the complete schedule before exposing the first callback.
+      mark_indices.each_with_index do |part_marks, part_index|
+        mark_count = @entries[part_index].mark_row_counts.size
+        previous = -1
+        part_marks.each do |mark_index|
+          raise BoundsError.new("candidate mark index is out of range") if mark_index < 0 || mark_index >= mark_count
+          raise BoundsError.new("candidate mark indices must be strictly increasing") if mark_index <= previous
+          previous = mark_index
+        end
+      end
+
+      source_row_offset = 0_u64
+      @entries.each_with_index do |part, part_index|
+        part_row_offset = 0_u64
+        selected_marks = mark_indices[part_index]
+        selected_index = 0
+        part.mark_row_counts.each_with_index do |mark_rows, mark_index|
+          if selected_index < selected_marks.size && selected_marks[selected_index] == mark_index.to_i32
+            selected_index += 1
+            column_values = Array(WidePartNumericArray).new(@columns.size)
+            part.readers.each do |selected|
+              values = read_numeric_values(selected, mark_index)
+              raise CorruptPartError.new("selected column mark row count changed") unless values.size.to_u64 == mark_rows
+              column_values << values
+            end
+
+            slices = Array(WidePartNumericSlice).new(column_values.size)
+            column_values.each do |values|
+              slices << slice_numeric_values(values, 0, values.size)
+            end
+            yield WidePartTableBatch.new(
+              part_index.to_i32,
+              part.name,
+              part.path,
+              mark_index.to_i32,
+              0_u64,
+              part_row_offset,
+              source_row_offset &+ part_row_offset,
+              @columns,
+              part.column_types,
+              slices
+            )
+          end
+          part_row_offset &+= mark_rows
+        end
+
+        raise CorruptPartError.new("part row count changed during candidate scan") unless part_row_offset == part.row_count
+        source_row_offset &+= part.row_count
+      end
+
+      raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count
+      nil
     end
 
     # Scan mixed fixed-width primitive numeric columns. Typed values are
