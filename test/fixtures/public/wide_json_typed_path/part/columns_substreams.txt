@@ -1,0 +1,12 @@
+columns substreams version: 1
+2 columns:
+1 substreams for column `seq`:
+	seq
+7 substreams for column `j`:
+	j.object_structure
+	j.a
+	j.b.size
+	j.b
+	j.object_shared_data.0.size0
+	j.object_shared_data.0%2Epaths
+	j.object_shared_data.0%2Evalues

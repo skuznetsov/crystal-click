@@ -173,6 +173,7 @@ module CrystalClick
       getter mark_row_counts : Array(UInt64)
       getter readers : Array(ColumnReader)
       getter column_types : Array(String)
+      getter column_sources : Array({String, String, String})
 
       def initialize(
         @name : String,
@@ -181,6 +182,7 @@ module CrystalClick
         @mark_row_counts : Array(UInt64),
         @readers : Array(ColumnReader),
         @column_types : Array(String),
+        @column_sources : Array({String, String, String}),
       )
       end
     end
@@ -209,6 +211,15 @@ module CrystalClick
     def column_types : Array({String, String})
       return [] of {String, String} if @entries.empty?
       @entries.first.readers.map { |selected| {selected.name, selected.column_type} }
+    end
+
+    # Retain the physical source identity for virtual JSON typed paths so the
+    # offline table can compare full JSON schemas before exposing callbacks.
+    def column_sources : Array({String, String, String})
+      return [] of {String, String, String} if @entries.empty?
+      @entries.first.readers.map do |selected|
+        {selected.name, selected.reader.source_column_name, selected.reader.source_column_type}
+      end
     end
 
     # The callback receives one row-aligned slice per selected column. Slices
@@ -519,6 +530,7 @@ module CrystalClick
       total_rows = 0_u64
       total_marks = 0_u64
       expected_column_types = nil.as(Array(String)?)
+      expected_column_sources = nil.as(Array({String, String, String})?)
 
       # selected_parts remains in caller order. The parsed identities above
       # are used only for the overlap guard; they do not imply Active status.
@@ -564,16 +576,24 @@ module CrystalClick
         end
 
         current_column_types = readers.map(&.column_type)
+        current_column_sources = readers.map do |selected|
+          {selected.name, selected.reader.source_column_name, selected.reader.source_column_type}
+        end
         if current_types = expected_column_types
           raise CorruptPartError.new("selected columns have different types across parts") unless current_column_types == current_types
         else
           expected_column_types = current_column_types
         end
+        if current_sources = expected_column_sources
+          raise CorruptPartError.new("selected columns have different source schemas across parts") unless current_column_sources == current_sources
+        else
+          expected_column_sources = current_column_sources
+        end
 
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, path, row_count, mark_row_counts, readers, current_column_types)
+        @entries << PartEntry.new(name, path, row_count, mark_row_counts, readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32

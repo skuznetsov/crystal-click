@@ -34,6 +34,61 @@ module CrystalClick
       type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type)
     end
 
+    def self.json_type?(type : String) : Bool
+      type == "JSON" || type.starts_with?("JSON(")
+    end
+
+    # Parse the intentionally small JSON typed-path declaration grammar used
+    # by this reader: simple top-level identifiers with exact primitive
+    # numeric or String types. Unsupported declarations fail closed.
+    def self.json_typed_paths(type : String) : Array({String, String})
+      raise UnsupportedFormatError.new("JSON column has no explicit typed paths") unless type.starts_with?("JSON(") && type.ends_with?(")")
+      inner = type.byte_slice(5, type.bytesize - 6)
+      raise UnsupportedFormatError.new("empty JSON typed-path declaration") if inner.empty?
+
+      declarations = Array({String, String}).new
+      seen = Set(String).new
+      start = 0
+      depth = 0
+      inner.to_slice.each_with_index do |byte, index|
+        case byte
+        when '('.ord
+          depth += 1
+        when ')'.ord
+          depth -= 1
+          raise UnsupportedFormatError.new("malformed JSON typed-path declaration") if depth < 0
+        when ','.ord
+          next unless depth == 0
+          add_json_typed_path(inner.byte_slice(start, index - start), declarations, seen)
+          start = index + 1
+        end
+      end
+      raise UnsupportedFormatError.new("malformed JSON typed-path declaration") unless depth == 0
+      add_json_typed_path(inner.byte_slice(start, inner.bytesize - start), declarations, seen)
+      declarations
+    end
+
+    def self.json_typed_path_type(type : String, path : String) : String?
+      json_typed_paths(type).find { |entry| entry[0] == path }.try(&.[1])
+    end
+
+    private def self.add_json_typed_path(
+      declaration : String,
+      declarations : Array({String, String}),
+      seen : Set(String),
+    ) : Nil
+      match = /\A\s*([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z0-9_]+)\s*\z/.match(declaration)
+      raise UnsupportedFormatError.new("unsupported JSON typed-path declaration") unless match
+      path = match[1]
+      type = match[2]
+      raise UnsupportedFormatError.new("duplicate JSON typed path") if seen.includes?(path)
+      unless type == "String" || supports_numeric_type?(type)
+        raise UnsupportedFormatError.new("unsupported JSON typed-path scalar type")
+      end
+      seen << path
+      declarations << {path, type}
+    end
+
     def self.numeric_type_name(type : T.class) : String forall T
       {% if T == UInt8 %}
         "UInt8"
@@ -62,6 +117,9 @@ module CrystalClick
 
     getter path : String
     getter column_type : String
+    getter source_column_name : String
+    getter source_column_type : String
+    getter json_typed_path : Bool
     getter row_count : UInt64
     getter data_path : String
     getter mark_path : String
@@ -324,6 +382,9 @@ module CrystalClick
     end
 
     @column : String
+    @source_column_name : String
+    @source_column_type : String
+    @json_typed_path : Bool
     @element_width : Int32
     @marks : Array(Mark)
     @sentinel : Mark
@@ -344,7 +405,7 @@ module CrystalClick
       @path = path
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
-      @column, @column_type, @row_count, physical_streams = parse_metadata(requested_column, mode)
+      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
       expected_mark_rows = nil.as(Array(UInt64)?)
       physical_streams.each do |stream_name|
@@ -373,7 +434,7 @@ module CrystalClick
       @element_width = stream_element_width(primary_stream)
     end
 
-    private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, UInt64, Array(String)}
+    private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, String, String, Bool, UInt64, Array(String)}
       columns_text = read_metadata_file("columns.txt")
       columns = parse_columns(columns_text)
       if columns.empty?
@@ -383,9 +444,9 @@ module CrystalClick
         raise UnsupportedFormatError.new("column is required for a multi-column part")
       end
       column = requested_column || columns[0][0]
-      selected = columns.find { |entry| entry[0] == column }
-      raise UnsupportedFormatError.new("column is not present") unless selected
-      column_type = selected.not_nil![1]
+      selected, source_column_name, source_column_type, column_type, json_typed_path =
+        resolve_selected_column(columns, column)
+      raise UnsupportedFormatError.new("JSON typed paths require the exact typed scan") if json_typed_path && mode != :typed
       case mode
       when :numeric
         numeric_type_width(column_type)
@@ -395,7 +456,11 @@ module CrystalClick
         raise UnsupportedFormatError.new("only exact UInt64 columns are supported") unless column_type == "UInt64"
       end
 
-      if column_type == "String" || WidePart.supports_nullable_numeric_type?(column_type)
+      json_paths = [] of {String, String}
+      if json_typed_path
+        json_paths = WidePart.json_typed_paths(source_column_type)
+        validate_json_typed_path_serialization(source_column_name, json_paths)
+      elsif column_type == "String" || WidePart.supports_nullable_numeric_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -404,10 +469,38 @@ module CrystalClick
       row_count = parse_count_file("count.txt")
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
 
-      physical_streams = parse_substreams(columns, column, column_type)
-      {column, column_type, row_count, physical_streams}
+      physical_streams = parse_substreams(columns, selected, column_type, source_column_name, json_paths)
+      {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, physical_streams}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
+    end
+
+    private def resolve_selected_column(
+      columns : Array({String, String}),
+      requested_column : String,
+    ) : {String, String, String, String, Bool}
+      exact = columns.find { |entry| entry[0] == requested_column }
+      virtual = Array({String, String, String}).new
+      columns.each do |entry|
+        owner, owner_type = entry
+        next unless WidePart.json_type?(owner_type)
+        prefix = "#{owner}."
+        next unless requested_column.starts_with?(prefix)
+        path = requested_column.byte_slice(prefix.bytesize, requested_column.bytesize - prefix.bytesize)
+        path_type = WidePart.json_typed_path_type(owner_type, path)
+        virtual << {owner, owner_type, path_type.not_nil!} if path_type
+      end
+
+      if exact && !virtual.empty?
+        raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
+      end
+      if selected = exact
+        return {selected[0], selected[0], selected[1], selected[1], false}
+      end
+      raise UnsupportedFormatError.new("selected column is not present") if virtual.empty?
+      raise UnsupportedFormatError.new("selected JSON typed path is ambiguous") unless virtual.size == 1
+      owner, owner_type, path_type = virtual[0]
+      {requested_column, owner, owner_type, path_type, true}
     end
 
     private def read_metadata_file(name : String) : String
@@ -451,10 +544,17 @@ module CrystalClick
       columns
     end
 
-    private def parse_substreams(columns : Array({String, String}), selected_column : String, selected_type : String) : Array(String)
+    private def parse_substreams(
+      columns : Array({String, String}),
+      selected_column : String,
+      selected_type : String,
+      source_column : String = selected_column,
+      json_paths : Array({String, String}) = [] of {String, String},
+    ) : Array(String)
       file = File.join(@path, "columns_substreams.txt")
       unless File.exists?(file)
         raise UnsupportedFormatError.new("columns_substreams.txt is required for multi-column parts") unless columns.size == 1
+        raise UnsupportedFormatError.new("columns_substreams.txt is required for JSON typed paths") unless json_paths.empty?
         expected_streams = expected_physical_streams(selected_column, selected_type)
         raise UnsupportedFormatError.new("columns_substreams.txt is required for this serialization shape") unless expected_streams == [selected_column]
         return [selected_column]
@@ -492,14 +592,31 @@ module CrystalClick
           seen_streams << stream
           streams << stream
         end
-        if column == selected_column
-          expected_streams = expected_physical_streams(column, selected_type)
-          raise UnsupportedFormatError.new("selected physical substreams do not match exact serialization shape") unless streams == expected_streams
-          selected_streams = streams
+        if column == source_column
+          if json_paths.empty?
+            expected_streams = expected_physical_streams(column, selected_type)
+            raise UnsupportedFormatError.new("selected physical substreams do not match exact serialization shape") unless streams == expected_streams
+            selected_streams = streams
+          else
+            expected_json_streams = expected_json_typed_path_substreams(source_column, json_paths)
+            raise UnsupportedFormatError.new("JSON physical substreams do not match declared typed-path shape") unless streams == expected_json_streams
+            selected_streams = expected_physical_streams(selected_column, selected_type)
+          end
         end
       end
       raise UnsupportedFormatError.new("trailing columns_substreams.txt data") unless cursor == bytes.size
       selected_streams || raise UnsupportedFormatError.new("selected column substreams are missing")
+    end
+
+    private def expected_json_typed_path_substreams(column : String, paths : Array({String, String})) : Array(String)
+      streams = ["#{column}.object_structure"]
+      paths.sort_by(&.[0]).each do |path, type|
+        streams.concat(expected_physical_streams("#{column}.#{path}", type))
+      end
+      streams << "#{column}.object_shared_data.0.size0"
+      streams << "#{column}.object_shared_data.0%2Epaths"
+      streams << "#{column}.object_shared_data.0%2Evalues"
+      streams
     end
 
     private def expected_physical_streams(column : String, type : String) : Array(String)
@@ -547,6 +664,96 @@ module CrystalClick
       nil
     rescue ex : JSON::ParseException | TypeCastError
       raise CorruptPartError.new("serialization.json is malformed")
+    end
+
+    private def validate_json_typed_path_serialization(column : String, paths : Array({String, String})) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for JSON typed paths") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      info.each_key do |key|
+        unless ["version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types", "missing_columns"].includes?(key)
+          raise UnsupportedFormatError.new("unsupported JSON serialization.json field")
+        end
+      end
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only JSON serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("JSON nested-version flag is unsupported") unless propagated == true
+
+      columns = info["columns"]?.try(&.as_a) || raise(CorruptPartError.new("JSON serialization column metadata is missing or malformed"))
+      raise UnsupportedFormatError.new("JSON serialization column metadata exceeds limit") if columns.size > MAX_METADATA_COLUMNS
+      columns.each do |column_info|
+        entry = column_info.as_h
+        unless entry.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
+          raise UnsupportedFormatError.new("unsupported JSON serialization column metadata")
+        end
+        raise UnsupportedFormatError.new("unsupported JSON serialization default kind") unless entry["kind"]?.try(&.as_s) == "Default"
+        raise CorruptPartError.new("JSON serialization column name is malformed") if entry["name"]?.try(&.as_s).try(&.empty?) != false
+        num_defaults = entry["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("JSON serialization default count is malformed"))
+        num_rows = entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("JSON serialization row count is malformed"))
+        raise CorruptPartError.new("JSON serialization default count is invalid") if num_defaults < 0 || num_rows < num_defaults
+      end
+
+      versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("JSON serialization type versions are missing or malformed"))
+      versions.each do |name, value|
+        raise UnsupportedFormatError.new("unsupported JSON nested serialization type version") unless name == "string" && value.as_i? == 1
+      end
+      if paths.any? { |entry| entry[1] == "String" }
+        raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported for JSON paths") unless versions["string"]?.try(&.as_i) == 1
+      end
+
+      validate_json_object_structure_prefix(column)
+      nil
+    rescue ex : JSON::ParseException | TypeCastError
+      raise CorruptPartError.new("JSON serialization.json is malformed")
+    end
+
+    # ClickHouse stores the Object serialization version in the first
+    # compressed object_structure frame, not in serialization.json. Decode
+    # only that bounded frame and inspect its UInt64 prefix; this is not a
+    # validation of the remaining structure or shared-data streams.
+    private def validate_json_object_structure_prefix(column : String) : Nil
+      data_path, _mark_path, _compressed_marks = resolve_stream("#{column}.object_structure")
+      data_size = File.size(data_path)
+      raise CorruptPartError.new("JSON object_structure data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
+      raise CorruptPartError.new("JSON object_structure data file is truncated") if data_size < CompressedBlock::FRAME_HEADER_SIZE
+
+      File.open(data_path, "rb") do |io|
+        header = Bytes.new(CompressedBlock::FRAME_HEADER_SIZE)
+        begin
+          io.read_fully(header)
+        rescue ex : IO::EOFError
+          raise CorruptPartError.new("JSON object_structure frame header is truncated")
+        end
+        compressed_size = u32(header, CompressedBlock::CHECKSUM_SIZE + 1).to_i64
+        frame_size = CompressedBlock::CHECKSUM_SIZE.to_i64 + compressed_size
+        if compressed_size < CompressedBlock::HEADER_SIZE || compressed_size > MAX_FRAME_COMPRESSED_BYTES || frame_size > data_size
+          raise CorruptPartError.new("JSON object_structure first frame is invalid")
+        end
+        frame_data = Bytes.new(frame_size.to_i)
+        header.copy_to(frame_data)
+        tail_size = frame_data.size - header.size
+        begin
+          io.read_fully(frame_data[header.size, tail_size]) if tail_size > 0
+        rescue ex : IO::EOFError
+          raise CorruptPartError.new("JSON object_structure first frame is truncated")
+        end
+        frame = CompressedBlock.decode_frame(
+          frame_data,
+          0_i64,
+          MAX_FRAME_COMPRESSED_BYTES,
+          MAX_FRAME_DECOMPRESSED_BYTES
+        )
+        raise CorruptPartError.new("JSON object_structure prefix is truncated") if frame.output.size < 8
+        raise UnsupportedFormatError.new("only JSON Object structure version V3 is supported") unless u64(frame.output, 0) == 4_u64
+      end
+      nil
     end
 
     private def parse_count_file(name : String) : UInt64

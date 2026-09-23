@@ -129,27 +129,63 @@ module CrystalClick
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > WidePartTable::MAX_BATCH_ROWS
 
       selected = Set(String).new
+      expected_sources = Hash(String, {String, String, String, Bool}).new
       columns.each do |column_name|
         raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
         raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
         selected << column_name
 
-        column = @columns.find { |entry| entry.name == column_name }
-        raise UnsupportedFormatError.new("selected column is not declared by table DDL") unless column
-        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.supports_typed_type?(column.type)
+        source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name)
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.supports_typed_type?(selected_type)
+        expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
       end
 
       candidates = @part_candidates || raise(UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only"))
       return nil if candidates.empty?
 
       reader = WidePartTable.open_selected_typed(candidates.map(&.path), columns)
+      reader.column_sources.each do |column_name, part_source_name, part_source_type|
+        ddl_source = expected_sources[column_name]? || raise(CorruptPartError.new("selected column disappeared from table DDL"))
+        if ddl_source[3]
+          unless part_source_name == ddl_source[0] && part_source_type == ddl_source[1]
+            raise UnsupportedFormatError.new("table DDL and selected JSON schema differ")
+          end
+        elsif part_source_name != ddl_source[0] || part_source_type != ddl_source[1]
+          raise UnsupportedFormatError.new("table DDL and selected part column types differ")
+        end
+      end
       reader.column_types.each do |column_name, part_type|
-        ddl_column = @columns.find { |entry| entry.name == column_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
-        unless ddl_column.type == part_type
+        ddl_source = expected_sources[column_name]? || raise(CorruptPartError.new("selected column disappeared from table DDL"))
+        unless ddl_source[2] == part_type
           raise UnsupportedFormatError.new("table DDL and selected part column types differ")
         end
       end
       reader.scan_typed(batch_rows: batch_rows, &block)
+    end
+
+    private def resolve_typed_ddl_selection(column_name : String) : {String, String, String, Bool}
+      exact = @columns.find { |entry| entry.name == column_name }
+      virtual = Array({String, String, String}).new
+      @columns.each do |source|
+        next unless WidePart.json_type?(source.type)
+        prefix = "#{source.name}."
+        next unless column_name.starts_with?(prefix)
+        path = column_name.byte_slice(prefix.bytesize, column_name.bytesize - prefix.bytesize)
+        if path_type = WidePart.json_typed_path_type(source.type, path)
+          virtual << {source.name, source.type, path_type}
+        end
+      end
+
+      if exact && !virtual.empty?
+        raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
+      end
+      if selected = exact
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.supports_typed_type?(selected.type)
+        return {selected.name, selected.type, selected.type, false}
+      end
+      raise UnsupportedFormatError.new("selected column is not declared by table DDL") if virtual.empty?
+      raise UnsupportedFormatError.new("selected JSON typed path is ambiguous") unless virtual.size == 1
+      {virtual[0][0], virtual[0][1], virtual[0][2], true}
     end
   end
 
