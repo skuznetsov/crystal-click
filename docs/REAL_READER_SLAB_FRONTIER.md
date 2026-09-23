@@ -47,8 +47,10 @@ protected by a source regression guard, while the explicit big-endian fallback
 decodes each value. The fallback is not covered by the current host
 verification. A decoder error does not expose the partial local vector.
 
-The Array and borrowed scanner paths retain their scalar `UInt64` callback
-path. No decoder, mmap, compression, or file-format behavior changed.
+The Array path retains its scalar `UInt64` callback path. The borrowed scanner
+now bulk-fills caller-owned `UInt64` scratch from validated byte spans on
+little-endian hosts, with a scalar fallback for big-endian hosts. No decoder,
+mmap, compression, or file-format behavior changed.
 
 The existing `read_uint64`, `read_uint64_mark_range`, and borrowed scratch API
 remain unchanged. They must not be routed through `to_a` or another extra owning

@@ -80,12 +80,19 @@ module CrystalClick
 
       start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
       chunk_size = 0
-      each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
-        scratch[chunk_size] = value
-        chunk_size += 1
-        if chunk_size == scratch.size
-          yield scratch[0, chunk_size]
-          chunk_size = 0
+      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes) do |bytes|
+        source_offset = 0
+        while source_offset < bytes.size
+          available = scratch.size - chunk_size
+          remaining = (bytes.size - source_offset) // 8
+          copied = available < remaining ? available : remaining
+          fill_uint64_scratch(scratch, chunk_size, bytes, source_offset, copied)
+          chunk_size += copied
+          source_offset += copied * 8
+          if chunk_size == scratch.size
+            yield scratch[0, chunk_size]
+            chunk_size = 0
+          end
         end
       end
       yield scratch[0, chunk_size] if chunk_size > 0
@@ -110,23 +117,33 @@ module CrystalClick
       mark_values = 0_u64
       mark_start = 0_u64
 
-      each_uint64_mark_range(start_mark, end_mark, expected_bytes) do |value|
-        scratch[chunk_size] = value
-        chunk_size += 1
-        mark_values += 1
+      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes) do |bytes|
+        source_offset = 0
+        while source_offset < bytes.size
+          available = scratch.size - chunk_size
+          remaining = (bytes.size - source_offset) // 8
+          mark_remaining = (mark_rows - mark_values).to_i
+          copied = available < remaining ? available : remaining
+          copied = mark_remaining if mark_remaining < copied
+          raise CorruptPartError.new("mark scan made no progress") if copied <= 0
+          fill_uint64_scratch(scratch, chunk_size, bytes, source_offset, copied)
+          chunk_size += copied
+          source_offset += copied * 8
+          mark_values += copied.to_u64
 
-        if chunk_size == scratch.size || mark_values == mark_rows
-          mark_row_offset = mark_values - chunk_size.to_u64
-          yield active_mark, mark_row_offset, mark_start &+ mark_row_offset, scratch[0, chunk_size]
-          chunk_size = 0
-        end
+          if chunk_size == scratch.size || mark_values == mark_rows
+            mark_row_offset = mark_values - chunk_size.to_u64
+            yield active_mark, mark_row_offset, mark_start &+ mark_row_offset, scratch[0, chunk_size]
+            chunk_size = 0
+          end
 
-        if mark_values == mark_rows
-          mark_start = mark_start &+ mark_rows
-          active_mark += 1
-          if active_mark < @marks.size
-            mark_rows = @marks[active_mark].rows
-            mark_values = 0_u64
+          if mark_values == mark_rows
+            mark_start = mark_start &+ mark_rows
+            active_mark += 1
+            if active_mark < @marks.size
+              mark_rows = @marks[active_mark].rows
+              mark_values = 0_u64
+            end
           end
         end
       end
@@ -624,6 +641,28 @@ module CrystalClick
       value = 0_u64
       8.times { |index| value |= bytes[offset + index].to_u64 << (index * 8) }
       value
+    end
+
+    private def fill_uint64_scratch(
+      destination : Slice(UInt64),
+      destination_offset : Int,
+      source : Bytes,
+      source_offset : Int,
+      count : Int,
+    ) : Nil
+      return if count == 0
+
+      {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+        # The destination is UInt64 storage; the source is deliberately byte-typed
+        # because a decoded frame's base address need not be UInt64-aligned.
+        destination_pointer = (destination.to_unsafe + destination_offset).unsafe_as(Pointer(UInt8))
+        destination_pointer.copy_from(source.to_unsafe + source_offset, count * 8)
+      {% else %}
+        count.times do |index|
+          destination[destination_offset + index] = u64(source, source_offset + index * 8)
+        end
+      {% end %}
+      nil
     end
   end
 end

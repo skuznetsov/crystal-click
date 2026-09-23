@@ -77,6 +77,18 @@ describe "borrowed UInt64 mark-range scanning" do
     scratch.size.should eq(257)
   end
 
+  it "preserves positional parity for a partial mark range with tiny chunks" do
+    part = CrystalClick::WidePart.open(FIXTURE)
+    expected = part.read_uint64_mark_range("value", 1, 3)
+    values, sizes, _ = borrowed_scan_chunks(part, "value", 1, 3, 5)
+
+    values.should eq(expected)
+    values.should eq((1_024_u64...4_096_u64).to_a)
+    sizes.all? { |size| size > 0 && size <= 5 }.should be_true
+    sizes[0...-1].all? { |size| size == 5 }.should be_true
+    sizes.last.should eq(2)
+  end
+
   it "matches direct ZSTD full and range reads" do
     part = CrystalClick::WidePart.open(BORROWED_ZSTD_FIXTURE)
     expected = part.read_uint64
@@ -297,6 +309,7 @@ describe "borrowed UInt64 mark-range scanning" do
     source = File.read(File.expand_path("../src/crystal_click/wide_part.cr", __DIR__))
     source.should_not contain("selected = IO::Memory")
     source.should_not contain("selected.to_slice")
+    source.should contain("fill_uint64_scratch")
     source.should contain("CompressedBlock.decode_all")
   end
 end

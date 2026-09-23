@@ -12,16 +12,37 @@ reuses the storage after the callback returns. Existing `read_uint64` and
 Bounded context: the existing Unix mmap-backed `.bin` route in
 `src/crystal_click/wide_part.cr`, with the current mark, frame, codec, size,
 and error semantics. This is an output-ownership slice; it is not a codec
-streaming implementation or a measured performance result.
+streaming implementation. The scoped chunk-fill measurements below do not
+promote a universal performance result.
 
-Verification gates are passing for this scope: the focused borrowed-scan suite
-is 11/0, the targeted malformed-huge-mark check is 1/0, the combined relevant
-suite is 73/0, and the full debug and release suites are each 76/0.
-Formatting and diff checks pass. The prior final adversary review was
-**VULNERABLE**: the owning read preallocated from untrusted `expected_bytes`.
-The historical source-guard RED was 11 examples with 1 failure. The fix uses
-`Array(UInt64).new` and grows only from actual decoded scalars. The final
-adversary recheck returned **ROBUST** within the declared scope.
+Verification gates are passing for this scope: the current focused
+borrowed-scan suite is 14/0, and the full debug and release suites are each
+149/0. The focused suite includes exact partial-mark parity with a tiny
+non-dividing scratch. Formatting and diff checks pass. A separate controlled
+campaign measured the chunk-fill candidate on one verified immutable generated
+10,000,000-row Delta+ZSTD fixture; those scoped observations are recorded
+below and are not universal or ClickHouse-equivalent performance claims.
+
+## Scoped chunk-fill evidence
+
+The scalar release HEAD and candidate were interleaved for seven paired runs
+on the verified immutable generated fixture. Medians are milliseconds, shown
+as HEAD -> candidate; every paired candidate observation won in the listed
+route.
+
+| Route | Scratch values | Median ms | Paired wins |
+| --- | ---: | ---: | ---: |
+| UInt64 execution pipeline | 4,096 | 109.308 -> 97.809 | 7/7 |
+| UInt64 execution pipeline | 8,191 | 110.149 -> 97.853 | 7/7 |
+| Borrowed scan | 4,096 | 128.868 -> 96.762 | 7/7 |
+
+An owning-Array typed-load probe was inconclusive (4/7 paired wins) and was
+removed from the final candidate. The final-source ClickHouse-track harness
+accepted all 28 observations with exact Crystal/ClickHouse sequence parity,
+byte-identical physical streams, and an unchanged fixture. Its pipeline median
+was 97.503 ms; the ClickHouse-reported SQL median was 82 ms (range 80-85 ms).
+The timer boundaries and integrity policies differ, so this is not an isolated
+reader-kernel gap.
 
 ## Sealed API and ownership boundary
 
@@ -66,8 +87,13 @@ The existing owning `read_*` methods do not expose such a prefix.
 - Empty scratch is rejected with `BoundsError` before mapping or decoding.
 - Chunks are emitted in logical row order, with no empty callback. The final
   chunk may be shorter than `scratch.size`.
-- The implemented scan uses one private scalar/frame core shared with
-  `read_uint64_mark_range`.
+- The implemented scan uses one private frame/range core shared with
+  `read_uint64_mark_range`; the owning path decodes scalar values, while the
+  borrowed path bulk-copies validated little-endian byte spans into the
+  caller's aligned `UInt64` scratch. Big-endian builds retain scalar decoding.
+- A selected frame's byte base need not be UInt64-aligned: only validated byte
+  offsets and lengths are multiples of eight. The bulk copy treats the source
+  as byte-aligned input and writes only to caller-owned `UInt64` storage.
 - The core retains the current mmap operation, global compressed offsets,
   frame boundaries, EOF/non-EOF sentinel rules, output bounds, and typed
   errors.
@@ -100,7 +126,7 @@ The existing owning `read_*` methods do not expose such a prefix.
 - Persistent mappings, changed mmap extent/flags, mark-format changes,
   checksum verification, Windows support, or a non-Unix fallback.
 - Any throughput, latency, GC, RSS, page-fault, or allocation-count claim
-  before a controlled benchmark.
+  beyond the controlled fixture, build, scratch-size, and timer scope below.
 
 ## Guard-only future
 
@@ -125,8 +151,9 @@ The existing owning `read_*` methods do not expose such a prefix.
    callback.
 5. Existing public reads collect locally and return only after the full scalar
    core completes. Any later exception discards their partial local array.
-6. Selected byte spans must remain bounded and 8-byte aligned. The exact
-   selected byte count and row count must be checked before successful return.
+6. Selected byte spans must remain bounded and 8-byte aligned by byte count;
+   their source pointer need not be UInt64-aligned. The exact selected byte
+   count and row count must be checked before successful return.
 7. Decoder/frame allocations are unchanged and remain explicitly outside the
    borrowed-output guarantee.
 8. Correctness, aliasing, cleanup, and error evidence precede performance
@@ -146,14 +173,17 @@ The existing owning `read_*` methods do not expose such a prefix.
 | Callback exception | **PASS**: original callback error is unchanged when cleanup succeeds; cleanup failure is typed with both errors | Callback lifetime |
 | Later corruption | **PASS**: streaming scan records a valid prefix, then raises the typed corruption error | Progressive delivery only |
 | Existing read parity | **PASS**: `read_uint64*` returns the same exact arrays and remains all-or-error | Public compatibility |
+| Tiny partial-mark refill | **PASS**: marks 1..3 match owning positional output with scratch size 5 and a 2-value tail | Chunk fill / mark split |
+| Byte-span fill alignment | **PASS**: bulk fill copies through byte pointers into caller-owned `UInt64` storage without requiring a UInt64-aligned source base | Source alignment boundary |
 | Source route guard | **PASS**: data scan contains no selected `IO::Memory` aggregate, `selected.to_slice`, or `Array(UInt64).new(expected_bytes)`; mark loading remains allowed | Structural evidence only |
 | Owning-array allocation guard | **VULNERABLE (historical)**: source guard failed with 11 examples and 1 failure when owning output used untrusted `expected_bytes`; current fix grows `Array(UInt64).new` from decoded scalars | Final adversary **ROBUST** |
 | Bounds and alignment | **PASS**: invalid mark offsets, byte counts, and scratch size fail closed | Existing typed limits |
-| Repository regression | **PASS**: focused 11/0, targeted malformed-huge-mark 1/0, combined relevant 73/0, full debug 76/0, full release 76/0 | Current supported-Unix checkout |
+| Repository regression | **PASS**: focused 14/0, full debug 149/0, full release 149/0; scoped benchmark evidence is recorded above | Current supported-Unix checkout |
 
 The source guard is not a substitute for behavior tests. The passing verification
-gates do not prove zero-copy decompression or a performance improvement. The
-final adversary recheck returned **ROBUST** within the declared scope.
+gates do not prove zero-copy decompression or any performance result outside the
+scoped campaign above. The final adversary recheck returned **ROBUST** within
+the declared scope.
 
 ## Stop rules and rollback
 
@@ -182,5 +212,6 @@ final adversary recheck returned **ROBUST** within the declared scope.
 - Design status: **sealed**.
 - Implementation status: **completed + VERIFIED** within the declared scope;
   final adversary verdict **ROBUST**.
-- Next local track: keep codec buffer reuse and all performance claims outside
-  this frontier.
+- Next local track: retain the measured chunk-fill result only within the
+  fixture, build, scratch-size, and timer scope above; keep codec buffer reuse
+  and any broader performance claim outside this frontier.
