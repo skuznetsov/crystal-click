@@ -7,6 +7,9 @@ This document records the original `UInt64` catalog slice. The subsequent
 fixed-width primitive numeric scan is governed by
 [`FIXED_NUMERIC_SCAN_FRONTIER.md`](FIXED_NUMERIC_SCAN_FRONTIER.md); it does not
 change the offline candidate or server-state boundary described here.
+The later bounded part-selection slice is governed by
+[`OFFLINE_MERGETREE_PART_RESOLUTION_FRONTIER.md`](OFFLINE_MERGETREE_PART_RESOLUTION_FRONTIER.md);
+the overlap rejection below records the original behavior, not that later API.
 
 Current frontier: read a bounded local ClickHouse Atomic metadata tree in
 Crystal, expose database/table names, table column names and declared types,

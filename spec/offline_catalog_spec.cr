@@ -309,6 +309,213 @@ describe CrystalClick::OfflineCatalog do
     end
   end
 
+  it "scans only the covering part when a merge result and its source coexist" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_1_1"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table.part_candidates.map(&.name).should eq(["all_1_1_0", "all_1_1_1"])
+      table.resolved_scan_parts.map(&.name).should eq(["all_1_1_1"])
+
+      {"UInt64", "numeric", "typed"}.each do |scan_kind|
+        seen_rows = 0_u64
+        scan = ->(batch : CrystalClick::WidePartTableBatch) do
+          batch.part_name.should eq("all_1_1_1")
+          seen_rows += batch.values_for("left").size.to_u64
+        end
+        case scan_kind
+        when "UInt64"
+          table.scan_uint64(["left"], batch_rows: 127, &scan)
+        when "numeric"
+          table.scan_numeric(["left"], batch_rows: 127, &scan)
+        else
+          table.scan_typed(["left"], batch_rows: 127, &scan)
+        end
+        seen_rows.should eq(OFFLINE_TABLE_ROWS.to_u64)
+      end
+    end
+  end
+
+  it "rejects transaction metadata on a selected candidate before callbacks" do
+    ["txn_version.txt", "txn_version.txt.tmp"].each do |metadata_name|
+      with_offline_catalog_root do |root|
+        offline_catalog_create_database(root)
+        table_path = offline_catalog_create_table(root, with_part: true)
+        File.write(File.join(table_path, "all_1_1_0", metadata_name), "transaction metadata\n")
+
+        table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+        callbacks = 0
+        expect_raises(CrystalClick::UnsupportedFormatError) { table.resolved_scan_parts }
+        expect_raises(CrystalClick::UnsupportedFormatError) do
+          table.scan_uint64(["left"], batch_rows: 127) { |_batch| callbacks += 1 }
+        end
+        callbacks.should eq(0)
+      end
+    end
+  end
+
+  it "rejects selected lightweight-delete markers before callbacks" do
+    ["_row_exists", "\\x5frow_exists"].each do |marker_name|
+      with_offline_catalog_root do |root|
+        offline_catalog_create_database(root)
+        table_path = offline_catalog_create_table(root, with_part: true)
+        part_path = File.join(table_path, "all_1_1_0")
+        File.write(File.join(part_path, "columns.txt"), "columns format version: 1\n3 columns:\n`left` UInt64\n`right` UInt64\n`#{marker_name}` UInt8\n")
+
+        table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+        callbacks = 0
+        expect_raises(CrystalClick::UnsupportedFormatError) { table.resolved_scan_parts }
+        expect_raises(CrystalClick::UnsupportedFormatError) do
+          table.scan_uint64(["left"], batch_rows: 127) { |_batch| callbacks += 1 }
+        end
+        callbacks.should eq(0)
+      end
+    end
+  end
+
+  it "rejects selected delete-bitmap sidecars before callbacks" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      File.write(File.join(table_path, "all_1_1_0", "delete_bitmap_7.rbm"), "bitmap\n")
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      callbacks = 0
+      expect_raises(CrystalClick::UnsupportedFormatError) { table.resolved_scan_parts }
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        table.scan_uint64(["left"], batch_rows: 127) { |_batch| callbacks += 1 }
+      end
+      callbacks.should eq(0)
+    end
+  end
+
+  it "resolves mutation replacements, ordinary merges, and MAX_LEVEL covering parts" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_1_0_3"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table.resolved_scan_parts.map(&.name).should eq(["all_1_1_0_3"])
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_2_1"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table.resolved_scan_parts.map(&.name).should eq(["all_1_2_1"])
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_2_999999999"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table.resolved_scan_parts.map(&.name).should eq(["all_1_2_999999999"])
+    end
+  end
+
+  it "rejects equal-info duplicate spellings and equal-level wide overlaps" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_1_4294967295"))
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_1_999999999"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      expect_raises(CrystalClick::InvalidPartError) { table.resolved_scan_parts }
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "same_1_3_2"))
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "same_2_2_2"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      expect_raises(CrystalClick::InvalidPartError) { table.resolved_scan_parts }
+    end
+  end
+
+  it "keeps disjoint parts in deterministic inventory order" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_2_2_0"))
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "other_1_1_0"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table.resolved_scan_parts.map(&.name).should eq(["all_1_1_0", "all_2_2_0", "other_1_1_0"])
+    end
+  end
+
+  it "keeps resolved scan selection scoped to exact MergeTree" do
+    info = CrystalClick::MergeTreePartInfo.parse("all_1_1_0").not_nil!
+    candidate = CrystalClick::OfflinePartCandidate.new("all_1_1_0", "/unused", info, 1_u64)
+    table = CrystalClick::OfflineTable.new("events", "uuid", "ReplacingMergeTree", [] of CrystalClick::OfflineColumn, [candidate])
+
+    expect_raises(CrystalClick::UnsupportedFormatError) { table.resolved_scan_parts }
+  end
+
+  it "does not mistake similar column names for lightweight-delete markers" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      File.write(File.join(table_path, "all_1_1_0", "columns.txt"), "columns format version: 1\n3 columns:\n`left` UInt64\n`right` UInt64\n`_row_exists_backup` UInt8\n")
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table.resolved_scan_parts.map(&.name).should eq(["all_1_1_0"])
+    end
+  end
+
+  it "rejects transaction metadata on covered candidates, including symlinks" do
+    ["txn_version.txt", "txn_version.txt.tmp"].each do |metadata_name|
+      with_offline_catalog_root do |root|
+        offline_catalog_create_database(root)
+        table_path = offline_catalog_create_table(root, with_part: true)
+        FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_1_1"))
+        File.write(File.join(table_path, "all_1_1_0", metadata_name), "transaction metadata\n")
+
+        table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+        expect_raises(CrystalClick::UnsupportedFormatError) { table.resolved_scan_parts }
+      end
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_1_1"))
+      File.symlink("missing-target", File.join(table_path, "all_1_1_0", "txn_version.txt"))
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      expect_raises(CrystalClick::UnsupportedFormatError) { table.resolved_scan_parts }
+    end
+  end
+
+  it "does not fall back to covered children when the selected covering part is corrupt" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      covering_path = File.join(table_path, "all_1_1_1")
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, covering_path)
+      selected_stream = CrystalClick::WidePart.open(covering_path, "left")
+      File.delete(selected_stream.data_path)
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table.resolved_scan_parts.map(&.name).should eq(["all_1_1_1"])
+      callbacks = 0
+      expect_raises(CrystalClick::Error) do
+        table.scan_uint64(["left"], batch_rows: 127) { |_batch| callbacks += 1 }
+      end
+      callbacks.should eq(0)
+    end
+  end
+
   it "rejects overlapping candidates before invoking a scan callback" do
     with_offline_catalog_root do |root|
       offline_catalog_create_database(root)

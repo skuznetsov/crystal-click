@@ -48,6 +48,53 @@ module CrystalClick
       candidates.dup
     end
 
+    # Resolve the physical inventory to a deterministic, unambiguous set of
+    # maximal covering parts for an offline scan. This is an inferred scan
+    # set, not ClickHouse server Active state.
+    def resolved_scan_parts : Array(OfflinePartCandidate)
+      raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
+      candidates = @part_candidates || raise(UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only"))
+      reject_transaction_metadata!(candidates)
+      return [] of OfflinePartCandidate if candidates.empty?
+
+      covered = Array(Bool).new(candidates.size, false)
+      candidates.each_with_index do |left, left_index|
+        right_index = left_index + 1
+        while right_index < candidates.size
+          right = candidates[right_index]
+          left_info = left.info
+          right_info = right.info
+
+          if same_part_info?(left_info, right_info)
+            raise InvalidPartError.new("duplicate MergeTree part identity: #{left.name} and #{right.name}")
+          end
+
+          if left_info.overlaps?(right_info)
+            left_contains = merge_tree_part_contains?(left_info, right_info)
+            right_contains = merge_tree_part_contains?(right_info, left_info)
+            if left_contains && right_contains
+              raise InvalidPartError.new("duplicate MergeTree part identity: #{left.name} and #{right.name}")
+            elsif left_contains
+              covered[right_index] = true
+            elsif right_contains
+              covered[left_index] = true
+            else
+              raise InvalidPartError.new("part candidates overlap without a covering relation: #{left.name} and #{right.name}")
+            end
+          end
+
+          right_index += 1
+        end
+      end
+
+      resolved = Array(OfflinePartCandidate).new(candidates.size)
+      candidates.each_with_index do |candidate, index|
+        resolved << candidate unless covered[index]
+      end
+      reject_unsupported_scan_features!(resolved)
+      resolved
+    end
+
     # Scan table-declared UInt64 columns through the existing Wide-part reader.
     # The callback receives borrowed slices valid only until it returns.
     def scan_uint64(
@@ -71,7 +118,7 @@ module CrystalClick
         raise UnsupportedFormatError.new("selected table column is not UInt64") unless column.type == "UInt64"
       end
 
-      candidates = @part_candidates || raise(UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only"))
+      candidates = resolved_scan_parts
       return nil if candidates.empty?
 
       paths = candidates.map(&.path)
@@ -102,7 +149,7 @@ module CrystalClick
         raise UnsupportedFormatError.new("selected table column is not an exact primitive numeric type") unless WidePart.supports_numeric_type?(column.type)
       end
 
-      candidates = @part_candidates || raise(UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only"))
+      candidates = resolved_scan_parts
       return nil if candidates.empty?
 
       reader = WidePartTable.open_selected_numeric(candidates.map(&.path), columns)
@@ -140,7 +187,7 @@ module CrystalClick
         expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
       end
 
-      candidates = @part_candidates || raise(UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only"))
+      candidates = resolved_scan_parts
       return nil if candidates.empty?
 
       reader = WidePartTable.open_selected_typed(candidates.map(&.path), columns)
@@ -186,6 +233,197 @@ module CrystalClick
       raise UnsupportedFormatError.new("selected column is not declared by table DDL") if virtual.empty?
       raise UnsupportedFormatError.new("selected JSON typed path is ambiguous") unless virtual.size == 1
       {virtual[0][0], virtual[0][1], virtual[0][2], true}
+    end
+
+    private def same_part_info?(left : MergeTreePartInfo, right : MergeTreePartInfo) : Bool
+      left.partition_id == right.partition_id &&
+        left.min_block == right.min_block &&
+        left.max_block == right.max_block &&
+        left.level == right.level &&
+        left.mutation == right.mutation
+    end
+
+    # Mirrors the pinned ClickHouse MergeTreePartInfo::contains relation.
+    private def merge_tree_part_contains?(outer : MergeTreePartInfo, inner : MergeTreePartInfo) : Bool
+      equal_block_range = outer.min_block == inner.min_block && outer.max_block == inner.max_block
+      strictly_contains_block_range = equal_block_range ||
+                                      outer.level > inner.level ||
+                                      outer.level == MergeTreePartInfo::MAX_LEVEL ||
+                                      outer.level == MergeTreePartInfo::LEGACY_MAX_LEVEL
+
+      outer.partition_id == inner.partition_id &&
+        outer.min_block <= inner.min_block &&
+        outer.max_block >= inner.max_block &&
+        outer.level >= inner.level &&
+        outer.mutation >= inner.mutation &&
+        strictly_contains_block_range
+    end
+
+    private def reject_transaction_metadata!(candidates : Array(OfflinePartCandidate)) : Nil
+      candidates.each do |candidate|
+        each_part_entry(candidate) do |entry|
+          if entry == "txn_version.txt" || entry == "txn_version.txt.tmp"
+            raise UnsupportedFormatError.new("transactional part metadata is not supported: #{candidate.name}")
+          end
+        end
+      end
+    end
+
+    private def reject_unsupported_scan_features!(candidates : Array(OfflinePartCandidate)) : Nil
+      candidates.each do |candidate|
+        each_part_entry(candidate) do |entry|
+          if entry.starts_with?("delete_bitmap_") && entry.ends_with?(".rbm") && entry.bytesize > "delete_bitmap_.rbm".bytesize
+            raise UnsupportedFormatError.new("delete bitmap sidecars are not supported: #{candidate.name}")
+          end
+        end
+        if part_has_row_exists_column?(candidate)
+          raise UnsupportedFormatError.new("lightweight-delete _row_exists columns are not supported: #{candidate.name}")
+        end
+      end
+    end
+
+    private def each_part_entry(candidate : OfflinePartCandidate, &block : String -> Nil) : Nil
+      entry_count = 0
+      Dir.each_child(candidate.path) do |entry|
+        entry_count += 1
+        raise BoundsError.new("physical part entry count exceeds limit") if entry_count > PartChecksums::MAX_ENTRIES + 16
+        yield entry
+      end
+    rescue ex : File::Error
+      raise InvalidPartError.new("cannot inspect physical part directory: #{candidate.name}")
+    end
+
+    private def part_has_row_exists_column?(candidate : OfflinePartCandidate) : Bool
+      path = File.join(candidate.path, "columns.txt")
+      info = File.info?(path, follow_symlinks: false) || raise(UnsupportedFormatError.new("selected part columns.txt is missing or inaccessible: #{candidate.name}"))
+      raise UnsupportedFormatError.new("selected part columns.txt is a symbolic link: #{candidate.name}") if info.type.symlink?
+      raise UnsupportedFormatError.new("selected part columns.txt is not a regular file: #{candidate.name}") unless info.type.file?
+      raise BoundsError.new("selected part columns.txt exceeds metadata limit") if info.size > WidePart::MAX_METADATA_FILE_BYTES
+
+      text = String.build do |output|
+        File.open(path, "r") do |input|
+          buffer = Bytes.new(8_192)
+          total = 0
+          while (read = input.read(buffer)) > 0
+            raise BoundsError.new("selected part columns.txt exceeds metadata limit") if read > WidePart::MAX_METADATA_FILE_BYTES - total
+            output.write(buffer[0, read])
+            total += read
+          end
+        end
+      end
+      bytes = text.to_slice
+      unless text.bytesize.to_i64 == info.size && !bytes.empty? && bytes[bytes.size - 1] == 10
+        raise CorruptPartError.new("selected part columns.txt is truncated or missing LF")
+      end
+
+      cursor = 0
+      header, cursor = part_metadata_line(bytes, cursor)
+      raise UnsupportedFormatError.new("invalid selected part columns.txt header") unless header == "columns format version: 1"
+      count_line, cursor = part_metadata_line(bytes, cursor)
+      match = /\A([0-9]+) columns:\z/.match(count_line) || raise(UnsupportedFormatError.new("invalid selected part column count"))
+      column_count = match[1].to_i? || raise(UnsupportedFormatError.new("invalid selected part column count"))
+      raise BoundsError.new("selected part column count exceeds limit") if column_count > WidePart::MAX_METADATA_COLUMNS
+      raise UnsupportedFormatError.new("selected part columns.txt contains no columns") if column_count == 0
+
+      column_count.times do
+        line, cursor = part_metadata_line(bytes, cursor)
+        return true if part_column_name(line) == "_row_exists"
+      end
+
+      raise UnsupportedFormatError.new("trailing selected part columns.txt data") unless cursor == bytes.size
+      false
+    rescue ex : File::Error
+      raise UnsupportedFormatError.new("selected part columns.txt is inaccessible: #{candidate.name}")
+    end
+
+    private def part_metadata_line(bytes : Bytes, cursor : Int32) : {String, Int32}
+      raise UnsupportedFormatError.new("truncated selected part columns.txt") if cursor < 0 || cursor >= bytes.size
+      ending = cursor
+      while ending < bytes.size && bytes[ending] != 10
+        ending += 1
+      end
+      raise UnsupportedFormatError.new("truncated selected part columns.txt") if ending >= bytes.size
+      raise BoundsError.new("selected part columns.txt line exceeds metadata limit") if ending - cursor + 1 > WidePart::MAX_METADATA_LINE_BYTES
+      {String.new(bytes[cursor, ending - cursor]), ending + 1}
+    end
+
+    private def part_column_name(line : String) : String
+      bytes = line.to_slice
+      raise UnsupportedFormatError.new("invalid selected part column identifier") if bytes.empty? || bytes[0] != '`'.ord
+      end_index = -1
+      decoded_length = 0
+      decoded = String.build do |io|
+        index = 1
+        while index < bytes.size
+          byte = bytes[index]
+          if byte == '`'.ord
+            if index + 1 < bytes.size && bytes[index + 1] == '`'.ord
+              io.write_byte('`'.ord.to_u8)
+              decoded_length += 1
+              index += 2
+              next
+            end
+            end_index = index + 1
+            break
+          elsif byte == '\\'.ord
+            index += 1
+            raise UnsupportedFormatError.new("invalid selected part column identifier escape") if index >= bytes.size
+            escaped = bytes[index]
+            if escaped == 'x'.ord
+              raise UnsupportedFormatError.new("invalid selected part column identifier escape") if index + 2 >= bytes.size
+              high = part_hex_digit(bytes[index + 1])
+              low = part_hex_digit(bytes[index + 2])
+              raise UnsupportedFormatError.new("invalid selected part column identifier escape") unless high && low
+              io.write_byte((high.not_nil! << 4) | low.not_nil!)
+              decoded_length += 1
+              index += 3
+              next
+            elsif escaped == 'N'.ord
+              index += 1
+              next
+            end
+            decoded_byte = case escaped
+                           when 'a'.ord then 0x07_u8
+                           when 'b'.ord then 0x08_u8
+                           when 'e'.ord then 0x1b_u8
+                           when 'f'.ord then 0x0c_u8
+                           when 'n'.ord then 0x0a_u8
+                           when 'r'.ord then 0x0d_u8
+                           when 't'.ord then 0x09_u8
+                           when 'v'.ord then 0x0b_u8
+                           when '0'.ord then 0_u8
+                           else              escaped
+                           end
+            if decoded_byte != '\\'.ord && decoded_byte != '\''.ord && decoded_byte != '"'.ord && decoded_byte != '`'.ord && decoded_byte != '/'.ord && decoded_byte != '='.ord && decoded_byte >= 0x20
+              io.write_byte('\\'.ord.to_u8)
+              decoded_length += 1
+            end
+            io.write_byte(decoded_byte)
+            decoded_length += 1
+            index += 1
+          else
+            raise UnsupportedFormatError.new("invalid selected part column identifier") if byte == 0 || byte == 10 || byte == 13
+            io.write_byte(byte)
+            decoded_length += 1
+            index += 1
+          end
+        end
+      end
+      raise UnsupportedFormatError.new("unterminated selected part column identifier") if end_index < 0
+      raise UnsupportedFormatError.new("empty selected part column identifier") if decoded_length == 0
+      raise UnsupportedFormatError.new("invalid selected part column type") if end_index >= bytes.size || bytes[end_index] != ' '.ord || end_index + 1 >= bytes.size
+      raise UnsupportedFormatError.new("invalid selected part column type") if bytes[end_index + 1, bytes.size - end_index - 1].any? { |byte| byte == 0 || byte == 13 }
+      decoded
+    end
+
+    private def part_hex_digit(byte : UInt8) : UInt8?
+      if byte >= '0'.ord && byte <= '9'.ord
+        byte - '0'.ord
+      elsif byte >= 'a'.ord && byte <= 'f'.ord
+        byte - 'a'.ord + 10
+      elsif byte >= 'A'.ord && byte <= 'F'.ord
+        byte - 'A'.ord + 10
+      end
     end
   end
 
