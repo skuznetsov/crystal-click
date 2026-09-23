@@ -78,6 +78,42 @@ module CrystalClick
       reader = WidePartTable.open_selected(paths, columns)
       reader.scan(batch_rows: batch_rows, &block)
     end
+
+    # Scan selected exact primitive numeric columns. The type declared by the
+    # table DDL must exactly match each selected part's columns.txt type.
+    def scan_numeric(
+      columns : Array(String),
+      batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+      &block : WidePartTableBatch -> Nil
+    ) : Nil
+      raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
+      raise BoundsError.new("no columns selected") if columns.empty?
+      raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
+      raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > WidePartTable::MAX_BATCH_ROWS
+
+      selected = Set(String).new
+      columns.each do |column_name|
+        raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
+        raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
+        selected << column_name
+
+        column = @columns.find { |entry| entry.name == column_name }
+        raise UnsupportedFormatError.new("selected column is not declared by table DDL") unless column
+        raise UnsupportedFormatError.new("selected table column is not an exact primitive numeric type") unless WidePart.supports_numeric_type?(column.type)
+      end
+
+      candidates = @part_candidates || raise(UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only"))
+      return nil if candidates.empty?
+
+      reader = WidePartTable.open_selected_numeric(candidates.map(&.path), columns)
+      reader.column_types.each do |column_name, part_type|
+        ddl_column = @columns.find { |entry| entry.name == column_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
+        unless ddl_column.type == part_type
+          raise UnsupportedFormatError.new("table DDL and selected part column types differ")
+        end
+      end
+      reader.scan_numeric(batch_rows: batch_rows, &block)
+    end
   end
 
   # Offline reader for the bounded ClickHouse 26.7 Atomic metadata layout.

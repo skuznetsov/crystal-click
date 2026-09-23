@@ -3,6 +3,11 @@
 Document status: implemented and verified for the bounded public-fixture scope
 below. This does not certify a live ClickHouse table snapshot.
 
+This document records the original `UInt64` catalog slice. The subsequent
+fixed-width primitive numeric scan is governed by
+[`FIXED_NUMERIC_SCAN_FRONTIER.md`](FIXED_NUMERIC_SCAN_FRONTIER.md); it does not
+change the offline candidate or server-state boundary described here.
+
 Current frontier: read a bounded local ClickHouse Atomic metadata tree in
 Crystal, expose database/table names, table column names and declared types,
 and inventory physical MergeTree part candidates. For an unambiguous, immutable

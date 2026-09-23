@@ -12,20 +12,64 @@ module CrystalClick
     MAX_METADATA_SUBSTREAMS      = 65536
     MARK_SIZE                    =    24
 
+    def self.supports_numeric_type?(type : String) : Bool
+      case type
+      when "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"
+        true
+      else
+        false
+      end
+    end
+
+    def self.numeric_type_name(type : T.class) : String forall T
+      {% if T == UInt8 %}
+        "UInt8"
+      {% elsif T == UInt16 %}
+        "UInt16"
+      {% elsif T == UInt32 %}
+        "UInt32"
+      {% elsif T == UInt64 %}
+        "UInt64"
+      {% elsif T == Int8 %}
+        "Int8"
+      {% elsif T == Int16 %}
+        "Int16"
+      {% elsif T == Int32 %}
+        "Int32"
+      {% elsif T == Int64 %}
+        "Int64"
+      {% elsif T == Float32 %}
+        "Float32"
+      {% elsif T == Float64 %}
+        "Float64"
+      {% else %}
+        raise UnsupportedFormatError.new("only exact fixed-width primitive numeric accessors are supported")
+      {% end %}
+    end
+
     getter path : String
+    getter column_type : String
     getter row_count : UInt64
     getter data_path : String
     getter mark_path : String
     getter checksum_verification : ChecksumVerification
 
     def self.open(path : String) : WidePart
-      new(path, nil)
+      new(path, nil, false)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
 
     def self.open(path : String, column : String) : WidePart
-      new(path, column)
+      new(path, column, false)
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot read part")
+    end
+
+    # Open a supported fixed-width numeric column. Existing open/read_uint64
+    # entry points remain UInt64-only.
+    def self.open_numeric(path : String, column : String) : WidePart
+      new(path, column, true)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
@@ -38,6 +82,28 @@ module CrystalClick
     # The returned array is independent of the reader's cached mark records.
     def mark_row_counts : Array(UInt64)
       @marks.map(&.rows)
+    end
+
+    def read_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(T) forall T
+      expected_type = WidePart.numeric_type_name(type)
+      element_width = numeric_type_width(expected_type)
+      raise UnsupportedFormatError.new("typed accessor does not match selected column type") unless expected_type == @column_type
+
+      start_mark, end_mark, expected_bytes = checked_numeric_mark_range(column, first_mark, mark_count, expected_type, element_width)
+      values = Array(T).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, element_width) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << decode_numeric_value(bytes, offset, type)
+          offset += element_width
+        end
+      end
+      values
     end
 
     def read_uint64(column : String = @column) : Array(UInt64)
@@ -162,23 +228,25 @@ module CrystalClick
     end
 
     @column : String
+    @element_width : Int32
     @marks : Array(Mark)
     @sentinel : Mark
 
-    private def initialize(path : String, requested_column : String?)
+    private def initialize(path : String, requested_column : String?, allow_numeric : Bool)
       @path = path
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
-      @column, @row_count, physical_stream = parse_metadata(requested_column)
+      @column, @column_type, @row_count, physical_stream = parse_metadata(requested_column, allow_numeric)
+      @element_width = numeric_type_width(@column_type)
       validate_selected_stream_name(physical_stream)
       @data_path, @mark_path, compressed_marks = resolve_stream(physical_stream)
       data_size = File.size(@data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
-      @marks, @sentinel = parse_marks(@mark_path, data_size, compressed_marks)
+      @marks, @sentinel = parse_marks(@mark_path, data_size, compressed_marks, @element_width)
       validate_rows
     end
 
-    private def parse_metadata(requested_column : String?) : {String, UInt64, String}
+    private def parse_metadata(requested_column : String?, allow_numeric : Bool) : {String, String, UInt64, String}
       columns_text = read_metadata_file("columns.txt")
       columns = parse_columns(columns_text)
       if columns.empty?
@@ -190,7 +258,12 @@ module CrystalClick
       column = requested_column || columns[0][0]
       selected = columns.find { |entry| entry[0] == column }
       raise UnsupportedFormatError.new("column is not present") unless selected
-      raise UnsupportedFormatError.new("only exact UInt64 columns are supported") unless selected.not_nil![1] == "UInt64"
+      column_type = selected.not_nil![1]
+      if allow_numeric
+        numeric_type_width(column_type)
+      else
+        raise UnsupportedFormatError.new("only exact UInt64 columns are supported") unless column_type == "UInt64"
+      end
 
       validate_default_codec
 
@@ -198,7 +271,7 @@ module CrystalClick
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
 
       physical_stream = parse_substreams(columns, column)
-      {column, row_count, physical_stream}
+      {column, column_type, row_count, physical_stream}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
     end
@@ -476,7 +549,7 @@ module CrystalClick
         raise CorruptPartError.new("data and mark streams do not form a pair")
       end
       return candidates.first.not_nil! if candidates.size == 1
-      raise InvalidPartError.new("UInt64 stream files not found")
+      raise InvalidPartError.new("selected numeric stream files not found")
     end
 
     private def reject_target_unsupported_mark_extensions(names : Array(String))
@@ -494,7 +567,7 @@ module CrystalClick
       end
     end
 
-    private def parse_marks(file : String, data_size : Int64, compressed : Bool) : {Array(Mark), Mark}
+    private def parse_marks(file : String, data_size : Int64, compressed : Bool, element_width : Int32) : {Array(Mark), Mark}
       size = File.size(file)
       raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
       bytes = if compressed
@@ -522,12 +595,12 @@ module CrystalClick
         raise CorruptPartError.new("mark offset is not monotonic") if compressed < previous_compressed
         raise CorruptPartError.new("mark decompressed offset is not monotonic") if compressed == previous_compressed && decompressed < previous_decompressed
         raise CorruptPartError.new("mark offset exceeds limit") if decompressed > MAX_FRAME_DECOMPRESSED_BYTES
-        raise CorruptPartError.new("mark decompressed offset is not UInt64-aligned") unless decompressed % 8 == 0
+        raise CorruptPartError.new("mark decompressed offset is not column-type-aligned") unless decompressed % element_width.to_u64 == 0
         if rows == 0
           raise CorruptPartError.new("zero-row mark must be the sentinel") unless offset + MARK_SIZE == bytes.size
           raise CorruptPartError.new("EOF sentinel must have zero local offset") if compressed == data_size && decompressed != 0
         else
-          raise CorruptPartError.new("mark row count is not aligned") if rows > MAX_FRAME_DECOMPRESSED_BYTES.to_u64 // 8
+          raise CorruptPartError.new("mark row count exceeds frame limit") if rows > MAX_FRAME_DECOMPRESSED_BYTES.to_u64 // element_width.to_u64
         end
         records << Mark.new(compressed, decompressed, rows)
         previous_compressed = compressed
@@ -553,8 +626,29 @@ module CrystalClick
       raise UnsupportedFormatError.new("column is not present") unless column == @column
     end
 
-    private def checked_mark_range(column : String, first_mark : Int, mark_count : Int) : {Mark?, Mark, Int32}
+    private def ensure_uint64_column(column : String)
       ensure_column(column)
+      raise UnsupportedFormatError.new("UInt64 accessor requires an exact UInt64 column") unless @column_type == "UInt64"
+    end
+
+    private def checked_mark_range(column : String, first_mark : Int, mark_count : Int) : {Mark?, Mark, Int32}
+      ensure_uint64_column(column)
+      checked_mark_range(column, first_mark, mark_count, 8)
+    end
+
+    private def checked_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      expected_type : String,
+      element_width : Int32,
+    ) : {Mark?, Mark, Int32}
+      ensure_column(column)
+      raise UnsupportedFormatError.new("typed accessor does not match selected column type") unless @column_type == expected_type
+      checked_mark_range(column, first_mark, mark_count, element_width)
+    end
+
+    private def checked_mark_range(column : String, first_mark : Int, mark_count : Int, element_width : Int32) : {Mark?, Mark, Int32}
       raise BoundsError.new("negative mark range") if first_mark < 0 || mark_count < 0
       raise BoundsError.new("empty mark range") if mark_count == 0
       raise BoundsError.new("mark range exceeds data marks") if first_mark > @marks.size || mark_count > @marks.size - first_mark
@@ -563,7 +657,7 @@ module CrystalClick
       end_index = first_mark + mark_count
       end_mark = end_index == @marks.size ? @sentinel : @marks[end_index]
       expected_rows = rows_in_range(first_mark, mark_count)
-      expected_bytes = checked_byte_count(expected_rows).to_i32
+      expected_bytes = checked_byte_count(expected_rows, element_width).to_i32
       {start_mark, end_mark, expected_bytes}
     end
 
@@ -577,9 +671,51 @@ module CrystalClick
       total
     end
 
-    private def checked_byte_count(rows : UInt64) : Int
-      raise CorruptPartError.new("row byte count overflow") if rows > (Int32::MAX.to_u64 / 8)
-      (rows * 8).to_i
+    private def checked_byte_count(rows : UInt64, element_width : Int32) : Int
+      width = element_width.to_u64
+      raise CorruptPartError.new("row byte count overflow") if width == 0 || rows > (Int32::MAX.to_u64 / width)
+      (rows * width).to_i
+    end
+
+    private def numeric_type_width(type : String) : Int32
+      case type
+      when "UInt8", "Int8"
+        1
+      when "UInt16", "Int16"
+        2
+      when "UInt32", "Int32", "Float32"
+        4
+      when "UInt64", "Int64", "Float64"
+        8
+      else
+        raise UnsupportedFormatError.new("only exact fixed-width primitive numeric columns are supported")
+      end
+    end
+
+    private def decode_numeric_value(bytes : Bytes, offset : Int, type : T.class) : T forall T
+      {% if T == UInt8 %}
+        bytes[offset]
+      {% elsif T == UInt16 %}
+        u16(bytes, offset)
+      {% elsif T == UInt32 %}
+        u32(bytes, offset)
+      {% elsif T == UInt64 %}
+        u64(bytes, offset)
+      {% elsif T == Int8 %}
+        bytes[offset].unsafe_as(Int8)
+      {% elsif T == Int16 %}
+        u16(bytes, offset).unsafe_as(Int16)
+      {% elsif T == Int32 %}
+        u32(bytes, offset).unsafe_as(Int32)
+      {% elsif T == Int64 %}
+        u64(bytes, offset).unsafe_as(Int64)
+      {% elsif T == Float32 %}
+        u32(bytes, offset).unsafe_as(Float32)
+      {% elsif T == Float64 %}
+        u64(bytes, offset).unsafe_as(Float64)
+      {% else %}
+        raise UnsupportedFormatError.new("only exact fixed-width primitive numeric accessors are supported")
+      {% end %}
     end
 
     private def each_uint64_mark_range(start_mark : Mark?, end_mark : Mark, expected_bytes : Int, & : UInt64 -> Nil) : Nil
@@ -593,6 +729,18 @@ module CrystalClick
     end
 
     private def each_uint64_mark_range_bytes(start_mark : Mark?, end_mark : Mark, expected_bytes : Int, & : Bytes -> Nil) : Nil
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 8) do |bytes|
+        yield bytes
+      end
+    end
+
+    private def each_mark_range_bytes(
+      start_mark : Mark?,
+      end_mark : Mark,
+      expected_bytes : Int,
+      element_width : Int32,
+      & : Bytes -> Nil
+    ) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
       data_size = File.size(@data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
@@ -626,7 +774,7 @@ module CrystalClick
           end
           selected_size = (local_end - local_start).to_i64
           raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > expected_bytes.to_i64 - selected_bytes
-          raise CorruptPartError.new("UInt64 bytes are not aligned") unless selected_size % 8 == 0
+          raise CorruptPartError.new("numeric bytes are not column-type-aligned") unless selected_size % element_width == 0
           yield frame.output[local_start.to_i, selected_size.to_i] if selected_size > 0
           selected_bytes += selected_size
           if current == end_offset
@@ -646,6 +794,20 @@ module CrystalClick
       raise CorruptPartError.new("truncated integer") if offset < 0 || offset > bytes.size - 8
       value = 0_u64
       8.times { |index| value |= bytes[offset + index].to_u64 << (index * 8) }
+      value
+    end
+
+    private def u32(bytes : Bytes, offset : Int) : UInt32
+      raise CorruptPartError.new("truncated integer") if offset < 0 || offset > bytes.size - 4
+      value = 0_u32
+      4.times { |index| value |= bytes[offset + index].to_u32 << (index * 8) }
+      value
+    end
+
+    private def u16(bytes : Bytes, offset : Int) : UInt16
+      raise CorruptPartError.new("truncated integer") if offset < 0 || offset > bytes.size - 2
+      value = 0_u16
+      2.times { |index| value |= bytes[offset + index].to_u16 << (index * 8) }
       value
     end
 
