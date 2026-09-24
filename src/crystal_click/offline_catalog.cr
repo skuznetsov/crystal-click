@@ -32,10 +32,10 @@ module CrystalClick
     getter name : String
     getter uuid : String
     getter engine : String
+    getter primary_key_column : String?
 
     @columns : Array(OfflineColumn)
     @part_candidates : Array(OfflinePartCandidate)?
-    @primary_key_column : String?
 
     def initialize(
       @name : String,

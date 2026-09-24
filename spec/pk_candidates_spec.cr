@@ -4,6 +4,7 @@ module OfflinePKCandidateSpecSupport
   DB_UUID    = "a1666606-4ca2-4afb-9900-000000000001"
   TABLE_UUID = "a1666606-4ca2-4afb-9900-000000000002"
   ORACLE     = File.expand_path("../test/fixtures/public/wide_u64_pk_candidates_oracle.tsv", __DIR__)
+  LARGE_WIDE = File.expand_path("../test/fixtures/public/wide_two_uint64/part", __DIR__)
 
   def self.with_table(
     index_variant : String = "raw",
@@ -57,6 +58,40 @@ module OfflinePKCandidateSpecSupport
   end
 end
 
+describe CrystalClick::WidePartTable do
+  it "keeps scan_candidate_marks on one complete 8,192-row granule with original offsets" do
+    root = File.tempname("crystal-click-pk-candidate-large-granule-spec")
+    Dir.mkdir(root)
+    begin
+      part_path = File.join(root, "all_1_1_0")
+      FileUtils.cp_r(OfflinePKCandidateSpecSupport::LARGE_WIDE, part_path)
+      reader = CrystalClick::WidePartTable.open_selected([part_path], ["left", "right"])
+      reader.part_mark_row_counts.should eq([[8192_u64, 8192_u64, 617_u64]])
+
+      callbacks = 0
+      reader.scan_candidate_marks([[1]]) do |batch|
+        callbacks += 1
+        left = batch.values_for("left")
+        right = batch.values_for("right")
+        left.size.should eq(8192)
+        left.size.should be > CrystalClick::WidePartTable::DEFAULT_BATCH_ROWS
+        right.size.should eq(left.size)
+        batch.mark_index.should eq(1)
+        batch.mark_row_offset.should eq(0_u64)
+        batch.part_row_offset.should eq(8192_u64)
+        batch.source_row_offset.should eq(8192_u64)
+        left.first.should eq(8192_u64)
+        left.last.should eq(16_383_u64)
+        right.first.should eq(24_583_u64)
+        right.last.should eq(49_156_u64)
+      end
+      callbacks.should eq(1)
+    ensure
+      FileUtils.rm_rf(root)
+    end
+  end
+end
+
 describe CrystalClick::OfflineTable do
   it "matches the independent ClickHouse oracle using conservative raw and compressed candidates" do
     cases = [
@@ -71,6 +106,7 @@ describe CrystalClick::OfflineTable do
 
     ["raw", "cidx"].each do |variant|
       OfflinePKCandidateSpecSupport.with_table(variant) do |table, _, _|
+        table.primary_key_column.should eq("pk")
         cases.each do |lower, upper, expected_marks|
           marks = [] of Int32
           part_offsets = [] of UInt64
@@ -114,6 +150,42 @@ describe CrystalClick::OfflineTable do
     end
   end
 
+  it "exhaustively matches small inclusive and one-sided bounds to the ClickHouse oracle" do
+    cases = [] of {UInt64?, UInt64?}
+    (0_u64..5_u64).each do |bound|
+      cases << {bound, nil}
+      cases << {nil, bound}
+      (bound..5_u64).each do |upper|
+        cases << {bound, upper}
+      end
+    end
+    cases.size.should eq(33)
+    oracle = OfflinePKCandidateSpecSupport.oracle_rows
+
+    ["raw", "cidx"].each do |variant|
+      OfflinePKCandidateSpecSupport.with_table(variant) do |table, _, _|
+        cases.each do |lower, upper|
+          filtered = [] of {UInt64, UInt64}
+          table.scan_uint64_pk_candidates(
+            ["pk", "value"],
+            lower_bound: lower,
+            upper_bound: upper
+          ) do |batch|
+            keys = batch.values_for("pk")
+            values = batch.values_for("value")
+            keys.each_with_index do |key, row|
+              next if lower && key < lower
+              next if upper && key > upper
+              filtered << {key, values[row]}
+            end
+          end
+
+          filtered.should eq(oracle.select { |key, _| (!lower || key >= lower) && (!upper || key <= upper) })
+        end
+      end
+    end
+  end
+
   it "admits a partitioned table with ClickHouse's explicit same-column primary-key syntax" do
     [
       "PARTITION BY tuple() PRIMARY KEY pk ORDER BY pk SETTINGS index_granularity = 8",
@@ -129,6 +201,7 @@ describe CrystalClick::OfflineTable do
 
   it "keeps generic scans available for tuple keys while refusing PK candidate inference" do
     OfflinePKCandidateSpecSupport.with_table("raw", "ORDER BY tuple()") do |table, _, _|
+      table.primary_key_column.should be_nil
       callbacks = 0
       expect_raises(CrystalClick::UnsupportedFormatError) do
         table.scan_uint64_pk_candidates(["pk"], lower_bound: 0_u64) { |_| callbacks += 1 }
