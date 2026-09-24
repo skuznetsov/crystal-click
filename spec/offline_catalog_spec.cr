@@ -1,9 +1,13 @@
 require "./spec_helper"
 
-OFFLINE_CATALOG_FIXTURE = File.expand_path("../test/fixtures/public/wide_two_uint64/part", __DIR__)
-OFFLINE_DB_UUID         = "835e7af8-f57c-42b8-bcb0-863f3de0ca51"
-OFFLINE_TABLE_UUID      = "1f068934-2439-44ce-9501-c2dc252a9027"
-OFFLINE_TABLE_ROWS      = 17_001
+OFFLINE_CATALOG_FIXTURE                = File.expand_path("../test/fixtures/public/wide_two_uint64/part", __DIR__)
+OFFLINE_VALUES_NUMERIC_FIXTURE         = File.expand_path("../test/fixtures/public/wide_numeric_mixed/part", __DIR__)
+OFFLINE_VALUES_STRING_FIXTURE          = File.expand_path("../test/fixtures/public/wide_string_nullable/part", __DIR__)
+OFFLINE_VALUES_NULLABLE_STRING_FIXTURE = File.expand_path("../test/fixtures/public/wide_nullable_string/part", __DIR__)
+OFFLINE_VALUES_JSON_FIXTURE            = File.expand_path("../test/fixtures/public/wide_json_typed_path/part", __DIR__)
+OFFLINE_DB_UUID                        = "835e7af8-f57c-42b8-bcb0-863f3de0ca51"
+OFFLINE_TABLE_UUID                     = "1f068934-2439-44ce-9501-c2dc252a9027"
+OFFLINE_TABLE_ROWS                     = 17_001
 
 class OfflineCatalogSpecStop < Exception
 end
@@ -763,6 +767,15 @@ describe CrystalClick::OfflineCatalog do
       part_candidates["name"].values.map { |value| value.as(String) }.should eq(["all_1_1_0", "all_2_2_0", "all_1_1_0"])
       part_candidates["partition_id"].values.map { |value| value.as(String) }.should eq(["all", "all", "all"])
       part_candidates["rows"].values.map { |value| value.as(UInt64) }.should eq([11_u64, 17_u64, 13_u64])
+      part_candidates["name"].values(max_rows: 3_u64, max_string_bytes: 27_u64).map { |value| value.as(String) }.should eq(["all_1_1_0", "all_2_2_0", "all_1_1_0"])
+      expect_raises(CrystalClick::BoundsError) { part_candidates["name"].values(max_rows: 2_u64) }
+      expect_raises(CrystalClick::BoundsError) { part_candidates["name"].values(max_string_bytes: 26_u64) }
+      expect_raises(CrystalClick::BoundsError) do
+        part_candidates["rows"].values(max_rows: CrystalClick::OfflineTable::MAX_MATERIALIZED_VALUES_ROWS + 1_u64)
+      end
+      expect_raises(CrystalClick::BoundsError) do
+        part_candidates["rows"].values(max_string_bytes: CrystalClick::OfflineTable::MAX_MATERIALIZED_VALUES_STRING_BYTES + 1_u64)
+      end
       caller_owned = part_candidates["database"].values
       caller_owned << "caller-only"
       part_candidates["database"].values.map { |value| value.as(String) }.should eq(["alpha", "alpha", "zeta"])
@@ -832,13 +845,13 @@ describe CrystalClick::OfflineCatalog do
     end
   end
 
-  it "keeps physical column selection lazy and rejects materialization in this slice" do
+  it "materializes physical column values only when requested" do
     with_offline_catalog_root do |root|
       offline_catalog_create_database(root)
       offline_catalog_create_table(root, with_part: true)
 
       selected = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["left"]
-      expect_raises(CrystalClick::UnsupportedFormatError) { selected.values }
+      selected.values.map { |value| value.as(UInt64) }.should eq((0_u64...OFFLINE_TABLE_ROWS.to_u64).to_a)
       values = [] of UInt64
       CrystalClick::OfflineCatalog.open(root)["lab"]["events"].scan_uint64(["left"], batch_rows: 127) do |batch|
         values.concat(batch.values_for("left"))
@@ -846,6 +859,189 @@ describe CrystalClick::OfflineCatalog do
       values.size.should eq(OFFLINE_TABLE_ROWS)
       values.first.should eq(0_u64)
       values.last.should eq((OFFLINE_TABLE_ROWS - 1).to_u64)
+    end
+  end
+
+  it "materializes each exact primitive numeric type through the typed scanner" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `u8` UInt8,\n    `u16` UInt16,\n    `u32` UInt32,\n    `u64` UInt64,\n" +
+                 "    `i8` Int8,\n    `i16` Int16,\n    `i32` Int32,\n    `i64` Int64,\n" +
+                 "    `f32` Float32,\n    `f64` Float64"
+      )
+      FileUtils.cp_r(OFFLINE_VALUES_NUMERIC_FIXTURE, File.join(table_path, "all_1_1_0"))
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+
+      table["u8"].values.map { |value| value.as(UInt8) }.should eq([0_u8, 127_u8, 255_u8, 1_u8])
+      table["u16"].values.map { |value| value.as(UInt16) }.should eq([0_u16, 32767_u16, 65535_u16, 1_u16])
+      table["u32"].values.map { |value| value.as(UInt32) }.should eq([0_u32, 2_147_483_647_u32, UInt32::MAX, 1_u32])
+      table["u64"].values.map { |value| value.as(UInt64) }.should eq([0_u64, Int64::MAX.to_u64, UInt64::MAX, 1_u64])
+      table["i8"].values.map { |value| value.as(Int8) }.should eq([-128_i8, -1_i8, 0_i8, 127_i8])
+      table["i16"].values.map { |value| value.as(Int16) }.should eq([-32768_i16, -1_i16, 0_i16, 32767_i16])
+      table["i32"].values.map { |value| value.as(Int32) }.should eq([-2_147_483_648_i32, -1_i32, 0_i32, 2_147_483_647_i32])
+      table["i64"].values.map { |value| value.as(Int64) }.should eq([Int64::MIN, -1_i64, 0_i64, Int64::MAX])
+      table["f32"].values.map { |value| value.as(Float32).unsafe_as(UInt32) }.should eq([0_u32, 0x80000000_u32, 0x3fc00000_u32, 0xc0100000_u32])
+      table["f64"].values.map { |value| value.as(Float64).unsafe_as(UInt64) }.should eq([0_u64, 0x8000000000000000_u64, 0x3ff8000000000000_u64, 0xc002000000000000_u64])
+    end
+  end
+
+  it "materializes String and Nullable numeric columns with nulls intact" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `label` String,\n    `maybe_u64` Nullable(UInt64),\n" +
+                 "    `maybe_i16` Nullable(Int16),\n    `maybe_f32` Nullable(Float32)"
+      )
+      FileUtils.cp_r(OFFLINE_VALUES_STRING_FIXTURE, File.join(table_path, "all_1_1_0"))
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+
+      table["label"].values.map { |value| value.as(String) }.should eq(["", "alpha", "a\0b", "tail", ""])
+      table["maybe_u64"].values.map { |value| value.as(UInt64?) }.should eq([0_u64, nil, UInt64::MAX, 7_u64, nil])
+      table["maybe_i16"].values.map { |value| value.as(Int16?) }.should eq([Int16::MIN, nil, Int16::MAX, -1_i16, nil])
+      maybe_f32_bits = [] of UInt32?
+      table["maybe_f32"].values.each do |value|
+        if float_value = value.as(Float32?)
+          maybe_f32_bits << float_value.unsafe_as(UInt32)
+        else
+          maybe_f32_bits << nil
+        end
+      end
+      maybe_f32_bits.should eq([0x80000000_u32, nil, 0x3fc00000_u32, 0xc0100000_u32, nil])
+    end
+  end
+
+  it "materializes Nullable(String), retains values after another scan, and enforces cumulative String bounds" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, columns: "    `seq` UInt64,\n    `payload` Nullable(String)")
+      FileUtils.cp_r(OFFLINE_VALUES_NULLABLE_STRING_FIXTURE, File.join(table_path, "all_1_1_0"))
+      source_table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      expected = ["P", nil, "Q", "", "a\0b", "z", nil, "Q\0R"] of String?
+
+      source_table["payload"].values(max_rows: 8_u64, max_string_bytes: 9_u64).map do |value|
+        value.as(String?)
+      end.should eq(expected)
+      expect_raises(CrystalClick::BoundsError) do
+        source_table["payload"].values(max_rows: 8_u64, max_string_bytes: 8_u64)
+      end
+
+      retained_values = source_table["payload"].values(max_rows: 8_u64, max_string_bytes: 9_u64)
+      source_table.scan_typed(["payload"]) { |_| nil }
+      retained_values.map { |value| value.as(String?) }.should eq(expected)
+    end
+  end
+
+  it "admits the row-limit boundary and rejects over-limit preflight counts before scanning" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      offline_catalog_create_table(root, with_part: true)
+      source_table = offline_catalog_database(root)["events"]
+
+      source_table["left"].values(max_rows: OFFLINE_TABLE_ROWS.to_u64).size.should eq(OFFLINE_TABLE_ROWS)
+      expect_raises(CrystalClick::BoundsError) do
+        source_table["left"].values(max_rows: (OFFLINE_TABLE_ROWS - 1).to_u64)
+      end
+      expect_raises(CrystalClick::BoundsError) do
+        source_table["left"].values(max_rows: CrystalClick::OfflineTable::MAX_MATERIALIZED_VALUES_ROWS + 1_u64)
+      end
+      expect_raises(CrystalClick::BoundsError) do
+        source_table["left"].values(max_string_bytes: CrystalClick::OfflineTable::MAX_MATERIALIZED_VALUES_STRING_BYTES + 1_u64)
+      end
+
+      count_path = File.join(source_table.part_candidates.first.path, "count.txt")
+      File.write(count_path, "100001\n")
+      refreshed_table = offline_catalog_database(root)["events"]
+      error = expect_raises(CrystalClick::BoundsError) { refreshed_table["left"].values }
+      error.message.not_nil!.should contain("row limit")
+    end
+  end
+
+  it "selects scalar JSON typed paths while rejecting whole JSON and dotted-name ambiguity" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, columns: "    `seq` UInt64,\n    `j` JSON(a UInt64, b String)")
+      FileUtils.cp_r(OFFLINE_VALUES_JSON_FIXTURE, File.join(table_path, "all_1_1_0"))
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+
+      table["j.a"].values.map { |value| value.as(UInt64) }.should eq([10_u64, 0_u64, 30_u64])
+      table["j.b"].values.map { |value| value.as(String) }.should eq(["x\0y", "", ""])
+      expect_raises(CrystalClick::UnsupportedFormatError) { table["j"].values }
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `seq` UInt64,\n    `j` JSON(a UInt64, b String),\n    `j.a` UInt64"
+      )
+      FileUtils.cp_r(OFFLINE_VALUES_JSON_FIXTURE, File.join(table_path, "all_1_1_0"))
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      error = expect_raises(CrystalClick::UnsupportedFormatError) { table["j.a"] }
+      error.message.not_nil!.should contain("ambiguous")
+    end
+  end
+
+  it "rejects ALIAS columns and never returns a prefix after later-mark corruption" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      offline_catalog_create_table(
+        root,
+        columns: "    `left` UInt64,\n    `right` UInt64,\n    `derived` UInt64 ALIAS left",
+        with_part: true
+      )
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      expect_raises(CrystalClick::UnsupportedFormatError) { table["derived"].values }
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      part_path = File.join(table_path, "all_1_1_0")
+      part = CrystalClick::WidePart.open(part_path, "left")
+      part.mark_count.should be > 2
+      mark_bytes = File.read(part.mark_path).to_slice
+      later_mark_data_offset = 0_u64
+      8.times do |index|
+        later_mark_data_offset |= mark_bytes[2 * CrystalClick::WidePart::MARK_SIZE + index].to_u64 << (index * 8)
+      end
+      later_mark_data_offset.should be > 0_u64
+      mutate_fixture_file(part_path, File.basename(part.data_path)) do |bytes|
+        # The first 16 frame bytes are an unchecked checksum; corrupt the
+        # compression-method byte so a later mark fails during scanning.
+        bytes[later_mark_data_offset.to_i + CrystalClick::CompressedBlock::CHECKSUM_SIZE] = 0xff_u8
+      end
+
+      selected = offline_catalog_database(root)["events"]["left"]
+      emitted_batches = 0
+      expect_raises(CrystalClick::Error) do
+        selected_table = offline_catalog_database(root)["events"]
+        selected_table.scan_typed(["left"]) do |_batch|
+          emitted_batches += 1
+          nil
+        end
+      end
+      emitted_batches.should be > 0
+      expect_raises(CrystalClick::Error) { selected.values }
+    end
+  end
+
+  it "preserves resolved part and mark order while materializing" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, columns: "    `seq` UInt64")
+      FileUtils.cp_r(OFFLINE_VALUES_JSON_FIXTURE, File.join(table_path, "all_1_1_0"))
+      FileUtils.cp_r(OFFLINE_VALUES_NULLABLE_STRING_FIXTURE, File.join(table_path, "all_2_2_0"))
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+
+      table.part_candidates.map(&.name).should eq(["all_1_1_0", "all_2_2_0"])
+      # Both parts have the selected `seq` stream plus distinct nonselected
+      # columns. Different row counts/content make a reversed part concat fail.
+      table["seq"].values.map { |value| value.as(UInt64) }.should eq(
+        [0_u64, 1_u64, 2_u64] + (1_u64..8_u64).to_a
+      )
     end
   end
 

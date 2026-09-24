@@ -28,9 +28,8 @@ the complete server `system` database.
   capacity before reading an over-cap candidate's `count.txt`. A later
   streaming API may avoid this allocation.
 - Preserve the existing targeted physical database/table lookups and scans.
-  Physical `table[column_name].values` is outside this slice; if `[]` exists
-  there for type stability, its materialization must fail explicitly until a
-  reader-backed implementation is admitted.
+  Physical `table[column_name].values` is outside this slice and follows its
+  separate reader-backed frontier.
 
 ## Exclusions and failure policy
 
@@ -43,7 +42,8 @@ the complete server `system` database.
   snapshot consistency. The root must be immutable and quiescent during a
   read. A physical database named `system` must not be silently shadowed.
 - This slice does not expose `system.tables`, `system.columns`, or arbitrary
-  physical data columns. Those require separate schema and reader contracts.
+  physical data columns. Physical values are governed separately by
+  [`OFFLINE_PHYSICAL_COLUMN_VALUES_FRONTIER.md`](OFFLINE_PHYSICAL_COLUMN_VALUES_FRONTIER.md).
 
 ## Verification and rollback
 

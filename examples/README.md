@@ -28,10 +28,27 @@ crystal run examples/read_offline_part_candidate_rows.cr -- /var/lib/clickhouse
 returns an owned, bounded collection of all physical part-candidate counts.
 These are not ClickHouse server Active parts. The projection rejects
 overlapping candidates and malformed metadata instead of returning a partial
-collection. `system.tables`, `system.columns`, and physical table-column
-materialization are not part of this example's API slice. In ClickHouse itself,
+collection. `system.tables` and `system.columns` are not implemented. In ClickHouse itself,
 `system.tables` calls its row estimate `total_rows`; `rows` is a column of
 `system.parts`.
+
+Read one physical table column into an owned array:
+
+```sh
+crystal run examples/read_offline_column_values.cr -- /var/lib/clickhouse lab events left
+```
+
+`catalog["lab"]["events"]["left"].values` reads all values for a supported
+stored column after selection. The result is bounded to 100,000 rows and
+64 MiB of returned non-NULL String content; this does not bound total bytes
+read, including nested bytes under NULL rows. Larger reads should use
+`scan_typed`. Since the column type is selected at runtime, elements have the
+`CrystalClick::OfflineColumnValue` union type; callers can cast an expected
+`UInt64` value with `value.as(UInt64)`. Pass `max_rows:` or
+`max_string_bytes:` to `.values` to request a smaller budget; values above
+the hard ceilings are rejected.
+Values follow the offline resolved-part and mark order, not SQL `ORDER BY`.
+Whole JSON objects and computed `ALIAS` columns are not materialized.
 
 On this macOS toolchain, Crystal's default LLD linker cannot parse the
 installed Xcode TAPI SDK files. If that affects your setup, put

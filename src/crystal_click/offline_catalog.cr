@@ -1,4 +1,8 @@
 module CrystalClick
+  alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
+                             Int8 | Int16 | Int32 | Int64 |
+                             Float32 | Float64 | String | Nil
+
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
     getter name : String
@@ -29,6 +33,9 @@ module CrystalClick
 
   # Read-only view of one table's parsed DDL and physical part candidates.
   class OfflineTable
+    MAX_MATERIALIZED_VALUES_ROWS         = 100_000_u64
+    MAX_MATERIALIZED_VALUES_STRING_BYTES = 64_u64 * 1024 * 1024
+
     getter name : String
     getter engine : String
     getter primary_key_column : String?
@@ -61,14 +68,129 @@ module CrystalClick
 
     def [](column_name : String) : OfflineColumnSelection
       raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
-      column = @columns.find { |entry| entry.name == column_name }
-      raise UnsupportedFormatError.new("selected column is not declared by table metadata") unless column
+      resolve_typed_ddl_selection(column_name, allow_unsupported_exact: true)
       OfflineColumnSelection.new(self, column_name)
     end
 
-    def materialize_selected_values(column_name : String) : Array(String | UInt64)
-      catalog = @part_candidates_catalog || raise(UnsupportedFormatError.new("physical table column materialization is unsupported"))
-      catalog.part_candidates_values(column_name)
+    def materialize_selected_values(
+      column_name : String,
+      max_rows : UInt64 = MAX_MATERIALIZED_VALUES_ROWS,
+      max_string_bytes : UInt64 = MAX_MATERIALIZED_VALUES_STRING_BYTES,
+    ) : Array(OfflineColumnValue)
+      raise BoundsError.new("selected column row limit exceeds hard limit") if max_rows > MAX_MATERIALIZED_VALUES_ROWS
+      raise BoundsError.new("selected column String payload limit exceeds hard limit") if max_string_bytes > MAX_MATERIALIZED_VALUES_STRING_BYTES
+
+      if catalog = @part_candidates_catalog
+        return catalog.part_candidates_values(column_name, max_rows, max_string_bytes)
+      end
+
+      source_name, _source_type, selected_type, _json_path = resolve_typed_ddl_selection(column_name)
+      source_column = @columns.find { |entry| entry.name == source_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
+      raise UnsupportedFormatError.new("ALIAS columns cannot be materialized") if source_column.alias_column
+
+      expected_rows = 0_u64
+      candidates = resolved_scan_parts
+      candidates.each do |candidate|
+        if expected_rows > max_rows || candidate.row_count > max_rows - expected_rows
+          raise BoundsError.new("selected column materialization exceeds row limit")
+        end
+        expected_rows += candidate.row_count
+      end
+
+      values = Array(OfflineColumnValue).new(expected_rows.to_i)
+      observed_rows = 0_u64
+      string_bytes = 0_u64
+
+      unless candidates.empty?
+        scan_typed([column_name]) do |batch|
+          observed_rows, string_bytes = append_materialized_value_batch(
+            values,
+            batch,
+            column_name,
+            selected_type,
+            observed_rows,
+            string_bytes,
+            expected_rows,
+            max_string_bytes
+          )
+          nil
+        end
+      end
+
+      raise CorruptPartError.new("observed selected column row count differs from preflight count") unless observed_rows == expected_rows
+      values
+    end
+
+    private def append_materialized_value_batch(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      selected_type : String,
+      observed_rows : UInt64,
+      string_bytes : UInt64,
+      expected_rows : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      case selected_type
+      when "UInt8"
+        observed_rows = append_uint8_values(values, batch, column_name, observed_rows, expected_rows)
+      when "UInt16"
+        observed_rows = append_uint16_values(values, batch, column_name, observed_rows, expected_rows)
+      when "UInt32"
+        observed_rows = append_uint32_values(values, batch, column_name, observed_rows, expected_rows)
+      when "UInt64"
+        observed_rows = append_uint64_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Int8"
+        observed_rows = append_int8_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Int16"
+        observed_rows = append_int16_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Int32"
+        observed_rows = append_int32_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Int64"
+        observed_rows = append_int64_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Float32"
+        observed_rows = append_float32_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Float64"
+        observed_rows = append_float64_values(values, batch, column_name, observed_rows, expected_rows)
+      when "String"
+        selected_values = batch.strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        string_bytes = append_materialized_strings(values, selected_values, string_bytes, max_string_bytes)
+      when "Nullable(String)"
+        selected_values = batch.nullable_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        selected_values.each do |value|
+          if string_value = value
+            string_bytes = checked_materialized_value_string_bytes(string_bytes, string_value.bytesize.to_u64, max_string_bytes)
+            values << String.new(string_value.to_slice)
+          else
+            values << nil
+          end
+        end
+      when "Nullable(UInt8)"
+        observed_rows = append_nullable_uint8_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(UInt16)"
+        observed_rows = append_nullable_uint16_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(UInt32)"
+        observed_rows = append_nullable_uint32_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(UInt64)"
+        observed_rows = append_nullable_uint64_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Int8)"
+        observed_rows = append_nullable_int8_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Int16)"
+        observed_rows = append_nullable_int16_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Int32)"
+        observed_rows = append_nullable_int32_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Int64)"
+        observed_rows = append_nullable_int64_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Float32)"
+        observed_rows = append_nullable_float32_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Float64)"
+        observed_rows = append_nullable_float64_values(values, batch, column_name, observed_rows, expected_rows)
+      else
+        raise UnsupportedFormatError.new("selected table column type is unsupported")
+      end
+      {observed_rows, string_bytes}
     end
 
     def part_candidates : Array(OfflinePartCandidate)
@@ -294,7 +416,115 @@ module CrystalClick
       reader.scan_typed(batch_rows: batch_rows, &block)
     end
 
-    private def resolve_typed_ddl_selection(column_name : String) : {String, String, String, Bool}
+    private def checked_materialized_value_rows(observed : UInt64, batch_rows : UInt64, expected : UInt64) : UInt64
+      if observed > expected || batch_rows > expected - observed
+        raise CorruptPartError.new("observed selected column row count exceeds preflight count")
+      end
+      observed + batch_rows
+    end
+
+    private def append_uint8_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, UInt8), observed_rows, expected_rows)
+    end
+
+    private def append_uint16_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, UInt16), observed_rows, expected_rows)
+    end
+
+    private def append_uint32_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, UInt32), observed_rows, expected_rows)
+    end
+
+    private def append_uint64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, UInt64), observed_rows, expected_rows)
+    end
+
+    private def append_int8_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, Int8), observed_rows, expected_rows)
+    end
+
+    private def append_int16_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, Int16), observed_rows, expected_rows)
+    end
+
+    private def append_int32_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, Int32), observed_rows, expected_rows)
+    end
+
+    private def append_int64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, Int64), observed_rows, expected_rows)
+    end
+
+    private def append_float32_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, Float32), observed_rows, expected_rows)
+    end
+
+    private def append_float64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.values_for(column_name, Float64), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_uint8_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, UInt8), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_uint16_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, UInt16), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_uint32_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, UInt32), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_uint64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, UInt64), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_int8_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, Int8), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_int16_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, Int16), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_int32_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, Int32), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_int64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, Int64), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_float32_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, Float32), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_float64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_values_for(column_name, Float64), observed_rows, expected_rows)
+    end
+
+    private def append_materialized_values(values : Array(OfflineColumnValue), selected_values : Slice(T), observed_rows : UInt64, expected_rows : UInt64) : UInt64 forall T
+      checked_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+      selected_values.each { |value| values << value }
+      checked_rows
+    end
+
+    private def append_materialized_strings(values : Array(OfflineColumnValue), selected_values : Slice(String), observed_bytes : UInt64, limit : UInt64) : UInt64
+      selected_values.each do |value|
+        observed_bytes = checked_materialized_value_string_bytes(observed_bytes, value.bytesize.to_u64, limit)
+        values << String.new(value.to_slice)
+      end
+      observed_bytes
+    end
+
+    private def checked_materialized_value_string_bytes(observed : UInt64, batch_bytes : UInt64, limit : UInt64) : UInt64
+      if observed > limit || batch_bytes > limit - observed
+        raise BoundsError.new("selected column materialization exceeds String payload limit")
+      end
+      observed + batch_bytes
+    end
+
+    private def resolve_typed_ddl_selection(column_name : String, allow_unsupported_exact : Bool = false) : {String, String, String, Bool}
       exact = @columns.find { |entry| entry.name == column_name }
       virtual = Array({String, String, String}).new
       @columns.each do |source|
@@ -311,7 +541,9 @@ module CrystalClick
         raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
       end
       if selected = exact
-        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.supports_typed_type?(selected.type)
+        unless allow_unsupported_exact || WidePart.supports_typed_type?(selected.type)
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
         return {selected.name, selected.type, selected.type, false}
       end
       raise UnsupportedFormatError.new("selected column is not declared by table DDL") if virtual.empty?
@@ -522,8 +754,11 @@ module CrystalClick
       @name = name.dup
     end
 
-    def values : Array(String | UInt64)
-      @table.materialize_selected_values(@name)
+    def values(
+      max_rows : UInt64 = OfflineTable::MAX_MATERIALIZED_VALUES_ROWS,
+      max_string_bytes : UInt64 = OfflineTable::MAX_MATERIALIZED_VALUES_STRING_BYTES,
+    ) : Array(OfflineColumnValue)
+      @table.materialize_selected_values(@name, max_rows, max_string_bytes)
     end
   end
 
@@ -725,10 +960,16 @@ module CrystalClick
     # system.part_candidates projection. The result is owned by the caller and
     # returned only after all supported source tables, counts, and overlap
     # guards pass.
-    def part_candidates_values(column_name : String) : Array(String | UInt64)
+    def part_candidates_values(
+      column_name : String,
+      max_rows : UInt64 = OfflineTable::MAX_MATERIALIZED_VALUES_ROWS,
+      max_string_bytes : UInt64 = OfflineTable::MAX_MATERIALIZED_VALUES_STRING_BYTES,
+    ) : Array(OfflineColumnValue)
       unless {"database", "table", "name", "partition_id", "rows"}.includes?(column_name)
         raise UnsupportedFormatError.new("selected system.part_candidates column is unsupported")
       end
+      raise BoundsError.new("selected column row limit exceeds hard limit") if max_rows > OfflineTable::MAX_MATERIALIZED_VALUES_ROWS
+      raise BoundsError.new("selected column String payload limit exceeds hard limit") if max_string_bytes > OfflineTable::MAX_MATERIALIZED_VALUES_STRING_BYTES
       database_names = self.database_names
       if database_names.includes?(SYSTEM_DATABASE_NAME)
         raise InvalidPartError.new("physical database named system collides with the synthetic system database")
@@ -750,6 +991,9 @@ module CrystalClick
             candidates = table.part_candidates
             reject_part_candidate_overlaps!(table.name, candidates)
             candidates.each do |candidate|
+              if parts.size.to_u64 >= max_rows
+                raise BoundsError.new("selected column materialization exceeds row limit")
+              end
               ensure_candidate_capacity!(parts.size + 1)
               parts << {database_name, table.name, candidate}
             end
@@ -759,16 +1003,25 @@ module CrystalClick
         end
       end
 
-      values = Array(String | UInt64).new(parts.size)
+      values = Array(OfflineColumnValue).new(parts.size)
+      string_bytes = 0_u64
       parts.each do |database_name, table_name, candidate|
         value = case column_name
-                when "database"     then database_name.dup
-                when "table"        then table_name.dup
-                when "name"         then candidate.name.dup
-                when "partition_id" then candidate.info.partition_id.dup
+                when "database"     then database_name
+                when "table"        then table_name
+                when "name"         then candidate.name
+                when "partition_id" then candidate.info.partition_id
                 when "rows"         then candidate.row_count
                 else                     raise UnsupportedFormatError.new("selected system.part_candidates column is unsupported")
                 end
+        if string_value = value.as?(String)
+          byte_count = string_value.bytesize.to_u64
+          if string_bytes > max_string_bytes || byte_count > max_string_bytes - string_bytes
+            raise BoundsError.new("selected column materialization exceeds String payload limit")
+          end
+          string_bytes += byte_count
+          value = String.new(string_value.to_slice)
+        end
         values << value
       end
       values
