@@ -3,8 +3,9 @@ require "./spec_helper"
 STRING_NULLABLE_FIXTURE    = File.expand_path("../test/fixtures/public/wide_string_nullable/part", __DIR__)
 STRING_NULLABLE_DB_UUID    = "b19d07fa-a32e-45d3-b9ea-bf1cf2b6b519"
 STRING_NULLABLE_TABLE_UUID = "aca343cd-33bd-435c-a584-c596fb73a347"
+EMPTY_STRING_FIXTURE       = File.expand_path("../test/fixtures/public/wide_string_empty/part", __DIR__)
 
-def with_string_nullable_table(ddl_columns : String = string_nullable_columns, &)
+def with_string_nullable_table(ddl_columns : String = string_nullable_columns, fixture_path : String = STRING_NULLABLE_FIXTURE, &)
   root = File.tempname("crystal-click-string-nullable-catalog-spec")
   metadata_root = File.join(root, "metadata")
   database_path = File.join(root, "store", STRING_NULLABLE_DB_UUID[0, 3], STRING_NULLABLE_DB_UUID)
@@ -20,7 +21,7 @@ def with_string_nullable_table(ddl_columns : String = string_nullable_columns, &
     )
     File.write(File.join(table_path, "format_version.txt"), "1\n")
     Dir.mkdir(File.join(table_path, "detached"))
-    FileUtils.cp_r(STRING_NULLABLE_FIXTURE, File.join(table_path, "all_1_1_0"))
+    FileUtils.cp_r(fixture_path, File.join(table_path, "all_1_1_0"))
     yield root, File.join(table_path, "all_1_1_0"), table_path
   ensure
     FileUtils.rm_rf(root)
@@ -87,7 +88,11 @@ end
 
 # Rebuild size-only checksum metadata for a deliberately synthetic corruption
 # probe. Production never writes or trusts these opaque hash fields.
-def rewrite_test_checksum_sizes(part_path : String, cloned_streams : Array({String, String})) : Nil
+def rewrite_test_checksum_sizes(
+  part_path : String,
+  cloned_streams : Array({String, String}),
+  uncompressed_size_overrides : Hash(String, UInt64) = Hash(String, UInt64).new,
+) : Nil
   entries = CrystalClick::PartChecksums.open(part_path).entries.dup
   cloned_streams.each do |source_name, new_name|
     source = entries[source_name]? || raise "missing source checksum entry"
@@ -103,7 +108,8 @@ def rewrite_test_checksum_sizes(part_path : String, cloned_streams : Array({Stri
     payload.write(Bytes.new(16, 0_u8))
     if entry.compressed
       payload.write_byte(1_u8)
-      test_write_var_uint(payload, entry.uncompressed_size.not_nil!)
+      uncompressed_size = uncompressed_size_overrides[name]? || entry.uncompressed_size.not_nil!
+      test_write_var_uint(payload, uncompressed_size)
       payload.write(Bytes.new(16, 0_u8))
     else
       payload.write_byte(0_u8)
@@ -127,7 +133,182 @@ def rewrite_string_size_marks(part_path : String, frame_size : UInt64)
   File.write(string_nullable_stream_path(part_path, "label.size", "mrk2"), marks)
 end
 
+def rewrite_string_mark_record(part_path : String, column : String, mark_index : Int, record : {UInt64, UInt64, UInt64})
+  path = string_nullable_stream_path(part_path, column, "mrk2")
+  bytes = File.read(path).to_slice.dup
+  values = {record[0], record[1], record[2]}
+  values.each_with_index do |value, field|
+    8.times do |byte|
+      bytes[mark_index * CrystalClick::WidePart::MARK_SIZE + field * 8 + byte] = ((value >> (byte * 8)) & 0xff_u64).to_u8
+    end
+  end
+  File.write(path, bytes)
+end
+
 describe "String and Nullable primitive Wide-part scans" do
+  it "reads a stock ClickHouse all-empty String stream with a zero-byte regular data file" do
+    part_path = EMPTY_STRING_FIXTURE
+    raw_path = string_nullable_stream_path(part_path, "value", "bin")
+    File.size(raw_path).should eq(0_i64)
+
+    part = CrystalClick::WidePart.open_typed(part_path, "value")
+    part.column_type.should eq("String")
+    part.mark_row_counts.should eq([2_u64, 2_u64, 1_u64])
+    part.read_string_mark_range("value", 0, part.mark_count).should eq(Array(String).new(5, ""))
+    part.read_string_mark_range("value", 1, 1).should eq(["", ""])
+
+    table_root = File.tempname("crystal-click-empty-string-table-spec")
+    Dir.mkdir(table_root)
+    table_part_path = File.join(table_root, "all_1_1_0")
+    FileUtils.cp_r(part_path, table_part_path)
+    begin
+      table = CrystalClick::WidePartTable.open_selected_typed([table_part_path], ["pk", "value"])
+      table.part_mark_row_counts.should eq([[2_u64, 2_u64, 1_u64]])
+      rows = [] of {UInt64, String}
+      offsets = [] of {Int32, UInt64, UInt64, UInt64}
+      table.scan_typed(batch_rows: 1) do |batch|
+        keys = batch.values_for("pk", UInt64)
+        values = batch.strings_for("value")
+        keys.size.should eq(values.size)
+        keys.each_with_index { |key, index| rows << {key, values[index]} }
+        offsets << {batch.mark_index, batch.mark_row_offset, batch.part_row_offset, batch.source_row_offset}
+      end
+      rows.should eq((1_u64..5_u64).map { |key| {key, ""} })
+      offsets.should eq([
+        {0_i32, 0_u64, 0_u64, 0_u64},
+        {0_i32, 1_u64, 1_u64, 1_u64},
+        {1_i32, 0_u64, 2_u64, 2_u64},
+        {1_i32, 1_u64, 3_u64, 3_u64},
+        {2_i32, 0_u64, 4_u64, 4_u64},
+      ])
+    ensure
+      FileUtils.rm_rf(table_root)
+    end
+  end
+
+  it "materializes the all-empty String stream through OfflineCatalog" do
+    with_string_nullable_table("    `pk` UInt64,\n    `value` String", EMPTY_STRING_FIXTURE) do |root, _part_path, _table_path|
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      table["value"].values.should eq(Array(String).new(5, ""))
+    end
+  end
+
+  it "accepts an exact empty String interval beginning at EOF after earlier raw bytes" do
+    table_root = File.tempname("crystal-click-string-eof-empty-mark-spec")
+    Dir.mkdir(table_root)
+    with_fixture_copy = File.join(table_root, "all_1_1_0")
+    FileUtils.cp_r(STRING_NULLABLE_FIXTURE, with_fixture_copy)
+    begin
+      raw_size = File.size(string_nullable_stream_path(with_fixture_copy, "label", "bin")).to_u64
+      raw_size.should be > 0_u64
+      # The final String is empty. Represent its mark as the legal EOF boundary
+      # used by writers that omit frames for empty-only granules.
+      rewrite_string_mark_record(with_fixture_copy, "label", 2, {raw_size, 0_u64, 1_u64})
+      rewrite_string_mark_record(with_fixture_copy, "label", 3, {raw_size, 0_u64, 0_u64})
+
+      part = CrystalClick::WidePart.open_typed(with_fixture_copy, "label")
+      part.read_string_mark_range("label", 0, part.mark_count).should eq(["", "alpha", "a\0b", "tail", ""])
+      part.read_string_mark_range("label", 2, 1).should eq([""])
+
+      table = CrystalClick::WidePartTable.open_selected_typed([with_fixture_copy], ["label"])
+      observed = [] of {Int32, UInt64, String}
+      table.scan_typed(batch_rows: 1) do |batch|
+        observed << {batch.mark_index, batch.mark_row_offset, batch.strings_for("label")[0]}
+      end
+      observed.should eq([
+        {0_i32, 0_u64, ""},
+        {0_i32, 1_u64, "alpha"},
+        {1_i32, 0_u64, "a\0b"},
+        {1_i32, 1_u64, "tail"},
+        {2_i32, 0_u64, ""},
+      ])
+    ensure
+      FileUtils.rm_rf(table_root)
+    end
+  end
+
+  it "rejects nonzero String mark offsets in a zero-byte raw stream" do
+    [
+      {0, {1_u64, 0_u64, 2_u64}},
+      {3, {1_u64, 0_u64, 0_u64}},
+      {0, {0_u64, 1_u64, 2_u64}},
+    ].each do |probe|
+      with_fixture_copy = File.tempname("crystal-click-string-empty-bad-mark-spec")
+      FileUtils.cp_r(EMPTY_STRING_FIXTURE, with_fixture_copy)
+      begin
+        rewrite_string_mark_record(with_fixture_copy, "value", probe[0], probe[1])
+        expect_raises(CrystalClick::CorruptPartError) do
+          CrystalClick::WidePart.open_typed(with_fixture_copy, "value")
+        end
+      ensure
+        FileUtils.rm_rf(with_fixture_copy)
+      end
+    end
+  end
+
+  it "rejects positive size bytes when the zero-byte String stream cannot supply them" do
+    with_fixture_copy = File.tempname("crystal-click-string-empty-size-mismatch-spec")
+    FileUtils.cp_r(EMPTY_STRING_FIXTURE, with_fixture_copy)
+    begin
+      rewrite_lz4_stream(with_fixture_copy, "value.size", string_sizes([1_u64, 0_u64, 0_u64, 0_u64, 0_u64]))
+      rewrite_test_checksum_sizes(with_fixture_copy, [{"#{CrystalClick::StreamName.hash("value.size")}.bin", "#{CrystalClick::StreamName.hash("value.size")}.bin"}])
+      part = CrystalClick::WidePart.open_typed(with_fixture_copy, "value")
+      expect_raises(CrystalClick::CorruptPartError, /zero expected bytes/) do
+        part.read_string_mark_range("value", 0, 1)
+      end
+    ensure
+      FileUtils.rm_rf(with_fixture_copy)
+    end
+  end
+
+  it "permits an empty nested raw stream for Nullable(String) while preserving null positions" do
+    with_fixture_copy = File.tempname("crystal-click-nullable-empty-raw-spec")
+    FileUtils.cp_r(File.expand_path("../test/fixtures/public/wide_nullable_string/part", __DIR__), with_fixture_copy)
+    begin
+      raw_path = string_nullable_stream_path(with_fixture_copy, "payload", "bin")
+      File.write(raw_path, Bytes.new(0))
+      rewrite_lz4_stream(with_fixture_copy, "payload.size", string_sizes(Array(UInt64).new(8, 0_u64)))
+      4.times do |mark_index|
+        rewrite_string_mark_record(with_fixture_copy, "payload", mark_index, {0_u64, 0_u64, 2_u64})
+      end
+      rewrite_string_mark_record(with_fixture_copy, "payload", 4, {0_u64, 0_u64, 0_u64})
+      rewrite_test_checksum_sizes(
+        with_fixture_copy,
+        [
+          {File.basename(raw_path), File.basename(raw_path)},
+          {"#{CrystalClick::StreamName.hash("payload.size")}.bin", "#{CrystalClick::StreamName.hash("payload.size")}.bin"},
+        ],
+        {File.basename(raw_path) => 0_u64}
+      )
+
+      part = CrystalClick::WidePart.open_typed(with_fixture_copy, "payload")
+      part.column_type.should eq("Nullable(String)")
+      part.nullable_string_mark_range_raw_bytes("payload", 0, part.mark_count).should eq(0_u64)
+      part.read_nullable_string_mark_range("payload", 0, part.mark_count).should eq(["", nil, "", "", "", "", nil, ""] of String?)
+    ensure
+      FileUtils.rm_rf(with_fixture_copy)
+    end
+  end
+
+  it "does not admit zero-byte regular data files for numeric columns" do
+    with_fixture_copy = File.tempname("crystal-click-numeric-empty-data-spec")
+    FileUtils.cp_r(EMPTY_STRING_FIXTURE, with_fixture_copy)
+    begin
+      numeric_path = string_nullable_stream_path(with_fixture_copy, "pk", "bin")
+      File.write(numeric_path, Bytes.new(0))
+      rewrite_test_checksum_sizes(
+        with_fixture_copy,
+        [{File.basename(numeric_path), File.basename(numeric_path)}],
+        {File.basename(numeric_path) => 0_u64}
+      )
+      expect_raises(CrystalClick::CorruptPartError, /mark compressed offset exceeds data/) do
+        CrystalClick::WidePart.open_typed(with_fixture_copy, "pk")
+      end
+    ensure
+      FileUtils.rm_rf(with_fixture_copy)
+    end
+  end
+
   it "reads exact String bytes and Nullable numeric values from ClickHouse streams" do
     string_part = CrystalClick::WidePart.open_typed(STRING_NULLABLE_FIXTURE, "label")
     string_part.column_type.should eq("String")

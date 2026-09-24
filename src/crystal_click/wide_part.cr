@@ -466,7 +466,8 @@ module CrystalClick
         data_size = File.size(data_path)
         raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
         element_width = stream_element_width(stream_name)
-        marks, sentinel = parse_marks(mark_path, data_size, compressed_marks, element_width)
+        allow_empty_string_eof = (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type)) && stream_name == @column
+        marks, sentinel = parse_marks(mark_path, data_size, compressed_marks, element_width, allow_empty_string_eof)
         validate_rows(marks)
         mark_rows = marks.map(&.rows)
         if expected = expected_mark_rows
@@ -1017,7 +1018,13 @@ module CrystalClick
       end
     end
 
-    private def parse_marks(file : String, data_size : Int64, compressed : Bool, element_width : Int32) : {Array(Mark), Mark}
+    private def parse_marks(
+      file : String,
+      data_size : Int64,
+      compressed : Bool,
+      element_width : Int32,
+      allow_empty_string_eof : Bool,
+    ) : {Array(Mark), Mark}
       size = File.size(file)
       raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
       bytes = if compressed
@@ -1041,7 +1048,11 @@ module CrystalClick
         decompressed = u64(bytes, offset + 8)
         rows = u64(bytes, offset + 16)
         raise CorruptPartError.new("first mark must start at zero") if offset == 0 && (compressed != 0 || decompressed != 0)
-        raise CorruptPartError.new("mark compressed offset exceeds data") if compressed >= data_size && !(offset + MARK_SIZE == bytes.size && rows == 0 && compressed == data_size)
+        string_eof = allow_empty_string_eof && compressed == data_size.to_u64 && decompressed == 0
+        eof_sentinel = offset + MARK_SIZE == bytes.size && rows == 0 && compressed == data_size.to_u64
+        unless compressed < data_size.to_u64 || string_eof || eof_sentinel
+          raise CorruptPartError.new("mark compressed offset exceeds data")
+        end
         raise CorruptPartError.new("mark offset is not monotonic") if compressed < previous_compressed
         raise CorruptPartError.new("mark decompressed offset is not monotonic") if compressed == previous_compressed && decompressed < previous_decompressed
         raise CorruptPartError.new("mark offset exceeds limit") if decompressed > MAX_FRAME_DECOMPRESSED_BYTES
@@ -1282,11 +1293,20 @@ module CrystalClick
     ) : Nil
       data_size = File.size(stream.data_path)
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
+      start_offset = start_mark.compressed_offset
+      end_offset = end_mark.compressed_offset
+      string_raw_stream = stream.name == @column && (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type))
+      eof_boundary = end_offset == data_size.to_u64 && end_mark.decompressed_offset == 0 &&
+                     (end_mark == stream.sentinel || string_raw_stream && end_mark.rows > 0)
+      if start_offset == data_size.to_u64
+        unless string_raw_stream && expected_bytes == 0 && end_offset == data_size.to_u64 &&
+               start_mark.decompressed_offset == 0 && end_mark.decompressed_offset == 0 && eof_boundary
+          raise CorruptPartError.new("empty String range at EOF must select zero expected bytes")
+        end
+        return
+      end
       MMapDataSource.with_file(stream.data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
-        start_offset = start_mark.compressed_offset
-        end_offset = end_mark.compressed_offset
-        eof_sentinel = end_mark == stream.sentinel && end_offset == data_size.to_u64 && end_mark.decompressed_offset == 0
-        raise CorruptPartError.new("mark frame offset exceeds data") if start_offset >= data_size || end_offset > data_size || end_offset == data_size && !eof_sentinel
+        raise CorruptPartError.new("mark frame offset exceeds data") if start_offset >= data_size || end_offset > data_size || end_offset == data_size && !eof_boundary
         raise CorruptPartError.new("mark frame offsets are reversed") if start_offset > end_offset
 
         selected_bytes = 0_i64
@@ -1307,7 +1327,7 @@ module CrystalClick
           local_start = current == start_offset ? start_mark.decompressed_offset : 0_u64
           local_end = current == end_offset ? end_mark.decompressed_offset : frame.output.size.to_u64
           raise CorruptPartError.new("mark offset exceeds frame output") if local_start > frame.output.size || local_end > frame.output.size || local_start > local_end
-          if current == end_offset && end_mark == stream.sentinel && !eof_sentinel
+          if current == end_offset && end_mark == stream.sentinel && !eof_boundary
             raise CorruptPartError.new("non-EOF sentinel must end at frame output") unless end_mark.decompressed_offset == frame.output.size
           end
           selected_size = (local_end - local_start).to_i64
@@ -1320,7 +1340,7 @@ module CrystalClick
             break
           end
           next_offset = frame.end_offset
-          break if eof_sentinel && next_offset == data_size
+          break if eof_boundary && next_offset == data_size
           raise CorruptPartError.new("mark frame offset was not found") if next_offset <= frame_offset || next_offset > data_size
           frame_offset = next_offset
         end

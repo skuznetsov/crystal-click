@@ -1,0 +1,7 @@
+columns substreams version: 1
+2 columns:
+1 substreams for column `pk`:
+	pk
+2 substreams for column `value`:
+	value.size
+	value

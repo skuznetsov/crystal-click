@@ -1,8 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
 Document status: active design. W1 and W2 are verified on this macOS host
-against the pinned ClickHouse build. Embedded table ownership and merging
-remain future frontiers.
+against the pinned ClickHouse build. W3 is the active bounded frontier.
+Embedded table ownership and merging remain future frontiers.
 
 ## Purpose and bounded contexts
 
@@ -81,6 +81,41 @@ table-level inserts, merges, and performance claims. A Nullable stream that
 self-reads but stock ClickHouse rejects is a W2 falsifier. A failure must
 leave no published part.
 
+## Active slice W3: regular String stream and bounded String payload
+
+First, admit a reader correction for a regular `String` data substream whose
+file is zero bytes while its `.size` substream records zero length for every
+row. This is not an empty part: the pinned producer emits positive-row marks
+for the zero-byte stream and an EOF sentinel. A trailing all-empty granule
+can likewise start at the physical EOF of an otherwise nonempty raw stream.
+The reader may synthesize empty values only when the selected size sum is zero
+and the regular data mark interval is an exact zero-byte boundary. It must
+keep rejecting an absent
+stream, inconsistent mark positions, positive sizes against an empty file,
+and empty files for types that require data bytes. Apply the same physical
+rule to the regular data substream of `Nullable(String)`; null-map validation
+remains unchanged. Sparse String serialization is not admitted.
+
+Then admit one new experimental writer entry point for a sorted `UInt64` key
+and one non-nullable `String` payload. Serialize String as a little-endian
+`UInt64` length per row in the `.size` stream and concatenated raw bytes in
+the regular data stream. Reuse W1's LZ4 framing, plain adaptive `.mrk2`,
+primary index, checksums, staging, and exclusive publication. An all-empty
+payload must write a zero-byte regular stream with valid positive-row marks;
+mixed empty and nonempty strings must preserve exact bytes, including NUL and
+multibyte UTF-8, across mark boundaries. The writer accepts no sparse,
+Nullable(String), LowCardinality, arbitrary schema, table-level insert, or
+merge request.
+
+The reader correction requires a producer-generated regular all-empty part
+with sparse serialization disabled, plus a negative altered-size/mark case.
+The writer requires Crystal readback and an independent pinned ClickHouse
+attach, exact and key-filtered reads, clean `CHECK TABLE`, and a same-size
+corruption negative check. A self-readable part that ClickHouse rejects or
+misreads falsifies W3 compatibility. W3 has no performance claim. Its evidence
+is limited to the tested producer/version, normal String serialization, Wide
+parts, and Darwin publication; a format or implementation change reopens it.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -94,10 +129,8 @@ Guard-only follow-on slices, in dependency order:
    actually supports, one stock-ClickHouse differential fixture per type and
    substream shape. Reader support does not imply writer support. Recheck
    physical stream naming on case-sensitive filesystems before claiming
-   cross-filesystem compatibility. String requires a separate reader frontier:
-   pinned ClickHouse can emit a zero-byte regular data stream for an all-empty
-   String column, while this reader currently rejects that valid shape. Do
-   not call a String writer complete by excluding all-empty marks.
+   cross-filesystem compatibility. W3 handles only regular String substreams;
+   sparse and other String variants remain guard-only.
 2. Add an embedded table manifest/recovery rule and a minimal insert API that
    publishes a validated immutable part without claiming server-equivalent
    active-part discovery.
@@ -153,7 +186,8 @@ Initial anchor: the existing public two-column `UInt64` fixture and reader
 cover LZ4 Wide parts with plain `.mrk2`; the full Crystal suite passed 242
 examples before W1 edits. The pinned oracle is ClickHouse local
 `26.7.1.1315`. The matching source is available as tag
-`v26.7.1.1315-stable` (`b8c42106e2a0`); its default checksums-envelope
+`v26.7.1.1315-stable` (annotated tag `b8c42106e2a0`, peeled commit
+`a6156303df65`); its default checksums-envelope
 codec is LZ4, matching the 26.7 public fixture. The newer shallow source
 `066ea77cf` instead defaults to ZSTD and is not the version authority for
 W1.
