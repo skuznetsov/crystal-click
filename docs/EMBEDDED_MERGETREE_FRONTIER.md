@@ -1,8 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W1 and W2 are verified on this macOS host
-against the pinned ClickHouse build. W3 is the active bounded frontier.
-Embedded table ownership and merging remain future frontiers.
+Document status: active design. W1, W2, and bounded W3 are verified on this
+macOS host against the pinned ClickHouse build. Embedded table ownership and
+merging remain future frontiers.
 
 ## Purpose and bounded contexts
 
@@ -81,7 +81,7 @@ table-level inserts, merges, and performance claims. A Nullable stream that
 self-reads but stock ClickHouse rejects is a W2 falsifier. A failure must
 leave no published part.
 
-## Active slice W3: regular String stream and bounded String payload
+## Bounded slice W3: regular String stream and String payload
 
 First, admit a reader correction for a regular `String` data substream whose
 file is zero bytes while its `.size` substream records zero length for every
@@ -223,9 +223,30 @@ parts, Darwin publication, and the pinned ClickHouse version. It decays on a
 producer-version, format, platform, or writer/reader change; refresh it with
 the focused, full, and external oracle checks.
 
+W3 evidence at the reader commit `0b833c8` plus the String writer diff:
+the original reader rejected the pinned producer's all-empty regular String
+part at mark parsing; the retained public fixture has five rows, marks
+`[2, 2, 1]`, and a zero-byte raw stream. Contradictory marks and positive
+size requirements fail closed. Focused reader/writer specs passed 34/34, and
+the full Crystal suite passed 273/273 in debug and release with Crystal
+1.21.0 and `/usr/bin/clang`. Formatting, shell syntax, fixture-shape, and
+diff checks passed. The independent official ClickHouse local
+`26.7.1.1315` oracle attached mixed and all-empty String writer parts,
+returned exact binary/UTF-8 and key-range rows, passed `CHECK TABLE`, then
+detected one-byte raw-stream and size-stream mutations respectively. The
+mixed part includes an empty middle granule followed by nonempty data and
+an empty final granule; the all-empty part has a zero-byte raw file. The
+read-only adversarial review found no blocker within this scope. The
+`Nullable(String)` zero-raw reader probe is synthetic, not an independent
+producer-generated all-empty Nullable fixture. W3 proves only this normal
+String Wide-part slice on Darwin and the pinned producer version, not
+sparse serialization, table-level insert/merge, or performance. A
+producer-version, format, platform, reader, or writer change decays the
+certificate; refresh it with the focused/full suites and external oracle.
+
 Risk tier: CAUTION, because malformed serialization can create convincing
-but unusable persistent data. Rollback is the respective W1 or W2 feature commit;
+but unusable persistent data. Rollback is the respective W1, W2, or W3 commit;
 there will be no push or write into existing ClickHouse data roots. The
 strongest likely failure is a subtle frame/checksum or mark/index mismatch
 that our reader tolerates and ClickHouse rejects. The stock-ClickHouse attach,
-read, and `CHECK TABLE` gates are mandatory for W1/W2 verification.
+read, and `CHECK TABLE` gates are mandatory for W1/W2/W3 verification.

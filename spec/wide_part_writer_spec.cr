@@ -1,6 +1,275 @@
 require "./spec_helper"
 
 describe CrystalClick::WidePartWriter do
+  it "writes a UInt64 key and regular String payload across marks" do
+    parent = File.tempname("crystal-click-wide-writer-string")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "part")
+    keys = [1_u64, 2_u64, 2_u64, 9_u64, UInt64::MAX]
+    values = ["", "alpha", "a\0b", "é", ""]
+
+    begin
+      CrystalClick::WidePartWriter.write_uint64_string_pair(
+        destination,
+        "pk",
+        keys.to_unsafe.to_slice(keys.size),
+        "value",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 2
+      )
+
+      key_part = CrystalClick::WidePart.open(destination, "pk")
+      key_part.row_count.should eq(5_u64)
+      key_part.mark_row_counts.should eq([2_u64, 2_u64, 1_u64])
+      key_part.read_uint64.should eq(keys)
+
+      value_part = CrystalClick::WidePart.open_typed(destination, "value")
+      value_part.column_type.should eq("String")
+      value_part.mark_row_counts.should eq([2_u64, 2_u64, 1_u64])
+      value_part.read_string_mark_range("value", 0, value_part.mark_count).should eq(values)
+      value_part.read_string_mark_range("value", 1, 1).should eq(["a\0b", "é"])
+
+      string_stream = File.read(File.join(destination, "#{CrystalClick::StreamName.hash("value")}.bin")).to_slice
+      CrystalClick::CompressedBlock.decode_all(string_stream).to_a.should eq(values.join.to_slice.to_a)
+      size_stream = File.read(File.join(destination, "#{CrystalClick::StreamName.hash("value.size")}.bin")).to_slice
+      size_bytes = CrystalClick::CompressedBlock.decode_all(size_stream)
+      sizes = Array(UInt64).new(values.size)
+      values.size.times do |index|
+        size = 0_u64
+        8.times do |byte|
+          size |= size_bytes[index * 8 + byte].to_u64 << (byte * 8)
+        end
+        sizes << size
+      end
+      sizes.should eq(values.map { |value| value.bytesize.to_u64 })
+
+      serialization = JSON.parse(File.read(File.join(destination, "serialization.json"))).as_h
+      serialization["types_serialization_versions"].as_h["string"].as_i.should eq(1)
+      File.read(File.join(destination, "columns.txt")).should eq(
+        "columns format version: 1\n2 columns:\n`pk` UInt64\n`value` String\n"
+      )
+      File.read(File.join(destination, "columns_substreams.txt")).should eq(
+        "columns substreams version: 1\n2 columns:\n1 substreams for column `pk`:\n\tpk\n2 substreams for column `value`:\n\tvalue.size\n\tvalue\n"
+      )
+      expected_checksum_names = ["count.txt", "primary.idx", "serialization.json"]
+      {"pk", "value.size", "value"}.each do |stream|
+        base = CrystalClick::StreamName.hash(stream)
+        expected_checksum_names << "#{base}.bin"
+        expected_checksum_names << "#{base}.mrk2"
+      end
+      CrystalClick::PartChecksums.open(destination).entries.keys.sort.should eq(expected_checksum_names.sort)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "writes an all-empty String payload with positive-row marks and a zero-byte regular stream" do
+    parent = File.tempname("crystal-click-wide-writer-string-empty")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "part")
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+    values = Array(String).new(keys.size, "")
+
+    begin
+      CrystalClick::WidePartWriter.write_uint64_string_pair(
+        destination,
+        "pk",
+        keys.to_unsafe.to_slice(keys.size),
+        "value",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 2
+      )
+
+      data_path = File.join(destination, "#{CrystalClick::StreamName.hash("value")}.bin")
+      File.size(data_path).should eq(0_i64)
+      value_part = CrystalClick::WidePart.open_typed(destination, "value")
+      value_part.column_type.should eq("String")
+      value_part.row_count.should eq(5_u64)
+      value_part.mark_row_counts.should eq([2_u64, 2_u64, 1_u64])
+      value_part.read_string_mark_range("value", 0, value_part.mark_count).should eq(values)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "keeps empty middle and final String granules as positive-row marks at shared raw positions" do
+    parent = File.tempname("crystal-click-wide-writer-string-empty-granules")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "part")
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64, 6_u64, 7_u64, 8_u64]
+    values = ["a", "b", "", "", "c", "d", "", ""]
+
+    begin
+      CrystalClick::WidePartWriter.write_uint64_string_pair(
+        destination,
+        "pk",
+        keys.to_unsafe.to_slice(keys.size),
+        "value",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 2
+      )
+
+      value_part = CrystalClick::WidePart.open_typed(destination, "value")
+      value_part.mark_row_counts.should eq([2_u64, 2_u64, 2_u64, 2_u64])
+      value_part.read_string_mark_range("value", 0, value_part.mark_count).should eq(values)
+      value_part.read_string_mark_range("value", 0, 1).should eq(["a", "b"])
+      value_part.read_string_mark_range("value", 1, 1).should eq(["", ""])
+      value_part.read_string_mark_range("value", 2, 1).should eq(["c", "d"])
+      value_part.read_string_mark_range("value", 3, 1).should eq(["", ""])
+
+      marks_path = File.join(destination, "#{CrystalClick::StreamName.hash("value")}.mrk2")
+      marks = File.read(marks_path).to_slice
+      mark_offsets = Array(UInt64).new(value_part.mark_count + 1) do |index|
+        offset = 0_u64
+        8.times do |byte|
+          offset |= marks[index * CrystalClick::WidePart::MARK_SIZE + byte].to_u64 << (byte * 8)
+        end
+        offset
+      end
+      mark_rows = Array(UInt64).new(value_part.mark_count + 1) do |index|
+        rows = 0_u64
+        8.times do |byte|
+          rows |= marks[index * CrystalClick::WidePart::MARK_SIZE + 16 + byte].to_u64 << (byte * 8)
+        end
+        rows
+      end
+
+      # The empty middle mark shares its raw position with the next frame;
+      # the empty final mark is positive-row but sits at the EOF sentinel.
+      mark_rows.should eq([2_u64, 2_u64, 2_u64, 2_u64, 0_u64])
+      mark_offsets[1].should eq(mark_offsets[2])
+      mark_offsets[3].should eq(mark_offsets[4])
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "rejects invalid String inputs and oversized String frames before publishing" do
+    invalid_cases = [
+      {keys: [2_u64, 1_u64], values: ["a", "b"], rows_per_mark: 1},
+      {keys: [1_u64, 2_u64], values: ["a"], rows_per_mark: 1},
+      {keys: [1_u64], values: ["a"], rows_per_mark: 0},
+      {keys: [1_u64], values: ["a"], rows_per_mark: 65_537},
+    ]
+
+    invalid_cases.each do |input|
+      parent = File.tempname("crystal-click-wide-writer-string-invalid")
+      Dir.mkdir(parent)
+      destination = File.join(parent, "part")
+      begin
+        expect_raises(ArgumentError) do
+          CrystalClick::WidePartWriter.write_uint64_string_pair(
+            destination,
+            "pk",
+            input[:keys].to_unsafe.to_slice(input[:keys].size),
+            "value",
+            input[:values].to_unsafe.to_slice(input[:values].size),
+            rows_per_mark: input[:rows_per_mark]
+          )
+        end
+        Dir.children(parent).should eq([] of String)
+      ensure
+        FileUtils.rm_rf(parent)
+      end
+    end
+
+    oversized = String.new(Bytes.new(CrystalClick::WidePart::MAX_FRAME_DECOMPRESSED_BYTES + 1, 0_u8))
+    parent = File.tempname("crystal-click-wide-writer-string-oversized")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "part")
+    begin
+      expect_raises(ArgumentError) do
+        CrystalClick::WidePartWriter.write_uint64_string_pair(
+          destination,
+          "pk",
+          [1_u64].to_unsafe.to_slice(1),
+          "value",
+          [oversized].to_unsafe.to_slice(1),
+          rows_per_mark: 1
+        )
+      end
+      Dir.children(parent).should eq([] of String)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "rejects invalid String column names before creating a staging directory" do
+    invalid_names = [
+      {"../pk", "value"},
+      {"pk", "../value"},
+      {"same", "same"},
+    ]
+
+    invalid_names.each do |names|
+      parent = File.tempname("crystal-click-wide-writer-string-name")
+      Dir.mkdir(parent)
+      destination = File.join(parent, "part")
+      begin
+        expect_raises(ArgumentError) do
+          CrystalClick::WidePartWriter.write_uint64_string_pair(
+            destination,
+            names[0],
+            [1_u64].to_unsafe.to_slice(1),
+            names[1],
+            ["payload"].to_unsafe.to_slice(1),
+            rows_per_mark: 1
+          )
+        end
+        Dir.children(parent).should eq([] of String)
+      ensure
+        FileUtils.rm_rf(parent)
+      end
+    end
+  end
+
+  it "rejects aggregate String bytes beyond the data-file limit before staging" do
+    parent = File.tempname("crystal-click-wide-writer-string-file-limit")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "part")
+    repeated_value = String.new(Bytes.new(29 * 1024 * 1024, 0_u8))
+    keys = Array(UInt64).new(9) { |index| index.to_u64 }
+    values = Array(String).new(9, repeated_value)
+
+    begin
+      expect_raises(ArgumentError) do
+        CrystalClick::WidePartWriter.write_uint64_string_pair(
+          destination,
+          "pk",
+          keys.to_unsafe.to_slice(keys.size),
+          "value",
+          values.to_unsafe.to_slice(values.size),
+          rows_per_mark: 1
+        )
+      end
+      Dir.children(parent).should eq([] of String)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "cleans its staged String part when exclusive publication fails after assembly" do
+    parent = File.tempname("crystal-click-wide-writer-string-publish-failure")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "x" * 256)
+
+    begin
+      expect_raises(IO::Error) do
+        CrystalClick::WidePartWriter.write_uint64_string_pair(
+          destination,
+          "pk",
+          [1_u64].to_unsafe.to_slice(1),
+          "value",
+          ["payload"].to_unsafe.to_slice(1),
+          rows_per_mark: 1
+        )
+      end
+      Dir.children(parent).should eq([] of String)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
   it "writes a UInt64 key and Nullable(UInt64) payload pair with positional nulls" do
     parent = File.tempname("crystal-click-wide-writer-nullable")
     Dir.mkdir(parent)

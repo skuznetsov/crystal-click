@@ -197,4 +197,153 @@ unless nullable_damaged_fields.size == 3 &&
 end
 
 puts "ClickHouse attached the synthetic Nullable part, returned exact null-vs-zero and key-range rows, passed CHECK TABLE, then detected a one-byte null-map stream checksum mutation."
+
+string_keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64, 6_u64, 7_u64, 8_u64]
+string_values = ["alpha", "a\0b", "", "", "é", "tail", "", ""]
+string_part = File.join(root, "string_part")
+CrystalClick::WidePartWriter.write_uint64_string_pair(
+  string_part,
+  "pk",
+  string_keys.to_unsafe.to_slice(string_keys.size),
+  "payload",
+  string_values.to_unsafe.to_slice(string_values.size),
+  rows_per_mark: 2
+)
+
+run_clickhouse(binary, store, <<-SQL)
+CREATE TABLE default.wide_string_writer_oracle
+(
+    `pk` UInt64,
+    `payload` String
+)
+ENGINE = MergeTree
+ORDER BY pk
+SETTINGS
+    index_granularity = 2,
+    index_granularity_bytes = 0,
+    min_rows_for_wide_part = 0,
+    min_bytes_for_wide_part = 0,
+    compress_marks = 0,
+    ratio_of_defaults_for_sparse_serialization = 1.0;
+SQL
+
+string_data_path = run_clickhouse(
+  binary,
+  store,
+  "SELECT data_paths[1] FROM system.tables WHERE database = 'default' AND name = 'wide_string_writer_oracle' FORMAT TSVRaw"
+).strip
+raise "ClickHouse returned no String oracle data path" if string_data_path.empty?
+FileUtils.mkdir_p(File.join(string_data_path, "detached"))
+FileUtils.cp_r(string_part, File.join(string_data_path, "detached", "all_1_1_0"))
+run_clickhouse(binary, store, "ALTER TABLE default.wide_string_writer_oracle ATTACH PART 'all_1_1_0'")
+
+string_actual = run_clickhouse(
+  binary,
+  store,
+  "SELECT pk, hex(payload) FROM default.wide_string_writer_oracle ORDER BY pk FORMAT TabSeparated"
+)
+string_expected = "1\t616C706861\n2\t610062\n3\t\n4\t\n5\tC3A9\n6\t7461696C\n7\t\n8\t\n"
+raise "ClickHouse String bytes differ: #{string_actual.inspect}" unless string_actual == string_expected
+
+string_indexed = run_clickhouse(
+  binary,
+  store,
+  "SELECT pk, hex(payload) FROM default.wide_string_writer_oracle WHERE pk >= 2 AND pk < 6 ORDER BY pk FORMAT TabSeparated"
+)
+raise "ClickHouse String key range differs: #{string_indexed.inspect}" unless string_indexed == "2\t610062\n3\t\n4\t\n5\tC3A9\n"
+
+string_integrity = run_clickhouse(binary, store, "CHECK TABLE default.wide_string_writer_oracle FORMAT TabSeparated").strip
+raise "ClickHouse String CHECK TABLE failed: #{string_integrity.inspect}" unless string_integrity == "all_1_1_0\t1"
+
+string_stream = File.join(string_data_path, "all_1_1_0", "#{CrystalClick::StreamName.hash("payload")}.bin")
+File.open(string_stream, "r+") do |file|
+  first = file.read_byte || raise "oracle String raw stream is empty"
+  file.pos = 0
+  file.write_byte(first ^ 1_u8)
+end
+string_damaged = run_clickhouse(binary, store, "CHECK TABLE default.wide_string_writer_oracle FORMAT TabSeparated").strip
+string_damaged_fields = string_damaged.split('\t', 3)
+unless string_damaged_fields.size == 3 &&
+       string_damaged_fields[0] == "all_1_1_0" &&
+       string_damaged_fields[1] == "0" &&
+       string_damaged_fields[2].includes?("CHECKSUM_DOESNT_MATCH")
+  raise "ClickHouse CHECK TABLE missed mutated String raw stream: #{string_damaged.inspect}"
+end
+
+puts "ClickHouse attached the mixed String part (including middle and final empty granules), returned exact binary/UTF-8 and key-range rows, passed CHECK TABLE, then detected a one-byte raw-stream checksum mutation."
+
+empty_keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+empty_values = ["", "", "", "", ""]
+empty_part = File.join(root, "empty_string_part")
+CrystalClick::WidePartWriter.write_uint64_string_pair(
+  empty_part,
+  "pk",
+  empty_keys.to_unsafe.to_slice(empty_keys.size),
+  "payload",
+  empty_values.to_unsafe.to_slice(empty_values.size),
+  rows_per_mark: 2
+)
+empty_raw_stream = File.join(empty_part, "#{CrystalClick::StreamName.hash("payload")}.bin")
+raise "all-empty String payload must have a zero-byte regular stream" unless File.size(empty_raw_stream) == 0
+
+run_clickhouse(binary, store, <<-SQL)
+CREATE TABLE default.wide_empty_string_writer_oracle
+(
+    `pk` UInt64,
+    `payload` String
+)
+ENGINE = MergeTree
+ORDER BY pk
+SETTINGS
+    index_granularity = 2,
+    index_granularity_bytes = 0,
+    min_rows_for_wide_part = 0,
+    min_bytes_for_wide_part = 0,
+    compress_marks = 0,
+    ratio_of_defaults_for_sparse_serialization = 1.0;
+SQL
+
+empty_data_path = run_clickhouse(
+  binary,
+  store,
+  "SELECT data_paths[1] FROM system.tables WHERE database = 'default' AND name = 'wide_empty_string_writer_oracle' FORMAT TSVRaw"
+).strip
+raise "ClickHouse returned no all-empty String oracle data path" if empty_data_path.empty?
+FileUtils.mkdir_p(File.join(empty_data_path, "detached"))
+FileUtils.cp_r(empty_part, File.join(empty_data_path, "detached", "all_1_1_0"))
+run_clickhouse(binary, store, "ALTER TABLE default.wide_empty_string_writer_oracle ATTACH PART 'all_1_1_0'")
+
+empty_actual = run_clickhouse(
+  binary,
+  store,
+  "SELECT pk, length(payload) FROM default.wide_empty_string_writer_oracle ORDER BY pk FORMAT TabSeparated"
+)
+raise "ClickHouse all-empty String values differ: #{empty_actual.inspect}" unless empty_actual == "1\t0\n2\t0\n3\t0\n4\t0\n5\t0\n"
+
+empty_indexed = run_clickhouse(
+  binary,
+  store,
+  "SELECT pk, length(payload) FROM default.wide_empty_string_writer_oracle WHERE pk >= 2 AND pk < 5 ORDER BY pk FORMAT TabSeparated"
+)
+raise "ClickHouse all-empty String key range differs: #{empty_indexed.inspect}" unless empty_indexed == "2\t0\n3\t0\n4\t0\n"
+
+empty_integrity = run_clickhouse(binary, store, "CHECK TABLE default.wide_empty_string_writer_oracle FORMAT TabSeparated").strip
+raise "ClickHouse all-empty String CHECK TABLE failed: #{empty_integrity.inspect}" unless empty_integrity == "all_1_1_0\t1"
+
+empty_size_stream = File.join(empty_data_path, "all_1_1_0", "#{CrystalClick::StreamName.hash("payload.size")}.bin")
+File.open(empty_size_stream, "r+") do |file|
+  first = file.read_byte || raise "oracle String size stream is empty"
+  file.pos = 0
+  file.write_byte(first ^ 1_u8)
+end
+empty_damaged = run_clickhouse(binary, store, "CHECK TABLE default.wide_empty_string_writer_oracle FORMAT TabSeparated").strip
+empty_damaged_fields = empty_damaged.split('\t', 3)
+unless empty_damaged_fields.size == 3 &&
+       empty_damaged_fields[0] == "all_1_1_0" &&
+       empty_damaged_fields[1] == "0" &&
+       empty_damaged_fields[2].includes?("CHECKSUM_DOESNT_MATCH")
+  raise "ClickHouse CHECK TABLE missed mutated String size stream: #{empty_damaged.inspect}"
+end
+
+puts "ClickHouse attached the all-empty String part with a zero-byte raw stream, returned exact and key-range rows, passed CHECK TABLE, then detected a one-byte size-stream checksum mutation."
 CRYSTAL

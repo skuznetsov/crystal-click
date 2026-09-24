@@ -1,6 +1,7 @@
 # Embedded MergeTree W3 Implementation Plan
 
-Status: active. Governed by `EMBEDDED_MERGETREE_FRONTIER.md`.
+Status: implemented and verified within the stated bounds on 2026-09-24.
+Governed by `EMBEDDED_MERGETREE_FRONTIER.md`.
 
 ## Scope, risk, and rollback
 
