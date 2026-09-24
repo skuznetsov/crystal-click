@@ -2,7 +2,8 @@
 
 Document status: active design. W1, W2, and bounded W3 are verified on this
 macOS host against the pinned ClickHouse build. Bounded W4, W5, and W6 are
-verified on the local Darwin process-atomicity frontier; power-loss recovery
+verified on the local Darwin process-atomicity frontier. Bounded W7 is
+verified on the same Crystal-owned table frontier; power-loss recovery
 remains future work.
 
 ## Purpose and bounded contexts
@@ -20,8 +21,8 @@ not be conflated:
    Crystal. SQL parsing, joins, and a general expression engine are not
    required.
 
-Boundary 2 now has bounded table ownership and a two-part logical merge, but
-physical reclamation and power-loss recovery remain open. Existing readers
+Boundary 2 now has bounded table ownership, a two-part logical merge, and
+explicit historical-part reclamation, but power-loss recovery remains open. Existing readers
 and the offline catalog provide useful inputs; the latter remains read-only
 and cannot infer a server's Active state from a physical directory inventory.
 
@@ -311,6 +312,68 @@ focused/fault/full suites and both external oracles. It does not authenticate
 all stored bytes, prove power-loss durability, protect unscoped raw paths, or
 guarantee exactly-once caller retries.
 
+## Verified slice W7: typed UInt64 primary-key candidate granules
+
+Add `EmbeddedMergeTreeTable#scan_uint64_pk_candidates` for a caller-selected
+column list containing the table's sorted `UInt64` key and optionally its
+regular `String` payload. Require at least one inclusive `UInt64` bound and
+reject an inverted pair, duplicates, or unknown columns before any callback,
+including on an empty table. The method exposes complete physical candidate
+granules in active-part order, with the original part, mark, and row offsets.
+It is not an exact row filter: callers must apply the bounds to each returned
+key before using its row. Multiple active parts do not imply global key order.
+Do not add SQL parsing, arbitrary key expressions, or background scheduling.
+
+Resolve the maximal committed part set under the shared table lock, open a
+typed selected-column reader, validate every active raw `primary.idx`, and
+compute every part's conservative mark schedule before exposing the first
+callback. Reuse `PrimaryKeyIndex#candidate_marks`, which retains the predecessor
+granule for lower bounds and handles duplicates across mark boundaries. The
+typed candidate path must skip unselected marks without materializing their
+column values, preserve physical offsets across skips and parts, and expose
+one full selected granule per callback even when it exceeds the ordinary
+4,096-row batch size. Existing per-mark and String-byte limits remain in
+force. Keep the shared lock through the callbacks so explicit GC cannot
+remove scanned parts. Callbacks must not reenter a table write.
+
+Context bridge: the offline `OfflineTable#scan_uint64_pk_candidates` and this
+embedded method overlap in the index-to-mark algorithm and residual-filter
+obligation, but not in table authority. The offline catalog sees physical
+candidates without server Active-state knowledge; the embedded table owns its
+commit markers and chooses a maximal active set. Neither method authenticates
+the full primary-index content. This bridge is valid for the current bounded
+UInt64 index format and decays if its format, table ownership, or index
+validation changes. In particular, a same-size monotone but semantically
+wrong index could omit matching marks; a residual predicate cannot recover
+rows that were never read. Exact parity therefore assumes immutable,
+untampered writer-produced parts, not arbitrary filesystem corruption.
+
+W7 falsifiers: exact caller-filtered rows must match a full typed scan for
+one-sided and two-sided ranges, duplicates spanning marks, String payloads,
+multiple active parts, and a post-merge active set; skipped marks must retain
+their original offsets; a damaged index in any active part must fail before
+the first callback; malformed requests must expose no callback. The method
+must not read selected String payload bytes from pruned marks. W7 changes no
+part bytes, so the pinned W3/W5 physical oracles are regression controls,
+not proof of candidate-pruning correctness. No speedup is claimed without a
+separate measurement.
+
+W7 evidence at the implementation diff on parent `a50e640`: 10 focused
+candidate tests passed, including a same-size corrupted String frame in a
+pruned mark (full scan fails, candidate scan succeeds), a 4,097-row whole-mark
+callback, an entirely pruned leading part, a damaged later index with no
+candidate marks, and inclusive `0`/`UInt64::MAX` edges. The full suite passed
+309/309 in both debug and release, and the W6 fault-flag regression passed
+30/30. Both pinned ClickHouse physical oracles remained green; the new example
+typechecked; formatting and diff checks passed. An adversarial source review
+found no in-scope omission, offset, pruning, or index-order bug. The existing
+W6 GC-versus-scan test covers the shared lock path, but no new W7-specific
+callback-versus-GC process test was added. This certificate assumes immutable,
+untampered writer-produced indexes and decays on changes to index selection,
+typed mark materialization, active-part inventory, lock scope, writer format,
+or the pinned ClickHouse version. Refresh focused/full/fault and physical
+oracle checks accordingly; no performance or hash-integrity claim follows.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -329,9 +392,9 @@ Guard-only follow-on slices, in dependency order:
 2. W4 admits only the bounded Crystal-owned table and committed-part recovery
    above; it does not widen `OfflineCatalog` to a mutable API.
 3. W6 admits only explicit historical-part reclamation and process-death
-   probes above. Filtering and primary-key pruning through the existing
-   Crystal scan API require a separate execution slice; power-loss durability
-   and idempotent caller retries remain separate frontiers.
+   probes above. W7 admits only typed UInt64 primary-key candidate granules;
+   general filtering, power-loss durability, and idempotent caller retries
+   remain separate frontiers.
 
 Content-integrity verification in the Crystal reader is not part of W1 or W2: it
 currently validates selected file sizes, not the recorded 128-bit file hashes.

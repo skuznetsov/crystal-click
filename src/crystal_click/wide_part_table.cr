@@ -333,6 +333,36 @@ module CrystalClick
       nil
     end
 
+    # Scan selected candidate marks through the typed reader. Every selected
+    # mark is exposed in one callback, while unselected marks advance offsets
+    # without reading any selected column data.
+    def scan_typed_candidate_marks(mark_indices : Array(Array(Int32)), & : WidePartTableBatch -> Nil) : Nil
+      raise UnsupportedFormatError.new("typed candidate scan requires typed readers") unless @typed_mode
+      raise BoundsError.new("candidate mark list does not match selected parts") unless mark_indices.size == @entries.size
+
+      # Snapshot and validate the complete schedule before any callback. This
+      # prevents a callback from changing later selections through the caller's
+      # mutable arrays.
+      validated_mark_indices = Array(Array(Int32)).new(mark_indices.size)
+      mark_indices.each_with_index do |part_marks, part_index|
+        mark_count = @entries[part_index].mark_row_counts.size
+        validated_part_marks = part_marks.dup
+        previous = -1
+        validated_part_marks.each do |mark_index|
+          raise BoundsError.new("candidate mark index is out of range") if mark_index < 0 || mark_index >= mark_count
+          raise BoundsError.new("candidate mark indices must be strictly increasing") if mark_index <= previous
+          previous = mark_index
+        end
+        validated_mark_indices << validated_part_marks
+      end
+
+      # All source marks are bounded by MAX_MARK_ROWS, so this batch size emits
+      # a selected granule as one complete callback. whole_marks also preserves
+      # the one-callback contract for a selected zero-row mark.
+      scan_typed_rows(MAX_MARK_ROWS.to_i, validated_mark_indices, whole_marks: true) { |batch| yield batch }
+      nil
+    end
+
     # Scan mixed fixed-width primitive numeric columns. Typed values are
     # retrieved from each batch with values_for(column, CrystalType).
     def scan_numeric(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
@@ -353,11 +383,28 @@ module CrystalClick
       scan_typed_rows(batch_rows) { |batch| yield batch }
     end
 
-    private def scan_typed_rows(batch_rows : Int, & : WidePartTableBatch -> Nil) : Nil
+    private def scan_typed_rows(
+      batch_rows : Int,
+      candidate_marks : Array(Array(Int32))? = nil,
+      whole_marks : Bool = false,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
       source_row_offset = 0_u64
       @entries.each_with_index do |part, part_index|
         part_row_offset = 0_u64
+        selected_marks = candidate_marks ? candidate_marks[part_index] : nil
+        selected_index = 0
         part.mark_row_counts.each_with_index do |mark_rows, mark_index|
+          mark_start_part_row_offset = part_row_offset
+          part_row_offset &+= mark_rows
+
+          selected_mark = true
+          if part_marks = selected_marks
+            selected_mark = selected_index < part_marks.size && part_marks[selected_index] == mark_index
+            selected_index += 1 if selected_mark
+          end
+          next unless selected_mark
+
           # Selected String and Nullable(String) size streams are read first.
           # This preflight bounds raw variable-width materialization before any
           # String array is allocated. The immutable-parts contract is not
@@ -412,9 +459,15 @@ module CrystalClick
           end
 
           mark_row_offset = 0_u64
-          while mark_row_offset < mark_rows
+          first_whole_mark_batch = whole_marks
+          while mark_row_offset < mark_rows || first_whole_mark_batch
+            first_whole_mark_batch = false
             remaining = mark_rows - mark_row_offset
-            size = remaining < batch_rows.to_u64 ? remaining.to_i : batch_rows
+            size = if whole_marks
+                     remaining.to_i
+                   else
+                     remaining < batch_rows.to_u64 ? remaining.to_i : batch_rows
+                   end
             numeric_slices = Hash(String, WidePartNumericSlice).new
             string_slices = Hash(String, Slice(String)).new
             nullable_slices = Hash(String, WidePartNullableSlice).new
@@ -438,8 +491,8 @@ module CrystalClick
               part.path,
               mark_index.to_i32,
               mark_row_offset,
-              part_row_offset &+ mark_row_offset,
-              source_row_offset &+ part_row_offset &+ mark_row_offset,
+              mark_start_part_row_offset &+ mark_row_offset,
+              source_row_offset &+ mark_start_part_row_offset &+ mark_row_offset,
               @columns,
               part.column_types,
               numeric_slices,
@@ -449,9 +502,8 @@ module CrystalClick
             )
             yield batch
             mark_row_offset &+= size.to_u64
+            break if whole_marks
           end
-
-          part_row_offset &+= mark_rows
         end
 
         raise CorruptPartError.new("part row count changed during scan") unless part_row_offset == part.row_count

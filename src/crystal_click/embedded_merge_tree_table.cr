@@ -264,6 +264,51 @@ module CrystalClick
       nil
     end
 
+    # Scan conservative candidate granules for an inclusive UInt64 primary-key
+    # range. Callers must apply the exact key predicate to every returned row.
+    # The shared table lock remains held through callbacks; callbacks must not
+    # reenter a table write.
+    def scan_uint64_pk_candidates(
+      columns : Array(String),
+      lower_bound : UInt64? = nil,
+      upper_bound : UInt64? = nil,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      raise BoundsError.new("at least one primary-key bound is required") unless lower_bound || upper_bound
+      if lower = lower_bound
+        if upper = upper_bound
+          raise BoundsError.new("primary-key lower bound exceeds upper bound") if lower > upper
+        end
+      end
+      validate_pk_candidate_request!(columns)
+
+      with_reader_lock do
+        committed, _orphans, _physical, _physical_entry_count, _marker_count, _covered = inventory
+        unless committed.empty?
+          table = WidePartTable.open_selected_typed(committed.map(&.path), columns)
+          expected_column_types = columns.map { |column| {column, column == @key_name ? "UInt64" : "String"} }
+          unless table.column_types == expected_column_types
+            raise UnsupportedFormatError.new("embedded candidate column types do not match the table schema")
+          end
+
+          part_mark_rows = table.part_mark_row_counts
+          raise CorruptPartError.new("selected part mark inventory changed") unless part_mark_rows.size == committed.size
+
+          # Validate every active index and construct every schedule before the
+          # typed reader can expose its first callback.
+          candidate_marks = Array(Array(Int32)).new(committed.size)
+          committed.each_with_index do |part, part_index|
+            checksums = PartChecksums.open(part.path)
+            index = PrimaryKeyIndex.open(part.path, part_mark_rows[part_index].size, checksums)
+            candidate_marks << index.candidate_marks(lower_bound, upper_bound)
+          end
+
+          table.scan_typed_candidate_marks(candidate_marks) { |batch| yield batch }
+        end
+      end
+      nil
+    end
+
     private def initialize(@root : String, @key_name : String, @value_name : String)
     end
 
@@ -568,6 +613,20 @@ module CrystalClick
       unless columns.all? { |column| column == @key_name || column == @value_name }
         raise UnsupportedFormatError.new("selected column is not present in the embedded table")
       end
+      nil
+    end
+
+    private def validate_pk_candidate_request!(columns : Array(String)) : Nil
+      raise BoundsError.new("at least one embedded table column must be selected") if columns.empty?
+      raise BoundsError.new("embedded table scan supports at most two columns") if columns.size > 2
+      raise BoundsError.new("selected embedded table columns must be distinct") unless columns.uniq.size == columns.size
+      columns.each do |column|
+        raise BoundsError.new("column name is empty or exceeds limit") if column.empty? || column.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
+        unless column == @key_name || column == @value_name
+          raise UnsupportedFormatError.new("selected column is not present in the embedded table")
+        end
+      end
+      raise UnsupportedFormatError.new("selected columns must include the embedded primary key") unless columns.includes?(@key_name)
       nil
     end
 

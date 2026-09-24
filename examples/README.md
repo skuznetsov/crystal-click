@@ -27,6 +27,22 @@ through callbacks. Those callbacks must not reenter a table write. Commit
 markers provide process-level atomicity, not power-loss durability,
 exactly-once retries, or a server `Active` state.
 
+For a bounded inclusive range on that table's `UInt64` key:
+
+```sh
+crystal run examples/scan_embedded_merge_tree_pk_range.cr -- /tmp/my-new-crystal-click-table --lower 2 --upper 4
+```
+
+Either bound may be omitted. The typed candidate API returns whole physical
+granules with `UInt64` keys and `String` values, not only rows that match the
+range. The example applies the exact residual predicate before printing;
+callers must do likewise. It prunes by the primary index of each active part,
+so output across multiple active parts is not necessarily globally sorted.
+The scan holds the table's shared lock through callbacks, preventing explicit
+GC by cooperating processes from deleting its parts during iteration. It
+assumes immutable, untampered writer-produced indexes; it does not verify
+their content hashes or promise a speedup.
+
 ## Read-only ClickHouse data-root examples
 
 These examples read local files under a ClickHouse data root (`metadata/` and
