@@ -1,8 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
 Document status: active design. W1, W2, and bounded W3 are verified on this
-macOS host against the pinned ClickHouse build. Embedded table ownership and
-merging remain future frontiers.
+macOS host against the pinned ClickHouse build. Bounded W4 is verified on the
+local Darwin process-atomicity frontier; merging remains future work.
 
 ## Purpose and bounded contexts
 
@@ -19,9 +19,10 @@ not be conflated:
    Crystal. SQL parsing, joins, and a general expression engine are not
    required.
 
-The active frontier is boundary 1. Existing readers and the offline catalog
-provide useful inputs to boundaries 2 and 3, but they do not make a mutable
-MergeTree table exist.
+Boundary 2 has its first bounded table-ownership slice, but merge and
+power-loss recovery remain open. Existing readers and the offline catalog
+provide useful inputs; the latter remains read-only and cannot infer a
+server's Active state from a physical directory inventory.
 
 ## Completed slice W1: bounded Wide-part writer
 
@@ -116,6 +117,66 @@ misreads falsifies W3 compatibility. W3 has no performance claim. Its evidence
 is limited to the tested producer/version, normal String serialization, Wide
 parts, and Darwin publication; a format or implementation change reopens it.
 
+## Completed slice W4: Crystal-owned table and committed-part recovery
+
+Admit a separate `EmbeddedMergeTreeTable` root created only at a previously
+absent path. It is not a ClickHouse server data root and is not opened through
+`OfflineCatalog`. An immutable, bounded schema manifest declares exactly one
+sorted `UInt64` key, one non-nullable regular `String` payload, format version
+1, and the single `all` partition. The root contains `parts/` and a separate
+`committed/` directory of empty per-part commit-marker directories. No
+arbitrary schema, partition expression, merge, mutation, or general SQL is
+admitted.
+
+`insert` accepts nonempty equal-length key and String slices and a bounded
+rows-per-mark value. Under a root-owned advisory writer lock, enumerate both
+committed and orphan physical part names, choose a new monotone block number,
+and call the W3 writer to stage, validate, and exclusively publish
+`all_N_N_0` beneath `parts/`. Only after that succeeds may one atomic
+exclusive `mkdir committed/all_N_N_0` make the part visible; `N` is a
+strictly positive, monotone block number. That marker is
+the process-level commit point. No marker is written on writer failure. An
+error after part publication but before the marker leaves an orphan, not a
+visible row; retry allocates a different block. The API returns the committed
+part name, not a server-equivalent transaction or exactly-once guarantee.
+
+`open` and each read re-enumerate committed names, reject malformed names,
+symlinks (including part metadata), missing/structurally invalid committed
+parts, and overlapping or wrong-schema candidates. Structural validation
+includes the primary index; it does not authenticate recorded file hashes.
+Then delegate row-aligned typed scanning to `WidePartTable`. Inserts refuse to
+publish a 1,025th committed part because the current table reader caps part
+count at 1,024 and W4 has no merge yet. Unmarked physical part directories
+and recognizable writer staging directories are excluded from reads and
+reported without automatic adoption or deletion. The embedded reader does
+not claim content-hash integrity: current `PartChecksums` checks selected
+sizes, not recorded file hashes.
+Same-size tampering and a concurrent external filesystem mutator are outside
+W4's guarantee. Readers hold a shared advisory lock while resolving the
+physical and marker inventory, then release it before scanning immutable
+parts. A reader may see the committed set before or after a concurrent
+cooperating insert, but must not reject a mixed inventory snapshot; one scan
+uses one resolved set of immutable parts.
+
+W4 is process-atomic, not power-loss durable: no file/directory `fsync`
+protocol, group transaction, or crash-status acknowledgment is claimed.
+Advisory locks coordinate cooperating writers on a local filesystem only.
+The root creation path must publish the complete manifest/layout exclusively
+or leave the destination absent on ordinary failure. The recovery falsifiers
+are: an unmarked published part stays invisible after reopen; a marker with
+no part fails closed; two cooperating writers cannot reuse a block; malformed,
+symlinked, or overlapping committed parts fail; a missing or malformed primary
+index fails; a failed insert preserves previous committed rows and does not
+publish a marker. The W3 physical oracle remains
+the compatibility control because W4 does not change part bytes.
+
+W4 verification on this macOS host: the focused suite passed 12/12 examples;
+the full debug and release suites each passed 285/285; formatting and diff
+checks passed; and the pinned W3 ClickHouse physical oracle remained green.
+The read-lock falsifier first failed on an unlocked child reader and passed
+after shared-lock coverage. A later change to the reader, writer, filesystem
+publication behavior, or manifest format reopens the corresponding claim.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -131,11 +192,10 @@ Guard-only follow-on slices, in dependency order:
    physical stream naming on case-sensitive filesystems before claiming
    cross-filesystem compatibility. W3 handles only regular String substreams;
    sparse and other String variants remain guard-only.
-2. Add an embedded table manifest/recovery rule and a minimal insert API that
-   publishes a validated immutable part without claiming server-equivalent
-   active-part discovery.
-3. Add a bounded merge operation and crash-recovery probes, then filtering
-   and primary-key pruning through the existing Crystal scan API.
+2. W4 admits only the bounded Crystal-owned table and committed-part recovery
+   above; it does not widen `OfflineCatalog` to a mutable API.
+3. Add a bounded merge operation and stronger crash-durability probes, then
+   filtering and primary-key pruning through the existing Crystal scan API.
 
 Content-integrity verification in the Crystal reader is not part of W1 or W2: it
 currently validates selected file sizes, not the recorded 128-bit file hashes.

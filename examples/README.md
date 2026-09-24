@@ -1,4 +1,21 @@
-# Offline reader examples
+# Embedded table and offline reader examples
+
+Create, insert into, reopen, and scan a bounded Crystal-owned table:
+
+```sh
+crystal run examples/embedded_merge_tree_table.cr -- /tmp/my-new-crystal-click-table
+```
+
+Choose a destination outside any ClickHouse server data root; the destination
+must not exist. The example leaves the table on disk for inspection. This is
+not a ClickHouse server data root or a mutable
+`OfflineCatalog` table. The experimental table currently supports only one
+sorted `UInt64` key, one `String` value, and the `all` partition. A published
+part becomes visible only after its commit marker appears; orphan parts are
+not read. The marker provides process-level atomicity, not power-loss
+durability or a server `Active` state.
+
+## Read-only ClickHouse data-root examples
 
 These examples read local files under a ClickHouse data root (`metadata/` and
 `store/`). They do not connect to a server, execute SQL, or provide a
