@@ -12,10 +12,14 @@ module EmbeddedMergeTreeTableExample
 
     root = args[0]
     table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
-    keys = [1_u64, 2_u64, 3_u64]
-    values = ["alpha", "", "é"]
-    part = table.insert(keys.to_unsafe.to_slice(keys.size), values.to_unsafe.to_slice(values.size), rows_per_mark: 2)
-    puts "committed #{part} under #{root}"
+    left_keys = [1_u64, 3_u64]
+    left_values = ["alpha", ""]
+    right_keys = [2_u64, 3_u64]
+    right_values = ["beta", "é"]
+    left = table.insert(left_keys.to_unsafe.to_slice(left_keys.size), left_values.to_unsafe.to_slice(left_values.size), rows_per_mark: 2)
+    right = table.insert(right_keys.to_unsafe.to_slice(right_keys.size), right_values.to_unsafe.to_slice(right_values.size), rows_per_mark: 2)
+    merged = table.merge_adjacent(left, right, rows_per_mark: 2)
+    puts "merged #{left} and #{right} into #{merged} under #{root}"
 
     reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
     reopened.scan_typed(["pk", "value"]) do |batch|

@@ -8,17 +8,21 @@ module CrystalClick
   # process-atomic for cooperating writers on a local Darwin filesystem; it is
   # not a ClickHouse server table or a power-loss durability protocol.
   class EmbeddedMergeTreeTable
-    FORMAT_VERSION        =         1
-    MAX_COLUMN_NAME_BYTES =       128
-    MAX_MANIFEST_BYTES    = 4_096_i64
-    MAX_METADATA_BYTES    = 4_096_i64
-    MAX_CHECKSUMS_BYTES   = 64_i64 * 1024
-    MAX_PARTS             = WidePartTable::MAX_PARTS
-    WRITER_STAGE_PREFIX   = ".crystal-click-wide-writer-"
-    TABLE_STAGE_PREFIX    = ".crystal-click-embedded-table-"
-    LOCK_FILE             = "writer.lock"
-    MANIFEST_FILE         = "manifest.json"
-    RENAME_EXCL           = 0x0000_0004_u32
+    FORMAT_VERSION          =         1
+    MAX_COLUMN_NAME_BYTES   =       128
+    MAX_MANIFEST_BYTES      = 4_096_i64
+    MAX_METADATA_BYTES      = 4_096_i64
+    MAX_CHECKSUMS_BYTES     = 64_i64 * 1024
+    MAX_PARTS               = WidePartTable::MAX_PARTS
+    MAX_PHYSICAL_ENTRIES    =       2_048
+    MAX_COMMITTED_MARKERS   =       2_048
+    MAX_MERGE_ROWS          = 100_000_u64
+    MAX_MERGE_PAYLOAD_BYTES = 64_i64 * 1024 * 1024
+    WRITER_STAGE_PREFIX     = ".crystal-click-wide-writer-"
+    TABLE_STAGE_PREFIX      = ".crystal-click-embedded-table-"
+    LOCK_FILE               = "writer.lock"
+    MANIFEST_FILE           = "manifest.json"
+    RENAME_EXCL             = 0x0000_0004_u32
 
     {% if flag?(:darwin) %}
       @[Link("c")]
@@ -33,6 +37,15 @@ module CrystalClick
       getter info : MergeTreePartInfo
 
       def initialize(@name : String, @path : String, @info : MergeTreePartInfo)
+      end
+    end
+
+    private struct MergeInput
+      getter keys : Array(UInt64)
+      getter values : Array(String)
+      getter payload_bytes : Int64
+
+      def initialize(@keys : Array(UInt64), @values : Array(String), @payload_bytes : Int64)
       end
     end
 
@@ -90,7 +103,7 @@ module CrystalClick
     # The inventory is resolved anew for each call.
     def part_paths : Array(String)
       with_reader_lock do
-        committed, _orphans, _physical = inventory
+        committed, _orphans, _physical, _physical_entry_count, _marker_count = inventory
         committed.map(&.path)
       end
     end
@@ -99,7 +112,7 @@ module CrystalClick
     # directories. They are never adopted or removed automatically.
     def orphan_part_names : Array(String)
       with_reader_lock do
-        _committed, orphans, _physical = inventory
+        _committed, orphans, _physical, _physical_entry_count, _marker_count = inventory
         orphans
       end
     end
@@ -112,12 +125,9 @@ module CrystalClick
       validate_layout!
 
       with_writer_lock do
-        committed, orphans, physical = inventory
+        committed, _orphans, physical, physical_entry_count, marker_count = inventory
         raise BoundsError.new("embedded table exceeds part limit") if committed.size >= MAX_PARTS
-        # The inventory cap includes both physical parts and interrupted
-        # writer staging directories. Do not make a currently readable root
-        # exceed that cap by publishing another physical part.
-        raise BoundsError.new("embedded table exceeds physical entry limit") if committed.size + orphans.size >= MAX_PARTS * 2
+        preflight_new_part!(physical_entry_count, marker_count)
 
         max_block = physical.reduce(0_i64) { |current, part| {current, part.info.max_block}.max }
         raise BoundsError.new("embedded part block number is exhausted") if max_block == Int64::MAX
@@ -141,11 +151,62 @@ module CrystalClick
       end
     end
 
+    # Merge two neighboring visible parts into one new immutable part. The
+    # input names are resolved against the locked active inventory before any
+    # caller-supplied string can be used as a filesystem path.
+    def merge_adjacent(left_name : String, right_name : String, rows_per_mark : Int32 = 8192) : String
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > WidePartWriter::MAX_ROWS_PER_MARK
+      validate_layout!
+
+      with_writer_lock do
+        active, _orphans, physical, physical_entry_count, marker_count = inventory
+        left_index = active.index { |part| part.name == left_name }
+        right_index = active.index { |part| part.name == right_name }
+        unless left_index && right_index && right_index == left_index + 1
+          raise ArgumentError.new("merge inputs must be neighboring active parts in ascending block order")
+        end
+
+        left = active[left_index]
+        right = active[right_index]
+        preflight_new_part!(physical_entry_count, marker_count)
+
+        left_reader = WidePartTable.open_selected_typed([left.path], [@key_name, @value_name])
+        right_reader = WidePartTable.open_selected_typed([right.path], [@key_name, @value_name])
+        left_row_count = part_row_count(left_reader)
+        right_row_count = part_row_count(right_reader)
+        if left_row_count > MAX_MERGE_ROWS || right_row_count > MAX_MERGE_ROWS - left_row_count
+          raise BoundsError.new("embedded merge exceeds row limit")
+        end
+
+        left_rows = read_merge_input(left_reader, left_row_count, 0_i64)
+        right_rows = read_merge_input(right_reader, right_row_count, left_rows.payload_bytes)
+        merged_keys, merged_values = stable_merge(left_rows, right_rows)
+        level = next_merge_level(physical, left, right)
+        part_name = canonical_part_name(left.info.min_block, right.info.max_block, level)
+        part_path = File.join(parts_path, part_name)
+
+        WidePartWriter.write_uint64_string_pair(
+          part_path,
+          @key_name,
+          merged_keys.to_unsafe.to_slice(merged_keys.size),
+          @value_name,
+          merged_values.to_unsafe.to_slice(merged_values.size),
+          rows_per_mark
+        )
+
+        # The marker is the only visibility point. If it fails, the complete
+        # result remains an ignored orphan and both old sources stay visible.
+        Dir.mkdir(File.join(committed_path, part_name))
+        part_name
+      end
+    end
+
     # Validate the selection even on an empty table, where there is no part
     # reader available to perform the usual type/column checks.
     def scan_typed(columns : Array(String), batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       validate_scan_request!(columns, batch_rows)
-      committed, _orphans, _physical = with_reader_lock { inventory }
+      committed, _orphans, _physical, _physical_entry_count, _marker_count = with_reader_lock { inventory }
       return nil if committed.empty?
 
       table = WidePartTable.open_selected_typed(committed.map(&.path), columns)
@@ -190,13 +251,13 @@ module CrystalClick
       nil
     end
 
-    private def inventory : {Array(PhysicalPart), Array(String), Array(PhysicalPart)}
+    private def inventory : {Array(PhysicalPart), Array(String), Array(PhysicalPart), Int32, Int32}
       validate_layout!
 
       physical = [] of PhysicalPart
       orphan_names = [] of String
       parts_children = Dir.children(parts_path)
-      raise BoundsError.new("embedded table exceeds physical part limit") if parts_children.size > MAX_PARTS * 2
+      raise BoundsError.new("embedded table exceeds physical entry limit") if parts_children.size > MAX_PHYSICAL_ENTRIES
       parts_children.each do |name|
         path = File.join(parts_path, name)
         reject_symlink!(path, "part or staging entry")
@@ -208,28 +269,16 @@ module CrystalClick
 
         info = parse_part_name(name)
         raise CorruptPartError.new("physical part entry is not a directory") unless Dir.exists?(path)
+        validate_part_name!(name, info)
         physical << PhysicalPart.new(name, path, info)
       end
 
-      reject_overlapping_parts!(physical)
-      physical.each do |part|
-        unless part.info.partition_id == "all" && part.info.min_block == part.info.max_block &&
-               part.info.min_block > 0 && part.info.level == 0 && part.info.mutation == 0 &&
-               part.name == canonical_part_name(part.info.max_block)
-          raise CorruptPartError.new("physical part name is outside the bounded W4 format")
-        end
-      end
-
       marker_names = Dir.children(committed_path)
-      raise BoundsError.new("embedded table exceeds committed part limit") if marker_names.size > MAX_PARTS
+      raise BoundsError.new("embedded table exceeds committed marker limit") if marker_names.size > MAX_COMMITTED_MARKERS
       marked = Set(String).new
       marker_names.each do |name|
         info = parse_part_name(name)
-        unless info.partition_id == "all" && info.min_block == info.max_block &&
-               info.min_block > 0 && info.level == 0 && info.mutation == 0 &&
-               name == canonical_part_name(info.max_block)
-          raise CorruptPartError.new("commit marker name is outside the bounded W4 format")
-        end
+        validate_part_name!(name, info, "commit marker")
         marker_path = File.join(committed_path, name)
         reject_symlink!(marker_path, "commit marker")
         raise CorruptPartError.new("commit marker is not a directory") unless Dir.exists?(marker_path)
@@ -238,17 +287,23 @@ module CrystalClick
       end
 
       physical_by_name = physical.to_h { |part| {part.name, part} }
+      marked_parts = [] of PhysicalPart
       marked.each do |name|
         part = physical_by_name[name]?
         raise CorruptPartError.new("commit marker has no physical part") unless part
         validate_part!(part.not_nil!)
+        marked_parts << part.not_nil!
       end
       physical.each { |part| orphan_names << part.name unless marked.includes?(part.name) }
 
-      committed = marked.map { |name| physical_by_name[name].not_nil! }
+      reject_ambiguous_marked_intervals!(marked_parts)
+      committed = marked_parts.reject do |part|
+        marked_parts.any? { |other| other.name != part.name && strictly_contains?(other.info, part.info) }
+      end
       committed.sort_by! { |part| {part.info.min_block, part.info.max_block, part.info.name} }
+      raise BoundsError.new("embedded table exceeds active part limit") if committed.size > MAX_PARTS
       orphan_names.sort!
-      {committed, orphan_names, physical}
+      {committed, orphan_names, physical, parts_children.size, marker_names.size}
     end
 
     private def validate_part!(part : PhysicalPart) : Nil
@@ -326,6 +381,91 @@ module CrystalClick
         previous = key
       end
       nil
+    end
+
+    private def preflight_new_part!(physical_entry_count : Int32, marker_count : Int32) : Nil
+      raise BoundsError.new("embedded table exceeds physical entry limit") if physical_entry_count >= MAX_PHYSICAL_ENTRIES
+      raise BoundsError.new("embedded table exceeds committed marker limit") if marker_count >= MAX_COMMITTED_MARKERS
+      nil
+    end
+
+    private def part_row_count(reader : WidePartTable) : UInt64
+      mark_counts = reader.part_mark_row_counts.first? || raise(CorruptPartError.new("merge input has no data marks"))
+      mark_counts.reduce(0_u64) do |total, mark_rows|
+        raise BoundsError.new("embedded merge exceeds row limit") if mark_rows > MAX_MERGE_ROWS - total
+        total + mark_rows
+      end
+    end
+
+    private def read_merge_input(reader : WidePartTable, expected_rows : UInt64, payload_bytes_before : Int64) : MergeInput
+      keys = [] of UInt64
+      values = [] of String
+      payload_bytes = payload_bytes_before
+      have_previous = false
+      previous_key = 0_u64
+
+      reader.scan_typed do |batch|
+        batch_keys = batch.values_for(@key_name, UInt64)
+        batch_values = batch.strings_for(@value_name)
+        unless batch_keys.size == batch_values.size
+          raise CorruptPartError.new("merge input columns are not row-aligned")
+        end
+
+        batch_keys.each_with_index do |key, index|
+          if have_previous && key < previous_key
+            raise CorruptPartError.new("merge input primary keys are not nondecreasing")
+          end
+          value = batch_values[index]
+          value_bytes = value.bytesize.to_i64
+          if value_bytes > MAX_MERGE_PAYLOAD_BYTES - payload_bytes
+            raise BoundsError.new("embedded merge exceeds String payload limit")
+          end
+          payload_bytes += value_bytes
+          keys << key
+          values << value
+          previous_key = key
+          have_previous = true
+        end
+      end
+
+      unless keys.size.to_u64 == expected_rows
+        raise CorruptPartError.new("merge input row count changed while reading")
+      end
+      MergeInput.new(keys, values, payload_bytes)
+    end
+
+    private def stable_merge(left : MergeInput, right : MergeInput) : {Array(UInt64), Array(String)}
+      merged_keys = Array(UInt64).new(left.keys.size + right.keys.size)
+      merged_values = Array(String).new(left.values.size + right.values.size)
+      left_index = 0
+      right_index = 0
+
+      while left_index < left.keys.size || right_index < right.keys.size
+        take_left = right_index >= right.keys.size ||
+                    left_index < left.keys.size && left.keys[left_index] <= right.keys[right_index]
+        if take_left
+          merged_keys << left.keys[left_index]
+          merged_values << left.values[left_index]
+          left_index += 1
+        else
+          merged_keys << right.keys[right_index]
+          merged_values << right.values[right_index]
+          right_index += 1
+        end
+      end
+
+      {merged_keys, merged_values}
+    end
+
+    private def next_merge_level(physical : Array(PhysicalPart), left : PhysicalPart, right : PhysicalPart) : UInt32
+      max_level = {left.info.level, right.info.level}.max
+      physical.each do |part|
+        if part.info.min_block == left.info.min_block && part.info.max_block == right.info.max_block && part.info.level > max_level
+          max_level = part.info.level
+        end
+      end
+      raise BoundsError.new("embedded merge level is exhausted") if max_level >= MergeTreePartInfo::MAX_LEVEL
+      max_level + 1_u32
     end
 
     private def read_part_metadata(part_path : String, name : String) : String
@@ -445,19 +585,40 @@ module CrystalClick
       info.not_nil!
     end
 
-    private def canonical_part_name(block : Int64) : String
-      "all_#{block}_#{block}_0"
+    private def validate_part_name!(name : String, info : MergeTreePartInfo, label : String = "physical part") : Nil
+      bounded_shape = info.partition_id == "all" && info.min_block > 0 && info.mutation == 0 &&
+                      if info.min_block == info.max_block
+                        info.level == 0
+                      else
+                        info.level > 0 && info.level <= MergeTreePartInfo::MAX_LEVEL
+                      end
+      unless bounded_shape && name == canonical_part_name(info.min_block, info.max_block, info.level)
+        raise CorruptPartError.new("#{label} name is outside the bounded W5 format")
+      end
+      nil
     end
 
-    private def reject_overlapping_parts!(parts : Array(PhysicalPart)) : Nil
+    private def canonical_part_name(min_block : Int64, max_block : Int64, level : UInt32) : String
+      "all_#{min_block}_#{max_block}_#{level}"
+    end
+
+    private def reject_ambiguous_marked_intervals!(parts : Array(PhysicalPart)) : Nil
       parts.each_with_index do |part, index|
         parts[(index + 1)..].each do |other|
-          if part.info.overlaps?(other.info)
-            raise CorruptPartError.new("embedded physical parts overlap")
+          next unless part.info.overlaps?(other.info)
+          unless strictly_contains?(part.info, other.info) || strictly_contains?(other.info, part.info)
+            raise CorruptPartError.new("marked part intervals overlap ambiguously")
           end
         end
       end
       nil
+    end
+
+    private def strictly_contains?(outer : MergeTreePartInfo, inner : MergeTreePartInfo) : Bool
+      outer.partition_id == inner.partition_id &&
+        outer.min_block <= inner.min_block &&
+        outer.max_block >= inner.max_block &&
+        (outer.min_block < inner.min_block || outer.max_block > inner.max_block)
     end
 
     private def self.create_stage(parent : String) : String

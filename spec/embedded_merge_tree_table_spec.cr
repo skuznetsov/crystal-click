@@ -52,6 +52,28 @@ def embedded_table_rows(table : CrystalClick::EmbeddedMergeTreeTable, key_name :
   rows
 end
 
+def embedded_part_bytes(path : String) : Hash(String, String)
+  Dir.children(path).to_h do |name|
+    {name, File.read(File.join(path, name))}
+  end
+end
+
+def write_embedded_physical_part(root : String, name : String, keys : Array(UInt64), values : Array(String), rows_per_mark : Int32 = 2) : String
+  path = File.join(root, "parts", name)
+  CrystalClick::WidePartWriter.write_uint64_string_pair(
+    path,
+    "pk",
+    keys.to_unsafe.to_slice(keys.size),
+    "value",
+    values.to_unsafe.to_slice(values.size),
+    rows_per_mark
+  )
+end
+
+def mark_embedded_part_committed(root : String, name : String) : Nil
+  Dir.mkdir(File.join(root, "committed", name))
+end
+
 describe CrystalClick::EmbeddedMergeTreeTable do
   it "rejects an existing root without modifying its contents or leaking a stage" do
     with_embedded_table_parent do |parent|
@@ -258,6 +280,234 @@ describe CrystalClick::EmbeddedMergeTreeTable do
       end
       table.part_paths.map { |path| File.basename(path) }.should eq(["all_1_1_0"])
       embedded_table_rows(table, "pk", "value").should eq([{1_u64, "first"}])
+    end
+  end
+
+  it "stably merges adjacent parts and leaves both immutable sources untouched" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      left_name = table.insert(
+        [1_u64, 2_u64, 2_u64, 5_u64].to_unsafe.to_slice(4),
+        ["left-1", "", "left\0two", "left-5"].to_unsafe.to_slice(4),
+        rows_per_mark: 2
+      )
+      right_name = table.insert(
+        [1_u64, 2_u64, 3_u64, 5_u64].to_unsafe.to_slice(4),
+        ["right-1", "right-2", "é", "right-5"].to_unsafe.to_slice(4),
+        rows_per_mark: 2
+      )
+      left_path = File.join(root, "parts", left_name)
+      right_path = File.join(root, "parts", right_name)
+      left_before = embedded_part_bytes(left_path)
+      right_before = embedded_part_bytes(right_path)
+
+      merged_name = table.merge_adjacent(left_name, right_name, rows_per_mark: 3)
+
+      merged_name.should eq("all_1_2_1")
+      table.part_paths.map { |path| File.basename(path) }.should eq([merged_name])
+      embedded_table_rows(table, "pk", "value").should eq([
+        {1_u64, "left-1"},
+        {1_u64, "right-1"},
+        {2_u64, ""},
+        {2_u64, "left\0two"},
+        {2_u64, "right-2"},
+        {3_u64, "é"},
+        {5_u64, "left-5"},
+        {5_u64, "right-5"},
+      ])
+      embedded_part_bytes(left_path).should eq(left_before)
+      embedded_part_bytes(right_path).should eq(right_before)
+      Dir.children(File.join(root, "committed")).sort.should eq(["all_1_1_0", "all_1_2_1", "all_2_2_0"])
+
+      reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened.part_paths.map { |path| File.basename(path) }.should eq([merged_name])
+      embedded_table_rows(reopened, "pk", "value").should eq([
+        {1_u64, "left-1"},
+        {1_u64, "right-1"},
+        {2_u64, ""},
+        {2_u64, "left\0two"},
+        {2_u64, "right-2"},
+        {3_u64, "é"},
+        {5_u64, "left-5"},
+        {5_u64, "right-5"},
+      ])
+    end
+  end
+
+  it "selects only maximal marked intervals through nested merges and retains history" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      first = table.insert([1_u64, 5_u64].to_unsafe.to_slice(2), ["a1", "a5"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      second = table.insert([2_u64, 4_u64].to_unsafe.to_slice(2), ["b2", "b4"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      third = table.insert([3_u64, 6_u64].to_unsafe.to_slice(2), ["c3", "c6"].to_unsafe.to_slice(2), rows_per_mark: 1)
+
+      first_merge = table.merge_adjacent(first, second, rows_per_mark: 2)
+      table.part_paths.map { |path| File.basename(path) }.should eq([first_merge, third])
+      final_merge = table.merge_adjacent(first_merge, third, rows_per_mark: 2)
+
+      final_merge.should eq("all_1_3_2")
+      reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened.part_paths.map { |path| File.basename(path) }.should eq([final_merge])
+      embedded_table_rows(reopened, "pk", "value").should eq([
+        {1_u64, "a1"},
+        {2_u64, "b2"},
+        {3_u64, "c3"},
+        {4_u64, "b4"},
+        {5_u64, "a5"},
+        {6_u64, "c6"},
+      ])
+      Dir.children(File.join(root, "committed")).size.should eq(5)
+      Dir.children(File.join(root, "committed")).sort.should eq([
+        "all_1_1_0",
+        "all_1_2_1",
+        "all_1_3_2",
+        "all_2_2_0",
+        "all_3_3_0",
+      ])
+    end
+  end
+
+  it "rejects reversed, stale, non-neighboring, and path-like merge inputs without publication" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      first = table.insert([1_u64].to_unsafe.to_slice(1), ["a"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      second = table.insert([2_u64].to_unsafe.to_slice(1), ["b"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      third = table.insert([3_u64].to_unsafe.to_slice(1), ["c"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      original_parts = Dir.children(File.join(root, "parts")).sort
+      original_markers = Dir.children(File.join(root, "committed")).sort
+
+      expect_raises(ArgumentError) { table.merge_adjacent(second, first, rows_per_mark: 1) }
+      expect_raises(ArgumentError) { table.merge_adjacent(first, third, rows_per_mark: 1) }
+      expect_raises(ArgumentError) { table.merge_adjacent(first, first, rows_per_mark: 1) }
+      expect_raises(ArgumentError) { table.merge_adjacent("../outside", second, rows_per_mark: 1) }
+      expect_raises(ArgumentError) { table.merge_adjacent(first, second, rows_per_mark: 0) }
+      Dir.children(File.join(root, "parts")).sort.should eq(original_parts)
+      Dir.children(File.join(root, "committed")).sort.should eq(original_markers)
+
+      merged = table.merge_adjacent(first, second, rows_per_mark: 1)
+      expect_raises(ArgumentError) { table.merge_adjacent(first, second, rows_per_mark: 1) }
+      Dir.children(File.join(root, "parts")).sort.should eq((original_parts + [merged]).sort)
+      Dir.children(File.join(root, "committed")).sort.should eq((original_markers + [merged]).sort)
+      table.part_paths.map { |path| File.basename(path) }.should eq([merged, third])
+    end
+  end
+
+  it "ignores an overlapping merge orphan and retries its range at a higher level" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      left = table.insert([10_u64].to_unsafe.to_slice(1), ["ten"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      right = table.insert([20_u64].to_unsafe.to_slice(1), ["twenty"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      orphan_name = "all_1_2_1"
+      orphan_path = write_embedded_physical_part(root, orphan_name, [10_u64, 20_u64], ["orphan-ten", "orphan-twenty"] of String)
+
+      table.orphan_part_names.should eq([orphan_name])
+      reopened_before_marker = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened_before_marker.part_paths.map { |path| File.basename(path) }.should eq([left, right])
+      embedded_table_rows(reopened_before_marker, "pk", "value").should eq([{10_u64, "ten"}, {20_u64, "twenty"}])
+      orphan_before = embedded_part_bytes(orphan_path)
+
+      merged = reopened_before_marker.merge_adjacent(left, right, rows_per_mark: 1)
+
+      merged.should eq("all_1_2_2")
+      embedded_part_bytes(orphan_path).should eq(orphan_before)
+      table.orphan_part_names.should eq([orphan_name])
+      reopened_after_marker = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened_after_marker.part_paths.map { |path| File.basename(path) }.should eq([merged])
+      embedded_table_rows(reopened_after_marker, "pk", "value").should eq([{10_u64, "ten"}, {20_u64, "twenty"}])
+    end
+  end
+
+  it "rejects merge level exhaustion before publishing a part" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      left = table.insert([1_u64].to_unsafe.to_slice(1), ["one"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      right = table.insert([2_u64].to_unsafe.to_slice(1), ["two"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      max_level_orphan = "all_1_2_#{CrystalClick::MergeTreePartInfo::MAX_LEVEL}"
+      write_embedded_physical_part(root, max_level_orphan, [1_u64, 2_u64], ["orphan-one", "orphan-two"] of String)
+      expected_parts = Dir.children(File.join(root, "parts")).sort
+      expected_markers = Dir.children(File.join(root, "committed")).sort
+
+      expect_raises(CrystalClick::BoundsError) { table.merge_adjacent(left, right, rows_per_mark: 1) }
+      Dir.children(File.join(root, "parts")).sort.should eq(expected_parts)
+      Dir.children(File.join(root, "committed")).sort.should eq(expected_markers)
+      table.part_paths.map { |path| File.basename(path) }.should eq([left, right])
+    end
+  end
+
+  it "rejects partial and equal-range marked overlap" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "partial")
+      CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      [
+        {"all_1_2_1", [1_u64, 2_u64], ["a", "b"]},
+        {"all_2_3_1", [2_u64, 3_u64], ["b", "c"]},
+      ].each do |name, keys, values|
+        write_embedded_physical_part(root, name, keys, values, 1)
+        mark_embedded_part_committed(root, name)
+      end
+      expect_raises(CrystalClick::CorruptPartError) { CrystalClick::EmbeddedMergeTreeTable.open(root) }
+    end
+
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "equal")
+      CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      ["all_1_2_1", "all_1_2_2"].each_with_index do |name, index|
+        write_embedded_physical_part(root, name, [1_u64, 2_u64], ["v#{index}-1", "v#{index}-2"], 1)
+        mark_embedded_part_committed(root, name)
+      end
+      expect_raises(CrystalClick::CorruptPartError) { CrystalClick::EmbeddedMergeTreeTable.open(root) }
+    end
+  end
+
+  it "rejects row and aggregate String payload overflow before publishing" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "row-limit")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      row_count = 50_001
+      keys = Array(UInt64).new(row_count) { |index| index.to_u64 }
+      values = Array(String).new(row_count) { "" }
+      first = table.insert(keys.to_unsafe.to_slice(row_count), values.to_unsafe.to_slice(row_count), rows_per_mark: row_count)
+      second = table.insert(keys.to_unsafe.to_slice(row_count), values.to_unsafe.to_slice(row_count), rows_per_mark: row_count)
+
+      expect_raises(CrystalClick::BoundsError) { table.merge_adjacent(first, second, rows_per_mark: 65_536) }
+      Dir.children(File.join(root, "parts")).sort.should eq([first, second].sort)
+      Dir.children(File.join(root, "committed")).sort.should eq([first, second].sort)
+    end
+
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "payload-limit")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      payload = "p" * (CrystalClick::EmbeddedMergeTreeTable::MAX_MERGE_PAYLOAD_BYTES // 2 + 1).to_i
+      first = table.insert([1_u64].to_unsafe.to_slice(1), [payload].to_unsafe.to_slice(1), rows_per_mark: 1)
+      second = table.insert([2_u64].to_unsafe.to_slice(1), [payload].to_unsafe.to_slice(1), rows_per_mark: 1)
+
+      expect_raises(CrystalClick::BoundsError) { table.merge_adjacent(first, second, rows_per_mark: 1) }
+      Dir.children(File.join(root, "parts")).sort.should eq([first, second].sort)
+      Dir.children(File.join(root, "committed")).sort.should eq([first, second].sort)
+    end
+  end
+
+  it "preflights the physical-entry cap before a merge can make the root unopenable" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      first = table.insert([1_u64].to_unsafe.to_slice(1), ["a"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      second = table.insert([2_u64].to_unsafe.to_slice(1), ["b"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      stage_count = CrystalClick::EmbeddedMergeTreeTable::MAX_PHYSICAL_ENTRIES - 2
+      stage_count.times do |index|
+        Dir.mkdir(File.join(root, "parts", ".crystal-click-wide-writer-cap-#{index}"))
+      end
+      expected_parts = Dir.children(File.join(root, "parts")).sort
+      expected_markers = Dir.children(File.join(root, "committed")).sort
+
+      expect_raises(CrystalClick::BoundsError) { table.merge_adjacent(first, second, rows_per_mark: 1) }
+      Dir.children(File.join(root, "parts")).sort.should eq(expected_parts)
+      Dir.children(File.join(root, "committed")).sort.should eq(expected_markers)
     end
   end
 

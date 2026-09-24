@@ -1,8 +1,9 @@
 # Embedded MergeTree Storage Frontier SDD
 
 Document status: active design. W1, W2, and bounded W3 are verified on this
-macOS host against the pinned ClickHouse build. Bounded W4 is verified on the
-local Darwin process-atomicity frontier; merging remains future work.
+macOS host against the pinned ClickHouse build. Bounded W4 and W5 are verified
+on the local Darwin process-atomicity frontier; physical reclamation and
+power-loss recovery remain future work.
 
 ## Purpose and bounded contexts
 
@@ -19,10 +20,10 @@ not be conflated:
    Crystal. SQL parsing, joins, and a general expression engine are not
    required.
 
-Boundary 2 has its first bounded table-ownership slice, but merge and
-power-loss recovery remain open. Existing readers and the offline catalog
-provide useful inputs; the latter remains read-only and cannot infer a
-server's Active state from a physical directory inventory.
+Boundary 2 now has bounded table ownership and a two-part logical merge, but
+physical reclamation and power-loss recovery remain open. Existing readers
+and the offline catalog provide useful inputs; the latter remains read-only
+and cannot infer a server's Active state from a physical directory inventory.
 
 ## Completed slice W1: bounded Wide-part writer
 
@@ -177,6 +178,75 @@ The read-lock falsifier first failed on an unlocked child reader and passed
 after shared-lock coverage. A later change to the reader, writer, filesystem
 publication behavior, or manifest format reopens the corresponding claim.
 
+## Verified slice W5: two-part logical merge without reclamation
+
+Admit `merge_adjacent(left_name, right_name, rows_per_mark)` only for two
+distinct, neighboring currently visible parts of the same W4 table. The
+caller names both active parts in increasing block order. Under the table's
+exclusive advisory lock, resolve and validate the active set, read both
+parts, and perform a stable key-ordered two-way merge. Preserve every row,
+including duplicate keys and binary/empty String values; equal keys from the
+left part precede equal keys from the right part. Do not concatenate parts or
+deduplicate rows. Bound one merge to 100,000 output rows and 64 MiB of total
+String payload; reject an over-limit request before publishing anything.
+Reuse the W3 writer and its existing physical validation for the result.
+
+Only the new part is key-sorted. A table scan with multiple remaining active
+parts still visits parts in block order and does not promise global key order;
+the preservation claim is an exact row multiset plus the specified stable
+order within the merged output.
+
+Name the output `all_<left.min>_<right.max>_<level>`, where `level` exceeds
+both input levels and every physical orphan level already occupying that
+exact block range; reject level exhaustion. The new part is staged and
+exclusively published under `parts/`. Only a subsequent exclusive empty
+`committed/<output-name>/` mkdir makes it visible. The old marker directories
+and immutable source parts remain untouched. A failure before that mkdir
+leaves an orphan and the old active set; a failure after it leaves the new
+active set. No cleanup, adoption, or deletion of old parts is attempted.
+
+W5 widens W4 inventory rules only inside `EmbeddedMergeTreeTable`: canonical
+single-block level-zero and multi-block positive-level part names are
+accepted. Orphans are named and bounded but excluded from overlap resolution,
+so a published unmarked merge result cannot poison reopen. Marked intervals
+must be laminar: a pair may be disjoint or one must strictly contain the
+other; partial overlaps and equal-range distinct parts fail closed. Visible
+parts are the maximal marked intervals, pairwise disjoint and sorted by block
+range. Generic `WidePartTable` still receives only this nonoverlapping set;
+its overlap policy does not change. A reader acquires the shared lock through
+inventory resolution and may observe the before- or after-merge set, never
+both. Sources remain readable for scans that already captured them.
+
+The selected reader remains capped at 1,024 visible parts. Historical marker
+directories and physical entries (including orphans and staging entries)
+each have an explicit 2,048-entry cap. Insert and merge preflight both caps
+before creating a new part so a successful publication cannot make the root
+unopenable. This is logical compaction of the scan set, not disk-space
+reclamation or unbounded insert capacity; once history fills, operations
+fail closed until a separately designed GC/recovery frontier exists.
+
+W5 falsifiers: interleaved keys must emerge globally sorted with stable
+duplicates and exact row multiset; a post-publication/pre-marker orphan must
+leave the old active rows visible on reopen and force a distinct retry name;
+post-marker reopen must select the merged part once, not double-count source
+rows; a partial or equal-range marked overlap must fail closed; merge of
+non-neighboring or stale inputs and row/history-cap overflow must publish
+nothing. A pinned ClickHouse attach/read/`CHECK TABLE` of the synthetic
+positive-level merged output is required for a physical compatibility claim.
+W5 still claims only local Darwin process atomicity, size-based reader checks,
+and cooperating-process locks—not fsync durability, hash authentication,
+mutation, partition-general merging, or server Active-state equivalence.
+
+Local W5 verification: the focused embedded-table suite passed 20 examples;
+the full debug and release suites each passed 293 examples. A synthetic
+positive-level merged part attached to pinned ClickHouse 26.7.1.1315, returned
+the exact rows and key-range result, and passed `CHECK TABLE`; ClickHouse
+renamed the attached part to its own block identity. The pre-marker recovery
+test constructs the complete orphan state and checks reopen/retry, but does
+not inject a process death at the exact instruction boundary. Changes to
+publication, inventory selection, reader retention, or the pinned ClickHouse
+version reopen the relevant claim.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -194,8 +264,9 @@ Guard-only follow-on slices, in dependency order:
    sparse and other String variants remain guard-only.
 2. W4 admits only the bounded Crystal-owned table and committed-part recovery
    above; it does not widen `OfflineCatalog` to a mutable API.
-3. Add a bounded merge operation and stronger crash-durability probes, then
-   filtering and primary-key pruning through the existing Crystal scan API.
+3. W5 admits only the bounded logical merge above; design historical-part GC
+   and stronger crash-durability probes separately, then filtering and
+   primary-key pruning through the existing Crystal scan API.
 
 Content-integrity verification in the Crystal reader is not part of W1 or W2: it
 currently validates selected file sizes, not the recorded 128-bit file hashes.
