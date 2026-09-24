@@ -2,7 +2,42 @@ require "./spec_helper"
 
 # The spec binary doubles as a tiny child writer so the locking example below
 # exercises separate OS processes, not only stale Crystal objects.
-if reader_root = ENV["CRYSTAL_CLICK_W4_READER_ROOT"]?
+if scan_root = ENV["CRYSTAL_CLICK_W6_SCAN_ROOT"]?
+  ready_path = ENV["CRYSTAL_CLICK_W6_SCAN_READY"]? || raise "missing scan ready path"
+  go_path = ENV["CRYSTAL_CLICK_W6_SCAN_GO"]? || raise "missing scan go path"
+  done_path = ENV["CRYSTAL_CLICK_W6_SCAN_DONE"]? || raise "missing scan done path"
+  begin
+    table = CrystalClick::EmbeddedMergeTreeTable.open(scan_root)
+    rows_seen = 0
+    table.scan_typed(["pk", "value"], batch_rows: 1) do |batch|
+      rows_seen += batch.values_for("pk", UInt64).size
+      File.write(ready_path, "ready")
+      until File.exists?(go_path)
+        sleep 5.milliseconds
+      end
+    end
+    File.write(done_path, rows_seen.to_s)
+    Process.exit(0)
+  rescue ex
+    STDERR.puts ex.message || ex.class.name
+    Process.exit(2)
+  end
+elsif gc_root = ENV["CRYSTAL_CLICK_W6_GC_ROOT"]?
+  ready_path = ENV["CRYSTAL_CLICK_W6_GC_READY"]? || raise "missing GC ready path"
+  attempting_path = ENV["CRYSTAL_CLICK_W6_GC_ATTEMPTING"]? || raise "missing GC attempting path"
+  done_path = ENV["CRYSTAL_CLICK_W6_GC_DONE"]? || raise "missing GC done path"
+  begin
+    table = CrystalClick::EmbeddedMergeTreeTable.open(gc_root)
+    File.write(ready_path, "ready")
+    File.write(attempting_path, "attempting")
+    table.reclaim_obsolete!
+    File.write(done_path, "done")
+    Process.exit(0)
+  rescue ex
+    STDERR.puts ex.message || ex.class.name
+    Process.exit(2)
+  end
+elsif reader_root = ENV["CRYSTAL_CLICK_W4_READER_ROOT"]?
   ready_path = ENV["CRYSTAL_CLICK_W4_READER_READY"]? || raise "missing reader ready path"
   done_path = ENV["CRYSTAL_CLICK_W4_READER_DONE"]? || raise "missing reader done path"
   File.write(ready_path, "ready")
@@ -366,6 +401,253 @@ describe CrystalClick::EmbeddedMergeTreeTable do
         "all_2_2_0",
         "all_3_3_0",
       ])
+    end
+  end
+
+  it "ignores missing or damaged covered history while validating the maximal active part" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      first = table.insert([1_u64, 3_u64].to_unsafe.to_slice(2), ["a1", "a3"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      second = table.insert([2_u64, 4_u64].to_unsafe.to_slice(2), ["b2", "b4"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      merged = table.merge_adjacent(first, second, rows_per_mark: 2)
+      historical_path = File.join(root, "parts", first)
+
+      File.delete(File.join(historical_path, "primary.idx"))
+      reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened.part_paths.map { |path| File.basename(path) }.should eq([merged])
+      embedded_table_rows(reopened, "pk", "value").should eq([
+        {1_u64, "a1"},
+        {2_u64, "b2"},
+        {3_u64, "a3"},
+        {4_u64, "b4"},
+      ])
+
+      FileUtils.rm_rf(historical_path)
+      reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened.part_paths.map { |path| File.basename(path) }.should eq([merged])
+      embedded_table_rows(reopened, "pk", "value").size.should eq(4)
+
+      external_target = File.join(parent, "external-target")
+      external_sentinel = File.join(external_target, "do-not-delete")
+      Dir.mkdir(external_target)
+      File.write(external_sentinel, "outside table root")
+      File.symlink(external_target, historical_path)
+      reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened.part_paths.map { |path| File.basename(path) }.should eq([merged])
+      Dir.delete(File.join(root, "committed", first))
+      reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened.part_paths.map { |path| File.basename(path) }.should eq([merged])
+      reopened.orphan_part_names.should eq([first])
+      reopened.reclaim_obsolete!
+      File.symlink?(historical_path).should be_false
+      File.read(external_sentinel).should eq("outside table root")
+
+      # The same marker-first restart must recover a canonical regular-file
+      # remnant, without weakening fail-closed checks for uncovered entries.
+      file_root = File.join(parent, "file-table")
+      file_table = CrystalClick::EmbeddedMergeTreeTable.create(file_root, "pk", "value")
+      file_first = file_table.insert([1_u64].to_unsafe.to_slice(1), ["a"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      file_second = file_table.insert([2_u64].to_unsafe.to_slice(1), ["b"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      file_merged = file_table.merge_adjacent(file_first, file_second, rows_per_mark: 1)
+      file_history = File.join(file_root, "parts", file_first)
+      FileUtils.rm_rf(file_history)
+      File.write(file_history, "covered file remnant")
+      Dir.delete(File.join(file_root, "committed", file_first))
+      file_table = CrystalClick::EmbeddedMergeTreeTable.open(file_root)
+      file_table.part_paths.map { |path| File.basename(path) }.should eq([file_merged])
+      file_table.orphan_part_names.should eq([file_first])
+      file_table.reclaim_obsolete!
+      File.exists?(file_history).should be_false
+    end
+  end
+
+  it "reclaims covered history without changing active paths or rows and retries marker-first cleanup" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      first = table.insert([1_u64, 3_u64].to_unsafe.to_slice(2), ["a1", "a3"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      second = table.insert([2_u64, 4_u64].to_unsafe.to_slice(2), ["b2", "b4"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      merged = table.merge_adjacent(first, second, rows_per_mark: 2)
+      before_paths = table.part_paths
+      before_rows = embedded_table_rows(table, "pk", "value")
+      table.with_part_paths { |paths| paths.should eq(before_paths) }
+      first_path = File.join(root, "parts", first)
+      first_marker = File.join(root, "committed", first)
+      second_path = File.join(root, "parts", second)
+      second_marker = File.join(root, "committed", second)
+
+      original_permissions = File.info(first_path).permissions
+      File.chmod(first_path, 0o555)
+      begin
+        expect_raises(File::Error) { table.reclaim_obsolete! }
+      ensure
+        File.chmod(first_path, original_permissions)
+      end
+      File.exists?(first_marker).should be_false
+      File.directory?(first_path).should be_true
+
+      # Simulate a process death after recursive removal has deleted one
+      # historical file but before the physical directory is removed.
+      File.delete(File.join(first_path, "primary.idx"))
+      reopened = CrystalClick::EmbeddedMergeTreeTable.open(root)
+      reopened.part_paths.should eq(before_paths)
+      reopened.reclaim_obsolete!
+      table.reclaim_obsolete!
+
+      table.part_paths.should eq(before_paths)
+      embedded_table_rows(table, "pk", "value").should eq(before_rows)
+      [first_path, first_marker, second_path, second_marker].each do |path|
+        File.exists?(path).should be_false
+      end
+      File.directory?(File.join(root, "parts", merged)).should be_true
+      File.directory?(File.join(root, "committed", merged)).should be_true
+    end
+  end
+
+  it "continues to reject an uncovered canonical symlink entry" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      target = File.join(parent, "outside")
+      Dir.mkdir(target)
+      File.symlink(target, File.join(root, "parts", "all_1_1_0"))
+
+      expect_raises(CrystalClick::CorruptPartError) do
+        CrystalClick::EmbeddedMergeTreeTable.open(root)
+      end
+    end
+  end
+
+  it "preserves uncovered orphan reservations while reclaiming covered equal-range orphans" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      first = table.insert([1_u64].to_unsafe.to_slice(1), ["a"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      second = table.insert([2_u64].to_unsafe.to_slice(1), ["b"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      equal_range_orphan = "all_1_2_2"
+      partial_overlap_orphan = "all_2_3_1"
+      uncovered_orphan = "all_9_9_0"
+      write_embedded_physical_part(root, equal_range_orphan, [1_u64, 2_u64], ["orphan-a", "orphan-b"] of String, 1)
+      write_embedded_physical_part(root, partial_overlap_orphan, [2_u64, 3_u64], ["partial-a", "partial-b"] of String, 1)
+      write_embedded_physical_part(root, uncovered_orphan, [9_u64], ["reservation"] of String, 1)
+
+      # With only single-block active parts, the exact-range merge orphan is
+      # not covered and reserves the retry level selected by a later merge.
+      table.reclaim_obsolete!
+      table.orphan_part_names.should eq([equal_range_orphan, partial_overlap_orphan, uncovered_orphan])
+      merged = table.merge_adjacent(first, second, rows_per_mark: 1)
+      merged.should eq("all_1_2_3")
+
+      # Once the covering merge is active, the equal-range orphan is safe to
+      # reclaim; the partial overlap and disjoint high-block orphan remain.
+      table.reclaim_obsolete!
+
+      table.part_paths.map { |path| File.basename(path) }.should eq([merged])
+      table.orphan_part_names.should eq([partial_overlap_orphan, uncovered_orphan])
+      File.exists?(File.join(root, "parts", equal_range_orphan)).should be_false
+      File.directory?(File.join(root, "parts", partial_overlap_orphan)).should be_true
+      File.directory?(File.join(root, "parts", uncovered_orphan)).should be_true
+      next_name = table.insert([10_u64].to_unsafe.to_slice(1), ["next"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      next_name.should eq("all_10_10_0")
+    end
+  end
+
+  it "reclaims recognized writer stages at the exact physical-entry limit" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      parts = File.join(root, "parts")
+      CrystalClick::EmbeddedMergeTreeTable::MAX_PHYSICAL_ENTRIES.times do |index|
+        Dir.mkdir(File.join(parts, ".crystal-click-wide-writer-stale-#{index}"))
+      end
+      Dir.children(parts).size.should eq(CrystalClick::EmbeddedMergeTreeTable::MAX_PHYSICAL_ENTRIES)
+
+      table.reclaim_obsolete!
+
+      Dir.children(parts).should eq([] of String)
+      table.orphan_part_names.should eq([] of String)
+      table.insert([1_u64].to_unsafe.to_slice(1), ["after-gc"].to_unsafe.to_slice(1), rows_per_mark: 1).should eq("all_1_1_0")
+    end
+  end
+
+  it "holds the shared lock through scan callbacks so reclamation waits for borrowed paths" do
+    with_embedded_table_parent do |parent|
+      root = File.join(parent, "table")
+      table = CrystalClick::EmbeddedMergeTreeTable.create(root, "pk", "value")
+      first = table.insert([1_u64].to_unsafe.to_slice(1), ["a"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      second = table.insert([2_u64].to_unsafe.to_slice(1), ["b"].to_unsafe.to_slice(1), rows_per_mark: 1)
+      table.merge_adjacent(first, second, rows_per_mark: 1)
+      source_paths = [File.join(root, "parts", first), File.join(root, "parts", second)]
+      scan_ready = File.join(parent, "scan-ready")
+      scan_go = File.join(parent, "scan-go")
+      scan_done = File.join(parent, "scan-done")
+      gc_ready = File.join(parent, "gc-ready")
+      gc_attempting = File.join(parent, "gc-attempting")
+      gc_done = File.join(parent, "gc-done")
+      executable = Process.executable_path || raise "spec executable path unavailable"
+      reader = Process.new(
+        executable,
+        env: {
+          "CRYSTAL_CLICK_W6_SCAN_ROOT"  => root,
+          "CRYSTAL_CLICK_W6_SCAN_READY" => scan_ready,
+          "CRYSTAL_CLICK_W6_SCAN_GO"    => scan_go,
+          "CRYSTAL_CLICK_W6_SCAN_DONE"  => scan_done,
+        },
+        output: Process::Redirect::Pipe,
+        error: Process::Redirect::Pipe
+      )
+      gc = nil.as(Process?)
+      reader_waited = false
+      gc_waited = false
+      begin
+        deadline = Time.instant + 10.seconds
+        until File.exists?(scan_ready)
+          raise "scan reader did not reach its callback barrier" if reader.terminated? || Time.instant > deadline
+          sleep 5.milliseconds
+        end
+
+        gc = Process.new(
+          executable,
+          env: {
+            "CRYSTAL_CLICK_W6_GC_ROOT"       => root,
+            "CRYSTAL_CLICK_W6_GC_READY"      => gc_ready,
+            "CRYSTAL_CLICK_W6_GC_ATTEMPTING" => gc_attempting,
+            "CRYSTAL_CLICK_W6_GC_DONE"       => gc_done,
+          },
+          output: Process::Redirect::Pipe,
+          error: Process::Redirect::Pipe
+        )
+        deadline = Time.instant + 10.seconds
+        until File.exists?(gc_attempting)
+          raise "GC worker did not reach its lock attempt" if gc.not_nil!.terminated? || Time.instant > deadline
+          sleep 5.milliseconds
+        end
+        sleep 100.milliseconds
+        File.exists?(gc_done).should be_false
+        source_paths.each { |path| File.directory?(path).should be_true }
+
+        File.write(scan_go, "go")
+        reader.wait.success?.should be_true
+        reader_waited = true
+        File.read(scan_done).should eq("2")
+        gc.not_nil!.wait.success?.should be_true
+        gc_waited = true
+        File.exists?(gc_done).should be_true
+        source_paths.each { |path| File.exists?(path).should be_false }
+      ensure
+        File.write(scan_go, "go") unless File.exists?(scan_go)
+        unless reader_waited
+          reader.terminate unless reader.terminated?
+          reader.wait
+        end
+        if process = gc
+          unless gc_waited
+            process.terminate unless process.terminated?
+            process.wait
+          end
+        end
+      end
     end
   end
 

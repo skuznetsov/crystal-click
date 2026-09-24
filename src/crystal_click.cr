@@ -15,6 +15,9 @@ require "./crystal_click/wide_part"
 require "./crystal_click/wide_part_set"
 require "./crystal_click/wide_part_table"
 require "./crystal_click/primary_key_index"
+{% if flag?(:crystal_click_test_failpoints) %}
+  require "./crystal_click/test_failpoints"
+{% end %}
 require "./crystal_click/wide_part_writer"
 require "./crystal_click/embedded_merge_tree_table"
 require "./crystal_click/offline_catalog"

@@ -376,6 +376,9 @@ module CrystalClick
         next if File.exists?(candidate) || File.symlink?(candidate)
         begin
           Dir.mkdir(candidate)
+          {% if flag?(:crystal_click_test_failpoints) %}
+            TestFailpoint.hit("writer_stage_created")
+          {% end %}
           return candidate
         rescue ex : File::Error
           raise ex unless Errno.value == Errno::EEXIST
@@ -832,6 +835,9 @@ module CrystalClick
         end
       {% else %}
         raise UnsupportedFormatError.new("atomic exclusive Wide-part publication is unsupported on this platform")
+      {% end %}
+      {% if flag?(:crystal_click_test_failpoints) %}
+        TestFailpoint.hit("part_published")
       {% end %}
       nil
     end

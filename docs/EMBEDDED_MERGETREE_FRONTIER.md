@@ -1,9 +1,9 @@
 # Embedded MergeTree Storage Frontier SDD
 
 Document status: active design. W1, W2, and bounded W3 are verified on this
-macOS host against the pinned ClickHouse build. Bounded W4 and W5 are verified
-on the local Darwin process-atomicity frontier; physical reclamation and
-power-loss recovery remain future work.
+macOS host against the pinned ClickHouse build. Bounded W4, W5, and W6 are
+verified on the local Darwin process-atomicity frontier; power-loss recovery
+remains future work.
 
 ## Purpose and bounded contexts
 
@@ -247,6 +247,70 @@ not inject a process death at the exact instruction boundary. Changes to
 publication, inventory selection, reader retention, or the pinned ClickHouse
 version reopen the relevant claim.
 
+## Verified slice W6: explicit reclamation and process-death recovery
+
+Admit an explicit `reclaim_obsolete!` operation on the Crystal-owned table
+root only; never run it automatically or on a ClickHouse server data root.
+It holds the exclusive table lock through selection and deletion. The operation
+may remove covered historical marked parts, unmarked physical parts whose
+block interval is contained in a valid active interval, and recognizable
+writer staging directories. It must retain every active part and uncovered
+unmarked physical part. The latter still reserves its block number and, for
+merge outputs, its exact-range level. No general orphan adoption, blanket
+orphan deletion, or allocator-watermark format change is admitted.
+
+Resolve canonical marked interval names and reject ambiguous overlaps before
+checking part content. Require structural validation of every maximal active
+part. A missing or structurally invalid *covered* historical part may be
+reclaimed without blocking reads; a missing or invalid active part still fails
+closed. Delete a covered part's empty commit marker before its physical
+directory. A process death between those actions leaves an unmarked part that
+the next explicit reclamation can finish. A process death during recursive
+removal likewise leaves only an unmarked, retryable directory. Reclamation
+must work at the 2,048-entry capacity boundary without creating an extra
+physical entry. It does not claim power-loss durability: no file or directory
+`fsync` protocol is admitted.
+
+The table's `scan_typed` must hold its shared lock through reader opening,
+mark consumption, and every user callback before any physical deletion is
+allowed. A scoped path-borrowing callback may provide the same pin for callers
+who use `WidePartTable` directly. A raw path returned by `part_paths` is only
+an instantaneous inventory result; it is not a lifetime lease once explicit
+reclamation is enabled. A callback must not attempt a reentrant table write
+while holding the shared lock. Full-scan locking can delay inserts and merges;
+an epoch/lease mechanism is future work, not assumed here.
+
+W6 falsifiers: a covered missing or damaged source does not poison an intact
+covering part, while a damaged active part still fails; reclamation leaves the
+row multiset and active path set unchanged; a concurrent scan keeps its source
+readable until callback completion; a process death after marker removal or
+during physical removal is recoverable; a killed writer stage can be reclaimed
+at the capacity boundary; uncovered orphans retain their identity reservations.
+Test-only compile-time fault barriers may exercise writer-stage creation,
+part-before-marker publication, marker-before-return, and GC deletion windows.
+Those tests establish process-death behavior only, not power-loss durability
+or exactly-once insert retries. Filtering and typed PK-granule pruning remain
+guard-only until a separate execution slice.
+
+W6 evidence at the implementation diff on parent `a1e515c`: 26 focused
+embedded-table examples and 30 combined fault-flag examples passed; the full
+Crystal suite passed 299/299 in both debug and release. The four SIGKILL
+barriers exercised stage creation, part publication before its marker, marker
+creation before return, and marker-first GC. Focused tests additionally
+covered a failing deletion, explicit retry, a paused scan versus concurrent
+GC, exactly 2,048 physical entries, retained uncovered block/level
+reservations, and partially removed, symlink, and regular-file historical
+remnants after marker-first interruption. The pinned ClickHouse `26.7.1.1315`
+W3 and W5 physical oracles passed, including exact merged rows and
+`CHECK TABLE`. Formatting, shell
+syntax, and diff-whitespace checks passed. This certificate covers only the
+Crystal-owned bounded UInt64/String table, cooperating processes on Darwin,
+and the tested process-death windows. It decays on lock, inventory, deletion,
+writer publication, platform, or part-format changes; refresh it with the
+focused/fault/full suites and both external oracles. It does not authenticate
+all stored bytes, prove power-loss durability, protect unscoped raw paths, or
+guarantee exactly-once caller retries.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -264,9 +328,10 @@ Guard-only follow-on slices, in dependency order:
    sparse and other String variants remain guard-only.
 2. W4 admits only the bounded Crystal-owned table and committed-part recovery
    above; it does not widen `OfflineCatalog` to a mutable API.
-3. W5 admits only the bounded logical merge above; design historical-part GC
-   and stronger crash-durability probes separately, then filtering and
-   primary-key pruning through the existing Crystal scan API.
+3. W6 admits only explicit historical-part reclamation and process-death
+   probes above. Filtering and primary-key pruning through the existing
+   Crystal scan API require a separate execution slice; power-loss durability
+   and idempotent caller retries remain separate frontiers.
 
 Content-integrity verification in the Crystal reader is not part of W1 or W2: it
 currently validates selected file sizes, not the recorded 128-bit file hashes.

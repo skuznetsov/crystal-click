@@ -16,9 +16,16 @@ row once in key order because only the merged part remains active. A table
 scan over multiple active parts does not generally promise global key order.
 A published part becomes visible only after its commit
 marker appears. Merge retains old physical parts and markers but selects the
-new covering part for reads; orphans are not read. The marker provides
-process-level atomicity, not power-loss durability, disk-space reclamation,
-or a server `Active` state.
+new covering part for reads; orphans are not read. On a Crystal-owned table,
+call `table.reclaim_obsolete!` explicitly to remove covered history and stale
+writer stages. It keeps active parts and uncovered unmarked parts, which still
+reserve block numbers or merge levels. This operation must not be used on a
+ClickHouse server data root. `part_paths` is an instantaneous inventory, not a
+file-lifetime lease once reclamation is possible; use `with_part_paths` when
+passing paths to a direct reader, or use `scan_typed`, which pins its scan
+through callbacks. Those callbacks must not reenter a table write. Commit
+markers provide process-level atomicity, not power-loss durability,
+exactly-once retries, or a server `Active` state.
 
 ## Read-only ClickHouse data-root examples
 

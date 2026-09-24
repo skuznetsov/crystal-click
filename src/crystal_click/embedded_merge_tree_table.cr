@@ -100,11 +100,19 @@ module CrystalClick
     end
 
     # Return paths for the currently committed, structurally valid parts.
-    # The inventory is resolved anew for each call.
+    # The inventory is resolved anew for each call. Returned paths are not
+    # pinned after this method returns; use with_part_paths for a scoped borrow.
     def part_paths : Array(String)
+      with_part_paths { |paths| paths }
+    end
+
+    # Borrow the current active paths while holding the table's shared lock.
+    # The paths must not escape the callback if reclamation may run concurrently.
+    # Do not reenter a table write from the callback; that can self-deadlock.
+    def with_part_paths(&block : Array(String) -> T) : T forall T
       with_reader_lock do
-        committed, _orphans, _physical, _physical_entry_count, _marker_count = inventory
-        committed.map(&.path)
+        committed, _orphans, _physical, _physical_entry_count, _marker_count, _covered = inventory
+        yield committed.map(&.path)
       end
     end
 
@@ -112,9 +120,45 @@ module CrystalClick
     # directories. They are never adopted or removed automatically.
     def orphan_part_names : Array(String)
       with_reader_lock do
-        _committed, orphans, _physical, _physical_entry_count, _marker_count = inventory
+        _committed, orphans, _physical, _physical_entry_count, _marker_count, _covered = inventory
         orphans
       end
+    end
+
+    # Explicitly reclaim only history already superseded by active parts,
+    # covered unmarked parts, and recognizable writer stages. Uncovered
+    # canonical orphans retain their block and merge-level reservations.
+    def reclaim_obsolete! : Nil
+      with_writer_lock do
+        active, orphan_names, physical, _physical_entry_count, _marker_count, covered_markers = inventory
+        active_infos = active.map(&.info)
+
+        # Marker removal is the recovery boundary: a death after this point
+        # leaves only an unmarked physical orphan for a later explicit retry.
+        covered_markers.each do |part|
+          marker_path = File.join(committed_path, part.name)
+          reject_symlink!(marker_path, "commit marker")
+          Dir.delete(marker_path)
+          {% if flag?(:crystal_click_test_failpoints) %}
+            CrystalClick::TestFailpoint.hit("gc_marker_removed")
+          {% end %}
+          remove_physical_entry!(part.name)
+        end
+
+        physical.each do |part|
+          next if active.any? { |current| current.name == part.name }
+          next if covered_markers.any? { |covered| covered.name == part.name }
+          next unless active_infos.any? { |info| contains_or_equals?(info, part.info) }
+
+          remove_physical_entry!(part.name)
+        end
+
+        orphan_names.each do |name|
+          next unless name.starts_with?(WRITER_STAGE_PREFIX)
+          remove_physical_entry!(name)
+        end
+      end
+      nil
     end
 
     # Publish one sorted UInt64/String part and then its exclusive commit
@@ -125,7 +169,7 @@ module CrystalClick
       validate_layout!
 
       with_writer_lock do
-        committed, _orphans, physical, physical_entry_count, marker_count = inventory
+        committed, _orphans, physical, physical_entry_count, marker_count, _covered = inventory
         raise BoundsError.new("embedded table exceeds part limit") if committed.size >= MAX_PARTS
         preflight_new_part!(physical_entry_count, marker_count)
 
@@ -147,6 +191,9 @@ module CrystalClick
         # mkdir is the exclusive atomic visibility point. If this raises, the
         # already-published part deliberately remains an orphan.
         Dir.mkdir(File.join(committed_path, part_name))
+        {% if flag?(:crystal_click_test_failpoints) %}
+          CrystalClick::TestFailpoint.hit("marker_created")
+        {% end %}
         part_name
       end
     end
@@ -160,7 +207,7 @@ module CrystalClick
       validate_layout!
 
       with_writer_lock do
-        active, _orphans, physical, physical_entry_count, marker_count = inventory
+        active, _orphans, physical, physical_entry_count, marker_count, _covered = inventory
         left_index = active.index { |part| part.name == left_name }
         right_index = active.index { |part| part.name == right_name }
         unless left_index && right_index && right_index == left_index + 1
@@ -203,14 +250,17 @@ module CrystalClick
     end
 
     # Validate the selection even on an empty table, where there is no part
-    # reader available to perform the usual type/column checks.
+    # reader available to perform the usual type/column checks. The callback
+    # runs under the shared lock and must not reenter a table write.
     def scan_typed(columns : Array(String), batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       validate_scan_request!(columns, batch_rows)
-      committed, _orphans, _physical, _physical_entry_count, _marker_count = with_reader_lock { inventory }
-      return nil if committed.empty?
-
-      table = WidePartTable.open_selected_typed(committed.map(&.path), columns)
-      table.scan_typed(batch_rows) { |batch| yield batch }
+      with_reader_lock do
+        committed, _orphans, _physical, _physical_entry_count, _marker_count, _covered = inventory
+        unless committed.empty?
+          table = WidePartTable.open_selected_typed(committed.map(&.path), columns)
+          table.scan_typed(batch_rows) { |batch| yield batch }
+        end
+      end
       nil
     end
 
@@ -251,7 +301,7 @@ module CrystalClick
       nil
     end
 
-    private def inventory : {Array(PhysicalPart), Array(String), Array(PhysicalPart), Int32, Int32}
+    private def inventory : {Array(PhysicalPart), Array(String), Array(PhysicalPart), Int32, Int32, Array(PhysicalPart)}
       validate_layout!
 
       physical = [] of PhysicalPart
@@ -260,22 +310,22 @@ module CrystalClick
       raise BoundsError.new("embedded table exceeds physical entry limit") if parts_children.size > MAX_PHYSICAL_ENTRIES
       parts_children.each do |name|
         path = File.join(parts_path, name)
-        reject_symlink!(path, "part or staging entry")
         if name.starts_with?(WRITER_STAGE_PREFIX)
+          reject_symlink!(path, "writer staging entry")
           raise CorruptPartError.new("writer staging entry is not a directory") unless Dir.exists?(path)
           orphan_names << name
           next
         end
 
         info = parse_part_name(name)
-        raise CorruptPartError.new("physical part entry is not a directory") unless Dir.exists?(path)
         validate_part_name!(name, info)
         physical << PhysicalPart.new(name, path, info)
       end
 
       marker_names = Dir.children(committed_path)
       raise BoundsError.new("embedded table exceeds committed marker limit") if marker_names.size > MAX_COMMITTED_MARKERS
-      marked = Set(String).new
+      marked_names = Set(String).new
+      marked_parts = [] of PhysicalPart
       marker_names.each do |name|
         info = parse_part_name(name)
         validate_part_name!(name, info, "commit marker")
@@ -283,30 +333,61 @@ module CrystalClick
         reject_symlink!(marker_path, "commit marker")
         raise CorruptPartError.new("commit marker is not a directory") unless Dir.exists?(marker_path)
         raise CorruptPartError.new("commit marker must be empty") unless Dir.children(marker_path).empty?
-        raise CorruptPartError.new("duplicate commit marker") unless marked.add?(name)
+        raise CorruptPartError.new("duplicate commit marker") unless marked_names.add?(name)
+        marked_parts << PhysicalPart.new(name, File.join(parts_path, name), info)
       end
 
-      physical_by_name = physical.to_h { |part| {part.name, part} }
-      marked_parts = [] of PhysicalPart
-      marked.each do |name|
-        part = physical_by_name[name]?
-        raise CorruptPartError.new("commit marker has no physical part") unless part
-        validate_part!(part.not_nil!)
-        marked_parts << part.not_nil!
-      end
-      physical.each { |part| orphan_names << part.name unless marked.includes?(part.name) }
-
+      # Resolve marker intervals before consulting part contents. Historical
+      # parts may already be damaged or partially removed by interrupted GC.
       reject_ambiguous_marked_intervals!(marked_parts)
-      committed = marked_parts.reject do |part|
+      active_markers = marked_parts.reject do |part|
         marked_parts.any? { |other| other.name != part.name && strictly_contains?(other.info, part.info) }
       end
+      covered_markers = marked_parts.reject { |part| active_markers.any? { |active| active.name == part.name } }
+      covered_marker_names = covered_markers.map(&.name).to_set
+
+      physical_by_name = physical.to_h { |part| {part.name, part} }
+      committed = [] of PhysicalPart
+      active_markers.each do |marker|
+        part = physical_by_name[marker.name]?
+        raise CorruptPartError.new("commit marker has no physical part") unless part
+        validate_part!(part)
+        committed << part
+      end
+
+      # Preserve W5's fail-closed treatment of active and uncovered physical
+      # entries. A malformed root is tolerated only if a validated active
+      # interval covers it: either a historical marker still names it or GC
+      # already removed that marker before dying.
+      active_infos = committed.map(&.info)
+      physical.each do |part|
+        next if covered_marker_names.includes?(part.name)
+        next if !marked_names.includes?(part.name) &&
+                active_infos.any? { |info| contains_or_equals?(info, part.info) } &&
+                (File.symlink?(part.path) || !Dir.exists?(part.path))
+        reject_symlink!(part.path, "part")
+        raise CorruptPartError.new("physical part entry is not a directory") unless Dir.exists?(part.path)
+      end
+      physical.each { |part| orphan_names << part.name unless marked_names.includes?(part.name) }
       committed.sort_by! { |part| {part.info.min_block, part.info.max_block, part.info.name} }
       raise BoundsError.new("embedded table exceeds active part limit") if committed.size > MAX_PARTS
       orphan_names.sort!
-      {committed, orphan_names, physical, parts_children.size, marker_names.size}
+      {committed, orphan_names, physical, parts_children.size, marker_names.size, covered_markers}
+    end
+
+    private def remove_physical_entry!(name : String) : Nil
+      path = File.join(parts_path, name)
+      return nil unless File.exists?(path) || File.symlink?(path)
+      # rm_r unlinks symlink entries rather than following them, and raises if
+      # removal fails instead of silently reporting a successful cleanup.
+      FileUtils.rm_r(path)
+      nil
     end
 
     private def validate_part!(part : PhysicalPart) : Nil
+      reject_symlink!(part.path, "part")
+      raise CorruptPartError.new("physical part entry is not a directory") unless Dir.exists?(part.path)
+
       expected_columns = "columns format version: 1\n2 columns:\n`#{@key_name}` UInt64\n`#{@value_name}` String\n"
       expected_substreams = "columns substreams version: 1\n2 columns:\n1 substreams for column `#{@key_name}`:\n\t#{@key_name}\n2 substreams for column `#{@value_name}`:\n\t#{@value_name}.size\n\t#{@value_name}\n"
       expected_files = [
@@ -619,6 +700,12 @@ module CrystalClick
         outer.min_block <= inner.min_block &&
         outer.max_block >= inner.max_block &&
         (outer.min_block < inner.min_block || outer.max_block > inner.max_block)
+    end
+
+    private def contains_or_equals?(outer : MergeTreePartInfo, inner : MergeTreePartInfo) : Bool
+      outer.partition_id == inner.partition_id &&
+        outer.min_block <= inner.min_block &&
+        outer.max_block >= inner.max_block
     end
 
     private def self.create_stage(parent : String) : String
