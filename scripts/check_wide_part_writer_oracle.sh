@@ -120,4 +120,81 @@ unless damaged_fields.size == 3 &&
 end
 
 puts "ClickHouse #{ENV.fetch("CLICKHOUSE_BIN")} attached the synthetic part, returned exact rows and key-range results, passed CHECK TABLE, then detected one-byte primary.idx corruption."
+
+nullable_part = File.join(root, "nullable_part")
+nullable_keys = [1_u64, 2_u64, 2_u64, 9_u64, UInt64::MAX]
+nullable_values = [nil, 0_u64, 7_u64, UInt64::MAX, nil] of UInt64?
+CrystalClick::WidePartWriter.write_uint64_nullable_uint64_pair(
+  nullable_part,
+  "pk",
+  nullable_keys.to_unsafe.to_slice(nullable_keys.size),
+  "payload",
+  nullable_values.to_unsafe.to_slice(nullable_values.size),
+  rows_per_mark: 2
+)
+
+run_clickhouse(binary, store, <<-SQL)
+CREATE TABLE default.wide_nullable_writer_oracle
+(
+    `pk` UInt64,
+    `payload` Nullable(UInt64)
+)
+ENGINE = MergeTree
+ORDER BY pk
+SETTINGS
+    index_granularity = 2,
+    index_granularity_bytes = 0,
+    min_rows_for_wide_part = 0,
+    min_bytes_for_wide_part = 0,
+    compress_marks = 0;
+SQL
+
+nullable_data_path = run_clickhouse(
+  binary,
+  store,
+  "SELECT data_paths[1] FROM system.tables WHERE database = 'default' AND name = 'wide_nullable_writer_oracle' FORMAT TSVRaw"
+).strip
+raise "ClickHouse returned no Nullable oracle data path" if nullable_data_path.empty?
+
+nullable_detached = File.join(nullable_data_path, "detached")
+FileUtils.mkdir_p(nullable_detached)
+FileUtils.cp_r(nullable_part, File.join(nullable_detached, "all_1_1_0"))
+run_clickhouse(binary, store, "ALTER TABLE default.wide_nullable_writer_oracle ATTACH PART 'all_1_1_0'")
+
+nullable_actual = run_clickhouse(
+  binary,
+  store,
+  "SELECT pk, isNull(payload), ifNull(payload, 0) FROM default.wide_nullable_writer_oracle ORDER BY pk, isNull(payload), ifNull(payload, 0) FORMAT TabSeparated"
+)
+nullable_expected = "1\t1\t0\n2\t0\t0\n2\t0\t7\n9\t0\t18446744073709551615\n18446744073709551615\t1\t0\n"
+raise "ClickHouse Nullable values differ: #{nullable_actual.inspect}" unless nullable_actual == nullable_expected
+
+nullable_indexed = run_clickhouse(
+  binary,
+  store,
+  "SELECT pk, isNull(payload), ifNull(payload, 0) FROM default.wide_nullable_writer_oracle WHERE pk >= 2 AND pk < 9 ORDER BY pk, ifNull(payload, 0) FORMAT TabSeparated"
+)
+raise "ClickHouse Nullable key range differs: #{nullable_indexed.inspect}" unless nullable_indexed == "2\t0\t0\n2\t0\t7\n"
+
+nullable_integrity = run_clickhouse(binary, store, "CHECK TABLE default.wide_nullable_writer_oracle FORMAT TabSeparated").strip
+raise "ClickHouse Nullable CHECK TABLE failed: #{nullable_integrity.inspect}" unless nullable_integrity == "all_1_1_0\t1"
+
+null_stream_name = "#{CrystalClick::StreamName.hash("payload.null")}.bin"
+null_stream_path = File.join(nullable_data_path, "all_1_1_0", null_stream_name)
+# Flip a compressed-frame checksum byte, not a decoded null-map flag.
+File.open(null_stream_path, "r+") do |file|
+  first = file.read_byte || raise "oracle null-map stream is empty"
+  file.pos = 0
+  file.write_byte(first ^ 1_u8)
+end
+nullable_damaged_integrity = run_clickhouse(binary, store, "CHECK TABLE default.wide_nullable_writer_oracle FORMAT TabSeparated").strip
+nullable_damaged_fields = nullable_damaged_integrity.split('\t', 3)
+unless nullable_damaged_fields.size == 3 &&
+       nullable_damaged_fields[0] == "all_1_1_0" &&
+       nullable_damaged_fields[1] == "0" &&
+       nullable_damaged_fields[2].includes?("CHECKSUM_DOESNT_MATCH")
+  raise "ClickHouse CHECK TABLE missed mutated Nullable null-map stream: #{nullable_damaged_integrity.inspect}"
+end
+
+puts "ClickHouse attached the synthetic Nullable part, returned exact null-vs-zero and key-range rows, passed CHECK TABLE, then detected a one-byte null-map stream checksum mutation."
 CRYSTAL

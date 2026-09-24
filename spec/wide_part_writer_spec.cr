@@ -1,6 +1,155 @@
 require "./spec_helper"
 
 describe CrystalClick::WidePartWriter do
+  it "writes a UInt64 key and Nullable(UInt64) payload pair with positional nulls" do
+    parent = File.tempname("crystal-click-wide-writer-nullable")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "part")
+    keys = [1_u64, 2_u64, 2_u64, 9_u64, UInt64::MAX, UInt64::MAX, UInt64::MAX]
+    values = [nil, 0_u64.as(UInt64?), nil, UInt64::MAX.as(UInt64?), nil, 7_u64.as(UInt64?), nil]
+
+    begin
+      CrystalClick::WidePartWriter.write_uint64_nullable_uint64_pair(
+        destination,
+        "pk",
+        keys.to_unsafe.to_slice(keys.size),
+        "value",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 3
+      )
+
+      key_part = CrystalClick::WidePart.open(destination, "pk")
+      key_part.row_count.should eq(7_u64)
+      key_part.mark_count.should eq(3)
+      key_part.mark_row_counts.should eq([3_u64, 3_u64, 1_u64])
+      key_part.read_uint64.should eq(keys)
+
+      value_part = CrystalClick::WidePart.open_typed(destination, "value")
+      value_part.column_type.should eq("Nullable(UInt64)")
+      value_part.mark_row_counts.should eq([3_u64, 3_u64, 1_u64])
+      value_part.read_nullable_numeric_mark_range("value", 0, 3, UInt64).should eq(values)
+      value_part.read_nullable_numeric_mark_range("value", 1, 1, UInt64).should eq([
+        UInt64::MAX.as(UInt64?), nil, 7_u64.as(UInt64?),
+      ])
+
+      null_stream = File.read(File.join(destination, "#{CrystalClick::StreamName.hash("value.null")}.bin")).to_slice
+      CrystalClick::CompressedBlock.decode_all(null_stream).to_a.should eq([1_u8, 0_u8, 1_u8, 0_u8, 1_u8, 0_u8, 1_u8])
+      nested_stream = File.read(File.join(destination, "#{CrystalClick::StreamName.hash("value")}.bin")).to_slice
+      nested_bytes = CrystalClick::CompressedBlock.decode_all(nested_stream)
+      nested_values = Array(UInt64).new(values.size)
+      values.size.times do |index|
+        nested_value = 0_u64
+        8.times do |byte|
+          nested_value |= (nested_bytes[index * 8 + byte].to_u64 << (byte * 8))
+        end
+        nested_values << nested_value
+      end
+      nested_values.should eq([0_u64, 0_u64, 0_u64, UInt64::MAX, 0_u64, 7_u64, 0_u64])
+
+      serialization = JSON.parse(File.read(File.join(destination, "serialization.json"))).as_h
+      serialization["version"].as_i.should eq(1)
+      serialization["propagate_types_serialization_versions_to_nested_types"].as_bool.should be_true
+      serialization["columns"].as_a.should be_empty
+      serialization["types_serialization_versions"].as_h["string"].as_i.should eq(1)
+      File.read(File.join(destination, "columns.txt")).should eq(
+        "columns format version: 1\n2 columns:\n`pk` UInt64\n`value` Nullable(UInt64)\n"
+      )
+      File.read(File.join(destination, "columns_substreams.txt")).should eq(
+        "columns substreams version: 1\n2 columns:\n1 substreams for column `pk`:\n\tpk\n2 substreams for column `value`:\n\tvalue.null\n\tvalue\n"
+      )
+      expected_checksum_names = ["count.txt", "primary.idx", "serialization.json"]
+      {"pk", "value.null", "value"}.each do |stream|
+        base = CrystalClick::StreamName.hash(stream)
+        expected_checksum_names << "#{base}.bin"
+        expected_checksum_names << "#{base}.mrk2"
+      end
+      CrystalClick::PartChecksums.open(destination).entries.keys.sort.should eq(expected_checksum_names.sort)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "writes an all-NULL Nullable(UInt64) payload as ordinary nested rows" do
+    parent = File.tempname("crystal-click-wide-writer-nullable-all-null")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "part")
+    keys = [1_u64, 2_u64, 3_u64]
+    values = [nil, nil, nil] of UInt64?
+
+    begin
+      CrystalClick::WidePartWriter.write_uint64_nullable_uint64_pair(
+        destination,
+        "pk",
+        keys.to_unsafe.to_slice(keys.size),
+        "value",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 3
+      )
+
+      part = CrystalClick::WidePart.open_typed(destination, "value")
+      part.read_nullable_numeric_mark_range("value", 0, 1, UInt64).should eq(values)
+      null_stream = File.read(File.join(destination, "#{CrystalClick::StreamName.hash("value.null")}.bin")).to_slice
+      CrystalClick::CompressedBlock.decode_all(null_stream).to_a.should eq([1_u8, 1_u8, 1_u8])
+      nested_stream = File.read(File.join(destination, "#{CrystalClick::StreamName.hash("value")}.bin")).to_slice
+      CrystalClick::CompressedBlock.decode_all(nested_stream).to_a.should eq(Array(UInt8).new(24, 0_u8))
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "rejects invalid Nullable(UInt64) inputs before publishing a part" do
+    invalid_cases = [
+      {keys: [2_u64, 1_u64], values: [1_u64.as(UInt64?), nil], rows_per_mark: 1},
+      {keys: [1_u64, 2_u64], values: [1_u64.as(UInt64?)], rows_per_mark: 1},
+      {keys: [1_u64], values: [nil], rows_per_mark: 0},
+      {keys: [1_u64], values: [nil], rows_per_mark: 65_537},
+    ]
+
+    invalid_cases.each do |input|
+      parent = File.tempname("crystal-click-wide-writer-nullable-invalid")
+      Dir.mkdir(parent)
+      destination = File.join(parent, "part")
+      begin
+        expect_raises(ArgumentError) do
+          CrystalClick::WidePartWriter.write_uint64_nullable_uint64_pair(
+            destination,
+            "pk",
+            input[:keys].to_unsafe.to_slice(input[:keys].size),
+            "value",
+            input[:values].to_unsafe.to_slice(input[:values].size),
+            rows_per_mark: input[:rows_per_mark]
+          )
+        end
+        Dir.children(parent).should eq([] of String)
+      ensure
+        FileUtils.rm_rf(parent)
+      end
+    end
+  end
+
+  it "cleans its staged Nullable part when exclusive publication fails" do
+    parent = File.tempname("crystal-click-wide-writer-nullable-publish-failure")
+    Dir.mkdir(parent)
+    destination = File.join(parent, "x" * 256)
+    values = [nil] of UInt64?
+
+    begin
+      expect_raises(IO::Error) do
+        CrystalClick::WidePartWriter.write_uint64_nullable_uint64_pair(
+          destination,
+          "pk",
+          [1_u64].to_unsafe.to_slice(1),
+          "value",
+          values.to_unsafe.to_slice(values.size),
+          rows_per_mark: 1
+        )
+      end
+      Dir.children(parent).should eq([] of String)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
   it "writes two UInt64 columns with fixed multi-mark granules" do
     parent = File.tempname("crystal-click-wide-writer")
     Dir.mkdir(parent)

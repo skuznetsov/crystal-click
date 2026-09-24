@@ -1,8 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W1 is verified on this macOS host against the
-pinned ClickHouse build; embedded table ownership and merging remain future
-frontiers.
+Document status: active design. W1 and W2 are verified on this macOS host
+against the pinned ClickHouse build. Embedded table ownership and merging
+remain future frontiers.
 
 ## Purpose and bounded contexts
 
@@ -20,10 +20,10 @@ not be conflated:
    required.
 
 The active frontier is boundary 1. Existing readers and the offline catalog
-provide useful inputs to boundaries 2 and 3, but they do not make a part
-writer or a mutable MergeTree table exist.
+provide useful inputs to boundaries 2 and 3, but they do not make a mutable
+MergeTree table exist.
 
-## Active slice W1: bounded Wide-part writer
+## Completed slice W1: bounded Wide-part writer
 
 Admit an experimental API that writes a new, immutable Wide part containing
 exactly two named `UInt64` columns: a sorted primary-key column and a payload
@@ -53,6 +53,34 @@ The public test data are deterministic and synthetic. Private Tokenomics
 parts, values, hashes, paths, and diagnostics are not writer fixtures and
 must not appear in committed artifacts or test output.
 
+## Completed slice W2: bounded Nullable(UInt64) payload
+
+Admit one additional experimental entry point that writes the same sorted
+`UInt64` key column and a `Nullable(UInt64)` payload column. Keep W1's
+immutable Wide part, LZ4, fixed rows per mark, exclusive Darwin publication,
+and primary-index rules. The payload uses ClickHouse's BASIC Nullable shape:
+one null-map byte per row (`0` or `1`) and one little-endian `UInt64` value per
+row, including a deterministic zero placeholder beneath each null. The two
+streams have independent `.mrk2` files and checksums but identical row counts
+and mark boundaries. Declare both physical substreams in
+`columns_substreams.txt` and emit `serialization.json` version metadata for
+the current Crystal reader (the pinned ClickHouse loader can default BASIC
+without this file).
+
+Before assembly, reject mismatched lengths, bad names, unsorted keys, or byte
+counts exceeding current reader frame/file/mark limits. After assembly, read
+back every value and mark with the Crystal typed reader. Independently attach
+the synthetic part to an isolated table in pinned ClickHouse local, compare
+null-vs-zero and key-filtered results across multiple marks and a short final
+granule, and require `CHECK TABLE`. Mutate one Nullable stream after attachment
+and require `CHECK TABLE` to fail. This is compatibility evidence only for the
+tested version and shape, not a generic Nullable writer promise.
+
+W2 rejects other payload types, non-UInt64 keys, arbitrary schemas,
+table-level inserts, merges, and performance claims. A Nullable stream that
+self-reads but stock ClickHouse rejects is a W2 falsifier. A failure must
+leave no published part.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -62,18 +90,21 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Guard-only follow-on slices, in dependency order:
 
-1. Generalize physical serialization to the types the reader actually
-   supports, with a stock-ClickHouse differential fixture for each type and
+1. Continue generalizing physical serialization to the types the reader
+   actually supports, one stock-ClickHouse differential fixture per type and
    substream shape. Reader support does not imply writer support. Recheck
    physical stream naming on case-sensitive filesystems before claiming
-   cross-filesystem compatibility.
+   cross-filesystem compatibility. String requires a separate reader frontier:
+   pinned ClickHouse can emit a zero-byte regular data stream for an all-empty
+   String column, while this reader currently rejects that valid shape. Do
+   not call a String writer complete by excluding all-empty marks.
 2. Add an embedded table manifest/recovery rule and a minimal insert API that
    publishes a validated immutable part without claiming server-equivalent
    active-part discovery.
 3. Add a bounded merge operation and crash-recovery probes, then filtering
    and primary-key pruning through the existing Crystal scan API.
 
-Content-integrity verification in the Crystal reader is not part of W1: it
+Content-integrity verification in the Crystal reader is not part of W1 or W2: it
 currently validates selected file sizes, not the recorded 128-bit file hashes.
 An unfiltered ClickHouse `SELECT` validates consumed compressed frames but
 does not substitute for `CHECK TABLE` on raw files such as `primary.idx`.
@@ -94,9 +125,9 @@ ClickHouse part variant.
 4. A write is staged on the destination filesystem and published with one
    exclusive rename only after every output file is closed and validated.
    On failure, clean up only the uniquely owned staging directory. This is a
-   process-level atomicity claim, not crash durability: W1 does not `fsync`
+   process-level atomicity claim, not crash durability: W1/W2 do not `fsync`
    every file and parent directory.
-5. The public API remains explicitly experimental until W1 passes the oracle.
+5. The public API remains explicitly experimental despite W1/W2 oracle passes.
    Optimization follows correctness and measured allocation/throughput data.
 
 ## Falsifier roster
@@ -140,9 +171,27 @@ publication, the pinned ClickHouse version, and the tested synthetic shapes.
 It decays on a producer-version, format, platform, or writer/reader change;
 refresh it by rerunning the focused, full, and external oracle checks.
 
+W2 evidence at parent `5158b9a` plus the W2 implementation diff: 10 focused
+writer examples passed; the full Crystal suite passed 259/259 in both debug
+and release with Crystal 1.21.0, `/usr/bin/clang`, and a writable temporary
+cache. Formatting, shell syntax, and diff whitespace checks passed. The
+independent official ClickHouse local `26.7.1.1315` oracle attached the
+synthetic Nullable part, returned the five exact null-vs-zero rows and the
+expected key-range rows, passed clean `CHECK TABLE`, then returned
+`CHECKSUM_DOESNT_MATCH` after a byte in the `payload.null.bin` compressed-frame
+checksum was flipped. This negative control proves detection of that physical
+stream corruption, not rejection of every malformed decoded null flag. The
+writer's local probes include an all-NULL part, multi-mark short-final layout,
+invalid inputs, and failed exclusive publication without staging residue.
+Adversarial review found no blocker within this scope. This certificate is
+limited to a sorted `UInt64` key and BASIC `Nullable(UInt64)` payload, LZ4 Wide
+parts, Darwin publication, and the pinned ClickHouse version. It decays on a
+producer-version, format, platform, or writer/reader change; refresh it with
+the focused, full, and external oracle checks.
+
 Risk tier: CAUTION, because malformed serialization can create convincing
-but unusable persistent data. Rollback is the single W1 feature commit;
+but unusable persistent data. Rollback is the respective W1 or W2 feature commit;
 there will be no push or write into existing ClickHouse data roots. The
 strongest likely failure is a subtle frame/checksum or mark/index mismatch
 that our reader tolerates and ClickHouse rejects. The stock-ClickHouse attach,
-read, and `CHECK TABLE` gates are mandatory for W1 verification.
+read, and `CHECK TABLE` gates are mandatory for W1/W2 verification.

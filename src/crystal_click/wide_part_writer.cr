@@ -1,5 +1,5 @@
 module CrystalClick
-  # Bounded writer for the initial two-column UInt64 Wide-part slice.
+  # Bounded writer for two-column UInt64-key Wide-part slices.
   #
   # Each data granule is one literal-only LZ4 block in a ClickHouse compressed
   # frame. The implementation intentionally accepts less than the theoretical
@@ -78,6 +78,121 @@ module CrystalClick
       ensure
         FileUtils.rm_rf(stage) if Dir.exists?(stage)
       end
+    end
+
+    # Write one immutable part with a sorted UInt64 primary key and a
+    # Nullable(UInt64) payload. BASIC Nullable serialization stores one
+    # UInt8 null flag per row plus a nested UInt64 value for every row; NULL
+    # rows use a zero placeholder in that nested stream.
+    def self.write_uint64_nullable_uint64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt64?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_nullable_uint64_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", nullable_columns_metadata(key_name, value_name))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", nullable_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.validate_nullable_uint64_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt64?),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      stream_bases = [key_name, "#{value_name}.null", value_name].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      key_data_bytes = 0_i64
+      null_data_bytes = 0_i64
+      nested_data_bytes = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        key_raw_size = rows.to_i64 * 8_i64
+        null_raw_size = rows.to_i64
+        nested_raw_size = key_raw_size
+        {
+          {key_raw_size, "UInt64 key"},
+          {null_raw_size, "Nullable null-map"},
+          {nested_raw_size, "Nullable nested UInt64"},
+        }.each do |raw_size, label|
+          if raw_size > MAX_FRAME_RAW_BYTES.to_i64
+            raise ArgumentError.new("#{label} granule exceeds decompressed frame limit")
+          end
+          frame_size = literal_frame_size(raw_size)
+          if frame_size > MAX_FRAME_COMPRESSED.to_i64
+            raise ArgumentError.new("#{label} granule literal frame exceeds compressed frame limit")
+          end
+        end
+
+        key_frame_bytes = literal_frame_size(key_raw_size)
+        null_frame_bytes = literal_frame_size(null_raw_size)
+        nested_frame_bytes = literal_frame_size(nested_raw_size)
+        if key_frame_bytes > MAX_DATA_FILE_BYTES - key_data_bytes
+          raise ArgumentError.new("UInt64 data stream exceeds reader limit")
+        end
+        if null_frame_bytes > MAX_DATA_FILE_BYTES - null_data_bytes
+          raise ArgumentError.new("Nullable null-map stream exceeds reader limit")
+        end
+        if nested_frame_bytes > MAX_DATA_FILE_BYTES - nested_data_bytes
+          raise ArgumentError.new("Nullable nested stream exceeds reader limit")
+        end
+        key_data_bytes += key_frame_bytes
+        null_data_bytes += null_frame_bytes
+        nested_data_bytes += nested_frame_bytes
+        start_row += rows
+      end
+      nil
     end
 
     private def self.validate_inputs(
@@ -200,6 +315,94 @@ module CrystalClick
       ]
     end
 
+    private def self.write_nullable_uint64_streams(
+      stage : String,
+      column : String,
+      values : Slice(UInt64?),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      null_name = StreamName.hash("#{column}.null")
+      value_name = StreamName.hash(column)
+      null_data_name = "#{null_name}.bin"
+      null_marks_name = "#{null_name}.mrk2"
+      value_data_name = "#{value_name}.bin"
+      value_marks_name = "#{value_name}.mrk2"
+      null_data_path = File.join(stage, null_data_name)
+      null_mark_path = File.join(stage, null_marks_name)
+      value_data_path = File.join(stage, value_data_name)
+      value_mark_path = File.join(stage, value_marks_name)
+      null_data_hash = CityHashV1::FileHasher.new
+      null_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      null_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      null_data_size = 0_u64
+      value_data_size = 0_u64
+      start_row = 0
+
+      File.open(null_data_path, "wb") do |null_data_file|
+        File.open(value_data_path, "wb") do |value_data_file|
+          while start_row < values.size
+            rows = {rows_per_mark, values.size - start_row}.min
+            null_raw = Bytes.new(rows)
+            value_raw = Bytes.new(rows * 8)
+            rows.times do |row|
+              value = values[start_row + row]
+              if value.nil?
+                null_raw[row] = 1_u8
+                write_uint64_le(value_raw, row * 8, 0_u64)
+              else
+                null_raw[row] = 0_u8
+                write_uint64_le(value_raw, row * 8, value)
+              end
+            end
+
+            write_uint64_le(null_mark_bytes, null_data_size)
+            write_uint64_le(null_mark_bytes, 0_u64)
+            write_uint64_le(null_mark_bytes, rows.to_u64)
+            write_uint64_le(value_mark_bytes, value_data_size)
+            write_uint64_le(value_mark_bytes, 0_u64)
+            write_uint64_le(value_mark_bytes, rows.to_u64)
+
+            null_frame = encode_lz4_frame(null_raw)
+            value_frame = encode_lz4_frame(value_raw)
+            raise ArgumentError.new("Nullable null-map stream exceeds reader limit") if null_data_size > MAX_DATA_FILE_BYTES.to_u64 - null_frame.size.to_u64
+            raise ArgumentError.new("Nullable nested stream exceeds reader limit") if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+            null_data_file.write(null_frame)
+            null_data_hash.update(null_frame)
+            null_raw_hash.update(null_raw)
+            null_data_size += null_frame.size.to_u64
+            value_data_file.write(value_frame)
+            value_data_hash.update(value_frame)
+            value_raw_hash.update(value_raw)
+            value_data_size += value_frame.size.to_u64
+            start_row += rows
+          end
+        end
+      end
+
+      write_uint64_le(null_mark_bytes, null_data_size)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      null_marks = null_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if null_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if value_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(null_mark_path, null_marks)
+      File.write(value_mark_path, value_marks)
+
+      [
+        ChecksumRecord.new(null_data_name, null_data_size, null_data_hash.finish, true, values.size.to_u64, null_raw_hash.finish),
+        ChecksumRecord.new(null_marks_name, null_marks.size.to_u64, CityHashV1.file_hash(null_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, values.size.to_u64 * 8_u64, value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
     private def self.write_primary_index(stage : String, keys : Slice(UInt64), rows_per_mark : Int32) : ChecksumRecord
       bytes = IO::Memory.new
       row = 0
@@ -298,6 +501,53 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_nullable_uint64_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(UInt64?),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Nullable(UInt64) row count does not match") unless value_part.row_count == values.size.to_u64
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, expected_mark_rows.size - 1, 1)
+        expected_values = value_part.read_nullable_numeric_mark_range(value_name, expected_mark_rows.size - 1, 1, UInt64)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && expected_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Nullable(UInt64) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Nullable(UInt64) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+      nil
+    end
+
     private def self.publish_exclusively(stage : String, target : String) : Nil
       {% if flag?(:darwin) %}
         result = LibWidePartWriterAtomicPublish.renamex_np(stage.to_unsafe, target.to_unsafe, RENAME_EXCL)
@@ -315,8 +565,20 @@ module CrystalClick
       "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` UInt64\n"
     end
 
+    private def self.nullable_columns_metadata(key_name : String, value_name : String) : String
+      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` Nullable(UInt64)\n"
+    end
+
     private def self.substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n1 substreams for column `#{value_name}`:\n\t#{value_name}\n"
+    end
+
+    private def self.nullable_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.null\n\t#{value_name}\n"
+    end
+
+    private def self.serialization_metadata : String
+      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":1},\"version\":1}"
     end
 
     private def self.literal_frame_size(raw_size : Int64) : Int64
