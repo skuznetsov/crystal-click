@@ -10,6 +10,15 @@ List databases, tables, DDL columns, and physical part candidates:
 crystal run examples/list_atomic_catalog.cr -- /var/lib/clickhouse
 ```
 
+The example uses `catalog.databases` and each database's `tables` collection.
+An `OfflineDatabase` retains its catalog context, so callers may keep the
+database object after the original catalog variable goes out of scope. Each
+enumeration validates its full level and fails if any sibling DDL is malformed;
+use `catalog.database(name)` or `database.table(name)` for targeted access.
+Targeted bracket aliases also work: `catalog["lab"]["events"]` returns an
+`OfflineTable`. There is no virtual `system` database or column-value indexer
+yet.
+
 On this macOS toolchain, Crystal's default LLD linker cannot parse the
 installed Xcode TAPI SDK files. If that affects your setup, put
 `--link-flags='-fuse-ld=ld'` before the source path, for example:

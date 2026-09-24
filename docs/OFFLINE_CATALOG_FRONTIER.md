@@ -11,8 +11,77 @@ The later bounded part-selection slice is governed by
 [`OFFLINE_MERGETREE_PART_RESOLUTION_FRONTIER.md`](OFFLINE_MERGETREE_PART_RESOLUTION_FRONTIER.md);
 the overlap rejection below records the original behavior, not that later API.
 
+Object-navigation extension (implemented for the bounded offline scope): expose
+`catalog.databases` as sorted `OfflineDatabase` objects and targeted
+`catalog.database(name)`. Each database object has its validated `name` and
+`uuid`, plus `table_names`, targeted `table(name)`, and `tables` returning
+`OfflineTable` objects. The database retains what it needs for later lookup;
+callers need not keep the catalog variable alive. Table objects already retain
+their parsed DDL, candidate paths, and scan methods. Enumeration of databases
+does not eagerly parse every table or part. Enumerating `tables` is all-or-error
+if any table fails validation, while targeted lookup must keep working for an
+unrelated valid table. Existing name-based methods remain compatible. A
+database object does not silently retarget to a different database UUID if
+metadata changes between calls; it is bound to its originating catalog, but
+this is not a live snapshot guarantee.
+
+Targeted bracket navigation is admitted as syntax sugar:
+`catalog[database_name]` is exactly `catalog.database(database_name)`, and
+`database[table_name]` is exactly `database.table(table_name)`, including
+typed errors and identity guards. A virtual `system` database and
+`table[column_name]` are not admitted by this extension. The latter should
+eventually return a data-bearing column handle, not merely parsed DDL metadata.
+In that later API, `table[column_name].values` means all values of the selected
+column in an owned, materialized collection; a separate iteration API should
+serve large columns without forcing that materialization. Selection alone
+must not silently read the entire column. The value type, allocation bound,
+and semantics of virtual offline system tables require their own verified
+frontier before this syntax is exposed.
+
+Extension falsifiers: database objects retain their identity after the caller
+drops the catalog reference; object and name-based lookups agree on table UUID,
+columns, part candidates, and scans; malformed later table metadata does not
+break targeted lookup but rejects `tables` without returning a partial array;
+unsupported engines remain inspectable without fabricated part inventory;
+`default` and escaped names retain the current path guards. The strongest
+failure is resolving a table through a different UUID than the database object
+originally represented. Verification uses focused public-fixture catalog
+specs, full debug/release specs, formatting, and an example smoke run. Rollback
+is the scoped feature commit. This extension does not admit `system.*` or server
+Active-state inference.
+
+Object navigation from a Crystal program:
+
+```crystal
+database = CrystalClick::OfflineCatalog.open(data_root).databases.first
+database.tables.each do |table|
+  puts "#{database.name}.#{table.name}: #{table.columns.size} columns"
+end
+
+table = CrystalClick::OfflineCatalog.open(data_root)["lab"]["events"]
+puts table.engine
+```
+
+`databases` resolves every database DDL but not table DDL; a malformed sibling
+database therefore fails enumeration while targeted `database(name)` still
+works. `tables` resolves every table and its candidate inventory, while
+targeted `table(name)` remains usable if a sibling table is malformed.
+
+Extension verification: the new `databases` and then bracket navigation calls
+were absent in red focused specs; after implementation, 29 focused catalog
+examples and 229 full examples
+in both debug and release passed on the final source. The inventory example
+compiled and printed one database, one table, its UInt64 column, and an empty
+physical-candidate inventory from a temporary Atomic root, using the host's
+system-linker override and a writable temporary Crystal cache. Format and
+diff checks passed. Adversary review found and closed cross-catalog object
+reuse, UUID drift, and repeated enumeration paths. This is robust only for an
+immutable, quiescent offline root; metadata
+mutation during a call remains outside the contract.
+
 Current frontier: read a bounded local ClickHouse Atomic metadata tree in
-Crystal, expose database/table names, table column names and declared types,
+Crystal, expose database/table objects and names, table column names and
+declared types,
 and inventory physical MergeTree part candidates. For an unambiguous, immutable
 single-disk table, hand selected `UInt64` columns to `WidePartTable` so caller
 code can filter rows. This is an offline catalog, not the ClickHouse `system.*`
@@ -58,7 +127,8 @@ part inventory, and a guarded scan without starting a ClickHouse server.
   `columns.txt` records per-part schema; directory presence identifies only a
   physical candidate. No equality of these layers is implied by names alone.
 
-The first API is `catalog.database_names`, `catalog.table_names(database)`,
+The original name-based API is `catalog.database_names`,
+`catalog.table_names(database)`,
 and `catalog.table(database, name)`. A targeted `OfflineTable` exposes parsed
 metadata UUID, engine, declared columns, and `part_candidates`, then
 `scan_uint64(columns, batch_rows: ...)` for the admitted physical scan.

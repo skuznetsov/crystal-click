@@ -491,6 +491,48 @@ module CrystalClick
     end
   end
 
+  # Read-only view of one database in an offline Atomic metadata tree.
+  # The catalog reference preserves the lookup context after its original
+  # caller drops the catalog variable; the UUID guards against metadata drift.
+  class OfflineDatabase
+    @catalog : OfflineCatalog
+    @name : String
+    @uuid : String
+
+    def initialize(@catalog : OfflineCatalog, name : String, uuid : String)
+      @name = name.dup
+      @uuid = uuid.dup
+    end
+
+    def name : String
+      @name.dup
+    end
+
+    def uuid : String
+      @uuid.dup
+    end
+
+    def owned_by?(catalog : OfflineCatalog) : Bool
+      @catalog.same?(catalog)
+    end
+
+    def table_names : Array(String)
+      @catalog.table_names(self)
+    end
+
+    def table(name : String) : OfflineTable
+      @catalog.table(self, name)
+    end
+
+    def [](name : String) : OfflineTable
+      table(name)
+    end
+
+    def tables : Array(OfflineTable)
+      @catalog.tables(self)
+    end
+  end
+
   # Offline reader for the bounded ClickHouse 26.7 Atomic metadata layout.
   # It reads local files only and does not emulate system.* tables or server
   # lifecycle state.
@@ -570,9 +612,49 @@ module CrystalClick
       names
     end
 
+    def databases : Array(OfflineDatabase)
+      names = database_names
+      known_names = Set(String).new
+      names.each { |name| known_names << name }
+      names.map do |name|
+        location = resolve_database(name, known_names)
+        OfflineDatabase.new(self, name, location.uuid)
+      end
+    end
+
+    def database(name : String) : OfflineDatabase
+      location = resolve_database(name)
+      OfflineDatabase.new(self, name, location.uuid)
+    end
+
+    def [](name : String) : OfflineDatabase
+      database(name)
+    end
+
     def table_names(database : String) : Array(String)
       location = resolve_database(database)
       list_table_names(location)
+    end
+
+    def table_names(database : OfflineDatabase) : Array(String)
+      validate_database_owner!(database)
+      location = resolve_database(database.name)
+      validate_database_identity!(database, location)
+      list_table_names(location)
+    end
+
+    def tables(database : OfflineDatabase) : Array(OfflineTable)
+      validate_database_owner!(database)
+      location = resolve_database(database.name)
+      validate_database_identity!(database, location)
+      names = list_table_names(location)
+      known_names = Set(String).new
+      names.each { |name| known_names << name }
+      result = Array(OfflineTable).new(names.size)
+      names.each do |name|
+        result << table(location, name, known_names)
+      end
+      result
     end
 
     private def list_table_names(location : DatabaseLocation) : Array(String)
@@ -603,8 +685,27 @@ module CrystalClick
     def table(database : String, name : String) : OfflineTable
       validate_identifier(name, "table name")
       location = resolve_database(database)
+      table(location, name)
+    end
+
+    def table(database : OfflineDatabase, name : String) : OfflineTable
+      validate_database_owner!(database)
+      validate_identifier(name, "table name")
+      location = resolve_database(database.name)
+      validate_database_identity!(database, location)
+      table(location, name)
+    end
+
+    private def table(location : DatabaseLocation, name : String) : OfflineTable
       names = list_table_names(location)
-      raise InvalidPartError.new("table does not exist: #{name}") unless names.includes?(name)
+      known_names = Set(String).new
+      names.each { |table_name| known_names << table_name }
+      table(location, name, known_names)
+    end
+
+    private def table(location : DatabaseLocation, name : String, known_names : Set(String)) : OfflineTable
+      validate_identifier(name, "table name")
+      raise InvalidPartError.new("table does not exist: #{name}") unless known_names.includes?(name)
 
       ddl_path = File.join(location.metadata_path, "#{encode_identifier(name)}.sql")
       ddl = read_bounded_file(ddl_path, MAX_METADATA_BYTES, "table DDL")
@@ -620,10 +721,26 @@ module CrystalClick
       OfflineTable.new(name, uuid, engine, columns, part_candidates, primary_key_column)
     end
 
-    private def resolve_database(name : String) : DatabaseLocation
+    private def validate_database_identity!(database : OfflineDatabase, location : DatabaseLocation) : Nil
+      unless location.uuid == database.uuid
+        raise InvalidPartError.new("database identity changed since object creation: #{database.name}")
+      end
+    end
+
+    private def validate_database_owner!(database : OfflineDatabase) : Nil
+      unless database.owned_by?(self)
+        raise InvalidPartError.new("database object belongs to a different offline catalog")
+      end
+    end
+
+    private def resolve_database(name : String, known_names : Set(String)? = nil) : DatabaseLocation
       validate_identifier(name, "database name")
-      names = database_names
-      raise InvalidPartError.new("database does not exist: #{name}") unless names.includes?(name)
+      exists = if known_names
+                 known_names.includes?(name)
+               else
+                 database_names.includes?(name)
+               end
+      raise InvalidPartError.new("database does not exist: #{name}") unless exists
 
       metadata_root = File.join(@root, "metadata")
       ddl_path = File.join(metadata_root, "#{encode_identifier(name)}.sql")

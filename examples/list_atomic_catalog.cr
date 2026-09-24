@@ -12,11 +12,10 @@ module ListAtomicCatalogExample
     usage unless args.size == 1
 
     catalog = CrystalClick::OfflineCatalog.open(args[0])
-    catalog.database_names.each do |database_name|
-      puts "DATABASE #{database_name}"
+    catalog.databases.each do |database|
+      puts "DATABASE #{database.name}"
 
-      catalog.table_names(database_name).each do |table_name|
-        table = catalog.table(database_name, table_name)
+      database.tables.each do |table|
         puts "  TABLE #{table.name} (engine: #{table.engine})"
         table.columns.each do |column|
           puts "    COLUMN #{column.name}: #{column.type}"
