@@ -10,6 +10,11 @@ change the offline candidate or server-state boundary described here.
 The later bounded part-selection slice is governed by
 [`OFFLINE_MERGETREE_PART_RESOLUTION_FRONTIER.md`](OFFLINE_MERGETREE_PART_RESOLUTION_FRONTIER.md);
 the overlap rejection below records the original behavior, not that later API.
+The synthetic offline `system.part_candidates` column projection is governed
+separately by
+[`OFFLINE_PART_CANDIDATE_VALUES_FRONTIER.md`](OFFLINE_PART_CANDIDATE_VALUES_FRONTIER.md);
+the `system.*` exclusion below records the scope of this original catalog
+slice.
 
 Object-navigation extension (implemented for the bounded offline scope): expose
 `catalog.databases` as sorted `OfflineDatabase` objects and targeted

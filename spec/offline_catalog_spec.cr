@@ -8,6 +8,20 @@ OFFLINE_TABLE_ROWS      = 17_001
 class OfflineCatalogSpecStop < Exception
 end
 
+class OfflineCatalogCapacityProbe < CrystalClick::OfflineCatalog
+  def initialize(root : String, @candidate_limit : Int32 = CrystalClick::OfflineCatalog::MAX_PART_CANDIDATES)
+    super(root)
+  end
+
+  private def max_projected_candidates : Int32
+    @candidate_limit
+  end
+
+  def validate_projected_candidates(count : Int32) : Nil
+    ensure_candidate_capacity!(count)
+  end
+end
+
 def with_offline_catalog_root(&)
   root = File.tempname("crystal-click-offline-catalog-spec")
   Dir.mkdir(root)
@@ -312,7 +326,9 @@ describe CrystalClick::OfflineCatalog do
       database = catalog["lab"]
       database.uuid.should eq(catalog.database("lab").uuid)
       database["events"].uuid.should eq(database.table("events").uuid)
-      expect_raises(CrystalClick::InvalidPartError) { catalog["system"] }
+      catalog["system"].table_names.should eq(["part_candidates"])
+      catalog.database_names.should eq(["lab"])
+      catalog.databases.map(&.name).should eq(["lab"])
       expect_raises(CrystalClick::InvalidPartError) { database["missing"] }
     end
   end
@@ -707,6 +723,157 @@ describe CrystalClick::OfflineCatalog do
       expect_raises(CrystalClick::UnsupportedFormatError) do
         table.scan_uint64(["label"]) { |_batch| }
       end
+    end
+  end
+
+  it "materializes deterministic owned values for synthetic system part candidates" do
+    with_offline_catalog_root do |root|
+      alpha_database_uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      zeta_database_uuid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      alpha_table_uuid = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+      zeta_table_uuid = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+      offline_catalog_create_database(root, "zeta", zeta_database_uuid)
+      offline_catalog_create_database(root, "alpha", alpha_database_uuid)
+      alpha_path = offline_catalog_create_table(root, alpha_database_uuid, "events", alpha_table_uuid, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(alpha_path, "all_2_2_0"))
+      File.write(File.join(alpha_path, "all_1_1_0", "count.txt"), "11\n")
+      File.write(File.join(alpha_path, "all_2_2_0", "count.txt"), "17\n")
+      zeta_path = offline_catalog_create_table(root, zeta_database_uuid, "events", zeta_table_uuid, with_part: true)
+      File.write(File.join(zeta_path, "all_1_1_0", "count.txt"), "13\n")
+
+      catalog = CrystalClick::OfflineCatalog.open(root)
+      catalog.database_names.should eq(["alpha", "zeta"])
+      system_database = catalog["system"]
+      system_database.name.should eq("system")
+      system_database.table_names.should eq(["part_candidates"])
+      system_database.tables.map(&.name).should eq(["part_candidates"])
+      expect_raises(CrystalClick::UnsupportedFormatError) { system_database.uuid }
+      forged = CrystalClick::OfflineDatabase.new(catalog, "lab", "fabricated-uuid", true)
+      expect_raises(CrystalClick::UnsupportedFormatError) { forged.uuid }
+      expect_raises(CrystalClick::InvalidPartError) { forged.table_names }
+
+      part_candidates = system_database["part_candidates"]
+      part_candidates.name.should eq("part_candidates")
+      part_candidates.columns.map(&.name).should eq(["database", "table", "name", "partition_id", "rows"])
+      expect_raises(CrystalClick::UnsupportedFormatError) { part_candidates.uuid }
+      expect_raises(CrystalClick::UnsupportedFormatError) { part_candidates["active"] }
+
+      part_candidates["database"].values.map { |value| value.as(String) }.should eq(["alpha", "alpha", "zeta"])
+      part_candidates["table"].values.map { |value| value.as(String) }.should eq(["events", "events", "events"])
+      part_candidates["name"].values.map { |value| value.as(String) }.should eq(["all_1_1_0", "all_2_2_0", "all_1_1_0"])
+      part_candidates["partition_id"].values.map { |value| value.as(String) }.should eq(["all", "all", "all"])
+      part_candidates["rows"].values.map { |value| value.as(UInt64) }.should eq([11_u64, 17_u64, 13_u64])
+      caller_owned = part_candidates["database"].values
+      caller_owned << "caller-only"
+      part_candidates["database"].values.map { |value| value.as(String) }.should eq(["alpha", "alpha", "zeta"])
+      CrystalClick::OfflineCatalog.open(root)["system"]["part_candidates"]["rows"].values.map { |value| value.as(UInt64) }.should eq([11_u64, 17_u64, 13_u64])
+    end
+  end
+
+  it "defers part reads until values are requested and rejects covering overlap" do
+    with_offline_catalog_root do |root|
+      alpha_database_uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      zeta_database_uuid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      offline_catalog_create_database(root, "alpha", alpha_database_uuid)
+      offline_catalog_create_database(root, "zeta", zeta_database_uuid)
+      offline_catalog_create_table(root, alpha_database_uuid, "events", "cccccccc-cccc-4ccc-8ccc-cccccccccccc", with_part: true)
+      later_path = offline_catalog_create_table(root, zeta_database_uuid, "events", "dddddddd-dddd-4ddd-8ddd-dddddddddddd", with_part: true)
+      count_path = File.join(later_path, "all_1_1_0", "count.txt")
+      File.delete(count_path)
+
+      selected_rows = CrystalClick::OfflineCatalog.open(root)["system"]["part_candidates"]["rows"]
+      expect_raises(CrystalClick::InvalidPartError) { selected_rows.values }
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(root, with_part: true)
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, File.join(table_path, "all_1_1_1"))
+
+      selected_rows = CrystalClick::OfflineCatalog.open(root)["system"]["part_candidates"]["rows"]
+      error = expect_raises(CrystalClick::InvalidPartError) { selected_rows.values }
+      error.message.not_nil!.should contain("overlap")
+    end
+  end
+
+  it "fails closed on a physical system database and unsupported MergeTree-family parts" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root, "system", "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+      catalog = CrystalClick::OfflineCatalog.open(root)
+      catalog.database_names.should eq(["system"])
+      expect_raises(CrystalClick::InvalidPartError) { catalog["system"] }
+    end
+
+    with_offline_catalog_root do |root|
+      database_uuid = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+      offline_catalog_create_database(root, "lab", database_uuid)
+      offline_catalog_create_table(root, database_uuid, "replacing", "11111111-1111-4111-8111-111111111111", engine: "ReplacingMergeTree", with_part: true)
+
+      selected_rows = CrystalClick::OfflineCatalog.open(root)["system"]["part_candidates"]["rows"]
+      expect_raises(CrystalClick::UnsupportedFormatError) { selected_rows.values }
+    end
+
+    with_offline_catalog_root do |root|
+      database_uuid = "44444444-4444-4444-8444-444444444444"
+      offline_catalog_create_database(root, "lab", database_uuid)
+      offline_catalog_create_table(root, database_uuid, "replacing", "55555555-5555-4555-8555-555555555555", engine: "replacingmergetree", with_part: true)
+
+      selected_rows = CrystalClick::OfflineCatalog.open(root)["system"]["part_candidates"]["rows"]
+      expect_raises(CrystalClick::UnsupportedFormatError) { selected_rows.values }
+    end
+
+    with_offline_catalog_root do |root|
+      database_uuid = "22222222-2222-4222-8222-222222222222"
+      offline_catalog_create_database(root, "lab", database_uuid)
+      offline_catalog_create_table(root, database_uuid, "memory", "33333333-3333-4333-8333-333333333333", engine: "Memory")
+
+      selected_rows = CrystalClick::OfflineCatalog.open(root)["system"]["part_candidates"]["rows"]
+      selected_rows.values.should be_empty
+    end
+  end
+
+  it "keeps physical column selection lazy and rejects materialization in this slice" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      offline_catalog_create_table(root, with_part: true)
+
+      selected = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["left"]
+      expect_raises(CrystalClick::UnsupportedFormatError) { selected.values }
+      values = [] of UInt64
+      CrystalClick::OfflineCatalog.open(root)["lab"]["events"].scan_uint64(["left"], batch_rows: 127) do |batch|
+        values.concat(batch.values_for("left"))
+      end
+      values.size.should eq(OFFLINE_TABLE_ROWS)
+      values.first.should eq(0_u64)
+      values.last.should eq((OFFLINE_TABLE_ROWS - 1).to_u64)
+    end
+  end
+
+  it "enforces the global projected-part cap at its boundary" do
+    with_offline_catalog_root do |root|
+      catalog = OfflineCatalogCapacityProbe.new(root)
+      catalog.validate_projected_candidates(CrystalClick::OfflineCatalog::MAX_PART_CANDIDATES)
+      expect_raises(CrystalClick::BoundsError) do
+        catalog.validate_projected_candidates(CrystalClick::OfflineCatalog::MAX_PART_CANDIDATES + 1)
+      end
+    end
+  end
+
+  it "stops incrementally at the projected candidate cap before visiting later table counts" do
+    with_offline_catalog_root do |root|
+      database_uuid = "66666666-6666-4666-8666-666666666666"
+      offline_catalog_create_database(root, "lab", database_uuid)
+      first_table_path = offline_catalog_create_table(root, database_uuid, "a_events", "77777777-7777-4777-8777-777777777777", with_part: true)
+      second_part_path = File.join(first_table_path, "all_2_2_0")
+      FileUtils.cp_r(OFFLINE_CATALOG_FIXTURE, second_part_path)
+      File.write(File.join(second_part_path, "count.txt"), "17\n")
+
+      later_table_path = offline_catalog_create_table(root, database_uuid, "z_events", "88888888-8888-4888-8888-888888888888", with_part: true)
+      File.delete(File.join(later_table_path, "all_1_1_0", "count.txt"))
+
+      selected_rows = OfflineCatalogCapacityProbe.new(root, 1)["system"]["part_candidates"]["rows"]
+      error = expect_raises(CrystalClick::BoundsError) { selected_rows.values }
+      error.message.not_nil!.should contain("projected candidate count exceeds limit")
     end
   end
 end

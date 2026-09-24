@@ -16,8 +16,22 @@ database object after the original catalog variable goes out of scope. Each
 enumeration validates its full level and fails if any sibling DDL is malformed;
 use `catalog.database(name)` or `database.table(name)` for targeted access.
 Targeted bracket aliases also work: `catalog["lab"]["events"]` returns an
-`OfflineTable`. There is no virtual `system` database or column-value indexer
-yet.
+`OfflineTable`.
+
+Read all `rows` values from the synthetic offline `system.part_candidates` projection:
+
+```sh
+crystal run examples/read_offline_part_candidate_rows.cr -- /var/lib/clickhouse
+```
+
+`catalog["system"]["part_candidates"]["rows"].values` selects the `rows` column and
+returns an owned, bounded collection of all physical part-candidate counts.
+These are not ClickHouse server Active parts. The projection rejects
+overlapping candidates and malformed metadata instead of returning a partial
+collection. `system.tables`, `system.columns`, and physical table-column
+materialization are not part of this example's API slice. In ClickHouse itself,
+`system.tables` calls its row estimate `total_rows`; `rows` is a column of
+`system.parts`.
 
 On this macOS toolchain, Crystal's default LLD linker cannot parse the
 installed Xcode TAPI SDK files. If that affects your setup, put

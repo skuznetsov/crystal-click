@@ -30,25 +30,45 @@ module CrystalClick
   # Read-only view of one table's parsed DDL and physical part candidates.
   class OfflineTable
     getter name : String
-    getter uuid : String
     getter engine : String
     getter primary_key_column : String?
 
     @columns : Array(OfflineColumn)
     @part_candidates : Array(OfflinePartCandidate)?
+    @uuid : String?
+    @part_candidates_catalog : OfflineCatalog?
 
     def initialize(
       @name : String,
-      @uuid : String,
+      @uuid : String?,
       @engine : String,
       @columns : Array(OfflineColumn),
       @part_candidates : Array(OfflinePartCandidate)?,
       @primary_key_column : String? = nil,
+      @part_candidates_catalog : OfflineCatalog? = nil,
     )
+    end
+
+    def uuid : String
+      raise UnsupportedFormatError.new("synthetic system table has no UUID") if @part_candidates_catalog
+      value = @uuid || raise(UnsupportedFormatError.new("synthetic system table has no UUID"))
+      value.dup
     end
 
     def columns : Array(OfflineColumn)
       @columns.dup
+    end
+
+    def [](column_name : String) : OfflineColumnSelection
+      raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
+      column = @columns.find { |entry| entry.name == column_name }
+      raise UnsupportedFormatError.new("selected column is not declared by table metadata") unless column
+      OfflineColumnSelection.new(self, column_name)
+    end
+
+    def materialize_selected_values(column_name : String) : Array(String | UInt64)
+      catalog = @part_candidates_catalog || raise(UnsupportedFormatError.new("physical table column materialization is unsupported"))
+      catalog.part_candidates_values(column_name)
     end
 
     def part_candidates : Array(OfflinePartCandidate)
@@ -491,17 +511,34 @@ module CrystalClick
     end
   end
 
+  # A selected offline column. Selection is metadata-only; values owns and
+  # materializes the complete bounded projection when explicitly requested.
+  class OfflineColumnSelection
+    getter name : String
+
+    @table : OfflineTable
+
+    def initialize(@table : OfflineTable, name : String)
+      @name = name.dup
+    end
+
+    def values : Array(String | UInt64)
+      @table.materialize_selected_values(@name)
+    end
+  end
+
   # Read-only view of one database in an offline Atomic metadata tree.
   # The catalog reference preserves the lookup context after its original
   # caller drops the catalog variable; the UUID guards against metadata drift.
   class OfflineDatabase
     @catalog : OfflineCatalog
     @name : String
-    @uuid : String
+    @uuid : String?
+    @virtual_system : Bool
 
-    def initialize(@catalog : OfflineCatalog, name : String, uuid : String)
+    def initialize(@catalog : OfflineCatalog, name : String, uuid : String?, @virtual_system : Bool = false)
       @name = name.dup
-      @uuid = uuid.dup
+      @uuid = uuid.try(&.dup)
     end
 
     def name : String
@@ -509,7 +546,13 @@ module CrystalClick
     end
 
     def uuid : String
-      @uuid.dup
+      raise UnsupportedFormatError.new("synthetic system database has no UUID") if @virtual_system
+      value = @uuid || raise(UnsupportedFormatError.new("synthetic system database has no UUID"))
+      value.dup
+    end
+
+    def virtual_system? : Bool
+      @virtual_system
     end
 
     def owned_by?(catalog : OfflineCatalog) : Bool
@@ -537,11 +580,14 @@ module CrystalClick
   # It reads local files only and does not emulate system.* tables or server
   # lifecycle state.
   class OfflineCatalog
-    MAX_METADATA_ENTRIES      =    10_000
-    MAX_METADATA_BYTES        = 1_048_576
-    MAX_IDENTIFIER_BYTES      =     4_096
-    MAX_COUNT_BYTES           =        32
-    TABLE_TAIL_CLAUSE_PATTERN = /\A(PARTITION\s+BY|ORDER\s+BY|PRIMARY\s+KEY|SAMPLE\s+BY|TTL|SETTINGS|COMMENT)\b/i
+    MAX_METADATA_ENTRIES              =    10_000
+    MAX_METADATA_BYTES                = 1_048_576
+    MAX_IDENTIFIER_BYTES              =     4_096
+    MAX_COUNT_BYTES                   =        32
+    MAX_PART_CANDIDATES               =   100_000
+    SYSTEM_DATABASE_NAME              = "system"
+    SYSTEM_PART_CANDIDATES_TABLE_NAME = "part_candidates"
+    TABLE_TAIL_CLAUSE_PATTERN         = /\A(PARTITION\s+BY|ORDER\s+BY|PRIMARY\s+KEY|SAMPLE\s+BY|TTL|SETTINGS|COMMENT)\b/i
 
     private struct DatabaseLocation
       getter uuid : String
@@ -623,6 +669,12 @@ module CrystalClick
     end
 
     def database(name : String) : OfflineDatabase
+      validate_identifier(name, "database name")
+      if name == SYSTEM_DATABASE_NAME
+        raise InvalidPartError.new("physical database named system collides with the synthetic system database") if database_names.includes?(SYSTEM_DATABASE_NAME)
+        return OfflineDatabase.new(self, SYSTEM_DATABASE_NAME, nil, true)
+      end
+
       location = resolve_database(name)
       OfflineDatabase.new(self, name, location.uuid)
     end
@@ -632,12 +684,19 @@ module CrystalClick
     end
 
     def table_names(database : String) : Array(String)
+      return self.database(database).table_names if database == SYSTEM_DATABASE_NAME
+
       location = resolve_database(database)
       list_table_names(location)
     end
 
     def table_names(database : OfflineDatabase) : Array(String)
       validate_database_owner!(database)
+      if database.virtual_system?
+        validate_virtual_system_database!(database)
+        return [SYSTEM_PART_CANDIDATES_TABLE_NAME]
+      end
+
       location = resolve_database(database.name)
       validate_database_identity!(database, location)
       list_table_names(location)
@@ -645,6 +704,11 @@ module CrystalClick
 
     def tables(database : OfflineDatabase) : Array(OfflineTable)
       validate_database_owner!(database)
+      if database.virtual_system?
+        validate_virtual_system_database!(database)
+        return [part_candidates_table]
+      end
+
       location = resolve_database(database.name)
       validate_database_identity!(database, location)
       names = list_table_names(location)
@@ -655,6 +719,59 @@ module CrystalClick
         result << table(location, name, known_names)
       end
       result
+    end
+
+    # Materialize one selected column from the bounded synthetic
+    # system.part_candidates projection. The result is owned by the caller and
+    # returned only after all supported source tables, counts, and overlap
+    # guards pass.
+    def part_candidates_values(column_name : String) : Array(String | UInt64)
+      unless {"database", "table", "name", "partition_id", "rows"}.includes?(column_name)
+        raise UnsupportedFormatError.new("selected system.part_candidates column is unsupported")
+      end
+      database_names = self.database_names
+      if database_names.includes?(SYSTEM_DATABASE_NAME)
+        raise InvalidPartError.new("physical database named system collides with the synthetic system database")
+      end
+
+      parts = Array({String, String, OfflinePartCandidate}).new
+      known_database_names = Set(String).new
+      database_names.each { |name| known_database_names << name }
+
+      database_names.each do |database_name|
+        location = resolve_database(database_name, known_database_names)
+        table_names = list_table_names(location)
+        known_table_names = Set(String).new
+        table_names.each { |name| known_table_names << name }
+
+        table_names.each do |table_name|
+          table = table(location, table_name, known_table_names, parts.size)
+          if table.engine == "MergeTree"
+            candidates = table.part_candidates
+            reject_part_candidate_overlaps!(table.name, candidates)
+            candidates.each do |candidate|
+              ensure_candidate_capacity!(parts.size + 1)
+              parts << {database_name, table.name, candidate}
+            end
+          elsif merge_tree_family_engine?(table.engine)
+            raise UnsupportedFormatError.new("system.part_candidates does not support MergeTree-family engine: #{table.engine}")
+          end
+        end
+      end
+
+      values = Array(String | UInt64).new(parts.size)
+      parts.each do |database_name, table_name, candidate|
+        value = case column_name
+                when "database"     then database_name.dup
+                when "table"        then table_name.dup
+                when "name"         then candidate.name.dup
+                when "partition_id" then candidate.info.partition_id.dup
+                when "rows"         then candidate.row_count
+                else                     raise UnsupportedFormatError.new("selected system.part_candidates column is unsupported")
+                end
+        values << value
+      end
+      values
     end
 
     private def list_table_names(location : DatabaseLocation) : Array(String)
@@ -684,6 +801,8 @@ module CrystalClick
 
     def table(database : String, name : String) : OfflineTable
       validate_identifier(name, "table name")
+      return self.database(database).table(name) if database == SYSTEM_DATABASE_NAME
+
       location = resolve_database(database)
       table(location, name)
     end
@@ -691,9 +810,64 @@ module CrystalClick
     def table(database : OfflineDatabase, name : String) : OfflineTable
       validate_database_owner!(database)
       validate_identifier(name, "table name")
+      if database.virtual_system?
+        validate_virtual_system_database!(database)
+        raise InvalidPartError.new("table does not exist: #{name}") unless name == SYSTEM_PART_CANDIDATES_TABLE_NAME
+        return part_candidates_table
+      end
+
       location = resolve_database(database.name)
       validate_database_identity!(database, location)
       table(location, name)
+    end
+
+    private def part_candidates_table : OfflineTable
+      columns = [
+        OfflineColumn.new("database", "String", false, false),
+        OfflineColumn.new("table", "String", false, false),
+        OfflineColumn.new("name", "String", false, false),
+        OfflineColumn.new("partition_id", "String", false, false),
+        OfflineColumn.new("rows", "UInt64", false, false),
+      ] of OfflineColumn
+      OfflineTable.new(SYSTEM_PART_CANDIDATES_TABLE_NAME, nil, "OfflineSystemPartCandidates", columns, nil, nil, self)
+    end
+
+    private def ensure_synthetic_system_available! : Nil
+      if database_names.includes?(SYSTEM_DATABASE_NAME)
+        raise InvalidPartError.new("physical database named system collides with the synthetic system database")
+      end
+    end
+
+    private def validate_virtual_system_database!(database : OfflineDatabase) : Nil
+      unless database.name == SYSTEM_DATABASE_NAME
+        raise InvalidPartError.new("synthetic system database has an invalid name")
+      end
+      ensure_synthetic_system_available!
+    end
+
+    private def max_projected_candidates : Int32
+      MAX_PART_CANDIDATES
+    end
+
+    private def ensure_candidate_capacity!(projected_candidates : Int32) : Nil
+      raise BoundsError.new("system.part_candidates projected candidate count exceeds limit") if projected_candidates > max_projected_candidates
+    end
+
+    private def merge_tree_family_engine?(engine : String) : Bool
+      engine.downcase.ends_with?("mergetree")
+    end
+
+    private def reject_part_candidate_overlaps!(table_name : String, candidates : Array(OfflinePartCandidate)) : Nil
+      candidates.each_with_index do |left, left_index|
+        right_index = left_index + 1
+        while right_index < candidates.size
+          right = candidates[right_index]
+          if left.info.overlaps?(right.info)
+            raise InvalidPartError.new("system.part_candidates refuses overlapping candidates for #{table_name}: #{left.name} and #{right.name}")
+          end
+          right_index += 1
+        end
+      end
     end
 
     private def table(location : DatabaseLocation, name : String) : OfflineTable
@@ -703,7 +877,12 @@ module CrystalClick
       table(location, name, known_names)
     end
 
-    private def table(location : DatabaseLocation, name : String, known_names : Set(String)) : OfflineTable
+    private def table(
+      location : DatabaseLocation,
+      name : String,
+      known_names : Set(String),
+      projected_candidate_offset : Int32? = nil,
+    ) : OfflineTable
       validate_identifier(name, "table name")
       raise InvalidPartError.new("table does not exist: #{name}") unless known_names.includes?(name)
 
@@ -713,7 +892,7 @@ module CrystalClick
 
       part_candidates = if engine == "MergeTree"
                           table_path = validate_store_directory(uuid)
-                          discover_part_candidates(table_path)
+                          discover_part_candidates(table_path, projected_candidate_offset)
                         else
                           nil
                         end
@@ -1195,7 +1374,7 @@ module CrystalClick
       raise UnsupportedFormatError.new("unterminated table column list")
     end
 
-    private def discover_part_candidates(table_path : String) : Array(OfflinePartCandidate)
+    private def discover_part_candidates(table_path : String, projected_candidate_offset : Int32? = nil) : Array(OfflinePartCandidate)
       children = bounded_children(table_path, WidePartTable::MAX_PARTS + 2_048, "table data entries")
       candidates = Array(OfflinePartCandidate).new
       total_rows = 0_u64
@@ -1220,6 +1399,9 @@ module CrystalClick
         raise InvalidPartError.new("part candidate is not a physical directory: #{name}") unless Dir.exists?(path)
         raise UnsupportedFormatError.new("patch parts are not supported: #{name}") if info.patch?
         raise BoundsError.new("part count exceeds limit") if candidates.size >= WidePartTable::MAX_PARTS
+        if offset = projected_candidate_offset
+          ensure_candidate_capacity!(offset + candidates.size + 1)
+        end
 
         count_path = File.join(path, "count.txt")
         row_count = parse_row_count(read_bounded_file(count_path, MAX_COUNT_BYTES, "part row count"))
