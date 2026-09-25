@@ -105,6 +105,73 @@ def offline_catalog_database(root : String, name : String = "lab") : CrystalClic
 end
 
 describe CrystalClick::OfflineCatalog do
+  it "reads a bounded typed row window through the catalog" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      offline_catalog_create_table(root, with_part: true)
+
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+      observed = [] of {UInt64, UInt64, UInt64, Int32, UInt64}
+      table.scan_typed_window(["left", "right"], 8190_u64, 5) do |batch|
+        left = batch.values_for("left")
+        right = batch.values_for("right")
+        left.each_with_index do |value, index|
+          observed << {value, right[index], batch.source_row_offset + index.to_u64, batch.mark_index, batch.mark_row_offset + index.to_u64}
+        end
+      end
+
+      observed.should eq([
+        {8190_u64, 24_577_u64, 8190_u64, 0_i32, 8190_u64},
+        {8191_u64, 24_580_u64, 8191_u64, 0_i32, 8191_u64},
+        {8192_u64, 24_583_u64, 8192_u64, 1_i32, 0_u64},
+        {8193_u64, 24_586_u64, 8193_u64, 1_i32, 1_u64},
+        {8194_u64, 24_589_u64, 8194_u64, 1_i32, 2_u64},
+      ])
+
+      full_scan_window = [] of {UInt64, UInt64, UInt64}
+      table.scan_typed(["left", "right"]) do |batch|
+        batch.values_for("left").each_with_index do |value, index|
+          row = batch.source_row_offset + index.to_u64
+          if row >= 8190_u64 && row < 8195_u64
+            full_scan_window << {value, batch.values_for("right")[index], row}
+          end
+        end
+      end
+      observed.map { |left, right, row, _, _| {left, right, row} }.should eq(full_scan_window)
+
+      callbacks = 0
+      table.scan_typed_window(["left"], OFFLINE_TABLE_ROWS.to_u64, 1) { |_batch| callbacks += 1 }
+      callbacks.should eq(0)
+      expect_raises(CrystalClick::BoundsError) do
+        table.scan_typed_window(["left"], OFFLINE_TABLE_ROWS.to_u64 + 1, 1) { |_batch| callbacks += 1 }
+      end
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        table.scan_typed_window(["missing"], 0_u64, 1) { |_batch| callbacks += 1 }
+      end
+      [0, CrystalClick::WidePartTable::MAX_BATCH_ROWS + 1].each do |invalid_rows|
+        expect_raises(CrystalClick::BoundsError) do
+          table.scan_typed_window(["left"], 0_u64, invalid_rows) { |_batch| callbacks += 1 }
+        end
+      end
+      callbacks.should eq(0)
+    end
+  end
+
+  it "treats an empty table as an empty physical row window" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      offline_catalog_create_table(root)
+      table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+
+      callbacks = 0
+      table.scan_typed_window(["left"], 0_u64, 1) { |_batch| callbacks += 1 }
+      expect_raises(CrystalClick::BoundsError) do
+        table.scan_typed_window(["left"], 1_u64, 1) { |_batch| callbacks += 1 }
+      end
+      callbacks.should eq(0)
+    end
+  end
+
   it "resolves Atomic UUID paths, exposes parsed table metadata, and scans selected columns" do
     with_offline_catalog_root do |root|
       database_store = offline_catalog_create_database(root, metadata_symlink: true)

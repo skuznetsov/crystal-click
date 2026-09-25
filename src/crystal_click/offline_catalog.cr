@@ -376,10 +376,31 @@ module CrystalClick
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
       &block : WidePartTableBatch -> Nil
     ) : Nil
+      if reader = open_typed_reader(columns, batch_rows, "batch")
+        reader.scan_typed(batch_rows: batch_rows, &block)
+      end
+    end
+
+    # Read a bounded physical-row window from a MergeTree table. Batches borrow
+    # their column buffers only for the duration of each callback.
+    def scan_typed_window(
+      columns : Array(String),
+      start_row : UInt64,
+      max_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+      &block : WidePartTableBatch -> Nil
+    ) : Nil
+      if reader = open_typed_reader(columns, max_rows, "window")
+        reader.scan_typed_window(start_row, max_rows, &block)
+      elsif start_row > 0
+        raise BoundsError.new("window start row is past the end of the table")
+      end
+    end
+
+    private def open_typed_reader(columns : Array(String), row_limit : Int, row_limit_label : String) : WidePartTable?
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
       raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
-      raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > WidePartTable::MAX_BATCH_ROWS
+      raise BoundsError.new("#{row_limit_label} row count is out of range") if row_limit <= 0 || row_limit > WidePartTable::MAX_BATCH_ROWS
 
       selected = Set(String).new
       expected_sources = Hash(String, {String, String, String, Bool}).new
@@ -413,7 +434,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("table DDL and selected part column types differ")
         end
       end
-      reader.scan_typed(batch_rows: batch_rows, &block)
+      reader
     end
 
     private def checked_materialized_value_rows(observed : UInt64, batch_rows : UInt64, expected : UInt64) : UInt64

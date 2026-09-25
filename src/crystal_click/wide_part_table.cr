@@ -383,10 +383,33 @@ module CrystalClick
       scan_typed_rows(batch_rows) { |batch| yield batch }
     end
 
+    # Scan a bounded physical-row interval in caller-selected part order.
+    # Only marks intersecting the interval have selected column payloads
+    # materialized; each selected mark is still decoded under the existing
+    # per-mark bounds, then the callback receives only the intersecting rows.
+    def scan_typed_window(
+      start_row : UInt64,
+      max_rows : Int = DEFAULT_BATCH_ROWS,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      raise BoundsError.new("window row count is out of range") if max_rows <= 0 || max_rows > MAX_BATCH_ROWS
+      raise BoundsError.new("window start is beyond the source row count") if start_row > @total_row_count
+      return nil if start_row == @total_row_count
+
+      available_rows = @total_row_count - start_row
+      window_rows = max_rows.to_u64 < available_rows ? max_rows.to_u64 : available_rows
+      # window_rows is bounded by total_row_count - start_row, so this addition
+      # is checked by construction and cannot overflow UInt64.
+      end_row = start_row + window_rows
+      scan_typed_rows(max_rows, window_rows: {start_row, end_row}) { |batch| yield batch }
+      nil
+    end
+
     private def scan_typed_rows(
       batch_rows : Int,
       candidate_marks : Array(Array(Int32))? = nil,
       whole_marks : Bool = false,
+      window_rows : {UInt64, UInt64}? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       source_row_offset = 0_u64
@@ -404,6 +427,18 @@ module CrystalClick
             selected_index += 1 if selected_mark
           end
           next unless selected_mark
+
+          selected_mark_row_start = 0_u64
+          selected_mark_row_end = mark_rows
+          if window = window_rows
+            mark_source_start = source_row_offset &+ mark_start_part_row_offset
+            mark_source_end = mark_source_start &+ mark_rows
+            window_start, window_end = window
+            next if mark_rows == 0_u64 || window_start >= mark_source_end || window_end <= mark_source_start
+
+            selected_mark_row_start = window_start > mark_source_start ? window_start - mark_source_start : 0_u64
+            selected_mark_row_end = window_end < mark_source_end ? window_end - mark_source_start : mark_rows
+          end
 
           # Selected String and Nullable(String) size streams are read first.
           # This preflight bounds raw variable-width materialization before any
@@ -458,11 +493,11 @@ module CrystalClick
             end
           end
 
-          mark_row_offset = 0_u64
+          mark_row_offset = selected_mark_row_start
           first_whole_mark_batch = whole_marks
-          while mark_row_offset < mark_rows || first_whole_mark_batch
+          while mark_row_offset < selected_mark_row_end || first_whole_mark_batch
             first_whole_mark_batch = false
-            remaining = mark_rows - mark_row_offset
+            remaining = selected_mark_row_end - mark_row_offset
             size = if whole_marks
                      remaining.to_i
                    else

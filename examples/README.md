@@ -98,6 +98,22 @@ the hard ceilings are rejected.
 Values follow the offline resolved-part and mark order, not SQL `ORDER BY`.
 Whole JSON objects and computed `ALIAS` columns are not materialized.
 
+Read a bounded physical-row window from two `UInt64` columns without
+materializing the complete table:
+
+```sh
+crystal run examples/read_typed_window.cr -- /var/lib/clickhouse lab events left right 8190 5
+```
+
+`scan_typed_window` also supports the existing typed `String`, nullable, and
+numeric column readers; this example uses `UInt64` accessors for compact
+output. `START_ROW` is zero-based in resolved part/mark order, not SQL order.
+The window is at most 4,096 rows, and its callbacks expose borrowed slices
+that must be copied if retained. The current implementation still decodes
+whole intersecting marks, so this is a bounded *result* API, not row-level
+lazy decoding or a performance claim. It requires the same immutable,
+quiescent copy and overlapping-part rejection as other offline scans.
+
 On this macOS toolchain, Crystal's default LLD linker cannot parse the
 installed Xcode TAPI SDK files. If that affects your setup, put
 `--link-flags='-fuse-ld=ld'` before the source path, for example:
