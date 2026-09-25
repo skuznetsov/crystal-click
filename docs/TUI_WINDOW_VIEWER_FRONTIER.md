@@ -1,8 +1,10 @@
 # Offline TUI Window Viewer Frontier
 
-Document status: implemented and locally verified for the immutable-root,
-headless-example scope on 2026-09-24. A live terminal smoke test and any
-performance measurement remain outside this verification.
+Document status: implemented and locally verified for the original unfiltered
+immutable-root, headless-example scope on 2026-09-24. A later bounded equality
+filter slice is specified separately in `OFFLINE_TUI_EQUALITY_FILTER_FRONTIER.md`;
+the seal below does not verify that later slice. A live terminal smoke test and
+any performance measurement remain outside this verification.
 
 This optional example navigates one immutable ClickHouse data-root copy through
 the existing `OfflineCatalog` and displays bounded physical-row pages from an
@@ -25,9 +27,10 @@ a new storage engine or a query interface.
   before escaping, with an explicit `[truncated]` marker for longer values, so
   a small row count cannot hide unbounded retained text.
 - Forward/backward navigation uses zero-based physical-row offsets in the
-  reader's resolved part/mark order. A short or empty page means the end of
-  that physical sequence. Switching tables discards the old page and resets
-  the offset.
+  reader's resolved part/mark order. In the original unfiltered viewer, a
+  short or empty page means the end of that physical sequence. In the later
+  bounded filter slice, match count can be zero before EOF. Switching tables
+  discards the old page and resets the offset.
 - Visible labels distinguish physical part candidates from ClickHouse server
   Active parts. Read failures remain visible rather than silently falling back
   to partial rows.
@@ -36,8 +39,10 @@ a new storage engine or a query interface.
 
 ## Rejected surface
 
-- Filtering, global sorting, SQL order, server `system.*` parity, joins, or a
-  consistent snapshot of a live ClickHouse data root.
+- Unbounded or result-relative filtering, global sorting, SQL order, server
+  `system.*` parity, joins, or a consistent snapshot of a live ClickHouse
+  data root. The later exact-equality physical-window slice does not change
+  those exclusions.
 - Full-table row materialization, retained borrowed buffers, and an implicit
   scan of every table on startup.
 - A claim that a page is decoded one row at a time or that paging improves
@@ -47,7 +52,7 @@ a new storage engine or a query interface.
 
 - A virtual-scroll widget or reusable row-source interface may replace
   explicit pages after focus, resize, and cache-invalidation tests.
-- Predicate-aware filtering and sort order need a defined result-offset
+- Broader predicate-aware filtering and sort order need a defined result-offset
   contract and bounded execution strategy before being exposed in the UI.
 - `pread` and decoded-mark caching remain independent performance experiments.
 

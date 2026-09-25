@@ -62,12 +62,12 @@ describe CrystalClick::Examples::OfflineTableBrowserApp do
       harness.press(Tui::Key::Tab)
       harness.press(Tui::Key::PageDown)
       second_page = harness.render_text
-      second_page.should contain("offset 2")
+      second_page.should contain("physical window [2, 4)")
       second_page.should contain("\"tail\"")
 
       harness.press(Tui::Key::PageUp)
       previous_page = harness.render_text
-      previous_page.should contain("offset 0")
+      previous_page.should contain("physical window [0, 2)")
       previous_page.should contain("\"alpha\"")
 
       harness.press(Tui::Key::Tab)
@@ -81,6 +81,185 @@ describe CrystalClick::Examples::OfflineTableBrowserApp do
 
       harness.type('q')
       app.quit_requested.should be_true
+    end
+  end
+
+  it "filters within physical windows, labels sparse matches, and preserves state on invalid input" do
+    with_offline_tui_catalog do |catalog|
+      app = CrystalClick::Examples::OfflineTableBrowserApp.new(catalog, page_rows: 2)
+      harness = Tui::Testing::Harness.new(app, 100, 20)
+      harness.render
+
+      harness.press(Tui::Key::Enter)
+      harness.press(Tui::Key::Down)
+      harness.press(Tui::Key::Enter)
+      harness.press(Tui::Key::Tab)
+
+      harness.type('/')
+      harness.type_string("label=tail")
+      harness.press(Tui::Key::Enter)
+
+      first_window = app.page_pane.page.not_nil!
+      first_window.start_row.should eq(0_u64)
+      first_window.end_row.should eq(2_u64)
+      first_window.rows.should be_empty
+      harness.render_text.should contain("no matches")
+
+      # An empty filtered window is not EOF: PageDown advances by the physical
+      # end offset rather than by the number of displayed matches.
+      harness.press(Tui::Key::PageDown)
+      second_window = app.page_pane.page.not_nil!
+      second_window.start_row.should eq(2_u64)
+      second_window.end_row.should eq(4_u64)
+      second_window.row_offsets.should eq([3_u64])
+      second_window.rows.size.should eq(1)
+      harness.render_text.should contain("3: \"tail\"")
+
+      # Unsupported/invalid input reports an error without replacing the last
+      # accepted filter or moving the visible physical page.
+      harness.type('/')
+      harness.press(Tui::Key::Home)
+      harness.ctrl('k')
+      harness.type_string("maybe_u64=1")
+      harness.press(Tui::Key::Enter)
+      app.page_pane.filter_error.should_not be_nil
+      app.page_pane.equality_filter.not_nil!.column.should eq("label")
+      app.page_pane.page.not_nil!.start_row.should eq(2_u64)
+      app.page_pane.page.not_nil!.row_offsets.should eq([3_u64])
+      harness.render_text.should contain("FILTER ERROR")
+      harness.press(Tui::Key::Escape)
+      app.page_pane.page.not_nil!.start_row.should eq(2_u64)
+      app.page_pane.page.not_nil!.rows[0][0].should contain("tail")
+
+      harness.type('c')
+      app.page_pane.equality_filter.should be_nil
+      app.page_pane.page.not_nil!.start_row.should eq(0_u64)
+      app.page_pane.page.not_nil!.rows.size.should eq(2)
+
+      # Empty String is a real equality value, not a missing value. Split only
+      # at the first '=' and preserve whitespace and later '=' characters.
+      harness.type('/')
+      harness.type_string("label=")
+      harness.press(Tui::Key::Enter)
+      app.page_pane.equality_filter.not_nil!.value.should eq("")
+      app.page_pane.page.not_nil!.row_offsets.should eq([0_u64])
+      app.page_pane.page.not_nil!.rows.should eq([["\"\"", "0"]])
+
+      harness.type('/')
+      harness.press(Tui::Key::Home)
+      harness.ctrl('k')
+      harness.type_string("label= tail=value ")
+      harness.press(Tui::Key::Enter)
+      app.page_pane.equality_filter.not_nil!.value.should eq(" tail=value ")
+    end
+  end
+
+  it "keeps q and Tab inside filter edit mode and rejects invisible or unsafe text" do
+    with_offline_tui_catalog do |catalog|
+      app = CrystalClick::Examples::OfflineTableBrowserApp.new(catalog, page_rows: 2)
+      harness = Tui::Testing::Harness.new(app, 100, 20)
+      harness.render
+
+      harness.press(Tui::Key::Enter)
+      harness.press(Tui::Key::Down)
+      harness.press(Tui::Key::Enter)
+      harness.press(Tui::Key::Tab)
+      harness.type('/')
+
+      harness.type('q')
+      app.page_pane.filter_input.value.should eq("q")
+      app.quit_requested.should be_false
+      harness.press(Tui::Key::Tab)
+      app.page_pane.filter_input.focused?.should be_true
+      harness.press(Tui::Key::Tab, Tui::Modifiers::Shift)
+      app.page_pane.filter_input.focused?.should be_true
+      harness.press(Tui::Key::Escape)
+      app.quit_requested.should be_false
+      app.page_pane.equality_filter.should be_nil
+      app.page_pane.filter_error.should be_nil
+
+      harness.type('/')
+      app.handle_event(Tui::PasteEvent.new("x" * CrystalClick::Examples::OfflinePagePane::MAX_FILTER_SOURCE_BYTES))
+      app.page_pane.filter_input.value.bytesize.should eq(CrystalClick::Examples::OfflinePagePane::MAX_FILTER_SOURCE_BYTES)
+      harness.press(Tui::Key::Home)
+      harness.ctrl('k')
+      app.page_pane.filter_input.value.should eq("")
+
+      app.handle_event(Tui::PasteEvent.new("x" * (CrystalClick::Examples::OfflinePagePane::MAX_FILTER_SOURCE_BYTES + 1)))
+      app.page_pane.filter_input.value.should eq("")
+      app.page_pane.filter_error.not_nil!.should contain("exceeds")
+
+      app.handle_event(Tui::PasteEvent.new("label=bad\u202Evalue"))
+      app.page_pane.filter_input.value.should eq("")
+      app.page_pane.filter_error.should_not be_nil
+
+      {"\u200B", "\u2060", "\u2028", "\u2029", "\u180B", "\uFE0F", "\uFFFA"}.each do |invisible|
+        app.handle_event(Tui::PasteEvent.new("label=bad#{invisible}hidden"))
+        app.page_pane.filter_input.value.should eq("")
+        app.page_pane.filter_error.should_not be_nil
+      end
+
+      harness.press(Tui::Key::Escape)
+      app.page_pane.filter_error.should be_nil
+
+      # KeyEvent paths must not retain zero-width characters either. Some
+      # terminals mark these non-printable before the app capture guard sees
+      # them; in either case the input stays clear.
+      harness.type('/')
+      {'\u200B', '\u2060', '\u2028', '\u2029', '\u180B', '\uFE0F', '\uFFFA'}.each do |invisible|
+        harness.type(invisible)
+      end
+      app.page_pane.filter_input.value.should eq("")
+      harness.press(Tui::Key::Escape)
+
+      rendered = harness.render_text
+      {"\u202E", "\u200B", "\u2060", "\u2028", "\u2029", "\u180B", "\uFE0F", "\uFFFA"}.each do |invisible|
+        rendered.includes?(invisible).should be_false
+      end
+
+      printable = CrystalClick::Examples::OfflineTuiDisplayText.printable(
+        "a\u00ADb\u034Fc\u061Cd\u180Ee\u200Bf\u200Fg\u202Ah\u2060i\uFEFFj\u2028k\u2029l\u180Bm\uFE0Fn\uFFFA"
+      )
+      printable.should contain("\\u{00AD}")
+      printable.should contain("\\u{034F}")
+      printable.should contain("\\u{061C}")
+      printable.should contain("\\u{180E}")
+      printable.should contain("\\u{200B}")
+      printable.should contain("\\u{200F}")
+      printable.should contain("\\u{202A}")
+      printable.should contain("\\u{2060}")
+      printable.should contain("\\u{FEFF}")
+      printable.should contain("\\u{2028}")
+      printable.should contain("\\u{2029}")
+      printable.should contain("\\u{180B}")
+      printable.should contain("\\u{FE0F}")
+      printable.should contain("\\u{FFFA}")
+      printable.should_not contain("\\u0301")
+      CrystalClick::Examples::OfflineTuiDisplayText.printable("e\u0301").should eq("e\u0301")
+    end
+  end
+
+  it "clears a table's filter when switching to another table" do
+    with_offline_tui_catalog do |catalog|
+      app = CrystalClick::Examples::OfflineTableBrowserApp.new(catalog, page_rows: 2)
+      harness = Tui::Testing::Harness.new(app, 100, 20)
+      harness.render
+
+      harness.press(Tui::Key::Enter)
+      harness.press(Tui::Key::Down)
+      harness.press(Tui::Key::Enter)
+      harness.press(Tui::Key::Tab)
+      harness.type('/')
+      harness.type_string("label=tail")
+      harness.press(Tui::Key::Enter)
+      app.page_pane.equality_filter.should_not be_nil
+
+      harness.press(Tui::Key::Tab)
+      harness.press(Tui::Key::Down)
+      harness.press(Tui::Key::Enter)
+      app.page_pane.equality_filter.should be_nil
+      app.page_pane.page.should be_nil
+      harness.render_text.should contain("ERROR: table has no directly supported")
     end
   end
 

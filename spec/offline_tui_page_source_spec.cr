@@ -47,19 +47,131 @@ describe CrystalClick::Examples::OfflinePageSource do
 
       first = source.load(0_u64)
       first.start_row.should eq(0_u64)
+      first.end_row.should eq(2_u64)
       first.total_rows.should eq(5_u64)
       first.column_names.should eq(["label", "maybe_u64"])
       first.rows.should eq([["\"\"", "0"], ["\"alpha\"", "NULL"]])
+      first.row_offsets.should eq([0_u64, 1_u64])
 
       second = source.load(2_u64)
       second.start_row.should eq(2_u64)
+      second.end_row.should eq(4_u64)
       second.rows.size.should eq(2)
+      second.row_offsets.should eq([2_u64, 3_u64])
       second.rows[1].should eq(["\"tail\"", "7"])
 
       final = source.load(4_u64)
+      final.end_row.should eq(5_u64)
       final.rows.should eq([["\"\"", "NULL"]])
-      source.load(5_u64).rows.should be_empty
+      final.row_offsets.should eq([4_u64])
+      eof = source.load(5_u64)
+      eof.end_row.should eq(5_u64)
+      eof.rows.should be_empty
+      eof.row_offsets.should be_empty
       first.rows.should eq([["\"\"", "0"], ["\"alpha\"", "NULL"]])
+    end
+  end
+
+  it "keeps equality pages on physical windows when a later UInt64 match follows a zero-hit page" do
+    numeric_columns = "    `u8` UInt8,\n    `u16` UInt16,\n    `u32` UInt32,\n    `u64` UInt64,\n" +
+                      "    `i8` Int8,\n    `i16` Int16,\n    `i32` Int32,\n    `i64` Int64,\n" +
+                      "    `f32` Float32,\n    `f64` Float64"
+    with_offline_page_table(numeric_columns, OFFLINE_PAGE_NUMERIC_FIXTURE) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["u64"], 2)
+      equality = CrystalClick::Examples::OfflineEqualityFilter.new("u64", UInt64::MAX)
+
+      first = source.load(0_u64, equality)
+      first.start_row.should eq(0_u64)
+      first.end_row.should eq(2_u64)
+      first.total_rows.should eq(4_u64)
+      first.rows.should be_empty
+      first.row_offsets.should be_empty
+
+      late = source.load(first.end_row, equality)
+      late.start_row.should eq(2_u64)
+      late.end_row.should eq(4_u64)
+      late.rows.should eq([[UInt64::MAX.to_s]])
+      late.row_offsets.should eq([2_u64])
+    end
+  end
+
+  it "compares raw String values before display truncation" do
+    columns = "    `seq` UInt64,\n    `payload` String"
+    prefix = "x" * 300
+    expected = prefix + "B"
+    keys = [0_u64, 1_u64]
+    values = [prefix + "A", expected]
+    setup_part = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_string_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        values.to_unsafe.to_slice(values.size),
+        1
+      )
+      nil
+    }
+
+    with_offline_page_table(columns, nil, setup_part) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 2)
+      page = source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("payload", expected))
+
+      page.end_row.should eq(2_u64)
+      page.rows.size.should eq(1)
+      page.row_offsets.should eq([1_u64])
+      page.rows[0][0].should start_with("[truncated] ")
+      page.rows[0][0].should eq("[truncated] #{(prefix + "A").byte_slice(0, 256).inspect}")
+    end
+  end
+
+  it "matches an empty String exactly and reports a filtered EOF window" do
+    with_offline_page_table do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["label"], 2)
+      equality = CrystalClick::Examples::OfflineEqualityFilter.new("label", "")
+
+      first = source.load(0_u64, equality)
+      first.rows.should eq([["\"\""]])
+      first.row_offsets.should eq([0_u64])
+      first.end_row.should eq(2_u64)
+
+      middle = source.load(first.end_row, equality)
+      middle.rows.should be_empty
+      middle.row_offsets.should be_empty
+      middle.end_row.should eq(4_u64)
+
+      final = source.load(middle.end_row, equality)
+      final.rows.should eq([["\"\""]])
+      final.row_offsets.should eq([4_u64])
+      final.end_row.should eq(5_u64)
+
+      eof = source.load(final.end_row, equality)
+      eof.rows.should be_empty
+      eof.row_offsets.should be_empty
+      eof.end_row.should eq(5_u64)
+    end
+  end
+
+  it "rejects unselected columns, unsupported types, and mismatched equality values" do
+    with_offline_page_table do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["label"], 2)
+
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("maybe_u64", 1_u64))
+      end
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("label", 1_u64))
+      end
+
+      no_hits = source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("label", "label"))
+      no_hits.rows.should be_empty
+      no_hits.row_offsets.should be_empty
+      no_hits.end_row.should eq(2_u64)
+
+      nullable_source = CrystalClick::Examples::OfflinePageSource.new(table, ["maybe_u64"], 2)
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        nullable_source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("maybe_u64", 1_u64))
+      end
     end
   end
 
@@ -143,6 +255,13 @@ describe CrystalClick::Examples::OfflinePageSource do
       page = CrystalClick::Examples::OfflinePageSource.new(table, ["seq"], 2).load(0_u64)
       page.total_rows.should eq(0_u64)
       page.rows.should be_empty
+      filtered = CrystalClick::Examples::OfflinePageSource.new(table, ["seq"], 2).load(
+        0_u64,
+        CrystalClick::Examples::OfflineEqualityFilter.new("seq", 0_u64)
+      )
+      filtered.end_row.should eq(0_u64)
+      filtered.rows.should be_empty
+      filtered.row_offsets.should be_empty
     end
   end
 end

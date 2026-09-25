@@ -126,17 +126,30 @@ CRYSTAL_PATH="/path/to/crystal_tui/src:$(crystal env CRYSTAL_PATH)" \
 
 Choose a database with Enter to load its table names, then choose a table with
 Enter. Tab switches focus between the tree and the page; PageDown/PageUp move
-by one bounded page, and `q` or Ctrl+C quits. The pane shows at most 256 owned
-rows from up to 16 directly supported typed columns. Omitted columns are
-reported, not silently decoded. Non-NULL Strings are quoted and escaped; only
-their first 256 source bytes are retained for display. Longer values carry a
-`[truncated]` prefix. Row offsets follow the resolved
-physical part order; these candidates are **not** ClickHouse server Active
-parts. The example does not provide filtering, global sorting, or a snapshot
-of a live server. Keep the data root immutable while browsing: a newly added
-part may remain invisible because the inventory was captured when the table
-was opened. It still decodes whole intersecting marks and reopens reader
-metadata on page requests, so no speedup or memory-use claim is implied.
+by one bounded physical window, and `q` or Ctrl+C quits. From the page pane,
+`/` opens a filter input: enter `column=value` to compare one selected direct
+`String` or `UInt64` column, press Enter to apply, or Escape to cancel.
+`String` values preserve accepted characters after the first `=`, including
+spaces and more `=` characters; `UInt64` values use unsigned decimal. Press
+`c` in the page pane to clear the filter. While editing, `q` is text, not the
+quit command, and Tab keeps the input focused. The interactive expression is
+limited to 512 bytes and rejects terminal controls and a defined set of
+invisible Unicode formatting characters; it does not normalize lookalike
+characters. The pane shows at most 256 owned rows from up to 16 directly
+supported typed columns. Omitted columns are reported, not silently decoded.
+Non-NULL Strings are quoted and escaped; only their first 256 source bytes are
+retained for display. Longer values carry a `[truncated]` prefix. Equality
+uses raw typed values, not truncated display text. Each filtered page examines
+one bounded *physical* window, so it may show no matching rows even though
+later windows have matches. PageDown still advances through those windows. Row
+offsets follow the resolved physical part order; these candidates are **not**
+ClickHouse server Active parts. The example does not provide global sorting,
+match counts, primary-key pruning for this equality filter, or a snapshot of a
+live server. Keep the data root
+immutable while browsing: a newly added part may remain invisible because the
+inventory was captured when the table was opened. It still decodes whole
+intersecting marks and reopens reader metadata on page requests, so no speedup
+or memory-use claim is implied.
 
 The opt-in headless UI check needs the same `CRYSTAL_PATH`:
 

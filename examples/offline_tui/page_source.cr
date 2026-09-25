@@ -2,16 +2,30 @@ require "../../src/crystal_click"
 
 module CrystalClick
   module Examples
+    struct OfflineEqualityFilter
+      getter column : String
+      getter value : UInt64 | String
+
+      def initialize(column : String, value : UInt64 | String)
+        @column = column.dup
+        @value = value.is_a?(String) ? value.dup : value
+      end
+    end
+
     struct OfflinePage
       getter start_row : UInt64
+      getter end_row : UInt64
       getter total_rows : UInt64
       getter column_names : Array(String)
+      getter row_offsets : Array(UInt64)
       getter rows : Array(Array(String))
 
       def initialize(
         @start_row : UInt64,
+        @end_row : UInt64,
         @total_rows : UInt64,
         @column_names : Array(String),
+        @row_offsets : Array(UInt64),
         @rows : Array(Array(String)),
       )
       end
@@ -60,13 +74,19 @@ module CrystalClick
         @total_rows = checked_total_rows(table.resolved_scan_parts)
       end
 
-      def load(start_row : UInt64) : OfflinePage
+      def load(start_row : UInt64, equality : OfflineEqualityFilter? = nil) : OfflinePage
         raise BoundsError.new("window start row is past the end of the table") if start_row > @total_rows
 
         remaining_rows = @total_rows - start_row
         expected_rows = {@page_rows.to_u64, remaining_rows}.min.to_i
-        rows = Array(Array(String)).new(expected_rows)
+        end_row = start_row + expected_rows.to_u64
+        result_capacity = equality ? 0 : expected_rows
+        rows = Array(Array(String)).new(result_capacity)
+        row_offsets = Array(UInt64).new(result_capacity)
         observed_rows = 0_u64
+        filter_column = equality.try(&.column)
+        filter_value = equality.try(&.value)
+        validate_equality_filter(filter_column, filter_value) if equality
 
         @table.scan_typed_window(@columns, start_row, @page_rows) do |batch|
           expected_offset = start_row + observed_rows
@@ -74,24 +94,38 @@ module CrystalClick
             raise CorruptPartError.new("typed window batch is not contiguous with requested row offset")
           end
 
-          formatted_columns = Array(Array(String)).new(@columns.size)
-          @columns.each_with_index do |column, index|
-            formatted_columns << format_column(batch, column, @column_types[index])
-          end
-
-          batch_size = formatted_columns[0].size
+          batch_size = typed_column_size(batch, @columns[0], @column_types[0])
           raise CorruptPartError.new("typed window emitted an empty batch") if batch_size == 0
-          unless formatted_columns.all? { |values| values.size == batch_size }
-            raise CorruptPartError.new("typed window selected columns have different row counts")
+          @columns.each_with_index do |column, index|
+            unless typed_column_size(batch, column, @column_types[index]) == batch_size
+              raise CorruptPartError.new("typed window selected columns have different row counts")
+            end
           end
           if observed_rows > expected_rows.to_u64 || batch_size.to_u64 > expected_rows.to_u64 - observed_rows
             raise CorruptPartError.new("typed window returned more rows than requested")
           end
 
-          batch_size.times do |row_index|
-            row = Array(String).new(@columns.size)
-            formatted_columns.each { |values| row << values[row_index] }
-            rows << row
+          matched_indices = if column = filter_column
+                              value = filter_value || raise(CorruptPartError.new("equality filter value disappeared"))
+                              equality_match_indices(batch, column, value)
+                            else
+                              nil
+                            end
+
+          if indices = matched_indices
+            indices.each do |matched_index|
+              row_index = matched_index.to_i
+              unless row_index >= 0 && row_index < batch_size
+                raise CorruptPartError.new("equality filter matched a row outside the typed batch")
+              end
+              rows << format_row(batch, row_index)
+              row_offsets << batch.source_row_offset + row_index.to_u64
+            end
+          else
+            batch_size.times do |row_index|
+              rows << format_row(batch, row_index)
+              row_offsets << batch.source_row_offset + row_index.to_u64
+            end
           end
           observed_rows += batch_size.to_u64
           nil
@@ -101,7 +135,7 @@ module CrystalClick
           raise CorruptPartError.new("typed window returned fewer rows than expected")
         end
 
-        OfflinePage.new(start_row, @total_rows, @column_names.dup, rows)
+        OfflinePage.new(start_row, end_row, @total_rows, @column_names.dup, row_offsets, rows)
       end
 
       private def checked_total_rows(parts : Array(OfflinePartCandidate)) : UInt64
@@ -116,67 +150,155 @@ module CrystalClick
         total
       end
 
-      private def format_column(batch : WidePartTableBatch, column : String, type : String) : Array(String)
+      private def validate_equality_filter(column : String?, value : (UInt64 | String)?) : Nil
+        selected_column = column || raise(CorruptPartError.new("equality filter column disappeared"))
+        selected_value = value || raise(CorruptPartError.new("equality filter value disappeared"))
+        column_index = @columns.index(selected_column) ||
+                       raise(UnsupportedFormatError.new("equality filter column must be selected"))
+
+        case selected_value
+        when UInt64
+          unless @column_types[column_index] == "UInt64"
+            raise UnsupportedFormatError.new("UInt64 equality filter requires an exact UInt64 column")
+          end
+        when String
+          unless @column_types[column_index] == "String"
+            raise UnsupportedFormatError.new("String equality filter requires an exact String column")
+          end
+        else
+          raise UnsupportedFormatError.new("equality filter type is unsupported")
+        end
+      end
+
+      private def equality_match_indices(batch : WidePartTableBatch, column : String, value : UInt64 | String) : Array(Int32)
+        matches = Array(Int32).new
+        case value
+        when UInt64
+          batch.values_for(column, UInt64).each_with_index do |candidate, index|
+            matches << index.to_i32 if candidate == value
+          end
+        when String
+          batch.strings_for(column).each_with_index do |candidate, index|
+            matches << index.to_i32 if candidate == value
+          end
+        end
+        matches
+      end
+
+      private def typed_column_size(batch : WidePartTableBatch, column : String, type : String) : Int32
         case type
         when "UInt8"
-          format_numeric_values(batch, column, UInt8)
+          batch.values_for(column, UInt8).size
         when "UInt16"
-          format_numeric_values(batch, column, UInt16)
+          batch.values_for(column, UInt16).size
         when "UInt32"
-          format_numeric_values(batch, column, UInt32)
+          batch.values_for(column, UInt32).size
         when "UInt64"
-          format_numeric_values(batch, column, UInt64)
+          batch.values_for(column, UInt64).size
         when "Int8"
-          format_numeric_values(batch, column, Int8)
+          batch.values_for(column, Int8).size
         when "Int16"
-          format_numeric_values(batch, column, Int16)
+          batch.values_for(column, Int16).size
         when "Int32"
-          format_numeric_values(batch, column, Int32)
+          batch.values_for(column, Int32).size
         when "Int64"
-          format_numeric_values(batch, column, Int64)
+          batch.values_for(column, Int64).size
         when "Float32"
-          format_numeric_values(batch, column, Float32)
+          batch.values_for(column, Float32).size
         when "Float64"
-          format_numeric_values(batch, column, Float64)
+          batch.values_for(column, Float64).size
         when "String"
-          batch.strings_for(column).map { |value| display_string(value) }.to_a
+          batch.strings_for(column).size
         when "Nullable(UInt8)"
-          format_nullable_numeric_values(batch, column, UInt8)
+          batch.nullable_values_for(column, UInt8).size
         when "Nullable(UInt16)"
-          format_nullable_numeric_values(batch, column, UInt16)
+          batch.nullable_values_for(column, UInt16).size
         when "Nullable(UInt32)"
-          format_nullable_numeric_values(batch, column, UInt32)
+          batch.nullable_values_for(column, UInt32).size
         when "Nullable(UInt64)"
-          format_nullable_numeric_values(batch, column, UInt64)
+          batch.nullable_values_for(column, UInt64).size
         when "Nullable(Int8)"
-          format_nullable_numeric_values(batch, column, Int8)
+          batch.nullable_values_for(column, Int8).size
         when "Nullable(Int16)"
-          format_nullable_numeric_values(batch, column, Int16)
+          batch.nullable_values_for(column, Int16).size
         when "Nullable(Int32)"
-          format_nullable_numeric_values(batch, column, Int32)
+          batch.nullable_values_for(column, Int32).size
         when "Nullable(Int64)"
-          format_nullable_numeric_values(batch, column, Int64)
+          batch.nullable_values_for(column, Int64).size
         when "Nullable(Float32)"
-          format_nullable_numeric_values(batch, column, Float32)
+          batch.nullable_values_for(column, Float32).size
         when "Nullable(Float64)"
-          format_nullable_numeric_values(batch, column, Float64)
+          batch.nullable_values_for(column, Float64).size
         when "Nullable(String)"
-          batch.nullable_strings_for(column).map do |value|
-            value ? display_string(value) : "NULL"
-          end.to_a
+          batch.nullable_strings_for(column).size
         else
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
       end
 
-      private def format_numeric_values(batch : WidePartTableBatch, column : String, type : T.class) : Array(String) forall T
-        batch.values_for(column, type).map(&.to_s).to_a
+      private def format_row(batch : WidePartTableBatch, row_index : Int) : Array(String)
+        row = Array(String).new(@columns.size)
+        @columns.each_with_index do |column, index|
+          row << format_cell(batch, column, @column_types[index], row_index)
+        end
+        row
       end
 
-      private def format_nullable_numeric_values(batch : WidePartTableBatch, column : String, type : T.class) : Array(String) forall T
-        batch.nullable_values_for(column, type).map do |value|
-          value ? value.to_s : "NULL"
-        end.to_a
+      private def format_cell(batch : WidePartTableBatch, column : String, type : String, row_index : Int) : String
+        case type
+        when "UInt8"
+          batch.values_for(column, UInt8)[row_index].to_s
+        when "UInt16"
+          batch.values_for(column, UInt16)[row_index].to_s
+        when "UInt32"
+          batch.values_for(column, UInt32)[row_index].to_s
+        when "UInt64"
+          batch.values_for(column, UInt64)[row_index].to_s
+        when "Int8"
+          batch.values_for(column, Int8)[row_index].to_s
+        when "Int16"
+          batch.values_for(column, Int16)[row_index].to_s
+        when "Int32"
+          batch.values_for(column, Int32)[row_index].to_s
+        when "Int64"
+          batch.values_for(column, Int64)[row_index].to_s
+        when "Float32"
+          batch.values_for(column, Float32)[row_index].to_s
+        when "Float64"
+          batch.values_for(column, Float64)[row_index].to_s
+        when "String"
+          display_string(batch.strings_for(column)[row_index])
+        when "Nullable(UInt8)"
+          nullable_numeric_cell(batch, column, UInt8, row_index)
+        when "Nullable(UInt16)"
+          nullable_numeric_cell(batch, column, UInt16, row_index)
+        when "Nullable(UInt32)"
+          nullable_numeric_cell(batch, column, UInt32, row_index)
+        when "Nullable(UInt64)"
+          nullable_numeric_cell(batch, column, UInt64, row_index)
+        when "Nullable(Int8)"
+          nullable_numeric_cell(batch, column, Int8, row_index)
+        when "Nullable(Int16)"
+          nullable_numeric_cell(batch, column, Int16, row_index)
+        when "Nullable(Int32)"
+          nullable_numeric_cell(batch, column, Int32, row_index)
+        when "Nullable(Int64)"
+          nullable_numeric_cell(batch, column, Int64, row_index)
+        when "Nullable(Float32)"
+          nullable_numeric_cell(batch, column, Float32, row_index)
+        when "Nullable(Float64)"
+          nullable_numeric_cell(batch, column, Float64, row_index)
+        when "Nullable(String)"
+          value = batch.nullable_strings_for(column)[row_index]
+          value ? display_string(value) : "NULL"
+        else
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+      end
+
+      private def nullable_numeric_cell(batch : WidePartTableBatch, column : String, type : T.class, row_index : Int) : String forall T
+        value = batch.nullable_values_for(column, type)[row_index]
+        value ? value.to_s : "NULL"
       end
 
       private def display_string(value : String) : String
