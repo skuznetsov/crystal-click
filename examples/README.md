@@ -114,6 +114,37 @@ whole intersecting marks, so this is a bounded *result* API, not row-level
 lazy decoding or a performance claim. It requires the same immutable,
 quiescent copy and overlapping-part rejection as other offline scans.
 
+Browse a local catalog and page through physical MergeTree rows with the
+optional `crystal_tui` example. Keep `crystal_tui` checked out separately and
+point `CRYSTAL_PATH` at its `src` directory; the core shard has no TUI
+dependency:
+
+```sh
+CRYSTAL_PATH="/path/to/crystal_tui/src:$(crystal env CRYSTAL_PATH)" \
+  crystal run examples/offline_tui/main.cr -- /path/to/immutable/clickhouse-data-root
+```
+
+Choose a database with Enter to load its table names, then choose a table with
+Enter. Tab switches focus between the tree and the page; PageDown/PageUp move
+by one bounded page, and `q` or Ctrl+C quits. The pane shows at most 256 owned
+rows from up to 16 directly supported typed columns. Omitted columns are
+reported, not silently decoded. Non-NULL Strings are quoted and escaped; only
+their first 256 source bytes are retained for display. Longer values carry a
+`[truncated]` prefix. Row offsets follow the resolved
+physical part order; these candidates are **not** ClickHouse server Active
+parts. The example does not provide filtering, global sorting, or a snapshot
+of a live server. Keep the data root immutable while browsing: a newly added
+part may remain invisible because the inventory was captured when the table
+was opened. It still decodes whole intersecting marks and reopens reader
+metadata on page requests, so no speedup or memory-use claim is implied.
+
+The opt-in headless UI check needs the same `CRYSTAL_PATH`:
+
+```sh
+CRYSTAL_PATH="/path/to/crystal_tui/src:$(crystal env CRYSTAL_PATH)" \
+  crystal spec examples/offline_tui/spec/browser_spec.cr
+```
+
 On this macOS toolchain, Crystal's default LLD linker cannot parse the
 installed Xcode TAPI SDK files. If that affects your setup, put
 `--link-flags='-fuse-ld=ld'` before the source path, for example:
