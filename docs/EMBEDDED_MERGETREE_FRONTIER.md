@@ -5,7 +5,9 @@ macOS host against the pinned ClickHouse build. Bounded W4, W5, and W6 are
 verified on the local Darwin process-atomicity frontier. Bounded W7 is
 verified on the same Crystal-owned table frontier; power-loss recovery
 remains future work. Bounded W8 recorded primary-index hash validation is
-verified for embedded candidate scans only.
+verified for embedded candidate scans only. W9 covers the exact scalar and
+Nullable payload types supported by the typed reader, on the pinned local
+ClickHouse/Darwin writer frontier; all remaining type families are guard-only.
 
 ## Purpose and bounded contexts
 
@@ -410,6 +412,39 @@ tested Darwin/pinned-producer frontier. It decays on checksum parsing, hash
 algorithm, index bytes/selection, active-part preflight, or producer-version
 changes. Refresh the focused/full/fault suites and the physical oracles.
 
+## Completed slice W9: typed payload parity with the exact typed reader
+
+Admit a bounded writer for a sorted `UInt64` key and one payload whose type is
+one of the exact physical scalar types accepted by `WidePart.open_typed`:
+`UInt8/16/32/64`, `Int8/16/32/64`, `Float32/64`, `String`, or `Nullable` of
+any of those. Existing writer entry points remain supported. The new entry
+point must derive the declared ClickHouse type from the exact Crystal payload
+type, encode integers and float bit patterns little-endian, and use BASIC
+Nullable streams with deterministic zero/empty nested values under nulls.
+It retains W1's two-column Wide part, `UInt64` key, LZ4 frames, plain adaptive
+marks, one partition, staged checksums, and exclusive Darwin publication.
+Every stream must be bounded against the current reader's frame/file/mark
+limits before publication. No implicit conversion or lossy narrowing is
+admitted.
+
+W9 does not claim arbitrary table schemas, non-`UInt64` sorting keys, Compact
+parts, sparse String variants, or complete JSON object support. The reader's
+`JSON(path Type, ...)` virtual typed-path access is a separate structural
+format: its object-structure stream and serialization metadata are not covered
+by ordinary scalar parity. It remains guard-only until a distinct stock
+ClickHouse differential writer slice is designed and tested. Likewise this
+slice does not widen embedded table insertion beyond its current schema.
+
+For each admitted payload type and substream shape, the falsifier is a
+synthetic multi-mark part with boundary values, null-vs-default distinctions,
+and a short final granule that Crystal reads exactly but pinned stock
+ClickHouse cannot `ATTACH PART`, return the same typed values and key-range
+selection, or pass `CHECK TABLE`. A corrupt stream must make the external
+integrity check fail. The oracle must report the specific type/shape tested;
+a scalar pass cannot certify a Nullable or String shape. The old three writer
+forms are regression controls. A separate disposable `clickhouse-server`
+smoke test remains needed before claiming daemon lifecycle compatibility.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -417,21 +452,18 @@ replication, transactions across tables, SQL, Compact parts, compressed
 marks, composite codecs, `Nullable`, `String`, JSON, projections, deletes,
 TTL, and arbitrary partition expressions. No performance claim is admitted.
 
-Guard-only follow-on slices, in dependency order:
+Residual guard-only surfaces:
 
-1. Continue generalizing physical serialization to the types the reader
-   actually supports, one stock-ClickHouse differential fixture per type and
-   substream shape. Reader support does not imply writer support. Recheck
-   physical stream naming on case-sensitive filesystems before claiming
-   cross-filesystem compatibility. W3 handles only regular String substreams;
-   sparse and other String variants remain guard-only.
-2. W4 admits only the bounded Crystal-owned table and committed-part recovery
-   above; it does not widen `OfflineCatalog` to a mutable API.
-3. W6 admits only explicit historical-part reclamation and process-death
-   probes above. W7 admits only typed UInt64 primary-key candidate granules;
-   W8 admits recorded-index-hash validation on that embedded candidate
-   path. General filtering, power-loss durability, and idempotent caller
-   retries remain separate frontiers.
+1. Extend reader and writer together beyond W9's exact 22 payload shapes,
+   one stock-ClickHouse differential fixture per type and substream shape.
+   Reader support never implies writer support. Recheck physical stream naming
+   on case-sensitive filesystems before claiming cross-filesystem
+   compatibility. Sparse and other String variants remain guard-only.
+2. The bounded Crystal-owned table does not widen `OfflineCatalog` to a
+   mutable API, and W9 does not widen table insertion to new schemas.
+3. General filtering, power-loss durability, and idempotent caller retries
+   remain separate frontiers. W8's recorded-index-hash validation applies
+   only to embedded candidate scans.
 
 Generic selected-entry validation remains size-only. W8 checks only the
 embedded candidate path's active primary indexes; it is not full part
@@ -541,9 +573,31 @@ sparse serialization, table-level insert/merge, or performance. A
 producer-version, format, platform, reader, or writer change decays the
 certificate; refresh it with the focused/full suites and external oracle.
 
+W9 evidence at parent `a358b76` plus the W9 implementation diff on Crystal
+1.21.0 and Darwin: the missing typed entry point was first exercised as a
+RED spec. The legacy and typed writer specs passed 24/24 together; the full
+debug and release suites each passed 340/340. Formatting, shell syntax, and
+diff whitespace checks passed. The independent official ClickHouse local
+`26.7.1.1315` oracle attached all 22 exact scalar/Nullable payload shapes,
+returned exact typed rows and `UInt64` key-range rows, and passed clean
+`CHECK TABLE`. It then detected an independent one-byte mutation in each
+nonempty payload substream, restored the byte, and required a clean check
+before testing the next stream. Additional controls covered all-NULL
+`Nullable(UInt64)`, all-NULL `Nullable(String)` with a zero-byte raw stream,
+and all-empty `String`; the older four-shape writer oracle stayed green.
+Local failure probes reject invalid input and oversized regular or Nullable
+String payloads without publishing a part. The adversarial review's two
+negative-test gaps were closed before the final runs. This certificate is
+limited to one sorted `UInt64` key plus one typed payload in a Wide/LZ4 part,
+exclusive Darwin publication, and the pinned `clickhouse local` consumer;
+it does not prove a daemon's attach/restart lifecycle, arbitrary schemas,
+JSON object serialization, or other ClickHouse types. A writer/reader or
+format change, ClickHouse build change, or platform/filesystem change decays
+it; refresh the focused/full suites and both external writer oracles.
+
 Risk tier: CAUTION, because malformed serialization can create convincing
-but unusable persistent data. Rollback is the respective W1, W2, or W3 commit;
-there will be no push or write into existing ClickHouse data roots. The
+but unusable persistent data. Rollback is the respective W1, W2, W3, or W9
+commit; there will be no push or write into existing ClickHouse data roots. The
 strongest likely failure is a subtle frame/checksum or mark/index mismatch
 that our reader tolerates and ClickHouse rejects. The stock-ClickHouse attach,
-read, and `CHECK TABLE` gates are mandatory for W1/W2/W3 verification.
+read, and `CHECK TABLE` gates are mandatory for W1/W2/W3/W9 verification.

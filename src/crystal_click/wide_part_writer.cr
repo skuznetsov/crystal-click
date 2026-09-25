@@ -159,6 +159,52 @@ module CrystalClick
       end
     end
 
+    # Write one immutable two-column part with a sorted UInt64 primary key.
+    # The payload's Crystal type selects an admitted numeric, String, or
+    # BASIC Nullable type; numeric values are encoded by their exact bits.
+    def self.write_uint64_typed_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(T),
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      {% if T == String %}
+        write_uint64_string_pair(destination, key_name, keys, value_name, values, rows_per_mark)
+      {% elsif T == UInt64? %}
+        write_uint64_nullable_uint64_pair(destination, key_name, keys, value_name, values, rows_per_mark)
+      {% else %}
+        type_name = typed_type_name(values)
+        validate_typed_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+
+        target = File.expand_path(destination)
+        parent = File.dirname(target)
+        raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+        raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+        stage = create_stage(parent)
+        begin
+          records = [] of ChecksumRecord
+          records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+          records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
+          records << write_primary_index(stage, keys, rows_per_mark)
+          records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+          records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name)) if type_name.starts_with?("Nullable(")
+          write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
+          write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+          write_plain_metadata(stage, "metadata_version.txt", "0")
+          write_plain_metadata(stage, "columns_substreams.txt", typed_substreams_metadata(key_name, value_name, type_name))
+          write_checksums(stage, records)
+          validate_staged_typed_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
+          publish_exclusively(stage, target)
+          target
+        ensure
+          FileUtils.rm_rf(stage) if Dir.exists?(stage)
+        end
+      {% end %}
+    end
+
     private def self.validate_nullable_uint64_inputs(
       destination : String,
       key_name : String,
@@ -358,6 +404,484 @@ module CrystalClick
       nil
     end
 
+    private def self.typed_type_name(values : Slice(T)) : String forall T
+      {% if T == UInt8 %}
+        "UInt8"
+      {% elsif T == UInt16 %}
+        "UInt16"
+      {% elsif T == UInt32 %}
+        "UInt32"
+      {% elsif T == UInt64 %}
+        "UInt64"
+      {% elsif T == Int8 %}
+        "Int8"
+      {% elsif T == Int16 %}
+        "Int16"
+      {% elsif T == Int32 %}
+        "Int32"
+      {% elsif T == Int64 %}
+        "Int64"
+      {% elsif T == Float32 %}
+        "Float32"
+      {% elsif T == Float64 %}
+        "Float64"
+      {% elsif T == UInt8? %}
+        "Nullable(UInt8)"
+      {% elsif T == UInt16? %}
+        "Nullable(UInt16)"
+      {% elsif T == UInt32? %}
+        "Nullable(UInt32)"
+      {% elsif T == UInt64? %}
+        "Nullable(UInt64)"
+      {% elsif T == Int8? %}
+        "Nullable(Int8)"
+      {% elsif T == Int16? %}
+        "Nullable(Int16)"
+      {% elsif T == Int32? %}
+        "Nullable(Int32)"
+      {% elsif T == Int64? %}
+        "Nullable(Int64)"
+      {% elsif T == Float32? %}
+        "Nullable(Float32)"
+      {% elsif T == Float64? %}
+        "Nullable(Float64)"
+      {% elsif T == String %}
+        "String"
+      {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
+        "Nullable(String)"
+      {% else %}
+        raise UnsupportedFormatError.new("typed writer requires one of the supported numeric, String, or Nullable payload types")
+      {% end %}
+    end
+
+    private def self.validate_typed_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(T),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      {% if T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+        validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+        validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
+        validate_nullable_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+      {% else %}
+        raise UnsupportedFormatError.new("unsupported typed writer payload")
+      {% end %}
+    end
+
+    private def self.write_typed_payload_streams(
+      stage : String,
+      column : String,
+      values : Slice(T),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord) forall T
+      {% if T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+        write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+        write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+      {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
+        write_nullable_string_streams(stage, column, values, rows_per_mark)
+      {% else %}
+        raise UnsupportedFormatError.new("unsupported typed writer payload")
+      {% end %}
+    end
+
+    private def self.numeric_width(type_name : String) : Int32
+      case type_name
+      when "UInt8", "Int8"
+        1
+      when "UInt16", "Int16"
+        2
+      when "UInt32", "Int32", "Float32"
+        4
+      when "UInt64", "Int64", "Float64"
+        8
+      else
+        raise UnsupportedFormatError.new("typed writer requires an exact fixed-width primitive numeric payload")
+      end
+    end
+
+    private def self.validate_nullable_typed_numeric_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(T),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      stream_bases = [key_name, "#{value_name}.null", value_name].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      width = numeric_width(type_name["Nullable(".size...-1])
+      key_data_bytes = 0_i64
+      null_data_bytes = 0_i64
+      nested_data_bytes = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        {
+          {rows.to_i64 * 8_i64, "UInt64 key", key_data_bytes},
+          {rows.to_i64, "Nullable null-map", null_data_bytes},
+          {rows.to_i64 * width.to_i64, "Nullable nested", nested_data_bytes},
+        }.each do |raw_size, label, prior_bytes|
+          raise ArgumentError.new("#{label} granule exceeds decompressed frame limit") if raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          frame_size = literal_frame_size(raw_size)
+          raise ArgumentError.new("#{label} granule literal frame exceeds compressed frame limit") if frame_size > MAX_FRAME_COMPRESSED.to_i64
+          raise ArgumentError.new("#{label} stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - prior_bytes
+          if label == "UInt64 key"
+            key_data_bytes += frame_size
+          elsif label == "Nullable null-map"
+            null_data_bytes += frame_size
+          else
+            nested_data_bytes += frame_size
+          end
+        end
+        start_row += rows
+      end
+      nil
+    end
+
+    private def self.validate_nullable_string_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String?),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      stream_bases = [key_name, "#{value_name}.null", "#{value_name}.size", value_name].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      key_data_bytes = 0_i64
+      null_data_bytes = 0_i64
+      size_data_bytes = 0_i64
+      string_data_bytes = 0_i64
+      total_raw_size = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_string_frame_size(fixed_raw_size, "UInt64 key and Nullable(String) size")
+        {
+          {"UInt64 key", key_data_bytes},
+          {"Nullable(String) size", size_data_bytes},
+        }.each do |label, prior_bytes|
+          raise ArgumentError.new("#{label} stream exceeds reader limit") if fixed_frame_size > MAX_DATA_FILE_BYTES - prior_bytes
+          if label == "UInt64 key"
+            key_data_bytes += fixed_frame_size
+          else
+            size_data_bytes += fixed_frame_size
+          end
+        end
+
+        null_frame_size = checked_string_frame_size(rows.to_i64, "Nullable(String) null-map")
+        raise ArgumentError.new("Nullable(String) null-map exceeds reader limit") if null_frame_size > MAX_DATA_FILE_BYTES - null_data_bytes
+        null_data_bytes += null_frame_size
+
+        raw_string_size = 0_i64
+        rows.times do |offset|
+          value = values[start_row + offset]
+          unless value.nil?
+            value_size = value.not_nil!.bytesize.to_i64
+            if value_size > MAX_FRAME_RAW_BYTES.to_i64 - raw_string_size
+              raise ArgumentError.new("Nullable(String) payload granule exceeds decompressed frame limit")
+            end
+            raw_string_size += value_size
+            total_raw_size += value_size
+            raise ArgumentError.new("Nullable(String) payload exceeds reader limit") if total_raw_size > MAX_DATA_FILE_BYTES
+          end
+        end
+        unless raw_string_size == 0
+          frame_size = checked_string_frame_size(raw_string_size, "Nullable(String) payload")
+          raise ArgumentError.new("Nullable(String) data stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - string_data_bytes
+          string_data_bytes += frame_size
+        end
+        start_row += rows
+      end
+      nil
+    end
+
+    private def self.validate_typed_numeric_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(T),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      stream_bases = [key_name, value_name].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      width = numeric_width(type_name).to_i64
+      key_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        {
+          {rows.to_i64 * 8_i64, "UInt64 key", key_data_bytes},
+          {rows.to_i64 * width, "typed numeric", value_data_bytes},
+        }.each do |raw_size, label, prior_bytes|
+          raise ArgumentError.new("#{label} granule exceeds decompressed frame limit") if raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          frame_size = literal_frame_size(raw_size)
+          raise ArgumentError.new("#{label} granule literal frame exceeds compressed frame limit") if frame_size > MAX_FRAME_COMPRESSED.to_i64
+          raise ArgumentError.new("#{label} data stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - prior_bytes
+          if label == "UInt64 key"
+            key_data_bytes += frame_size
+          else
+            value_data_bytes += frame_size
+          end
+        end
+        start_row += rows
+      end
+      nil
+    end
+
+    private def self.write_typed_numeric_stream(
+      stage : String,
+      column : String,
+      values : Slice(T),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord) forall T
+      width = numeric_width(type_name)
+      base_name = StreamName.hash(column)
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_path = File.join(stage, data_name)
+      mark_path = File.join(stage, marks_name)
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      start_row = 0
+
+      File.open(data_path, "wb") do |data_file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          raw = Bytes.new(rows * width)
+          rows.times do |row|
+            write_typed_numeric_le(raw, row * width, values[start_row + row])
+          end
+
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+
+          frame = encode_lz4_frame(raw)
+          raise ArgumentError.new("typed numeric data stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+          data_file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(raw)
+          data_size += frame.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(mark_path, marks)
+      mark_hash = CityHashV1.file_hash(marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64 * width.to_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false),
+      ]
+    end
+
+    private def self.write_nullable_typed_numeric_streams(
+      stage : String,
+      column : String,
+      values : Slice(T),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord) forall T
+      width = numeric_width(type_name["Nullable(".size...-1])
+      null_base = StreamName.hash("#{column}.null")
+      value_base = StreamName.hash(column)
+      null_data_name = "#{null_base}.bin"
+      null_marks_name = "#{null_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      null_data_path = File.join(stage, null_data_name)
+      null_mark_path = File.join(stage, null_marks_name)
+      value_data_path = File.join(stage, value_data_name)
+      value_mark_path = File.join(stage, value_marks_name)
+      null_data_hash = CityHashV1::FileHasher.new
+      null_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      null_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      null_data_size = 0_u64
+      value_data_size = 0_u64
+      start_row = 0
+
+      File.open(null_data_path, "wb") do |null_data_file|
+        File.open(value_data_path, "wb") do |value_data_file|
+          while start_row < values.size
+            rows = {rows_per_mark, values.size - start_row}.min
+            null_raw = Bytes.new(rows)
+            value_raw = Bytes.new(rows * width)
+            rows.times do |row|
+              value = values[start_row + row]
+              offset = row * width
+              if value.nil?
+                null_raw[row] = 1_u8
+                width.times { |byte| value_raw[offset + byte] = 0_u8 }
+              else
+                null_raw[row] = 0_u8
+                write_typed_numeric_le(value_raw, offset, value.not_nil!)
+              end
+            end
+
+            write_uint64_le(null_mark_bytes, null_data_size)
+            write_uint64_le(null_mark_bytes, 0_u64)
+            write_uint64_le(null_mark_bytes, rows.to_u64)
+            write_uint64_le(value_mark_bytes, value_data_size)
+            write_uint64_le(value_mark_bytes, 0_u64)
+            write_uint64_le(value_mark_bytes, rows.to_u64)
+
+            null_frame = encode_lz4_frame(null_raw)
+            value_frame = encode_lz4_frame(value_raw)
+            raise ArgumentError.new("Nullable null-map stream exceeds reader limit") if null_data_size > MAX_DATA_FILE_BYTES.to_u64 - null_frame.size.to_u64
+            raise ArgumentError.new("Nullable nested stream exceeds reader limit") if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+            null_data_file.write(null_frame)
+            null_data_hash.update(null_frame)
+            null_raw_hash.update(null_raw)
+            null_data_size += null_frame.size.to_u64
+            value_data_file.write(value_frame)
+            value_data_hash.update(value_frame)
+            value_raw_hash.update(value_raw)
+            value_data_size += value_frame.size.to_u64
+            start_row += rows
+          end
+        end
+      end
+
+      write_uint64_le(null_mark_bytes, null_data_size)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      null_marks = null_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if null_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if value_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(null_mark_path, null_marks)
+      File.write(value_mark_path, value_marks)
+
+      [
+        ChecksumRecord.new(null_data_name, null_data_size, null_data_hash.finish, true, values.size.to_u64, null_raw_hash.finish),
+        ChecksumRecord.new(null_marks_name, null_marks.size.to_u64, CityHashV1.file_hash(null_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, values.size.to_u64 * width.to_u64, value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
+    private def self.write_typed_numeric_le(bytes : Bytes, offset : Int, value : T) : Nil forall T
+      {% if T == UInt8 %}
+        bytes[offset] = value
+      {% elsif T == UInt16 %}
+        2.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u16).to_u8 }
+      {% elsif T == UInt32 %}
+        write_uint32_le(bytes, offset, value)
+      {% elsif T == UInt64 %}
+        write_uint64_le(bytes, offset, value)
+      {% elsif T == Int8 %}
+        bytes[offset] = value.unsafe_as(UInt8)
+      {% elsif T == Int16 %}
+        bits = value.unsafe_as(UInt16)
+        2.times { |index| bytes[offset + index] = ((bits >> (index * 8)) & 0xff_u16).to_u8 }
+      {% elsif T == Int32 %}
+        write_uint32_le(bytes, offset, value.unsafe_as(UInt32))
+      {% elsif T == Int64 %}
+        write_uint64_le(bytes, offset, value.unsafe_as(UInt64))
+      {% elsif T == Float32 %}
+        write_uint32_le(bytes, offset, value.unsafe_as(UInt32))
+      {% elsif T == Float64 %}
+        write_uint64_le(bytes, offset, value.unsafe_as(UInt64))
+      {% else %}
+        raise UnsupportedFormatError.new("typed writer requires an exact fixed-width primitive numeric payload")
+      {% end %}
+      nil
+    end
+
     private def self.checked_mark_count(row_count : Int, rows_per_mark : Int32) : Int32
       count = (row_count.to_i64 + rows_per_mark.to_i64 - 1_i64) // rows_per_mark.to_i64
       raise ArgumentError.new("mark count exceeds writer limit") if count > MAX_MARKS
@@ -531,9 +1055,9 @@ module CrystalClick
     private def self.write_string_streams(
       stage : String,
       column : String,
-      values : Slice(String),
+      values : Slice(T),
       rows_per_mark : Int32,
-    ) : Array(ChecksumRecord)
+    ) : Array(ChecksumRecord) forall T
       size_base = StreamName.hash("#{column}.size")
       value_base = StreamName.hash(column)
       size_data_name = "#{size_base}.bin"
@@ -562,7 +1086,7 @@ module CrystalClick
             sizes_raw = Bytes.new(rows * 8)
             string_raw_size = 0_i64
             rows.times do |row|
-              value_size = values[start_row + row].bytesize.to_i64
+              value_size = typed_string_value(values[start_row + row]).bytesize.to_i64
               if value_size > MAX_FRAME_RAW_BYTES.to_i64 - string_raw_size
                 raise ArgumentError.new("String payload granule exceeds decompressed frame limit")
               end
@@ -574,7 +1098,7 @@ module CrystalClick
             string_raw = Bytes.new(string_raw_size.to_i)
             string_offset = 0
             rows.times do |row|
-              value = values[start_row + row]
+              value = typed_string_value(values[start_row + row])
               value_bytes = value.to_slice
               if value_bytes.size > 0
                 value_bytes.copy_to(string_raw[string_offset, value_bytes.size])
@@ -629,6 +1153,68 @@ module CrystalClick
         ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, total_raw_size, value_raw_hash.finish),
         ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
       ]
+    end
+
+    private def self.typed_string_value(value : T) : String forall T
+      {% if T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
+        value || ""
+      {% elsif T == String %}
+        value
+      {% else %}
+        raise UnsupportedFormatError.new("String stream requires String or Nullable(String) values")
+      {% end %}
+    end
+
+    private def self.write_nullable_string_streams(
+      stage : String,
+      column : String,
+      values : Slice(String?),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      null_base = StreamName.hash("#{column}.null")
+      data_name = "#{null_base}.bin"
+      marks_name = "#{null_base}.mrk2"
+      data_path = File.join(stage, data_name)
+      mark_path = File.join(stage, marks_name)
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      start_row = 0
+
+      File.open(data_path, "wb") do |data_file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          raw = Bytes.new(rows)
+          rows.times do |row|
+            raw[row] = values[start_row + row].nil? ? 1_u8 : 0_u8
+          end
+
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+
+          frame = encode_lz4_frame(raw)
+          raise ArgumentError.new("Nullable(String) null-map exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+          data_file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(raw)
+          data_size += frame.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("Nullable(String) null-map marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(mark_path, marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ] + write_string_streams(stage, column, values, rows_per_mark)
     end
 
     private def self.write_primary_index(stage : String, keys : Slice(UInt64), rows_per_mark : Int32) : ChecksumRecord
@@ -826,6 +1412,259 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_typed_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(T),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      {% if T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+        validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
+      {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
+        validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
+      {% else %}
+        validate_staged_typed_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
+      {% end %}
+    end
+
+    private def self.validate_staged_typed_numeric_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(T),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged typed payload row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged typed payload column type does not match") unless value_part.column_type == type_name
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = read_typed_numeric_mark(value_part, value_name, mark_index, values)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && typed_numeric_value_equal?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged typed numeric stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged typed payload marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+      nil
+    end
+
+    private def self.read_typed_numeric_mark(
+      part : WidePart,
+      column : String,
+      mark_index : Int,
+      values : Slice(T),
+    ) : Array(T) forall T
+      {% if T == UInt8 %}
+        part.read_numeric_mark_range(column, mark_index, 1, UInt8)
+      {% elsif T == UInt16 %}
+        part.read_numeric_mark_range(column, mark_index, 1, UInt16)
+      {% elsif T == UInt32 %}
+        part.read_numeric_mark_range(column, mark_index, 1, UInt32)
+      {% elsif T == UInt64 %}
+        part.read_numeric_mark_range(column, mark_index, 1, UInt64)
+      {% elsif T == Int8 %}
+        part.read_numeric_mark_range(column, mark_index, 1, Int8)
+      {% elsif T == Int16 %}
+        part.read_numeric_mark_range(column, mark_index, 1, Int16)
+      {% elsif T == Int32 %}
+        part.read_numeric_mark_range(column, mark_index, 1, Int32)
+      {% elsif T == Int64 %}
+        part.read_numeric_mark_range(column, mark_index, 1, Int64)
+      {% elsif T == Float32 %}
+        part.read_numeric_mark_range(column, mark_index, 1, Float32)
+      {% elsif T == Float64 %}
+        part.read_numeric_mark_range(column, mark_index, 1, Float64)
+      {% else %}
+        raise UnsupportedFormatError.new("typed writer requires an exact fixed-width primitive numeric payload")
+      {% end %}
+    end
+
+    private def self.typed_numeric_value_equal?(expected : T, actual : T) : Bool forall T
+      {% if T == Float32 %}
+        expected.unsafe_as(UInt32) == actual.unsafe_as(UInt32)
+      {% elsif T == Float64 %}
+        expected.unsafe_as(UInt64) == actual.unsafe_as(UInt64)
+      {% elsif T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 %}
+        expected == actual
+      {% else %}
+        false
+      {% end %}
+    end
+
+    private def self.validate_staged_nullable_numeric_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(T),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Nullable payload row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Nullable payload type does not match") unless value_part.column_type == type_name
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = read_typed_nullable_numeric_mark(value_part, value_name, mark_index, values)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && typed_nullable_numeric_value_equal?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged Nullable numeric stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Nullable payload marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_nullable_string_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(String?),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Nullable(String) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Nullable(String) type does not match") unless value_part.column_type == "Nullable(String)"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_nullable_string_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && expected_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Nullable(String) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Nullable(String) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_primary_index(
+      stage : String,
+      checksums : PartChecksums,
+      keys : Slice(UInt64),
+      rows_per_mark : Int32,
+      mark_count : Int32,
+    ) : Nil
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+      nil
+    end
+
+    private def self.read_typed_nullable_numeric_mark(
+      part : WidePart,
+      column : String,
+      mark_index : Int,
+      values : Slice(T),
+    ) : Array(T) forall T
+      {% if T == UInt8? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt8)
+      {% elsif T == UInt16? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt16)
+      {% elsif T == UInt32? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt32)
+      {% elsif T == UInt64? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt64)
+      {% elsif T == Int8? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int8)
+      {% elsif T == Int16? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int16)
+      {% elsif T == Int32? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int32)
+      {% elsif T == Int64? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int64)
+      {% elsif T == Float32? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, Float32)
+      {% elsif T == Float64? %}
+        part.read_nullable_numeric_mark_range(column, mark_index, 1, Float64)
+      {% else %}
+        raise UnsupportedFormatError.new("unsupported typed Nullable numeric payload")
+      {% end %}
+    end
+
+    private def self.typed_nullable_numeric_value_equal?(expected : T, actual : T) : Bool forall T
+      if expected.nil?
+        actual.nil?
+      elsif actual.nil?
+        false
+      else
+        typed_numeric_value_equal?(expected.not_nil!, actual.not_nil!)
+      end
+    end
+
     private def self.publish_exclusively(stage : String, target : String) : Nil
       {% if flag?(:darwin) %}
         result = LibWidePartWriterAtomicPublish.renamex_np(stage.to_unsafe, target.to_unsafe, RENAME_EXCL)
@@ -864,6 +1703,43 @@ module CrystalClick
 
     private def self.string_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size\n\t#{value_name}\n"
+    end
+
+    private def self.typed_columns_metadata(key_name : String, value_name : String, type_name : String) : String
+      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` #{type_name}\n"
+    end
+
+    private def self.typed_substreams_metadata(key_name : String, value_name : String, type_name : String) : String
+      value_streams = if type_name == "String"
+                        ["#{value_name}.size", value_name]
+                      elsif type_name == "Nullable(String)"
+                        ["#{value_name}.null", "#{value_name}.size", value_name]
+                      elsif type_name.starts_with?("Nullable(")
+                        ["#{value_name}.null", value_name]
+                      else
+                        [value_name]
+                      end
+      payload = IO::Memory.new
+      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
+      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
+      value_streams.each { |stream| payload << "\t#{stream}\n" }
+      payload.to_s
+    end
+
+    private def self.typed_serialization_metadata(type_name : String) : String
+      versions = if type_name == "String"
+                   "\"string\":1"
+                 elsif type_name == "Nullable(String)"
+                   "\"nullable\":0,\"string\":1"
+                 elsif type_name.starts_with?("Nullable(")
+                   # The existing BASIC Nullable(UInt64) writer emits the
+                   # String serializer version key, which the current reader
+                   # permits for all supported Nullable numeric types.
+                   "\"string\":1"
+                 else
+                   ""
+                 end
+      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{#{versions}},\"version\":1}"
     end
 
     private def self.serialization_metadata : String
