@@ -40,8 +40,11 @@ callers must do likewise. It prunes by the primary index of each active part,
 so output across multiple active parts is not necessarily globally sorted.
 The scan holds the table's shared lock through callbacks, preventing explicit
 GC by cooperating processes from deleting its parts during iteration. It
-assumes immutable, untampered writer-produced indexes; it does not verify
-their content hashes or promise a speedup.
+checks each active `primary.idx` against its recorded physical-file hash
+before callbacks. This detects an isolated index change while `checksums.txt`
+remains intact; it does not verify other part files or defend against a
+coordinated rewrite of both files. Callers must still use immutable,
+writer-produced parts. No speedup is promised.
 
 ## Read-only ClickHouse data-root examples
 

@@ -9,7 +9,12 @@ module CrystalClick
     getter keys : Array(UInt64)
     getter data_mark_count : Int32
 
-    def self.open(part_path : String, data_mark_count : Int, checksums : PartChecksums) : PrimaryKeyIndex
+    def self.open(
+      part_path : String,
+      data_mark_count : Int,
+      checksums : PartChecksums,
+      verify_recorded_hash : Bool = false,
+    ) : PrimaryKeyIndex
       raise BoundsError.new("primary index mark count is out of range") if data_mark_count < 0 || data_mark_count >= MAX_INDEX_ENTRIES
 
       raw_name = "primary.idx"
@@ -56,6 +61,10 @@ module CrystalClick
       file_bytes = file_data.to_slice
       raise CorruptPartError.new("primary index changed size while being read") unless file_bytes.size.to_u64 == physical_size
       raise CorruptPartError.new("primary index exceeds size limit") if file_bytes.size.to_i64 > MAX_INDEX_FILE_BYTES
+      if verify_recorded_hash
+        recorded_hash = entry.not_nil!.file_hash
+        raise CorruptPartError.new("primary index file hash does not match checksums.txt") unless CityHashV1.file_hash(file_bytes) == recorded_hash
+      end
 
       decoded = if compressed
                   CompressedBlock.decode_all(

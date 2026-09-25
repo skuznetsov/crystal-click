@@ -6,6 +6,7 @@ require "../src/crystal_click/lz4"
 require "../src/crystal_click/zstd"
 require "../src/crystal_click/compressed_block"
 require "../src/crystal_click/part_checksums"
+require "../src/crystal_click"
 
 CHECKSUMS_V4_HEADER    = "checksums format version: 4\n"
 PART_CHECKSUMS_FIXTURE = File.expand_path("../test/fixtures/public/wide_u64_lz4/part", __DIR__)
@@ -116,6 +117,47 @@ private def checksum_payload(entries : Array({String, UInt64, Bool})) : Bytes
 end
 
 describe CrystalClick::PartChecksums do
+  it "preserves positional checksum entry construction without a recorded hash argument" do
+    entry = CrystalClick::PartChecksums::Entry.new(24_u64, false, nil)
+    entry.physical_size.should eq(24_u64)
+    entry.file_hash.should eq({0_u64, 0_u64})
+  end
+
+  it "retains the little-endian writer-recorded hash for primary.idx without promoting size-only checks" do
+    parent = File.tempname("crystal-click-checksum-hash-spec")
+    Dir.mkdir(parent)
+    begin
+      part_path = File.join(parent, "part")
+      keys = [1_u64, 2_u64, 3_u64, 4_u64]
+      values = [10_u64, 20_u64, 30_u64, 40_u64]
+      CrystalClick::WidePartWriter.write_uint64_pair(
+        part_path,
+        "pk",
+        keys.to_unsafe.to_slice(keys.size),
+        "value",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 2
+      )
+
+      primary_index_contents = File.read(File.join(part_path, "primary.idx"))
+      primary_index = primary_index_contents.to_slice
+      checksums = CrystalClick::PartChecksums.open(part_path)
+      primary_entry = checksums.entry("primary.idx").not_nil!
+      primary_entry.file_hash.should eq(CrystalClick::CityHashV1.file_hash(primary_index))
+      checksums.validate_selected_entries(part_path, "primary.idx").should eq(
+        CrystalClick::ChecksumVerification::SizeChecked
+      )
+
+      stock_part_path = File.expand_path("../test/fixtures/public/wide_u64_pk_raw/part", __DIR__)
+      stock_primary_contents = File.read(File.join(stock_part_path, "primary.idx"))
+      stock_primary_index = stock_primary_contents.to_slice
+      stock_primary_entry = CrystalClick::PartChecksums.open(stock_part_path).entry("primary.idx").not_nil!
+      stock_primary_entry.file_hash.should eq(CrystalClick::CityHashV1.file_hash(stock_primary_index))
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
   it "parses the public v4 fixture and checks selected physical sizes only" do
     checksums = CrystalClick::PartChecksums.open(PART_CHECKSUMS_FIXTURE)
     data_name = File.basename(Dir.glob(File.join(PART_CHECKSUMS_FIXTURE, "*.bin")).first.not_nil!)
@@ -189,6 +231,18 @@ describe CrystalClick::PartChecksums do
       expect_raises(CrystalClick::CorruptPartError) do
         CrystalClick::PartChecksums.parse(checksum_v4(payload))
       end
+    end
+  end
+
+  it "rejects a v3 entry truncated within the physical hash bytes" do
+    name = "primary.idx"
+    entry = checksum_v3_entry(name, 24_u64, compressed: false)
+    hash_start = checksum_var_uint(name.bytesize.to_u64).size + name.bytesize + checksum_var_uint(24_u64).size
+    truncated_payload = [1_u8]
+    truncated_payload.concat(entry[0, hash_start + 7])
+
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::PartChecksums.parse(checksum_v4(checksum_bytes(truncated_payload)))
     end
   end
 

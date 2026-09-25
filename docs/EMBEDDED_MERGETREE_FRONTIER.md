@@ -4,7 +4,8 @@ Document status: active design. W1, W2, and bounded W3 are verified on this
 macOS host against the pinned ClickHouse build. Bounded W4, W5, and W6 are
 verified on the local Darwin process-atomicity frontier. Bounded W7 is
 verified on the same Crystal-owned table frontier; power-loss recovery
-remains future work.
+remains future work. Bounded W8 recorded primary-index hash validation is
+verified for embedded candidate scans only.
 
 ## Purpose and bounded contexts
 
@@ -374,6 +375,41 @@ typed mark materialization, active-part inventory, lock scope, writer format,
 or the pinned ClickHouse version. Refresh focused/full/fault and physical
 oracle checks accordingly; no performance or hash-integrity claim follows.
 
+## Verified slice W8: recorded primary-index hash validation
+
+For `EmbeddedMergeTreeTable#scan_uint64_pk_candidates` only, verify each
+active raw `primary.idx` against its recorded 128-bit physical-file hash in
+`checksums.txt` before computing mark schedules or exposing any callback.
+The checksum parser retains the recorded hash, but its existing size-only
+APIs and other readers keep their current contracts. Hash the same bounded
+index bytes used for key decoding; do not reopen the file to hash a different
+snapshot. A mismatch fails closed, including when a same-size, monotone but
+wrong index would otherwise make a matching range appear empty. Preflight
+every active part before the first callback as in W7.
+
+W8 changes no part bytes. It does not verify data or mark files, the
+`checksums.txt` envelope itself, offline-catalog indexes, or a coordinated
+rewrite of both index and recorded hash. The ClickHouse file hash is an
+accidental-corruption consistency check, not a cryptographic authenticity
+claim. Power-loss durability, external filesystem mutation during a scan,
+and a general content-integrity mode remain rejected. The strongest W8
+falsifier is a same-size monotone replacement index that omits a real key:
+the candidate scan must reject it before any callback, while an unchanged
+writer-produced index must still select the same exact residual rows.
+
+W8 evidence at the implementation diff on parent `df4a547`: the first- and
+later-active-part same-size monotone wrong-index tests reject before callbacks;
+an independent public ClickHouse fixture and a Crystal-written part agree
+with the parsed recorded hash. Focused checksum/candidate specs passed 20/20,
+and the full debug and release suites each passed 314/314. The W6 fault-flag
+regression and both pinned physical oracles remained green; formatter and
+diff checks passed. A size-only `PrimaryKeyIndex.open` control accepts the
+altered index, confirming the opt-in boundary. This certificate covers only
+the recorded physical hash of active embedded candidate indexes on the
+tested Darwin/pinned-producer frontier. It decays on checksum parsing, hash
+algorithm, index bytes/selection, active-part preflight, or producer-version
+changes. Refresh the focused/full/fault suites and the physical oracles.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -393,11 +429,13 @@ Guard-only follow-on slices, in dependency order:
    above; it does not widen `OfflineCatalog` to a mutable API.
 3. W6 admits only explicit historical-part reclamation and process-death
    probes above. W7 admits only typed UInt64 primary-key candidate granules;
-   general filtering, power-loss durability, and idempotent caller retries
-   remain separate frontiers.
+   W8 admits recorded-index-hash validation on that embedded candidate
+   path. General filtering, power-loss durability, and idempotent caller
+   retries remain separate frontiers.
 
-Content-integrity verification in the Crystal reader is not part of W1 or W2: it
-currently validates selected file sizes, not the recorded 128-bit file hashes.
+Generic selected-entry validation remains size-only. W8 checks only the
+embedded candidate path's active primary indexes; it is not full part
+content-integrity verification.
 An unfiltered ClickHouse `SELECT` validates consumed compressed frames but
 does not substitute for `CHECK TABLE` on raw files such as `primary.idx`.
 

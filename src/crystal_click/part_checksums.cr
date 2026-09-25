@@ -1,9 +1,9 @@
 module CrystalClick
   # Read-only, bounded parsing for the ClickHouse v4 checksums envelope.
   #
-  # The parser consumes the v4 compressed-v3 payload and retains only the
-  # declared physical sizes. Hashes are intentionally treated as opaque: this
-  # slice proves selected-entry presence and file length, not content integrity.
+  # The parser consumes the v4 compressed-v3 payload and retains declared
+  # physical sizes and file hashes. Selected-entry validation remains size-only:
+  # it proves presence and file length, not content integrity.
   class PartChecksums
     CHECKSUMS_HEADER             = "checksums format version: 4\n"
     MAX_CHECKSUM_FILE_BYTES      = 64_i64 * 1024 * 1024
@@ -15,6 +15,7 @@ module CrystalClick
 
     struct Entry
       getter physical_size : UInt64
+      getter file_hash : {UInt64, UInt64}
       getter compressed : Bool
       getter uncompressed_size : UInt64?
 
@@ -22,6 +23,7 @@ module CrystalClick
         @physical_size : UInt64,
         @compressed : Bool,
         @uncompressed_size : UInt64?,
+        @file_hash : {UInt64, UInt64} = {0_u64, 0_u64},
       )
       end
     end
@@ -109,7 +111,12 @@ module CrystalClick
         raise CorruptPartError.new("duplicate checksums entry") if entries.has_key?(name)
 
         physical_size, cursor = read_var_uint(bytes, cursor)
-        cursor = checked_end(cursor, 16, bytes.size)
+        hash_end = checked_end(cursor, 16, bytes.size)
+        file_hash = {
+          read_uint64_le(bytes, cursor),
+          read_uint64_le(bytes, cursor + 8),
+        }
+        cursor = hash_end
 
         compressed_flag = bytes[cursor]? || raise CorruptPartError.new("truncated checksums entry")
         cursor += 1
@@ -128,11 +135,19 @@ module CrystalClick
           raise CorruptPartError.new("invalid checksums compression flag")
         end
         cursor = checked_end(cursor, compressed ? 16 : 0, bytes.size)
-        entries[name] = Entry.new(physical_size, compressed, uncompressed_size)
+        entries[name] = Entry.new(physical_size, compressed, uncompressed_size, file_hash)
       end
 
       raise CorruptPartError.new("trailing checksums payload") unless cursor == bytes.size
       entries
+    end
+
+    private def read_uint64_le(bytes : Bytes, offset : Int32) : UInt64
+      value = 0_u64
+      8.times do |byte_index|
+        value |= bytes[offset + byte_index].to_u64 << (byte_index * 8)
+      end
+      value
     end
 
     private def read_var_uint(bytes : Bytes, cursor : Int32) : {UInt64, Int32}

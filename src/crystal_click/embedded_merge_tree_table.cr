@@ -299,7 +299,12 @@ module CrystalClick
           candidate_marks = Array(Array(Int32)).new(committed.size)
           committed.each_with_index do |part, part_index|
             checksums = PartChecksums.open(part.path)
-            index = PrimaryKeyIndex.open(part.path, part_mark_rows[part_index].size, checksums)
+            index = PrimaryKeyIndex.open(
+              part.path,
+              part_mark_rows[part_index].size,
+              checksums,
+              verify_recorded_hash: true
+            )
             candidate_marks << index.candidate_marks(lower_bound, upper_bound)
           end
 

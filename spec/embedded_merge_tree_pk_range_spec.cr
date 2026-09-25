@@ -89,6 +89,13 @@ def embedded_w7_read_uint64_le(bytes : Bytes, offset : Int) : UInt64
   value
 end
 
+def embedded_w8_encode_uint64s(values : Array(UInt64)) : Bytes
+  Bytes.new(values.size * 8) do |offset|
+    value = values[offset // 8]
+    ((value >> ((offset % 8) * 8)) & 0xff_u64).to_u8
+  end
+end
+
 describe CrystalClick::EmbeddedMergeTreeTable do
   it "returns inclusive residual matches from complete candidate marks for one- and two-sided bounds" do
     with_embedded_w7_table do |table, _parent|
@@ -248,6 +255,59 @@ describe CrystalClick::EmbeddedMergeTreeTable do
         table.scan_uint64_pk_candidates(["pk", "value"], 1_u64, 1_u64) { callback_seen = true }
       end
       callback_seen.should be_false
+    end
+  end
+
+  it "rejects a same-size monotone false primary index before exposing candidate callbacks" do
+    with_embedded_w7_table do |table, parent|
+      part = table.insert([1_u64, 2_u64, 3_u64, 4_u64].to_unsafe.to_slice(4), ["a", "b", "c", "d"].to_unsafe.to_slice(4), rows_per_mark: 2)
+      index_path = File.join(parent, "table", "parts", part, "primary.idx")
+      original_index_contents = File.read(index_path)
+      original_index = original_index_contents.to_slice
+      original_index.size.should eq(24)
+      [0, 8, 16].map { |offset| embedded_w7_read_uint64_le(original_index, offset) }.should eq([1_u64, 3_u64, 4_u64])
+      baseline = embedded_w7_candidate_batches(table, 1_u64, 1_u64)
+      baseline.map(&.[:mark_index]).should eq([0])
+      baseline.map(&.[:keys]).should eq([[1_u64, 2_u64]])
+
+      false_index = embedded_w8_encode_uint64s([10_u64, 11_u64, 12_u64])
+      false_index.size.should eq(original_index.size)
+      File.write(index_path, false_index)
+      part_path = File.dirname(index_path)
+      checksums = CrystalClick::PartChecksums.open(part_path)
+      CrystalClick::PrimaryKeyIndex.open(part_path, 2, checksums).keys.should eq([10_u64, 11_u64, 12_u64])
+
+      callback_count = 0
+      expect_raises(CrystalClick::CorruptPartError) do
+        table.scan_uint64_pk_candidates(["pk", "value"], 1_u64, 1_u64) { callback_count += 1 }
+      end
+      callback_count.should eq(0)
+    end
+  end
+
+  it "rejects a same-size monotone false later index before an earlier candidate callback" do
+    with_embedded_w7_table do |table, parent|
+      first = table.insert([1_u64, 2_u64].to_unsafe.to_slice(2), ["a", "b"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      later = table.insert([3_u64, 4_u64].to_unsafe.to_slice(2), ["c", "d"].to_unsafe.to_slice(2), rows_per_mark: 1)
+      index_path = File.join(parent, "table", "parts", later, "primary.idx")
+      original_index_contents = File.read(index_path)
+      original_index = original_index_contents.to_slice
+      original_index.size.should eq(24)
+      [0, 8, 16].map { |offset| embedded_w7_read_uint64_le(original_index, offset) }.should eq([3_u64, 4_u64, 4_u64])
+
+      baseline = embedded_w7_candidate_batches(table, 1_u64, 1_u64)
+      baseline.map(&.[:part_name]).should eq([first])
+      baseline.map(&.[:keys]).should eq([[1_u64]])
+
+      false_index = embedded_w8_encode_uint64s([100_u64, 101_u64, 102_u64])
+      false_index.size.should eq(original_index.size)
+      File.write(index_path, false_index)
+
+      callback_count = 0
+      expect_raises(CrystalClick::CorruptPartError) do
+        table.scan_uint64_pk_candidates(["pk", "value"], 1_u64, 1_u64) { callback_count += 1 }
+      end
+      callback_count.should eq(0)
     end
   end
 
