@@ -1,16 +1,16 @@
 module CrystalClick
   alias WidePartNumericArray = Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(UInt64) |
                                Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Int128) | Array(Bool) |
-                               Array(Float32) | Array(Float64) | Array(UUIDValue) | Array(IPv4Value) | Array(IPv6Value)
+                               Array(Float32) | Array(Float64) | Array(UUIDValue) | Array(IPv4Value) | Array(IPv6Value) | Array(Decimal256Value)
   alias WidePartNumericSlice = Slice(UInt8) | Slice(UInt16) | Slice(UInt32) | Slice(UInt64) |
                                Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Int128) | Slice(Bool) |
-                               Slice(Float32) | Slice(Float64) | Slice(UUIDValue) | Slice(IPv4Value) | Slice(IPv6Value)
+                               Slice(Float32) | Slice(Float64) | Slice(UUIDValue) | Slice(IPv4Value) | Slice(IPv6Value) | Slice(Decimal256Value)
   alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
                                 Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Int128?) | Array(Bool?) |
-                                Array(Float32?) | Array(Float64?) | Array(UUIDValue?) | Array(IPv4Value?) | Array(IPv6Value?)
+                                Array(Float32?) | Array(Float64?) | Array(UUIDValue?) | Array(IPv4Value?) | Array(IPv6Value?) | Array(Decimal256Value?)
   alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
                                 Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Int128?) | Slice(Bool?) |
-                                Slice(Float32?) | Slice(Float64?) | Slice(UUIDValue?) | Slice(IPv4Value?) | Slice(IPv6Value?)
+                                Slice(Float32?) | Slice(Float64?) | Slice(UUIDValue?) | Slice(IPv4Value?) | Slice(IPv6Value?) | Slice(Decimal256Value?)
   alias WidePartNullableStringArray = Array(String?)
   alias WidePartNullableStringSlice = Slice(String?)
 
@@ -265,6 +265,19 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_types[index])
       @nullable_values[column]?.try(&.as(Slice(Int128?))) || raise(UnsupportedFormatError.new("Nullable(Decimal128) column was not materialized in this batch"))
+    end
+
+    def decimal256_raw_for(column : String) : Slice(Decimal256Value)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Decimal(76, S)") unless WidePart.decimal256_scale(@column_types[index])
+      return @typed_numeric_values[column].as(Slice(Decimal256Value)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Decimal256Value))
+    end
+
+    def nullable_decimal256_raw_for(column : String) : Slice(Decimal256Value?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Nullable(Decimal(76, S))") unless WidePart.nullable_decimal256_scale(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(Decimal256Value?))) || raise(UnsupportedFormatError.new("Nullable(Decimal256) column was not materialized in this batch"))
     end
 
     def uuids_for(column : String) : Slice(UUIDValue)
@@ -861,6 +874,8 @@ module CrystalClick
         return reader.read_decimal64_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.decimal128_scale(type).nil?
         return reader.read_decimal128_raw_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.decimal256_scale(type).nil?
+        return reader.read_decimal256_raw_mark_range(selected.name, mark_index, 1)
       end
 
       case selected.column_type
@@ -920,6 +935,8 @@ module CrystalClick
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int128)
         values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Decimal256Value)
+        values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Bool)
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32)
@@ -958,6 +975,8 @@ module CrystalClick
         return reader.read_nullable_decimal64_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.nullable_decimal128_scale(type).nil?
         return reader.read_nullable_decimal128_raw_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.nullable_decimal256_scale(type).nil?
+        return reader.read_nullable_decimal256_raw_mark_range(selected.name, mark_index, 1)
       end
 
       case selected.column_type
@@ -984,21 +1003,22 @@ module CrystalClick
 
     private def nullable_array_size(values : WidePartNullableArray) : Int
       case values
-      when Array(UInt8?)     then values.size
-      when Array(UInt16?)    then values.size
-      when Array(UInt32?)    then values.size
-      when Array(UInt64?)    then values.size
-      when Array(Int8?)      then values.size
-      when Array(Int16?)     then values.size
-      when Array(Int32?)     then values.size
-      when Array(Int64?)     then values.size
-      when Array(Int128?)    then values.size
-      when Array(Bool?)      then values.size
-      when Array(Float32?)   then values.size
-      when Array(Float64?)   then values.size
-      when Array(UUIDValue?) then values.size
-      when Array(IPv4Value?) then values.size
-      when Array(IPv6Value?) then values.size
+      when Array(UInt8?)           then values.size
+      when Array(UInt16?)          then values.size
+      when Array(UInt32?)          then values.size
+      when Array(UInt64?)          then values.size
+      when Array(Int8?)            then values.size
+      when Array(Int16?)           then values.size
+      when Array(Int32?)           then values.size
+      when Array(Int64?)           then values.size
+      when Array(Int128?)          then values.size
+      when Array(Decimal256Value?) then values.size
+      when Array(Bool?)            then values.size
+      when Array(Float32?)         then values.size
+      when Array(Float64?)         then values.size
+      when Array(UUIDValue?)       then values.size
+      when Array(IPv4Value?)       then values.size
+      when Array(IPv6Value?)       then values.size
       else
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end
@@ -1006,21 +1026,22 @@ module CrystalClick
 
     private def slice_nullable_values(values : WidePartNullableArray, offset : Int, size : Int) : WidePartNullableSlice
       case values
-      when Array(UInt8?)     then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(UInt16?)    then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(UInt32?)    then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(UInt64?)    then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int8?)      then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int16?)     then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int32?)     then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int64?)     then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int128?)    then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Bool?)      then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Float32?)   then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Float64?)   then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(UUIDValue?) then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(IPv4Value?) then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(IPv6Value?) then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt8?)           then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt16?)          then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt32?)          then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt64?)          then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int8?)            then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int16?)           then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int32?)           then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int64?)           then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int128?)          then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Decimal256Value?) then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Bool?)            then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Float32?)         then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Float64?)         then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UUIDValue?)       then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(IPv4Value?)       then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(IPv6Value?)       then values.to_unsafe.to_slice(values.size)[offset, size]
       else
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end

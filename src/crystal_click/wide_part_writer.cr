@@ -425,6 +425,25 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(38, #{scale}))", rows_per_mark)
     end
 
+    # Decimal256 stores its signed two's-complement coefficient unchanged.
+    def self.write_uint64_decimal256_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Decimal256Value), scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Decimal256 scale must be between 0 and 76") unless (0..76).includes?(scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Decimal(76, #{scale})", rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_decimal256_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Decimal256Value?), scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Decimal256 scale must be between 0 and 76") unless (0..76).includes?(scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(76, #{scale}))", rows_per_mark)
+    end
+
     # Enum payloads retain a validated exact label/code declaration. Only
     # declared signed codes may be written; generic Int8/Int16 writes remain
     # ordinary numeric columns.
@@ -603,7 +622,7 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
+        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
           records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name))
         end
         write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
@@ -1051,6 +1070,12 @@ module CrystalClick
       {% elsif T == IPv6Value? %}
         raise UnsupportedFormatError.new("Nullable IPv6 writer requires exact Nullable(IPv6) metadata") unless type_name == "Nullable(IPv6)"
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == Decimal256Value %}
+        raise UnsupportedFormatError.new("Decimal256 writer requires exact Decimal(76, S) metadata") unless WidePart.decimal256_scale(type_name)
+        validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == Decimal256Value? %}
+        raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(76, S)) metadata") unless WidePart.nullable_decimal256_scale(type_name)
+        validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Int128 || T == Float32 || T == Float64 %}
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
@@ -1087,6 +1112,12 @@ module CrystalClick
       {% elsif T == IPv6Value? %}
         raise UnsupportedFormatError.new("Nullable IPv6 writer requires exact Nullable(IPv6) metadata") unless type_name == "Nullable(IPv6)"
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == Decimal256Value %}
+        raise UnsupportedFormatError.new("Decimal256 writer requires exact Decimal(76, S) metadata") unless WidePart.decimal256_scale(type_name)
+        write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == Decimal256Value? %}
+        raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(76, S)) metadata") unless WidePart.nullable_decimal256_scale(type_name)
+        write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Int128 || T == Float32 || T == Float64 %}
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
@@ -1118,6 +1149,7 @@ module CrystalClick
         return 4 if WidePart.decimal32_scale(type_name)
         return 8 if WidePart.decimal64_scale(type_name)
         return 16 if WidePart.decimal128_scale(type_name)
+        return 32 if WidePart.decimal256_scale(type_name)
         raise UnsupportedFormatError.new("typed writer requires an exact fixed-width primitive numeric payload")
       end
     end
@@ -1492,6 +1524,9 @@ module CrystalClick
       {% elsif T == Int128 %}
         bits = value.unsafe_as(UInt128)
         16.times { |index| bytes[offset + index] = ((bits >> (index * 8)) & 0xff_u128).to_u8 }
+      {% elsif T == Decimal256Value %}
+        16.times { |index| bytes[offset + index] = ((value.low >> (index * 8)) & 0xff_u128).to_u8 }
+        16.times { |index| bytes[offset + 16 + index] = ((value.high >> (index * 8)) & 0xff_u128).to_u8 }
       {% elsif T == UUIDValue %}
         write_uint64_le(bytes, offset, value.high)
         write_uint64_le(bytes, offset + 8, value.low)
@@ -2309,7 +2344,7 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
+      {% if T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
@@ -2394,6 +2429,12 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("typed IPv6 writer requires exact IPv6 metadata")
         end
+      {% elsif T == Decimal256Value %}
+        if WidePart.decimal256_scale(type_name)
+          part.read_decimal256_raw_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("typed Decimal256 writer requires exact Decimal(76, S) metadata")
+        end
       {% elsif T == Bool %}
         part.read_bool_mark_range(column, mark_index, 1)
       {% elsif T == UInt8 %}
@@ -2470,6 +2511,8 @@ module CrystalClick
         expected.network_order == actual.network_order
       {% elsif T == IPv6Value %}
         expected.high == actual.high && expected.low == actual.low
+      {% elsif T == Decimal256Value %}
+        expected.low == actual.low && expected.high == actual.high
       {% elsif T == Float32 %}
         expected.unsafe_as(UInt32) == actual.unsafe_as(UInt32)
       {% elsif T == Float64 %}
@@ -2605,6 +2648,12 @@ module CrystalClick
           part.read_nullable_ipv6s_mark_range(column, mark_index, 1)
         else
           raise UnsupportedFormatError.new("typed Nullable IPv6 writer requires exact Nullable(IPv6) metadata")
+        end
+      {% elsif T == Decimal256Value? %}
+        if WidePart.nullable_decimal256_scale(type_name)
+          part.read_nullable_decimal256_raw_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("typed Nullable Decimal256 writer requires exact Nullable(Decimal(76, S)) metadata")
         end
       {% elsif T == Bool? %}
         part.read_nullable_bool_mark_range(column, mark_index, 1)
@@ -2751,7 +2800,7 @@ module CrystalClick
                    "\"string\":1"
                  elsif type_name == "Nullable(String)"
                    "\"nullable\":0,\"string\":1"
-                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
+                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
                    # BASIC Nullable payloads, UUID, IPv4, and IPv6 use this global
                    # serializer-version metadata. Semantic identity is
                    # carried by the exact column type.
@@ -2762,9 +2811,10 @@ module CrystalClick
       "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{#{versions}},\"version\":1}"
     end
 
-    private def self.w15_semantic_type?(type_name : String) : Bool
+    private def self.semantic_fixed_width_type?(type_name : String) : Bool
       type_name == "Bool" || !WidePart.enum8_codes(type_name).nil? || !WidePart.enum16_codes(type_name).nil? ||
-        !WidePart.decimal32_scale(type_name).nil? || !WidePart.decimal64_scale(type_name).nil? || !WidePart.decimal128_scale(type_name).nil?
+        !WidePart.decimal32_scale(type_name).nil? || !WidePart.decimal64_scale(type_name).nil? ||
+        !WidePart.decimal128_scale(type_name).nil? || !WidePart.decimal256_scale(type_name).nil?
     end
 
     private def self.nullable_fixed_string_serialization_metadata : String

@@ -1,7 +1,7 @@
 module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
-                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Nil
+                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -167,6 +167,9 @@ module CrystalClick
       elsif !WidePart.decimal128_scale(selected_type).nil?
         observed_rows = append_materialized_values(values, batch.decimal128_raw_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
+      elsif !WidePart.decimal256_scale(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.decimal256_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
       elsif selected_type == "Nullable(Bool)"
         observed_rows = append_materialized_values(values, batch.nullable_bools_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
@@ -184,6 +187,9 @@ module CrystalClick
         return {observed_rows, string_bytes}
       elsif !WidePart.nullable_decimal128_scale(selected_type).nil?
         observed_rows = append_materialized_values(values, batch.nullable_decimal128_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif !WidePart.nullable_decimal256_scale(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.nullable_decimal256_raw_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
       end
 

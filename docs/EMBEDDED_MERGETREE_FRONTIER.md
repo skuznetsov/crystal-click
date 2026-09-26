@@ -36,6 +36,11 @@ W19 admits paired `IPv6` and BASIC `Nullable(IPv6)` payloads on the same
 pinned Wide/LZ4 frontier after a bidirectional stock/Crystal oracle and full
 regression gate. The value is distinct from UUID and UInt128; IPv6 keys,
 general IP operations, and untested ClickHouse versions remain outside scope.
+W20 admits paired raw `Decimal256` and BASIC `Nullable(Decimal256)` payloads
+on the same pinned frontier. A bidirectional stock/Crystal oracle exercises
+scales 0, 38, and 76 in both shapes, including the signed 256-bit backing
+extrema at scale 0. This is raw coefficient compatibility, not Decimal SQL
+arithmetic, conversion, or support for arbitrary part layouts.
 
 ## Purpose and bounded contexts
 
@@ -1077,6 +1082,57 @@ publication boundary. A structurally valid 16-byte value can silently render
 as another address if halves or octets are reversed; the hardcoded byte and
 text controls guard this tested risk. Rollback is one W19-only local feature
 commit; no push or mutation of an existing ClickHouse data root is authorized.
+
+## Completed slice W20: paired raw Decimal256 payloads
+
+W20 admits only `Decimal256(S)` and BASIC `Nullable(Decimal256(S))` payloads on
+the existing sorted `UInt64`-key, two-column Wide/LZ4, plain adaptive-mark
+part shape. The public value must be a distinct 32-byte signed two's-complement
+coefficient, not `Int128`, `UUID`, `IPv6`, or a scaled floating-point number.
+The scale is explicit and never changes stored raw bits. The pinned producer
+persists `Decimal256(S)` as `Decimal(76, S)` and its BASIC Nullable form as
+`Nullable(Decimal(76, S))`; scales 0 and 76 are accepted while -1 and 77 are
+rejected. The exact admitted range is 0 through 76.
+Named bare/nullable writer APIs must preserve type identity, and NULL must
+remain distinct from zero with a deterministic zero-filled nested slot. No
+SQL decimal conversion, arithmetic, rounding, or general `Decimal(P,S)`
+contract is admitted.
+
+The isolated pinned ClickHouse 26.7.1.1315 probe observes 32-byte signed
+little-endian coefficients, including an asymmetric high-word positive value,
+its two's-complement negative, zero, +1, and -1. A five-row Wide part at
+granularity two has four marks (including the final zero-row mark): Decimal256
+decompressed offsets 0, 64, 128, 160; Nullable null-map offsets 0, 2, 4, 5.
+The Nullable physical stream order is `payload.null`, then `payload`, with
+zero-filled nested slots for NULL. `CHECK TABLE` succeeds. RowBinary accepts
+raw coefficient one at scale 76, stores the same 32 bytes, and renders 76
+fractional places. At scale zero, RowBinary accepts both signed 256-bit backing
+extrema and SQL renders their full signed integers. SQL
+`toDecimal256('1', 76)` is not a valid substitute for a raw coefficient of one
+because that decimal input needs 77 unscaled digits.
+
+The bidirectional pinned stock/Crystal oracle passes at scales 0, 38, and 76
+for both bare and BASIC Nullable: hardcoded raw bytes and marks independent
+of the writer, stock-to-Crystal reads, Crystal-to-stock `ATTACH PART`, exact
+full/key-range RowBinary, clean `CHECK TABLE`, and isolated same-size
+corruption rejection for bare payload and nullable map/payload. Focused
+negative specs reject noncanonical scales/declarations, primitive or UUID/IP
+aliases, malformed metadata, truncated streams, and bad inputs before
+publication. Reader, batch, catalog, and TUI expose one consistent raw value;
+the TUI displays the coefficient with an explicit scale label, not a SQL
+formatted decimal. Full debug/release suites (478 examples each), headless
+TUI (6 examples), and all W9-W19 pinned type oracles passed. The adversarial
+review found no concrete defect within this bounded path (ROBUST); it does
+not widen the pinned-version or layout claim. Evidence decays if ClickHouse
+version, part format, writer serialization, reader dispatch, or TUI formatting
+changes; refresh the pinned oracle and relevant suites.
+
+Rejected in W20: generic `Decimal(P,S)` widths, numeric conversion/arithmetic/rounding,
+non-BASIC Nullable serializers, arbitrary schemas, Compact parts, and claims
+beyond the pinned build and Darwin publication boundary. CAUTION: a 32-byte
+stream can remain structurally valid after high-word sign extension or word
+order is wrong. Rollback is one W20-only local feature commit; no push or
+mutation of an existing ClickHouse data root is authorized.
 
 ## Rejected and guard-only surfaces
 

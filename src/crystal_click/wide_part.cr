@@ -122,6 +122,11 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    private def self.decimal256_alias_scale(type : String) : Int32?
+      match = /\ADecimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
     # Enum declarations remain exact metadata, while row values are exposed as
     # their signed backing codes. The parser intentionally admits one bounded
     # grammar instead of treating any `Enum8(` / `Enum16(` prefix as typed.
@@ -151,6 +156,12 @@ module CrystalClick
       decimal_precision_scale(type, 38, 38)
     end
 
+    # Decimal256 is stored as a signed 32-byte coefficient. ClickHouse writes
+    # the logical alias as its canonical Decimal(76, S) metadata form.
+    def self.decimal256_scale(type : String) : Int32?
+      decimal_precision_scale(type, 76, 76)
+    end
+
     def self.nullable_decimal32_scale(type : String) : Int32?
       nullable_inner(type).try { |inner| decimal32_scale(inner) }
     end
@@ -161,6 +172,10 @@ module CrystalClick
 
     def self.nullable_decimal128_scale(type : String) : Int32?
       nullable_inner(type).try { |inner| decimal128_scale(inner) }
+    end
+
+    def self.nullable_decimal256_scale(type : String) : Int32?
+      nullable_inner(type).try { |inner| decimal256_scale(inner) }
     end
 
     # Normalize only the Decimal DDL aliases observed in stock metadata. The
@@ -175,6 +190,8 @@ module CrystalClick
           return "Nullable(Decimal(18, #{scale}))"
         elsif scale = decimal128_alias_scale(inner)
           return "Nullable(Decimal(38, #{scale}))"
+        elsif scale = decimal256_alias_scale(inner)
+          return "Nullable(Decimal(76, #{scale}))"
         end
         return nil
       end
@@ -185,6 +202,8 @@ module CrystalClick
         return "Decimal(18, #{scale})"
       elsif scale = decimal128_alias_scale(type)
         return "Decimal(38, #{scale})"
+      elsif scale = decimal256_alias_scale(type)
+        return "Decimal(76, #{scale})"
       end
       nil
     end
@@ -230,7 +249,8 @@ module CrystalClick
     def self.supports_semantic_fixed_width_type?(type : String) : Bool
       return false if nullable_inner(type)
       type == "Bool" || !enum8_codes(type).nil? || !enum16_codes(type).nil? ||
-        !decimal32_scale(type).nil? || !decimal64_scale(type).nil? || !decimal128_scale(type).nil?
+        !decimal32_scale(type).nil? || !decimal64_scale(type).nil? || !decimal128_scale(type).nil? ||
+        !decimal256_scale(type).nil?
     end
 
     def self.supports_nullable_semantic_fixed_width_type?(type : String) : Bool
@@ -569,6 +589,63 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
+    end
+
+    def read_decimal256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Decimal256Value)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Decimal(76, S)") unless WidePart.decimal256_scale(@column_type)
+
+      stream = @streams[column]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      expected_bytes = checked_byte_count(rows, 32)
+      encoded_values = read_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, 32)
+      values = Array(Decimal256Value).new(rows.to_i)
+      offset = 0
+      while offset < encoded_values.size
+        values << Decimal256Value.from_words(
+          u64(encoded_values, offset),
+          u64(encoded_values, offset + 8),
+          u64(encoded_values, offset + 16),
+          u64(encoded_values, offset + 24)
+        )
+        offset += 32
+      end
+      raise CorruptPartError.new("Decimal256 values do not consume nested bytes") unless offset == encoded_values.size
+      values
+    end
+
+    # BASIC Nullable(Decimal256) stores a one-byte map and a fixed 32-byte
+    # nested slot per row. NULL slots are consumed and ignored like other
+    # nullable semantic values.
+    def read_nullable_decimal256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Decimal256Value?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Nullable(Decimal(76, S))") unless WidePart.nullable_decimal256_scale(@column_type)
+
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable(Decimal256) substream mark rows differ") unless rows == value_rows
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(rows, 32), 32)
+      values = Array(Decimal256Value?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        value = Decimal256Value.from_words(
+          u64(encoded_values, offset),
+          u64(encoded_values, offset + 8),
+          u64(encoded_values, offset + 16),
+          u64(encoded_values, offset + 24)
+        )
+        values << (is_null == 1 ? nil : value)
+        offset += 32
+      end
+      raise CorruptPartError.new("Nullable(Decimal256) values do not consume nested bytes") unless offset == encoded_values.size
+      values
     end
 
     # UUID is exposed as its two ClickHouse UUID halves, not as a generic
@@ -1898,6 +1975,8 @@ module CrystalClick
         8
       elsif WidePart.decimal128_scale(type)
         16
+      elsif WidePart.decimal256_scale(type)
+        32
       else
         raise UnsupportedFormatError.new("unsupported exact semantic type")
       end

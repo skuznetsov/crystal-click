@@ -162,7 +162,7 @@ epoch-day codes, not formatted calendar dates. `DateTime` and
 precision label on non-NULL cells, because the column header shows only the
 name. Nullable cells display `NULL` separately from raw zero. The viewer
 also displays `Bool` as `true`/`false`, `Enum8/16` as signed backing codes,
-and `Decimal32/64` as signed raw scaled integers with an `[s=N]` scale label;
+and `Decimal32/64/128/256` as signed raw scaled integers with an `[s=N]` scale label;
 their BASIC Nullable forms keep `NULL` distinct from zero. It does not resolve
 Enum labels or convert Decimal values to text with a decimal point. The viewer
 performs no timezone or calendar conversion; none of these semantic types is
