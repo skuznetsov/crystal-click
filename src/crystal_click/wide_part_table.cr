@@ -1,15 +1,15 @@
 module CrystalClick
   alias WidePartNumericArray = Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(UInt64) |
-                               Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Bool) |
+                               Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Int128) | Array(Bool) |
                                Array(Float32) | Array(Float64)
   alias WidePartNumericSlice = Slice(UInt8) | Slice(UInt16) | Slice(UInt32) | Slice(UInt64) |
-                               Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Bool) |
+                               Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Int128) | Slice(Bool) |
                                Slice(Float32) | Slice(Float64)
   alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
-                                Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Bool?) |
+                                Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Int128?) | Array(Bool?) |
                                 Array(Float32?) | Array(Float64?)
   alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
-                                Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Bool?) |
+                                Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Int128?) | Slice(Bool?) |
                                 Slice(Float32?) | Slice(Float64?)
   alias WidePartNullableStringArray = Array(String?)
   alias WidePartNullableStringSlice = Slice(String?)
@@ -252,6 +252,19 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Nullable(Decimal(18, S))") unless WidePart.nullable_decimal64_scale(@column_types[index])
       @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(Decimal64) column was not materialized in this batch"))
+    end
+
+    def decimal128_raw_for(column : String) : Slice(Int128)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Decimal(38, S)") unless WidePart.decimal128_scale(@column_types[index])
+      return @typed_numeric_values[column].as(Slice(Int128)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int128))
+    end
+
+    def nullable_decimal128_raw_for(column : String) : Slice(Int128?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(Int128?))) || raise(UnsupportedFormatError.new("Nullable(Decimal128) column was not materialized in this batch"))
     end
 
     def strings_for(column : String) : Slice(String)
@@ -802,6 +815,8 @@ module CrystalClick
         return reader.read_decimal32_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.decimal64_scale(type).nil?
         return reader.read_decimal64_raw_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.decimal128_scale(type).nil?
+        return reader.read_decimal128_raw_mark_range(selected.name, mark_index, 1)
       end
 
       case selected.column_type
@@ -859,6 +874,8 @@ module CrystalClick
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int64)
         values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int128)
+        values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Bool)
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32)
@@ -883,6 +900,8 @@ module CrystalClick
         return reader.read_nullable_decimal32_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.nullable_decimal64_scale(type).nil?
         return reader.read_nullable_decimal64_raw_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.nullable_decimal128_scale(type).nil?
+        return reader.read_nullable_decimal128_raw_mark_range(selected.name, mark_index, 1)
       end
 
       case selected.column_type
@@ -917,6 +936,7 @@ module CrystalClick
       when Array(Int16?)   then values.size
       when Array(Int32?)   then values.size
       when Array(Int64?)   then values.size
+      when Array(Int128?)  then values.size
       when Array(Bool?)    then values.size
       when Array(Float32?) then values.size
       when Array(Float64?) then values.size
@@ -935,6 +955,7 @@ module CrystalClick
       when Array(Int16?)   then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int32?)   then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int64?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int128?)  then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Bool?)    then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32?) then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float64?) then values.to_unsafe.to_slice(values.size)[offset, size]

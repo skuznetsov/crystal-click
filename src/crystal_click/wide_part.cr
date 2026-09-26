@@ -117,6 +117,11 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    private def self.decimal128_alias_scale(type : String) : Int32?
+      match = /\ADecimal128\(([0-9]|[1-2][0-9]|3[0-8])\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
     # Enum declarations remain exact metadata, while row values are exposed as
     # their signed backing codes. The parser intentionally admits one bounded
     # grammar instead of treating any `Enum8(` / `Enum16(` prefix as typed.
@@ -142,12 +147,20 @@ module CrystalClick
       decimal_precision_scale(type, 18, 18)
     end
 
+    def self.decimal128_scale(type : String) : Int32?
+      decimal_precision_scale(type, 38, 38)
+    end
+
     def self.nullable_decimal32_scale(type : String) : Int32?
       nullable_inner(type).try { |inner| decimal32_scale(inner) }
     end
 
     def self.nullable_decimal64_scale(type : String) : Int32?
       nullable_inner(type).try { |inner| decimal64_scale(inner) }
+    end
+
+    def self.nullable_decimal128_scale(type : String) : Int32?
+      nullable_inner(type).try { |inner| decimal128_scale(inner) }
     end
 
     # Normalize only the Decimal DDL aliases observed in stock metadata. The
@@ -160,6 +173,8 @@ module CrystalClick
           return "Nullable(Decimal(9, #{scale}))"
         elsif scale = decimal64_alias_scale(inner)
           return "Nullable(Decimal(18, #{scale}))"
+        elsif scale = decimal128_alias_scale(inner)
+          return "Nullable(Decimal(38, #{scale}))"
         end
         return nil
       end
@@ -168,6 +183,8 @@ module CrystalClick
         return "Decimal(9, #{scale})"
       elsif scale = decimal64_alias_scale(type)
         return "Decimal(18, #{scale})"
+      elsif scale = decimal128_alias_scale(type)
+        return "Decimal(38, #{scale})"
       end
       nil
     end
@@ -186,6 +203,19 @@ module CrystalClick
       type == "Nullable(Bool)"
     end
 
+    def self.supports_semantic_fixed_width_type?(type : String) : Bool
+      return false if nullable_inner(type)
+      type == "Bool" || !enum8_codes(type).nil? || !enum16_codes(type).nil? ||
+        !decimal32_scale(type).nil? || !decimal64_scale(type).nil? || !decimal128_scale(type).nil?
+    end
+
+    def self.supports_nullable_semantic_fixed_width_type?(type : String) : Bool
+      inner = nullable_inner(type) || return false
+      supports_semantic_fixed_width_type?(inner)
+    end
+
+    # Keep the W15-specific public predicates bounded to their original types;
+    # callers that need the current family use supports_semantic_fixed_width_type?.
     def self.supports_w15_semantic_type?(type : String) : Bool
       return false if nullable_inner(type)
       type == "Bool" || !enum8_codes(type).nil? || !enum16_codes(type).nil? ||
@@ -235,7 +265,7 @@ module CrystalClick
     end
 
     def self.supports_typed_type?(type : String) : Bool
-      supports_w15_semantic_type?(type) || supports_nullable_w15_semantic_type?(type) ||
+      supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         type == "Date" || type == "Date32" || type == "DateTime" ||
         !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) ||
         supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
@@ -501,6 +531,18 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Nullable(Decimal(18, S))") unless WidePart.nullable_decimal64_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+    end
+
+    def read_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int128)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Decimal(38, S)") unless WidePart.decimal128_scale(@column_type)
+      read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
+    end
+
+    def read_nullable_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int128?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_type)
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
     end
 
     private def read_semantic_fixed_width_mark_range(
@@ -1017,7 +1059,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_w15_semantic_type?(column_type) || WidePart.supports_nullable_w15_semantic_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -1189,7 +1231,7 @@ module CrystalClick
         ["#{column}.null", column]
       elsif WidePart.supports_nullable_temporal_type?(type)
         ["#{column}.null", column]
-      elsif WidePart.supports_nullable_w15_semantic_type?(type)
+      elsif WidePart.supports_nullable_semantic_fixed_width_type?(type)
         ["#{column}.null", column]
       else
         [column]
@@ -1244,7 +1286,7 @@ module CrystalClick
         raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
-      elsif WidePart.supports_w15_semantic_type?(type) || WidePart.supports_nullable_w15_semantic_type?(type)
+      elsif WidePart.supports_semantic_fixed_width_type?(type) || WidePart.supports_nullable_semantic_fixed_width_type?(type)
         string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("W15 semantic serialization version is required"))
         raise UnsupportedFormatError.new("only W15 semantic serialization version 1 is supported") unless string_version == 1
         columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("W15 semantic column serializers are required"))
@@ -1630,8 +1672,8 @@ module CrystalClick
         stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
       elsif WidePart.supports_nullable_temporal_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : nullable_temporal_width(@column_type)
-      elsif WidePart.supports_nullable_w15_semantic_type?(@column_type)
-        stream_name == "#{@column}.null" ? 1 : semantic_type_width(nullable_w15_inner_type(@column_type))
+      elsif WidePart.supports_nullable_semantic_fixed_width_type?(@column_type)
+        stream_name == "#{@column}.null" ? 1 : semantic_type_width(nullable_semantic_inner_type(@column_type))
       elsif @column_type == "Date"
         2
       elsif @column_type == "Date32"
@@ -1640,7 +1682,7 @@ module CrystalClick
         4
       elsif WidePart.datetime64_scale(@column_type)
         8
-      elsif WidePart.supports_w15_semantic_type?(@column_type)
+      elsif WidePart.supports_semantic_fixed_width_type?(@column_type)
         semantic_type_width(@column_type)
       else
         numeric_type_width(@column_type)
@@ -1656,13 +1698,15 @@ module CrystalClick
         4
       elsif WidePart.decimal64_scale(type)
         8
+      elsif WidePart.decimal128_scale(type)
+        16
       else
-        raise UnsupportedFormatError.new("unsupported exact W15 semantic type")
+        raise UnsupportedFormatError.new("unsupported exact semantic type")
       end
     end
 
-    private def nullable_w15_inner_type(type : String) : String
-      raise UnsupportedFormatError.new("exact Nullable W15 semantic type required") unless WidePart.supports_nullable_w15_semantic_type?(type)
+    private def nullable_semantic_inner_type(type : String) : String
+      raise UnsupportedFormatError.new("exact Nullable semantic fixed-width type required") unless WidePart.supports_nullable_semantic_fixed_width_type?(type)
       type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
     end
 
@@ -1832,6 +1876,8 @@ module CrystalClick
         u32(bytes, offset).unsafe_as(Int32)
       {% elsif T == Int64 %}
         u64(bytes, offset).unsafe_as(Int64)
+      {% elsif T == Int128 %}
+        u128(bytes, offset).unsafe_as(Int128)
       {% elsif T == Float32 %}
         u32(bytes, offset).unsafe_as(Float32)
       {% elsif T == Float64 %}
@@ -1939,6 +1985,13 @@ module CrystalClick
       raise CorruptPartError.new("truncated integer") if offset < 0 || offset > bytes.size - 8
       value = 0_u64
       8.times { |index| value |= bytes[offset + index].to_u64 << (index * 8) }
+      value
+    end
+
+    private def u128(bytes : Bytes, offset : Int) : UInt128
+      raise CorruptPartError.new("truncated integer") if offset < 0 || offset > bytes.size - 16
+      value = 0_u128
+      16.times { |index| value |= bytes[offset + index].to_u128 << (index * 8) }
       value
     end
 

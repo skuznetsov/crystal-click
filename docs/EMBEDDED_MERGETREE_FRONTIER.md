@@ -22,6 +22,10 @@ accept canonical precisions 0 through 9. W15 admits paired reader/writer
 support for bounded Bool, Enum8/16, and Decimal32/64 payloads and their BASIC
 Nullable forms on the same pinned frontier. This is not full ClickHouse type
 parity: JSON typed-path reading remains an intentionally unmatched surface.
+W16 admits paired raw Decimal128 and BASIC Nullable(Decimal128) reading and
+writing at canonical scales 0 through 38 on the same pinned Wide/LZ4 frontier.
+The differential oracle directly exercises scales 0, 2, and 38, plus the
+full signed Int128 backing extrema at scale 0.
 
 ## Purpose and bounded contexts
 
@@ -830,6 +834,55 @@ oracles, the headless TUI harness, and the linked TUI build passed. This
 evidence decays after a reader/writer/serialization change, a pinned
 ClickHouse build change, or a format/platform change; refresh the paired
 oracles and full suites before widening the claim.
+
+## Completed slice W16: paired raw Decimal128
+
+The W16 payload is ClickHouse `Decimal128(S)` at scales 0 through 38,
+including one BASIC `Nullable(Decimal128(S))` wrapper, in the same sorted
+`UInt64`-key, two-column Wide/LZ4, plain adaptive-mark part shape. Expose raw
+signed 128-bit scaled integers in Crystal with an explicit scale; generic
+`Int128` slices must not silently become Decimal128 columns. The pinned
+producer normalizes these aliases to `Decimal(38, S)` and
+`Nullable(Decimal(38, S))`; accept only these exact canonical part declarations.
+The pinned physical probe confirmed scales 0 and 38, signed 16-byte
+little-endian words, one bare payload stream, Nullable `.null` then payload
+with zero-filled NULL slots, plain 24-byte adaptive mark records, and the
+global `string:1` serialization-version metadata already used by W15.
+RowBinary omits the nested word under NULL.
+
+The compatibility falsifier has two directions: stock-generated multi-mark
+parts with negative, zero, positive, and NULL values must read exactly in
+Crystal; Crystal-generated parts must attach to pinned ClickHouse, return
+byte-exact full and key-range RowBinary, and pass `CHECK TABLE`. Scale endpoints
+and invalid scales, malformed declarations, truncated streams, and NULL versus
+zero must be tested. A failed writer validation must leave no published part.
+Generic primitive numeric accessors, including attempted `Int128` dispatch,
+must not alias Decimal128 metadata. The W15-named public semantic predicates
+remain W15-only; the neutral fixed-width predicates include W16. Full debug
+and release suites and the prior pinned oracles are regression guards, not
+substitutes for the W16 differential oracle.
+
+Observed W16 gate: the pinned ClickHouse 26.7.1.1315 differential oracle
+passed seven stock-to-Crystal and Crystal-to-stock fixtures: bare and BASIC
+Nullable Decimal128 at scales 0, 2, and 38, plus bare scale-0 raw
+`Int128::MIN/MAX`. Each fixture checked canonical metadata, physical streams
+and marks, exact full and key-range RowBinary, `ATTACH PART`, and stock
+`CHECK TABLE`; representative bare payload and Nullable payload/null-map
+streams rejected same-size corruption. SQL `toDecimal128` conversion rejects a
+39-digit input, but stock RowBinary ingestion and attached parts preserved the
+full signed Int128 backing extrema; W16 is a raw-code API, not a SQL decimal
+conversion API. Both full debug and release suites passed 436 examples each.
+The selected-column TUI spec passed 21 examples, the optional headless TUI
+harness passed six, and the W9-W15 pinned type oracles passed. These signals
+apply to the tested Wide/LZ4/plain-mark/Darwin and pinned-build boundary, not
+to arbitrary ClickHouse releases or part layouts.
+
+Rejected in W16: Decimal256, arbitrary `Decimal(P,S)` widths or conversions,
+rounding, SQL arithmetic, alternative serializers, nested composites, Compact
+parts, and any claim beyond the pinned build and Darwin publication boundary.
+Risk is CAUTION because valid-looking 16-byte streams can encode incorrect
+signed values or scales. Rollback is a W16-only local feature commit; no push
+or mutation of an existing ClickHouse data root is authorized.
 
 ## Rejected and guard-only surfaces
 

@@ -624,6 +624,39 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "formats Decimal128 raw codes and keeps Nullable NULL distinct from zero" do
+    keys = [1_u64, 2_u64, 3_u64]
+    large = 1_i128 << 80
+    values = [-1_i128, 0_i128, large]
+    setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_decimal128_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", values.to_unsafe.to_slice(values.size), 2, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Decimal128(2)", nil, setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 2).load(0_u64)
+      page.rows.should eq([["-1 [s=2]"], ["0 [s=2]"]])
+      CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 2).load(2_u64).rows.should eq([["#{large} [s=2]"]])
+      table["amount"].values.should eq(values)
+    end
+
+    nullable_values = [nil, 0_i128.as(Int128?), large.as(Int128?)]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_decimal128_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", nullable_values.to_unsafe.to_slice(nullable_values.size), 2, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Nullable(Decimal128(2))", nil, nullable_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 3).load(0_u64)
+      page.rows.should eq([["NULL"], ["0 [s=2]"], ["#{large} [s=2]"]])
+      table["amount"].values.should eq(nullable_values)
+    end
+  end
+
   it "returns an empty page for an empty table without materializing rows" do
     with_offline_page_table("    `seq` UInt64", nil) do |table, _table_path|
       page = CrystalClick::Examples::OfflinePageSource.new(table, ["seq"], 2).load(0_u64)

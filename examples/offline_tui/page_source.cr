@@ -275,6 +275,10 @@ module CrystalClick
             batch.decimal64_raw_for(column).size
           elsif WidePart.nullable_decimal64_scale(type)
             batch.nullable_decimal64_raw_for(column).size
+          elsif WidePart.decimal128_scale(type)
+            batch.decimal128_raw_for(column).size
+          elsif WidePart.nullable_decimal128_scale(type)
+            batch.nullable_decimal128_raw_for(column).size
           else
             raise UnsupportedFormatError.new("selected table column type is unsupported")
           end
@@ -386,6 +390,11 @@ module CrystalClick
             "#{batch.decimal64_raw_for(column)[row_index]} [s=#{scale}]"
           elsif scale = WidePart.nullable_decimal64_scale(type)
             value = batch.nullable_decimal64_raw_for(column)[row_index]
+            value ? "#{value} [s=#{scale}]" : "NULL"
+          elsif scale = WidePart.decimal128_scale(type)
+            "#{batch.decimal128_raw_for(column)[row_index]} [s=#{scale}]"
+          elsif scale = WidePart.nullable_decimal128_scale(type)
+            value = batch.nullable_decimal128_raw_for(column)[row_index]
             value ? "#{value} [s=#{scale}]" : "NULL"
           else
             raise UnsupportedFormatError.new("selected table column type is unsupported")
