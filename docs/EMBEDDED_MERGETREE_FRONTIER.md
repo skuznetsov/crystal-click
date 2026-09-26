@@ -29,6 +29,9 @@ full signed Int128 backing extrema at scale 0.
 W17 admits paired `UUID` and BASIC `Nullable(UUID)` payloads on this pinned
 Wide/LZ4 frontier after a bidirectional stock/Crystal oracle and full
 regression gate. It does not imply support for other 128-bit or IP types.
+W18 admits paired `IPv4` and BASIC `Nullable(IPv4)` payloads on the same
+pinned Wide/LZ4 frontier after a bidirectional stock/Crystal oracle and full
+regression gate. It does not imply `IPv6`, IP functions, or IPv4 key support.
 
 ## Purpose and bounded contexts
 
@@ -940,6 +943,68 @@ claims beyond the pinned build and Darwin publication boundary. Risk is
 CAUTION: an apparently valid 16-byte stream can silently swap UUID halves.
 Rollback is the W17-only local feature commit; no push or existing ClickHouse
 data-root mutation is authorized.
+
+## Completed slice W18: paired IPv4 payloads
+
+Admit exactly `IPv4` and BASIC `Nullable(IPv4)` as payload declarations on the
+existing sorted `UInt64`-key, two-column Wide/LZ4, plain adaptive-mark part
+shape. An `IPv4Value` is a four-byte value type with canonical dotted-decimal
+rendering and no per-row string object. Its public representation and accessor
+must be distinct from a plain `UInt32`, even if the on-disk scalar occupies
+four bytes. The reader, table batch, offline catalog, and optional TUI must
+either expose the same semantic value or reject the selection before page
+loading. Named bare/nullable writer APIs must preserve that type identity;
+generic `UInt32` inputs must never silently produce `IPv4` metadata. NULL and
+`0.0.0.0` are distinct values, with a deterministic zero-filled nested slot
+for NULL. No IPv4-specific key ordering, filtering, or SQL function is added.
+
+Before production edits, probe pinned ClickHouse 26.7.1.1315 for canonical
+type spelling, byte order with asymmetric addresses, stream and mark names,
+serialization metadata, null-map behavior, and RowBinary encoding. A
+falsifier includes `1.2.3.4`, `4.3.2.1`, `0.0.0.0`, NULL, multiple marks, and a
+short final granule. The exact byte order is established by the probe, not by
+assuming that IPv4 aliases a native-endian `UInt32`. Stock parts must decode
+to the expected addresses in Crystal; Crystal parts must attach to stock
+ClickHouse, return byte-exact full and key-range RowBinary, pass `CHECK TABLE`,
+and have ClickHouse `CHECK TABLE` reject representative same-size stream
+corruption in a disposable attached copy. Missing/truncated
+streams, malformed type/serialization metadata, and primitive accessor
+aliasing must fail closed. Full debug/release suites and W9-W17 pinned oracles
+are regression controls, not substitutes for the W18 oracle.
+The pinned preimplementation RowBinary probe observes `1.2.3.4` as
+`04 03 02 01` and `4.3.2.1` as `01 02 03 04`: a little-endian encoding of
+the network-order 32-bit address, not dotted-octet byte order. Stock
+`columns.txt` spells the types `IPv4` and `Nullable(IPv4)`; the BASIC nullable
+stream order is `payload.null` then `payload`. Both shapes use version-1
+serialization metadata with the global `string:1` entry and empty per-column
+list. RowBinary NULL carries only the one-byte flag; the physical nested
+NULL slot is four zero bytes. The stock nullable null map was
+`01 00 00 00 00`; a non-NULL `0.0.0.0` has the same four nested zero bytes
+but map byte `00`. These are preimplementation format observations, not a
+paired-compatibility claim.
+
+Observed W18 gate: the pinned ClickHouse 26.7.1.1315 differential oracle
+passed bare and BASIC Nullable IPv4 in both directions. Stock parts decoded
+exactly in Crystal; Crystal parts attached to stock ClickHouse with matching
+metadata, stream bytes, marks, full and key-range RowBinary, and clean
+`CHECK TABLE`. Isolated same-size payload and nullable null-map corruption
+was rejected by stock `CHECK TABLE`; this does not claim Crystal independently
+detects arbitrary same-size semantic changes. Focused specs cover malformed
+serialization/type metadata, truncated streams, NULL versus `0.0.0.0`,
+primitive `UInt32` accessor isolation, and named-only writer admission. The
+full debug and release suites each passed 458 examples, the selected-column
+TUI spec passed 23, the optional headless TUI harness passed six, and W9-W17
+pinned type oracles passed. This evidence decays after a reader/writer or
+serialization change, a pinned ClickHouse build change, or a format/platform
+change; refresh the paired oracle and suites before widening the claim.
+
+Rejected in W18: `IPv6`, IP subnet and other address operations, IPv4 primary
+keys, non-BASIC Nullable serializers, composite types, Compact parts,
+arbitrary table schemas, and claims beyond the pinned build and Darwin
+publication boundary. CAUTION: a four-byte stream can remain structurally
+valid after octet reversal while every address becomes wrong. Rollback is one
+W18-only local feature commit; no push or existing ClickHouse data-root
+mutation is authorized.
 
 ## Rejected and guard-only surfaces
 

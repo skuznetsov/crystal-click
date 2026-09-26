@@ -216,6 +216,10 @@ module CrystalClick
           batch.values_for(column, Float64).size
         when "Nullable(Bool)"
           batch.nullable_bools_for(column).size
+        when "IPv4"
+          batch.ipv4s_for(column).size
+        when "Nullable(IPv4)"
+          batch.nullable_ipv4s_for(column).size
         when "UUID"
           batch.uuids_for(column).size
         when "Nullable(UUID)"
@@ -329,6 +333,10 @@ module CrystalClick
           batch.values_for(column, Float64)[row_index].to_s
         when "Nullable(Bool)"
           display_nullable_bool(batch.nullable_bools_for(column)[row_index])
+        when "IPv4"
+          batch.ipv4s_for(column)[row_index].to_s
+        when "Nullable(IPv4)"
+          batch.nullable_ipv4s_for(column)[row_index].try(&.to_s) || "NULL"
         when "UUID"
           batch.uuids_for(column)[row_index].to_s
         when "Nullable(UUID)"
