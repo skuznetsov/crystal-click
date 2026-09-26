@@ -191,6 +191,8 @@ module CrystalClick
           batch.values_for(column, UInt8).size
         when "UInt16"
           batch.values_for(column, UInt16).size
+        when "Date"
+          batch.date_codes_for(column).size
         when "UInt32"
           batch.values_for(column, UInt32).size
         when "UInt64"
@@ -201,6 +203,8 @@ module CrystalClick
           batch.values_for(column, Int16).size
         when "Int32"
           batch.values_for(column, Int32).size
+        when "Date32"
+          batch.date32_codes_for(column).size
         when "Int64"
           batch.values_for(column, Int64).size
         when "Float32"
@@ -250,6 +254,8 @@ module CrystalClick
           batch.values_for(column, UInt8)[row_index].to_s
         when "UInt16"
           batch.values_for(column, UInt16)[row_index].to_s
+        when "Date"
+          batch.date_codes_for(column)[row_index].to_s
         when "UInt32"
           batch.values_for(column, UInt32)[row_index].to_s
         when "UInt64"
@@ -260,6 +266,8 @@ module CrystalClick
           batch.values_for(column, Int16)[row_index].to_s
         when "Int32"
           batch.values_for(column, Int32)[row_index].to_s
+        when "Date32"
+          batch.date32_codes_for(column)[row_index].to_s
         when "Int64"
           batch.values_for(column, Int64)[row_index].to_s
         when "Float32"

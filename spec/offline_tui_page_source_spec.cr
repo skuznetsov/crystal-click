@@ -95,6 +95,43 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "displays Date and Date32 as lossless raw day codes without treating them as numeric filters" do
+    keys = [1_u64, 2_u64, 3_u64]
+    date_codes = [0_u16, 1_u16, UInt16::MAX]
+    date_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_date_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_date", date_codes.to_unsafe.to_slice(date_codes.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_date` Date", nil, date_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_date"], 2)
+      source.load(0_u64).rows.should eq([["0"], ["1"]])
+      source.load(2_u64).rows.should eq([[UInt16::MAX.to_s]])
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("event_date", 0_u64))
+      end
+    end
+
+    date32_codes = [Int32::MIN, -1_i32, Int32::MAX]
+    date32_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_date32_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_date", date32_codes.to_unsafe.to_slice(date32_codes.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_date` Date32", nil, date32_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_date"], 2)
+      source.load(0_u64).rows.should eq([[Int32::MIN.to_s], ["-1"]])
+      source.load(2_u64).rows.should eq([[Int32::MAX.to_s]])
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("event_date", 0_u64))
+      end
+    end
+  end
+
   it "compares raw String values before display truncation" do
     columns = "    `seq` UInt64,\n    `payload` String"
     prefix = "x" * 300

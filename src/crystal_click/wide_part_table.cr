@@ -147,6 +147,22 @@ module CrystalClick
       @column_values[index].as(Slice(T))
     end
 
+    # Return raw UInt16 day codes only for an exact Date column.
+    def date_codes_for(column : String) : Slice(UInt16)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Date accessor requires an exact Date column") unless @column_types[index] == "Date"
+      return @typed_numeric_values[column].as(Slice(UInt16)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(UInt16))
+    end
+
+    # Return raw signed Int32 day codes only for an exact Date32 column.
+    def date32_codes_for(column : String) : Slice(Int32)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Date32 accessor requires an exact Date32 column") unless @column_types[index] == "Date32"
+      return @typed_numeric_values[column].as(Slice(Int32)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int32))
+    end
+
     def strings_for(column : String) : Slice(String)
       index = column_index(column)
       raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_types[index] == "String"
@@ -402,10 +418,9 @@ module CrystalClick
       scan_rows(batch_rows) { |batch| yield batch }
     end
 
-    # Scan exact String, Nullable(String), fixed-width primitive numeric, and
-    # Nullable(primitive numeric) columns. Each selected column's declared
-    # type is retained in the callback; no equal-width reinterpretation is
-    # permitted.
+    # Scan exact String, Date/Date32 raw day codes, primitive numeric, and
+    # supported Nullable columns. Each selected column's declared type is
+    # retained in the callback; no equal-width reinterpretation is permitted.
     def scan_typed(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
       scan_typed_rows(batch_rows) { |batch| yield batch }
@@ -660,6 +675,10 @@ module CrystalClick
     private def read_numeric_values(selected : ColumnReader, mark_index : Int) : WidePartNumericArray
       reader = selected.reader
       case selected.column_type
+      when "Date"
+        reader.read_date_codes_mark_range(selected.name, mark_index, 1)
+      when "Date32"
+        reader.read_date32_codes_mark_range(selected.name, mark_index, 1)
       when "UInt8"
         reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt8)
       when "UInt16"

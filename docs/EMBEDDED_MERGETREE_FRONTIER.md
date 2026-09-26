@@ -9,8 +9,9 @@ verified for embedded candidate scans only. W9 covers the exact scalar and
 Nullable payload types supported by the typed reader, on the pinned local
 ClickHouse/Darwin writer frontier. W10 verifies plain `FixedString(N)` as a
 separately tested reader/writer payload. W11 verifies BASIC
-`Nullable(FixedString(N))` within its bounded reader/writer scope; other type
-families remain guard-only.
+`Nullable(FixedString(N))` within its bounded reader/writer scope. W12 verifies
+raw non-null `Date` and `Date32` day-code reading and writing on the pinned
+Wide/LZ4 ClickHouse/Darwin frontier; other type families remain guard-only.
 
 ## Purpose and bounded contexts
 
@@ -551,6 +552,69 @@ flag plus an all-NULL part. W9/W10 oracles also passed. This does not certify
 every width against stock ClickHouse, other builds/filesystems, Compact
 parts, power-loss durability, or daemon restart behavior.
 
+## Completed slice W12: raw Date and Date32 day codes
+
+Admit exactly the non-null `Date` and `Date32` column types as separate
+semantic types in the existing Wide/LZ4, plain adaptive `.mrk2` reader and
+two-column writer. A `Date` row is one little-endian `UInt16` day code since
+1970-01-01; a `Date32` row is one little-endian signed `Int32` day code since
+that epoch. Each has one data substream and the same mark/index boundaries as
+the already-supported fixed-width numbers. The physical `Date` range is the
+whole `UInt16` domain. The physical `Date32` range is the whole `Int32`
+domain: the pinned ClickHouse build accepted both signed extrema in a part,
+detached and reattached it, and passed `CHECK TABLE`. Its civil-date display
+and SQL text conversions saturate outside their calendar range, so they must
+not be used as a lossless representation of those raw codes.
+
+Reader APIs return raw codes with distinct `Date`/`Date32` names and require
+exact column metadata. They must not make a `Date` readable through the
+ordinary `UInt16` accessor, a `Date32` through the ordinary `Int32` accessor,
+or vice versa. Table batches and offline catalog column values preserve that
+distinction at the schema/accessor boundary while yielding `UInt16` or
+`Int32` codes to Crystal callers. Existing numeric-only scans remain limited
+to exact numeric metadata. The offline TUI is a downstream consumer of the
+typed-support predicate; if it selects these columns, it must display their
+raw codes under the declared type rather than fail after selection. Its
+existing equality filters remain UInt64/String-only. No Crystal `Time`
+conversion, timezone, date arithmetic, or calendar validation is admitted.
+
+Writer entry points name `Date` or `Date32` explicitly; the existing
+type-inferred writer must continue mapping `UInt16` and `Int32` to their
+numeric ClickHouse types. Reuse the W9 frame/mark/checksum/primary-index
+preflights, staged self-read, and exclusive Darwin publication. Reject wrong
+shapes or metadata and leave no published part on failure. Do not clamp or
+reinterpret an input code during writing or reading.
+
+The differential falsifier uses pinned ClickHouse 26.7.1.1315 stock-generated
+parts with multiple marks and a short final granule, including `Date` 0 and
+65,535 and `Date32` negative, ordinary, and signed-extreme codes. Crystal
+must return the exact codes and mark ranges. Conversely, the pinned build
+must `ATTACH PART` for separate Crystal-generated Date and Date32 parts,
+return identical full/key-range raw codes, pass `CHECK TABLE`, and detect a
+same-size damaged payload stream. Focused RED-to-green specs, full debug and
+release suites, formatting/shell checks, and the W9/W10/W11 typed oracles are
+the completion gate. Self-read alone cannot establish stock compatibility.
+
+`DateTime`, `DateTime64`, Nullable dates, LowCardinality, timezone semantics,
+calendar objects, non-UInt64 keys, mutable table inserts, Compact parts,
+other ClickHouse builds, and daemon restart remain guard-only. Risk is
+CAUTION: an accidental numeric alias or date conversion could silently
+mislabel persisted values. Rollback is a single W12 feature commit; no push
+or write into an existing ClickHouse data root is authorized.
+
+W12 closure on the pinned local ClickHouse 26.7.1.1315/Darwin frontier:
+376 Crystal examples passed in both debug and release. The differential
+oracle checked stock-produced `Date` and `Date32` payload bytes, exact raw
+codes (including both `Int32` extrema), adaptive marks `[2, 2, 1]`, and
+Crystal-generated parts through `ATTACH PART`, full/key-range queries,
+`CHECK TABLE`, and same-size payload corruption detection. W9/W10/W11
+oracles passed as regression controls. The headless TUI specs and linked
+example build passed; date cells show raw codes and equality filtering was
+not widened. This evidence is fixture- and build-scoped, not proof of other
+ClickHouse builds, calendar conversions, Compact parts, power-loss recovery,
+or daemon restart behavior. Refresh it after changing the date serializer,
+reader dispatch, part framing, or pinned ClickHouse build.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -560,10 +624,10 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W11's BASIC
-   `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, and W9's exact 22
-   payload shapes,
-   one stock-ClickHouse differential fixture per type and substream shape.
+1. Extend reader and writer together beyond W12's raw dates, W11's BASIC
+   `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, W9's exact 22
+   payload shapes, one stock-ClickHouse differential fixture per type and
+   substream shape.
    Reader support never implies writer support. Recheck physical stream naming
    on case-sensitive filesystems before claiming cross-filesystem
    compatibility. Sparse and other String variants remain guard-only.

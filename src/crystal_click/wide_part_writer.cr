@@ -257,33 +257,71 @@ module CrystalClick
         write_uint64_nullable_uint64_pair(destination, key_name, keys, value_name, values, rows_per_mark)
       {% else %}
         type_name = typed_type_name(values)
-        validate_typed_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
-
-        target = File.expand_path(destination)
-        parent = File.dirname(target)
-        raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
-        raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
-
-        stage = create_stage(parent)
-        begin
-          records = [] of ChecksumRecord
-          records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
-          records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
-          records << write_primary_index(stage, keys, rows_per_mark)
-          records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-          records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name)) if type_name.starts_with?("Nullable(")
-          write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
-          write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
-          write_plain_metadata(stage, "metadata_version.txt", "0")
-          write_plain_metadata(stage, "columns_substreams.txt", typed_substreams_metadata(key_name, value_name, type_name))
-          write_checksums(stage, records)
-          validate_staged_typed_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
-          publish_exclusively(stage, target)
-          target
-        ensure
-          FileUtils.rm_rf(stage) if Dir.exists?(stage)
-        end
+        write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% end %}
+    end
+
+    # Write a Date payload as raw UInt16 day codes since 1970-01-01. Codes are
+    # preserved as supplied; no civil-date conversion or range clamping occurs.
+    def self.write_uint64_date_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt16),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Date", rows_per_mark)
+    end
+
+    # Write a Date32 payload as raw signed Int32 day codes since 1970-01-01.
+    # The full Int32 domain is retained without civil-date conversion.
+    def self.write_uint64_date32_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Int32),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Date32", rows_per_mark)
+    end
+
+    private def self.write_uint64_typed_pair_with_type(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(T),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : String forall T
+      validate_typed_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name)) if type_name.starts_with?("Nullable(")
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", typed_substreams_metadata(key_name, value_name, type_name))
+        write_checksums(stage, records)
+        validate_staged_typed_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
     end
 
     private def self.validate_nullable_uint64_inputs(
@@ -729,9 +767,9 @@ module CrystalClick
       case type_name
       when "UInt8", "Int8"
         1
-      when "UInt16", "Int16"
+      when "UInt16", "Int16", "Date"
         2
-      when "UInt32", "Int32", "Float32"
+      when "UInt32", "Int32", "Float32", "Date32"
         4
       when "UInt64", "Int64", "Float64"
         8
@@ -1951,7 +1989,7 @@ module CrystalClick
         mark_index = expected_mark_rows.size
         expected_mark_rows << rows.to_u64
         expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
-        expected_values = read_typed_numeric_mark(value_part, value_name, mark_index, values)
+        expected_values = read_typed_numeric_mark(value_part, value_name, mark_index, values, type_name)
         rows.times do |offset|
           unless expected_keys[offset] == keys[start + offset] && typed_numeric_value_equal?(expected_values[offset], values[start + offset])
             raise CorruptPartError.new("staged typed numeric stream readback differs from input")
@@ -1979,11 +2017,18 @@ module CrystalClick
       column : String,
       mark_index : Int,
       values : Slice(T),
+      type_name : String,
     ) : Array(T) forall T
       {% if T == UInt8 %}
         part.read_numeric_mark_range(column, mark_index, 1, UInt8)
       {% elsif T == UInt16 %}
-        part.read_numeric_mark_range(column, mark_index, 1, UInt16)
+        if type_name == "Date"
+          part.read_date_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "UInt16"
+          part.read_numeric_mark_range(column, mark_index, 1, UInt16)
+        else
+          raise UnsupportedFormatError.new("typed writer requires an exact UInt16 or Date payload")
+        end
       {% elsif T == UInt32 %}
         part.read_numeric_mark_range(column, mark_index, 1, UInt32)
       {% elsif T == UInt64 %}
@@ -1993,7 +2038,13 @@ module CrystalClick
       {% elsif T == Int16 %}
         part.read_numeric_mark_range(column, mark_index, 1, Int16)
       {% elsif T == Int32 %}
-        part.read_numeric_mark_range(column, mark_index, 1, Int32)
+        if type_name == "Date32"
+          part.read_date32_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "Int32"
+          part.read_numeric_mark_range(column, mark_index, 1, Int32)
+        else
+          raise UnsupportedFormatError.new("typed writer requires an exact Int32 or Date32 payload")
+        end
       {% elsif T == Int64 %}
         part.read_numeric_mark_range(column, mark_index, 1, Int64)
       {% elsif T == Float32 %}

@@ -54,7 +54,7 @@ module CrystalClick
     end
 
     def self.supports_typed_type?(type : String) : Bool
-      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
+      type == "Date" || type == "Date32" || type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
     end
 
     def self.json_type?(type : String) : Bool
@@ -212,6 +212,42 @@ module CrystalClick
         while offset < bytes.size
           values << decode_numeric_value(bytes, offset, type)
           offset += element_width
+        end
+      end
+      values
+    end
+
+    # Date is stored as a raw UInt16 day code. Keep this semantic accessor
+    # separate from the ordinary numeric UInt16 reader.
+    def read_date_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt16)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Date accessor requires an exact Date column") unless @column_type == "Date"
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 2)
+      values = Array(UInt16).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 2) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << u16(bytes, offset)
+          offset += 2
+        end
+      end
+      values
+    end
+
+    # Date32 is stored as a raw signed Int32 day code without calendar
+    # conversion or clamping.
+    def read_date32_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Date32 accessor requires an exact Date32 column") unless @column_type == "Date32"
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 4)
+      values = Array(Int32).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 4) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << u32(bytes, offset).unsafe_as(Int32)
+          offset += 4
         end
       end
       values
@@ -1201,6 +1237,10 @@ module CrystalClick
         fixed_width
       elsif WidePart.supports_nullable_numeric_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
+      elsif @column_type == "Date"
+        2
+      elsif @column_type == "Date32"
+        4
       else
         numeric_type_width(@column_type)
       end

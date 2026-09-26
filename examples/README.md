@@ -137,6 +137,8 @@ limited to 512 bytes and rejects terminal controls and a defined set of
 invisible Unicode formatting characters; it does not normalize lookalike
 characters. The pane shows at most 256 owned rows from up to 16 directly
 supported typed columns. Omitted columns are reported, not silently decoded.
+`Date` and `Date32` cells display their lossless raw epoch-day codes, not
+formatted calendar dates; neither is an equality-filter type in this example.
 Non-NULL Strings are quoted and escaped; only their first 256 source bytes are
 retained for display. Longer values carry a `[truncated]` prefix. Equality
 uses raw typed values, not truncated display text. Each filtered page examines
