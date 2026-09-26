@@ -7,7 +7,8 @@ verified on the same Crystal-owned table frontier; power-loss recovery
 remains future work. Bounded W8 recorded primary-index hash validation is
 verified for embedded candidate scans only. W9 covers the exact scalar and
 Nullable payload types supported by the typed reader, on the pinned local
-ClickHouse/Darwin writer frontier; all remaining type families are guard-only.
+ClickHouse/Darwin writer frontier. W10 verifies plain `FixedString(N)` as a
+separately tested reader/writer payload; other type families remain guard-only.
 
 ## Purpose and bounded contexts
 
@@ -445,6 +446,51 @@ a scalar pass cannot certify a Nullable or String shape. The old three writer
 forms are regression controls. A separate disposable `clickhouse-server`
 smoke test remains needed before claiming daemon lifecycle compatibility.
 
+## Verified slice W10: plain FixedString(N) payload
+
+Admit an exact `FixedString(N)` selected column in a Wide part, where
+`1 <= N <= 65,536` bytes. The reader must recognize only canonical
+`FixedString(N)` spelling, require one ordinary physical stream (no String
+`.size` stream), check every selected mark's `rows * N` byte count, and return
+all `N` bytes for each value, including trailing and embedded zero bytes.
+Direct materialization is capped at 64 MiB of raw bytes and 65,536 returned
+values per call, preventing small-width values from multiplying into an
+unbounded number of Crystal objects. Validate the global `string`
+serialization version as one of the pinned ClickHouse enum values, even
+though FixedString itself uses one stream.
+Table and offline-catalog typed selection must expose that exact byte value;
+the existing variable `String` behavior must remain unchanged. Reject a
+malformed declaration or a stream shape that does not match this contract.
+
+Admit a writer entry point with explicit `N`, sorted `UInt64` key, and one
+`Slice(String)` payload. Each input is a byte string, not a character count:
+reject values longer than `N`, zero-pad shorter values to exactly `N`, and
+write one bounded fixed-width stream. Reuse W9's staged checksums, marks,
+checksummed `serialization.json`, Crystal self-read, and exclusive publication.
+Reject a per-mark row count above the reader's 65,536-value materialization
+limit before staging. Do not infer
+`FixedString(N)` from the Crystal `String` type or silently truncate a value.
+The writer and reader must preflight `rows * N`, frame, file, and mark limits
+before allocating or publishing. Existing W9 entry points remain unchanged.
+
+W10's falsifier is a stock ClickHouse-generated reader fixture and a
+Crystal-generated writer part with multiple marks, short and exact-width
+values, embedded and trailing zeros, multibyte UTF-8 bytes, and a short final
+granule. Both readers must return identical hex bytes per key. Pinned stock
+ClickHouse must `ATTACH PART`, return identical full and key-range results,
+and pass `CHECK TABLE`; a corrupt-stream negative control must fail integrity.
+If any of these fail, keep W10 experimental and do not claim server-readable
+format compatibility. The verified scope will be the tested pinned producer,
+Darwin filesystem and two-column Wide/LZ4 layout, not generic ClickHouse
+parts or daemon restart behavior.
+
+`Nullable(FixedString(N))`, date/time, UUID/IP, Decimal, Enum,
+LowCardinality, arrays, maps, tuples, Variant/Dynamic, full JSON objects,
+arbitrary schemas, and Compact parts remain guard-only for this slice.
+Rollback is the single W10 feature commit. The DoD signal is focused and full
+Crystal specs plus the pinned differential oracle all passing, with each
+physical byte shape named in its output.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -454,7 +500,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W9's exact 22 payload shapes,
+1. Extend reader and writer together beyond W10's plain `FixedString(N)` and
+   W9's exact 22 payload shapes,
    one stock-ClickHouse differential fixture per type and substream shape.
    Reader support never implies writer support. Recheck physical stream naming
    on case-sensitive filesystems before claiming cross-filesystem
@@ -595,9 +642,30 @@ JSON object serialization, or other ClickHouse types. A writer/reader or
 format change, ClickHouse build change, or platform/filesystem change decays
 it; refresh the focused/full suites and both external writer oracles.
 
+W10 evidence at parent `d3ac49c` plus the W10 implementation diff on Crystal
+1.21.0 and Darwin: the exact typed reader and explicit writer APIs were first
+exercised by RED specs. A second RED spec showed that `FixedString` wrongly
+accepted `serialization.json` with global `string: 999`; a read-only adversary
+also found that a 64-MiB `FixedString(1)` range could create tens of millions
+of String objects. Both gaps were closed before final checks. The focused
+reader/writer specs passed 12/12; the full debug and release suites each
+passed 352/352. Formatting, shell syntax, and diff whitespace checks passed.
+The pinned ClickHouse local `26.7.1.1315` oracle generated a stock
+`FixedString(3)` part whose exact bytes and `[2, 2, 1]` mark rows Crystal
+read correctly. It then attached a Crystal-generated part, compared full and
+key-range hex rows, passed `CHECK TABLE`, and detected a damaged payload
+frame. The W9 22-shape oracle and all-null/all-empty controls stayed green.
+Adversarial review returned ROBUST within the bounded scope. This certificate
+covers one sorted `UInt64` key and one plain `FixedString(N)` payload in a
+Wide/LZ4 part with exclusive Darwin publication; stock interoperability was
+exercised at `N=3`, not every width. It does not prove daemon restart behavior,
+Nullable(FixedString), other formats, or all ClickHouse versions. A
+reader/writer, format, ClickHouse build, platform, or filesystem change decays
+it; refresh the focused/full suites and the W10 external oracle.
+
 Risk tier: CAUTION, because malformed serialization can create convincing
-but unusable persistent data. Rollback is the respective W1, W2, W3, or W9
-commit; there will be no push or write into existing ClickHouse data roots. The
+but unusable persistent data. Rollback is the respective feature commit;
+there will be no push or write into existing ClickHouse data roots. The
 strongest likely failure is a subtle frame/checksum or mark/index mismatch
 that our reader tolerates and ClickHouse rejects. The stock-ClickHouse attach,
-read, and `CHECK TABLE` gates are mandatory for W1/W2/W3/W9 verification.
+read, and `CHECK TABLE` gates are mandatory for W1/W2/W3/W9/W10 verification.

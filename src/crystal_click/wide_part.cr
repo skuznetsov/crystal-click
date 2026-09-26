@@ -8,7 +8,9 @@ module CrystalClick
     MAX_FRAME_COMPRESSED_BYTES   = 64 * 1024 * 1024
     MAX_FRAME_DECOMPRESSED_BYTES = 64 * 1024 * 1024
     MAX_STRING_RANGE_BYTES       = 64 * 1024 * 1024
-    MAX_CODEC_FILE_BYTES         = 64
+    MAX_FIXED_STRING_WIDTH       =     65_536
+    MAX_FIXED_STRING_RANGE_ROWS  = 65_536_u64
+    MAX_CODEC_FILE_BYTES         =         64
     MAX_METADATA_FILE_BYTES      = 4 * 1024 * 1024
     MAX_METADATA_LINE_BYTES      = 64 * 1024
     MAX_METADATA_COLUMNS         =  4096
@@ -34,8 +36,19 @@ module CrystalClick
       type == "Nullable(String)"
     end
 
+    # Return the byte width only for the exact, bounded FixedString grammar.
+    # Leading zeros, signs, whitespace, zero, and oversized parameters fail
+    # closed so DDL and part metadata have one canonical spelling.
+    def self.fixed_string_width(type : String) : Int32?
+      match = /\AFixedString\(([1-9][0-9]*)\)\z/.match(type)
+      return nil unless match
+      width = match[1].to_i?
+      return nil unless width && width <= MAX_FIXED_STRING_WIDTH
+      width
+    end
+
     def self.supports_typed_type?(type : String) : Bool
-      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type)
+      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil?
     end
 
     def self.json_type?(type : String) : Bool
@@ -157,8 +170,9 @@ module CrystalClick
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
 
-    # Open an exact String or primitive numeric column, including Nullable(T).
-    # Serialization version metadata and every physical substream are checked.
+    # Open an exact String, FixedString(N), or primitive numeric column,
+    # including supported Nullable(T) forms. Serialization metadata and every
+    # physical substream are checked where required by the selected type.
     def self.open_typed(path : String, column : String) : WidePart
       new(path, column, :typed)
     rescue ex : IO::Error
@@ -217,6 +231,17 @@ module CrystalClick
       total_bytes
     end
 
+    # Return the exact raw byte count for a FixedString(N) mark range without
+    # allocating value Strings. WidePartTable uses this to preflight the
+    # aggregate selected-mark bound before decoding any fixed-width values.
+    def fixed_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      width = WidePart.fixed_string_width(@column_type) || raise(UnsupportedFormatError.new("FixedString accessor requires an exact FixedString(N) column"))
+      stream = @streams[column]
+      _, _, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      checked_fixed_string_byte_count(rows, width).to_u64
+    end
+
     # Read a bounded mark range from an exact String column. At most 64 MiB of
     # raw bytes are materialized per call (the whole range, not each mark).
     # Empty values are zero-length; embedded NUL bytes are preserved.
@@ -236,6 +261,26 @@ module CrystalClick
         offset += length
       end
       raise CorruptPartError.new("String sizes do not consume selected raw bytes") unless offset == raw_bytes.size
+      values
+    end
+
+    # Read an exact FixedString(N) mark range. Each returned String contains
+    # exactly N on-disk bytes, including embedded and trailing NUL bytes.
+    # Materialization is bounded by both raw bytes and returned String count.
+    def read_fixed_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String)
+      ensure_column(column)
+      width = WidePart.fixed_string_width(@column_type) || raise(UnsupportedFormatError.new("FixedString accessor requires an exact FixedString(N) column"))
+      stream = @streams[column]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      expected_bytes = checked_fixed_string_byte_count(rows, width)
+      raw_bytes = read_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, width)
+      values = Array(String).new(rows.to_i)
+      offset = 0
+      rows.to_i.times do
+        values << String.new(raw_bytes[offset, width])
+        offset += width
+      end
+      raise CorruptPartError.new("FixedString values do not consume selected bytes") unless offset == raw_bytes.size
       values
     end
 
@@ -513,7 +558,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -677,6 +722,8 @@ module CrystalClick
         ["#{column}.size", column]
       elsif WidePart.supports_nullable_string_type?(type)
         ["#{column}.null", "#{column}.size", column]
+      elsif WidePart.fixed_string_width(type)
+        [column]
       elsif WidePart.supports_nullable_numeric_type?(type)
         ["#{column}.null", column]
       else
@@ -713,6 +760,9 @@ module CrystalClick
       if type == "String"
         string_version = versions["string"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
+      elsif !WidePart.fixed_string_width(type).nil?
+        string_version = versions["string"]?.try(&.as_i) || 0_i64
+        raise UnsupportedFormatError.new("unsupported String serialization version") unless string_version == 0 || string_version == 1
       elsif WidePart.supports_nullable_numeric_type?(type)
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
@@ -1093,6 +1143,8 @@ module CrystalClick
         stream_name == "#{@column}.size" ? 8 : 1
       elsif WidePart.supports_nullable_string_type?(@column_type)
         stream_name == "#{@column}.size" ? 8 : 1
+      elsif fixed_width = WidePart.fixed_string_width(@column_type)
+        fixed_width
       elsif WidePart.supports_nullable_numeric_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
       else
@@ -1211,6 +1263,16 @@ module CrystalClick
       width = element_width.to_u64
       raise CorruptPartError.new("row byte count overflow") if width == 0 || rows > (Int32::MAX.to_u64 / width)
       (rows * width).to_i
+    end
+
+    private def checked_fixed_string_byte_count(rows : UInt64, width : Int32) : Int
+      byte_width = width.to_u64
+      raise CorruptPartError.new("FixedString width is invalid") if byte_width == 0 || byte_width > MAX_FIXED_STRING_WIDTH.to_u64
+      raise CorruptPartError.new("FixedString read range exceeds row materialization limit") if rows > MAX_FIXED_STRING_RANGE_ROWS
+      if rows > MAX_STRING_RANGE_BYTES.to_u64 // byte_width
+        raise CorruptPartError.new("FixedString read range exceeds materialization limit")
+      end
+      checked_byte_count(rows, width)
     end
 
     private def numeric_type_width(type : String) : Int32

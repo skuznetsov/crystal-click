@@ -159,6 +159,47 @@ module CrystalClick
       end
     end
 
+    # Write a sorted UInt64 primary key and a FixedString(N) payload. Values
+    # are byte strings: short values are zero-padded to N and values longer
+    # than N are rejected. FixedString has one raw payload stream and no
+    # per-row size substream.
+    def self.write_uint64_fixed_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String),
+      width : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_fixed_string_inputs(destination, key_name, keys, value_name, values, width, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_fixed_string_stream(stage, value_name, values, width, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "FixedString(#{width})"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", typed_substreams_metadata(key_name, value_name, "FixedString(#{width})"))
+        write_checksums(stage, records)
+        validate_staged_fixed_string_part(stage, key_name, value_name, keys, values, width, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable two-column part with a sorted UInt64 primary key.
     # The payload's Crystal type selects an admitted numeric, String, or
     # BASIC Nullable type; numeric values are encoded by their exact bits.
@@ -349,6 +390,80 @@ module CrystalClick
             raise ArgumentError.new("String data stream exceeds reader limit")
           end
           string_data_bytes += string_frame_size
+        end
+        start_row += rows
+      end
+
+      nil
+    end
+
+    private def self.validate_fixed_string_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String),
+      width : Int32,
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("FixedString width must be positive") if width <= 0
+      raise ArgumentError.new("FixedString width exceeds reader limit") if width > WidePart::MAX_FIXED_STRING_WIDTH
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+      raise ArgumentError.new("FixedString rows_per_mark exceeds reader materialization limit") if rows_per_mark > WidePart::MAX_FIXED_STRING_RANGE_ROWS
+
+      stream_bases = [key_name, value_name].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      key_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      fixed_width = width.to_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        {
+          {rows.to_i64 * 8_i64, "UInt64 key", key_data_bytes},
+          {rows.to_i64 * fixed_width, "FixedString payload", value_data_bytes},
+        }.each do |raw_size, label, prior_bytes|
+          if raw_size > MAX_FRAME_RAW_BYTES.to_i64
+            raise ArgumentError.new("#{label} granule exceeds decompressed frame limit")
+          end
+          frame_size = literal_frame_size(raw_size)
+          if frame_size > MAX_FRAME_COMPRESSED.to_i64
+            raise ArgumentError.new("#{label} granule literal frame exceeds compressed frame limit")
+          end
+          if frame_size > MAX_DATA_FILE_BYTES - prior_bytes
+            raise ArgumentError.new("#{label} stream exceeds reader limit")
+          end
+          if label == "UInt64 key"
+            key_data_bytes += frame_size
+          else
+            value_data_bytes += frame_size
+          end
+        end
+
+        rows.times do |offset|
+          if values[start_row + offset].bytesize > width
+            raise ArgumentError.new("FixedString value exceeds declared byte width")
+          end
         end
         start_row += rows
       end
@@ -1155,6 +1270,64 @@ module CrystalClick
       ]
     end
 
+    private def self.write_fixed_string_stream(
+      stage : String,
+      column : String,
+      values : Slice(String),
+      width : Int32,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash(column)
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_path = File.join(stage, data_name)
+      mark_path = File.join(stage, marks_name)
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      start_row = 0
+
+      File.open(data_path, "wb") do |data_file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          raw = Bytes.new(rows * width)
+          rows.times do |row|
+            value_bytes = values[start_row + row].to_slice
+            value_offset = row * width
+            value_bytes.copy_to(raw[value_offset, value_bytes.size]) unless value_bytes.empty?
+          end
+
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+
+          frame = encode_lz4_frame(raw)
+          if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+            raise ArgumentError.new("FixedString data stream exceeds reader limit")
+          end
+          data_file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(raw)
+          data_size += frame.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(mark_path, marks)
+      mark_hash = CityHashV1.file_hash(marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64 * width.to_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false),
+      ]
+    end
+
     private def self.typed_string_value(value : T) : String forall T
       {% if T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         value || ""
@@ -1399,6 +1572,69 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged String marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+      nil
+    end
+
+    private def self.validate_staged_fixed_string_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(String),
+      width : Int32,
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged FixedString row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged FixedString column type does not match") unless value_part.column_type == "FixedString(#{width})"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        expected_mark_rows << rows.to_u64
+        mark_index = expected_mark_rows.size - 1
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_fixed_string_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset]
+            raise CorruptPartError.new("staged FixedString key readback differs from input")
+          end
+
+          input_bytes = values[start + offset].to_slice
+          actual_bytes = expected_values[offset].to_slice
+          unless actual_bytes.size == width
+            raise CorruptPartError.new("staged FixedString value has an unexpected byte width")
+          end
+          width.times do |byte_index|
+            expected_byte = byte_index < input_bytes.size ? input_bytes[byte_index] : 0_u8
+            unless actual_bytes[byte_index] == expected_byte
+              raise CorruptPartError.new("staged FixedString stream readback differs from input")
+            end
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged FixedString marks do not match") unless value_part.mark_row_counts == expected_mark_rows
 
       index = PrimaryKeyIndex.open(stage, mark_count, checksums)
       expected_index = Array(UInt64).new(mark_count + 1)
