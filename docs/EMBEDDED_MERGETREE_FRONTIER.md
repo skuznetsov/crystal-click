@@ -15,6 +15,10 @@ Wide/LZ4 ClickHouse/Darwin frontier; other type families remain guard-only.
 W13 admits raw non-null `DateTime` seconds and `DateTime64(p)` ticks for
 canonical precisions 0 through 9 on the same pinned Wide/LZ4 frontier;
 the differential oracle directly exercises precisions 0, 3, and 9.
+W14 admits BASIC Nullable wrappers for these four raw date/time families on
+the pinned Wide/LZ4/plain-adaptive-mark frontier. The differential oracle
+directly tests DateTime64 precisions 0, 3, and 9; the exact parser and writer
+accept canonical precisions 0 through 9.
 
 ## Purpose and bounded contexts
 
@@ -684,6 +688,66 @@ This evidence is fixture- and build-scoped, not proof of timezone-bearing
 metadata, civil conversion, Compact parts, other ClickHouse builds, daemon
 restart, or power-loss recovery. Refresh after changes to the time serializer,
 type dispatch, part framing, or pinned ClickHouse build.
+
+## Slice W14: nullable raw date/time codes
+
+The admitted scope is exact `Nullable(Date)`, `Nullable(Date32)`,
+`Nullable(DateTime)`, and `Nullable(DateTime64(p))`, where the inner precision
+has W13's canonical one-digit 0..9 grammar. Non-NULL values remain raw
+UInt16 day codes, Int32 day codes, UInt32 epoch seconds, or Int64 ticks;
+NULL remains distinct from a zero code. The DDL and part type must retain
+the complete wrapper and precision. No civil-time, timezone, or calendar
+conversion is proposed.
+
+The pinned ClickHouse 26.7.1.1315 probe generated a Wide/LZ4 part with exact
+type spellings, `name.null` then `name` substreams, one fixed-width nested
+value per row, zero placeholders under NULL, and plain adaptive `.mrk2`
+records for `4,4,1` rows plus sentinel. `serialization.json` carries version
+1, `types_serialization_versions:{"string":1}` and
+`propagate_types_serialization_versions_to_nested_types:true`, with no
+temporal column records. Raw RowBinary insertion and selection were
+byte-identical for NULL, zero, and signed/unsigned extrema; the NULL wire
+form omits nested bytes. `CHECK TABLE` passed. This admits reuse of the
+existing BASIC Nullable byte codec, not the primitive numeric API. Reader entry points
+and batch accessors must require the exact semantic Nullable type, and
+primitive `Nullable(UInt16/Int32/UInt32/Int64)` accessors must refuse the
+corresponding date/time metadata. Writer entry points must name the
+semantic type and DateTime64 precision explicitly; inferred nullable
+numeric slices must remain numeric. Invalid precision, mismatched rows,
+unsupported metadata (including missing or non-1 `string` serialization
+version), malformed null flags, or publication failure must fail closed
+without exposing a partial part.
+
+The falsifier reads stock-generated multi-mark parts through Crystal,
+including NULL, zero, extreme non-NULL codes, and a short tail mark. In the
+reverse direction stock ClickHouse must attach Crystal-generated parts,
+return byte-exact full/key-range RowBinary, pass `CHECK TABLE`, and detect
+same-size corruption in both the null-map and nested value streams. Local
+negative tests must reject timezone-qualified or noncanonical metadata and
+numeric accessor aliases before callbacks. W9-W13 differential oracles and
+full Crystal debug/release suites are regression controls. The offline TUI
+may display `NULL` and raw codes with an explicit DateTime64 precision label;
+its equality filters remain unchanged. No compatibility claim is allowed
+from Crystal self-read alone.
+
+Nullable timezone-bearing types, implicit precision spellings, non-BASIC
+serializations, civil conversion, other ClickHouse builds, Compact parts,
+power-loss durability, and daemon restart remain guard-only. Risk is
+CAUTION: a wrong null-map or semantic alias can silently alter persisted
+data. Rollback is one W14-only local feature commit after the gate passes;
+no push or mutation of an existing ClickHouse data root is authorized.
+
+Observed W14 gate: the full debug and release Crystal suites each passed 405
+examples. The pinned differential oracle passed stock-to-Crystal and
+Crystal-to-stock for `Nullable(Date)`, `Nullable(Date32)`,
+`Nullable(DateTime)`, and `Nullable(DateTime64(0/3/9))`: exact metadata,
+substreams, marks and raw codes, full/key-range RowBinary, `ATTACH PART`,
+`CHECK TABLE`, and independent same-size corruption of the null-map and
+nested value streams. W9-W13 differential controls, the headless TUI suite,
+and the linked TUI build passed. This does not admit timezone semantics,
+SQL calendar conversion, Compact parts, compressed marks, other ClickHouse
+builds, daemon restart, or power-loss durability. Refresh after changes to
+Nullable/date-time dispatch, part framing, or the pinned ClickHouse build.
 
 ## Rejected and guard-only surfaces
 

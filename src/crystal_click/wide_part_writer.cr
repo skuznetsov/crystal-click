@@ -315,6 +315,60 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, ticks, "DateTime64(#{scale})", rows_per_mark)
     end
 
+    # Write Nullable(Date) as raw UInt16 day codes. NULL has its own null-map
+    # entry and a zero placeholder in the nested value stream; non-NULL codes,
+    # including zero, are preserved exactly.
+    def self.write_uint64_nullable_date_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt16?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Date)", rows_per_mark)
+    end
+
+    # Write Nullable(Date32) as raw signed Int32 day codes.
+    def self.write_uint64_nullable_date32_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Int32?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Date32)", rows_per_mark)
+    end
+
+    # Write Nullable(DateTime) as raw UInt32 epoch seconds.
+    def self.write_uint64_nullable_datetime_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt32?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(DateTime)", rows_per_mark)
+    end
+
+    # Write Nullable(DateTime64(p)) as raw signed Int64 ticks. The explicit
+    # precision is part of the stored semantic type and uses W13's canonical
+    # one-digit 0..9 spelling.
+    def self.write_uint64_nullable_datetime64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Int64?),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(DateTime64(#{scale}))", rows_per_mark)
+    end
+
     private def self.write_uint64_typed_pair_with_type(
       destination : String,
       key_name : String,
@@ -2136,7 +2190,7 @@ module CrystalClick
         mark_index = expected_mark_rows.size
         expected_mark_rows << rows.to_u64
         expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
-        expected_values = read_typed_nullable_numeric_mark(value_part, value_name, mark_index, values)
+        expected_values = read_typed_nullable_numeric_mark(value_part, value_name, mark_index, values, type_name)
         rows.times do |offset|
           unless expected_keys[offset] == keys[start + offset] && typed_nullable_numeric_value_equal?(expected_values[offset], values[start + offset])
             raise CorruptPartError.new("staged Nullable numeric stream readback differs from input")
@@ -2215,13 +2269,26 @@ module CrystalClick
       column : String,
       mark_index : Int,
       values : Slice(T),
+      type_name : String,
     ) : Array(T) forall T
       {% if T == UInt8? %}
         part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt8)
       {% elsif T == UInt16? %}
-        part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt16)
+        if type_name == "Nullable(Date)"
+          part.read_nullable_date_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "Nullable(UInt16)"
+          part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt16)
+        else
+          raise UnsupportedFormatError.new("typed Nullable UInt16 writer requires exact Date or numeric metadata")
+        end
       {% elsif T == UInt32? %}
-        part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt32)
+        if type_name == "Nullable(DateTime)"
+          part.read_nullable_datetime_seconds_mark_range(column, mark_index, 1)
+        elsif type_name == "Nullable(UInt32)"
+          part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt32)
+        else
+          raise UnsupportedFormatError.new("typed Nullable UInt32 writer requires exact DateTime or numeric metadata")
+        end
       {% elsif T == UInt64? %}
         part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt64)
       {% elsif T == Int8? %}
@@ -2229,9 +2296,21 @@ module CrystalClick
       {% elsif T == Int16? %}
         part.read_nullable_numeric_mark_range(column, mark_index, 1, Int16)
       {% elsif T == Int32? %}
-        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int32)
+        if type_name == "Nullable(Date32)"
+          part.read_nullable_date32_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "Nullable(Int32)"
+          part.read_nullable_numeric_mark_range(column, mark_index, 1, Int32)
+        else
+          raise UnsupportedFormatError.new("typed Nullable Int32 writer requires exact Date32 or numeric metadata")
+        end
       {% elsif T == Int64? %}
-        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int64)
+        if WidePart.nullable_datetime64_scale(type_name)
+          part.read_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
+        elsif type_name == "Nullable(Int64)"
+          part.read_nullable_numeric_mark_range(column, mark_index, 1, Int64)
+        else
+          raise UnsupportedFormatError.new("typed Nullable Int64 writer requires exact DateTime64 or numeric metadata")
+        end
       {% elsif T == Float32? %}
         part.read_nullable_numeric_mark_range(column, mark_index, 1, Float32)
       {% elsif T == Float64? %}
@@ -2318,9 +2397,10 @@ module CrystalClick
                  elsif type_name == "Nullable(String)"
                    "\"nullable\":0,\"string\":1"
                  elsif type_name.starts_with?("Nullable(")
-                   # The existing BASIC Nullable(UInt64) writer emits the
-                   # String serializer version key, which the current reader
-                   # permits for all supported Nullable numeric types.
+                   # BASIC Nullable primitive and temporal payloads share
+                   # this serializer-version metadata. Temporal identity is
+                   # carried by the exact column type, with no extra version
+                   # entry for the nested Date/Date32/DateTime/DateTime64 representation.
                    "\"string\":1"
                  else
                    ""

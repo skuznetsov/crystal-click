@@ -219,8 +219,12 @@ module CrystalClick
           batch.nullable_values_for(column, UInt8).size
         when "Nullable(UInt16)"
           batch.nullable_values_for(column, UInt16).size
+        when "Nullable(Date)"
+          batch.nullable_date_codes_for(column).size
         when "Nullable(UInt32)"
           batch.nullable_values_for(column, UInt32).size
+        when "Nullable(DateTime)"
+          batch.nullable_datetime_seconds_for(column).size
         when "Nullable(UInt64)"
           batch.nullable_values_for(column, UInt64).size
         when "Nullable(Int8)"
@@ -229,6 +233,8 @@ module CrystalClick
           batch.nullable_values_for(column, Int16).size
         when "Nullable(Int32)"
           batch.nullable_values_for(column, Int32).size
+        when "Nullable(Date32)"
+          batch.nullable_date32_codes_for(column).size
         when "Nullable(Int64)"
           batch.nullable_values_for(column, Int64).size
         when "Nullable(Float32)"
@@ -240,6 +246,8 @@ module CrystalClick
         else
           if WidePart.datetime64_scale(type)
             batch.datetime64_ticks_for(column).size
+          elsif WidePart.nullable_datetime64_scale(type)
+            batch.nullable_datetime64_ticks_for(column).size
           else
             raise UnsupportedFormatError.new("selected table column type is unsupported")
           end
@@ -288,8 +296,12 @@ module CrystalClick
           nullable_numeric_cell(batch, column, UInt8, row_index)
         when "Nullable(UInt16)"
           nullable_numeric_cell(batch, column, UInt16, row_index)
+        when "Nullable(Date)"
+          batch.nullable_date_codes_for(column)[row_index].try(&.to_s) || "NULL"
         when "Nullable(UInt32)"
           nullable_numeric_cell(batch, column, UInt32, row_index)
+        when "Nullable(DateTime)"
+          batch.nullable_datetime_seconds_for(column)[row_index].try(&.to_s) || "NULL"
         when "Nullable(UInt64)"
           nullable_numeric_cell(batch, column, UInt64, row_index)
         when "Nullable(Int8)"
@@ -298,6 +310,8 @@ module CrystalClick
           nullable_numeric_cell(batch, column, Int16, row_index)
         when "Nullable(Int32)"
           nullable_numeric_cell(batch, column, Int32, row_index)
+        when "Nullable(Date32)"
+          batch.nullable_date32_codes_for(column)[row_index].try(&.to_s) || "NULL"
         when "Nullable(Int64)"
           nullable_numeric_cell(batch, column, Int64, row_index)
         when "Nullable(Float32)"
@@ -310,6 +324,9 @@ module CrystalClick
         else
           if scale = WidePart.datetime64_scale(type)
             "#{batch.datetime64_ticks_for(column)[row_index]} [p=#{scale}]"
+          elsif scale = WidePart.nullable_datetime64_scale(type)
+            value = batch.nullable_datetime64_ticks_for(column)[row_index]
+            value ? "#{value} [p=#{scale}]" : "NULL"
           else
             raise UnsupportedFormatError.new("selected table column type is unsupported")
           end

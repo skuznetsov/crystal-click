@@ -169,6 +169,69 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "displays nullable date/time codes without confusing NULL with raw zero" do
+    keys = [1_u64, 2_u64, 3_u64]
+
+    dates = [nil, 0_u16.as(UInt16?), UInt16::MAX.as(UInt16?)]
+    date_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_date_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_date", dates.to_unsafe.to_slice(dates.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_date` Nullable(Date)", nil, date_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_date"], 2)
+      source.load(0_u64).rows.should eq([["NULL"], ["0"]])
+      source.load(2_u64).rows.should eq([[UInt16::MAX.to_s]])
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("event_date", 0_u64))
+      end
+    end
+
+    date32_codes = [Int32::MIN.as(Int32?), nil, 0_i32.as(Int32?)]
+    date32_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_date32_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_date", date32_codes.to_unsafe.to_slice(date32_codes.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_date` Nullable(Date32)", nil, date32_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_date"], 2)
+      source.load(0_u64).rows.should eq([[Int32::MIN.to_s], ["NULL"]])
+      source.load(2_u64).rows.should eq([["0"]])
+    end
+
+    seconds = [nil, 0_u32.as(UInt32?), UInt32::MAX.as(UInt32?)]
+    datetime_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_datetime_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_time", seconds.to_unsafe.to_slice(seconds.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_time` Nullable(DateTime)", nil, datetime_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_time"], 2)
+      source.load(0_u64).rows.should eq([["NULL"], ["0"]])
+      source.load(2_u64).rows.should eq([[UInt32::MAX.to_s]])
+    end
+
+    ticks = [nil, Int64::MIN.as(Int64?), 0_i64.as(Int64?)]
+    datetime64_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_datetime64_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_time", ticks.to_unsafe.to_slice(ticks.size), 3, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_time` Nullable(DateTime64(3))", nil, datetime64_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_time"], 2)
+      source.load(0_u64).rows.should eq([["NULL"], ["#{Int64::MIN} [p=3]"]])
+      source.load(2_u64).rows.should eq([["0 [p=3]"]])
+    end
+  end
+
   it "compares raw String values before display truncation" do
     columns = "    `seq` UInt64,\n    `payload` String"
     prefix = "x" * 300

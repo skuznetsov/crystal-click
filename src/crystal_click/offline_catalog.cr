@@ -199,6 +199,17 @@ module CrystalClick
             values << nil
           end
         end
+      when "Nullable(Date)"
+        observed_rows = append_nullable_date_codes_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Date32)"
+        observed_rows = append_nullable_date32_codes_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(DateTime)"
+        observed_rows = append_nullable_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("Nullable(DateTime64(")
+        unless WidePart.nullable_datetime64_scale(selected_type)
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_nullable_datetime64_ticks_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt8)"
         observed_rows = append_nullable_uint8_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt16)"
@@ -534,6 +545,22 @@ module CrystalClick
 
     private def append_nullable_uint8_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.nullable_values_for(column_name, UInt8), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_date_codes_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_date_codes_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_date32_codes_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_date32_codes_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_datetime_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_datetime_seconds_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_datetime64_ticks_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_datetime64_ticks_for(column_name), observed_rows, expected_rows)
     end
 
     private def append_nullable_uint16_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64

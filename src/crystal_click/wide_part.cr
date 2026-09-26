@@ -60,8 +60,21 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    # Nullable temporal values have the same fixed-width nested slots as
+    # their non-null semantic types, with nullness stored in a separate map.
+    # Keep this recognizer separate from Nullable(primitive numeric): callers
+    # must opt into the semantic temporal contract explicitly.
+    def self.nullable_datetime64_scale(type : String) : Int32?
+      match = /\ANullable\(DateTime64\(([0-9])\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    def self.supports_nullable_temporal_type?(type : String) : Bool
+      type == "Nullable(Date)" || type == "Nullable(Date32)" || type == "Nullable(DateTime)" || !nullable_datetime64_scale(type).nil?
+    end
+
     def self.supports_typed_type?(type : String) : Bool
-      type == "Date" || type == "Date32" || type == "DateTime" || !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
+      type == "Date" || type == "Date32" || type == "DateTime" || !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
     end
 
     def self.json_type?(type : String) : Bool
@@ -296,6 +309,33 @@ module CrystalClick
       values
     end
 
+    # Nullable temporal accessors expose raw nested fixed-width codes without
+    # applying date/time conversion. NULL slots are consumed and discarded;
+    # the optional result preserves NULL separately from a zero code.
+    def read_nullable_date_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt16?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(Date) accessor requires an exact Nullable(Date) column") unless @column_type == "Nullable(Date)"
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 2, UInt16)
+    end
+
+    def read_nullable_date32_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(Date32) accessor requires an exact Nullable(Date32) column") unless @column_type == "Nullable(Date32)"
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
+    end
+
+    def read_nullable_datetime_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt32?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(DateTime) accessor requires an exact Nullable(DateTime) column") unless @column_type == "Nullable(DateTime)"
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 4, UInt32)
+    end
+
+    def read_nullable_datetime64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(DateTime64) accessor requires a canonical Nullable(DateTime64(p)) column") unless WidePart.nullable_datetime64_scale(@column_type)
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+    end
+
     # Return the raw-byte sum for an exact String mark range without
     # materializing its String values. WidePartTable uses this to preflight an
     # aggregate bound across selected String columns before reading raw streams.
@@ -459,6 +499,16 @@ module CrystalClick
       expected_type = "Nullable(#{WidePart.numeric_type_name(type)})"
       raise UnsupportedFormatError.new("typed accessor does not match selected Nullable column type") unless @column_type == expected_type
       element_width = numeric_type_width(WidePart.numeric_type_name(type))
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, element_width, type)
+    end
+
+    private def read_nullable_fixed_width_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_width : Int32,
+      type : T.class,
+    ) : Array(T?) forall T
       null_stream = @streams["#{column}.null"]
       value_stream = @streams[column]
       null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
@@ -682,7 +732,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -852,6 +902,8 @@ module CrystalClick
         [column]
       elsif WidePart.supports_nullable_numeric_type?(type)
         ["#{column}.null", column]
+      elsif WidePart.supports_nullable_temporal_type?(type)
+        ["#{column}.null", column]
       else
         [column]
       end
@@ -894,6 +946,9 @@ module CrystalClick
         raise UnsupportedFormatError.new("unsupported String serialization version") unless string_version == 0 || string_version == 1
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
+      elsif WidePart.supports_nullable_temporal_type?(type)
+        string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("Nullable temporal String serialization version is required"))
+        raise UnsupportedFormatError.new("only Nullable temporal String serialization version 1 is supported") unless string_version == 1
       elsif WidePart.supports_nullable_numeric_type?(type)
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
@@ -1280,6 +1335,8 @@ module CrystalClick
         fixed_width
       elsif WidePart.supports_nullable_numeric_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
+      elsif WidePart.supports_nullable_temporal_type?(@column_type)
+        stream_name == "#{@column}.null" ? 1 : nullable_temporal_width(@column_type)
       elsif @column_type == "Date"
         2
       elsif @column_type == "Date32"
@@ -1296,6 +1353,17 @@ module CrystalClick
     private def nullable_inner_type(type : String) : String
       raise UnsupportedFormatError.new("exact Nullable primitive type required") unless WidePart.supports_nullable_numeric_type?(type)
       type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
+    end
+
+    private def nullable_temporal_width(type : String) : Int32
+      case type
+      when "Nullable(Date)"     then 2
+      when "Nullable(Date32)"   then 4
+      when "Nullable(DateTime)" then 4
+      else
+        raise UnsupportedFormatError.new("exact Nullable temporal type required") unless WidePart.nullable_datetime64_scale(type)
+        8
+      end
     end
 
     private def read_string_sizes(column : String, first_mark : Int, mark_count : Int) : {Array(UInt64), UInt64}

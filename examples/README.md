@@ -137,12 +137,14 @@ limited to 512 bytes and rejects terminal controls and a defined set of
 invisible Unicode formatting characters; it does not normalize lookalike
 characters. The pane shows at most 256 owned rows from up to 16 directly
 supported typed columns. Omitted columns are reported, not silently decoded.
-`Date` and `Date32` cells display their lossless raw epoch-day codes, not
-formatted calendar dates; neither is an equality-filter type in this example.
-`DateTime` cells display raw epoch-second codes. `DateTime64(p)` cells display
-raw ticks with an explicit `[p=N]` precision label, because the column header
-shows only the name. The viewer performs no timezone or calendar conversion;
-neither timestamp type is an equality-filter type.
+`Date`, `Date32`, and their Nullable forms display their lossless raw
+epoch-day codes, not formatted calendar dates. `DateTime` and
+`Nullable(DateTime)` display raw epoch-second codes. `DateTime64(p)` and
+`Nullable(DateTime64(p))` display raw ticks with an explicit `[p=N]`
+precision label on non-NULL cells, because the column header shows only the
+name. Nullable cells display `NULL` separately from raw zero. The viewer
+performs no timezone or calendar conversion; none of these date/time types
+is an equality-filter type.
 Non-NULL Strings are quoted and escaped; only their first 256 source bytes are
 retained for display. Longer values carry a `[truncated]` prefix. Equality
 uses raw typed values, not truncated display text. Each filtered page examines

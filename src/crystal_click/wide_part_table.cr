@@ -202,6 +202,32 @@ module CrystalClick
       (@nullable_values[column]? || raise(UnsupportedFormatError.new("Nullable column was not materialized in this batch"))).as(Slice(T?))
     end
 
+    def nullable_date_codes_for(column : String) : Slice(UInt16?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Nullable(Date) accessor requires an exact Nullable(Date) column") unless @column_types[index] == "Nullable(Date)"
+      @nullable_values[column]?.try(&.as(Slice(UInt16?))) || raise(UnsupportedFormatError.new("Nullable(Date) column was not materialized in this batch"))
+    end
+
+    def nullable_date32_codes_for(column : String) : Slice(Int32?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Nullable(Date32) accessor requires an exact Nullable(Date32) column") unless @column_types[index] == "Nullable(Date32)"
+      @nullable_values[column]?.try(&.as(Slice(Int32?))) || raise(UnsupportedFormatError.new("Nullable(Date32) column was not materialized in this batch"))
+    end
+
+    def nullable_datetime_seconds_for(column : String) : Slice(UInt32?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Nullable(DateTime) accessor requires an exact Nullable(DateTime) column") unless @column_types[index] == "Nullable(DateTime)"
+      @nullable_values[column]?.try(&.as(Slice(UInt32?))) || raise(UnsupportedFormatError.new("Nullable(DateTime) column was not materialized in this batch"))
+    end
+
+    def nullable_datetime64_ticks_for(column : String) : Slice(Int64?)
+      index = column_index(column)
+      unless WidePart.nullable_datetime64_scale(@column_types[index])
+        raise UnsupportedFormatError.new("Nullable(DateTime64) accessor requires a canonical Nullable(DateTime64(p)) column")
+      end
+      @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(DateTime64) column was not materialized in this batch"))
+    end
+
     def nullable_strings_for(column : String) : Slice(String?)
       index = column_index(column)
       raise UnsupportedFormatError.new("Nullable(String) accessor requires an exact Nullable(String) column") unless @column_types[index] == "Nullable(String)"
@@ -759,17 +785,23 @@ module CrystalClick
     private def read_nullable_values(selected : ColumnReader, mark_index : Int) : WidePartNullableArray
       reader = selected.reader
       case selected.column_type
-      when "Nullable(UInt8)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt8)
-      when "Nullable(UInt16)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt16)
-      when "Nullable(UInt32)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt32)
-      when "Nullable(UInt64)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt64)
-      when "Nullable(Int8)"    then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int8)
-      when "Nullable(Int16)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int16)
-      when "Nullable(Int32)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int32)
-      when "Nullable(Int64)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int64)
-      when "Nullable(Float32)" then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Float32)
-      when "Nullable(Float64)" then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Float64)
+      when "Nullable(Date)"     then reader.read_nullable_date_codes_mark_range(selected.name, mark_index, 1)
+      when "Nullable(Date32)"   then reader.read_nullable_date32_codes_mark_range(selected.name, mark_index, 1)
+      when "Nullable(DateTime)" then reader.read_nullable_datetime_seconds_mark_range(selected.name, mark_index, 1)
+      when "Nullable(UInt8)"    then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt8)
+      when "Nullable(UInt16)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt16)
+      when "Nullable(UInt32)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt32)
+      when "Nullable(UInt64)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt64)
+      when "Nullable(Int8)"     then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int8)
+      when "Nullable(Int16)"    then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int16)
+      when "Nullable(Int32)"    then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int32)
+      when "Nullable(Int64)"    then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Int64)
+      when "Nullable(Float32)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Float32)
+      when "Nullable(Float64)"  then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, Float64)
       else
+        if WidePart.nullable_datetime64_scale(selected.column_type)
+          return reader.read_nullable_datetime64_ticks_mark_range(selected.name, mark_index, 1)
+        end
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end
     end
