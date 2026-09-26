@@ -200,6 +200,46 @@ module CrystalClick
       end
     end
 
+    # Write BASIC Nullable(FixedString(N)) with an explicit byte width. NULL
+    # rows have a one-byte null flag and a zero-filled N-byte nested slot;
+    # non-NULL rows are zero-padded to N bytes without a size substream.
+    def self.write_uint64_nullable_fixed_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String?),
+      width : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_nullable_fixed_string_inputs(destination, key_name, keys, value_name, values, width, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_nullable_fixed_string_streams(stage, value_name, values, width, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", nullable_fixed_string_serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Nullable(FixedString(#{width}))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", nullable_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_nullable_fixed_string_part(stage, key_name, value_name, keys, values, width, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable two-column part with a sorted UInt64 primary key.
     # The payload's Crystal type selects an admitted numeric, String, or
     # BASIC Nullable type; numeric values are encoded by their exact bits.
@@ -462,6 +502,84 @@ module CrystalClick
 
         rows.times do |offset|
           if values[start_row + offset].bytesize > width
+            raise ArgumentError.new("FixedString value exceeds declared byte width")
+          end
+        end
+        start_row += rows
+      end
+
+      nil
+    end
+
+    private def self.validate_nullable_fixed_string_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String?),
+      width : Int32,
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("FixedString width must be positive") if width <= 0
+      raise ArgumentError.new("FixedString width exceeds reader limit") if width > WidePart::MAX_FIXED_STRING_WIDTH
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+      raise ArgumentError.new("Nullable(FixedString) rows_per_mark exceeds reader materialization limit") if rows_per_mark > WidePart::MAX_FIXED_STRING_RANGE_ROWS
+
+      stream_bases = [key_name, "#{value_name}.null", value_name].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      key_data_bytes = 0_i64
+      null_data_bytes = 0_i64
+      nested_data_bytes = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        {
+          {rows.to_i64 * 8_i64, "UInt64 key", key_data_bytes},
+          {rows.to_i64, "Nullable null-map", null_data_bytes},
+          {rows.to_i64 * width.to_i64, "Nullable FixedString nested", nested_data_bytes},
+        }.each do |raw_size, label, prior_bytes|
+          if raw_size > MAX_FRAME_RAW_BYTES.to_i64
+            raise ArgumentError.new("#{label} granule exceeds decompressed frame limit")
+          end
+          frame_size = literal_frame_size(raw_size)
+          if frame_size > MAX_FRAME_COMPRESSED.to_i64
+            raise ArgumentError.new("#{label} granule literal frame exceeds compressed frame limit")
+          end
+          if frame_size > MAX_DATA_FILE_BYTES - prior_bytes
+            raise ArgumentError.new("#{label} stream exceeds reader limit")
+          end
+          if label == "UInt64 key"
+            key_data_bytes += frame_size
+          elsif label == "Nullable null-map"
+            null_data_bytes += frame_size
+          else
+            nested_data_bytes += frame_size
+          end
+        end
+
+        rows.times do |offset|
+          value = values[start_row + offset]
+          if value && value.bytesize > width
             raise ArgumentError.new("FixedString value exceeds declared byte width")
           end
         end
@@ -1328,6 +1446,91 @@ module CrystalClick
       ]
     end
 
+    private def self.write_nullable_fixed_string_streams(
+      stage : String,
+      column : String,
+      values : Slice(String?),
+      width : Int32,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      null_base = StreamName.hash("#{column}.null")
+      value_base = StreamName.hash(column)
+      null_data_name = "#{null_base}.bin"
+      null_marks_name = "#{null_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      null_data_hash = CityHashV1::FileHasher.new
+      null_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      null_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      null_data_size = 0_u64
+      value_data_size = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, null_data_name), "wb") do |null_data_file|
+        File.open(File.join(stage, value_data_name), "wb") do |value_data_file|
+          while start_row < values.size
+            rows = {rows_per_mark, values.size - start_row}.min
+            null_raw = Bytes.new(rows)
+            value_raw = Bytes.new(rows * width)
+            rows.times do |row|
+              value = values[start_row + row]
+              if value.nil?
+                null_raw[row] = 1_u8
+              else
+                null_raw[row] = 0_u8
+                value_bytes = value.to_slice
+                value_bytes.copy_to(value_raw[row * width, value_bytes.size]) unless value_bytes.empty?
+              end
+            end
+
+            write_uint64_le(null_mark_bytes, null_data_size)
+            write_uint64_le(null_mark_bytes, 0_u64)
+            write_uint64_le(null_mark_bytes, rows.to_u64)
+            write_uint64_le(value_mark_bytes, value_data_size)
+            write_uint64_le(value_mark_bytes, 0_u64)
+            write_uint64_le(value_mark_bytes, rows.to_u64)
+
+            null_frame = encode_lz4_frame(null_raw)
+            value_frame = encode_lz4_frame(value_raw)
+            raise ArgumentError.new("Nullable null-map stream exceeds reader limit") if null_data_size > MAX_DATA_FILE_BYTES.to_u64 - null_frame.size.to_u64
+            raise ArgumentError.new("Nullable FixedString nested stream exceeds reader limit") if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+            null_data_file.write(null_frame)
+            null_data_hash.update(null_frame)
+            null_raw_hash.update(null_raw)
+            null_data_size += null_frame.size.to_u64
+            value_data_file.write(value_frame)
+            value_data_hash.update(value_frame)
+            value_raw_hash.update(value_raw)
+            value_data_size += value_frame.size.to_u64
+            start_row += rows
+          end
+        end
+      end
+
+      write_uint64_le(null_mark_bytes, null_data_size)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      null_marks = null_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if null_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if value_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, null_marks_name), null_marks)
+      File.write(File.join(stage, value_marks_name), value_marks)
+
+      [
+        ChecksumRecord.new(null_data_name, null_data_size, null_data_hash.finish, true, values.size.to_u64, null_raw_hash.finish),
+        ChecksumRecord.new(null_marks_name, null_marks.size.to_u64, CityHashV1.file_hash(null_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, values.size.to_u64 * width.to_u64, value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
     private def self.typed_string_value(value : T) : String forall T
       {% if T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         value || ""
@@ -1645,6 +1848,60 @@ module CrystalClick
       end
       expected_index << keys.last
       raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+      nil
+    end
+
+    private def self.validate_staged_nullable_fixed_string_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(String?),
+      width : Int32,
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Nullable(FixedString) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Nullable(FixedString) type does not match") unless value_part.column_type == "Nullable(FixedString(#{width}))"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        observed_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        observed_values = value_part.read_nullable_fixed_string_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          raise CorruptPartError.new("staged Nullable(FixedString) key readback differs from input") unless observed_keys[offset] == keys[start + offset]
+
+          input = values[start + offset]
+          actual = observed_values[offset]
+          if input.nil?
+            raise CorruptPartError.new("staged Nullable(FixedString) null map differs from input") unless actual.nil?
+          else
+            raise CorruptPartError.new("staged Nullable(FixedString) null map differs from input") if actual.nil?
+            input_bytes = input.to_slice
+            actual_bytes = actual.not_nil!.to_slice
+            raise CorruptPartError.new("staged Nullable(FixedString) value has an unexpected byte width") unless actual_bytes.size == width
+            width.times do |byte_index|
+              expected_byte = byte_index < input_bytes.size ? input_bytes[byte_index] : 0_u8
+              raise CorruptPartError.new("staged Nullable(FixedString) nested stream differs from input") unless actual_bytes[byte_index] == expected_byte
+            end
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Nullable(FixedString) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
     end
 
@@ -1976,6 +2233,10 @@ module CrystalClick
                    ""
                  end
       "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{#{versions}},\"version\":1}"
+    end
+
+    private def self.nullable_fixed_string_serialization_metadata : String
+      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"nullable\":0,\"string\":1},\"version\":1}"
     end
 
     private def self.serialization_metadata : String

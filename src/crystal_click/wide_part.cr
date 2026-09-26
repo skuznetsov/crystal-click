@@ -47,8 +47,14 @@ module CrystalClick
       width
     end
 
+    def self.nullable_fixed_string_width(type : String) : Int32?
+      return nil unless type.starts_with?("Nullable(") && type.ends_with?(")")
+      inner = type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
+      fixed_string_width(inner)
+    end
+
     def self.supports_typed_type?(type : String) : Bool
-      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil?
+      type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
     end
 
     def self.json_type?(type : String) : Bool
@@ -242,6 +248,17 @@ module CrystalClick
       checked_fixed_string_byte_count(rows, width).to_u64
     end
 
+    # Count every nested slot, including those hidden by NULL, before a
+    # caller allocates value Strings or the null map for this range.
+    def nullable_fixed_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      width = WidePart.nullable_fixed_string_width(@column_type) || raise(UnsupportedFormatError.new("Nullable(FixedString) accessor requires an exact Nullable(FixedString(N)) column"))
+      _, _, null_rows = checked_stream_mark_range(@streams["#{column}.null"], first_mark, mark_count)
+      _, _, value_rows = checked_stream_mark_range(@streams[column], first_mark, mark_count)
+      raise CorruptPartError.new("Nullable(FixedString) substream mark rows differ") unless null_rows == value_rows
+      checked_fixed_string_byte_count(value_rows, width).to_u64
+    end
+
     # Read a bounded mark range from an exact String column. At most 64 MiB of
     # raw bytes are materialized per call (the whole range, not each mark).
     # Empty values are zero-length; embedded NUL bytes are preserved.
@@ -281,6 +298,34 @@ module CrystalClick
         offset += width
       end
       raise CorruptPartError.new("FixedString values do not consume selected bytes") unless offset == raw_bytes.size
+      values
+    end
+
+    # BASIC Nullable(FixedString(N)) has a boolean null map and an N-byte
+    # nested slot for every row. The nested slot under NULL is consumed but
+    # never exposed to the caller.
+    def read_nullable_fixed_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String?)
+      ensure_column(column)
+      width = WidePart.nullable_fixed_string_width(@column_type) || raise(UnsupportedFormatError.new("Nullable(FixedString) accessor requires an exact Nullable(FixedString(N)) column"))
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable(FixedString) substream mark rows differ") unless rows == value_rows
+      expected_bytes = checked_fixed_string_byte_count(rows, width)
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      nested_bytes = read_mark_range_bytes(value_stream, value_start, value_end, expected_bytes, width)
+      values = Array(String?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        values << (is_null == 1 ? nil : String.new(nested_bytes[offset, width]))
+        offset += width
+      end
+      raise CorruptPartError.new("Nullable(FixedString) values do not consume nested bytes") unless offset == nested_bytes.size
       values
     end
 
@@ -558,7 +603,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -722,6 +767,8 @@ module CrystalClick
         ["#{column}.size", column]
       elsif WidePart.supports_nullable_string_type?(type)
         ["#{column}.null", "#{column}.size", column]
+      elsif WidePart.nullable_fixed_string_width(type)
+        ["#{column}.null", column]
       elsif WidePart.fixed_string_width(type)
         [column]
       elsif WidePart.supports_nullable_numeric_type?(type)
@@ -753,7 +800,7 @@ module CrystalClick
       raise UnsupportedFormatError.new("serialization.json nested-version flag is unsupported") unless propagated == true
       versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
       versions.each_key do |key|
-        allowed = key == "string" || key == "nullable" && WidePart.supports_nullable_string_type?(type)
+        allowed = key == "string" || key == "nullable" && (WidePart.supports_nullable_string_type?(type) || !WidePart.nullable_fixed_string_width(type).nil?)
         raise UnsupportedFormatError.new("unsupported serialization type version") unless allowed
       end
 
@@ -763,6 +810,11 @@ module CrystalClick
       elsif !WidePart.fixed_string_width(type).nil?
         string_version = versions["string"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("unsupported String serialization version") unless string_version == 0 || string_version == 1
+      elsif !WidePart.nullable_fixed_string_width(type).nil?
+        string_version = versions["string"]?.try(&.as_i) || 0_i64
+        raise UnsupportedFormatError.new("unsupported String serialization version") unless string_version == 0 || string_version == 1
+        nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
+        raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
       elsif WidePart.supports_nullable_numeric_type?(type)
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
@@ -1143,6 +1195,8 @@ module CrystalClick
         stream_name == "#{@column}.size" ? 8 : 1
       elsif WidePart.supports_nullable_string_type?(@column_type)
         stream_name == "#{@column}.size" ? 8 : 1
+      elsif fixed_width = WidePart.nullable_fixed_string_width(@column_type)
+        stream_name == "#{@column}.null" ? 1 : fixed_width
       elsif fixed_width = WidePart.fixed_string_width(@column_type)
         fixed_width
       elsif WidePart.supports_nullable_numeric_type?(@column_type)

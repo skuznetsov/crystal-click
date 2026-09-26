@@ -163,6 +163,20 @@ module CrystalClick
         selected_values = batch.fixed_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         string_bytes = append_materialized_strings(values, selected_values, string_bytes, max_string_bytes)
+      when .starts_with?("Nullable(FixedString(")
+        unless WidePart.nullable_fixed_string_width(selected_type)
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        selected_values = batch.nullable_fixed_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        selected_values.each do |value|
+          if string_value = value
+            string_bytes = checked_materialized_value_string_bytes(string_bytes, string_value.bytesize.to_u64, max_string_bytes)
+            values << String.new(string_value.to_slice)
+          else
+            values << nil
+          end
+        end
       when "Nullable(String)"
         selected_values = batch.nullable_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)

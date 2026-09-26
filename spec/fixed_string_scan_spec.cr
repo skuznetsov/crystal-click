@@ -39,10 +39,13 @@ describe "FixedString(N) Wide-part scans" do
     CrystalClick::WidePart.fixed_string_width("FixedString(65536)").should eq(CrystalClick::WidePart::MAX_FIXED_STRING_WIDTH)
     CrystalClick::WidePart.supports_typed_type?("FixedString(8)").should be_true
 
-    ["FixedString(0)", "FixedString(01)", "FixedString(-1)", "FixedString(65537)", "FixedString(8) ", "Nullable(FixedString(8))"].each do |type|
+    ["FixedString(0)", "FixedString(01)", "FixedString(-1)", "FixedString(65537)", "FixedString(8) "].each do |type|
       CrystalClick::WidePart.fixed_string_width(type).should be_nil
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end
+
+    CrystalClick::WidePart.fixed_string_width("Nullable(FixedString(8))").should be_nil
+    CrystalClick::WidePart.supports_typed_type?("Nullable(FixedString(8))").should be_true
   end
 
   it "opens a canonical FixedString column from a one-stream fixed-width part" do

@@ -34,6 +34,7 @@ module CrystalClick
     @fixed_string_values : Hash(String, Slice(String))
     @nullable_values : Hash(String, WidePartNullableSlice)
     @nullable_string_values : Hash(String, WidePartNullableStringSlice)
+    @nullable_fixed_string_values : Hash(String, WidePartNullableStringSlice)
 
     def initialize(
       @part_index : Int32,
@@ -53,6 +54,7 @@ module CrystalClick
       @fixed_string_values = Hash(String, Slice(String)).new
       @nullable_values = Hash(String, WidePartNullableSlice).new
       @nullable_string_values = Hash(String, WidePartNullableStringSlice).new
+      @nullable_fixed_string_values = Hash(String, WidePartNullableStringSlice).new
     end
 
     # Preserve the original UInt64 batch construction contract.
@@ -74,6 +76,7 @@ module CrystalClick
       @fixed_string_values = Hash(String, Slice(String)).new
       @nullable_values = Hash(String, WidePartNullableSlice).new
       @nullable_string_values = Hash(String, WidePartNullableStringSlice).new
+      @nullable_fixed_string_values = Hash(String, WidePartNullableStringSlice).new
     end
 
     # Preserve the existing typed/hash construction contract. Batches created
@@ -95,6 +98,7 @@ module CrystalClick
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = Hash(String, Slice(String)).new
       @nullable_string_values = Hash(String, WidePartNullableStringSlice).new
+      @nullable_fixed_string_values = Hash(String, WidePartNullableStringSlice).new
     end
 
     def initialize(
@@ -112,9 +116,11 @@ module CrystalClick
       @nullable_values : Hash(String, WidePartNullableSlice),
       @nullable_string_values : Hash(String, WidePartNullableStringSlice),
       fixed_string_values : Hash(String, Slice(String)) = Hash(String, Slice(String)).new,
+      nullable_fixed_string_values : Hash(String, WidePartNullableStringSlice) = Hash(String, WidePartNullableStringSlice).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
+      @nullable_fixed_string_values = nullable_fixed_string_values
     end
 
     def column_names : Array(String)
@@ -166,6 +172,14 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("Nullable(String) accessor requires an exact Nullable(String) column") unless @column_types[index] == "Nullable(String)"
       @nullable_string_values[column]? || raise(UnsupportedFormatError.new("Nullable(String) column was not materialized in this batch"))
+    end
+
+    def nullable_fixed_strings_for(column : String) : Slice(String?)
+      index = column_index(column)
+      unless WidePart.nullable_fixed_string_width(@column_types[index])
+        raise UnsupportedFormatError.new("Nullable(FixedString) accessor requires an exact Nullable(FixedString(N)) column")
+      end
+      @nullable_fixed_string_values[column]? || raise(UnsupportedFormatError.new("Nullable(FixedString) column was not materialized in this batch"))
     end
 
     private def column_index(column : String) : Int
@@ -454,7 +468,7 @@ module CrystalClick
             selected_mark_row_end = window_end < mark_source_end ? window_end - mark_source_start : mark_rows
           end
 
-          # Selected String, Nullable(String), and FixedString payloads are
+          # Selected String, Nullable(String), and fixed-width String payloads are
           # preflighted before any String array is allocated. The immutable-
           # parts contract is not transactional; the actual aggregate is
           # checked again before callback exposure.
@@ -468,6 +482,8 @@ module CrystalClick
                       end
             elsif WidePart.fixed_string_width(selected.column_type)
               bytes = selected.reader.fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+            elsif WidePart.nullable_fixed_string_width(selected.column_type)
+              bytes = selected.reader.nullable_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
             else
               next
             end
@@ -482,6 +498,7 @@ module CrystalClick
           fixed_string_values = Hash(String, Array(String)).new
           nullable_values = Hash(String, WidePartNullableArray).new
           nullable_string_values = Hash(String, WidePartNullableStringArray).new
+          nullable_fixed_string_values = Hash(String, WidePartNullableStringArray).new
           actual_string_bytes = 0_u64
           part.readers.each do |selected|
             case selected.column_type
@@ -508,6 +525,14 @@ module CrystalClick
               raise CorruptPartError.new("selected FixedString mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
               actual_string_bytes += bytes
               fixed_string_values[selected.name] = values
+            when .starts_with?("Nullable(FixedString(")
+              width = WidePart.nullable_fixed_string_width(selected.column_type) || raise(UnsupportedFormatError.new("unsupported exact Nullable(FixedString) type"))
+              values = selected.reader.read_nullable_fixed_string_mark_range(selected.name, mark_index, 1)
+              raise CorruptPartError.new("selected Nullable(FixedString) mark row count changed") unless values.size.to_u64 == mark_rows
+              bytes = values.size.to_u64 * width.to_u64
+              raise CorruptPartError.new("selected Nullable(FixedString) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+              actual_string_bytes += bytes
+              nullable_fixed_string_values[selected.name] = values
             when .starts_with?("Nullable(")
               values = read_nullable_values(selected, mark_index)
               raise CorruptPartError.new("selected Nullable mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
@@ -534,6 +559,7 @@ module CrystalClick
             fixed_string_slices = Hash(String, Slice(String)).new
             nullable_slices = Hash(String, WidePartNullableSlice).new
             nullable_string_slices = Hash(String, WidePartNullableStringSlice).new
+            nullable_fixed_string_slices = Hash(String, WidePartNullableStringSlice).new
             part.readers.each do |selected|
               if values = numeric_values[selected.name]?
                 numeric_slices[selected.name] = slice_numeric_values(values, mark_row_offset.to_i, size)
@@ -545,6 +571,8 @@ module CrystalClick
                 nullable_slices[selected.name] = slice_nullable_values(values, mark_row_offset.to_i, size)
               elsif values = nullable_string_values[selected.name]?
                 nullable_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+              elsif values = nullable_fixed_string_values[selected.name]?
+                nullable_fixed_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
               else
                 raise CorruptPartError.new("selected typed column was not materialized")
               end
@@ -563,7 +591,8 @@ module CrystalClick
               string_slices,
               nullable_slices,
               nullable_string_slices,
-              fixed_string_slices
+              fixed_string_slices,
+              nullable_fixed_string_slices
             )
             yield batch
             mark_row_offset &+= size.to_u64

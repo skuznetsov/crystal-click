@@ -8,7 +8,9 @@ remains future work. Bounded W8 recorded primary-index hash validation is
 verified for embedded candidate scans only. W9 covers the exact scalar and
 Nullable payload types supported by the typed reader, on the pinned local
 ClickHouse/Darwin writer frontier. W10 verifies plain `FixedString(N)` as a
-separately tested reader/writer payload; other type families remain guard-only.
+separately tested reader/writer payload. W11 verifies BASIC
+`Nullable(FixedString(N))` within its bounded reader/writer scope; other type
+families remain guard-only.
 
 ## Purpose and bounded contexts
 
@@ -491,6 +493,64 @@ Rollback is the single W10 feature commit. The DoD signal is focused and full
 Crystal specs plus the pinned differential oracle all passing, with each
 physical byte shape named in its output.
 
+## Verified slice W11: BASIC Nullable(FixedString(N)) payload
+
+Admit only the canonical exact `Nullable(FixedString(N))` spelling with
+`1 <= N <= 65,536`, in the existing two-column Wide/LZ4 part with sorted
+`UInt64` key. The BASIC reader must require exactly two physical substreams:
+`<column>.null` (one boolean byte per row) and `<column>` (exactly `N` bytes
+per row), with equal adaptive mark rows and no String `.size` stream. It must
+consume the nested `N` bytes even when the null flag is set, while exposing
+`nil` to the caller. Preserve the exact byte representation of non-null
+values, including zeros and invalid UTF-8. The global String serialization
+version must be a pinned valid enum value and Nullable serialization must be
+BASIC; sparse or unknown versions fail closed. A direct call must preflight
+both the 64-MiB raw-byte limit and the 65,536-value materialization limit.
+The `types_serialization_versions` object is mandatory; omitted per-type
+entries mean ClickHouse's version-0 defaults (String SINGLE_STREAM and
+Nullable BASIC), not an unknown version.
+
+Admit a separate writer entry point with explicit `N` and `Slice(String?)`;
+Crystal's `String?` alone must continue to mean `Nullable(String)` in the
+existing inferred writer. For `nil`, write flag 1 and a deterministic `N`
+zero-byte nested slot. For non-null input, write flag 0 and zero-pad to `N`
+bytes; reject overwidth inputs. Preflight frame/file/mark limits and
+`rows_per_mark <= 65,536` before staging. Reuse checksummed metadata,
+Crystal self-read, and exclusive publication. Table batches and offline
+catalog values must expose the nullable byte string without conflating its
+type or accessor with `Nullable(String)`.
+
+The independent falsifier is a pinned stock ClickHouse-generated
+`Nullable(FixedString(3))` part with NULL, empty, short, exact-width, and
+embedded-zero values across multiple marks and a short final granule. Assert
+two streams and exact physical mark rows; Crystal must read the same null flags
+and non-null hex bytes. Conversely, pinned ClickHouse local must `ATTACH PART`
+for Crystal output, return exact full and key-range rows, pass `CHECK TABLE`,
+and detect a damaged payload or null-map stream. Include an all-NULL control
+and an invalid-null-byte negative. The oracle must pin its producer version;
+the available newer source tree is format guidance, not version authority.
+
+W11 rejects sparse Nullable, Nullable(String) remapping, nested generic
+Nullable expressions, non-UInt64 keys, Compact parts, mutable table inserts,
+and daemon restart claims. Date/time, UUID/IP, Decimal, Enum,
+LowCardinality, arrays, maps, tuples, Variant/Dynamic, and full JSON objects
+remain guard-only. Risk tier is CAUTION: a wrong nested slot, stream shape,
+or version check could create a convincing but unusable part. Rollback is one
+W11 feature commit; before commit, revert only W11-owned paths.
+DoD: focused RED-to-green specs, full debug/release suites, format and shell
+checks, the pinned W11 differential oracle, and the W9/W10
+oracles as regression guards. A failed external oracle prevents a verified
+compatibility claim or commit.
+
+W11 closure on the pinned local ClickHouse 26.7.1.1315/Darwin frontier:
+366 Crystal examples passed in both debug and release. The independent
+`N=3` oracle read a stock-generated two-stream part, attached the
+Crystal-generated part, checked full and key-range rows, passed
+`CHECK TABLE`, detected corruption in both streams, and exercised an invalid null
+flag plus an all-NULL part. W9/W10 oracles also passed. This does not certify
+every width against stock ClickHouse, other builds/filesystems, Compact
+parts, power-loss durability, or daemon restart behavior.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -500,8 +560,9 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W10's plain `FixedString(N)` and
-   W9's exact 22 payload shapes,
+1. Extend reader and writer together beyond W11's BASIC
+   `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, and W9's exact 22
+   payload shapes,
    one stock-ClickHouse differential fixture per type and substream shape.
    Reader support never implies writer support. Recheck physical stream naming
    on case-sensitive filesystems before claiming cross-filesystem
