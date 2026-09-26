@@ -215,6 +215,14 @@ module CrystalClick
       type == "Nullable(IPv4)"
     end
 
+    def self.supports_ipv6_type?(type : String) : Bool
+      type == "IPv6"
+    end
+
+    def self.supports_nullable_ipv6_type?(type : String) : Bool
+      type == "Nullable(IPv6)"
+    end
+
     def self.supports_nullable_bool_type?(type : String) : Bool
       type == "Nullable(Bool)"
     end
@@ -287,6 +295,7 @@ module CrystalClick
         supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
         supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
         supports_ipv4_type?(type) || supports_nullable_ipv4_type?(type) ||
+        supports_ipv6_type?(type) || supports_nullable_ipv6_type?(type) ||
         !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
     end
 
@@ -649,6 +658,52 @@ module CrystalClick
         offset += 4
       end
       raise CorruptPartError.new("Nullable(IPv4) values do not consume nested bytes") unless offset == encoded_values.size
+      values
+    end
+
+    # IPv6 is a raw 16-byte network-order address, unlike UUID's pair of
+    # little-endian UInt64 halves. Keep the semantic address distinct from
+    # numeric UInt128 accessors.
+    def read_ipv6s_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(IPv6Value)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("IPv6 accessor requires an exact IPv6 column") unless WidePart.supports_ipv6_type?(@column_type)
+
+      stream = @streams[column]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      encoded_values = read_mark_range_bytes(stream, start_mark, end_mark, checked_byte_count(rows, 16), 16)
+      values = Array(IPv6Value).new(rows.to_i)
+      offset = 0
+      while offset < encoded_values.size
+        values << IPv6Value.new(network_order_u64(encoded_values, offset), network_order_u64(encoded_values, offset + 8))
+        offset += 16
+      end
+      values
+    end
+
+    # BASIC Nullable(IPv6) carries a one-byte null map and one raw IPv6 value
+    # per row. Payload bytes in NULL slots are consumed but ignored.
+    def read_nullable_ipv6s_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(IPv6Value?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("IPv6 accessor requires an exact Nullable(IPv6) column") unless WidePart.supports_nullable_ipv6_type?(@column_type)
+
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable(IPv6) substream mark rows differ") unless rows == value_rows
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(rows, 16), 16)
+      values = Array(IPv6Value?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        values << (is_null == 1 ? nil : IPv6Value.new(network_order_u64(encoded_values, offset), network_order_u64(encoded_values, offset + 8)))
+        offset += 16
+      end
+      raise CorruptPartError.new("Nullable(IPv6) values do not consume nested bytes") unless offset == encoded_values.size
       values
     end
 
@@ -1166,7 +1221,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -1334,6 +1389,8 @@ module CrystalClick
         ["#{column}.null", column]
       elsif WidePart.supports_nullable_ipv4_type?(type)
         ["#{column}.null", column]
+      elsif WidePart.supports_nullable_ipv6_type?(type)
+        ["#{column}.null", column]
       elsif WidePart.nullable_fixed_string_width(type)
         ["#{column}.null", column]
       elsif WidePart.fixed_string_width(type)
@@ -1409,6 +1466,12 @@ module CrystalClick
         columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("IPv4 column serializers are required"))
         raise UnsupportedFormatError.new("IPv4 per-column serialization is unsupported") unless columns.empty?
         raise UnsupportedFormatError.new("IPv4 missing-column serialization is unsupported") if info.has_key?("missing_columns")
+      elsif WidePart.supports_ipv6_type?(type) || WidePart.supports_nullable_ipv6_type?(type)
+        string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("IPv6 serialization version is required"))
+        raise UnsupportedFormatError.new("only IPv6 serialization version 1 is supported") unless string_version == 1
+        columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("IPv6 column serializers are required"))
+        raise UnsupportedFormatError.new("IPv6 per-column serialization is unsupported") unless columns.empty?
+        raise UnsupportedFormatError.new("IPv6 missing-column serialization is unsupported") if info.has_key?("missing_columns")
       elsif WidePart.supports_semantic_fixed_width_type?(type) || WidePart.supports_nullable_semantic_fixed_width_type?(type)
         string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("W15 semantic serialization version is required"))
         raise UnsupportedFormatError.new("only W15 semantic serialization version 1 is supported") unless string_version == 1
@@ -1795,6 +1858,10 @@ module CrystalClick
         stream_name == "#{@column}.null" ? 1 : 4
       elsif WidePart.supports_ipv4_type?(@column_type)
         4
+      elsif WidePart.supports_nullable_ipv6_type?(@column_type)
+        stream_name == "#{@column}.null" ? 1 : 16
+      elsif WidePart.supports_ipv6_type?(@column_type)
+        16
       elsif fixed_width = WidePart.nullable_fixed_string_width(@column_type)
         stream_name == "#{@column}.null" ? 1 : fixed_width
       elsif fixed_width = WidePart.fixed_string_width(@column_type)
@@ -2116,6 +2183,13 @@ module CrystalClick
       raise CorruptPartError.new("truncated integer") if offset < 0 || offset > bytes.size - 8
       value = 0_u64
       8.times { |index| value |= bytes[offset + index].to_u64 << (index * 8) }
+      value
+    end
+
+    private def network_order_u64(bytes : Bytes, offset : Int) : UInt64
+      raise CorruptPartError.new("truncated IPv6 address") if offset < 0 || offset > bytes.size - 8
+      value = 0_u64
+      8.times { |index| value = (value << 8) | bytes[offset + index].to_u64 }
       value
     end
 

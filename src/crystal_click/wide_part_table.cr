@@ -1,16 +1,16 @@
 module CrystalClick
   alias WidePartNumericArray = Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(UInt64) |
                                Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Int128) | Array(Bool) |
-                               Array(Float32) | Array(Float64) | Array(UUIDValue) | Array(IPv4Value)
+                               Array(Float32) | Array(Float64) | Array(UUIDValue) | Array(IPv4Value) | Array(IPv6Value)
   alias WidePartNumericSlice = Slice(UInt8) | Slice(UInt16) | Slice(UInt32) | Slice(UInt64) |
                                Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Int128) | Slice(Bool) |
-                               Slice(Float32) | Slice(Float64) | Slice(UUIDValue) | Slice(IPv4Value)
+                               Slice(Float32) | Slice(Float64) | Slice(UUIDValue) | Slice(IPv4Value) | Slice(IPv6Value)
   alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
                                 Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Int128?) | Array(Bool?) |
-                                Array(Float32?) | Array(Float64?) | Array(UUIDValue?) | Array(IPv4Value?)
+                                Array(Float32?) | Array(Float64?) | Array(UUIDValue?) | Array(IPv4Value?) | Array(IPv6Value?)
   alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
                                 Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Int128?) | Slice(Bool?) |
-                                Slice(Float32?) | Slice(Float64?) | Slice(UUIDValue?) | Slice(IPv4Value?)
+                                Slice(Float32?) | Slice(Float64?) | Slice(UUIDValue?) | Slice(IPv4Value?) | Slice(IPv6Value?)
   alias WidePartNullableStringArray = Array(String?)
   alias WidePartNullableStringSlice = Slice(String?)
 
@@ -290,6 +290,19 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("IPv4 accessor requires an exact Nullable(IPv4) column") unless WidePart.supports_nullable_ipv4_type?(@column_types[index])
       @nullable_values[column]?.try(&.as(Slice(IPv4Value?))) || raise(UnsupportedFormatError.new("Nullable(IPv4) column was not materialized in this batch"))
+    end
+
+    def ipv6s_for(column : String) : Slice(IPv6Value)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("IPv6 accessor requires an exact IPv6 column") unless WidePart.supports_ipv6_type?(@column_types[index])
+      return @typed_numeric_values[column].as(Slice(IPv6Value)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(IPv6Value))
+    end
+
+    def nullable_ipv6s_for(column : String) : Slice(IPv6Value?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("IPv6 accessor requires an exact Nullable(IPv6) column") unless WidePart.supports_nullable_ipv6_type?(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(IPv6Value?))) || raise(UnsupportedFormatError.new("Nullable(IPv6) column was not materialized in this batch"))
     end
 
     def strings_for(column : String) : Slice(String)
@@ -834,6 +847,8 @@ module CrystalClick
         return reader.read_uuids_mark_range(selected.name, mark_index, 1)
       elsif WidePart.supports_ipv4_type?(type)
         return reader.read_ipv4s_mark_range(selected.name, mark_index, 1)
+      elsif WidePart.supports_ipv6_type?(type)
+        return reader.read_ipv6s_mark_range(selected.name, mark_index, 1)
       elsif type == "Bool"
         return reader.read_bool_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum8_codes(type).nil? && !type.starts_with?("Nullable(")
@@ -915,6 +930,8 @@ module CrystalClick
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(IPv4Value)
         values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(IPv6Value)
+        values.to_unsafe.to_slice(values.size)[offset, size]
       else
         raise UnsupportedFormatError.new("unsupported numeric column type")
       end
@@ -927,6 +944,8 @@ module CrystalClick
         return reader.read_nullable_uuids_mark_range(selected.name, mark_index, 1)
       elsif WidePart.supports_nullable_ipv4_type?(type)
         return reader.read_nullable_ipv4s_mark_range(selected.name, mark_index, 1)
+      elsif WidePart.supports_nullable_ipv6_type?(type)
+        return reader.read_nullable_ipv6s_mark_range(selected.name, mark_index, 1)
       elsif type == "Nullable(Bool)"
         return reader.read_nullable_bool_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum8_codes(type).nil? && type.starts_with?("Nullable(")
@@ -979,6 +998,7 @@ module CrystalClick
       when Array(Float64?)   then values.size
       when Array(UUIDValue?) then values.size
       when Array(IPv4Value?) then values.size
+      when Array(IPv6Value?) then values.size
       else
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end
@@ -1000,6 +1020,7 @@ module CrystalClick
       when Array(Float64?)   then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(UUIDValue?) then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(IPv4Value?) then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(IPv6Value?) then values.to_unsafe.to_slice(values.size)[offset, size]
       else
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end

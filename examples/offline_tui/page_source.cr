@@ -220,6 +220,10 @@ module CrystalClick
           batch.ipv4s_for(column).size
         when "Nullable(IPv4)"
           batch.nullable_ipv4s_for(column).size
+        when "IPv6"
+          batch.ipv6s_for(column).size
+        when "Nullable(IPv6)"
+          batch.nullable_ipv6s_for(column).size
         when "UUID"
           batch.uuids_for(column).size
         when "Nullable(UUID)"
@@ -337,6 +341,10 @@ module CrystalClick
           batch.ipv4s_for(column)[row_index].to_s
         when "Nullable(IPv4)"
           batch.nullable_ipv4s_for(column)[row_index].try(&.to_s) || "NULL"
+        when "IPv6"
+          batch.ipv6s_for(column)[row_index].to_s
+        when "Nullable(IPv6)"
+          batch.nullable_ipv6s_for(column)[row_index].try(&.to_s) || "NULL"
         when "UUID"
           batch.uuids_for(column)[row_index].to_s
         when "Nullable(UUID)"

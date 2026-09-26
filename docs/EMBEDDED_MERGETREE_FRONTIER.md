@@ -32,6 +32,10 @@ regression gate. It does not imply support for other 128-bit or IP types.
 W18 admits paired `IPv4` and BASIC `Nullable(IPv4)` payloads on the same
 pinned Wide/LZ4 frontier after a bidirectional stock/Crystal oracle and full
 regression gate. It does not imply `IPv6`, IP functions, or IPv4 key support.
+W19 admits paired `IPv6` and BASIC `Nullable(IPv6)` payloads on the same
+pinned Wide/LZ4 frontier after a bidirectional stock/Crystal oracle and full
+regression gate. The value is distinct from UUID and UInt128; IPv6 keys,
+general IP operations, and untested ClickHouse versions remain outside scope.
 
 ## Purpose and bounded contexts
 
@@ -1006,6 +1010,74 @@ valid after octet reversal while every address becomes wrong. Rollback is one
 W18-only local feature commit; no push or existing ClickHouse data-root
 mutation is authorized.
 
+## Completed slice W19: paired IPv6 payloads
+
+Admit exactly `IPv6` and BASIC `Nullable(IPv6)` as payload declarations on
+the existing sorted `UInt64`-key, two-column Wide/LZ4, plain adaptive-mark
+part shape. Keep an IPv6 value distinct from `UUID`, `UInt128`, and
+`FixedString(16)` even if the payload width is 16 bytes. The reader, batch,
+offline catalog, and optional TUI must expose one consistent value or reject
+selection before page loading. Named bare/nullable writer APIs must preserve
+type identity, and NULL must remain distinct from the all-zero address with
+a deterministic zero-filled nested slot. No IPv6 key ordering, subnet
+operation, IP function, or general parser contract is admitted.
+
+Before implementation, probe pinned ClickHouse 26.7.1.1315 with asymmetric
+addresses, `::`, `::1`, `2001:db8::1`, a non-compressible address, and a
+NULL slot. Establish canonical type spelling, physical 16-byte order,
+text rendering relevant to the exposed API, substream order, serialization
+metadata, marks, RowBinary, and stock `CHECK TABLE`. The gate is a
+bidirectional stock/Crystal oracle: exact bytes and marks, full and key-range
+RowBinary, stock attachment of Crystal parts, clean `CHECK TABLE`, and stock
+rejection of representative same-size corruption in an isolated copy.
+Focused negative specs must reject UUID/numeric aliases, malformed metadata,
+truncated streams, and bad inputs before publication. Full debug/release
+suites and W9-W18 pinned type oracles guard regression. Any later probe
+conflict reopens W19 and requires this design boundary to be revised first.
+
+The preimplementation pinned stock probe recorded `IPv6` and
+`Nullable(IPv6)` in `columns.txt`, the bare `payload` stream or BASIC
+`payload.null` then `payload`, version-1 serialization metadata with only
+global `string:1`, and 16 network-order address octets per physical row.
+The pinned text probe renders both IPv4-compatible `::192.0.2.1` and
+IPv4-mapped `::ffff:192.0.2.1` with a dotted-decimal tail, but renders
+`::ffff:0:192.0.2.1` as `::ffff:0:c000:201`. The value renderer must
+preserve these distinct observed cases rather than convert every low
+32-bit tail to dotted decimal. A boundary probe rendered compatible
+`::0.0.0.2` as `::2` and `::0.0.1.0` as `::100`, but retained dotted
+tails for `::0.1.0.0` and `::1.0.0.0`; the low-order 32-bit value's upper
+16 bits therefore determine the tested compatible-text branch.
+For five rows at granularity two, payload marks were `(0,0,2)`, `(0,32,2)`,
+`(0,64,1)`, `(0,80,0)`; the nullable map marks were `(0,0,2)`,
+`(0,2,2)`, `(0,4,1)`, `(0,5,0)`. A NULL row had a one-byte null flag in
+RowBinary without nested bytes, but a 16-zero-byte physical nested slot;
+non-NULL `::` had the same nested zeros and a zero null flag. The
+bidirectional oracle must independently replay these expectations before
+any compatibility claim.
+
+Observed W19 gate: `scripts/check_ipv6_oracle.sh` passed on pinned ClickHouse
+26.7.1.1315 for both bare and BASIC Nullable shapes. It checked hardcoded
+16-byte network-order payloads and high/low halves independent of the writer,
+exact streams/marks/metadata, stock-to-Crystal reads, Crystal-to-stock
+`ATTACH PART`, full and key-range RowBinary, clean `CHECK TABLE`, and
+same-size corruption rejection in isolated copies. Focused specs cover
+declaration and alias isolation, cross-mark/batch/catalog access, NULL versus
+`::`, malformed metadata, truncated streams, prepublication rejection, and
+TUI display. The full debug and release Crystal suites each passed 467
+examples; W9-W18 pinned type oracles and the optional headless TUI harness
+passed. These checks establish paired compatibility only on the tested
+two-column `UInt64`-key Wide/LZ4/plain-adaptive-mark shape. A future reader,
+writer, serialization, ClickHouse build, or platform change decays this
+evidence and requires rerunning the oracle and relevant suites.
+
+Residual W19 guard-only surfaces: unobserved IPv4-compatible presentation,
+non-BASIC Nullable serializers, IPv6 primary keys, IP functions, arbitrary
+schemas, Compact parts, and claims beyond the pinned build and Darwin
+publication boundary. A structurally valid 16-byte value can silently render
+as another address if halves or octets are reversed; the hardcoded byte and
+text controls guard this tested risk. Rollback is one W19-only local feature
+commit; no push or mutation of an existing ClickHouse data root is authorized.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1015,12 +1087,12 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W16's bounded semantic scalars,
-   W14's BASIC nullable temporal codes, W13's raw time codes, W12's raw dates,
-   W11's BASIC
-   `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, W9's exact 22
-   payload shapes, one stock-ClickHouse differential fixture per type and
-   substream shape.
+1. Extend reader and writer together beyond W19's paired IPv6, W18's paired
+   IPv4, W17's paired UUID, W16's bounded semantic scalars, W14's BASIC
+   nullable temporal codes, W13's raw time codes, W12's raw dates, W11's
+   BASIC `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, and W9's
+   exact 22 payload shapes, one stock-ClickHouse differential fixture per
+   type and substream shape.
    Reader support never implies writer support. Recheck physical stream naming
    on case-sensitive filesystems before claiming cross-filesystem
    compatibility. Sparse and other String variants remain guard-only.

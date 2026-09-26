@@ -167,6 +167,9 @@ their BASIC Nullable forms keep `NULL` distinct from zero. It does not resolve
 Enum labels or convert Decimal values to text with a decimal point. The viewer
 performs no timezone or calendar conversion; none of these semantic types is
 an equality-filter type.
+It displays `UUID`, `IPv4`, and `IPv6` values as text; their BASIC Nullable
+forms show `NULL` separately from zero-valued entries. Address and UUID
+columns are not equality-filter types in this example.
 Non-NULL Strings are quoted and escaped; only their first 256 source bytes are
 retained for display. Longer values carry a `[truncated]` prefix. Equality
 uses raw typed values, not truncated display text. Each filtered page examines

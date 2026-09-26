@@ -316,6 +316,33 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(IPv4)", rows_per_mark)
     end
 
+    # Write IPv6 values as their exact 16-byte network-order representation:
+    # big-endian high UInt64 followed by big-endian low UInt64. The named
+    # entry point keeps IPv6 distinct from UUID, UInt128, and FixedString(16).
+    def self.write_uint64_ipv6_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(IPv6Value),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "IPv6", rows_per_mark)
+    end
+
+    # Write BASIC Nullable(IPv6). NULL rows have a separate null flag and a
+    # zero-filled 16-byte nested slot; :: remains a non-NULL value.
+    def self.write_uint64_nullable_ipv6_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(IPv6Value?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(IPv6)", rows_per_mark)
+    end
+
     # Write Bool as its exact semantic type rather than a UInt8 alias.
     def self.write_uint64_bool_pair(
       destination : String,
@@ -576,7 +603,7 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        if type_name == "UUID" || type_name == "IPv4" || type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
+        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
           records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name))
         end
         write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
@@ -1012,11 +1039,17 @@ module CrystalClick
       {% elsif T == IPv4Value %}
         raise UnsupportedFormatError.new("IPv4 writer requires exact IPv4 metadata") unless type_name == "IPv4"
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == IPv6Value %}
+        raise UnsupportedFormatError.new("IPv6 writer requires exact IPv6 metadata") unless type_name == "IPv6"
+        validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UUIDValue? %}
         raise UnsupportedFormatError.new("Nullable UUID writer requires exact Nullable(UUID) metadata") unless type_name == "Nullable(UUID)"
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == IPv4Value? %}
         raise UnsupportedFormatError.new("Nullable IPv4 writer requires exact Nullable(IPv4) metadata") unless type_name == "Nullable(IPv4)"
+        validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == IPv6Value? %}
+        raise UnsupportedFormatError.new("Nullable IPv6 writer requires exact Nullable(IPv6) metadata") unless type_name == "Nullable(IPv6)"
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Int128 || T == Float32 || T == Float64 %}
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
@@ -1042,11 +1075,17 @@ module CrystalClick
       {% elsif T == IPv4Value %}
         raise UnsupportedFormatError.new("IPv4 writer requires exact IPv4 metadata") unless type_name == "IPv4"
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == IPv6Value %}
+        raise UnsupportedFormatError.new("IPv6 writer requires exact IPv6 metadata") unless type_name == "IPv6"
+        write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UUIDValue? %}
         raise UnsupportedFormatError.new("Nullable UUID writer requires exact Nullable(UUID) metadata") unless type_name == "Nullable(UUID)"
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == IPv4Value? %}
         raise UnsupportedFormatError.new("Nullable IPv4 writer requires exact Nullable(IPv4) metadata") unless type_name == "Nullable(IPv4)"
+        write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == IPv6Value? %}
+        raise UnsupportedFormatError.new("Nullable IPv6 writer requires exact Nullable(IPv6) metadata") unless type_name == "Nullable(IPv6)"
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Int128 || T == Float32 || T == Float64 %}
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
@@ -1069,7 +1108,7 @@ module CrystalClick
         4
       when "UInt64", "Int64", "Float64", "DateTime64(0)", "DateTime64(1)", "DateTime64(2)", "DateTime64(3)", "DateTime64(4)", "DateTime64(5)", "DateTime64(6)", "DateTime64(7)", "DateTime64(8)", "DateTime64(9)"
         8
-      when "UUID"
+      when "UUID", "IPv6"
         16
       when "DateTime"
         4
@@ -1458,6 +1497,9 @@ module CrystalClick
         write_uint64_le(bytes, offset + 8, value.low)
       {% elsif T == IPv4Value %}
         write_uint32_le(bytes, offset, value.network_order)
+      {% elsif T == IPv6Value %}
+        write_uint64_be(bytes, offset, value.high)
+        write_uint64_be(bytes, offset + 8, value.low)
       {% elsif T == Float32 %}
         write_uint32_le(bytes, offset, value.unsafe_as(UInt32))
       {% elsif T == Float64 %}
@@ -2267,7 +2309,7 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == UUIDValue? || T == IPv4Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
+      {% if T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
@@ -2346,6 +2388,12 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("typed IPv4 writer requires exact IPv4 metadata")
         end
+      {% elsif T == IPv6Value %}
+        if type_name == "IPv6"
+          part.read_ipv6s_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("typed IPv6 writer requires exact IPv6 metadata")
+        end
       {% elsif T == Bool %}
         part.read_bool_mark_range(column, mark_index, 1)
       {% elsif T == UInt8 %}
@@ -2420,6 +2468,8 @@ module CrystalClick
         expected.high == actual.high && expected.low == actual.low
       {% elsif T == IPv4Value %}
         expected.network_order == actual.network_order
+      {% elsif T == IPv6Value %}
+        expected.high == actual.high && expected.low == actual.low
       {% elsif T == Float32 %}
         expected.unsafe_as(UInt32) == actual.unsafe_as(UInt32)
       {% elsif T == Float64 %}
@@ -2549,6 +2599,12 @@ module CrystalClick
           part.read_nullable_ipv4s_mark_range(column, mark_index, 1)
         else
           raise UnsupportedFormatError.new("typed Nullable IPv4 writer requires exact Nullable(IPv4) metadata")
+        end
+      {% elsif T == IPv6Value? %}
+        if type_name == "Nullable(IPv6)"
+          part.read_nullable_ipv6s_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("typed Nullable IPv6 writer requires exact Nullable(IPv6) metadata")
         end
       {% elsif T == Bool? %}
         part.read_nullable_bool_mark_range(column, mark_index, 1)
@@ -2695,8 +2751,8 @@ module CrystalClick
                    "\"string\":1"
                  elsif type_name == "Nullable(String)"
                    "\"nullable\":0,\"string\":1"
-                 elsif type_name == "UUID" || type_name == "IPv4" || type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
-                   # BASIC Nullable payloads, UUID, and IPv4 use this global
+                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
+                   # BASIC Nullable payloads, UUID, IPv4, and IPv6 use this global
                    # serializer-version metadata. Semantic identity is
                    # carried by the exact column type.
                    "\"string\":1"
@@ -2784,6 +2840,10 @@ module CrystalClick
 
     private def self.write_uint64_le(bytes : Bytes, offset : Int, value : UInt64) : Nil
       8.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u64).to_u8 }
+    end
+
+    private def self.write_uint64_be(bytes : Bytes, offset : Int, value : UInt64) : Nil
+      8.times { |index| bytes[offset + index] = ((value >> ((7 - index) * 8)) & 0xff_u64).to_u8 }
     end
 
     private def self.write_uint32_le(bytes : Bytes, offset : Int, value : UInt32) : Nil

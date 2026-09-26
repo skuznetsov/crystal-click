@@ -1,7 +1,7 @@
 module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
-                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | Nil
+                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -136,6 +136,12 @@ module CrystalClick
         return {observed_rows, string_bytes}
       elsif WidePart.supports_nullable_ipv4_type?(selected_type)
         observed_rows = append_materialized_values(values, batch.nullable_ipv4s_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif WidePart.supports_ipv6_type?(selected_type)
+        observed_rows = append_materialized_values(values, batch.ipv6s_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif WidePart.supports_nullable_ipv6_type?(selected_type)
+        observed_rows = append_materialized_values(values, batch.nullable_ipv6s_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
       elsif WidePart.supports_uuid_type?(selected_type)
         observed_rows = append_materialized_values(values, batch.uuids_for(column_name), observed_rows, expected_rows)
