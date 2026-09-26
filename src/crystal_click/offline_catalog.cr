@@ -150,8 +150,15 @@ module CrystalClick
         observed_rows = append_int32_values(values, batch, column_name, observed_rows, expected_rows)
       when "Date32"
         observed_rows = append_date32_codes_values(values, batch, column_name, observed_rows, expected_rows)
+      when "DateTime"
+        observed_rows = append_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
       when "Int64"
         observed_rows = append_int64_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("DateTime64(")
+        unless WidePart.datetime64_scale(selected_type)
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_datetime64_ticks_values(values, batch, column_name, observed_rows, expected_rows)
       when "Float32"
         observed_rows = append_float32_values(values, batch, column_name, observed_rows, expected_rows)
       when "Float64"
@@ -393,9 +400,9 @@ module CrystalClick
       reader.scan_numeric(batch_rows: batch_rows, &block)
     end
 
-    # Scan exact String, Date/Date32 raw day codes, primitive numeric, and
-    # supported Nullable columns. Selected part types must exactly match this
-    # table's DDL before the first callback is allowed to run.
+    # Scan exact String, raw date/time codes, primitive numeric, and supported
+    # Nullable columns. Selected part types must exactly match this table's DDL
+    # before the first callback is allowed to run.
     def scan_typed(
       columns : Array(String),
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
@@ -503,6 +510,14 @@ module CrystalClick
 
     private def append_date32_codes_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.date32_codes_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_datetime_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.datetime_seconds_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_datetime64_ticks_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.datetime64_ticks_for(column_name), observed_rows, expected_rows)
     end
 
     private def append_int64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64

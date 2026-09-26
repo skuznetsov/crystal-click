@@ -53,8 +53,15 @@ module CrystalClick
       fixed_string_width(inner)
     end
 
+    # Accept only the canonical one-digit DateTime64 precision. Timezone
+    # arguments and alternate spellings remain outside this reader's scope.
+    def self.datetime64_scale(type : String) : Int32?
+      match = /\ADateTime64\(([0-9])\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
     def self.supports_typed_type?(type : String) : Bool
-      type == "Date" || type == "Date32" || type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
+      type == "Date" || type == "Date32" || type == "DateTime" || !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
     end
 
     def self.json_type?(type : String) : Bool
@@ -248,6 +255,42 @@ module CrystalClick
         while offset < bytes.size
           values << u32(bytes, offset).unsafe_as(Int32)
           offset += 4
+        end
+      end
+      values
+    end
+
+    # DateTime is exposed as raw UInt32 epoch seconds. This semantic accessor
+    # stays separate from the primitive UInt32 reader.
+    def read_datetime_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt32)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("DateTime accessor requires an exact DateTime column") unless @column_type == "DateTime"
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 4)
+      values = Array(UInt32).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 4) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << u32(bytes, offset)
+          offset += 4
+        end
+      end
+      values
+    end
+
+    # DateTime64 is exposed as raw signed Int64 ticks. The exact canonical
+    # precision remains in column metadata and is checked before decoding.
+    def read_datetime64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("DateTime64 accessor requires a canonical DateTime64(p) column") unless WidePart.datetime64_scale(@column_type)
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 8)
+      values = Array(Int64).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 8) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << u64(bytes, offset).unsafe_as(Int64)
+          offset += 8
         end
       end
       values
@@ -1241,6 +1284,10 @@ module CrystalClick
         2
       elsif @column_type == "Date32"
         4
+      elsif @column_type == "DateTime"
+        4
+      elsif WidePart.datetime64_scale(@column_type)
+        8
       else
         numeric_type_width(@column_type)
       end

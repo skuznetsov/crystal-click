@@ -163,6 +163,24 @@ module CrystalClick
       @column_values[index].as(Slice(Int32))
     end
 
+    # Return raw UInt32 epoch seconds only for an exact bare DateTime column.
+    def datetime_seconds_for(column : String) : Slice(UInt32)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("DateTime accessor requires an exact DateTime column") unless @column_types[index] == "DateTime"
+      return @typed_numeric_values[column].as(Slice(UInt32)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(UInt32))
+    end
+
+    # Return raw signed Int64 ticks only for a canonical DateTime64(p) column.
+    def datetime64_ticks_for(column : String) : Slice(Int64)
+      index = column_index(column)
+      unless WidePart.datetime64_scale(@column_types[index])
+        raise UnsupportedFormatError.new("DateTime64 accessor requires a canonical DateTime64(p) column")
+      end
+      return @typed_numeric_values[column].as(Slice(Int64)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int64))
+    end
+
     def strings_for(column : String) : Slice(String)
       index = column_index(column)
       raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_types[index] == "String"
@@ -679,6 +697,13 @@ module CrystalClick
         reader.read_date_codes_mark_range(selected.name, mark_index, 1)
       when "Date32"
         reader.read_date32_codes_mark_range(selected.name, mark_index, 1)
+      when "DateTime"
+        reader.read_datetime_seconds_mark_range(selected.name, mark_index, 1)
+      when .starts_with?("DateTime64(")
+        unless WidePart.datetime64_scale(selected.column_type)
+          raise UnsupportedFormatError.new("unsupported exact DateTime64 type")
+        end
+        reader.read_datetime64_ticks_mark_range(selected.name, mark_index, 1)
       when "UInt8"
         reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt8)
       when "UInt16"

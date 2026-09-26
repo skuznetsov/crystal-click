@@ -287,6 +287,34 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Date32", rows_per_mark)
     end
 
+    # Write a DateTime payload as raw UInt32 epoch seconds. Values are
+    # preserved exactly; no timezone or civil-time conversion is performed.
+    def self.write_uint64_datetime_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      seconds : Slice(UInt32),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, seconds, "DateTime", rows_per_mark)
+    end
+
+    # Write a DateTime64 payload as raw signed ticks at the explicit decimal
+    # precision. Values are preserved exactly without rounding or clamping.
+    def self.write_uint64_datetime64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      ticks : Slice(Int64),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, ticks, "DateTime64(#{scale})", rows_per_mark)
+    end
+
     private def self.write_uint64_typed_pair_with_type(
       destination : String,
       key_name : String,
@@ -771,8 +799,10 @@ module CrystalClick
         2
       when "UInt32", "Int32", "Float32", "Date32"
         4
-      when "UInt64", "Int64", "Float64"
+      when "UInt64", "Int64", "Float64", "DateTime64(0)", "DateTime64(1)", "DateTime64(2)", "DateTime64(3)", "DateTime64(4)", "DateTime64(5)", "DateTime64(6)", "DateTime64(7)", "DateTime64(8)", "DateTime64(9)"
         8
+      when "DateTime"
+        4
       else
         raise UnsupportedFormatError.new("typed writer requires an exact fixed-width primitive numeric payload")
       end
@@ -2030,7 +2060,13 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed writer requires an exact UInt16 or Date payload")
         end
       {% elsif T == UInt32 %}
-        part.read_numeric_mark_range(column, mark_index, 1, UInt32)
+        if type_name == "DateTime"
+          part.read_datetime_seconds_mark_range(column, mark_index, 1)
+        elsif type_name == "UInt32"
+          part.read_numeric_mark_range(column, mark_index, 1, UInt32)
+        else
+          raise UnsupportedFormatError.new("typed writer requires an exact UInt32 or DateTime payload")
+        end
       {% elsif T == UInt64 %}
         part.read_numeric_mark_range(column, mark_index, 1, UInt64)
       {% elsif T == Int8 %}
@@ -2046,7 +2082,13 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed writer requires an exact Int32 or Date32 payload")
         end
       {% elsif T == Int64 %}
-        part.read_numeric_mark_range(column, mark_index, 1, Int64)
+        if type_name.starts_with?("DateTime64(")
+          part.read_datetime64_ticks_mark_range(column, mark_index, 1)
+        elsif type_name == "Int64"
+          part.read_numeric_mark_range(column, mark_index, 1, Int64)
+        else
+          raise UnsupportedFormatError.new("typed writer requires an exact Int64 or DateTime64 payload")
+        end
       {% elsif T == Float32 %}
         part.read_numeric_mark_range(column, mark_index, 1, Float32)
       {% elsif T == Float64 %}

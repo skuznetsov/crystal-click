@@ -195,6 +195,8 @@ module CrystalClick
           batch.date_codes_for(column).size
         when "UInt32"
           batch.values_for(column, UInt32).size
+        when "DateTime"
+          batch.datetime_seconds_for(column).size
         when "UInt64"
           batch.values_for(column, UInt64).size
         when "Int8"
@@ -236,7 +238,11 @@ module CrystalClick
         when "Nullable(String)"
           batch.nullable_strings_for(column).size
         else
-          raise UnsupportedFormatError.new("selected table column type is unsupported")
+          if WidePart.datetime64_scale(type)
+            batch.datetime64_ticks_for(column).size
+          else
+            raise UnsupportedFormatError.new("selected table column type is unsupported")
+          end
         end
       end
 
@@ -258,6 +264,8 @@ module CrystalClick
           batch.date_codes_for(column)[row_index].to_s
         when "UInt32"
           batch.values_for(column, UInt32)[row_index].to_s
+        when "DateTime"
+          batch.datetime_seconds_for(column)[row_index].to_s
         when "UInt64"
           batch.values_for(column, UInt64)[row_index].to_s
         when "Int8"
@@ -300,7 +308,11 @@ module CrystalClick
           value = batch.nullable_strings_for(column)[row_index]
           value ? display_string(value) : "NULL"
         else
-          raise UnsupportedFormatError.new("selected table column type is unsupported")
+          if scale = WidePart.datetime64_scale(type)
+            "#{batch.datetime64_ticks_for(column)[row_index]} [p=#{scale}]"
+          else
+            raise UnsupportedFormatError.new("selected table column type is unsupported")
+          end
         end
       end
 

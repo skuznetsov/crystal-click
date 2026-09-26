@@ -12,6 +12,9 @@ separately tested reader/writer payload. W11 verifies BASIC
 `Nullable(FixedString(N))` within its bounded reader/writer scope. W12 verifies
 raw non-null `Date` and `Date32` day-code reading and writing on the pinned
 Wide/LZ4 ClickHouse/Darwin frontier; other type families remain guard-only.
+W13 admits raw non-null `DateTime` seconds and `DateTime64(p)` ticks for
+canonical precisions 0 through 9 on the same pinned Wide/LZ4 frontier;
+the differential oracle directly exercises precisions 0, 3, and 9.
 
 ## Purpose and bounded contexts
 
@@ -615,6 +618,73 @@ ClickHouse builds, calendar conversions, Compact parts, power-loss recovery,
 or daemon restart behavior. Refresh it after changing the date serializer,
 reader dispatch, part framing, or pinned ClickHouse build.
 
+## Completed slice W13: raw DateTime seconds and DateTime64 ticks
+
+Admit only non-null, timezone-unqualified `DateTime` and the canonical
+`DateTime64(p)` spelling with one decimal precision digit `p` from 0 through
+9, as separate semantic payload types in the existing two-column Wide/LZ4
+reader and writer. The intended physical values are little-endian `UInt32`
+epoch seconds and little-endian signed `Int64` ticks at scale `p`. The
+precision is part of the exact column type and must survive catalog and
+batch selection; raw ticks are meaningless without it. The pinned build has
+already round-tripped `DateTime` including `UInt32::MAX` and `DateTime64(3)`
+including both `Int64` extrema through RowBinary and detach/attach. Endpoint
+scales 0 and 9 also preserve both extrema in pinned RowBinary probes;
+stock parts use one stream and plain adaptive marks and pass `CHECK TABLE`.
+The completed differential oracle also confirms Crystal-generated attachment
+and reverse-direction raw-code reads.
+
+Reader entry points and batch accessors must name seconds/ticks explicitly
+and require exact metadata. `DateTime` must not pass the primitive `UInt32`
+reader; `DateTime64(p)` must not pass the primitive `Int64` reader. Numeric
+scans remain primitive-only. Catalog materialization yields raw UInt32/Int64
+values while retaining the full DDL type string. The offline TUI may display
+raw decimal seconds and ticks, but must label each DateTime64 cell with its
+precision because its column header currently contains only a name. It must
+not invent calendar text or widen its UInt64/String equality filter.
+
+Writer entry points must name `DateTime` or an explicit precision `p`; the
+inferred `UInt32` and `Int64` writer stays numeric. Retain W12's staged
+self-read, exact metadata, width/frame/mark/checksum preflights, and
+exclusive publication. Invalid precision, mismatched lengths, unsorted keys,
+or failed publication must leave no part at the destination. No rounding,
+clamping, timezone conversion, or `Time`/`Time::Span` conversion is admitted.
+
+The falsifier uses pinned stock ClickHouse 26.7.1.1315 parts for bare
+`DateTime` and `DateTime64(0)`, `(3)`, `(9)` across multiple marks and a
+short last granule. It compares exact RowBinary codes, physical payload
+bytes, marks and type metadata, including negative ticks and supported
+extrema. In the reverse direction the pinned build must attach distinct
+Crystal-generated parts, return exact full/key-range raw codes, pass
+`CHECK TABLE`, and reject same-size payload corruption. Negative tests must
+reject timezone-qualified or noncanonical type strings, primitive aliases,
+and malformed precision before any callback or publication. Full debug and
+release suites, TUI checks, format/shell checks, and W9-W12 differential
+oracles are regression guards; self-read alone is insufficient.
+
+`DateTime('zone')`, `DateTime64(p, 'zone')`, implicit precision spellings,
+Nullable time types, timezone semantics, civil formatting, DST, arbitrary
+keys, Compact parts, other ClickHouse builds, daemon restart, and power-loss
+durability remain guard-only. The risk is CAUTION: an accidental scale or
+timezone alias can silently change the meaning of persisted ticks. Rollback
+is one local W13 feature commit after verification; no push or mutation of
+an existing ClickHouse data root is authorized.
+
+W13 closure on the pinned local ClickHouse 26.7.1.1315/Darwin frontier:
+388 Crystal examples passed in both debug and release. The differential
+oracle checked stock-produced `DateTime` and `DateTime64(0)`, `(3)`, `(9)`
+metadata, physical payload bytes, exact marks, raw values including
+`UInt32::MAX` and both `Int64` extrema, and full/key-range RowBinary.
+Crystal-generated parts attached for all four types, returned byte-exact
+full/key-range RowBinary, passed clean `CHECK TABLE`, and rejected a seeded
+same-size payload corruption. W9-W12 oracles passed as regression controls;
+the headless TUI suite and linked example build passed. The TUI exposes raw
+codes and explicit DateTime64 precision without widening equality filters.
+This evidence is fixture- and build-scoped, not proof of timezone-bearing
+metadata, civil conversion, Compact parts, other ClickHouse builds, daemon
+restart, or power-loss recovery. Refresh after changes to the time serializer,
+type dispatch, part framing, or pinned ClickHouse build.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -624,7 +694,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W12's raw dates, W11's BASIC
+1. Extend reader and writer together beyond W13's raw time codes, W12's raw
+   dates, W11's BASIC
    `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, W9's exact 22
    payload shapes, one stock-ClickHouse differential fixture per type and
    substream shape.

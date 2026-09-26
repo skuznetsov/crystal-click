@@ -132,6 +132,43 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "displays DateTime seconds and DateTime64 ticks as raw codes without numeric filters" do
+    keys = [1_u64, 2_u64, 3_u64]
+    seconds = [0_u32, 1_u32, UInt32::MAX]
+    datetime_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_datetime_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_time", seconds.to_unsafe.to_slice(seconds.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_time` DateTime", nil, datetime_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_time"], 2)
+      source.load(0_u64).rows.should eq([["0"], ["1"]])
+      source.load(2_u64).rows.should eq([[UInt32::MAX.to_s]])
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("event_time", 0_u64))
+      end
+    end
+
+    ticks = [Int64::MIN, -1_i64, Int64::MAX]
+    datetime64_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_datetime64_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "event_time", ticks.to_unsafe.to_slice(ticks.size), 3, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `event_time` DateTime64(3)", nil, datetime64_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["event_time"], 2)
+      source.load(0_u64).rows.should eq([["#{Int64::MIN} [p=3]"], ["-1 [p=3]"]])
+      source.load(2_u64).rows.should eq([["#{Int64::MAX} [p=3]"]])
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("event_time", 0_u64))
+      end
+    end
+  end
+
   it "compares raw String values before display truncation" do
     columns = "    `seq` UInt64,\n    `payload` String"
     prefix = "x" * 300
