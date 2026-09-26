@@ -216,6 +216,10 @@ module CrystalClick
           batch.values_for(column, Float64).size
         when "Nullable(Bool)"
           batch.nullable_bools_for(column).size
+        when "UUID"
+          batch.uuids_for(column).size
+        when "Nullable(UUID)"
+          batch.nullable_uuids_for(column).size
         when "String"
           batch.strings_for(column).size
         when "Nullable(UInt8)"
@@ -325,6 +329,10 @@ module CrystalClick
           batch.values_for(column, Float64)[row_index].to_s
         when "Nullable(Bool)"
           display_nullable_bool(batch.nullable_bools_for(column)[row_index])
+        when "UUID"
+          batch.uuids_for(column)[row_index].to_s
+        when "Nullable(UUID)"
+          batch.nullable_uuids_for(column)[row_index].try(&.to_s) || "NULL"
         when "String"
           display_string(batch.strings_for(column)[row_index])
         when "Nullable(UInt8)"

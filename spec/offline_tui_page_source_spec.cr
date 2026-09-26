@@ -657,6 +657,51 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "formats UUID values canonically and keeps Nullable NULL distinct from zero UUID" do
+    keys = [1_u64, 2_u64, 3_u64]
+    zero = CrystalClick::UUIDValue.new(0_u64, 0_u64)
+    asymmetric = CrystalClick::UUIDValue.new(0x61f0c4045cb311e7_u64, 0x907ba6006ad3dba0_u64)
+    other = CrystalClick::UUIDValue.new(0x123456789abcdef0_u64, 0x0fedcba987654321_u64)
+    values = [zero, asymmetric, other]
+    setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_uuid_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "identifier", values.to_unsafe.to_slice(values.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `identifier` UUID", nil, setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["identifier"], 2)
+      source.load(0_u64).rows.should eq([
+        ["00000000-0000-0000-0000-000000000000"],
+        ["61f0c404-5cb3-11e7-907b-a6006ad3dba0"],
+      ])
+      source.load(2_u64).rows.should eq([["12345678-9abc-def0-0fed-cba987654321"]])
+      table["identifier"].values.should eq(values)
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("identifier", asymmetric.to_s))
+      end
+    end
+
+    nullable_values = [nil, zero.as(CrystalClick::UUIDValue?), asymmetric.as(CrystalClick::UUIDValue?)]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_uuid_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "identifier", nullable_values.to_unsafe.to_slice(nullable_values.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `identifier` Nullable(UUID)", nil, nullable_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["identifier"], 3)
+      source.load(0_u64).rows.should eq([
+        ["NULL"],
+        ["00000000-0000-0000-0000-000000000000"],
+        ["61f0c404-5cb3-11e7-907b-a6006ad3dba0"],
+      ])
+      table["identifier"].values.should eq(nullable_values)
+    end
+  end
+
   it "returns an empty page for an empty table without materializing rows" do
     with_offline_page_table("    `seq` UInt64", nil) do |table, _table_path|
       page = CrystalClick::Examples::OfflinePageSource.new(table, ["seq"], 2).load(0_u64)

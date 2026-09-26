@@ -1,7 +1,7 @@
 module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
-                             Float32 | Float64 | Bool | String | Nil
+                             Float32 | Float64 | Bool | String | UUIDValue | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -131,7 +131,13 @@ module CrystalClick
       expected_rows : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
-      if selected_type == "Bool"
+      if WidePart.supports_uuid_type?(selected_type)
+        observed_rows = append_materialized_values(values, batch.uuids_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif WidePart.supports_nullable_uuid_type?(selected_type)
+        observed_rows = append_materialized_values(values, batch.nullable_uuids_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type == "Bool"
         observed_rows = append_materialized_values(values, batch.bools_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
       elsif !WidePart.enum8_codes(selected_type).nil? && !selected_type.starts_with?("Nullable(")

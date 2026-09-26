@@ -26,6 +26,9 @@ W16 admits paired raw Decimal128 and BASIC Nullable(Decimal128) reading and
 writing at canonical scales 0 through 38 on the same pinned Wide/LZ4 frontier.
 The differential oracle directly exercises scales 0, 2, and 38, plus the
 full signed Int128 backing extrema at scale 0.
+W17 admits paired `UUID` and BASIC `Nullable(UUID)` payloads on this pinned
+Wide/LZ4 frontier after a bidirectional stock/Crystal oracle and full
+regression gate. It does not imply support for other 128-bit or IP types.
 
 ## Purpose and bounded contexts
 
@@ -884,6 +887,60 @@ Risk is CAUTION because valid-looking 16-byte streams can encode incorrect
 signed values or scales. Rollback is a W16-only local feature commit; no push
 or mutation of an existing ClickHouse data root is authorized.
 
+## Completed slice W17: paired UUID payloads
+
+Admit exactly `UUID` and BASIC `Nullable(UUID)` as payload declarations on the
+existing sorted `UInt64`-key, two-column Wide/LZ4, plain adaptive-mark part
+shape. The Crystal value is a 16-byte structure with separate high and low
+`UInt64` halves, preserving the canonical UUID value without per-row strings;
+generic `UInt128` and `FixedString(16)` accessors must not alias this type.
+The reader, table batch, offline catalog, and optional TUI must either expose
+and render this value consistently or refuse selection before page loading.
+The writer must require a named UUID entry point and zero-fill the nested slot
+for NULL. It may not infer UUID metadata from a generic numeric or string
+slice. No variant/version validation is implied by the UUID type.
+
+Before implementation, probe pinned ClickHouse 26.7.1.1315 to establish the
+canonical type spelling, exact high/low byte order, data and null-map stream
+names/order, serialization metadata, marks, and RowBinary NULL encoding. A
+falsifier uses non-symmetric high/low halves and a short final mark: stock
+parts must decode to the exact canonical identifiers in Crystal, and Crystal
+parts must attach to stock ClickHouse, return byte-exact full and key-range
+RowBinary, pass `CHECK TABLE`, and fail the appropriate integrity check after
+representative same-size corruption. Missing/truncated streams and malformed
+type metadata must fail closed. Full debug/release suites and W9-W16 pinned
+oracles are regression controls, not substitutes for this W17 oracle.
+The pinned preimplementation probe observed `UUID` and `Nullable(UUID)` in
+`columns.txt`, a bare payload stream or BASIC `payload.null` then `payload`,
+and version-1 serialization metadata with only the global `string:1` entry.
+Canonical `00112233-4455-6677-8899-aabbccddeeff` physically encodes as
+`77 66 55 44 33 22 11 00 ff ee dd cc bb aa 99 88`: high `UInt64` little
+endian, then low `UInt64` little endian. For a NULL row, the nested payload
+is 16 zero bytes while RowBinary emits only the null flag. The five-row
+stock parts had four plain adaptive marks with a short final granule.
+
+Observed W17 gate: the pinned ClickHouse 26.7.1.1315 differential oracle
+passed both bare and BASIC Nullable shapes in both directions. Stock parts
+read exactly in Crystal; Crystal parts attached to stock ClickHouse with
+matching metadata, streams, payload bytes, marks, full and key-range
+RowBinary, and clean `CHECK TABLE`. Isolated same-size payload and nullable
+null-map corruption were detected. Focused specs reject absent/malformed
+serialization metadata, truncated streams, primitive aliases, and invalid
+prepublication inputs. The full debug and release suites each passed 448
+examples, the selected-column TUI spec passed 22, the optional headless TUI
+harness passed six, and the W9-W16 pinned type oracles passed. This evidence
+decays after a reader/writer/serialization change, a pinned ClickHouse build
+change, or a format/platform change; refresh the paired oracle and suites
+before widening the claim.
+
+Rejected in W17: `IPv4`, `IPv6`, `Decimal256`, timezone-qualified temporal
+declarations, UUID ordering as a generic `UInt128`, non-BASIC Nullable
+serializers, composite types, Compact parts, arbitrary table schemas, and
+claims beyond the pinned build and Darwin publication boundary. Risk is
+CAUTION: an apparently valid 16-byte stream can silently swap UUID halves.
+Rollback is the W17-only local feature commit; no push or existing ClickHouse
+data-root mutation is authorized.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -893,7 +950,7 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W15's bounded semantic scalars,
+1. Extend reader and writer together beyond W16's bounded semantic scalars,
    W14's BASIC nullable temporal codes, W13's raw time codes, W12's raw dates,
    W11's BASIC
    `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, W9's exact 22

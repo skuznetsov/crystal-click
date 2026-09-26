@@ -1,16 +1,16 @@
 module CrystalClick
   alias WidePartNumericArray = Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(UInt64) |
                                Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Int128) | Array(Bool) |
-                               Array(Float32) | Array(Float64)
+                               Array(Float32) | Array(Float64) | Array(UUIDValue)
   alias WidePartNumericSlice = Slice(UInt8) | Slice(UInt16) | Slice(UInt32) | Slice(UInt64) |
                                Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Int128) | Slice(Bool) |
-                               Slice(Float32) | Slice(Float64)
+                               Slice(Float32) | Slice(Float64) | Slice(UUIDValue)
   alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
                                 Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Int128?) | Array(Bool?) |
-                                Array(Float32?) | Array(Float64?)
+                                Array(Float32?) | Array(Float64?) | Array(UUIDValue?)
   alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
                                 Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Int128?) | Slice(Bool?) |
-                                Slice(Float32?) | Slice(Float64?)
+                                Slice(Float32?) | Slice(Float64?) | Slice(UUIDValue?)
   alias WidePartNullableStringArray = Array(String?)
   alias WidePartNullableStringSlice = Slice(String?)
 
@@ -265,6 +265,18 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_types[index])
       @nullable_values[column]?.try(&.as(Slice(Int128?))) || raise(UnsupportedFormatError.new("Nullable(Decimal128) column was not materialized in this batch"))
+    end
+
+    def uuids_for(column : String) : Slice(UUIDValue)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("UUID accessor requires an exact UUID column") unless WidePart.supports_uuid_type?(@column_types[index])
+      @typed_numeric_values[column]?.try(&.as(Slice(UUIDValue))) || @column_values[index].as(Slice(UUIDValue))
+    end
+
+    def nullable_uuids_for(column : String) : Slice(UUIDValue?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("UUID accessor requires an exact Nullable(UUID) column") unless WidePart.supports_nullable_uuid_type?(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(UUIDValue?))) || raise(UnsupportedFormatError.new("Nullable(UUID) column was not materialized in this batch"))
     end
 
     def strings_for(column : String) : Slice(String)
@@ -805,7 +817,9 @@ module CrystalClick
     private def read_numeric_values(selected : ColumnReader, mark_index : Int) : WidePartNumericArray
       reader = selected.reader
       type = selected.column_type
-      if type == "Bool"
+      if WidePart.supports_uuid_type?(type)
+        return reader.read_uuids_mark_range(selected.name, mark_index, 1)
+      elsif type == "Bool"
         return reader.read_bool_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum8_codes(type).nil? && !type.starts_with?("Nullable(")
         return reader.read_enum8_codes_mark_range(selected.name, mark_index, 1)
@@ -882,6 +896,8 @@ module CrystalClick
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float64)
         values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UUIDValue)
+        values.to_unsafe.to_slice(values.size)[offset, size]
       else
         raise UnsupportedFormatError.new("unsupported numeric column type")
       end
@@ -890,7 +906,9 @@ module CrystalClick
     private def read_nullable_values(selected : ColumnReader, mark_index : Int) : WidePartNullableArray
       reader = selected.reader
       type = selected.column_type
-      if type == "Nullable(Bool)"
+      if WidePart.supports_nullable_uuid_type?(type)
+        return reader.read_nullable_uuids_mark_range(selected.name, mark_index, 1)
+      elsif type == "Nullable(Bool)"
         return reader.read_nullable_bool_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum8_codes(type).nil? && type.starts_with?("Nullable(")
         return reader.read_nullable_enum8_codes_mark_range(selected.name, mark_index, 1)
@@ -928,18 +946,19 @@ module CrystalClick
 
     private def nullable_array_size(values : WidePartNullableArray) : Int
       case values
-      when Array(UInt8?)   then values.size
-      when Array(UInt16?)  then values.size
-      when Array(UInt32?)  then values.size
-      when Array(UInt64?)  then values.size
-      when Array(Int8?)    then values.size
-      when Array(Int16?)   then values.size
-      when Array(Int32?)   then values.size
-      when Array(Int64?)   then values.size
-      when Array(Int128?)  then values.size
-      when Array(Bool?)    then values.size
-      when Array(Float32?) then values.size
-      when Array(Float64?) then values.size
+      when Array(UInt8?)     then values.size
+      when Array(UInt16?)    then values.size
+      when Array(UInt32?)    then values.size
+      when Array(UInt64?)    then values.size
+      when Array(Int8?)      then values.size
+      when Array(Int16?)     then values.size
+      when Array(Int32?)     then values.size
+      when Array(Int64?)     then values.size
+      when Array(Int128?)    then values.size
+      when Array(Bool?)      then values.size
+      when Array(Float32?)   then values.size
+      when Array(Float64?)   then values.size
+      when Array(UUIDValue?) then values.size
       else
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end
@@ -947,18 +966,19 @@ module CrystalClick
 
     private def slice_nullable_values(values : WidePartNullableArray, offset : Int, size : Int) : WidePartNullableSlice
       case values
-      when Array(UInt8?)   then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(UInt16?)  then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(UInt32?)  then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(UInt64?)  then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int8?)    then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int16?)   then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int32?)   then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int64?)   then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Int128?)  then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Bool?)    then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Float32?) then values.to_unsafe.to_slice(values.size)[offset, size]
-      when Array(Float64?) then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt8?)     then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt16?)    then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt32?)    then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt64?)    then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int8?)      then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int16?)     then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int32?)     then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int64?)     then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Int128?)    then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Bool?)      then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Float32?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Float64?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UUIDValue?) then values.to_unsafe.to_slice(values.size)[offset, size]
       else
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end

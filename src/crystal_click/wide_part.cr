@@ -199,6 +199,14 @@ module CrystalClick
       type == "Nullable(String)"
     end
 
+    def self.supports_uuid_type?(type : String) : Bool
+      type == "UUID"
+    end
+
+    def self.supports_nullable_uuid_type?(type : String) : Bool
+      type == "Nullable(UUID)"
+    end
+
     def self.supports_nullable_bool_type?(type : String) : Bool
       type == "Nullable(Bool)"
     end
@@ -269,7 +277,7 @@ module CrystalClick
         type == "Date" || type == "Date32" || type == "DateTime" ||
         !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) ||
         supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
-        supports_nullable_string_type?(type) ||
+        supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
         !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
     end
 
@@ -543,6 +551,51 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
+    end
+
+    # UUID is exposed as its two ClickHouse UUID halves, not as a generic
+    # UInt128. The physical payload stores each UInt64 half little-endian.
+    def read_uuids_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UUIDValue)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("UUID accessor requires an exact UUID column") unless WidePart.supports_uuid_type?(@column_type)
+
+      stream = @streams[column]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      encoded_values = read_mark_range_bytes(stream, start_mark, end_mark, checked_byte_count(rows, 16), 16)
+      values = Array(UUIDValue).new(rows.to_i)
+      offset = 0
+      while offset < encoded_values.size
+        values << UUIDValue.new(u64(encoded_values, offset), u64(encoded_values, offset + 8))
+        offset += 16
+      end
+      values
+    end
+
+    # BASIC Nullable(UUID) has an independent null map followed by the
+    # 16-byte UUID payload stream. Payload bytes in NULL slots are ignored.
+    def read_nullable_uuids_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UUIDValue?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("UUID accessor requires an exact Nullable(UUID) column") unless WidePart.supports_nullable_uuid_type?(@column_type)
+
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable(UUID) substream mark rows differ") unless rows == value_rows
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(rows, 16), 16)
+      values = Array(UUIDValue?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        values << (is_null == 1 ? nil : UUIDValue.new(u64(encoded_values, offset), u64(encoded_values, offset + 8)))
+        offset += 16
+      end
+      raise CorruptPartError.new("Nullable(UUID) values do not consume nested bytes") unless offset == encoded_values.size
+      values
     end
 
     private def read_semantic_fixed_width_mark_range(
@@ -1059,7 +1112,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -1223,6 +1276,8 @@ module CrystalClick
         ["#{column}.size", column]
       elsif WidePart.supports_nullable_string_type?(type)
         ["#{column}.null", "#{column}.size", column]
+      elsif WidePart.supports_nullable_uuid_type?(type)
+        ["#{column}.null", column]
       elsif WidePart.nullable_fixed_string_width(type)
         ["#{column}.null", column]
       elsif WidePart.fixed_string_width(type)
@@ -1286,6 +1341,12 @@ module CrystalClick
         raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
+      elsif WidePart.supports_uuid_type?(type) || WidePart.supports_nullable_uuid_type?(type)
+        string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("UUID String serialization version is required"))
+        raise UnsupportedFormatError.new("only UUID String serialization version 1 is supported") unless string_version == 1
+        columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("UUID column serializers are required"))
+        raise UnsupportedFormatError.new("UUID per-column serialization is unsupported") unless columns.empty?
+        raise UnsupportedFormatError.new("UUID missing-column serialization is unsupported") if info.has_key?("missing_columns")
       elsif WidePart.supports_semantic_fixed_width_type?(type) || WidePart.supports_nullable_semantic_fixed_width_type?(type)
         string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("W15 semantic serialization version is required"))
         raise UnsupportedFormatError.new("only W15 semantic serialization version 1 is supported") unless string_version == 1
@@ -1664,6 +1725,10 @@ module CrystalClick
         stream_name == "#{@column}.size" ? 8 : 1
       elsif WidePart.supports_nullable_string_type?(@column_type)
         stream_name == "#{@column}.size" ? 8 : 1
+      elsif WidePart.supports_nullable_uuid_type?(@column_type)
+        stream_name == "#{@column}.null" ? 1 : 16
+      elsif WidePart.supports_uuid_type?(@column_type)
+        16
       elsif fixed_width = WidePart.nullable_fixed_string_width(@column_type)
         stream_name == "#{@column}.null" ? 1 : fixed_width
       elsif fixed_width = WidePart.fixed_string_width(@column_type)
