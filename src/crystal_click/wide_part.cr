@@ -26,6 +26,152 @@ module CrystalClick
       end
     end
 
+    private def self.nullable_inner(type : String) : String?
+      return nil unless type.starts_with?("Nullable(") && type.ends_with?(")")
+      inner = type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
+      inner.empty? ? nil : inner
+    end
+
+    private def self.enum_codes(type : String, prefix : String, minimum : Int32, maximum : Int32) : Array(Int32)?
+      declaration = nullable_inner(type) || type
+      return nil unless declaration.starts_with?(prefix) && declaration.ends_with?(")")
+      declaration.each_byte do |byte|
+        return nil if byte < 0x20 || byte == 0x7f
+      end
+
+      body_end = declaration.bytesize - 1
+      cursor = prefix.bytesize
+      labels = Set(String).new
+      codes = Set(Int32).new
+      return nil if cursor >= body_end
+
+      loop do
+        return nil unless declaration.to_slice[cursor]? == '\''.ord.to_u8
+        cursor += 1
+        label = IO::Memory.new
+        closed = false
+        while cursor < body_end
+          byte = declaration.to_slice[cursor]
+          if byte == '\\'.ord.to_u8
+            cursor += 1
+            return nil if cursor >= body_end
+            escaped = declaration.to_slice[cursor]
+            case escaped
+            when '\''.ord.to_u8, '\\'.ord.to_u8
+              # These are the escaped quote and backslash forms observed in
+              # stock columns.txt. Other escape sequences remain unsupported.
+              label.write_byte(escaped)
+            else
+              return nil
+            end
+            cursor += 1
+          elsif byte == '\''.ord.to_u8
+            cursor += 1
+            closed = true
+            break
+          else
+            label.write_byte(byte)
+            cursor += 1
+          end
+        end
+        return nil unless closed
+        return nil unless labels.add?(label.to_slice.to_s)
+
+        return nil unless cursor + 3 <= body_end && declaration.byte_slice(cursor, 3) == " = "
+        cursor += 3
+
+        code_start = cursor
+        cursor += 1 if cursor < body_end && declaration.to_slice[cursor] == '-'.ord.to_u8
+        digit_start = cursor
+        while cursor < body_end && declaration.to_slice[cursor] >= '0'.ord.to_u8 && declaration.to_slice[cursor] <= '9'.ord.to_u8
+          cursor += 1
+        end
+        return nil if cursor == digit_start
+        code_text = declaration.byte_slice(code_start, cursor - code_start)
+        return nil unless code_text == "0" || code_text.matches?(/\A-?[1-9][0-9]*\z/)
+        code = code_text.to_i?
+        return nil unless code && code >= minimum && code <= maximum
+        return nil unless codes.add?(code)
+
+        return codes.to_a if cursor == body_end
+        return nil unless cursor + 2 < body_end && declaration.byte_slice(cursor, 2) == ", "
+        cursor += 2
+      end
+    end
+
+    private def self.decimal_precision_scale(type : String, precision : Int32, maximum_scale : Int32) : Int32?
+      match = /\ADecimal\(([0-9]+), ([0-9]+)\)\z/.match(type)
+      return nil unless match && match[1] == precision.to_s && match[2].matches?(/\A(?:0|[1-9][0-9]*)\z/)
+      scale = match[2].to_i?
+      return nil unless scale && scale <= maximum_scale
+      scale
+    end
+
+    private def self.decimal32_alias_scale(type : String) : Int32?
+      match = /\ADecimal32\(([0-9])\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.decimal64_alias_scale(type : String) : Int32?
+      match = /\ADecimal64\(([0-9]|1[0-8])\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    # Enum declarations remain exact metadata, while row values are exposed as
+    # their signed backing codes. The parser intentionally admits one bounded
+    # grammar instead of treating any `Enum8(` / `Enum16(` prefix as typed.
+    def self.enum8_codes(type : String) : Set(Int8)?
+      codes = enum_codes(type, "Enum8(", -128, 127)
+      return nil unless codes
+      codes.map(&.to_i8).to_set
+    end
+
+    def self.enum16_codes(type : String) : Set(Int16)?
+      codes = enum_codes(type, "Enum16(", -32_768, 32_767)
+      return nil unless codes
+      codes.map(&.to_i16).to_set
+    end
+
+    # ClickHouse normalizes Decimal32/64 aliases in columns.txt to the
+    # canonical precision forms Decimal(9, S) and Decimal(18, S).
+    def self.decimal32_scale(type : String) : Int32?
+      decimal_precision_scale(type, 9, 9)
+    end
+
+    def self.decimal64_scale(type : String) : Int32?
+      decimal_precision_scale(type, 18, 18)
+    end
+
+    def self.nullable_decimal32_scale(type : String) : Int32?
+      nullable_inner(type).try { |inner| decimal32_scale(inner) }
+    end
+
+    def self.nullable_decimal64_scale(type : String) : Int32?
+      nullable_inner(type).try { |inner| decimal64_scale(inner) }
+    end
+
+    # Normalize only the Decimal DDL aliases observed in stock metadata. The
+    # caller retains the exact source spelling separately for API metadata.
+    def self.catalog_type(type : String) : String?
+      return type if supports_typed_type?(type)
+
+      if inner = nullable_inner(type)
+        if scale = decimal32_alias_scale(inner)
+          return "Nullable(Decimal(9, #{scale}))"
+        elsif scale = decimal64_alias_scale(inner)
+          return "Nullable(Decimal(18, #{scale}))"
+        end
+        return nil
+      end
+
+      if scale = decimal32_alias_scale(type)
+        return "Decimal(9, #{scale})"
+      elsif scale = decimal64_alias_scale(type)
+        return "Decimal(18, #{scale})"
+      end
+      nil
+    end
+
     def self.supports_nullable_numeric_type?(type : String) : Bool
       return false unless type.starts_with?("Nullable(") && type.ends_with?(")")
       inner = type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
@@ -34,6 +180,21 @@ module CrystalClick
 
     def self.supports_nullable_string_type?(type : String) : Bool
       type == "Nullable(String)"
+    end
+
+    def self.supports_nullable_bool_type?(type : String) : Bool
+      type == "Nullable(Bool)"
+    end
+
+    def self.supports_w15_semantic_type?(type : String) : Bool
+      return false if nullable_inner(type)
+      type == "Bool" || !enum8_codes(type).nil? || !enum16_codes(type).nil? ||
+        !decimal32_scale(type).nil? || !decimal64_scale(type).nil?
+    end
+
+    def self.supports_nullable_w15_semantic_type?(type : String) : Bool
+      inner = nullable_inner(type) || return false
+      supports_w15_semantic_type?(inner)
     end
 
     # Return the byte width only for the exact, bounded FixedString grammar.
@@ -74,7 +235,12 @@ module CrystalClick
     end
 
     def self.supports_typed_type?(type : String) : Bool
-      type == "Date" || type == "Date32" || type == "DateTime" || !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) || supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) || supports_nullable_string_type?(type) || !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
+      supports_w15_semantic_type?(type) || supports_nullable_w15_semantic_type?(type) ||
+        type == "Date" || type == "Date32" || type == "DateTime" ||
+        !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) ||
+        supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
+        supports_nullable_string_type?(type) ||
+        !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
     end
 
     def self.json_type?(type : String) : Bool
@@ -226,6 +392,125 @@ module CrystalClick
       raise UnsupportedFormatError.new("typed accessor does not match selected column type") unless expected_type == @column_type
 
       start_mark, end_mark, expected_bytes = checked_numeric_mark_range(column, first_mark, mark_count, expected_type, element_width)
+      values = Array(T).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, element_width) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << decode_numeric_value(bytes, offset, type)
+          offset += element_width
+        end
+      end
+      values
+    end
+
+    # Bool is physically one byte, but its semantic domain is intentionally
+    # narrower than UInt8: only 0 and 1 are admitted by this reader.
+    def read_bool_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Bool)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Bool accessor requires an exact Bool column") unless @column_type == "Bool"
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 1)
+      values = Array(Bool).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 1) do |bytes|
+        bytes.each do |value|
+          case value
+          when 0 then values << false
+          when 1 then values << true
+          else        raise CorruptPartError.new("Bool byte is not 0 or 1")
+          end
+        end
+      end
+      values
+    end
+
+    def read_nullable_bool_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Bool?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Bool accessor requires an exact Nullable(Bool) column") unless WidePart.supports_nullable_bool_type?(@column_type)
+
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 1, UInt8).map do |value|
+        case value
+        when nil then nil
+        when 0   then false
+        when 1   then true
+        else          raise CorruptPartError.new("Bool byte is not 0 or 1")
+        end
+      end
+    end
+
+    def read_enum8_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int8)
+      ensure_column(column)
+      codes = WidePart.enum8_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum8 accessor requires an exact Enum8 declaration") unless codes && !@column_type.starts_with?("Nullable(")
+
+      values = read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 1, Int8)
+      values.each { |value| raise CorruptPartError.new("Enum8 code is not declared") unless codes.includes?(value) }
+      values
+    end
+
+    def read_nullable_enum8_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int8?)
+      ensure_column(column)
+      codes = WidePart.enum8_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum8 accessor requires an exact Nullable(Enum8) declaration") unless codes && @column_type.starts_with?("Nullable(")
+
+      values = read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 1, Int8)
+      values.each { |value| raise CorruptPartError.new("Enum8 code is not declared") if value && !codes.includes?(value) }
+      values
+    end
+
+    def read_enum16_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int16)
+      ensure_column(column)
+      codes = WidePart.enum16_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum16 accessor requires an exact Enum16 declaration") unless codes && !@column_type.starts_with?("Nullable(")
+
+      values = read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 2, Int16)
+      values.each { |value| raise CorruptPartError.new("Enum16 code is not declared") unless codes.includes?(value) }
+      values
+    end
+
+    def read_nullable_enum16_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int16?)
+      ensure_column(column)
+      codes = WidePart.enum16_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum16 accessor requires an exact Nullable(Enum16) declaration") unless codes && @column_type.starts_with?("Nullable(")
+
+      values = read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 2, Int16)
+      values.each { |value| raise CorruptPartError.new("Enum16 code is not declared") if value && !codes.includes?(value) }
+      values
+    end
+
+    # Decimal rows are not converted to Float or divided by the scale. These
+    # readers preserve the signed little-endian scaled integer bit-for-bit.
+    def read_decimal32_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Decimal(9, S)") unless WidePart.decimal32_scale(@column_type)
+      read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
+    end
+
+    def read_nullable_decimal32_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Nullable(Decimal(9, S))") unless WidePart.nullable_decimal32_scale(@column_type)
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
+    end
+
+    def read_decimal64_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Decimal(18, S)") unless WidePart.decimal64_scale(@column_type)
+      read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+    end
+
+    def read_nullable_decimal64_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Nullable(Decimal(18, S))") unless WidePart.nullable_decimal64_scale(@column_type)
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+    end
+
+    private def read_semantic_fixed_width_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_width : Int32,
+      type : T.class,
+    ) : Array(T) forall T
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, element_width)
       values = Array(T).new
       each_mark_range_bytes(start_mark, end_mark, expected_bytes, element_width) do |bytes|
         offset = 0
@@ -732,7 +1017,7 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_w15_semantic_type?(column_type) || WidePart.supports_nullable_w15_semantic_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -904,6 +1189,8 @@ module CrystalClick
         ["#{column}.null", column]
       elsif WidePart.supports_nullable_temporal_type?(type)
         ["#{column}.null", column]
+      elsif WidePart.supports_nullable_w15_semantic_type?(type)
+        ["#{column}.null", column]
       else
         [column]
       end
@@ -957,6 +1244,12 @@ module CrystalClick
         raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
+      elsif WidePart.supports_w15_semantic_type?(type) || WidePart.supports_nullable_w15_semantic_type?(type)
+        string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("W15 semantic serialization version is required"))
+        raise UnsupportedFormatError.new("only W15 semantic serialization version 1 is supported") unless string_version == 1
+        columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("W15 semantic column serializers are required"))
+        raise UnsupportedFormatError.new("W15 per-column serialization is unsupported") unless columns.empty?
+        raise UnsupportedFormatError.new("W15 missing-column serialization is unsupported") if info.has_key?("missing_columns")
       end
       nil
     rescue ex : JSON::ParseException | TypeCastError
@@ -1337,6 +1630,8 @@ module CrystalClick
         stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
       elsif WidePart.supports_nullable_temporal_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : nullable_temporal_width(@column_type)
+      elsif WidePart.supports_nullable_w15_semantic_type?(@column_type)
+        stream_name == "#{@column}.null" ? 1 : semantic_type_width(nullable_w15_inner_type(@column_type))
       elsif @column_type == "Date"
         2
       elsif @column_type == "Date32"
@@ -1345,9 +1640,30 @@ module CrystalClick
         4
       elsif WidePart.datetime64_scale(@column_type)
         8
+      elsif WidePart.supports_w15_semantic_type?(@column_type)
+        semantic_type_width(@column_type)
       else
         numeric_type_width(@column_type)
       end
+    end
+
+    private def semantic_type_width(type : String) : Int32
+      if type == "Bool" || !WidePart.enum8_codes(type).nil?
+        1
+      elsif !WidePart.enum16_codes(type).nil?
+        2
+      elsif WidePart.decimal32_scale(type)
+        4
+      elsif WidePart.decimal64_scale(type)
+        8
+      else
+        raise UnsupportedFormatError.new("unsupported exact W15 semantic type")
+      end
+    end
+
+    private def nullable_w15_inner_type(type : String) : String
+      raise UnsupportedFormatError.new("exact Nullable W15 semantic type required") unless WidePart.supports_nullable_w15_semantic_type?(type)
+      type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
     end
 
     private def nullable_inner_type(type : String) : String

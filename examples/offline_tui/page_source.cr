@@ -60,10 +60,9 @@ module CrystalClick
           column = table_columns.find { |entry| entry.name == name } ||
                    raise(UnsupportedFormatError.new("selected column is not declared by table DDL"))
           raise UnsupportedFormatError.new("ALIAS columns cannot be materialized") if column.alias_column
-          unless WidePart.supports_typed_type?(column.type)
-            raise UnsupportedFormatError.new("selected table column type is unsupported")
-          end
-          column_types << column.type.dup
+          column_type = WidePart.catalog_type(column.type) ||
+                        raise(UnsupportedFormatError.new("selected table column type is unsupported"))
+          column_types << column_type.dup
         end
 
         @table = table
@@ -187,6 +186,8 @@ module CrystalClick
 
       private def typed_column_size(batch : WidePartTableBatch, column : String, type : String) : Int32
         case type
+        when "Bool"
+          batch.bools_for(column).size
         when "UInt8"
           batch.values_for(column, UInt8).size
         when "UInt16"
@@ -213,6 +214,8 @@ module CrystalClick
           batch.values_for(column, Float32).size
         when "Float64"
           batch.values_for(column, Float64).size
+        when "Nullable(Bool)"
+          batch.nullable_bools_for(column).size
         when "String"
           batch.strings_for(column).size
         when "Nullable(UInt8)"
@@ -248,6 +251,30 @@ module CrystalClick
             batch.datetime64_ticks_for(column).size
           elsif WidePart.nullable_datetime64_scale(type)
             batch.nullable_datetime64_ticks_for(column).size
+          elsif WidePart.fixed_string_width(type)
+            batch.fixed_strings_for(column).size
+          elsif WidePart.nullable_fixed_string_width(type)
+            batch.nullable_fixed_strings_for(column).size
+          elsif WidePart.enum8_codes(type)
+            if type.starts_with?("Nullable(")
+              batch.nullable_enum8_codes_for(column).size
+            else
+              batch.enum8_codes_for(column).size
+            end
+          elsif WidePart.enum16_codes(type)
+            if type.starts_with?("Nullable(")
+              batch.nullable_enum16_codes_for(column).size
+            else
+              batch.enum16_codes_for(column).size
+            end
+          elsif WidePart.decimal32_scale(type)
+            batch.decimal32_raw_for(column).size
+          elsif WidePart.nullable_decimal32_scale(type)
+            batch.nullable_decimal32_raw_for(column).size
+          elsif WidePart.decimal64_scale(type)
+            batch.decimal64_raw_for(column).size
+          elsif WidePart.nullable_decimal64_scale(type)
+            batch.nullable_decimal64_raw_for(column).size
           else
             raise UnsupportedFormatError.new("selected table column type is unsupported")
           end
@@ -264,6 +291,8 @@ module CrystalClick
 
       private def format_cell(batch : WidePartTableBatch, column : String, type : String, row_index : Int) : String
         case type
+        when "Bool"
+          display_bool(batch.bools_for(column)[row_index])
         when "UInt8"
           batch.values_for(column, UInt8)[row_index].to_s
         when "UInt16"
@@ -290,6 +319,8 @@ module CrystalClick
           batch.values_for(column, Float32)[row_index].to_s
         when "Float64"
           batch.values_for(column, Float64)[row_index].to_s
+        when "Nullable(Bool)"
+          display_nullable_bool(batch.nullable_bools_for(column)[row_index])
         when "String"
           display_string(batch.strings_for(column)[row_index])
         when "Nullable(UInt8)"
@@ -327,6 +358,35 @@ module CrystalClick
           elsif scale = WidePart.nullable_datetime64_scale(type)
             value = batch.nullable_datetime64_ticks_for(column)[row_index]
             value ? "#{value} [p=#{scale}]" : "NULL"
+          elsif WidePart.fixed_string_width(type)
+            display_string(batch.fixed_strings_for(column)[row_index])
+          elsif WidePart.nullable_fixed_string_width(type)
+            value = batch.nullable_fixed_strings_for(column)[row_index]
+            value ? display_string(value) : "NULL"
+          elsif WidePart.enum8_codes(type)
+            if type.starts_with?("Nullable(")
+              value = batch.nullable_enum8_codes_for(column)[row_index]
+              value ? value.to_s : "NULL"
+            else
+              batch.enum8_codes_for(column)[row_index].to_s
+            end
+          elsif WidePart.enum16_codes(type)
+            if type.starts_with?("Nullable(")
+              value = batch.nullable_enum16_codes_for(column)[row_index]
+              value ? value.to_s : "NULL"
+            else
+              batch.enum16_codes_for(column)[row_index].to_s
+            end
+          elsif scale = WidePart.decimal32_scale(type)
+            "#{batch.decimal32_raw_for(column)[row_index]} [s=#{scale}]"
+          elsif scale = WidePart.nullable_decimal32_scale(type)
+            value = batch.nullable_decimal32_raw_for(column)[row_index]
+            value ? "#{value} [s=#{scale}]" : "NULL"
+          elsif scale = WidePart.decimal64_scale(type)
+            "#{batch.decimal64_raw_for(column)[row_index]} [s=#{scale}]"
+          elsif scale = WidePart.nullable_decimal64_scale(type)
+            value = batch.nullable_decimal64_raw_for(column)[row_index]
+            value ? "#{value} [s=#{scale}]" : "NULL"
           else
             raise UnsupportedFormatError.new("selected table column type is unsupported")
           end
@@ -336,6 +396,14 @@ module CrystalClick
       private def nullable_numeric_cell(batch : WidePartTableBatch, column : String, type : T.class, row_index : Int) : String forall T
         value = batch.nullable_values_for(column, type)[row_index]
         value ? value.to_s : "NULL"
+      end
+
+      private def display_bool(value : Bool) : String
+        value ? "true" : "false"
+      end
+
+      private def display_nullable_bool(value : Bool?) : String
+        value.nil? ? "NULL" : display_bool(value)
       end
 
       private def display_string(value : String) : String

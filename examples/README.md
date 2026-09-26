@@ -143,8 +143,12 @@ epoch-day codes, not formatted calendar dates. `DateTime` and
 `Nullable(DateTime64(p))` display raw ticks with an explicit `[p=N]`
 precision label on non-NULL cells, because the column header shows only the
 name. Nullable cells display `NULL` separately from raw zero. The viewer
-performs no timezone or calendar conversion; none of these date/time types
-is an equality-filter type.
+also displays `Bool` as `true`/`false`, `Enum8/16` as signed backing codes,
+and `Decimal32/64` as signed raw scaled integers with an `[s=N]` scale label;
+their BASIC Nullable forms keep `NULL` distinct from zero. It does not resolve
+Enum labels or convert Decimal values to text with a decimal point. The viewer
+performs no timezone or calendar conversion; none of these semantic types is
+an equality-filter type.
 Non-NULL Strings are quoted and escaped; only their first 256 source bytes are
 retained for display. Longer values carry a `[truncated]` prefix. Equality
 uses raw typed values, not truncated display text. Each filtered page examines

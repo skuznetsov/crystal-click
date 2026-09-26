@@ -261,6 +261,115 @@ module CrystalClick
       {% end %}
     end
 
+    # Write Bool as its exact semantic type rather than a UInt8 alias.
+    def self.write_uint64_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Bool),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Bool", rows_per_mark)
+    end
+
+    # BASIC Nullable(Bool) keeps NULL separate from false.
+    def self.write_uint64_nullable_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Bool?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Bool)", rows_per_mark)
+    end
+
+    # Decimal32/64 retain signed scaled integers. ClickHouse normalizes their
+    # part declarations to Decimal(9, S) / Decimal(18, S).
+    def self.write_uint64_decimal32_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int32), scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Decimal32 scale must be between 0 and 9") unless (0..9).includes?(scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Decimal(9, #{scale})", rows_per_mark)
+    end
+
+    def self.write_uint64_decimal64_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int64), scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Decimal64 scale must be between 0 and 18") unless (0..18).includes?(scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Decimal(18, #{scale})", rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_decimal32_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int32?), scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Decimal32 scale must be between 0 and 9") unless (0..9).includes?(scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(9, #{scale}))", rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_decimal64_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int64?), scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Decimal64 scale must be between 0 and 18") unless (0..18).includes?(scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(18, #{scale}))", rows_per_mark)
+    end
+
+    # Enum payloads retain a validated exact label/code declaration. Only
+    # declared signed codes may be written; generic Int8/Int16 writes remain
+    # ordinary numeric columns.
+    def self.write_uint64_enum8_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int8), enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact Enum8 declaration required") unless enum_type.starts_with?("Enum8(")
+      codes = WidePart.enum8_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum8 declaration"))
+      values.each { |value| raise ArgumentError.new("Enum8 code is not declared") unless codes.includes?(value) }
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, enum_type, rows_per_mark)
+    end
+
+    def self.write_uint64_enum16_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int16), enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact Enum16 declaration required") unless enum_type.starts_with?("Enum16(")
+      codes = WidePart.enum16_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum16 declaration"))
+      values.each { |value| raise ArgumentError.new("Enum16 code is not declared") unless codes.includes?(value) }
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, enum_type, rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_enum8_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int8?), enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact Enum8 declaration required") unless enum_type.starts_with?("Enum8(")
+      codes = WidePart.enum8_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum8 declaration"))
+      values.each { |value| raise ArgumentError.new("Enum8 code is not declared") if !value.nil? && !codes.includes?(value.not_nil!) }
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(#{enum_type})", rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_enum16_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int16?), enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact Enum16 declaration required") unless enum_type.starts_with?("Enum16(")
+      codes = WidePart.enum16_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum16 declaration"))
+      values.each { |value| raise ArgumentError.new("Enum16 code is not declared") if !value.nil? && !codes.includes?(value.not_nil!) }
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(#{enum_type})", rows_per_mark)
+    end
+
     # Write a Date payload as raw UInt16 day codes since 1970-01-01. Codes are
     # preserved as supplied; no civil-date conversion or range clamping occurs.
     def self.write_uint64_date_pair(
@@ -392,7 +501,9 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name)) if type_name.starts_with?("Nullable(")
+        if type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
+          records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name))
+        end
         write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
@@ -758,7 +869,9 @@ module CrystalClick
     end
 
     private def self.typed_type_name(values : Slice(T)) : String forall T
-      {% if T == UInt8 %}
+      {% if T == Bool %}
+        "Bool"
+      {% elsif T == UInt8 %}
         "UInt8"
       {% elsif T == UInt16 %}
         "UInt16"
@@ -778,6 +891,8 @@ module CrystalClick
         "Float32"
       {% elsif T == Float64 %}
         "Float64"
+      {% elsif T == Bool? %}
+        "Nullable(Bool)"
       {% elsif T == UInt8? %}
         "Nullable(UInt8)"
       {% elsif T == UInt16? %}
@@ -816,9 +931,9 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+      {% if T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
-      {% elsif T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+      {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_nullable_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
@@ -834,9 +949,9 @@ module CrystalClick
       rows_per_mark : Int32,
       type_name : String,
     ) : Array(ChecksumRecord) forall T
-      {% if T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+      {% if T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
-      {% elsif T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+      {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         write_nullable_string_streams(stage, column, values, rows_per_mark)
@@ -847,7 +962,7 @@ module CrystalClick
 
     private def self.numeric_width(type_name : String) : Int32
       case type_name
-      when "UInt8", "Int8"
+      when "UInt8", "Int8", "Bool"
         1
       when "UInt16", "Int16", "Date"
         2
@@ -858,6 +973,10 @@ module CrystalClick
       when "DateTime"
         4
       else
+        return 1 if WidePart.enum8_codes(type_name)
+        return 2 if WidePart.enum16_codes(type_name)
+        return 4 if WidePart.decimal32_scale(type_name)
+        return 8 if WidePart.decimal64_scale(type_name)
         raise UnsupportedFormatError.new("typed writer requires an exact fixed-width primitive numeric payload")
       end
     end
@@ -1210,7 +1329,9 @@ module CrystalClick
     end
 
     private def self.write_typed_numeric_le(bytes : Bytes, offset : Int, value : T) : Nil forall T
-      {% if T == UInt8 %}
+      {% if T == Bool %}
+        bytes[offset] = value ? 1_u8 : 0_u8
+      {% elsif T == UInt8 %}
         bytes[offset] = value
       {% elsif T == UInt16 %}
         2.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u16).to_u8 }
@@ -2036,7 +2157,7 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+      {% if T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
@@ -2103,7 +2224,9 @@ module CrystalClick
       values : Slice(T),
       type_name : String,
     ) : Array(T) forall T
-      {% if T == UInt8 %}
+      {% if T == Bool %}
+        part.read_bool_mark_range(column, mark_index, 1)
+      {% elsif T == UInt8 %}
         part.read_numeric_mark_range(column, mark_index, 1, UInt8)
       {% elsif T == UInt16 %}
         if type_name == "Date"
@@ -2124,12 +2247,26 @@ module CrystalClick
       {% elsif T == UInt64 %}
         part.read_numeric_mark_range(column, mark_index, 1, UInt64)
       {% elsif T == Int8 %}
-        part.read_numeric_mark_range(column, mark_index, 1, Int8)
+        if WidePart.enum8_codes(type_name)
+          part.read_enum8_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "Int8"
+          part.read_numeric_mark_range(column, mark_index, 1, Int8)
+        else
+          raise UnsupportedFormatError.new("typed writer requires an exact Int8 or Enum8 payload")
+        end
       {% elsif T == Int16 %}
-        part.read_numeric_mark_range(column, mark_index, 1, Int16)
+        if WidePart.enum16_codes(type_name)
+          part.read_enum16_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "Int16"
+          part.read_numeric_mark_range(column, mark_index, 1, Int16)
+        else
+          raise UnsupportedFormatError.new("typed writer requires an exact Int16 or Enum16 payload")
+        end
       {% elsif T == Int32 %}
         if type_name == "Date32"
           part.read_date32_codes_mark_range(column, mark_index, 1)
+        elsif WidePart.decimal32_scale(type_name)
+          part.read_decimal32_raw_mark_range(column, mark_index, 1)
         elsif type_name == "Int32"
           part.read_numeric_mark_range(column, mark_index, 1, Int32)
         else
@@ -2138,6 +2275,8 @@ module CrystalClick
       {% elsif T == Int64 %}
         if type_name.starts_with?("DateTime64(")
           part.read_datetime64_ticks_mark_range(column, mark_index, 1)
+        elsif WidePart.decimal64_scale(type_name)
+          part.read_decimal64_raw_mark_range(column, mark_index, 1)
         elsif type_name == "Int64"
           part.read_numeric_mark_range(column, mark_index, 1, Int64)
         else
@@ -2157,7 +2296,7 @@ module CrystalClick
         expected.unsafe_as(UInt32) == actual.unsafe_as(UInt32)
       {% elsif T == Float64 %}
         expected.unsafe_as(UInt64) == actual.unsafe_as(UInt64)
-      {% elsif T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 %}
+      {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 %}
         expected == actual
       {% else %}
         false
@@ -2271,7 +2410,9 @@ module CrystalClick
       values : Slice(T),
       type_name : String,
     ) : Array(T) forall T
-      {% if T == UInt8? %}
+      {% if T == Bool? %}
+        part.read_nullable_bool_mark_range(column, mark_index, 1)
+      {% elsif T == UInt8? %}
         part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt8)
       {% elsif T == UInt16? %}
         if type_name == "Nullable(Date)"
@@ -2292,12 +2433,26 @@ module CrystalClick
       {% elsif T == UInt64? %}
         part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt64)
       {% elsif T == Int8? %}
-        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int8)
+        if WidePart.enum8_codes(type_name)
+          part.read_nullable_enum8_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "Nullable(Int8)"
+          part.read_nullable_numeric_mark_range(column, mark_index, 1, Int8)
+        else
+          raise UnsupportedFormatError.new("typed Nullable Int8 writer requires exact Enum8 or numeric metadata")
+        end
       {% elsif T == Int16? %}
-        part.read_nullable_numeric_mark_range(column, mark_index, 1, Int16)
+        if WidePart.enum16_codes(type_name)
+          part.read_nullable_enum16_codes_mark_range(column, mark_index, 1)
+        elsif type_name == "Nullable(Int16)"
+          part.read_nullable_numeric_mark_range(column, mark_index, 1, Int16)
+        else
+          raise UnsupportedFormatError.new("typed Nullable Int16 writer requires exact Enum16 or numeric metadata")
+        end
       {% elsif T == Int32? %}
         if type_name == "Nullable(Date32)"
           part.read_nullable_date32_codes_mark_range(column, mark_index, 1)
+        elsif WidePart.nullable_decimal32_scale(type_name)
+          part.read_nullable_decimal32_raw_mark_range(column, mark_index, 1)
         elsif type_name == "Nullable(Int32)"
           part.read_nullable_numeric_mark_range(column, mark_index, 1, Int32)
         else
@@ -2306,6 +2461,8 @@ module CrystalClick
       {% elsif T == Int64? %}
         if WidePart.nullable_datetime64_scale(type_name)
           part.read_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
+        elsif WidePart.nullable_decimal64_scale(type_name)
+          part.read_nullable_decimal64_raw_mark_range(column, mark_index, 1)
         elsif type_name == "Nullable(Int64)"
           part.read_nullable_numeric_mark_range(column, mark_index, 1, Int64)
         else
@@ -2396,16 +2553,20 @@ module CrystalClick
                    "\"string\":1"
                  elsif type_name == "Nullable(String)"
                    "\"nullable\":0,\"string\":1"
-                 elsif type_name.starts_with?("Nullable(")
+                 elsif type_name.starts_with?("Nullable(") || w15_semantic_type?(type_name)
                    # BASIC Nullable primitive and temporal payloads share
-                   # this serializer-version metadata. Temporal identity is
-                   # carried by the exact column type, with no extra version
-                   # entry for the nested Date/Date32/DateTime/DateTime64 representation.
+                   # this global serializer-version metadata. The semantic
+                   # identity is carried by the exact column type.
                    "\"string\":1"
                  else
                    ""
                  end
       "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{#{versions}},\"version\":1}"
+    end
+
+    private def self.w15_semantic_type?(type_name : String) : Bool
+      type_name == "Bool" || !WidePart.enum8_codes(type_name).nil? || !WidePart.enum16_codes(type_name).nil? ||
+        !WidePart.decimal32_scale(type_name).nil? || !WidePart.decimal64_scale(type_name).nil?
     end
 
     private def self.nullable_fixed_string_serialization_metadata : String

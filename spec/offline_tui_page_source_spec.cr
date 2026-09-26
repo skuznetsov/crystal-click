@@ -355,6 +355,35 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "formats FixedString values and distinguishes Nullable(FixedString) NULLs" do
+    keys = [1_u64, 2_u64, 3_u64]
+    fixed_values = ["a", "xy", ""]
+    fixed_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_fixed_string_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "payload", fixed_values.to_unsafe.to_slice(fixed_values.size), 3, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `payload` FixedString(3)", nil, fixed_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 3).load(0_u64)
+      page.rows.map(&.[0]).should eq(["\"a\\u0000\\u0000\"", "\"xy\\u0000\"", "\"\\u0000\\u0000\\u0000\""])
+    end
+
+    nullable_values = [nil, "b", "xy"]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_fixed_string_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "payload", nullable_values.to_unsafe.to_slice(nullable_values.size), 3, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `payload` Nullable(FixedString(3))", nil, nullable_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 3).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "\"b\\u0000\\u0000\"", "\"xy\\u0000\""])
+    end
+  end
+
   it "rejects unsupported selected types and page sizes above the example bound" do
     columns = "    `payload` Array(String)"
     with_offline_page_table(columns, nil) do |table, _table_path|
@@ -384,6 +413,214 @@ describe CrystalClick::Examples::OfflinePageSource do
     with_offline_page_table(nullable_columns, OFFLINE_PAGE_NULLABLE_STRING_FIXTURE) do |table, _table_path|
       page = CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 6).load(0_u64)
       page.rows.map(&.[0]).should eq(["\"P\"", "NULL", "\"Q\"", "\"\"", "\"a\\u0000b\"", "\"z\""])
+    end
+  end
+
+  it "formats Bool semantically and keeps Nullable(Bool) NULL distinct from false" do
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+    values = [false, true, false, true, true]
+    bool_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_bool_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "flag", values.to_unsafe.to_slice(values.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `flag` Bool", nil, bool_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["flag"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["false", "true", "false", "true", "true"])
+      table["flag"].values.should eq(values)
+    end
+
+    nullable_values = [nil, false.as(Bool?), true.as(Bool?), nil, false.as(Bool?)]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_bool_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "flag", nullable_values.to_unsafe.to_slice(nullable_values.size), 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `flag` Nullable(Bool)", nil, nullable_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["flag"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "false", "true", "NULL", "false"])
+      table["flag"].values.should eq(nullable_values)
+    end
+  end
+
+  it "formats Enum8 signed codes and Nullable(Enum8) NULLs without decoding labels" do
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+    enum_type = "Enum8('neg' = -7, 'zero' = 0, 'pos' = 7)"
+    values = [-7_i8, 0_i8, 7_i8, -7_i8, 7_i8]
+    setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_enum8_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "state", values.to_unsafe.to_slice(values.size), enum_type, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `state` #{enum_type}", nil, setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["state"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["-7", "0", "7", "-7", "7"])
+      table["state"].values.should eq(values)
+    end
+
+    nullable_values = [nil, -7_i8.as(Int8?), 7_i8.as(Int8?), nil, -7_i8.as(Int8?)]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_enum8_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "state", nullable_values.to_unsafe.to_slice(nullable_values.size), enum_type, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `state` Nullable(#{enum_type})", nil, nullable_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["state"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "-7", "7", "NULL", "-7"])
+      table["state"].values.should eq(nullable_values)
+    end
+  end
+
+  it "formats Enum16 signed codes and Nullable(Enum16) NULLs without decoding labels" do
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+    enum_type = "Enum16('neg' = -257, 'zero' = 0, 'pos' = 257)"
+    values = [-257_i16, 0_i16, 257_i16, -257_i16, 257_i16]
+    setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_enum16_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "state", values.to_unsafe.to_slice(values.size), enum_type, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `state` #{enum_type}", nil, setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["state"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["-257", "0", "257", "-257", "257"])
+    end
+
+    nullable_values = [nil, -257_i16.as(Int16?), 257_i16.as(Int16?), nil, -257_i16.as(Int16?)]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_enum16_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "state", nullable_values.to_unsafe.to_slice(nullable_values.size), enum_type, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `state` Nullable(#{enum_type})", nil, nullable_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["state"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "-257", "257", "NULL", "-257"])
+    end
+  end
+
+  it "formats Decimal(9, S) as raw scaled codes and preserves Nullable NULLs" do
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+    values = [-12_345_i32, -1_i32, 0_i32, 1_i32, 12_345_i32]
+    setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_decimal32_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", values.to_unsafe.to_slice(values.size), 2, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Decimal(9, 2)", nil, setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["-12345 [s=2]", "-1 [s=2]", "0 [s=2]", "1 [s=2]", "12345 [s=2]"])
+    end
+
+    nullable_values = [nil, -123_i32.as(Int32?), 0_i32.as(Int32?), nil, 456_i32.as(Int32?)]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_decimal32_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", nullable_values.to_unsafe.to_slice(nullable_values.size), 2, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Nullable(Decimal(9, 2))", nil, nullable_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "-123 [s=2]", "0 [s=2]", "NULL", "456 [s=2]"])
+    end
+  end
+
+  it "formats Decimal(18, S) as raw scaled codes and preserves Nullable NULLs" do
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+    values = [-123_456_789_i64, -1_i64, 0_i64, 1_i64, 123_456_789_i64]
+    setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_decimal64_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", values.to_unsafe.to_slice(values.size), 4, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Decimal(18, 4)", nil, setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["-123456789 [s=4]", "-1 [s=4]", "0 [s=4]", "1 [s=4]", "123456789 [s=4]"])
+    end
+
+    nullable_values = [nil, -12_345_i64.as(Int64?), 0_i64.as(Int64?), nil, 67_890_i64.as(Int64?)]
+    nullable_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_decimal64_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", nullable_values.to_unsafe.to_slice(nullable_values.size), 4, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Nullable(Decimal(18, 4))", nil, nullable_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 5).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "-12345 [s=4]", "0 [s=4]", "NULL", "67890 [s=4]"])
+    end
+  end
+
+  it "normalizes Decimal32 and Decimal64 aliases before formatting typed pages" do
+    keys = [1_u64, 2_u64, 3_u64]
+
+    decimal32_values = [-12_345_i32, 0_i32, 12_345_i32]
+    decimal32_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_decimal32_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", decimal32_values.to_unsafe.to_slice(decimal32_values.size), 2, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Decimal32(2)", nil, decimal32_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 3).load(0_u64)
+      page.rows.map(&.[0]).should eq(["-12345 [s=2]", "0 [s=2]", "12345 [s=2]"])
+      table["amount"].values.should eq(decimal32_values)
+    end
+
+    nullable_decimal32_values = [nil, 0_i32.as(Int32?), 12_345_i32.as(Int32?)]
+    nullable_decimal32_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_decimal32_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", nullable_decimal32_values.to_unsafe.to_slice(nullable_decimal32_values.size), 2, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Nullable(Decimal32(2))", nil, nullable_decimal32_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 3).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "0 [s=2]", "12345 [s=2]"])
+    end
+
+    decimal64_values = [-123_456_i64, 0_i64, 123_456_i64]
+    decimal64_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_decimal64_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", decimal64_values.to_unsafe.to_slice(decimal64_values.size), 4, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Decimal64(4)", nil, decimal64_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 3).load(0_u64)
+      page.rows.map(&.[0]).should eq(["-123456 [s=4]", "0 [s=4]", "123456 [s=4]"])
+    end
+
+    nullable_decimal64_values = [nil, 0_i64.as(Int64?), 123_456_i64.as(Int64?)]
+    nullable_decimal64_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_nullable_decimal64_pair(
+        File.join(table_path, "all_1_1_0"), "seq", keys.to_unsafe.to_slice(keys.size),
+        "amount", nullable_decimal64_values.to_unsafe.to_slice(nullable_decimal64_values.size), 4, 2
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `amount` Nullable(Decimal64(4))", nil, nullable_decimal64_setup) do |table, _table_path|
+      page = CrystalClick::Examples::OfflinePageSource.new(table, ["amount"], 3).load(0_u64)
+      page.rows.map(&.[0]).should eq(["NULL", "0 [s=4]", "123456 [s=4]"])
     end
   end
 

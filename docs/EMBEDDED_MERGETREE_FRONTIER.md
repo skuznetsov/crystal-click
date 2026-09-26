@@ -18,7 +18,10 @@ the differential oracle directly exercises precisions 0, 3, and 9.
 W14 admits BASIC Nullable wrappers for these four raw date/time families on
 the pinned Wide/LZ4/plain-adaptive-mark frontier. The differential oracle
 directly tests DateTime64 precisions 0, 3, and 9; the exact parser and writer
-accept canonical precisions 0 through 9.
+accept canonical precisions 0 through 9. W15 admits paired reader/writer
+support for bounded Bool, Enum8/16, and Decimal32/64 payloads and their BASIC
+Nullable forms on the same pinned frontier. This is not full ClickHouse type
+parity: JSON typed-path reading remains an intentionally unmatched surface.
 
 ## Purpose and bounded contexts
 
@@ -749,6 +752,83 @@ SQL calendar conversion, Compact parts, compressed marks, other ClickHouse
 builds, daemon restart, or power-loss durability. Refresh after changes to
 Nullable/date-time dispatch, part framing, or the pinned ClickHouse build.
 
+## Completed slice W15: paired fixed-width semantic payloads
+
+W15 targets a UInt64 primary key and one payload in the existing Wide/LZ4,
+plain adaptive-mark part format. The paired reader/writer surface is exact
+`Bool`, bounded canonical `Enum8/16` declarations, and stock-normalized
+`Decimal(9, S)` / `Decimal(18, S)` (the metadata emitted for `Decimal32(S)` /
+`Decimal64(S)`), plus one BASIC `Nullable(...)` wrapper for
+each. No type becomes reader-admitted until its writer can produce a part
+accepted by pinned ClickHouse 26.7.1.1315, and vice versa. `Bool` is exposed
+as Crystal Bool, enums as signed raw codes with the exact label/code mapping
+retained in metadata, and decimals as signed raw scaled integers with the
+explicit scale retained in metadata. Inferred signed-integer slices remain
+signed-integer columns; semantic types require named entry points. No text
+conversion, arithmetic, enum-label lookup, or decimal rounding is admitted.
+
+The strongest likely failure is an apparently valid primitive-width stream
+whose semantic metadata, enum code, Bool byte, or Nullable placeholder is
+wrong. Require exact type grammars and reject malformed, duplicate, or
+unsupported enum definitions; reject Bool bytes outside 0/1 and undeclared
+enum codes in non-NULL rows. A Nullable NULL slot is represented by a null
+flag and fixed-width zero placeholder, not by conflating NULL with a valid
+zero value. No existing directory may be replaced on failed validation or
+publication. Reader and writer accessors must not alias the corresponding
+primitive numeric metadata. The pinned stock probe must establish exact
+`columns.txt`, substream ordering, `serialization.json`, marks, and raw bytes
+before implementation of each shape. The pinned 26.7.1.1315 probe observed
+the normalized decimal spellings above, exact Bool and Enum8/16 spellings,
+one fixed-width raw stream per bare column, `<name>.null` then `<name>` for
+Nullable, and `serialization.json` version 1 with only global `string:1`.
+RowBinary uses the corresponding little-endian fixed width and omits the
+nested value on NULL. Stock RowBinary ingestion and `CHECK TABLE` accept
+non-0/1 Bool bytes and undeclared Enum codes; W15 deliberately rejects those
+on its bounded semantic reader/writer surface. Therefore stock `CHECK TABLE`
+alone is not a semantic-value oracle. The pinned stock probe also accepted
+the full signed Int32/Int64 backing ranges for Decimal32/64, despite their
+nominal decimal precisions; W15 preserves those raw widths without rounding.
+Stock Enum metadata escaped embedded quote and backslash labels; those two
+escape forms are admitted, with the pinned canonical comma/equality spacing.
+Raw control characters and alternate spacing in a declaration remain outside
+the admitted grammar. W15 also requires the observed empty per-column
+serialization list and no `missing_columns` override.
+
+W15 falsifier: stock-generated multi-mark parts with a short tail, Boolean
+false/true, signed enum codes, decimal negative/zero/positive raw values,
+and NULL distinct from zero must read exactly through Crystal. In reverse,
+stock ClickHouse must attach Crystal-generated parts, return the expected
+RowBinary for full and key-range scans, and pass `CHECK TABLE`. Negative
+tests must reject unsupported semantic metadata and invalid values before
+publication; same-size stream corruption must fail the applicable checksum
+or stock `CHECK TABLE` guard. Full debug/release Crystal suites and W9-W14
+oracles are regression controls. The TUI may display raw semantic values but
+does not gain new equality predicates in W15.
+
+Rejected for W15: inferred enum or decimal metadata, SQL-level conversion,
+noncanonical enum label grammars beyond the pinned quote/backslash escapes, sparse or
+alternative serialization, arbitrary table schemas, Compact parts, and full
+JSON values. `Decimal128/256`, UUID/IP, timezone-qualified date/time,
+LowCardinality, Array/Map/Tuple, Variant/Dynamic, and nested composites stay
+guard-only. Risk is CAUTION: a metadata/value mismatch can silently corrupt
+persistent data. Rollback is the W15-only local feature commit; no push or
+existing ClickHouse data-root mutation is authorized.
+
+Observed W15 gate: the full debug and release Crystal suites each passed 425
+examples. The pinned ClickHouse 26.7.1.1315 differential oracle passed 19
+stock-to-Crystal and Crystal-to-stock fixtures: bare and BASIC Nullable Bool,
+Enum8/16, Decimal32 at scales 0/2/9, Decimal64 at scales 0/4/18, plus a bare
+Enum8 declaration with escaped quote and backslash labels. Every fixture
+checked physical streams/marks, metadata, full and key-range RowBinary,
+`ATTACH PART`, and `CHECK TABLE`; representative bare and nullable payloads
+also rejected same-size stream corruption. Reader negatives cover invalid
+Bool bytes, undeclared Enum codes, malformed/noncanonical declarations,
+per-column serialization overrides, and NULL placeholders. W9-W14 pinned
+oracles, the headless TUI harness, and the linked TUI build passed. This
+evidence decays after a reader/writer/serialization change, a pinned
+ClickHouse build change, or a format/platform change; refresh the paired
+oracles and full suites before widening the claim.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -758,8 +838,9 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W13's raw time codes, W12's raw
-   dates, W11's BASIC
+1. Extend reader and writer together beyond W15's bounded semantic scalars,
+   W14's BASIC nullable temporal codes, W13's raw time codes, W12's raw dates,
+   W11's BASIC
    `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, W9's exact 22
    payload shapes, one stock-ClickHouse differential fixture per type and
    substream shape.

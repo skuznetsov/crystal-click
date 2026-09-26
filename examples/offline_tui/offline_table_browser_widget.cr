@@ -210,7 +210,7 @@ module CrystalClick
           @candidate_count = table.part_candidates.size
           selected = [] of OfflineColumn
           table.columns.each do |column|
-            if !column.alias_column && WidePart.supports_typed_type?(column.type) && selected.size < WidePartTable::MAX_COLUMNS
+            if !column.alias_column && !WidePart.catalog_type(column.type).nil? && selected.size < WidePartTable::MAX_COLUMNS
               selected << column
               if column.type == "String" || column.type == "UInt64"
                 @filterable_columns[column.name] = column.type

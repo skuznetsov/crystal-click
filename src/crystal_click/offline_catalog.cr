@@ -1,7 +1,7 @@
 module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 |
-                             Float32 | Float64 | String | Nil
+                             Float32 | Float64 | Bool | String | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -131,6 +131,38 @@ module CrystalClick
       expected_rows : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if selected_type == "Bool"
+        observed_rows = append_materialized_values(values, batch.bools_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif !WidePart.enum8_codes(selected_type).nil? && !selected_type.starts_with?("Nullable(")
+        observed_rows = append_materialized_values(values, batch.enum8_codes_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif !WidePart.enum16_codes(selected_type).nil? && !selected_type.starts_with?("Nullable(")
+        observed_rows = append_materialized_values(values, batch.enum16_codes_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif !WidePart.decimal32_scale(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.decimal32_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif !WidePart.decimal64_scale(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.decimal64_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type == "Nullable(Bool)"
+        observed_rows = append_materialized_values(values, batch.nullable_bools_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type.starts_with?("Nullable(") && !WidePart.enum8_codes(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.nullable_enum8_codes_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type.starts_with?("Nullable(") && !WidePart.enum16_codes(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.nullable_enum16_codes_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif !WidePart.nullable_decimal32_scale(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.nullable_decimal32_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif !WidePart.nullable_decimal64_scale(selected_type).nil?
+        observed_rows = append_materialized_values(values, batch.nullable_decimal64_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      end
+
       case selected_type
       when "Date"
         observed_rows = append_date_codes_values(values, batch, column_name, observed_rows, expected_rows)
@@ -467,7 +499,7 @@ module CrystalClick
           unless part_source_name == ddl_source[0] && part_source_type == ddl_source[1]
             raise UnsupportedFormatError.new("table DDL and selected JSON schema differ")
           end
-        elsif part_source_name != ddl_source[0] || part_source_type != ddl_source[1]
+        elsif part_source_name != ddl_source[0] || part_source_type != (WidePart.catalog_type(ddl_source[1]) || ddl_source[1])
           raise UnsupportedFormatError.new("table DDL and selected part column types differ")
         end
       end
@@ -637,10 +669,11 @@ module CrystalClick
         raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
       end
       if selected = exact
-        unless allow_unsupported_exact || WidePart.supports_typed_type?(selected.type)
+        unless allow_unsupported_exact || WidePart.supports_typed_type?(selected.type) || WidePart.catalog_type(selected.type)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
-        return {selected.name, selected.type, selected.type, false}
+        selected_type = WidePart.catalog_type(selected.type) || selected.type
+        return {selected.name, selected.type, selected_type, false}
       end
       raise UnsupportedFormatError.new("selected column is not declared by table DDL") if virtual.empty?
       raise UnsupportedFormatError.new("selected JSON typed path is ambiguous") unless virtual.size == 1

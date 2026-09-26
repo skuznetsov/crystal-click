@@ -1,15 +1,15 @@
 module CrystalClick
   alias WidePartNumericArray = Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(UInt64) |
-                               Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) |
+                               Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Bool) |
                                Array(Float32) | Array(Float64)
   alias WidePartNumericSlice = Slice(UInt8) | Slice(UInt16) | Slice(UInt32) | Slice(UInt64) |
-                               Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) |
+                               Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Bool) |
                                Slice(Float32) | Slice(Float64)
   alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
-                                Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) |
+                                Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Bool?) |
                                 Array(Float32?) | Array(Float64?)
   alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
-                                Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) |
+                                Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Bool?) |
                                 Slice(Float32?) | Slice(Float64?)
   alias WidePartNullableStringArray = Array(String?)
   alias WidePartNullableStringSlice = Slice(String?)
@@ -179,6 +179,79 @@ module CrystalClick
       end
       return @typed_numeric_values[column].as(Slice(Int64)) if @typed_numeric_values.has_key?(column)
       @column_values[index].as(Slice(Int64))
+    end
+
+    def bools_for(column : String) : Slice(Bool)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Bool accessor requires an exact Bool column") unless @column_types[index] == "Bool"
+      return @typed_numeric_values[column].as(Slice(Bool)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Bool))
+    end
+
+    def nullable_bools_for(column : String) : Slice(Bool?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Bool accessor requires an exact Nullable(Bool) column") unless WidePart.supports_nullable_bool_type?(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(Bool?))) || raise(UnsupportedFormatError.new("Nullable(Bool) column was not materialized in this batch"))
+    end
+
+    def enum8_codes_for(column : String) : Slice(Int8)
+      index = column_index(column)
+      unless WidePart.enum8_codes(@column_types[index]) && !@column_types[index].starts_with?("Nullable(")
+        raise UnsupportedFormatError.new("Enum8 accessor requires an exact Enum8 declaration")
+      end
+      return @typed_numeric_values[column].as(Slice(Int8)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int8))
+    end
+
+    def nullable_enum8_codes_for(column : String) : Slice(Int8?)
+      index = column_index(column)
+      unless @column_types[index].starts_with?("Nullable(") && WidePart.enum8_codes(@column_types[index])
+        raise UnsupportedFormatError.new("Enum8 accessor requires an exact Nullable(Enum8) declaration")
+      end
+      @nullable_values[column]?.try(&.as(Slice(Int8?))) || raise(UnsupportedFormatError.new("Nullable(Enum8) column was not materialized in this batch"))
+    end
+
+    def enum16_codes_for(column : String) : Slice(Int16)
+      index = column_index(column)
+      unless WidePart.enum16_codes(@column_types[index]) && !@column_types[index].starts_with?("Nullable(")
+        raise UnsupportedFormatError.new("Enum16 accessor requires an exact Enum16 declaration")
+      end
+      return @typed_numeric_values[column].as(Slice(Int16)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int16))
+    end
+
+    def nullable_enum16_codes_for(column : String) : Slice(Int16?)
+      index = column_index(column)
+      unless @column_types[index].starts_with?("Nullable(") && WidePart.enum16_codes(@column_types[index])
+        raise UnsupportedFormatError.new("Enum16 accessor requires an exact Nullable(Enum16) declaration")
+      end
+      @nullable_values[column]?.try(&.as(Slice(Int16?))) || raise(UnsupportedFormatError.new("Nullable(Enum16) column was not materialized in this batch"))
+    end
+
+    def decimal32_raw_for(column : String) : Slice(Int32)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Decimal(9, S)") unless WidePart.decimal32_scale(@column_types[index])
+      return @typed_numeric_values[column].as(Slice(Int32)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int32))
+    end
+
+    def nullable_decimal32_raw_for(column : String) : Slice(Int32?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Nullable(Decimal(9, S))") unless WidePart.nullable_decimal32_scale(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(Int32?))) || raise(UnsupportedFormatError.new("Nullable(Decimal32) column was not materialized in this batch"))
+    end
+
+    def decimal64_raw_for(column : String) : Slice(Int64)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Decimal(18, S)") unless WidePart.decimal64_scale(@column_types[index])
+      return @typed_numeric_values[column].as(Slice(Int64)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int64))
+    end
+
+    def nullable_decimal64_raw_for(column : String) : Slice(Int64?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Nullable(Decimal(18, S))") unless WidePart.nullable_decimal64_scale(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(Decimal64) column was not materialized in this batch"))
     end
 
     def strings_for(column : String) : Slice(String)
@@ -718,6 +791,19 @@ module CrystalClick
 
     private def read_numeric_values(selected : ColumnReader, mark_index : Int) : WidePartNumericArray
       reader = selected.reader
+      type = selected.column_type
+      if type == "Bool"
+        return reader.read_bool_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.enum8_codes(type).nil? && !type.starts_with?("Nullable(")
+        return reader.read_enum8_codes_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.enum16_codes(type).nil? && !type.starts_with?("Nullable(")
+        return reader.read_enum16_codes_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.decimal32_scale(type).nil?
+        return reader.read_decimal32_raw_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.decimal64_scale(type).nil?
+        return reader.read_decimal64_raw_mark_range(selected.name, mark_index, 1)
+      end
+
       case selected.column_type
       when "Date"
         reader.read_date_codes_mark_range(selected.name, mark_index, 1)
@@ -773,6 +859,8 @@ module CrystalClick
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int64)
         values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Bool)
+        values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32)
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float64)
@@ -784,6 +872,19 @@ module CrystalClick
 
     private def read_nullable_values(selected : ColumnReader, mark_index : Int) : WidePartNullableArray
       reader = selected.reader
+      type = selected.column_type
+      if type == "Nullable(Bool)"
+        return reader.read_nullable_bool_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.enum8_codes(type).nil? && type.starts_with?("Nullable(")
+        return reader.read_nullable_enum8_codes_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.enum16_codes(type).nil? && type.starts_with?("Nullable(")
+        return reader.read_nullable_enum16_codes_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.nullable_decimal32_scale(type).nil?
+        return reader.read_nullable_decimal32_raw_mark_range(selected.name, mark_index, 1)
+      elsif !WidePart.nullable_decimal64_scale(type).nil?
+        return reader.read_nullable_decimal64_raw_mark_range(selected.name, mark_index, 1)
+      end
+
       case selected.column_type
       when "Nullable(Date)"     then reader.read_nullable_date_codes_mark_range(selected.name, mark_index, 1)
       when "Nullable(Date32)"   then reader.read_nullable_date32_codes_mark_range(selected.name, mark_index, 1)
@@ -816,6 +917,7 @@ module CrystalClick
       when Array(Int16?)   then values.size
       when Array(Int32?)   then values.size
       when Array(Int64?)   then values.size
+      when Array(Bool?)    then values.size
       when Array(Float32?) then values.size
       when Array(Float64?) then values.size
       else
@@ -833,6 +935,7 @@ module CrystalClick
       when Array(Int16?)   then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int32?)   then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int64?)   then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(Bool?)    then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32?) then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float64?) then values.to_unsafe.to_slice(values.size)[offset, size]
       else
