@@ -814,12 +814,14 @@ guard-only. Risk is CAUTION: a metadata/value mismatch can silently corrupt
 persistent data. Rollback is the W15-only local feature commit; no push or
 existing ClickHouse data-root mutation is authorized.
 
-Observed W15 gate: the full debug and release Crystal suites each passed 425
-examples. The pinned ClickHouse 26.7.1.1315 differential oracle passed 19
+Observed W15 gate: the full debug and release Crystal suites each passed 426
+examples. The pinned ClickHouse 26.7.1.1315 differential oracle passed 23
 stock-to-Crystal and Crystal-to-stock fixtures: bare and BASIC Nullable Bool,
 Enum8/16, Decimal32 at scales 0/2/9, Decimal64 at scales 0/4/18, plus a bare
-Enum8 declaration with escaped quote and backslash labels. Every fixture
-checked physical streams/marks, metadata, full and key-range RowBinary,
+Enum8 declaration with escaped quote and backslash labels. Bare and Nullable
+Enum8/16 fixtures also cover the signed backing-width minimum and maximum
+codes. Every fixture checked physical streams/marks, metadata, full and
+key-range RowBinary,
 `ATTACH PART`, and `CHECK TABLE`; representative bare and nullable payloads
 also rejected same-size stream corruption. Reader negatives cover invalid
 Bool bytes, undeclared Enum codes, malformed/noncanonical declarations,

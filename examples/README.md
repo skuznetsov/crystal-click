@@ -46,6 +46,24 @@ remains intact; it does not verify other part files or defend against a
 coordinated rewrite of both files. Callers must still use immutable,
 writer-produced parts. No speedup is promised.
 
+## Write and read a standalone typed Wide part
+
+This example writes a `UInt64` key and a `Decimal32(2)` payload, then reads the
+raw scaled integers back through the typed reader:
+
+```sh
+crystal run examples/write_w15_decimal_part.cr -- /tmp/my-new-decimal-part
+```
+
+Choose a destination that does not exist and is outside any ClickHouse data
+root. The writer does not insert into a table or attach the part to a server.
+`Decimal32(2)` is stored as signed `Int32` values scaled by 100; its part
+metadata uses ClickHouse's canonical `Decimal(9, 2)` spelling. The paired W15
+writer also has named Bool and Enum8/16 entry points, each with a BASIC
+Nullable form. Enum entry points require an explicit label/code declaration;
+ordinary signed-integer writes do not infer an Enum or Decimal type. JSON
+typed-path reading still has no matching writer.
+
 ## Read-only ClickHouse data-root examples
 
 These examples read local files under a ClickHouse data root (`metadata/` and

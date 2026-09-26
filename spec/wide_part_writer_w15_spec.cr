@@ -225,6 +225,54 @@ describe CrystalClick::WidePartWriter do
     end
   end
 
+  it "writes Enum8 and Enum16 signed backing endpoints exactly" do
+    parent = File.tempname("crystal-click-w15-enum-endpoints")
+    Dir.mkdir(parent)
+    keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64]
+    small = [Int8::MIN, Int8::MAX, Int8::MIN, Int8::MAX, Int8::MIN]
+    large = [Int16::MIN, Int16::MAX, Int16::MIN, Int16::MAX, Int16::MIN]
+    small_type = "Enum8('min' = -128, 'max' = 127)"
+    large_type = "Enum16('min' = -32768, 'max' = 32767)"
+    nullable_small = [nil, Int8::MIN.as(Int8?), Int8::MAX.as(Int8?), nil, Int8::MIN.as(Int8?)]
+    nullable_large = [nil, Int16::MIN.as(Int16?), Int16::MAX.as(Int16?), nil, Int16::MIN.as(Int16?)]
+
+    begin
+      small_destination = File.join(parent, "enum8")
+      CrystalClick::WidePartWriter.write_uint64_enum8_pair(
+        small_destination, "pk", keys.to_unsafe.to_slice(keys.size), "state",
+        small.to_unsafe.to_slice(small.size), small_type, 2
+      )
+      File.read(File.join(small_destination, "columns.txt")).should contain("`state` #{small_type}\n")
+      w15_stream_bytes(small_destination, "state").should eq(small.map(&.unsafe_as(UInt8)))
+
+      large_destination = File.join(parent, "enum16")
+      CrystalClick::WidePartWriter.write_uint64_enum16_pair(
+        large_destination, "pk", keys.to_unsafe.to_slice(keys.size), "state",
+        large.to_unsafe.to_slice(large.size), large_type, 2
+      )
+      File.read(File.join(large_destination, "columns.txt")).should contain("`state` #{large_type}\n")
+      w15_stream_bytes(large_destination, "state").should eq(w15_le_bytes(large))
+
+      nullable_small_destination = File.join(parent, "nullable-enum8")
+      CrystalClick::WidePartWriter.write_uint64_nullable_enum8_pair(
+        nullable_small_destination, "pk", keys.to_unsafe.to_slice(keys.size), "state",
+        nullable_small.to_unsafe.to_slice(nullable_small.size), small_type, 2
+      )
+      w15_stream_bytes(nullable_small_destination, "state.null").should eq([1_u8, 0_u8, 0_u8, 1_u8, 0_u8])
+      w15_stream_bytes(nullable_small_destination, "state").should eq([0_u8, 128_u8, 127_u8, 0_u8, 128_u8])
+
+      nullable_large_destination = File.join(parent, "nullable-enum16")
+      CrystalClick::WidePartWriter.write_uint64_nullable_enum16_pair(
+        nullable_large_destination, "pk", keys.to_unsafe.to_slice(keys.size), "state",
+        nullable_large.to_unsafe.to_slice(nullable_large.size), large_type, 2
+      )
+      w15_stream_bytes(nullable_large_destination, "state.null").should eq([1_u8, 0_u8, 0_u8, 1_u8, 0_u8])
+      w15_stream_bytes(nullable_large_destination, "state").should eq(w15_le_bytes([0_i16, Int16::MIN, Int16::MAX, 0_i16, Int16::MIN]))
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
   it "rejects undeclared enum codes, malformed enum metadata, and invalid scale before staging" do
     parent = File.tempname("crystal-click-w15-invalid")
     Dir.mkdir(parent)

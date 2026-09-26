@@ -50,11 +50,12 @@ value, and prepublication inputs fail closed; and an adversary review finds no
 claim broader than the executed checks. If only a subset passes, keep W15
 `IN_PROGRESS` and name that subset explicitly rather than claiming parity.
 
-Observed gate: debug/release each passed 425 specs; the 19-case pinned
+Observed gate: debug/release each passed 426 specs; the 23-case pinned
 ClickHouse oracle passed stock-to-Crystal and Crystal-to-stock, including
-escaped Enum labels, full/key-range RowBinary, `ATTACH PART`, `CHECK TABLE`,
-and representative same-size corruption checks. W9-W14 oracles, the headless
-TUI harness (six specs), and linked example build passed. The reader rejects
+escaped Enum labels, signed Enum8/16 code endpoints, full/key-range RowBinary,
+`ATTACH PART`, `CHECK TABLE`, and representative same-size corruption checks.
+W9-W14 oracles, the headless TUI harness (six specs), and linked example build
+passed. The reader rejects
 noncanonical Enum spacing and W15 per-column/missing-column serialization
 overrides; the writer rejects invalid enum codes/declarations and scales
 before staging. The user-facing API retains JSON typed-path reads without

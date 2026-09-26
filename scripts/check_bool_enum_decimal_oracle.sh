@@ -33,6 +33,8 @@ W15_KEYS = [1_u64, 2_u64, 4_u64, 6_u64, 9_u64]
 W15_MARK_ROWS = [2_u64, 2_u64, 1_u64, 0_u64]
 W15_ENUM8 = "Enum8('neg' = -7, 'zero' = 0, 'pos' = 7)"
 W15_ENUM16 = "Enum16('neg' = -300, 'zero' = 0, 'pos' = 300)"
+W15_ENUM8_BOUNDARY = "Enum8('min' = -128, 'max' = 127)"
+W15_ENUM16_BOUNDARY = "Enum16('min' = -32768, 'max' = 32767)"
 W15_ENUM8_ESCAPED = "Enum8('quo\\'te' = -7, 'back\\\\slash' = 7)"
 
 def run_clickhouse(binary : String, store : String, query : String) : String
@@ -535,9 +537,13 @@ verify_bare(binary, store, root, "bool", "Bool", 1, [false, true, false, true, t
 verify_nullable(binary, store, root, "nullable-bool", "Bool", "Bool", 1, [nil, false.as(Bool?), true.as(Bool?), nil, true.as(Bool?)])
 verify_bare(binary, store, root, "enum8", W15_ENUM8, 1, [-7_i8, 0_i8, 7_i8, -7_i8, 7_i8])
 verify_nullable(binary, store, root, "nullable-enum8", W15_ENUM8, W15_ENUM8, 1, [nil, -7_i8.as(Int8?), 0_i8.as(Int8?), nil, 7_i8.as(Int8?)])
+verify_bare(binary, store, root, "enum8-endpoints", W15_ENUM8_BOUNDARY, 1, [Int8::MIN, Int8::MAX, Int8::MIN, Int8::MAX, Int8::MIN])
+verify_nullable(binary, store, root, "nullable-enum8-endpoints", W15_ENUM8_BOUNDARY, W15_ENUM8_BOUNDARY, 1, [nil, Int8::MIN.as(Int8?), Int8::MAX.as(Int8?), nil, Int8::MIN.as(Int8?)])
 verify_bare(binary, store, root, "enum8-escaped", W15_ENUM8_ESCAPED, 1, [-7_i8, 7_i8, -7_i8, 7_i8, -7_i8])
 verify_bare(binary, store, root, "enum16", W15_ENUM16, 2, [-300_i16, 0_i16, 300_i16, -300_i16, 300_i16])
 verify_nullable(binary, store, root, "nullable-enum16", W15_ENUM16, W15_ENUM16, 2, [nil, -300_i16.as(Int16?), 0_i16.as(Int16?), nil, 300_i16.as(Int16?)])
+verify_bare(binary, store, root, "enum16-endpoints", W15_ENUM16_BOUNDARY, 2, [Int16::MIN, Int16::MAX, Int16::MIN, Int16::MAX, Int16::MIN])
+verify_nullable(binary, store, root, "nullable-enum16-endpoints", W15_ENUM16_BOUNDARY, W15_ENUM16_BOUNDARY, 2, [nil, Int16::MIN.as(Int16?), Int16::MAX.as(Int16?), nil, Int16::MIN.as(Int16?)])
 
 {0, 2, 9}.each do |scale|
   values = [Int32::MIN, -1_i32, 0_i32, 1_i32, Int32::MAX]
