@@ -117,7 +117,7 @@ module CrystalClick
       inner.empty? ? nil : inner
     end
 
-    private def self.enum_codes(type : String, prefix : String, minimum : Int32, maximum : Int32) : Array(Int32)?
+    private def self.enum_entries(type : String, prefix : String, minimum : Int32, maximum : Int32) : Array(Tuple(Int32, String))?
       declaration = nullable_inner(type) || type
       return nil unless declaration.starts_with?(prefix) && declaration.ends_with?(")")
       declaration.each_byte do |byte|
@@ -127,10 +127,12 @@ module CrystalClick
       body_end = declaration.bytesize - 1
       cursor = prefix.bytesize
       labels = Set(String).new
-      codes = Set(Int32).new
+      seen_codes = Set(Int32).new
+      entries = [] of Tuple(Int32, String)
       return nil if cursor >= body_end
 
       loop do
+        entry_start = cursor
         return nil unless declaration.to_slice[cursor]? == '\''.ord.to_u8
         cursor += 1
         label = IO::Memory.new
@@ -176,9 +178,10 @@ module CrystalClick
         return nil unless code_text == "0" || code_text.matches?(/\A-?[1-9][0-9]*\z/)
         code = code_text.to_i?
         return nil unless code && code >= minimum && code <= maximum
-        return nil unless codes.add?(code)
+        return nil unless seen_codes.add?(code)
+        entries << {code, declaration.byte_slice(entry_start, cursor - entry_start)}
 
-        return codes.to_a if cursor == body_end
+        return entries if cursor == body_end
         return nil unless cursor + 2 < body_end && declaration.byte_slice(cursor, 2) == ", "
         cursor += 2
       end
@@ -256,15 +259,81 @@ module CrystalClick
     # their signed backing codes. The parser intentionally admits one bounded
     # grammar instead of treating any `Enum8(` / `Enum16(` prefix as typed.
     def self.enum8_codes(type : String) : Set(Int8)?
-      codes = enum_codes(type, "Enum8(", -128, 127)
-      return nil unless codes
-      codes.map(&.to_i8).to_set
+      entries = enum_entries(type, "Enum8(", -128, 127)
+      return nil unless entries
+      entries.map { |entry| entry[0].to_i8 }.to_set
     end
 
     def self.enum16_codes(type : String) : Set(Int16)?
-      codes = enum_codes(type, "Enum16(", -32_768, 32_767)
-      return nil unless codes
-      codes.map(&.to_i16).to_set
+      entries = enum_entries(type, "Enum16(", -32_768, 32_767)
+      return nil unless entries
+      entries.map { |entry| entry[0].to_i16 }.to_set
+    end
+
+    # EnumValues sorts declared codes numerically, and DataTypeEnum uses the
+    # first sorted value as the nested NULL default. Declaration order is not
+    # preserved for this purpose.
+    def self.enum8_default_code(type : String) : Int8?
+      enum_entries(type, "Enum8(", -128, 127).try { |entries| entries.min_by { |entry| entry[0] }[0].to_i8 }
+    end
+
+    def self.enum16_default_code(type : String) : Int16?
+      enum_entries(type, "Enum16(", -32_768, 32_767).try { |entries| entries.min_by { |entry| entry[0] }[0].to_i16 }
+    end
+
+    private def self.canonical_enum_type(type : String, prefix : String, minimum : Int32, maximum : Int32) : String?
+      return nil if type.starts_with?("Nullable(")
+      entries = enum_entries(type, prefix, minimum, maximum)
+      return nil unless entries
+      ordered = entries.sort_by { |entry| entry[0] }.map { |entry| entry[1] }.join(", ")
+      "#{prefix}#{ordered})"
+    end
+
+    # ClickHouse's DataTypeEnum name uses EnumValues' ascending numeric order.
+    # Keep each validated raw label literal intact while canonicalizing entries.
+    def self.canonical_enum8_type(type : String) : String?
+      canonical_enum_type(type, "Enum8(", -128, 127)
+    end
+
+    def self.canonical_enum16_type(type : String) : String?
+      canonical_enum_type(type, "Enum16(", -32_768, 32_767)
+    end
+
+    # Array Enum leaves are a separate semantic surface from numeric
+    # Array(Int8/Int16). Extract exactly one Array wrapper before invoking the
+    # existing bounded scalar enum parser; the nullable form requires exactly
+    # one additional Nullable wrapper.
+    def self.array_enum8_codes(type : String) : Set(Int8)?
+      return nil unless type.starts_with?("Array(") && type.ends_with?(")")
+      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
+      return nil if inner.starts_with?("Nullable(")
+      enum8_codes(inner)
+    end
+
+    def self.array_nullable_enum8_codes(type : String) : Set(Int8)?
+      inner = array_nullable_enum_inner(type)
+      return nil unless inner
+      enum8_codes(inner)
+    end
+
+    def self.array_enum16_codes(type : String) : Set(Int16)?
+      return nil unless type.starts_with?("Array(") && type.ends_with?(")")
+      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
+      return nil if inner.starts_with?("Nullable(")
+      enum16_codes(inner)
+    end
+
+    def self.array_nullable_enum16_codes(type : String) : Set(Int16)?
+      inner = array_nullable_enum_inner(type)
+      return nil unless inner
+      enum16_codes(inner)
+    end
+
+    private def self.array_nullable_enum_inner(type : String) : String?
+      return nil unless type.starts_with?("Array(Nullable(") && type.ends_with?("))")
+      inner = type.byte_slice("Array(Nullable(".bytesize, type.bytesize - "Array(Nullable())".bytesize)
+      return nil if inner.starts_with?("Nullable(") || inner.starts_with?("Array(")
+      inner
     end
 
     # ClickHouse normalizes Decimal32/64 aliases in columns.txt to the
@@ -641,7 +710,11 @@ module CrystalClick
       when "Array(Nullable(Bool))"
         ["#{column}.null", column]
       else
-        if array_nullable_decimal32_scale(type) || array_nullable_decimal64_scale(type)
+        if array_nullable_enum8_codes(type) || array_nullable_enum16_codes(type)
+          ["#{column}.null", column]
+        elsif array_enum8_codes(type) || array_enum16_codes(type)
+          [column]
+        elsif array_nullable_decimal32_scale(type) || array_nullable_decimal64_scale(type)
           ["#{column}.null", column]
         elsif array_nullable_decimal128_scale(type)
           ["#{column}.null", column]
@@ -1573,6 +1646,50 @@ module CrystalClick
       checked_array_mark_byte_count(flat_elements, 32).to_u64
     end
 
+    def array_enum8_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Enum8 Array accessor requires an exact Array(Enum8(...)) column") unless WidePart.array_enum8_codes(@column_type)
+      array_enum_mark_range_raw_bytes(column, first_mark, mark_count, 1, false)
+    end
+
+    def array_nullable_enum8_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Enum8 Array accessor requires an exact Array(Nullable(Enum8(...))) column") unless WidePart.array_nullable_enum8_codes(@column_type)
+      array_enum_mark_range_raw_bytes(column, first_mark, mark_count, 1, true)
+    end
+
+    def array_enum16_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Enum16 Array accessor requires an exact Array(Enum16(...)) column") unless WidePart.array_enum16_codes(@column_type)
+      array_enum_mark_range_raw_bytes(column, first_mark, mark_count, 2, false)
+    end
+
+    def array_nullable_enum16_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Enum16 Array accessor requires an exact Array(Nullable(Enum16(...))) column") unless WidePart.array_nullable_enum16_codes(@column_type)
+      array_enum_mark_range_raw_bytes(column, first_mark, mark_count, 2, true)
+    end
+
+    private def array_enum_mark_range_raw_bytes(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_width : Int32,
+      nullable : Bool,
+    ) : UInt64
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      child_streams = nullable ? ["#{column}.null", column] : [column]
+      child_streams.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array Enum child substream mark rows differ") unless child_rows == rows
+        width = stream_name == "#{column}.null" ? 1 : element_width
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
+      end
+      bytes_per_element = nullable ? element_width + 1 : element_width
+      checked_array_mark_byte_count(flat_elements, bytes_per_element).to_u64
+    end
+
     # Count all three physical streams of Array(Array(UInt64)) before a table
     # batch allocates nested row arrays. The size1 values are decoded only to
     # derive per-mark leaf counts; payload frames are boundary-validated but
@@ -2260,6 +2377,50 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Decimal(38, S)) column") unless WidePart.array_decimal128_scale(@column_type)
       read_array_fixed_leaf_mark_range(column, first_mark, mark_count, Int128)
+    end
+
+    def read_array_enum8_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int8))
+      ensure_column(column)
+      codes = WidePart.array_enum8_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum8 Array accessor requires an exact Array(Enum8(...)) column") unless codes
+      values = read_array_fixed_leaf_mark_range(column, first_mark, mark_count, Int8)
+      values.each do |row|
+        row.each { |value| raise CorruptPartError.new("Enum8 code is not declared") unless codes.includes?(value) }
+      end
+      values
+    end
+
+    def read_array_nullable_enum8_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int8?))
+      ensure_column(column)
+      codes = WidePart.array_nullable_enum8_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum8 Array accessor requires an exact Array(Nullable(Enum8(...))) column") unless codes
+      values = read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, Int8)
+      values.each do |row|
+        row.each { |value| raise CorruptPartError.new("Enum8 code is not declared") if value && !codes.includes?(value) }
+      end
+      values
+    end
+
+    def read_array_enum16_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int16))
+      ensure_column(column)
+      codes = WidePart.array_enum16_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum16 Array accessor requires an exact Array(Enum16(...)) column") unless codes
+      values = read_array_fixed_leaf_mark_range(column, first_mark, mark_count, Int16)
+      values.each do |row|
+        row.each { |value| raise CorruptPartError.new("Enum16 code is not declared") unless codes.includes?(value) }
+      end
+      values
+    end
+
+    def read_array_nullable_enum16_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int16?))
+      ensure_column(column)
+      codes = WidePart.array_nullable_enum16_codes(@column_type)
+      raise UnsupportedFormatError.new("Enum16 Array accessor requires an exact Array(Nullable(Enum16(...))) column") unless codes
+      values = read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, Int16)
+      values.each do |row|
+        row.each { |value| raise CorruptPartError.new("Enum16 code is not declared") if value && !codes.includes?(value) }
+      end
+      values
     end
 
     def read_array_nullable_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int128?))
@@ -4086,10 +4247,11 @@ module CrystalClick
       w45_decimal256_array_shape = decimal256_array_w45_schema?(columns, selected_column)
       w46_ipv4_array_shape = ipv4_array_w46_schema?(columns, selected_column)
       w47_ipv6_array_shape = ipv6_array_w47_schema?(columns, selected_column)
+      w48_enum_array_shape = enum_array_w48_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape || w48_enum_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -4245,6 +4407,21 @@ module CrystalClick
                           ]
       selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
       !WidePart.ipv6_array_element_type(selected_type).nil? || !WidePart.nullable_ipv6_array_element_type(selected_type).nil?
+    end
+
+    # Exact W48 stock Enum fixture profile: one UInt64 key and the BASIC
+    # Enum8/Enum16 Array pair, in canonical physical metadata spelling.
+    private def enum_array_w48_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns == [
+                            {"pk", "UInt64"},
+                            {"plain8", "Array(Enum8('min' = -128, 'neg' = -7, 'zero' = 0, 'pos' = 7, 'max' = 127))"},
+                            {"maybe8", "Array(Nullable(Enum8('min' = -128, 'neg' = -7, 'zero' = 0, 'pos' = 7, 'max' = 127)))"},
+                            {"plain16", "Array(Enum16('min' = -32768, 'neg' = -300, 'zero' = 0, 'pos' = 300, 'max' = 32767))"},
+                            {"maybe16", "Array(Nullable(Enum16('min' = -32768, 'neg' = -300, 'zero' = 0, 'pos' = 300, 'max' = 32767)))"},
+                          ]
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      !WidePart.array_enum8_codes(selected_type).nil? || !WidePart.array_nullable_enum8_codes(selected_type).nil? ||
+        !WidePart.array_enum16_codes(selected_type).nil? || !WidePart.array_nullable_enum16_codes(selected_type).nil?
     end
 
     # Exact W42 stock fixture shape for the paired Decimal32(2) Array leaves.
@@ -5218,6 +5395,36 @@ module CrystalClick
         when "#{@column}.size0" then 8
         else
           raise UnsupportedFormatError.new("unsupported exact Array(IPv6) substream")
+        end
+      elsif WidePart.array_nullable_enum8_codes(@column_type)
+        case stream_name
+        when "#{@column}.null"  then 1
+        when @column            then 1
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Nullable(Enum8)) substream")
+        end
+      elsif WidePart.array_nullable_enum16_codes(@column_type)
+        case stream_name
+        when "#{@column}.null"  then 1
+        when @column            then 2
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Nullable(Enum16)) substream")
+        end
+      elsif WidePart.array_enum8_codes(@column_type)
+        case stream_name
+        when @column            then 1
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Enum8) substream")
+        end
+      elsif WidePart.array_enum16_codes(@column_type)
+        case stream_name
+        when @column            then 2
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Enum16) substream")
         end
       elsif WidePart.array_nullable_decimal32_scale(@column_type)
         case stream_name

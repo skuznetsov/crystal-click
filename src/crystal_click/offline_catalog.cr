@@ -231,6 +231,28 @@ module CrystalClick
         return {observed_rows, string_bytes}
       end
 
+      if WidePart.array_enum8_codes(selected_type)
+        selected_values = batch.array_enum8_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif WidePart.array_nullable_enum8_codes(selected_type)
+        selected_values = batch.array_nullable_enum8_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif WidePart.array_enum16_codes(selected_type)
+        selected_values = batch.array_enum16_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif WidePart.array_nullable_enum16_codes(selected_type)
+        selected_values = batch.array_nullable_enum16_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      end
+
       case selected_type
       when "Date"
         observed_rows = append_date_codes_values(values, batch, column_name, observed_rows, expected_rows)

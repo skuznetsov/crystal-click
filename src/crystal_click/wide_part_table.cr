@@ -585,6 +585,34 @@ module CrystalClick
       values.as(Slice(Array(IPv6Value?)))
     end
 
+    def array_enum8_codes_for(column : String) : Slice(Array(Int8))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(Enum8) accessor requires an exact declaration") unless WidePart.array_enum8_codes(@column_types[index])
+      values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Enum8) column was not materialized in this batch"))
+      values.as(Slice(Array(Int8)))
+    end
+
+    def array_nullable_enum8_codes_for(column : String) : Slice(Array(Int8?))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(Nullable(Enum8)) accessor requires an exact declaration") unless WidePart.array_nullable_enum8_codes(@column_types[index])
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(Enum8)) column was not materialized in this batch"))
+      values.as(Slice(Array(Int8?)))
+    end
+
+    def array_enum16_codes_for(column : String) : Slice(Array(Int16))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(Enum16) accessor requires an exact declaration") unless WidePart.array_enum16_codes(@column_types[index])
+      values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Enum16) column was not materialized in this batch"))
+      values.as(Slice(Array(Int16)))
+    end
+
+    def array_nullable_enum16_codes_for(column : String) : Slice(Array(Int16?))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(Nullable(Enum16)) accessor requires an exact declaration") unless WidePart.array_nullable_enum16_codes(@column_types[index])
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(Enum16)) column was not materialized in this batch"))
+      values.as(Slice(Array(Int16?)))
+    end
+
     def array_decimal32_raw_for(column : String) : Slice(Array(Int32))
       index = column_index(column)
       raise UnsupportedFormatError.new("typed Decimal32 Array accessor requires an exact Array(Decimal(9, S)) declaration") unless WidePart.array_decimal32_scale(@column_types[index])
@@ -1135,6 +1163,18 @@ module CrystalClick
               elsif WidePart.nullable_temporal_array_element_type(selected.column_type)
                 bytes = selected.reader.array_nullable_temporal_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_enum8_codes(selected.column_type)
+                bytes = selected.reader.array_enum8_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_nullable_enum8_codes(selected.column_type)
+                bytes = selected.reader.array_nullable_enum8_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_enum16_codes(selected.column_type)
+                bytes = selected.reader.array_enum16_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_nullable_enum16_codes(selected.column_type)
+                bytes = selected.reader.array_nullable_enum16_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_numeric_bytes[selected.name] = bytes
               elsif WidePart.array_decimal32_scale(selected.column_type)
                 bytes = selected.reader.array_decimal32_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_numeric_bytes[selected.name] = bytes
@@ -1234,7 +1274,49 @@ module CrystalClick
             map_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
-              if WidePart.array_decimal32_scale(selected.column_type)
+              if WidePart.array_enum8_codes(selected.column_type)
+                values = selected.reader.read_array_enum8_codes_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Enum8 Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Enum8 Array mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements
+                raise CorruptPartError.new("selected Enum8 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Enum8 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
+                next
+              elsif WidePart.array_nullable_enum8_codes(selected.column_type)
+                values = selected.reader.read_array_nullable_enum8_codes_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected nullable Enum8 Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Enum8 Array mark was not preflighted"))
+                bytes = array_nullable_numeric_materialized_bytes(values, "Int8")
+                raise CorruptPartError.new("selected nullable Enum8 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Enum8 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+                next
+              elsif WidePart.array_enum16_codes(selected.column_type)
+                values = selected.reader.read_array_enum16_codes_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Enum16 Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Enum16 Array mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 2_u64
+                raise CorruptPartError.new("selected Enum16 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Enum16 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
+                next
+              elsif WidePart.array_nullable_enum16_codes(selected.column_type)
+                values = selected.reader.read_array_nullable_enum16_codes_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected nullable Enum16 Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Enum16 Array mark was not preflighted"))
+                bytes = array_nullable_numeric_materialized_bytes(values, "Int16")
+                raise CorruptPartError.new("selected nullable Enum16 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Enum16 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+                next
+              elsif WidePart.array_decimal32_scale(selected.column_type)
                 values = selected.reader.read_array_decimal32_raw_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Decimal32 Array mark row count changed") unless values.size.to_u64 == mark_rows
                 preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Decimal32 Array mark was not preflighted"))

@@ -123,6 +123,9 @@ pinned Wide/LZ4/plain-mark profile; its scoped evidence is recorded below.
 W47 admits paired single-level IPv6 Arrays with BASIC Nullable leaves on the
 pinned Wide/LZ4/plain-mark profile. Its network-octet codec is distinct from
 IPv4, UUID, UInt128, and FixedString(16); scoped evidence is recorded below.
+W48 admits paired Enum8 and Enum16 Array leaves, including BASIC Nullable
+forms, with exact code membership and stock-canonical metadata in the bounded
+Wide/LZ4/plain-mark profile. Its scoped evidence and limits are below.
 
 ## Purpose and bounded contexts
 
@@ -2826,6 +2829,66 @@ reader after resealing its frame and marks, but was not independently
 accepted by stock ClickHouse. This result does not admit other schemas,
 aliases in physical metadata, Compact/Sparse parts, MV/projection semantics,
 or any memory/performance conclusion.
+
+## W48 frontier: paired Enum8 and Enum16 Array leaves
+
+Admit one-level `Array(Enum8(...))`, `Array(Enum16(...))`, and their BASIC
+`Array(Nullable(Enum8(...)))` / `Array(Nullable(Enum16(...)))` forms beside
+a sorted `UInt64` key in the pinned Wide/LZ4/plain-`.mrk2` profile. Expose
+signed `Int8` / `Int16` backing codes through exact typed APIs, retaining the
+canonical Enum declaration and checking every non-NULL code against its
+declared set. The writer must sort valid declaration entries by numeric code
+in `columns.txt`, as stock ClickHouse does even when the input spelling is
+unsorted. A matching-width `Array(Int8)` or `Array(Int16)` is a different
+type; generic numeric Array APIs must not reinterpret it as Enum. Only the
+existing bounded canonical Enum8/16 physical grammar is admitted. The API
+does not separately parse generic `Enum(...)` or MySQL `ENUM` spellings, but
+stock ClickHouse can normalize those inputs to identical canonical Enum8/16
+metadata; their original spelling cannot be distinguished from a part.
+Label conversion and arbitrary recursive Arrays remain rejected.
+
+This is **CAUTION** because width-correct raw decoding can silently admit an
+undeclared code or alias an ordinary numeric Array. The initial falsifier is
+exact typed admission returning false before production edits. Use one stock
+fixture with all four shapes, signed endpoints, negative/zero/positive codes,
+empty and nonempty all-NULL rows, NULL beside valid zero, multiple marks and
+a short tail. The reader must consume each fixed-width nested slot under a
+NULL bit without assigning its hidden code or shifting a later sentinel;
+the writer uses the `DataTypeEnum` default (the smallest numeric declared
+code) in hidden slots, matching the pinned explicit-`CAST` stock path. Stock
+insertion paths can put other ignored bytes under `NULL`, so that physical
+slot is not a unique representation of nullness. A resealed visible undeclared
+code must fail closed, while a resealed nonzero hidden NULL code must not.
+
+DoD: focused W48 spec, full debug/release suites, pinned fixture verifier,
+and bidirectional stock `ATTACH PART` / `CHECK TABLE` / byte-exact full and
+PK-filtered RowBinary for stock and Crystal-written cases, plus canonical
+metadata and hidden-leaf byte comparison for unsorted Enum declarations;
+format, shell syntax, diff-whitespace checks, and hostile self-review. The pair
+writers preflight dimensions and code membership, self-read staged files, and publish
+exclusively only after validation. This slice does not admit other schemas,
+Compact/Sparse serialization, enum keys, MV/projection semantics, or
+memory/performance work. Rollback is one W48-only local commit. Its evidence
+decays when the producer version, canonical Enum grammar, codec, mark or
+checksum implementation, or platform changes; refresh all gates then.
+
+W48 result on pinned ClickHouse 26.7.1.1315 (Darwin): focused W48 spec passed
+9/0; full debug and release suites passed 726/0 each. The stock fixture
+verifier confirmed five canonical columns, 11 LZ4 streams, and mark rows
+`[2, 2, 2, 1]`. The bidirectional oracle passed on that stock fixture, a
+second stock part with unsorted no-zero Enum8/16 declarations, and 12
+Crystal-written parts. Every attached part passed `CHECK TABLE`; full and
+PK-filtered RowBinary were byte-exact. The second stock part established
+numeric-sorted `columns.txt` and explicit-`CAST` hidden NULL child bytes
+`f9` (Enum8) and `d4 fe` (Enum16); the Crystal writer matched both widths
+byte-for-byte and canonicalized their metadata. Formatting, shell syntax,
+and diff-whitespace checks passed. A separate source-and-oracle hostile review
+returned **ROBUST** within this bounded profile. The Enum grammar still
+rejects some valid ClickHouse escaped control labels, so this is not full
+Enum-label compatibility. Hidden NULL child bytes may also differ across
+stock insertion paths; only the explicit-`CAST`/`DataTypeEnum` default path
+was matched. Other schemas, Compact/Sparse parts, MV/projections, and any
+memory/performance conclusion remain outside this result.
 
 ## Rejected and guard-only surfaces
 

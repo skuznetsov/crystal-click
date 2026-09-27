@@ -736,6 +736,68 @@ module CrystalClick
       write_uint64_array_nullable_ipv6_pair_internal(destination, key_name, keys, value_name, values, rows_per_mark)
     end
 
+    # Write Enum Array leaves as their signed Int8/Int16 backing codes while
+    # preserving the exact enum declaration in canonical physical metadata.
+    def self.write_uint64_array_enum8_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int8)),
+      enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact non-nullable Enum8 declaration required") unless enum_type.starts_with?("Enum8(")
+      codes = WidePart.enum8_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum8 declaration"))
+      values.each { |row| row.each { |value| raise ArgumentError.new("Enum8 code is not declared") unless codes.includes?(value) } }
+      write_uint64_array_enum_pair_internal(destination, key_name, keys, value_name, values, enum_type, "Int8", rows_per_mark)
+    end
+
+    def self.write_uint64_array_nullable_enum8_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int8?)),
+      enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact non-nullable Enum8 declaration required") unless enum_type.starts_with?("Enum8(")
+      codes = WidePart.enum8_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum8 declaration"))
+      values.each { |row| row.each { |value| raise ArgumentError.new("Enum8 code is not declared") if value && !codes.includes?(value) } }
+      write_uint64_array_nullable_enum_pair_internal(destination, key_name, keys, value_name, values, enum_type, "Int8", rows_per_mark)
+    end
+
+    def self.write_uint64_array_enum16_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int16)),
+      enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact non-nullable Enum16 declaration required") unless enum_type.starts_with?("Enum16(")
+      codes = WidePart.enum16_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum16 declaration"))
+      values.each { |row| row.each { |value| raise ArgumentError.new("Enum16 code is not declared") unless codes.includes?(value) } }
+      write_uint64_array_enum_pair_internal(destination, key_name, keys, value_name, values, enum_type, "Int16", rows_per_mark)
+    end
+
+    def self.write_uint64_array_nullable_enum16_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int16?)),
+      enum_type : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise UnsupportedFormatError.new("exact non-nullable Enum16 declaration required") unless enum_type.starts_with?("Enum16(")
+      codes = WidePart.enum16_codes(enum_type) || raise(UnsupportedFormatError.new("unsupported Enum16 declaration"))
+      values.each { |row| row.each { |value| raise ArgumentError.new("Enum16 code is not declared") if value && !codes.includes?(value) } }
+      write_uint64_array_nullable_enum_pair_internal(destination, key_name, keys, value_name, values, enum_type, "Int16", rows_per_mark)
+    end
+
     # Write a sorted UInt64 key and an exact Array(Array(UInt64)) payload.
     # The two offsets streams and the flattened leaf stream share outer-row
     # mark granules, while their byte positions advance by their own depths.
@@ -2382,6 +2444,106 @@ module CrystalClick
         write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_enum_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(T)),
+      enum_type : String,
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : String forall T
+      exact_enum = type_name == "Int8" ? WidePart.array_enum8_codes("Array(#{enum_type})") : WidePart.array_enum16_codes("Array(#{enum_type})")
+      raise UnsupportedFormatError.new("canonical non-nullable Enum declaration required") unless exact_enum
+      canonical_enum_type = if type_name == "Int8"
+                              WidePart.canonical_enum8_type(enum_type)
+                            else
+                              WidePart.canonical_enum16_type(enum_type)
+                            end
+      canonical_enum_type = canonical_enum_type || raise(UnsupportedFormatError.new("canonical Enum declaration required"))
+      validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_name)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{canonical_enum_type})"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_enum_part(stage, key_name, value_name, keys, values, rows_per_mark, canonical_enum_type, type_name)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_nullable_enum_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(T?)),
+      enum_type : String,
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : String forall T
+      exact_enum = type_name == "Int8" ? WidePart.array_nullable_enum8_codes("Array(Nullable(#{enum_type}))") : WidePart.array_nullable_enum16_codes("Array(Nullable(#{enum_type}))")
+      raise UnsupportedFormatError.new("canonical non-nullable Enum declaration required") unless exact_enum
+      canonical_enum_type = if type_name == "Int8"
+                              WidePart.canonical_enum8_type(enum_type)
+                            else
+                              WidePart.canonical_enum16_type(enum_type)
+                            end
+      canonical_enum_type = canonical_enum_type || raise(UnsupportedFormatError.new("canonical Enum declaration required"))
+      validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_name)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        {% if T == Int8 %}
+          null_default = WidePart.enum8_default_code(enum_type) || raise(UnsupportedFormatError.new("Enum8 default code is unavailable"))
+          records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name, null_default))
+        {% elsif T == Int16 %}
+          null_default = WidePart.enum16_default_code(enum_type) || raise(UnsupportedFormatError.new("Enum16 default code is unavailable"))
+          records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name, null_default))
+        {% else %}
+          {% raise "nullable Enum Array writing requires Int8 or Int16 leaves" %}
+        {% end %}
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{canonical_enum_type}))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_nullable_enum_part(stage, key_name, value_name, keys, values, rows_per_mark, canonical_enum_type, type_name)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5829,6 +5991,7 @@ module CrystalClick
       values : Slice(Array(T?)),
       rows_per_mark : Int32,
       type_name : String,
+      null_default : T? = nil,
     ) : Array(ChecksumRecord) forall T
       width = numeric_width(type_name)
       size0_base = StreamName.hash("#{column}.size0")
@@ -5881,6 +6044,9 @@ module CrystalClick
                 values[start_row + row].each do |value|
                   if value.nil?
                     null_raw[element_offset] = 1_u8
+                    if fallback = null_default
+                      write_typed_numeric_le(value_raw, value_offset, fallback)
+                    end
                   else
                     null_raw[element_offset] = 0_u8
                     write_typed_numeric_le(value_raw, value_offset, value.not_nil!)
@@ -9003,6 +9169,156 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged nullable Decimal256 Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_enum_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(T)),
+      rows_per_mark : Int32,
+      enum_type : String,
+      type_name : String,
+    ) : Nil forall T
+      expected_type = "Array(#{enum_type})"
+      {% if T == Int8 %}
+        raise CorruptPartError.new("staged Enum8 Array declaration is invalid") unless type_name == "Int8" && WidePart.array_enum8_codes(expected_type)
+      {% elsif T == Int16 %}
+        raise CorruptPartError.new("staged Enum16 Array declaration is invalid") unless type_name == "Int16" && WidePart.array_enum16_codes(expected_type)
+      {% else %}
+        {% raise "staged Enum Array validation requires Int8 or Int16 leaves" %}
+      {% end %}
+
+      checksums = PartChecksums.open(stage)
+      expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
+      [key_name, "#{value_name}.size0", value_name].each do |logical_name|
+        base = StreamName.hash(logical_name)
+        expected_checksum_files << "#{base}.bin"
+        expected_checksum_files << "#{base}.mrk2"
+      end
+      raise CorruptPartError.new("staged Enum Array checksum inventory differs") unless checksums.entries.keys.sort == expected_checksum_files.sort
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged Enum Array column metadata differs")
+      end
+      raise CorruptPartError.new("staged Enum Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Enum Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged Enum Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged Enum Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Enum Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Enum Array type does not match") unless value_part.column_type == expected_type
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        {% if T == Int8 %}
+          observed_values = value_part.read_array_enum8_codes_mark_range(value_name, mark_index, 1)
+          rows.times do |offset|
+            unless expected_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+              raise CorruptPartError.new("staged Enum Array stream readback differs from input")
+            end
+          end
+        {% else %}
+          observed_values = value_part.read_array_enum16_codes_mark_range(value_name, mark_index, 1)
+          rows.times do |offset|
+            unless expected_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+              raise CorruptPartError.new("staged Enum Array stream readback differs from input")
+            end
+          end
+        {% end %}
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Enum Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_nullable_enum_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(T?)),
+      rows_per_mark : Int32,
+      enum_type : String,
+      type_name : String,
+    ) : Nil forall T
+      expected_type = "Array(Nullable(#{enum_type}))"
+      {% if T == Int8 %}
+        raise CorruptPartError.new("staged nullable Enum8 Array declaration is invalid") unless type_name == "Int8" && WidePart.array_nullable_enum8_codes(expected_type)
+      {% elsif T == Int16 %}
+        raise CorruptPartError.new("staged nullable Enum16 Array declaration is invalid") unless type_name == "Int16" && WidePart.array_nullable_enum16_codes(expected_type)
+      {% else %}
+        {% raise "staged nullable Enum Array validation requires Int8 or Int16 leaves" %}
+      {% end %}
+
+      checksums = PartChecksums.open(stage)
+      expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
+      [key_name, "#{value_name}.size0", "#{value_name}.null", value_name].each do |logical_name|
+        base = StreamName.hash(logical_name)
+        expected_checksum_files << "#{base}.bin"
+        expected_checksum_files << "#{base}.mrk2"
+      end
+      raise CorruptPartError.new("staged nullable Enum Array checksum inventory differs") unless checksums.entries.keys.sort == expected_checksum_files.sort
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged nullable Enum Array column metadata differs")
+      end
+      raise CorruptPartError.new("staged nullable Enum Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable Enum Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged nullable Enum Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged nullable Enum Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged nullable Enum Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged nullable Enum Array type does not match") unless value_part.column_type == expected_type
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        {% if T == Int8 %}
+          observed_values = value_part.read_array_nullable_enum8_codes_mark_range(value_name, mark_index, 1)
+          rows.times do |offset|
+            unless expected_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+              raise CorruptPartError.new("staged nullable Enum Array stream readback differs from input")
+            end
+          end
+        {% else %}
+          observed_values = value_part.read_array_nullable_enum16_codes_mark_range(value_name, mark_index, 1)
+          rows.times do |offset|
+            unless expected_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+              raise CorruptPartError.new("staged nullable Enum Array stream readback differs from input")
+            end
+          end
+        {% end %}
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged nullable Enum Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil

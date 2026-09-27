@@ -1,0 +1,18 @@
+columns substreams version: 1
+5 columns:
+1 substreams for column `pk`:
+	pk
+2 substreams for column `plain8`:
+	plain8.size0
+	plain8
+3 substreams for column `maybe8`:
+	maybe8.size0
+	maybe8.null
+	maybe8
+2 substreams for column `plain16`:
+	plain16.size0
+	plain16
+3 substreams for column `maybe16`:
+	maybe16.size0
+	maybe16.null
+	maybe16

@@ -1,0 +1,7 @@
+columns format version: 1
+5 columns:
+`pk` UInt64
+`plain8` Array(Enum8('min' = -128, 'neg' = -7, 'zero' = 0, 'pos' = 7, 'max' = 127))
+`maybe8` Array(Nullable(Enum8('min' = -128, 'neg' = -7, 'zero' = 0, 'pos' = 7, 'max' = 127)))
+`plain16` Array(Enum16('min' = -32768, 'neg' = -300, 'zero' = 0, 'pos' = 300, 'max' = 32767))
+`maybe16` Array(Nullable(Enum16('min' = -32768, 'neg' = -300, 'zero' = 0, 'pos' = 300, 'max' = 32767)))
