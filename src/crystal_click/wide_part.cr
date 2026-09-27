@@ -434,7 +434,8 @@ module CrystalClick
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         !datetime64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
         type == "Int256" || type == "UInt256" ||
-        type == "Nullable(Int128)" || type == "Nullable(UInt128)" || supports_numeric_type?(type) ||
+        type == "Nullable(Int128)" || type == "Nullable(UInt128)" ||
+        type == "Nullable(Int256)" || type == "Nullable(UInt256)" || supports_numeric_type?(type) ||
         supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
         supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
         supports_ipv4_type?(type) || supports_nullable_ipv4_type?(type) ||
@@ -778,6 +779,78 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("raw Nullable(UInt128) accessor requires exact Nullable(UInt128) metadata") unless @column_type == "Nullable(UInt128)"
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 16, UInt128)
+    end
+
+    # Nullable primitive Int256 is retained as signed two's-complement bits;
+    # the optional wrapper carries nullness without aliasing Decimal256.
+    def read_nullable_int256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int256Value?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("raw Nullable(Int256) accessor requires exact Nullable(Int256) metadata") unless @column_type == "Nullable(Int256)"
+
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable substream mark rows differ") unless rows == value_rows
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(rows, 32), 32)
+      values = Array(Int256Value?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        if is_null == 1
+          values << nil
+        else
+          values << Int256Value.from_words(
+            u64(encoded_values, offset),
+            u64(encoded_values, offset + 8),
+            u64(encoded_values, offset + 16),
+            u64(encoded_values, offset + 24)
+          )
+        end
+        offset += 32
+      end
+      raise CorruptPartError.new("Nullable values do not consume nested bytes") unless offset == encoded_values.size
+      values
+    end
+
+    # UInt256's most-significant bit remains data even when the value is
+    # nullable; this API never routes through a signed or decimal decoder.
+    def read_nullable_uint256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt256Value?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("raw Nullable(UInt256) accessor requires exact Nullable(UInt256) metadata") unless @column_type == "Nullable(UInt256)"
+
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable substream mark rows differ") unless rows == value_rows
+
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(rows, 32), 32)
+      values = Array(UInt256Value?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        if is_null == 1
+          values << nil
+        else
+          values << UInt256Value.from_words(
+            u64(encoded_values, offset),
+            u64(encoded_values, offset + 8),
+            u64(encoded_values, offset + 16),
+            u64(encoded_values, offset + 24)
+          )
+        end
+        offset += 32
+      end
+      raise CorruptPartError.new("Nullable values do not consume nested bytes") unless offset == encoded_values.size
+      values
     end
 
     def read_decimal256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Decimal256Value)
@@ -2850,7 +2923,7 @@ module CrystalClick
         validate_tuple_uint64_string_serialization(columns, selected, row_count)
       elsif column_type == "Int128" || column_type == "UInt128" || column_type == "Int256" || column_type == "UInt256"
         validate_raw_integer_serialization(columns, row_count)
-      elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)"
+      elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
         validate_nullable_raw_integer_serialization(columns, row_count)
       elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
@@ -3035,7 +3108,7 @@ module CrystalClick
         ["#{column}.null", column]
       elsif WidePart.supports_nullable_ipv6_type?(type)
         ["#{column}.null", column]
-      elsif type == "Nullable(Int128)" || type == "Nullable(UInt128)"
+      elsif type == "Nullable(Int128)" || type == "Nullable(UInt128)" || type == "Nullable(Int256)" || type == "Nullable(UInt256)"
         ["#{column}.null", column]
       elsif WidePart.nullable_fixed_string_width(type)
         ["#{column}.null", column]
@@ -3502,7 +3575,7 @@ module CrystalClick
 
     private def validate_nullable_raw_integer_serialization(part_columns : Array({String, String}), row_count : UInt64) : Nil
       file = File.join(@path, "serialization.json")
-      raise UnsupportedFormatError.new("serialization.json is required for Nullable raw 128-bit integers") unless File.file?(file)
+      raise UnsupportedFormatError.new("serialization.json is required for Nullable raw wide integers") unless File.file?(file)
       raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
       size = File.size(file)
       raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
@@ -3515,7 +3588,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("unsupported serialization.json field")
         end
       end
-      raise UnsupportedFormatError.new("Nullable raw 128-bit missing-column serialization is unsupported") if info.has_key?("missing_columns")
+      raise UnsupportedFormatError.new("Nullable raw wide-integer missing-column serialization is unsupported") if info.has_key?("missing_columns")
 
       version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
       raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
@@ -3524,9 +3597,9 @@ module CrystalClick
 
       versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
       versions.each_key do |key|
-        raise UnsupportedFormatError.new("unsupported Nullable raw 128-bit serialization type version") unless key == "string" || key == "nullable"
+        raise UnsupportedFormatError.new("unsupported Nullable raw wide-integer serialization type version") unless key == "string" || key == "nullable"
       end
-      string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("Nullable raw 128-bit String serialization version is required"))
+      string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("Nullable raw wide-integer String serialization version is required"))
       raise UnsupportedFormatError.new("only String serialization version 1 is supported") unless string_version == 1
       nullable_version = if versions.has_key?("nullable")
                            versions["nullable"].as_i
@@ -3535,32 +3608,32 @@ module CrystalClick
                          end
       raise UnsupportedFormatError.new("only BASIC Nullable serialization is supported") unless nullable_version == 0
 
-      serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Nullable raw 128-bit column serializers are required"))
+      serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Nullable raw wide-integer column serializers are required"))
       # Stock BASIC Nullable parts and this writer may omit per-column stats.
       # If present, accept only complete Default records, matched by name.
       unless serializers.empty?
-        raise UnsupportedFormatError.new("Nullable raw 128-bit serializer count differs") unless serializers.size == part_columns.size
+        raise UnsupportedFormatError.new("Nullable raw wide-integer serializer count differs") unless serializers.size == part_columns.size
         expected_names = part_columns.map(&.[0]).to_set
-        raise CorruptPartError.new("Nullable raw 128-bit part column names are not unique") unless expected_names.size == part_columns.size
+        raise CorruptPartError.new("Nullable raw wide-integer part column names are not unique") unless expected_names.size == part_columns.size
         seen_names = Set(String).new
         serializers.each do |serializer_json|
           serializer = serializer_json.as_h
           unless serializer.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
-            raise UnsupportedFormatError.new("unsupported Nullable raw 128-bit column serializer fields")
+            raise UnsupportedFormatError.new("unsupported Nullable raw wide-integer column serializer fields")
           end
-          kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("Nullable raw 128-bit serializer kind is malformed"))
-          name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("Nullable raw 128-bit serializer name is malformed"))
-          defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Nullable raw 128-bit serializer default count is malformed"))
-          rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Nullable raw 128-bit serializer row count is malformed"))
+          kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("Nullable raw wide-integer serializer kind is malformed"))
+          name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("Nullable raw wide-integer serializer name is malformed"))
+          defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Nullable raw wide-integer serializer default count is malformed"))
+          rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Nullable raw wide-integer serializer row count is malformed"))
           unless expected_names.includes?(name) && !seen_names.includes?(name)
-            raise UnsupportedFormatError.new("Nullable raw 128-bit serializer names do not match the part columns")
+            raise UnsupportedFormatError.new("Nullable raw wide-integer serializer names do not match the part columns")
           end
           seen_names << name
           unless kind == "Default" && rows >= 0 && rows.to_u64 == row_count && defaults >= 0 && defaults.to_u64 <= row_count
-            raise UnsupportedFormatError.new("Nullable raw 128-bit serializer is not an exact Default column record")
+            raise UnsupportedFormatError.new("Nullable raw wide-integer serializer is not an exact Default column record")
           end
         end
-        raise UnsupportedFormatError.new("Nullable raw 128-bit serializer names do not cover the part columns") unless seen_names == expected_names
+        raise UnsupportedFormatError.new("Nullable raw wide-integer serializer names do not cover the part columns") unless seen_names == expected_names
       end
       nil
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
@@ -4101,12 +4174,12 @@ module CrystalClick
         16
       elsif @column_type == "Int256" || @column_type == "UInt256"
         32
-      elsif @column_type == "Nullable(Int128)" || @column_type == "Nullable(UInt128)"
+      elsif @column_type == "Nullable(Int128)" || @column_type == "Nullable(UInt128)" || @column_type == "Nullable(Int256)" || @column_type == "Nullable(UInt256)"
         case stream_name
         when "#{@column}.null" then 1
-        when @column           then 16
+        when @column           then @column_type == "Nullable(Int256)" || @column_type == "Nullable(UInt256)" ? 32 : 16
         else
-          raise UnsupportedFormatError.new("unsupported exact Nullable raw 128-bit substream")
+          raise UnsupportedFormatError.new("unsupported exact Nullable raw integer substream")
         end
       elsif fixed_width = WidePart.nullable_fixed_string_width(@column_type)
         stream_name == "#{@column}.null" ? 1 : fixed_width

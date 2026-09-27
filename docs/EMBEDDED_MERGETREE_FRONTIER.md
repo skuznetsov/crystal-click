@@ -2147,6 +2147,75 @@ performance parity. A source, fixture, pinned binary, or compiler change
 decays this certificate; refresh the focused/full suites and bidirectional
 stock oracle before reasserting compatibility.
 
+## Verified W38 slice: BASIC Nullable raw 256-bit integer payloads
+
+Admit exactly `Nullable(Int256)` and `Nullable(UInt256)` scalar payload
+columns beside a sorted `UInt64` key in the pinned Wide/LZ4/plain-mark
+profile. Expose distinct optional raw `Int256Value?` and `UInt256Value?`
+reader, typed-batch, offline-catalog, and explicit writer APIs. Keep the
+32-byte nested values separate from `Nullable(Decimal(76, S))` and from
+generic numeric/inferred writer paths. `Array(Nullable(Int256))`,
+`Array(Nullable(UInt256))`, other array forms, Sparse serialization, Compact
+parts, arbitrary schemas, 256-bit keys, arithmetic, and performance tuning
+remain closed.
+
+A read-only isolated stock ClickHouse local 26.7.1.1315 probe accepted both
+types in a 13-row Wide part and passed `CHECK TABLE`. The BASIC part has
+`i.null`, `i`, `u.null`, and `u` substreams; each `.mrk2` has seven data
+marks plus one zero-row EOF mark with 24-byte plain records. Null-map
+decompressed offsets are 0, 2, 4, 6, 8, 10, 12, 13; nested-value offsets
+are 0, 64, 128, 192, 256, 320, 384, 416. Its `serialization.json`
+is version 1 with propagated nested versions, `string:1`, an empty column
+serializer list, and no explicit `nullable` version entry (BASIC version 0).
+Stock RowBinary uses a nullable flag and emits the 32-byte child only for
+non-NULL values, whereas the physical part reserves one child slot per row,
+including NULL. A separate stock Sparse control uses `nullable:1`, sparse
+index streams, and Sparse serializer records rather than BASIC null maps;
+it is a negative admission test, not another accepted representation.
+The pinned executable/part is the authority; local development source is
+explanatory only.
+
+Risk is **CAUTION**: the same 32-byte layout can conceal signed/unsigned/
+Decimal256 aliasing, and RowBinary NULL omission can be mistaken for the
+on-disk nested stream. Rollback is one W38-only local feature commit; do
+not mutate the user's ClickHouse data root or push. The first falsifier is
+a focused RED spec for exact metadata, optional raw values, paired marks,
+and explicit writer admission while cross-type, generic, and Sparse paths
+still reject. DoD: hardcoded NULL/non-NULL edge bit patterns, full/later-
+mark reads and bounded table/catalog windows; bool-only null maps, equal
+substream row counts and exact nested byte consumption; fail-closed
+serialization records and no-publication invalid writes; full debug and
+release suites; format/diff checks; and a pinned bidirectional stock oracle
+with `ATTACH PART`, `CHECK TABLE`, independent full/key-range RowBinary,
+and same-size corruption detection. The strongest adversarial case is an
+identical high-bit bit pattern under the wrong signed, unsigned, or decimal
+type that is incorrectly accepted by a typed API. No compatibility or
+performance claim follows from the physical layout alone.
+
+Observed W38 evidence on this checkout: the focused W38 spec passed 13/13;
+the full debug and release suites each passed 646/646. The public stock
+fixture verifier checked SHA256 coverage, exact metadata/substreams,
+null-map and 32-byte nested bytes including NULL slots, all marks and the
+sentinel, SQL values, independent Python-integer RowBinary, and stock
+`ATTACH PART`/`CHECK TABLE` for both the 13-row BASIC part and the 32-row
+Sparse negative control. The pinned ClickHouse local 26.7.1.1315
+bidirectional oracle passed stock-to-Crystal full/later-mark reads and
+full/keyed RowBinary; both Crystal nullable writers attached and checked
+in ClickHouse and returned independent full/keyed RowBinary. A same-size
+mutation of the attached BASIC null-map stream produced
+`CHECKSUM_DOESNT_MATCH`; restoration recovered `CHECK TABLE` and RowBinary.
+Adjacent W35/W36/W37 raw-integer and Decimal256 oracles passed. Format,
+shell syntax, and diff checks passed. Hostile review verdict: **ROBUST
+within this pinned BASIC Wide/LZ4/plain-mark profile**; no claim is made
+for Sparse writing, arrays, other part layouts or ClickHouse versions,
+TUI formatting, MV/projections, or performance parity. The writer oracle's
+RowBinary expectation is separately encoded but uses the same Crystal raw
+value structs passed to the writer; the Python-integer stock fixture and
+raw-stream tests provide the independent byte anchor. A reader/writer,
+fixture, pinned binary, compiler, or filesystem-case change decays this
+certificate; refresh the focused/full suites and pinned bidirectional
+oracle before reasserting compatibility.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2156,8 +2225,10 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W36's paired BASIC Nullable raw
-   128-bit scalars, W35's paired raw 128-bit scalars, W34's paired Bool Array family,
+1. Extend reader and writer together beyond W38's paired BASIC Nullable raw
+   256-bit scalars, W37's paired raw 256-bit scalars, W36's paired BASIC
+   Nullable raw 128-bit scalars, W35's paired raw 128-bit scalars,
+   W34's paired Bool Array family,
    W33's paired FixedString Array family, W32's nullable String Array,
    W31's nullable numeric Array family, and W30's non-null numeric Array family,
    W29's nested nullable Array, W28's nested Array, W27's exact nullable array,

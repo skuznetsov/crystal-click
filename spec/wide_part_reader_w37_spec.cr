@@ -143,8 +143,8 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("UInt256").should be_true
     CrystalClick::WidePart.supports_numeric_type?("Int256").should be_false
     CrystalClick::WidePart.supports_numeric_type?("UInt256").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Nullable(Int256)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Nullable(UInt256)").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Nullable(Int256)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Nullable(UInt256)").should be_true
     CrystalClick::WidePart.supports_typed_type?("Array(Int256)").should be_false
     CrystalClick::WidePart.supports_typed_type?("Array(UInt256)").should be_false
     CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int256))").should be_false
@@ -154,8 +154,8 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("Decimal(76, 0)").should be_true
     CrystalClick::WidePart.catalog_type("Int256").should eq("Int256")
     CrystalClick::WidePart.catalog_type("UInt256").should eq("UInt256")
-    CrystalClick::WidePart.catalog_type("Nullable(Int256)").should be_nil
-    CrystalClick::WidePart.catalog_type("Nullable(UInt256)").should be_nil
+    CrystalClick::WidePart.catalog_type("Nullable(Int256)").should eq("Nullable(Int256)")
+    CrystalClick::WidePart.catalog_type("Nullable(UInt256)").should eq("Nullable(UInt256)")
   end
 
   it "reads exact signed and unsigned values from a stock part without Decimal256 aliasing" do

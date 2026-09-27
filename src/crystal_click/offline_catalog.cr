@@ -213,6 +213,12 @@ module CrystalClick
       elsif selected_type == "Nullable(UInt128)"
         observed_rows = append_materialized_values(values, batch.nullable_uint128_raw_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
+      elsif selected_type == "Nullable(Int256)"
+        observed_rows = append_materialized_values(values, batch.nullable_int256_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type == "Nullable(UInt256)"
+        observed_rows = append_materialized_values(values, batch.nullable_uint256_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
       elsif !WidePart.nullable_decimal128_scale(selected_type).nil?
         observed_rows = append_materialized_values(values, batch.nullable_decimal128_raw_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}

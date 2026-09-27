@@ -224,8 +224,8 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int128))").should be_false
     CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UInt128))").should be_false
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(Int128))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Nullable(Int256)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Nullable(UInt256)").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Nullable(Int256)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Nullable(UInt256)").should be_true
   end
 
   it "reads stock BASIC nullable raw 128-bit streams exactly across marks and the final sentinel" do
