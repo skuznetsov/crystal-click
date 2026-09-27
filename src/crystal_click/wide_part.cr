@@ -213,6 +213,16 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    private def self.array_decimal128_alias_scale(type : String) : Int32?
+      match = /\AArray\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_nullable_decimal128_alias_scale(type : String) : Int32?
+      match = /\AArray\(Nullable\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
     private def self.decimal64_alias_scale(type : String) : Int32?
       match = /\ADecimal64\(([0-9]|1[0-8])\)\z/.match(type)
       match.try { |value| value[1].to_i }
@@ -307,6 +317,20 @@ module CrystalClick
       nullable_decimal64_scale(inner)
     end
 
+    # Decimal128 Arrays expose signed Int128 coefficients only through these
+    # exact semantic gates; physical width alone does not admit Int128 Arrays.
+    def self.array_decimal128_scale(type : String) : Int32?
+      return nil unless type.starts_with?("Array(") && type.ends_with?(")")
+      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
+      decimal128_scale(inner)
+    end
+
+    def self.array_nullable_decimal128_scale(type : String) : Int32?
+      return nil unless type.starts_with?("Array(Nullable(") && type.ends_with?(")")
+      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
+      nullable_decimal128_scale(inner)
+    end
+
     # Normalize only the Decimal DDL aliases observed in stock metadata. The
     # caller retains the exact source spelling separately for API metadata.
     def self.catalog_type(type : String) : String?
@@ -320,6 +344,10 @@ module CrystalClick
         return "Array(Decimal(18, #{scale}))"
       elsif scale = array_nullable_decimal64_alias_scale(type)
         return "Array(Nullable(Decimal(18, #{scale})))"
+      elsif scale = array_decimal128_alias_scale(type)
+        return "Array(Decimal(38, #{scale}))"
+      elsif scale = array_nullable_decimal128_alias_scale(type)
+        return "Array(Nullable(Decimal(38, #{scale})))"
       end
 
       if inner = nullable_inner(type)
@@ -559,7 +587,11 @@ module CrystalClick
       else
         if array_nullable_decimal32_scale(type) || array_nullable_decimal64_scale(type)
           ["#{column}.null", column]
+        elsif array_nullable_decimal128_scale(type)
+          ["#{column}.null", column]
         elsif array_decimal32_scale(type) || array_decimal64_scale(type)
+          [column]
+        elsif array_decimal128_scale(type)
           [column]
         elsif nullable_temporal_array_element_type(type)
           ["#{column}.null", column]
@@ -1457,6 +1489,18 @@ module CrystalClick
       checked_array_mark_byte_count(flat_elements, 8).to_u64
     end
 
+    def array_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Decimal(38, S)) column") unless WidePart.array_decimal128_scale(@column_type)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Decimal128) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 16)
+      checked_array_mark_byte_count(flat_elements, 16).to_u64
+    end
+
     # Count all three physical streams of Array(Array(UInt64)) before a table
     # batch allocates nested row arrays. The size1 values are decoded only to
     # derive per-mark leaf counts; payload frames are boundary-validated but
@@ -1591,6 +1635,21 @@ module CrystalClick
         validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
       end
       checked_array_mark_byte_count(flat_elements, 9).to_u64
+    end
+
+    def array_nullable_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Nullable(Decimal(38, S))) column") unless WidePart.array_nullable_decimal128_scale(@column_type)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      {"#{column}.null", column}.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Nullable(Decimal128)) child substream mark rows differ") unless child_rows == rows
+        width = stream_name == "#{column}.null" ? 1 : 16
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
+      end
+      checked_array_mark_byte_count(flat_elements, 17).to_u64
     end
 
     # Count both physical child streams for one exact Array(UUID) range before
@@ -2046,6 +2105,18 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("Decimal64 Array accessor requires an exact Array(Nullable(Decimal(18, S))) column") unless WidePart.array_nullable_decimal64_scale(@column_type)
       read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, Int64)
+    end
+
+    def read_array_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int128))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Decimal(38, S)) column") unless WidePart.array_decimal128_scale(@column_type)
+      read_array_fixed_leaf_mark_range(column, first_mark, mark_count, Int128)
+    end
+
+    def read_array_nullable_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int128?))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Nullable(Decimal(38, S))) column") unless WidePart.array_nullable_decimal128_scale(@column_type)
+      read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, Int128)
     end
 
     def read_array_uuids_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UUIDValue))
@@ -3666,10 +3737,11 @@ module CrystalClick
       w41_uuid_array_shape = uuid_array_w41_schema?(columns, selected_column)
       w42_decimal32_array_shape = decimal32_array_w42_schema?(columns, selected_column)
       w43_decimal64_array_shape = decimal64_array_w43_schema?(columns, selected_column)
+      w44_decimal128_array_shape = decimal128_array_w44_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -3824,6 +3896,18 @@ module CrystalClick
                           ]
       selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
       !WidePart.array_decimal64_scale(selected_type).nil? || !WidePart.array_nullable_decimal64_scale(selected_type).nil?
+    end
+
+    # Exact observed W44 stock fixture shape. The no-serializer exception is
+    # pinned to the two canonical Decimal128(2) Array declarations.
+    private def decimal128_array_w44_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns == [
+                            {"pk", "UInt64"},
+                            {"plain", "Array(Decimal(38, 2))"},
+                            {"maybe", "Array(Nullable(Decimal(38, 2)))"},
+                          ]
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      !WidePart.array_decimal128_scale(selected_type).nil? || !WidePart.array_nullable_decimal128_scale(selected_type).nil?
     end
 
     private def fixed_string_array_w33_schema?(columns : Array({String, String}), selected_column : String) : Bool
@@ -4735,6 +4819,14 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("unsupported exact Array(Nullable(Decimal64)) substream")
         end
+      elsif WidePart.array_nullable_decimal128_scale(@column_type)
+        case stream_name
+        when "#{@column}.null"  then 1
+        when @column            then 16
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Nullable(Decimal128)) substream")
+        end
       elsif WidePart.array_decimal32_scale(@column_type)
         case stream_name
         when @column            then 4
@@ -4748,6 +4840,13 @@ module CrystalClick
         when "#{@column}.size0" then 8
         else
           raise UnsupportedFormatError.new("unsupported exact Array(Decimal64) substream")
+        end
+      elsif WidePart.array_decimal128_scale(@column_type)
+        case stream_name
+        when @column            then 16
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Decimal128) substream")
         end
       elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
         stream_name == "#{@column}%2Eb" ? 1 : 8

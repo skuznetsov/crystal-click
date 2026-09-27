@@ -110,6 +110,11 @@ W40 admits paired single-level temporal Arrays: bare `Date`, `Date32`,
 `DateTime`, and canonical `DateTime64(p)` leaves, plus their BASIC Nullable
 forms. Raw code and tick APIs must retain the exact semantic declaration;
 this does not admit timezone-qualified declarations or calendar conversion.
+W41 admits paired single-level UUID Arrays and BASIC Nullable UUID leaves.
+W42 and W43 separately admit paired Decimal32 and Decimal64 Array leaves,
+respectively, with signed raw coefficients and exact precision/scale metadata.
+W44 admits the corresponding paired Decimal128 Array leaves on the pinned
+Wide/LZ4/plain-mark profile; its detailed evidence and limits are below.
 
 ## Purpose and bounded contexts
 
@@ -2538,6 +2543,77 @@ exact W43 profile**; it treats the absent serializer-bearing three-column
 branch as a conservative rejection, not an observed compatibility failure.
 Refresh the scoped evidence after the decay triggers above.
 
+## W44 frontier: paired Decimal128 Array leaves
+
+Admit only one-level `Array(Decimal(38, S))` and BASIC
+`Array(Nullable(Decimal(38, S)))`, with `S` from 0 through 38, beside a
+sorted `UInt64` key in the pinned Wide/LZ4/plain-`.mrk2` profile. The public
+typed value is the signed little-endian `Int128` raw coefficient; the exact
+scale stays in column metadata. Do not infer decimals from `Int128` Arrays,
+convert coefficients through floating point, or accept an arbitrary
+`Decimal(P, S)` precision. Reader, batch, offline catalog `.values`, and
+paired writer must preserve the same declaration and row order. NULL child
+slots contain the stock default payload and are distinct from non-NULL zero.
+Only the canonical `Decimal(38, S)` spelling is accepted in physical part
+metadata; the exact `Decimal128(S)` alias may normalize at the catalog DDL
+boundary, as it does for existing scalar Decimal128.
+The writer preflights dimensions and mark boundaries, self-reads its staged
+part, and publishes exclusively only after validation.
+
+Risk is **CAUTION**: a 16-byte raw integer stream could accidentally alias
+`Array(Int128)` or `Array(Decimal(38,S))` with the wrong scale, while simple
+single-mark rows may conceal null-map or later-mark corruption. The initial
+gate is a behavioral RED assertion against the current typed-support
+predicate. The independent producer/consumer check uses a synthetic part
+made by the pinned local ClickHouse build, SHA256-pinned physical streams,
+stock-to-Crystal reader tests, and Crystal-to-stock `ATTACH PART`,
+`CHECK TABLE`, and byte-exact full/keyed RowBinary. Include empty Arrays, NULL
+versus zero, negative values, later marks, scale boundaries,
+noncanonical/wrong-type rejection, and catalog/batch access. DoD also
+requires focused and full debug/release Crystal suites, format and shell
+syntax checks, whitespace check, and hostile review. A stock-accepted part
+whose signed coefficients, null positions, or keyed rows differ is the
+strongest falsifier; a failing guard or oracle blocks the feature commit.
+Test the valid SQL Decimal(38,S) coefficient boundary separately from full
+`Int128::MIN/MAX` raw backing compatibility; the latter does not claim those
+coefficients are valid Decimal SQL values.
+
+Reject Decimal256 Arrays, nested and outer-Nullable Arrays, generic inferred
+numeric APIs, Compact/Sparse serialization, arbitrary multi-column schemas,
+MV/projection semantics, and memory/performance changes in this slice.
+Rollback is one W44-only local commit; no existing ClickHouse data root or
+remote is changed. Evidence is scoped to the pinned ClickHouse build, part
+profile, and platform. Changing producer version, codec, mark/checksum
+implementation, or platform decays it and calls for rerunning the focused,
+full, and stock-oracle gates.
+
+The preimplementation W44 typed-admission assertion was RED: the current
+reader returned false for `Array(Decimal(38, 0))` (one example, one failure,
+not a compile error). The pinned official ClickHouse 26.7.1.1315 fixture has
+canonical scale-2 three-column declarations, six LZ4 streams, and mark rows
+`[2, 2, 2, 1]`; SHA256 and physical-topology checks pass. The focused W44
+spec passes six examples, and the full debug suite passes 692 examples with
+no failures or errors. The full release suite also passes 692 examples with
+no failures or errors. Crystal formatting, shell syntax, and diff-whitespace
+checks pass.
+
+The independent stock oracle attaches and checks seven parts: the stock
+fixture, Crystal plain/nullable scale-0 raw-extrema parts, plain/nullable
+scale-38 valid-precision-boundary parts, and plain/nullable all-empty parts.
+For each it confirms exact full and PK-filtered RowBinary bytes. Mixed and
+all-NULL rows distinguish null flags from non-NULL zero; all-NULL leaves
+retain 16 zero nested bytes per leaf on disk. Physical Decimal128 aliases,
+wrong precision/scale grammar, and raw `Array(Int128)` semantic aliasing are
+rejected. The stock three-column empty-serializer exception is pinned only
+to the observed `pk`/`plain`/`maybe` scale-2 schema; arbitrary schemas and
+serializer-bearing three-column parts remain outside this claim.
+Hostile review returned **ROBUST within the exact W44 profile** after the
+all-NULL and all-empty controls were added. The remaining shared Array
+adversarial gap is checksum-consistent malformed child/null/mark topology;
+the W44 evidence does not promote arbitrary multi-column layouts, other
+storage formats, Decimal SQL arithmetic, MV/projections, or performance
+parity. Refresh the scoped checks after the decay triggers above.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2547,7 +2623,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W43's paired Decimal64 Arrays,
+1. Extend reader and writer together beyond W44's paired Decimal128 Arrays,
+   W43's paired Decimal64 Arrays,
    W42's paired Decimal32 Arrays,
    W41's paired UUID Arrays,
    W40's paired temporal Arrays,

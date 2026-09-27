@@ -70,8 +70,8 @@ describe CrystalClick::WidePart do
     end
 
     [
-      "Array(Nullable(Decimal(38, 0)))",
-      "Array(Decimal(38, 0))",
+      "Array(Nullable(Decimal(38, 39)))",
+      "Array(Decimal(38, 39))",
       "Array(FixedString(08))",
       "Array(Array(Nullable(UInt8)))",
       "Array(Array(UInt64) trailing)",
