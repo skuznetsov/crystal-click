@@ -80,6 +80,8 @@ module CrystalClick
     @tuple_string_values : Hash(String, Slice(Tuple(UInt64, String)))
     @map_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64, String))))
     @map_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64))))
+    @map_string_uint64_values : Hash(String, Slice(Array(Tuple(String, UInt64))))
+    @map_string_string_values : Hash(String, Slice(Array(Tuple(String, String))))
 
     def initialize(
       @part_index : Int32,
@@ -115,6 +117,8 @@ module CrystalClick
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+      @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
+      @map_string_string_values = Hash(String, Slice(Array(Tuple(String, String)))).new
     end
 
     # Preserve the original UInt64 batch construction contract.
@@ -152,6 +156,8 @@ module CrystalClick
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+      @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
+      @map_string_string_values = Hash(String, Slice(Array(Tuple(String, String)))).new
     end
 
     # Preserve the existing typed/hash construction contract. Batches created
@@ -189,6 +195,8 @@ module CrystalClick
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+      @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
+      @map_string_string_values = Hash(String, Slice(Array(Tuple(String, String)))).new
     end
 
     def initialize(
@@ -222,6 +230,8 @@ module CrystalClick
       @array_nullable_bool_values : Hash(String, WidePartArrayNullableBoolSlice) = Hash(String, WidePartArrayNullableBoolSlice).new,
       @array_tuple_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64, String)))) = Hash(String, Slice(Array(Tuple(UInt64, String)))).new,
       @array_tuple_nullable_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64?, String)))) = Hash(String, Slice(Array(Tuple(UInt64?, String)))).new,
+      map_string_uint64_values : Hash(String, Slice(Array(Tuple(String, UInt64)))) = Hash(String, Slice(Array(Tuple(String, UInt64)))).new,
+      map_string_string_values : Hash(String, Slice(Array(Tuple(String, String)))) = Hash(String, Slice(Array(Tuple(String, String)))).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
@@ -234,6 +244,8 @@ module CrystalClick
       @array_numeric_values = array_numeric_values
       @array_nullable_numeric_values = array_nullable_numeric_values
       @array_nullable_string_values = array_nullable_string_values
+      @map_string_uint64_values = map_string_uint64_values
+      @map_string_string_values = map_string_string_values
     end
 
     def column_names : Array(String)
@@ -858,6 +870,18 @@ module CrystalClick
       @map_uint64_uint64_values[column]? || raise(UnsupportedFormatError.new("Map column was not materialized in this batch"))
     end
 
+    def map_string_uint64s_for(column : String) : Slice(Array(Tuple(String, UInt64)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Map accessor requires an exact Map(String, UInt64) column") unless WidePart.supports_map_string_uint64_type?(@column_types[index])
+      @map_string_uint64_values[column]? || raise(UnsupportedFormatError.new("Map column was not materialized in this batch"))
+    end
+
+    def map_string_strings_for(column : String) : Slice(Array(Tuple(String, String)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Map accessor requires an exact Map(String, String) column") unless WidePart.supports_map_string_string_type?(@column_types[index])
+      @map_string_string_values[column]? || raise(UnsupportedFormatError.new("Map column was not materialized in this batch"))
+    end
+
     def fixed_strings_for(column : String) : Slice(String)
       index = column_index(column)
       unless WidePart.fixed_string_width(@column_types[index])
@@ -1228,6 +1252,10 @@ module CrystalClick
             preflight_array_fixed_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_bool_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_bool_raw_bytes = Hash(String, UInt64).new
+            preflight_map_string_uint64_payload_bytes = Hash(String, UInt64).new
+            preflight_map_string_uint64_charge_bytes = Hash(String, UInt64).new
+            preflight_map_string_string_payload_bytes = Hash(String, UInt64).new
+            preflight_map_string_string_charge_bytes = Hash(String, UInt64).new
             part.readers.each do |selected|
               if plan = WideTypePlan.admitted(selected.column_type)
                 bytes = case plan.shape
@@ -1358,6 +1386,16 @@ module CrystalClick
                 bytes = selected.reader.map_uint64_string_mark_range_raw_bytes(selected.name, mark_index, 1)
               elsif WidePart.supports_map_uint64_uint64_type?(selected.column_type)
                 bytes = selected.reader.map_uint64_uint64_mark_range_raw_bytes(selected.name, mark_index, 1)
+              elsif WidePart.supports_map_string_uint64_type?(selected.column_type)
+                payload_bytes, charge_bytes = selected.reader.map_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
+                preflight_map_string_uint64_payload_bytes[selected.name] = payload_bytes
+                preflight_map_string_uint64_charge_bytes[selected.name] = charge_bytes
+                bytes = charge_bytes
+              elsif WidePart.supports_map_string_string_type?(selected.column_type)
+                payload_bytes, charge_bytes = selected.reader.map_string_string_mark_range_materialization_preflight(selected.name, mark_index, 1)
+                preflight_map_string_string_payload_bytes[selected.name] = payload_bytes
+                preflight_map_string_string_charge_bytes[selected.name] = charge_bytes
+                bytes = charge_bytes
               else
                 next
               end
@@ -1388,6 +1426,8 @@ module CrystalClick
             tuple_string_values = Hash(String, Array(Tuple(UInt64, String))).new
             map_uint64_string_values = Hash(String, Array(Array(Tuple(UInt64, String)))).new
             map_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
+            map_string_uint64_values = Hash(String, Array(Array(Tuple(String, UInt64)))).new
+            map_string_string_values = Hash(String, Array(Array(Tuple(String, String)))).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
               if WidePart.array_enum8_codes(selected.column_type)
@@ -1874,6 +1914,64 @@ module CrystalClick
                 raise CorruptPartError.new("selected Map mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 map_uint64_uint64_values[selected.name] = values
+              when "Map(String, UInt64)"
+                values = selected.reader.read_map_string_uint64_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Map mark row count changed") unless values.size.to_u64 == mark_rows
+                entries = 0_u64
+                key_bytes = 0_u64
+                values.each do |row|
+                  if row.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - entries
+                    raise CorruptPartError.new("selected Map mark entry count exceeds materialization limit")
+                  end
+                  entries += row.size.to_u64
+                  row.each do |key, _value|
+                    bytes = key.bytesize.to_u64
+                    raise CorruptPartError.new("selected Map mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - key_bytes
+                    key_bytes += bytes
+                  end
+                end
+                value_bytes = entries * 8_u64
+                if value_bytes > UInt64::MAX - key_bytes
+                  raise CorruptPartError.new("selected Map key/value payload overflows")
+                end
+                payload_bytes = key_bytes + value_bytes
+                expected_payload_bytes = preflight_map_string_uint64_payload_bytes[selected.name]? || raise(CorruptPartError.new("selected Map payload was not preflighted"))
+                raise CorruptPartError.new("selected Map key/value payload differs from preflight") unless payload_bytes == expected_payload_bytes
+                charge_bytes = checked_map_tuple_materialization_charge(mark_rows, entries, payload_bytes)
+                expected_charge_bytes = preflight_map_string_uint64_charge_bytes[selected.name]? || raise(CorruptPartError.new("selected Map charge was not preflighted"))
+                raise CorruptPartError.new("selected Map materialization charge differs from preflight") unless charge_bytes == expected_charge_bytes
+                bytes = charge_bytes
+                raise CorruptPartError.new("selected Map mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                map_string_uint64_values[selected.name] = values
+              when "Map(String, String)"
+                values = selected.reader.read_map_string_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Map mark row count changed") unless values.size.to_u64 == mark_rows
+                entries = 0_u64
+                payload_bytes = 0_u64
+                values.each do |row|
+                  if row.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - entries
+                    raise CorruptPartError.new("selected Map mark entry count exceeds materialization limit")
+                  end
+                  entries += row.size.to_u64
+                  row.each do |key, value|
+                    key_bytes = key.bytesize.to_u64
+                    value_bytes = value.bytesize.to_u64
+                    if key_bytes > UInt64::MAX - payload_bytes || value_bytes > UInt64::MAX - payload_bytes - key_bytes
+                      raise CorruptPartError.new("selected Map key/value payload overflows")
+                    end
+                    payload_bytes += key_bytes + value_bytes
+                  end
+                end
+                expected_payload_bytes = preflight_map_string_string_payload_bytes[selected.name]? || raise(CorruptPartError.new("selected Map payload was not preflighted"))
+                raise CorruptPartError.new("selected Map key/value payload differs from preflight") unless payload_bytes == expected_payload_bytes
+                charge_bytes = checked_map_tuple_materialization_charge(mark_rows, entries, payload_bytes)
+                expected_charge_bytes = preflight_map_string_string_charge_bytes[selected.name]? || raise(CorruptPartError.new("selected Map charge was not preflighted"))
+                raise CorruptPartError.new("selected Map materialization charge differs from preflight") unless charge_bytes == expected_charge_bytes
+                bytes = charge_bytes
+                raise CorruptPartError.new("selected Map mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                map_string_string_values[selected.name] = values
               when .starts_with?("Nullable(")
                 values = read_nullable_values(selected, mark_index)
                 raise CorruptPartError.new("selected Nullable mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
@@ -1916,6 +2014,8 @@ module CrystalClick
               tuple_string_slices = Hash(String, Slice(Tuple(UInt64, String))).new
               map_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
               map_uint64_uint64_slices = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+              map_string_uint64_slices = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
+              map_string_string_slices = Hash(String, Slice(Array(Tuple(String, String)))).new
               part.readers.each do |selected|
                 if values = numeric_values[selected.name]?
                   numeric_slices[selected.name] = slice_numeric_values(values, mark_row_offset.to_i, size)
@@ -1967,6 +2067,10 @@ module CrystalClick
                   map_uint64_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = map_uint64_uint64_values[selected.name]?
                   map_uint64_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = map_string_uint64_values[selected.name]?
+                  map_string_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = map_string_string_values[selected.name]?
+                  map_string_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 else
                   raise CorruptPartError.new("selected typed column was not materialized")
                 end
@@ -2001,7 +2105,9 @@ module CrystalClick
                 array_bool_slices,
                 array_nullable_bool_slices,
                 array_tuple_uint64_string_slices,
-                array_tuple_nullable_uint64_string_slices
+                array_tuple_nullable_uint64_string_slices,
+                map_string_uint64_slices,
+                map_string_string_slices
               )
               yield batch
               mark_row_offset &+= size.to_u64
@@ -2361,7 +2467,7 @@ module CrystalClick
       if outer_rows > UInt64::MAX // 8_u64 || elements > UInt64::MAX // slot_bytes_per_element
         raise CorruptPartError.new("selected Array(Tuple) materialization charge overflows")
       end
-      outer_bytes = outer_rows * 8_u64
+      outer_bytes = outer_rows * WidePart::ARRAY_TUPLE_ROW_ACCOUNTING_BYTES
       slot_bytes = elements * slot_bytes_per_element
       if slot_bytes > UInt64::MAX - outer_bytes || string_bytes > UInt64::MAX - outer_bytes - slot_bytes
         raise CorruptPartError.new("selected Array(Tuple) materialization charge overflows")
@@ -2371,6 +2477,27 @@ module CrystalClick
         raise CorruptPartError.new("selected Array(Tuple) mark exceeds aggregate materialization limit")
       end
       total_bytes
+    end
+
+    private def checked_map_tuple_materialization_charge(rows : UInt64, entries : UInt64, payload_bytes : UInt64) : UInt64
+      row_width = WidePart::ARRAY_TUPLE_ROW_ACCOUNTING_BYTES
+      entry_width = WidePart::ARRAY_TUPLE_ENTRY_ACCOUNTING_BYTES
+      if rows > WidePart::MAX_ARRAY_MARK_ROWS || entries > WidePart::MAX_ARRAY_MARK_ELEMENTS
+        raise CorruptPartError.new("selected Map mark container count exceeds materialization limit")
+      end
+      if rows > UInt64::MAX // row_width || entries > UInt64::MAX // entry_width
+        raise CorruptPartError.new("selected Map materialization charge overflows")
+      end
+      row_bytes = rows * row_width
+      entry_bytes = entries * entry_width
+      if entry_bytes > UInt64::MAX - row_bytes || payload_bytes > UInt64::MAX - row_bytes - entry_bytes
+        raise CorruptPartError.new("selected Map materialization charge overflows")
+      end
+      charge_bytes = row_bytes + entry_bytes + payload_bytes
+      if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64
+        raise CorruptPartError.new("selected Map mark exceeds aggregate materialization limit")
+      end
+      charge_bytes
     end
 
     # Charge both the physical child bytes (including hidden NULL slots) and

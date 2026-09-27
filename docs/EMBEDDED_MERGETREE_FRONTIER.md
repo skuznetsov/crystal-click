@@ -133,6 +133,9 @@ Time64 values in the exact scalar, BASIC Nullable, and one-level Array shapes
 recorded below. W51 admits the two exact named-Tuple Array declarations below
 for paired reading, table/catalog access, and immutable writing. Its recursive
 syntax parser does not admit other physical type compositions.
+W52 admits the two remaining String-key Map combinations over the existing
+`{UInt64, String}` leaf matrix for a pinned physical probe and paired
+reader/writer implementation; verification status is recorded in its section.
 
 ## Purpose and bounded contexts
 
@@ -3049,6 +3052,59 @@ establish content-hash validation for mutated marks, other ClickHouse
 versions, arbitrary recursive types, MV/projection subparts, total heap use,
 or performance.
 
+## W52 admitted frontier: ordered String-key Maps over the existing leaf codecs
+
+Admit exactly `Map(String, UInt64)` and `Map(String, String)` alongside the
+previous `Map(UInt64, UInt64)` and `Map(UInt64, String)` declarations, with
+paired mark-range reader, typed-table/catalog values, and immutable writer
+beside a sorted `UInt64` primary key. Together these form the Cartesian
+`{UInt64, String}` key/value matrix, but do not imply general Map admission.
+Represent entries as ordered tuples, preserving duplicate keys and arbitrary
+String bytes. Reject Nullable keys, unadmitted children, nested Maps, and
+other Map serialization variants at this boundary.
+
+This is **CAUTION**: String keys require both a `.size` and raw child stream,
+whose flattened element counts and per-mark byte boundaries must align with
+the Map `size0` stream and the independent value child. A valid-looking part
+can otherwise pair a key with the next value or row. Preflight each selected
+mark's child streams, sizes, and materialization budget before that mark's
+table callback; scans are streaming, not whole-scan transactions, so a later
+corrupt mark can fail after earlier batches were delivered. The writer must
+read back the staged part before exclusive publication. Use
+the pinned ClickHouse 26.7.1.1315 producer to establish the actual physical
+substreams; the logical `Array(Tuple)` equivalence is not format evidence.
+Rollback is one W52-only local commit, with no existing ClickHouse data root
+modified and no memory/performance work.
+
+First falsifier: open a stock Wide/LZ4/plain-`.mrk2` part with both new
+declarations; the pre-W52 type gate must reject them. DoD: pinned stock
+fixture with duplicate and binary String keys, empty Maps, empty/nonempty
+values, multiple marks and a short final mark; exact full and later-mark
+reads, typed batch/catalog values, malformed type and shifted child-boundary
+rejection before the affected mark's callback or staged publication; reverse
+stock `ATTACH PART`, `CHECK TABLE`, and independently expected full/key-range
+RowBinary for both new
+writer shapes; full debug/release suites, fixture integrity, format/diff
+checks, and hostile review of key/value pairing and bounds. Evidence decays
+on a change in the pinned ClickHouse producer, Map serialization, codec,
+marks, platform, or shared reader/writer helpers. MV/projection subparts,
+other physical formats, remaining types, and performance remain guard-only.
+
+W52 result: the pinned fixture verifier confirmed ten physical streams and
+mark rows `[2, 2, 2, 1]`. Reader specs exercised exact ordered entries,
+duplicate and binary keys, later marks, typed-table/catalog access, charge
+accounting, and shifted key-stream boundaries. A later corrupt mark was
+observed to fail after one earlier callback; this is the declared streaming
+boundary, not whole-scan atomicity. The independent ClickHouse oracle
+accepted both Crystal-written Map shapes and two empty-stream variants with
+`ATTACH PART`/`CHECK TABLE`; exact type metadata and full/key-range RowBinary
+matched separately encoded expectations. At this source state, full debug
+and release suites each passed 756 examples with no failures or errors;
+format, fixture, shell syntax, and diff checks passed. A read-only hostile
+review returned **ROBUST** for the per-mark contract. Budget overflow and
+exact-limit edges were source-audited, not separately stress-tested; no total
+heap, other ClickHouse version, MV/projection, or performance claim follows.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3058,7 +3114,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W51's paired named-Tuple Arrays,
+1. Extend reader and writer together beyond W52's paired String-key Maps,
+   W51's paired named-Tuple Arrays,
    W50's paired Time family,
    W49's paired BFloat16 family,
    W48's paired Enum Arrays, W47's paired IPv6 Arrays,

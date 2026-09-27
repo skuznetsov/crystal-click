@@ -1,0 +1,15 @@
+columns substreams version: 1
+3 columns:
+1 substreams for column `pk`:
+	pk
+4 substreams for column `map_u64`:
+	map_u64.size0
+	map_u64%2Ekeys.size
+	map_u64%2Ekeys
+	map_u64%2Evalues
+5 substreams for column `map_string`:
+	map_string.size0
+	map_string%2Ekeys.size
+	map_string%2Ekeys
+	map_string%2Evalues.size
+	map_string%2Evalues
