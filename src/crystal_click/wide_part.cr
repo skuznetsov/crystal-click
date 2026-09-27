@@ -405,6 +405,55 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    # Array temporal declarations retain their semantic leaf type, including
+    # the canonical DateTime64 precision. These recognizers deliberately stay
+    # separate from the numeric Array grammar even when physical widths match.
+    def self.temporal_array_element_type(type : String) : String?
+      case type
+      when "Array(Date)"     then "Date"
+      when "Array(Date32)"   then "Date32"
+      when "Array(DateTime)" then "DateTime"
+      else
+        if scale = array_datetime64_scale(type)
+          "DateTime64(#{scale})"
+        end
+      end
+    end
+
+    def self.nullable_temporal_array_element_type(type : String) : String?
+      case type
+      when "Array(Nullable(Date))"     then "Date"
+      when "Array(Nullable(Date32))"   then "Date32"
+      when "Array(Nullable(DateTime))" then "DateTime"
+      else
+        if scale = nullable_array_datetime64_scale(type)
+          "DateTime64(#{scale})"
+        end
+      end
+    end
+
+    def self.array_datetime64_scale(type : String) : Int32?
+      match = /\AArray\(DateTime64\(([0-9])\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    def self.nullable_array_datetime64_scale(type : String) : Int32?
+      match = /\AArray\(Nullable\(DateTime64\(([0-9])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    # Map an admitted temporal leaf to its on-disk fixed-width carrier. This
+    # is an internal codec choice; public numeric Array gates remain unchanged.
+    def self.temporal_array_physical_type(element_type : String) : String?
+      case element_type
+      when "Date"     then "UInt16"
+      when "Date32"   then "Int32"
+      when "DateTime" then "UInt32"
+      else
+        "Int64" if datetime64_scale(element_type)
+      end
+    end
+
     def self.supports_nullable_temporal_type?(type : String) : Bool
       type == "Nullable(Date)" || type == "Nullable(Date32)" || type == "Nullable(DateTime)" || !nullable_datetime64_scale(type).nil?
     end
@@ -438,7 +487,11 @@ module CrystalClick
       when "Array(Nullable(Bool))"
         ["#{column}.null", column]
       else
-        if array_nullable_fixed_string_width(type)
+        if nullable_temporal_array_element_type(type)
+          ["#{column}.null", column]
+        elsif temporal_array_element_type(type)
+          [column]
+        elsif array_nullable_fixed_string_width(type)
           ["#{column}.null", column]
         elsif array_fixed_string_width(type)
           [column]
@@ -1288,6 +1341,24 @@ module CrystalClick
       checked_array_mark_byte_count(flat_elements, element_width).to_u64
     end
 
+    # Temporal Arrays share fixed-width storage with selected numeric leaves,
+    # but reach it only through this exact semantic gate. Keep numeric Array
+    # accessors closed to Date/Date32/DateTime/DateTime64 declarations.
+    def array_temporal_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.temporal_array_element_type(@column_type) || raise(UnsupportedFormatError.new("temporal Array accessor requires an exact temporal leaf column"))
+      element_width = WidePart.array_numeric_payload_width(
+        WidePart.temporal_array_physical_type(element_type).not_nil!
+      )
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("temporal Array substream mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
+      checked_array_mark_byte_count(flat_elements, element_width).to_u64
+    end
+
     # Count all three physical streams of Array(Array(UInt64)) before a table
     # batch allocates nested row arrays. The size1 values are decoded only to
     # derive per-mark leaf counts; payload frames are boundary-validated but
@@ -1370,6 +1441,24 @@ module CrystalClick
         stream = @streams[stream_name]
         _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
         raise CorruptPartError.new("Array(Nullable(T)) child substream mark rows differ") unless child_rows == rows
+        width = stream_name == "#{column}.null" ? 1 : element_width
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
+      end
+      checked_array_mark_byte_count(flat_elements, 1 + element_width).to_u64
+    end
+
+    def array_nullable_temporal_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.nullable_temporal_array_element_type(@column_type) || raise(UnsupportedFormatError.new("nullable temporal Array accessor requires an exact temporal leaf column"))
+      element_width = WidePart.array_numeric_payload_width(
+        WidePart.temporal_array_physical_type(element_type).not_nil!
+      )
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      {"#{column}.null", column}.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("nullable temporal Array child substream mark rows differ") unless child_rows == rows
         width = stream_name == "#{column}.null" ? 1 : element_width
         validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
       end
@@ -1719,6 +1808,119 @@ module CrystalClick
       value_stream = @streams[column]
       value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
       raise CorruptPartError.new("Array(Nullable(T)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, element_width), element_width)
+
+      values = Array(Array(T?)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(T?).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(Nullable(T)) sizes exceed selected child streams") if flat_offset >= flat_elements
+          is_null = null_bytes[flat_offset]
+          raise CorruptPartError.new("Array(Nullable(T)) null map contains a value other than 0 or 1") unless is_null <= 1_u8
+          row << (is_null == 1_u8 ? nil : decode_array_numeric_value(value_bytes, flat_offset * element_width, type))
+          flat_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Nullable(T)) sizes do not consume selected child streams") unless flat_offset.to_u64 == flat_elements
+      values
+    end
+
+    def read_array_date_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UInt16))
+      read_array_temporal_mark_range(column, first_mark, mark_count, "Date", UInt16)
+    end
+
+    def read_array_date32_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int32))
+      read_array_temporal_mark_range(column, first_mark, mark_count, "Date32", Int32)
+    end
+
+    def read_array_datetime_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UInt32))
+      read_array_temporal_mark_range(column, first_mark, mark_count, "DateTime", UInt32)
+    end
+
+    def read_array_datetime64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int64))
+      ensure_column(column)
+      scale = WidePart.array_datetime64_scale(@column_type) || -1
+      read_array_temporal_mark_range(column, first_mark, mark_count, "DateTime64(#{scale})", Int64)
+    end
+
+    def read_array_nullable_date_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UInt16?))
+      read_array_nullable_temporal_mark_range(column, first_mark, mark_count, "Date", UInt16)
+    end
+
+    def read_array_nullable_date32_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int32?))
+      read_array_nullable_temporal_mark_range(column, first_mark, mark_count, "Date32", Int32)
+    end
+
+    def read_array_nullable_datetime_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UInt32?))
+      read_array_nullable_temporal_mark_range(column, first_mark, mark_count, "DateTime", UInt32)
+    end
+
+    def read_array_nullable_datetime64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int64?))
+      ensure_column(column)
+      scale = WidePart.nullable_array_datetime64_scale(@column_type) || -1
+      read_array_nullable_temporal_mark_range(column, first_mark, mark_count, "DateTime64(#{scale})", Int64)
+    end
+
+    private def read_array_temporal_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T)) forall T
+      ensure_column(column)
+      unless WidePart.temporal_array_element_type(@column_type) == element_type &&
+             WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed temporal Array accessor does not match selected semantic column type")
+      end
+
+      read_array_fixed_leaf_mark_range(column, first_mark, mark_count, type)
+    end
+
+    private def read_array_nullable_temporal_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T?)) forall T
+      ensure_column(column)
+      unless WidePart.nullable_temporal_array_element_type(@column_type) == element_type &&
+             WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed nullable temporal Array accessor does not match selected semantic column type")
+      end
+
+      read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, type)
+    end
+
+    private def read_array_fixed_leaf_mark_range(column : String, first_mark : Int, mark_count : Int, type : T.class) : Array(Array(T)) forall T
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array fixed-width substream mark rows differ") unless value_rows == rows
+      element_width = WidePart.array_numeric_payload_width(WidePart.array_numeric_type_name(type))
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, element_width), element_width)
+
+      values = Array(Array(T)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(T).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array sizes exceed selected fixed-width bytes") if flat_offset > value_bytes.size - element_width
+          row << decode_array_numeric_value(value_bytes, flat_offset, type)
+          flat_offset += element_width
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array sizes do not consume selected fixed-width bytes") unless flat_offset == value_bytes.size
+      values
+    end
+
+    private def read_array_nullable_fixed_leaf_mark_range(column : String, first_mark : Int, mark_count : Int, type : T.class) : Array(Array(T?)) forall T
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      element_width = WidePart.array_numeric_payload_width(WidePart.array_numeric_type_name(type))
+
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("nullable Array null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_flat_elements, 1)
+      null_bytes = read_mark_range_bytes(null_stream, null_start, null_end, checked_array_mark_byte_count(flat_elements, 1), 1)
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("nullable Array value mark rows differ") unless value_rows == rows
       validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
       value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, element_width), element_width)
 
@@ -3215,10 +3417,11 @@ module CrystalClick
       w33_fixed_string_pair_shape = fixed_string_array_w33_schema?(columns, selected_column)
       w34_bool_pair_shape = bool_array_w34_schema?(columns, selected_column)
       w39_wide_array_shape = wide_integer_array_w39_schema?(columns, selected_column)
+      w40_temporal_array_shape = temporal_array_w40_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -3237,7 +3440,8 @@ module CrystalClick
         w33_keyed_fixed_string_shape = w33_fixed_string_pair_shape && key_columns.size == 1 && key_columns[0] == key_column
         w34_keyed_bool_shape = w34_bool_pair_shape && key_columns.size == 1 && key_columns[0] == key_column
         w39_keyed_wide_array_shape = w39_wide_array_shape && key_columns.size == 1 && key_columns[0] == key_column
-        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape || w39_keyed_wide_array_shape
+        w40_keyed_temporal_array_shape = w40_temporal_array_shape && key_columns.size == 1 && key_columns[0] == key_column
+        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape || w39_keyed_wide_array_shape || w40_keyed_temporal_array_shape
           raise UnsupportedFormatError.new("array serialization requires one supported UInt64 key/value pair")
         end
         unless kind == "Default"
@@ -3301,6 +3505,36 @@ module CrystalClick
       columns.all? do |name, column_type|
         name == selected_column || column_type == "UInt64" ||
           !WidePart.numeric_array_element_type(column_type).nil? || !WidePart.nullable_numeric_array_element_type(column_type).nil?
+      end
+    end
+
+    # Exact stock W40 fixture shape for the four BASIC temporal Array leaves,
+    # their BASIC Nullable forms, and one UInt64 key. This exception is only
+    # for the observed DateTime64(3) stock fixture with empty serializers;
+    # paired two-column writer output is admitted separately by the semantic
+    # temporal predicate above, including DateTime64 precisions 0 through 9.
+    private def temporal_array_w40_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns.size == 9
+      return false unless columns.any? { |name, _| name == selected_column }
+
+      key_columns = columns.select { |name, column_type| name != selected_column && column_type == "UInt64" }
+      return false unless key_columns.size == 1 && columns.count { |_, column_type| column_type == "UInt64" } == 1
+
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      return false unless !WidePart.temporal_array_element_type(selected_type).nil? || !WidePart.nullable_temporal_array_element_type(selected_type).nil?
+
+      array_types = columns.compact_map do |_, column_type|
+        column_type if !WidePart.temporal_array_element_type(column_type).nil? || !WidePart.nullable_temporal_array_element_type(column_type).nil?
+      end
+      expected_types = Set{
+        "Array(Date)", "Array(Date32)", "Array(DateTime)", "Array(DateTime64(3))",
+        "Array(Nullable(Date))", "Array(Nullable(Date32))", "Array(Nullable(DateTime))", "Array(Nullable(DateTime64(3)))",
+      }
+      return false unless array_types.size == 8 && array_types.to_set == expected_types
+
+      columns.all? do |name, column_type|
+        name == selected_column || column_type == "UInt64" ||
+          !WidePart.temporal_array_element_type(column_type).nil? || !WidePart.nullable_temporal_array_element_type(column_type).nil?
       end
     end
 
@@ -4198,10 +4432,25 @@ module CrystalClick
         else
           8
         end
+      elsif element_type = WidePart.nullable_temporal_array_element_type(@column_type)
+        case stream_name
+        when "#{@column}.null"  then 1
+        when @column            then WidePart.array_numeric_payload_width(WidePart.temporal_array_physical_type(element_type).not_nil!)
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact nullable temporal Array substream")
+        end
       elsif @column_type == "Array(Array(Nullable(UInt64)))"
         stream_name == "#{@column}.null" ? 1 : 8
       elsif element_type = WidePart.numeric_array_element_type(@column_type)
         stream_name == @column ? WidePart.array_numeric_payload_width(element_type) : 8
+      elsif element_type = WidePart.temporal_array_element_type(@column_type)
+        case stream_name
+        when @column            then WidePart.array_numeric_payload_width(WidePart.temporal_array_physical_type(element_type).not_nil!)
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact temporal Array substream")
+        end
       elsif @column_type == "Array(UInt64)"
         8
       elsif @column_type == "Array(Array(UInt64))"

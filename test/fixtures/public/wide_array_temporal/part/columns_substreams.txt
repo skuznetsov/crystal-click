@@ -1,0 +1,32 @@
+columns substreams version: 1
+9 columns:
+1 substreams for column `pk`:
+	pk
+2 substreams for column `a_date`:
+	a_date.size0
+	a_date
+2 substreams for column `a_date32`:
+	a_date32.size0
+	a_date32
+2 substreams for column `a_datetime`:
+	a_datetime.size0
+	a_datetime
+2 substreams for column `a_datetime64`:
+	a_datetime64.size0
+	a_datetime64
+3 substreams for column `n_date`:
+	n_date.size0
+	n_date.null
+	n_date
+3 substreams for column `n_date32`:
+	n_date32.size0
+	n_date32.null
+	n_date32
+3 substreams for column `n_datetime`:
+	n_datetime.size0
+	n_datetime.null
+	n_datetime
+3 substreams for column `n_datetime64`:
+	n_datetime64.size0
+	n_datetime64.null
+	n_datetime64

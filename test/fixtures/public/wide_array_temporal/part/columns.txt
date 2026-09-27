@@ -1,0 +1,11 @@
+columns format version: 1
+9 columns:
+`pk` UInt64
+`a_date` Array(Date)
+`a_date32` Array(Date32)
+`a_datetime` Array(DateTime)
+`a_datetime64` Array(DateTime64(3))
+`n_date` Array(Nullable(Date))
+`n_date32` Array(Nullable(Date32))
+`n_datetime` Array(Nullable(DateTime))
+`n_datetime64` Array(Nullable(DateTime64(3)))

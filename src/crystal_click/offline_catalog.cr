@@ -265,6 +265,23 @@ module CrystalClick
         selected_values = batch.array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_uint64s(values, selected_values, array_elements[0])
+      when "Array(Date)"
+        selected_values = batch.array_date_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Date32)"
+        selected_values = batch.array_date32_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(DateTime)"
+        selected_values = batch.array_datetime_seconds_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(DateTime64(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_datetime64_scale(selected_type)
+        selected_values = batch.array_datetime64_ticks_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(UInt8)"
         selected_values = batch.array_numeric_values(column_name, UInt8)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -346,6 +363,23 @@ module CrystalClick
         selected_values = batch.array_nullable_bools_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_bool(values, selected_values, array_elements[0])
+      when "Array(Nullable(Date))"
+        selected_values = batch.array_nullable_date_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when "Array(Nullable(Date32))"
+        selected_values = batch.array_nullable_date32_codes_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when "Array(Nullable(DateTime))"
+        selected_values = batch.array_nullable_datetime_seconds_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Nullable(DateTime64(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.nullable_array_datetime64_scale(selected_type)
+        selected_values = batch.array_nullable_datetime64_ticks_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when .starts_with?("Array(Nullable(")
         element_type = WidePart.nullable_numeric_array_element_type(selected_type) || raise(UnsupportedFormatError.new("selected table column type is unsupported"))
         selected_values = array_nullable_numeric_values_for(batch, column_name, element_type)

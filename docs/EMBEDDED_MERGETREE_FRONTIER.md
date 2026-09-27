@@ -106,6 +106,10 @@ scalar payloads through exact paired APIs; Sparse remains rejected.
 W39 admits single-level Arrays of the already admitted raw 128- and 256-bit
 integer values, with BASIC Nullable leaves on the pinned Wide/LZ4/plain-mark
 frontier. It does not admit generic recursive Arrays or semantic aliases.
+W40 admits paired single-level temporal Arrays: bare `Date`, `Date32`,
+`DateTime`, and canonical `DateTime64(p)` leaves, plus their BASIC Nullable
+forms. Raw code and tick APIs must retain the exact semantic declaration;
+this does not admit timezone-qualified declarations or calendar conversion.
 
 ## Purpose and bounded contexts
 
@@ -2279,6 +2283,79 @@ review found no remaining W39 correctness or scope counterexample (`ROBUST`
 within this pinned profile). Any codec, fixture, compiler, pinned ClickHouse
 binary, or reader/writer source change requires those checks to be rerun.
 
+## W40 bounded implementation: paired temporal Array leaves
+
+Admit only one-level `Array(Date)`, `Array(Date32)`, `Array(DateTime)`,
+`Array(DateTime64(p))`, and their `Array(Nullable(T))` BASIC counterparts,
+beside a sorted `UInt64` key on the pinned Wide/LZ4/plain-mark frontier.
+`p` is a canonical single digit from 0 through 9 and remains part of the
+column type; values are raw day codes, epoch seconds, or signed ticks, with
+no calendar or timezone conversion. Public readers, typed batches, offline
+catalog values, and explicit writers must preserve this semantic identity
+even where the physical widths equal ordinary integers. A physical stock
+probe must establish `size0`, optional child null-map, child payload, marks,
+and serializer metadata before the implementation is promoted.
+
+Reject same-width integer aliases in temporal accessors, alternate
+`DateTime64` spellings, timezone-qualified `DateTime`, nested or Sparse
+arrays, Compact parts, and any inferred generic writer route. The offline
+TUI remains guard-only for these values; no renderer is implied by catalog
+materialization. MV and projection semantics remain separate follow-ons.
+
+Risk is **CAUTION**: equal-width payloads can silently exchange Date with
+UInt16, Date32 with Int32, DateTime with UInt32, or DateTime64 with Int64;
+precision may be lost even when tick bytes round-trip. Rollback is one
+W40-only local commit; no existing ClickHouse data root or remote is changed.
+The first falsifier is a RED exact-type spec, followed by a stock physical
+probe spanning empty rows, NULL versus zero, and later marks at scale 3.
+Writer readback and the independent ClickHouse oracle then cover scales 0,
+3, and 9. DoD is paired reader/writer coverage for all eight declaration
+families, exact type and precision rejection, malformed child-stream
+fail-closed behavior, no-publication invalid writer inputs, typed batch and
+catalog ownership checks, focused and full debug/release suites, and a
+pinned bidirectional ClickHouse `ATTACH PART`/`CHECK TABLE`/independently
+encoded full and keyed RowBinary oracle. The strongest adversarial case is a
+same-width numeric column accepted as temporal, or a `DateTime64(9)` part
+read/written as precision 3. Any change to the fixture, pinned binary,
+compiler, serialization code, or filesystem-case assumption decays the
+resulting certificate.
+The initial pinned ClickHouse local 26.7.1.1315 stock probe produced one
+seven-row, five-mark Wide part with nine exact columns (one `UInt64` key and
+the eight W40 Array declarations). `CHECK TABLE` passed. Its 21 LZ4 data
+streams and 21 plain mark streams follow `size0` plus child payload for
+non-null leaves, and `size0`, child null-map, and payload for BASIC Nullable
+leaves. `serialization.json` has no per-column serializer overrides and the
+expected nested String serialization version 1. This was the physical-layout
+anchor before reader/writer verification.
+
+The W40 admission test was RED before production: `Array(Date)` was rejected.
+At the final W40 source state, the focused spec passed 10/10; full debug and
+release suites each passed 665/665 with the host's `-fuse-ld=ld` link flag.
+The fixture verifier checked all 50 stock-part files, SHA-256 pins, eight
+declarations, 21 data and 21 mark streams, and four data marks plus EOF.
+Pinned ClickHouse local 26.7.1.1315 accepted the stock fixture and each
+paired writer part through `ATTACH PART` and `CHECK TABLE`; independently
+encoded full and key-filtered RowBinary matched byte-for-byte for all eight
+families, representative DateTime64 precisions 0, 3, and 9, and nullable
+all-NULL, empty-only, and adjacent non-NULL marks. Local writer readback
+covered every DateTime64 precision 0 through 9. The stock Date32 SQL
+conversion saturated the requested Int32 endpoints to raw codes `-25567`
+and `24854`; separate paired-writer checks preserved raw Int32 extrema.
+The neighboring W39 wide-integer Array and nullable temporal scalar
+ClickHouse oracles also passed after W40. Final hostile review found no
+W40-specific alias, precision, mark/null, or publication counterexample:
+`ROBUST` within this pinned profile.
+
+This is a bounded compatibility result, not general Array or DateTime64
+coverage. The external ClickHouse oracle samples precision 0/3/9, while
+precisions 1/2/4-8 have local readback only. The W40 corruption falsifier
+truncates a nullable child frame; checksum-consistent malformed child/null
+topology remains a cross-family adversarial test gap, although the shared
+fixed-leaf decoder validates child marks, byte spans, 0/1 null flags, and
+flattened consumption. Compact, Sparse, timezone-qualified, nested, and
+non-paired writer shapes remain rejected. Re-run the gate after any decay
+trigger above.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2288,7 +2365,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W39's paired raw 128/256-bit
+1. Extend reader and writer together beyond W40's paired temporal Arrays,
+   W39's paired raw 128/256-bit
    Array leaves, W38's paired BASIC Nullable raw 256-bit scalars,
    W37's paired raw 256-bit scalars, W36's paired BASIC
    Nullable raw 128-bit scalars, W35's paired raw 128-bit scalars,
