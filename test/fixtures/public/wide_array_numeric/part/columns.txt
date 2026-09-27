@@ -1,0 +1,13 @@
+columns format version: 1
+11 columns:
+`pk` UInt64
+`arr_u8` Array(UInt8)
+`arr_u16` Array(UInt16)
+`arr_u32` Array(UInt32)
+`arr_u64` Array(UInt64)
+`arr_i8` Array(Int8)
+`arr_i16` Array(Int16)
+`arr_i32` Array(Int32)
+`arr_i64` Array(Int64)
+`arr_f32` Array(Float32)
+`arr_f64` Array(Float64)

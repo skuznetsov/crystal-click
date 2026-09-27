@@ -70,8 +70,8 @@ describe CrystalClick::WidePart do
     end
 
     [
-      "Array(UInt8)",
-      "Array(Int64)",
+      "Array(Nullable(UInt8))",
+      "Array(Int128)",
       "Array(FixedString(8))",
       "Array(Array(Nullable(UInt8)))",
       "Array(Array(UInt64) trailing)",
@@ -298,7 +298,7 @@ describe CrystalClick::WidePart do
 
       columns_path = File.join(part_path, "columns.txt")
       columns = File.read(columns_path)
-      File.write(columns_path, columns.sub("Array(UInt64)", "Array(UInt8)"))
+      File.write(columns_path, columns.sub("Array(UInt64)", "Array(FixedString(8))"))
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::WidePart.open_typed(part_path, "payload")
       end

@@ -2,7 +2,9 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
-                             Array(UInt64) | Array(UInt64?) | Array(String) | Array(Array(UInt64)) | Array(Array(UInt64?)) | Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
+                             Array(UInt64) | Array(UInt64?) | Array(String) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
+                             Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
+                             Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -234,6 +236,42 @@ module CrystalClick
         selected_values = batch.array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_uint64s(values, selected_values, array_elements[0])
+      when "Array(UInt8)"
+        selected_values = batch.array_numeric_values(column_name, UInt8)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(UInt16)"
+        selected_values = batch.array_numeric_values(column_name, UInt16)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(UInt32)"
+        selected_values = batch.array_numeric_values(column_name, UInt32)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Int8)"
+        selected_values = batch.array_numeric_values(column_name, Int8)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Int16)"
+        selected_values = batch.array_numeric_values(column_name, Int16)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Int32)"
+        selected_values = batch.array_numeric_values(column_name, Int32)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Int64)"
+        selected_values = batch.array_numeric_values(column_name, Int64)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Float32)"
+        selected_values = batch.array_numeric_values(column_name, Float32)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Float64)"
+        selected_values = batch.array_numeric_values(column_name, Float64)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(Array(UInt64))"
         selected_values = batch.array_array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -736,6 +774,20 @@ module CrystalClick
       selected_values : Slice(Array(UInt64)),
       observed_elements : UInt64,
     ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
+
+      selected_values.each { |row| values << row.dup }
+      next_elements
+    end
+
+    private def append_materialized_array_numeric(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(T)),
+      observed_elements : UInt64,
+    ) : UInt64 forall T
       next_elements = observed_elements
       selected_values.each do |row|
         next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)

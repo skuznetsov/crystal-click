@@ -496,7 +496,7 @@ describe CrystalClick::Examples::OfflinePageSource do
   end
 
   it "rejects unsupported selected types and page sizes above the example bound" do
-    columns = "    `payload` Array(UInt8)"
+    columns = "    `payload` Array(Nullable(UInt8))"
     with_offline_page_table(columns, nil) do |table, _table_path|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 1).load(0_u64)

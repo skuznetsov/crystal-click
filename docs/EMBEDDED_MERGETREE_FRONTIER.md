@@ -76,6 +76,9 @@ this does not admit arbitrary nested types.
 W29 admits exactly `Array(Array(Nullable(UInt64)))` with paired reading and
 writing, typed batches, and offline catalog values. Its four-stream stock
 oracle and regression gates passed; this is not general recursive type support.
+W30 admits a bounded single-level numeric Array family, replacing
+one-spelling-at-a-time widening with a sealed leaf plan. It does not admit
+nullable numeric leaves or arbitrary recursive Arrays.
 
 ## Purpose and bounded contexts
 
@@ -1657,6 +1660,42 @@ is **ROBUST** only for this exact shape and the pinned Wide/LZ4/plain-mark
 profile. General recursive codecs, MV, projections, Compact parts, and
 performance remain outside this slice.
 
+## Completed slice W30: single-level numeric Array family
+
+W30 admits paired `Array(T)` only for the existing fixed-width primitive numeric
+leaves `T`: `UInt8/16/32/64`, `Int8/16/32/64`, and `Float32/64`. A sealed
+leaf dispatch selects the canonical type, width, and exact substreams. It
+does not parse or admit arbitrary recursive types. Existing `Array(UInt64)`
+behavior remains unchanged while moving onto the common path; existing
+`Array(Nullable(UInt64))` and nested Array support did not regress. Other
+nullable Array leaves are a separate W31 candidate. String/semantic leaves,
+new nested Arrays, JSON, Map, Tuple, Variant, and MV/projections remain
+outside W30.
+
+The physical streams are `payload.size0` plus `payload`, confirmed by the
+stock-produced fixture. It verifies stream inventory, mark alignment, and
+values for every admitted spelling, including empty arrays, an empty middle
+row, an all-empty final mark, integer extrema, finite float boundaries, and
+NaN payload handling. A shifted value mark and a declared leaf-width mismatch
+are rejected before a typed batch is published. The writer rejects oversized
+arrays before publishing a part.
+
+Risk is **CAUTION** because a shared dispatch can silently decode the wrong
+width or associate elements with the wrong row. Rollback is the W30-only
+feature commit; neither existing part bytes nor live ClickHouse directories
+were mutated. The DoD passed: the pinned stock 26.7.1.1315 fixture reads at
+full and later-mark ranges, all ten Crystal-written shapes pass stock
+`ATTACH PART`, exact full/key-range RowBinary, and `CHECK TABLE`; mark-offset
+and width mismatch controls fail closed before a typed batch is published;
+debug and release suites each pass 568 examples; and all 24 stock-oracle
+scripts pass. The adversary verdict is **ROBUST within the admitted profile**:
+exact one-level numeric leaves in Wide/LZ4/plain-mark parts. This does not
+establish compatibility for other serializer layouts, nullable leaves,
+arbitrary recursive Arrays, MV, projections, or Compact parts. Evidence
+decays when the producer build, serializer/mark layout, codec, filesystem,
+or shared reader/writer changes. No memory or throughput optimization was
+admitted in this slice.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1666,7 +1705,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W27's exact nullable array,
+1. Extend reader and writer together beyond W30's numeric Array family,
+   W29's nested nullable Array, W28's nested Array, W27's exact nullable array,
    W25/W26's exact Maps,
    W24's exact JSON typed paths, W23's exact named Tuple,
    W22's bounded `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
