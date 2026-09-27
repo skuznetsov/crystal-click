@@ -115,6 +115,9 @@ W42 and W43 separately admit paired Decimal32 and Decimal64 Array leaves,
 respectively, with signed raw coefficients and exact precision/scale metadata.
 W44 admits the corresponding paired Decimal128 Array leaves on the pinned
 Wide/LZ4/plain-mark profile; its detailed evidence and limits are below.
+W45 admits paired Decimal256 Array leaves with distinct signed raw
+`Decimal256Value` coefficients; its scoped stock compatibility evidence is
+recorded below. Neither Decimal Array slice admits general decimal arithmetic.
 
 ## Purpose and bounded contexts
 
@@ -2614,6 +2617,80 @@ the W44 evidence does not promote arbitrary multi-column layouts, other
 storage formats, Decimal SQL arithmetic, MV/projections, or performance
 parity. Refresh the scoped checks after the decay triggers above.
 
+## W45 frontier: paired Decimal256 Array leaves
+
+Admit only one-level `Array(Decimal(76, S))` and BASIC
+`Array(Nullable(Decimal(76, S)))`, with `S` from 0 through 76, beside a
+sorted `UInt64` key in the pinned Wide/LZ4/plain-`.mrk2` profile. The public
+typed value is `Decimal256Value`, preserving the signed little-endian 32-byte
+raw coefficient and the exact scale in column metadata; neither `Int256Value`
+nor `UInt256Value` is a Decimal alias. Reader, batch, offline catalog
+`.values`, and explicit paired writer APIs must agree on type identity, row
+order, empty Arrays, and NULL versus non-NULL zero. A NULL child slot has
+the stock zero-filled nested payload. Only canonical `Decimal(76, S)` is
+admitted in physical part metadata; `Decimal256(S)` may normalize only at
+the catalog DDL boundary. No SQL arithmetic, rounding, or generic numeric
+inference is admitted. Distinguish raw backing compatibility from the valid
+SQL Decimal(76, S) coefficient range in tests and claims.
+
+Risk is **CAUTION**: a 32-byte child stream could alias raw `Int256` or
+`UInt256`, and an all-NULL or all-empty row can conceal a missing nested
+stream or wrong serializer metadata. Start with a typed-admission RED test,
+then use a pinned stock ClickHouse fixture and independently verify its
+physical topology and SHA256. The bidirectional oracle must cover
+stock-to-Crystal reads and Crystal-to-stock `ATTACH PART`, `CHECK TABLE`, and
+byte-exact full/keyed RowBinary. Include scale 0 and 76, sign/high-word
+patterns, NULL versus zero, nonempty all-NULL and all-empty controls, later
+marks, noncanonical declarations, wrong scale, batch/catalog access, and
+writer rejection before publication. A stock-accepted part whose coefficient
+bytes, null positions, or keyed rows differ is the strongest falsifier.
+DoD also requires focused and full debug/release Crystal suites, format and
+shell syntax checks, whitespace check, and hostile self-review. A failed
+guard or oracle blocks the feature commit.
+
+Reject nested or outer-Nullable Arrays, generic `Array(T)` dispatch,
+Compact/Sparse serialization, arbitrary schemas, MV/projection semantics,
+and memory/performance work in W45. The writer must preflight dimensions
+and mark boundaries, self-read the staged part, and publish exclusively
+only after validation. Rollback is one W45-only local commit, without
+changing existing ClickHouse data roots or any remote. Evidence is scoped
+to the pinned ClickHouse build, part profile, and platform; producer version,
+codec, mark/checksum implementation, or platform changes require refreshing
+the focused, full, and stock-oracle gates.
+
+The preimplementation typed-admission assertion was behaviorally RED:
+`Array(Decimal(76, 0))` returned false (one example, one failure, no compile
+error). The pinned official ClickHouse 26.7.1.1315 fixture has canonical
+scale-2 three-column declarations, BASIC `serialization.json`, six LZ4
+streams, and mark rows `[2, 2, 2, 1]` plus EOF. Its 20 SHA256 entries and
+physical topology pass the fixture verifier. The focused W45 spec passes
+seven examples; the final full debug and release suites each pass 699
+examples with no failures or errors. Format, shell syntax, and diff-whitespace
+checks pass.
+
+The bidirectional stock oracle checks 13 parts: the stock fixture plus
+Crystal-written bare/nullable scale-0 raw signed backing extrema, valid
+`+(10^76-1)` and `-(10^76-1)` boundaries at scales 0 and 76, all-empty
+controls at both scales, and scale-76 nonempty all-NULL controls. Every part
+passes `ATTACH PART` and `CHECK TABLE`, and its full and PK-filtered
+RowBinary bytes match the independent expected encoding exactly. The oracle
+also checks later marks, high-word coefficients, zero-filled 32-byte NULL
+slots on disk versus omitted NULL payload in RowBinary, and NULL versus
+non-NULL zero. Raw signed Int256 backing extrema are storage-compatibility
+cases, not claims of valid SQL Decimal(76) values. Physical Decimal256 aliases,
+noncanonical precision/scale, and semantic aliasing through generic Int256
+Array access remain rejected; the DDL alias is accepted only at the catalog
+boundary.
+
+Hostile self-review returned **ROBUST within the exact W45 profile** after
+independent focused and stock-oracle reruns. The strongest attempted attacks
+were identical-width Int256/Decimal256 type leakage and nonempty all-NULL
+nullable arrays. The remaining shared Array gap is checksum-consistent
+malformed child/null/mark topology; this evidence does not establish arbitrary
+multi-column schemas, other formats or ClickHouse versions, Decimal SQL
+arithmetic, MV/projections, or performance parity. Refresh these scoped
+checks when the producer or reader/writer format boundary changes.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2623,7 +2700,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W44's paired Decimal128 Arrays,
+1. Extend reader and writer together beyond W45's paired Decimal256 Arrays,
+   W44's paired Decimal128 Arrays,
    W43's paired Decimal64 Arrays,
    W42's paired Decimal32 Arrays,
    W41's paired UUID Arrays,

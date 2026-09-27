@@ -8,6 +8,7 @@ module CrystalClick
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Int128) | Array(UInt128) | Array(Int256Value) | Array(UInt256Value) |
                              Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) |
+                             Array(Decimal256Value) | Array(Decimal256Value?) |
                              Array(UUIDValue) | Array(UUIDValue?) |
                              Array(Bool) | Array(Bool?) | Array(Array(Bool)) | Array(Array(Bool?)) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
@@ -302,6 +303,11 @@ module CrystalClick
         selected_values = batch.array_decimal128_raw_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Decimal(76,")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_decimal256_scale(selected_type)
+        selected_values = batch.array_decimal256_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(UInt8)"
         selected_values = batch.array_numeric_values(column_name, UInt8)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -412,6 +418,11 @@ module CrystalClick
       when .starts_with?("Array(Nullable(Decimal(38,")
         raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_nullable_decimal128_scale(selected_type)
         selected_values = batch.array_nullable_decimal128_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Nullable(Decimal(76,")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_nullable_decimal256_scale(selected_type)
+        selected_values = batch.array_nullable_decimal256_raw_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when .starts_with?("Array(Nullable(DateTime64(")

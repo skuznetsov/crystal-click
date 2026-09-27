@@ -643,6 +643,34 @@ module CrystalClick
       write_uint64_array_nullable_decimal128_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
     end
 
+    # Write signed Decimal256 coefficients in their exact 32-byte
+    # little-endian representation. Scale is semantic metadata only.
+    def self.write_uint64_array_decimal256_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Decimal256Value)),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_decimal256_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+    end
+
+    # BASIC Array(Nullable(Decimal256)) keeps one zero-filled 32-byte nested
+    # coefficient slot for each null-map entry.
+    def self.write_uint64_array_nullable_decimal256_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Decimal256Value?)),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_nullable_decimal256_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+    end
+
     # Write BASIC Array(Nullable(UUID)); null slots retain a zero 16-byte
     # payload placeholder alongside their one-byte null-map entry.
     def self.write_uint64_array_nullable_uuid_pair(
@@ -2233,6 +2261,82 @@ module CrystalClick
       end
     end
 
+    private def self.write_uint64_array_decimal256_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Decimal256Value)),
+      scale : Int32,
+      rows_per_mark : Int32,
+    ) : String
+      validate_decimal256_array_scale(scale)
+      validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Decimal256", true)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "Decimal256"))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Decimal(76, #{scale}))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_nullable_decimal256_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Decimal256Value?)),
+      scale : Int32,
+      rows_per_mark : Int32,
+    ) : String
+      validate_decimal256_array_scale(scale)
+      validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Decimal256", true)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "Decimal256"))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(Decimal(76, #{scale})))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_nullable_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     private def self.validate_decimal32_array_scale(scale : Int32) : Nil
       raise ArgumentError.new("Decimal32 Array scale must be in range 0..9") unless 0 <= scale <= 9
     end
@@ -2243,6 +2347,10 @@ module CrystalClick
 
     private def self.validate_decimal128_array_scale(scale : Int32) : Nil
       raise ArgumentError.new("Decimal128 Array scale must be in range 0..38") unless 0 <= scale <= 38
+    end
+
+    private def self.validate_decimal256_array_scale(scale : Int32) : Nil
+      raise ArgumentError.new("Decimal256 Array scale must be in range 0..76") unless 0 <= scale <= 76
     end
 
     private def self.write_uint64_array_uuid_pair_internal(
@@ -2395,9 +2503,18 @@ module CrystalClick
       values : Slice(Array(T)),
       rows_per_mark : Int32,
       type_name : String,
+      semantic_decimal256 : Bool = false,
     ) : Nil forall T
       raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
-      raise ArgumentError.new("Array numeric writer requires an exact supported numeric type") unless WidePart.numeric_array_element_type("Array(#{type_name})") == type_name
+      decimal256_semantic_type =
+        {% if T == Decimal256Value %}
+          semantic_decimal256 && type_name == "Decimal256"
+        {% else %}
+          false
+        {% end %}
+      unless WidePart.numeric_array_element_type("Array(#{type_name})") == type_name || decimal256_semantic_type
+        raise ArgumentError.new("Array numeric writer requires an exact supported numeric type")
+      end
       validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, ["#{value_name}.size0", value_name])
 
       width = numeric_width(type_name)
@@ -2693,9 +2810,16 @@ module CrystalClick
       values : Slice(Array(T?)),
       rows_per_mark : Int32,
       type_name : String,
+      semantic_decimal256 : Bool = false,
     ) : Nil forall T
       raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
-      unless WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name
+      decimal256_semantic_type =
+        {% if T == Decimal256Value %}
+          semantic_decimal256 && type_name == "Decimal256"
+        {% else %}
+          false
+        {% end %}
+      unless WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name || decimal256_semantic_type
         raise ArgumentError.new("Array nullable numeric writer requires an exact supported numeric type")
       end
       validate_array_common_inputs(
@@ -4093,7 +4217,7 @@ module CrystalClick
         8
       when "UUID", "IPv6", "Int128", "UInt128"
         16
-      when "Int256", "UInt256"
+      when "Int256", "UInt256", "Decimal256"
         32
       when "DateTime"
         4
@@ -8417,6 +8541,100 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged nullable Decimal128 Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_decimal256_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Decimal256Value)),
+      rows_per_mark : Int32,
+      scale : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      expected_type = "Array(Decimal(76, #{scale}))"
+      unless WidePart.array_decimal256_scale(expected_type) == scale
+        raise CorruptPartError.new("staged Decimal256 Array scale or semantic declaration is invalid")
+      end
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Decimal256 Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Decimal256 Array type does not match") unless value_part.column_type == expected_type
+      raise CorruptPartError.new("staged Decimal256 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Decimal256 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_decimal256_raw_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && numeric_array_rows_identical?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged Decimal256 Array stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Decimal256 Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_nullable_decimal256_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Decimal256Value?)),
+      rows_per_mark : Int32,
+      scale : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      expected_type = "Array(Nullable(Decimal(76, #{scale})))"
+      unless WidePart.array_nullable_decimal256_scale(expected_type) == scale
+        raise CorruptPartError.new("staged nullable Decimal256 Array scale or semantic declaration is invalid")
+      end
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged nullable Decimal256 Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged nullable Decimal256 Array type does not match") unless value_part.column_type == expected_type
+      raise CorruptPartError.new("staged nullable Decimal256 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable Decimal256 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_nullable_decimal256_raw_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && nullable_numeric_array_rows_identical?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged nullable Decimal256 Array stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged nullable Decimal256 Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
