@@ -20,19 +20,23 @@ module CrystalClick
   alias WidePartArrayNumericArray = Array(Array(UInt8)) | Array(Array(UInt16)) | Array(Array(UInt32)) | Array(Array(UInt64)) |
                                     Array(Array(Int8)) | Array(Array(Int16)) | Array(Array(Int32)) | Array(Array(Int64)) |
                                     Array(Array(Float32)) | Array(Array(Float64)) |
-                                    Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value))
+                                    Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value)) |
+                                    Array(Array(UUIDValue))
   alias WidePartArrayNumericSlice = Slice(Array(UInt8)) | Slice(Array(UInt16)) | Slice(Array(UInt32)) | Slice(Array(UInt64)) |
                                     Slice(Array(Int8)) | Slice(Array(Int16)) | Slice(Array(Int32)) | Slice(Array(Int64)) |
                                     Slice(Array(Float32)) | Slice(Array(Float64)) |
-                                    Slice(Array(Int128)) | Slice(Array(UInt128)) | Slice(Array(Int256Value)) | Slice(Array(UInt256Value))
+                                    Slice(Array(Int128)) | Slice(Array(UInt128)) | Slice(Array(Int256Value)) | Slice(Array(UInt256Value)) |
+                                    Slice(Array(UUIDValue))
   alias WidePartArrayNullableNumericArray = Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) | Array(Array(UInt64?)) |
                                             Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
                                             Array(Array(Float32?)) | Array(Array(Float64?)) |
-                                            Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?))
+                                            Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?)) |
+                                            Array(Array(UUIDValue?))
   alias WidePartArrayNullableNumericSlice = Slice(Array(UInt8?)) | Slice(Array(UInt16?)) | Slice(Array(UInt32?)) | Slice(Array(UInt64?)) |
                                             Slice(Array(Int8?)) | Slice(Array(Int16?)) | Slice(Array(Int32?)) | Slice(Array(Int64?)) |
                                             Slice(Array(Float32?)) | Slice(Array(Float64?)) |
-                                            Slice(Array(Int128?)) | Slice(Array(UInt128?)) | Slice(Array(Int256Value?)) | Slice(Array(UInt256Value?))
+                                            Slice(Array(Int128?)) | Slice(Array(UInt128?)) | Slice(Array(Int256Value?)) | Slice(Array(UInt256Value?)) |
+                                            Slice(Array(UUIDValue?))
   alias WidePartArrayNullableStringArray = Array(Array(String?))
   alias WidePartArrayNullableStringSlice = Slice(Array(String?))
   alias WidePartArrayBoolArray = Array(Array(Bool))
@@ -539,6 +543,20 @@ module CrystalClick
       array_nullable_temporal_values_for(column, "DateTime64(#{scale})", Int64)
     end
 
+    def array_uuids_for(column : String) : Slice(Array(UUIDValue))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(UUID) accessor requires an exact Array(UUID) declaration") unless WidePart.uuid_array_element_type(@column_types[index])
+      values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(UUID) column was not materialized in this batch"))
+      values.as(Slice(Array(UUIDValue)))
+    end
+
+    def array_nullable_uuids_for(column : String) : Slice(Array(UUIDValue?))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(Nullable(UUID)) accessor requires an exact declaration") unless WidePart.nullable_uuid_array_element_type(@column_types[index])
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(UUID)) column was not materialized in this batch"))
+      values.as(Slice(Array(UUIDValue?)))
+    end
+
     # Return a nullable typed Array(T) view only for an exact
     # Array(Nullable(T)) numeric declaration.
     def array_nullable_numeric_values(column : String, type : T.class) : Slice(Array(T?)) forall T
@@ -991,6 +1009,8 @@ module CrystalClick
             preflight_string_bytes = 0_u64
             preflight_array_numeric_bytes = Hash(String, UInt64).new
             preflight_array_nullable_numeric_bytes = Hash(String, UInt64).new
+            preflight_array_uuid_bytes = Hash(String, UInt64).new
+            preflight_array_nullable_uuid_bytes = Hash(String, UInt64).new
             preflight_array_array_uint64_bytes = Hash(String, UInt64).new
             preflight_array_array_nullable_uint64_bytes = Hash(String, UInt64).new
             preflight_array_nullable_string_raw_bytes = Hash(String, UInt64).new
@@ -1031,6 +1051,12 @@ module CrystalClick
               elsif WidePart.nullable_temporal_array_element_type(selected.column_type)
                 bytes = selected.reader.array_nullable_temporal_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.uuid_array_element_type(selected.column_type)
+                bytes = selected.reader.array_uuid_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_uuid_bytes[selected.name] = bytes
+              elsif WidePart.nullable_uuid_array_element_type(selected.column_type)
+                bytes = selected.reader.array_nullable_uuid_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_uuid_bytes[selected.name] = bytes
               elsif WidePart.numeric_array_element_type(selected.column_type)
                 bytes = selected.reader.array_numeric_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_numeric_bytes[selected.name] = bytes
@@ -1089,6 +1115,26 @@ module CrystalClick
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
               case selected.column_type
+              when "Array(UUID)"
+                values = selected.reader.read_array_uuids_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(UUID) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_uuid_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(UUID) mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 16_u64
+                raise CorruptPartError.new("selected Array(UUID) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(UUID) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
+              when "Array(Nullable(UUID))"
+                values = selected.reader.read_array_nullable_uuids_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Nullable(UUID)) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_uuid_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Nullable(UUID)) mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 17_u64
+                raise CorruptPartError.new("selected Array(Nullable(UUID)) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(Nullable(UUID)) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
               when "Array(Date)", "Array(Date32)", "Array(DateTime)"
                 element_type = WidePart.temporal_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported temporal Array type"))
                 values = read_array_temporal_values(selected.reader, selected.name, mark_index, element_type)

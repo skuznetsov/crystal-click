@@ -8,6 +8,7 @@ module CrystalClick
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Int128) | Array(UInt128) | Array(Int256Value) | Array(UInt256Value) |
                              Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) |
+                             Array(UUIDValue) | Array(UUIDValue?) |
                              Array(Bool) | Array(Bool?) | Array(Array(Bool)) | Array(Array(Bool?)) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
@@ -265,6 +266,10 @@ module CrystalClick
         selected_values = batch.array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_uint64s(values, selected_values, array_elements[0])
+      when "Array(UUID)"
+        selected_values = batch.array_uuids_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(Date)"
         selected_values = batch.array_date_codes_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -373,6 +378,10 @@ module CrystalClick
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when "Array(Nullable(DateTime))"
         selected_values = batch.array_nullable_datetime_seconds_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when "Array(Nullable(UUID))"
+        selected_values = batch.array_nullable_uuids_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when .starts_with?("Array(Nullable(DateTime64(")

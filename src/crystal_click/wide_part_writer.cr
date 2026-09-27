@@ -506,6 +506,20 @@ module CrystalClick
       write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
     end
 
+    # Write one immutable part with a sorted UInt64 key and exact Array(UUID)
+    # leaves. UUID values retain their semantic two-half representation while
+    # reusing the established 16-byte little-endian fixed-width stream codec.
+    def self.write_uint64_array_uuid_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(UUIDValue)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_uuid_pair_internal(destination, key_name, keys, value_name, values, rows_per_mark)
+    end
+
     def self.write_uint64_array_nullable_date_pair(
       destination : String,
       key_name : String,
@@ -549,6 +563,19 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String
       write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+    end
+
+    # Write BASIC Array(Nullable(UUID)); null slots retain a zero 16-byte
+    # payload placeholder alongside their one-byte null-map entry.
+    def self.write_uint64_array_nullable_uuid_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(UUIDValue?)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_nullable_uuid_pair_internal(destination, key_name, keys, value_name, values, rows_per_mark)
     end
 
     # Write a sorted UInt64 key and an exact Array(Array(UInt64)) payload.
@@ -1898,6 +1925,148 @@ module CrystalClick
       ensure
         FileUtils.rm_rf(stage) if Dir.exists?(stage)
       end
+    end
+
+    private def self.write_uint64_array_uuid_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(UUIDValue)),
+      rows_per_mark : Int32,
+    ) : String
+      validate_array_uuid_layout_inputs(destination, key_name, keys, value_name, values, rows_per_mark, false)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "UUID"))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(UUID)"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_uuid_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_nullable_uuid_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(UUIDValue?)),
+      rows_per_mark : Int32,
+    ) : String
+      validate_array_uuid_layout_inputs(destination, key_name, keys, value_name, values, rows_per_mark, true)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "UUID"))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(UUID))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_uuid_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    # The UUID Array writer uses the generic fixed-width stream machinery, but
+    # keeps admission separate from the public numeric Array type family.
+    private def self.validate_array_uuid_layout_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(T)),
+      rows_per_mark : Int32,
+      nullable : Bool,
+    ) : Nil forall T
+      {% if T == UUIDValue %}
+        raise ArgumentError.new("Array(UUID) writer requires non-null UUIDValue leaves") if nullable
+      {% elsif T == UUIDValue? %}
+        raise ArgumentError.new("Array(Nullable(UUID)) writer requires nullable UUIDValue leaves") unless nullable
+      {% else %}
+        {% raise "UUID Array writer requires UUIDValue leaves" %}
+      {% end %}
+
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      streams = nullable ? ["#{value_name}.size0", "#{value_name}.null", value_name] : ["#{value_name}.size0", value_name]
+      validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, streams)
+
+      key_data_bytes = 0_i64
+      size0_data_bytes = 0_i64
+      null_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        size0_data_bytes = add_array_frame_size(size0_data_bytes, fixed_frame_size, "Array size0")
+
+        mark_elements = 0_u64
+        rows.times do |offset|
+          row_elements = values[start_row + offset].size.to_u64
+          if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+            raise ArgumentError.new("UUID Array nested element count exceeds per-mark limit")
+          end
+          mark_elements += row_elements
+        end
+
+        combined_width = nullable ? 17 : 16
+        combined_raw_size = checked_array_numeric_bytes(mark_elements, combined_width, "UUID Array child streams")
+        if combined_raw_size > WidePart::MAX_ARRAY_MARK_BYTES
+          raise ArgumentError.new("UUID Array child stream bytes exceed per-mark limit")
+        end
+        unless mark_elements == 0
+          value_raw_size = checked_array_numeric_bytes(mark_elements, 16, "UUID Array nested")
+          value_data_bytes = add_array_frame_size(
+            value_data_bytes,
+            checked_array_frame_size(value_raw_size, "UUID Array nested"),
+            "UUID Array nested"
+          )
+          if nullable
+            null_raw_size = checked_array_numeric_bytes(mark_elements, 1, "nullable UUID Array null map")
+            null_data_bytes = add_array_frame_size(
+              null_data_bytes,
+              checked_array_frame_size(null_raw_size, "nullable UUID Array null map"),
+              "nullable UUID Array null map"
+            )
+          end
+        end
+        start_row += rows
+      end
+      nil
     end
 
     private def self.validate_array_numeric_inputs(
@@ -7324,6 +7493,78 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged temporal Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_uuid_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(T)),
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      {% unless T == UUIDValue || T == UUIDValue? %}
+        {% raise "staged UUID Array validation requires UUIDValue leaves" %}
+      {% end %}
+      nullable_uuid = {% if T == UUIDValue? %}true{% else %}false{% end %}
+      expected_type = nullable_uuid ? "Array(Nullable(UUID))" : "Array(UUID)"
+      logical_streams = nullable_uuid ? [key_name, "#{value_name}.size0", "#{value_name}.null", value_name] : [key_name, "#{value_name}.size0", value_name]
+
+      checksums = PartChecksums.open(stage)
+      expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
+      logical_streams.each do |logical_name|
+        base = StreamName.hash(logical_name)
+        expected_checksum_files << "#{base}.bin"
+        expected_checksum_files << "#{base}.mrk2"
+      end
+      unless checksums.entries.keys.sort == expected_checksum_files.sort
+        raise CorruptPartError.new("staged UUID Array checksum inventory differs")
+      end
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      expected_substreams = nullable_uuid ? array_nullable_numeric_substreams_metadata(key_name, value_name) : array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged UUID Array column metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == expected_substreams
+        raise CorruptPartError.new("staged UUID Array substream metadata differs")
+      end
+      raise CorruptPartError.new("staged UUID Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged UUID Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged UUID Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged UUID Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged UUID Array type does not match") unless value_part.column_type == expected_type
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        observed_values = Array(Array(T)).new
+        {% if T == UUIDValue %}
+          observed_values = value_part.read_array_uuids_mark_range(value_name, mark_index, 1)
+        {% else %}
+          observed_values = value_part.read_array_nullable_uuids_mark_range(value_name, mark_index, 1)
+        {% end %}
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged UUID Array stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged UUID Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil

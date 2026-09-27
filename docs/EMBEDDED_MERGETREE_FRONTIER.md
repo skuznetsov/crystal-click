@@ -2356,6 +2356,61 @@ flattened consumption. Compact, Sparse, timezone-qualified, nested, and
 non-paired writer shapes remain rejected. Re-run the gate after any decay
 trigger above.
 
+## W41 frontier: paired UUID Array leaves
+
+Admit exactly one-level `Array(UUID)` and BASIC
+`Array(Nullable(UUID))` payloads beside a sorted `UInt64` key in the pinned
+Wide/LZ4/plain-`.mrk2` profile. Preserve `UUIDValue` as two ClickHouse-order
+little-endian `UInt64` halves, not a `UInt128`, `IPv6`, or string alias. The
+public typed reader, batch, catalog `.values`, and staged writer must retain
+the exact declared type and NULL/empty distinctions. The paired writer must
+publish only after self-readback and expose no generic inferred UUID path.
+
+The pinned ClickHouse 26.7.1.1315 preimplementation probe accepted both
+declarations and `CHECK TABLE`: `Array(UUID)` has `size0` plus the 16-byte
+child stream; `Array(Nullable(UUID))` adds a child `.null` stream. This is
+physical-layout evidence, not yet a compatibility result. Reject nested or
+outer-Nullable variants, other UUID spellings, Compact/Sparse parts, and
+cross-type numeric/IP aliases. Keep key ordering and partition semantics
+within existing bounds; do not add UUID-key filtering or SQL functions.
+
+Risk is **CAUTION**: byte-width compatibility can hide swapped UUID halves,
+or malformed child/null marks can silently misalign values. Rollback is one
+W41-only local commit, without touching existing ClickHouse data or pushing.
+The discriminating preimplementation test was required to be RED because
+exact UUID Arrays were rejected at the preimplementation source state. DoD
+was focused debug and full debug/release specs, formatting, exact stock
+reader fixture checks, and stock `ATTACH PART`/`CHECK TABLE` plus full and
+keyed RowBinary comparison for both writer variants. Adversarial checks
+targeted same-width aliases and malformed NULL/mark topology and used
+non-symmetric UUID halves to expose byte-order errors.
+
+The preimplementation admission spec was RED: `Array(UUID)` returned false.
+At the final W41 source state, its focused spec passed 9/9; the full debug
+and release suites each passed 674 examples with no failures or errors.
+Formatting and `git diff --check` passed. The stock fixture verifier pinned
+the exact three-column schema, six LZ4 data streams, six plain `.mrk2`
+streams, mark rows `[2, 2, 2, 1]`, and all copied-file hashes. Reader tests
+covered later marks, typed windows, catalog-owned values, same-width alias
+rejection, malformed child marks, and a frame-checksum-consistent non-boolean
+NULL map. The independent pinned ClickHouse oracle attached and checked the
+stock part and both normal writer variants, then compared full and keyed
+RowBinary byte-for-byte. It also attached and checked writer parts with all
+outer rows empty and with six nonempty all-NULL leaves; the latter retained
+six set null bytes and 96 zero-filled nested UUID bytes on disk while
+RowBinary omitted NULL child payloads. Final hostile review found no W41
+half-order, alias, null-topology, or publication defect: **ROBUST within this
+exact profile**.
+
+This does not admit arbitrary multi-column UUID Array schemas: the stock
+serializer exception recognizes only the observed `pk`/`plain`/`maybe`
+three-column fixture, while paired writer output retains its exact
+two-column gate. The corruption tests do not rewrite the part-level checksum
+inventory, so checksum-consistent malformed part metadata remains a
+cross-family adversarial gap. ClickHouse version/profile changes, Array or
+UUID codec changes, and mark/checksum validation changes decay this evidence;
+rerun the focused suite and stock oracle before widening compatibility.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2365,7 +2420,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W40's paired temporal Arrays,
+1. Extend reader and writer together beyond W41's paired UUID Arrays,
+   W40's paired temporal Arrays,
    W39's paired raw 128/256-bit
    Array leaves, W38's paired BASIC Nullable raw 256-bit scalars,
    W37's paired raw 256-bit scalars, W36's paired BASIC

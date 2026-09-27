@@ -307,6 +307,14 @@ module CrystalClick
       type == "Nullable(UUID)"
     end
 
+    def self.uuid_array_element_type(type : String) : String?
+      "UUID" if type == "Array(UUID)"
+    end
+
+    def self.nullable_uuid_array_element_type(type : String) : String?
+      "UUID" if type == "Array(Nullable(UUID))"
+    end
+
     def self.supports_ipv4_type?(type : String) : Bool
       type == "IPv4"
     end
@@ -472,6 +480,10 @@ module CrystalClick
       case type
       when "Array(UInt64)"
         [column]
+      when "Array(UUID)"
+        [column]
+      when "Array(Nullable(UUID))"
+        ["#{column}.null", column]
       when "Array(String)"
         ["#{column}.size", column]
       when "Array(Nullable(String))"
@@ -1465,6 +1477,38 @@ module CrystalClick
       checked_array_mark_byte_count(flat_elements, 1 + element_width).to_u64
     end
 
+    # Count both physical child streams for one exact Array(UUID) range before
+    # a table batch allocates caller-visible UUIDValue arrays.
+    def array_uuid_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("UUID Array accessor requires an exact Array(UUID) column") unless WidePart.uuid_array_element_type(@column_type)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(UUID) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 16)
+      checked_array_mark_byte_count(flat_elements, 16).to_u64
+    end
+
+    # BASIC Array(Nullable(UUID)) stores a one-byte null map and one 16-byte
+    # UUID slot per leaf, including NULL slots. Validate both child topologies
+    # before table materialization.
+    def array_nullable_uuid_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("nullable UUID Array accessor requires an exact Array(Nullable(UUID)) column") unless WidePart.nullable_uuid_array_element_type(@column_type)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      {"#{column}.null", column}.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Nullable(UUID)) child substream mark rows differ") unless child_rows == rows
+        width = stream_name == "#{column}.null" ? 1 : 16
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
+      end
+      checked_array_mark_byte_count(flat_elements, 17).to_u64
+    end
+
     # Count the fixed-width child payload of an exact Array(FixedString(N))
     # range after matching each child's marks to the flattened size0 counts.
     def array_fixed_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
@@ -1862,6 +1906,67 @@ module CrystalClick
       ensure_column(column)
       scale = WidePart.nullable_array_datetime64_scale(@column_type) || -1
       read_array_nullable_temporal_mark_range(column, first_mark, mark_count, "DateTime64(#{scale})", Int64)
+    end
+
+    def read_array_uuids_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UUIDValue))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(UUID) accessor requires an exact Array(UUID) column") unless WidePart.uuid_array_element_type(@column_type)
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(UUID) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 16)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 16), 16)
+
+      values = Array(Array(UUIDValue)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(UUIDValue).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(UUID) sizes exceed selected UUID bytes") if flat_offset > value_bytes.size - 16
+          row << UUIDValue.new(u64(value_bytes, flat_offset), u64(value_bytes, flat_offset + 8))
+          flat_offset += 16
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(UUID) sizes do not consume selected UUID bytes") unless flat_offset == value_bytes.size
+      values
+    end
+
+    def read_array_nullable_uuids_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UUIDValue?))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(Nullable(UUID)) accessor requires an exact Array(Nullable(UUID)) column") unless WidePart.nullable_uuid_array_element_type(@column_type)
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(UUID)) null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_flat_elements, 1)
+      null_bytes = read_mark_range_bytes(null_stream, null_start, null_end, checked_array_mark_byte_count(flat_elements, 1), 1)
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(UUID)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 16)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 16), 16)
+
+      values = Array(Array(UUIDValue?)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(UUIDValue?).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(Nullable(UUID)) sizes exceed selected child streams") if flat_offset >= flat_elements
+          is_null = null_bytes[flat_offset]
+          raise CorruptPartError.new("Array(Nullable(UUID)) null map contains a value other than 0 or 1") unless is_null <= 1_u8
+          value_offset = flat_offset * 16
+          row << (is_null == 1_u8 ? nil : UUIDValue.new(u64(value_bytes, value_offset), u64(value_bytes, value_offset + 8)))
+          flat_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Nullable(UUID)) sizes do not consume selected child streams") unless flat_offset.to_u64 == flat_elements
+      values
     end
 
     private def read_array_temporal_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T)) forall T
@@ -3418,10 +3523,11 @@ module CrystalClick
       w34_bool_pair_shape = bool_array_w34_schema?(columns, selected_column)
       w39_wide_array_shape = wide_integer_array_w39_schema?(columns, selected_column)
       w40_temporal_array_shape = temporal_array_w40_schema?(columns, selected_column)
+      w41_uuid_array_shape = uuid_array_w41_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -3441,7 +3547,8 @@ module CrystalClick
         w34_keyed_bool_shape = w34_bool_pair_shape && key_columns.size == 1 && key_columns[0] == key_column
         w39_keyed_wide_array_shape = w39_wide_array_shape && key_columns.size == 1 && key_columns[0] == key_column
         w40_keyed_temporal_array_shape = w40_temporal_array_shape && key_columns.size == 1 && key_columns[0] == key_column
-        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape || w39_keyed_wide_array_shape || w40_keyed_temporal_array_shape
+        w41_keyed_uuid_array_shape = w41_uuid_array_shape && key_columns.size == 1 && key_columns[0] == key_column
+        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape || w39_keyed_wide_array_shape || w40_keyed_temporal_array_shape || w41_keyed_uuid_array_shape
           raise UnsupportedFormatError.new("array serialization requires one supported UInt64 key/value pair")
         end
         unless kind == "Default"
@@ -3536,6 +3643,19 @@ module CrystalClick
         name == selected_column || column_type == "UInt64" ||
           !WidePart.temporal_array_element_type(column_type).nil? || !WidePart.nullable_temporal_array_element_type(column_type).nil?
       end
+    end
+
+    # Exact stock W41 fixture shape: one UInt64 key, one Array(UUID), and one
+    # Array(Nullable(UUID)) value. This only admits its empty serializer form;
+    # paired two-column writer output uses the existing legacy key/value gate.
+    private def uuid_array_w41_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns == [
+                            {"pk", "UInt64"},
+                            {"plain", "Array(UUID)"},
+                            {"maybe", "Array(Nullable(UUID))"},
+                          ]
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      !WidePart.uuid_array_element_type(selected_type).nil? || !WidePart.nullable_uuid_array_element_type(selected_type).nil?
     end
 
     private def fixed_string_array_w33_schema?(columns : Array({String, String}), selected_column : String) : Bool
@@ -4416,6 +4536,21 @@ module CrystalClick
     private def stream_element_width(stream_name : String) : Int32
       if @column_type == "LowCardinality(String)"
         1
+      elsif WidePart.nullable_uuid_array_element_type(@column_type)
+        case stream_name
+        when "#{@column}.null"  then 1
+        when @column            then 16
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Nullable(UUID)) substream")
+        end
+      elsif WidePart.uuid_array_element_type(@column_type)
+        case stream_name
+        when @column            then 16
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(UUID) substream")
+        end
       elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
         stream_name == "#{@column}%2Eb" ? 1 : 8
       elsif WidePart.supports_map_uint64_string_type?(@column_type)
