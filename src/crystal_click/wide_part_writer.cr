@@ -418,6 +418,45 @@ module CrystalClick
       end
     end
 
+    # Write a sorted UInt64 key and an exact Array(Array(UInt64)) payload.
+    # The two offsets streams and the flattened leaf stream share outer-row
+    # mark granules, while their byte positions advance by their own depths.
+    def self.write_uint64_array_array_uint64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(UInt64))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_array_array_uint64_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_array_uint64_streams(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Array(UInt64))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_array_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable part with a sorted UInt64 key and an
     # Array(Nullable(UInt64)) payload. Outer sizes, a flattened null map, and
     # flattened UInt64 values are separate streams; NULL slots retain a zero
@@ -1101,6 +1140,92 @@ module CrystalClick
 
     private def self.checked_array_element_checksum_size(elements : UInt64, label : String) : UInt64
       checked_array_element_bytes(elements, label).to_u64
+    end
+
+    private def self.validate_array_array_uint64_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(UInt64))),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      validate_array_common_inputs(
+        destination,
+        key_name,
+        keys,
+        value_name,
+        rows_per_mark,
+        ["#{value_name}.size0", "#{value_name}.size1", value_name]
+      )
+
+      key_data_bytes = 0_i64
+      size0_data_bytes = 0_i64
+      size1_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      total_inner_arrays = 0_u64
+      total_leaf_elements = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        size0_data_bytes = add_array_frame_size(size0_data_bytes, fixed_frame_size, "Array size0")
+
+        mark_inner_arrays = 0_u64
+        mark_leaf_elements = 0_u64
+        rows.times do |offset|
+          inner_arrays = values[start_row + offset]
+          inner_count = inner_arrays.size.to_u64
+          if inner_count > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_inner_arrays
+            raise ArgumentError.new("Array(Array(UInt64)) inner-array count exceeds per-mark limit")
+          end
+          mark_inner_arrays += inner_count
+          inner_arrays.each do |inner|
+            leaf_count = inner.size.to_u64
+            if leaf_count > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_leaf_elements
+              raise ArgumentError.new("Array(Array(UInt64)) leaf element count exceeds per-mark limit")
+            end
+            mark_leaf_elements += leaf_count
+          end
+        end
+
+        size1_raw_size = checked_array_element_bytes(mark_inner_arrays, "Array(Array(UInt64)) size1")
+        if size1_raw_size > WidePart::MAX_ARRAY_MARK_BYTES
+          raise ArgumentError.new("Array(Array(UInt64)) size1 bytes exceed per-mark limit")
+        end
+        unless size1_raw_size == 0
+          size1_data_bytes = add_array_frame_size(
+            size1_data_bytes,
+            checked_array_frame_size(size1_raw_size, "Array(Array(UInt64)) size1"),
+            "Array(Array(UInt64)) size1"
+          )
+        end
+
+        value_raw_size = checked_array_element_bytes(mark_leaf_elements, "Array(Array(UInt64)) nested")
+        if value_raw_size > WidePart::MAX_ARRAY_MARK_BYTES
+          raise ArgumentError.new("Array(Array(UInt64)) nested bytes exceed per-mark limit")
+        end
+        unless value_raw_size == 0
+          value_data_bytes = add_array_frame_size(
+            value_data_bytes,
+            checked_array_frame_size(value_raw_size, "Array(Array(UInt64)) nested"),
+            "Array(Array(UInt64)) nested"
+          )
+        end
+        if mark_inner_arrays > UInt64::MAX - total_inner_arrays
+          raise ArgumentError.new("Array(Array(UInt64)) inner-array count overflows")
+        end
+        if mark_leaf_elements > UInt64::MAX - total_leaf_elements
+          raise ArgumentError.new("Array(Array(UInt64)) leaf element count overflows")
+        end
+        total_inner_arrays += mark_inner_arrays
+        total_leaf_elements += mark_leaf_elements
+        start_row += rows
+      end
+      nil
     end
 
     private def self.validate_array_uint64_inputs(
@@ -3146,6 +3271,161 @@ module CrystalClick
       ]
     end
 
+    private def self.write_array_array_uint64_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(Array(UInt64))),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      size0_base = StreamName.hash("#{column}.size0")
+      size1_base = StreamName.hash("#{column}.size1")
+      value_base = StreamName.hash(column)
+      size0_data_name = "#{size0_base}.bin"
+      size0_marks_name = "#{size0_base}.mrk2"
+      size1_data_name = "#{size1_base}.bin"
+      size1_marks_name = "#{size1_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      size0_data_hash = CityHashV1::FileHasher.new
+      size0_raw_hash = CityHashV1::FileHasher.new
+      size1_data_hash = CityHashV1::FileHasher.new
+      size1_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      size0_mark_bytes = IO::Memory.new
+      size1_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      size0_data_size = 0_u64
+      size1_data_size = 0_u64
+      value_data_size = 0_u64
+      total_inner_arrays = 0_u64
+      total_leaf_elements = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, size0_data_name), "wb") do |size0_data_file|
+        File.open(File.join(stage, size1_data_name), "wb") do |size1_data_file|
+          File.open(File.join(stage, value_data_name), "wb") do |value_data_file|
+            while start_row < values.size
+              rows = {rows_per_mark, values.size - start_row}.min
+              size0_raw = Bytes.new(rows * 8)
+              mark_inner_arrays = 0_u64
+              mark_leaf_elements = 0_u64
+              rows.times do |row_offset|
+                row = values[start_row + row_offset]
+                inner_count = row.size.to_u64
+                if inner_count > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_inner_arrays
+                  raise ArgumentError.new("Array(Array(UInt64)) inner-array count exceeds per-mark limit")
+                end
+                mark_inner_arrays += inner_count
+                write_uint64_le(size0_raw, row_offset * 8, inner_count)
+                row.each do |inner|
+                  leaf_count = inner.size.to_u64
+                  if leaf_count > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_leaf_elements
+                    raise ArgumentError.new("Array(Array(UInt64)) leaf element count exceeds per-mark limit")
+                  end
+                  mark_leaf_elements += leaf_count
+                end
+              end
+
+              size1_raw_size = checked_array_element_bytes(mark_inner_arrays, "Array(Array(UInt64)) size1")
+              value_raw_size = checked_array_element_bytes(mark_leaf_elements, "Array(Array(UInt64)) nested")
+              size1_raw = Bytes.new(size1_raw_size)
+              value_raw = Bytes.new(value_raw_size)
+              size1_offset = 0
+              value_offset = 0
+              rows.times do |row_offset|
+                values[start_row + row_offset].each do |inner|
+                  write_uint64_le(size1_raw, size1_offset, inner.size.to_u64)
+                  size1_offset += 8
+                  inner.each do |value|
+                    write_uint64_le(value_raw, value_offset, value)
+                    value_offset += 8
+                  end
+                end
+              end
+              raise CorruptPartError.new("Array(Array(UInt64)) size1 writer count changed") unless size1_offset == size1_raw.size
+              raise CorruptPartError.new("Array(Array(UInt64)) leaf writer count changed") unless value_offset == value_raw.size
+
+              write_uint64_le(size0_mark_bytes, size0_data_size)
+              write_uint64_le(size0_mark_bytes, 0_u64)
+              write_uint64_le(size0_mark_bytes, rows.to_u64)
+              write_uint64_le(size1_mark_bytes, size1_data_size)
+              write_uint64_le(size1_mark_bytes, 0_u64)
+              write_uint64_le(size1_mark_bytes, rows.to_u64)
+              write_uint64_le(value_mark_bytes, value_data_size)
+              write_uint64_le(value_mark_bytes, 0_u64)
+              write_uint64_le(value_mark_bytes, rows.to_u64)
+
+              size0_frame = encode_lz4_frame(size0_raw)
+              if size0_data_size > MAX_DATA_FILE_BYTES.to_u64 - size0_frame.size.to_u64
+                raise ArgumentError.new("Array size0 stream exceeds reader limit")
+              end
+              size0_data_file.write(size0_frame)
+              size0_data_hash.update(size0_frame)
+              size0_raw_hash.update(size0_raw)
+              size0_data_size += size0_frame.size.to_u64
+
+              unless size1_raw.empty?
+                size1_frame = encode_lz4_frame(size1_raw)
+                if size1_data_size > MAX_DATA_FILE_BYTES.to_u64 - size1_frame.size.to_u64
+                  raise ArgumentError.new("Array(Array(UInt64)) size1 stream exceeds reader limit")
+                end
+                size1_data_file.write(size1_frame)
+                size1_data_hash.update(size1_frame)
+                size1_data_size += size1_frame.size.to_u64
+              end
+              size1_raw_hash.update(size1_raw)
+
+              unless value_raw.empty?
+                value_frame = encode_lz4_frame(value_raw)
+                if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+                  raise ArgumentError.new("Array(Array(UInt64)) nested stream exceeds reader limit")
+                end
+                value_data_file.write(value_frame)
+                value_data_hash.update(value_frame)
+                value_data_size += value_frame.size.to_u64
+              end
+              value_raw_hash.update(value_raw)
+              if mark_inner_arrays > UInt64::MAX - total_inner_arrays || mark_leaf_elements > UInt64::MAX - total_leaf_elements
+                raise ArgumentError.new("Array(Array(UInt64)) element count overflows")
+              end
+              total_inner_arrays += mark_inner_arrays
+              total_leaf_elements += mark_leaf_elements
+              start_row += rows
+            end
+          end
+        end
+      end
+
+      write_uint64_le(size0_mark_bytes, size0_data_size)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size1_mark_bytes, size1_data_size)
+      write_uint64_le(size1_mark_bytes, 0_u64)
+      write_uint64_le(size1_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      size0_marks = size0_mark_bytes.to_slice
+      size1_marks = size1_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if size0_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if size1_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if value_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, size0_marks_name), size0_marks)
+      File.write(File.join(stage, size1_marks_name), size1_marks)
+      File.write(File.join(stage, value_marks_name), value_marks)
+
+      [
+        ChecksumRecord.new(size0_data_name, size0_data_size, size0_data_hash.finish, true, checked_array_element_checksum_size(values.size.to_u64, "Array size0"), size0_raw_hash.finish),
+        ChecksumRecord.new(size0_marks_name, size0_marks.size.to_u64, CityHashV1.file_hash(size0_marks), false),
+        ChecksumRecord.new(size1_data_name, size1_data_size, size1_data_hash.finish, true, checked_array_element_checksum_size(total_inner_arrays, "Array(Array(UInt64)) size1"), size1_raw_hash.finish),
+        ChecksumRecord.new(size1_marks_name, size1_marks.size.to_u64, CityHashV1.file_hash(size1_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, checked_array_element_checksum_size(total_leaf_elements, "Array(Array(UInt64)) nested"), value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
     private def self.write_array_nullable_uint64_streams(
       stage : String,
       column : String,
@@ -4589,6 +4869,48 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_array_array_uint64_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Array(UInt64))),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Array(Array(UInt64)) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Array(Array(UInt64)) column type does not match") unless value_part.column_type == "Array(Array(UInt64))"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_array_uint64_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && expected_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Array(Array(UInt64)) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(Array(UInt64)) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
     private def self.validate_staged_array_nullable_uint64_part(
       stage : String,
       key_name : String,
@@ -5548,6 +5870,10 @@ module CrystalClick
 
     private def self.array_uint64_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}\n"
+    end
+
+    private def self.array_array_uint64_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size1\n\t#{value_name}\n"
     end
 
     private def self.array_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String

@@ -2,7 +2,7 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
-                             Array(UInt64) | Array(UInt64?) | Array(String) | Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
+                             Array(UInt64) | Array(UInt64?) | Array(String) | Array(Array(UInt64)) | Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -234,6 +234,10 @@ module CrystalClick
         selected_values = batch.array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_uint64s(values, selected_values, array_elements[0])
+      when "Array(Array(UInt64))"
+        selected_values = batch.array_array_uint64s_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_uint64s(values, selected_values, array_elements[0])
       when "Array(Nullable(UInt64))"
         selected_values = batch.array_nullable_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -734,6 +738,29 @@ module CrystalClick
       end
 
       selected_values.each { |row| values << row.dup }
+      next_elements
+    end
+
+    private def append_materialized_array_array_uint64s(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Array(UInt64))),
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        # Bound both nested-array objects and leaf slots. Empty inner arrays
+        # consume structural capacity even though they have no UInt64 payload.
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |inner|
+          next_elements = checked_materialized_value_array_elements(next_elements, inner.size.to_u64)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Array(UInt64)).new(row.size)
+        row.each { |inner| owned_row << inner.dup }
+        values << owned_row
+      end
       next_elements
     end
 

@@ -334,6 +334,8 @@ module CrystalClick
         ["#{column}.size", column]
       when "Array(Nullable(UInt64))"
         ["#{column}.null", column]
+      when "Array(Array(UInt64))"
+        ["#{column}.size1", column]
       else
         nil
       end
@@ -1001,6 +1003,40 @@ module CrystalClick
       checked_array_mark_byte_count(flat_elements, 8).to_u64
     end
 
+    # Count all three physical streams of Array(Array(UInt64)) before a table
+    # batch allocates nested row arrays. The size1 values are decoded only to
+    # derive per-mark leaf counts; payload frames are boundary-validated but
+    # not copied here.
+    def array_array_uint64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      unless @column_type == "Array(Array(UInt64))"
+        raise UnsupportedFormatError.new("Array(Array(UInt64)) accessor requires an exact Array(Array(UInt64)) column")
+      end
+
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, flat_elements, mark_leaf_elements = read_array_array_uint64_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays
+      )
+      raise CorruptPartError.new("Array(Array(UInt64)) outer row count changed") unless outer_sizes.size.to_u64 == rows
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(UInt64)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, 8)
+      value_bytes = checked_array_mark_byte_count(flat_elements, 8).to_u64
+      validate_mark_range_bytes(value_stream, value_start, value_end, value_bytes.to_i, 8)
+      raise CorruptPartError.new("Array(Array(UInt64)) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      outer_bytes = checked_byte_count(rows, 8).to_u64
+      inner_bytes = checked_array_mark_byte_count(flat_inner_arrays, 8).to_u64
+      outer_bytes + inner_bytes + value_bytes
+    end
+
     # Count both the Nullable null map and nested UInt64 slots before the
     # caller materializes Array(Nullable(UInt64)) rows.
     def array_nullable_uint64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
@@ -1180,6 +1216,54 @@ module CrystalClick
         values << row
       end
       raise CorruptPartError.new("Array(UInt64) sizes do not consume selected nested bytes") unless flat_offset == nested_bytes.size
+      values
+    end
+
+    # Read two exact Array levels with one fixed-width UInt64 leaf stream.
+    # size0 has one count per outer row; size1 has one count per inner array;
+    # both size streams and the payload are marked in outer-row granules.
+    def read_array_array_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(UInt64)))
+      ensure_column(column)
+      unless @column_type == "Array(Array(UInt64))"
+        raise UnsupportedFormatError.new("Array(Array(UInt64)) accessor requires an exact Array(Array(UInt64)) column")
+      end
+
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, flat_elements, mark_leaf_elements = read_array_array_uint64_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays
+      )
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(UInt64)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, 8)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 8), 8)
+
+      values = Array(Array(Array(UInt64))).new(rows.to_i)
+      inner_offset = 0
+      value_offset = 0
+      outer_sizes.each do |inner_count|
+        row = Array(Array(UInt64)).new(inner_count.to_i)
+        inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(UInt64)) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
+          leaf_count = element_sizes[inner_offset]
+          inner = Array(UInt64).new(leaf_count.to_i)
+          leaf_count.to_i.times do
+            raise CorruptPartError.new("Array(Array(UInt64)) sizes exceed selected payload bytes") if value_offset > value_bytes.size - 8
+            inner << u64(value_bytes, value_offset)
+            value_offset += 8
+          end
+          row << inner
+          inner_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Array(UInt64)) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
+      raise CorruptPartError.new("Array(Array(UInt64)) sizes do not consume selected payload bytes") unless value_offset == value_bytes.size
       values
     end
 
@@ -3116,6 +3200,8 @@ module CrystalClick
         stream_name == "#{@column}.null" ? 1 : 8
       elsif @column_type == "Array(UInt64)"
         8
+      elsif @column_type == "Array(Array(UInt64))"
+        8
       elsif @column_type == "Array(String)"
         stream_name == @column ? 1 : 8
       elsif @column_type == "String"
@@ -3268,6 +3354,57 @@ module CrystalClick
       end
       raise CorruptPartError.new("Array size0 marks do not consume selected rows") unless row_offset == outer_sizes.size
       {outer_sizes, flat_elements, rows, mark_flat_elements}
+    end
+
+    private def read_array_array_uint64_element_sizes(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      flat_inner_arrays : UInt64,
+      outer_rows : UInt64,
+      mark_inner_arrays : Array(UInt64),
+    ) : {Array(UInt64), UInt64, Array(UInt64)}
+      size_stream = @streams["#{column}.size1"]
+      size_start, size_end, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(UInt64)) size1 mark rows differ") unless size_rows == outer_rows
+      validate_array_nested_stream_marks(size_stream, first_mark, mark_inner_arrays, 8)
+      encoded_sizes = read_mark_range_bytes(
+        size_stream,
+        size_start,
+        size_end,
+        checked_array_mark_byte_count(flat_inner_arrays, 8),
+        8
+      )
+
+      element_sizes = Array(UInt64).new(flat_inner_arrays.to_i)
+      mark_leaf_elements = Array(UInt64).new(mark_count)
+      total_leaf_elements = 0_u64
+      size_offset = 0
+      mark_inner_arrays.each_with_index do |mark_inner_count, range_mark_index|
+        mark_leaf_count = 0_u64
+        mark_inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(UInt64)) size1 count exceeds selected bytes") if size_offset > encoded_sizes.size - 8
+          leaf_count = u64(encoded_sizes, size_offset)
+          if leaf_count > MAX_ARRAY_MARK_ELEMENTS - mark_leaf_count || leaf_count > MAX_ARRAY_MARK_ELEMENTS - total_leaf_elements
+            raise CorruptPartError.new("Array(Array(UInt64)) leaf element count exceeds per-range limit")
+          end
+          mark_leaf_count += leaf_count
+          total_leaf_elements += leaf_count
+          element_sizes << leaf_count
+          size_offset += 8
+        end
+        checked_array_mark_byte_count(mark_leaf_count, 8)
+        mark_leaf_elements << mark_leaf_count
+
+        mark_index = first_mark + range_mark_index
+        mark_start = size_stream.marks[mark_index]
+        mark_end = mark_index + 1 == size_stream.marks.size ? size_stream.sentinel : size_stream.marks[mark_index + 1]
+        validate_mark_range_bytes(size_stream, mark_start, mark_end, checked_array_mark_byte_count(mark_inner_count, 8), 8)
+      end
+      raise CorruptPartError.new("Array(Array(UInt64)) size1 has trailing bytes") unless size_offset == encoded_sizes.size
+      raise CorruptPartError.new("Array(Array(UInt64)) size1 count does not match size0") unless element_sizes.size.to_u64 == flat_inner_arrays
+      checked_array_mark_byte_count(total_leaf_elements, 8)
+      {element_sizes, total_leaf_elements, mark_leaf_elements}
     end
 
     private def read_array_string_element_sizes(

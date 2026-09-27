@@ -100,15 +100,16 @@ private def w27_rewrite_first_frame_value(path : String, stream : String, raw_of
 end
 
 describe CrystalClick::WidePart do
-  it "admits only the bounded Array(Nullable(UInt64)) composition" do
-    ["Array(UInt64)", "Array(String)", "Array(Nullable(UInt64))"].each do |type|
+  it "keeps Array(Nullable(UInt64)) and other supported Array admissions exact" do
+    ["Array(UInt64)", "Array(String)", "Array(Nullable(UInt64))", "Array(Array(UInt64))"].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
     end
     [
       "Array(Nullable(UInt8))",
       "Array(Nullable(UInt64) trailing)",
       "Nullable(Array(UInt64))",
-      "Array(Array(UInt64))",
+      "Array(Array(Nullable(UInt64)))",
+      "Array(Array(UInt64) trailing)",
       "Array(Nullable(Nullable(UInt64)))",
     ].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
