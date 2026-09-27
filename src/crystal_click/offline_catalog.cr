@@ -5,6 +5,7 @@ module CrystalClick
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
                              Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
+                             Array(Bool) | Array(Bool?) | Array(Array(Bool)) | Array(Array(Bool?)) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
@@ -273,6 +274,10 @@ module CrystalClick
         selected_values = batch.array_numeric_values(column_name, Float64)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Bool)"
+        selected_values = batch.array_bools_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_bool(values, selected_values, array_elements[0])
       when "Array(Nullable(String))"
         selected_values = batch.array_nullable_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -294,6 +299,10 @@ module CrystalClick
           string_bytes,
           max_string_bytes
         )
+      when "Array(Nullable(Bool))"
+        selected_values = batch.array_nullable_bools_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_bool(values, selected_values, array_elements[0])
       when .starts_with?("Array(Nullable(")
         element_type = WidePart.nullable_numeric_array_element_type(selected_type) || raise(UnsupportedFormatError.new("selected table column type is unsupported"))
         selected_values = array_nullable_numeric_values_for(batch, column_name, element_type)
@@ -831,6 +840,32 @@ module CrystalClick
         next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
       end
 
+      selected_values.each { |row| values << row.dup }
+      next_elements
+    end
+
+    private def append_materialized_array_bool(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Bool)),
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
+      selected_values.each { |row| values << row.dup }
+      next_elements
+    end
+
+    private def append_materialized_array_nullable_bool(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Bool?)),
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
       selected_values.each { |row| values << row.dup }
       next_elements
     end

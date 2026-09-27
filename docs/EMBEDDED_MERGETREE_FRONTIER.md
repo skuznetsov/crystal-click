@@ -87,10 +87,12 @@ W32 admits paired `Array(Nullable(String))` payloads beside a sorted `UInt64`
 key, with typed batches and caller-owned offline catalog values. Its stock
 oracle covers four physical streams and both directions; it does not admit
 other nullable String wrappers or arbitrary recursive types.
-W33 is design-sealed for the parameterized FixedString Array leaf family:
-`Array(FixedString(N))` and `Array(Nullable(FixedString(N)))`. Neither shape
-is admitted until its stock-produced physical probe, paired implementation,
-and bidirectional oracle pass.
+W33 admits paired `Array(FixedString(N))` and
+`Array(Nullable(FixedString(N)))` for canonical widths on the pinned
+Wide/LZ4/plain-mark frontier. Its exact evidence and limits are below.
+W34 admits paired `Array(Bool)` and `Array(Nullable(Bool))` on that pinned
+frontier. Its stock physical probe, exact-domain checks, and bidirectional
+oracle are recorded below; this is not generic semantic Array support.
 
 ## Purpose and bounded contexts
 
@@ -1891,6 +1893,60 @@ projections, other codecs/marks/platforms, or performance parity. Evidence
 decays with a changed stock build, serialization or mark layout, filesystem,
 or shared reader/writer implementation.
 
+## Verified W34 slice: Bool Array leaf family
+
+W34 targets exactly `Array(Bool)` and `Array(Nullable(Bool))` beside the
+existing sorted `UInt64` writer key. Public elements are `Bool` or `Bool?`,
+not numeric `UInt8` aliases. The physical child value stream uses one byte
+per flattened element; the nullable form also has a one-byte null-map
+stream. Each row's `size0` offset and every child mark must remain aligned
+across empty and nonempty granules. A visible value byte must be 0 or 1;
+nullness comes only from the null map. A hidden value byte beneath NULL is
+consumed but is not interpreted as a `Bool`, matching the scalar Nullable
+contract. Writer output uses canonical 0 for NULL placeholders.
+
+Admission requires exact type and stream validation, bounded full and
+later-mark reads, typed table batches, owned offline-catalog values,
+immutable writing, and a pinned stock ClickHouse oracle in both directions:
+`ATTACH PART`, `CHECK TABLE`, and independently encoded full and key-range
+RowBinary. A falsifier must reject a checksum-updated visible child byte of
+2 or 255, an invalid null flag, a shifted child mark, and any writer failure
+that publishes a destination. The strongest risk is conflating semantic
+`Bool` with numeric `UInt8`, silently widening generic numeric or JSON
+paths or accepting out-of-domain bytes. W34 must use exact Bool-array
+admission and preserve all existing scalar and numeric-array gates.
+
+Risk is **CAUTION** because this changes nested type admission and the
+reader/table/catalog/writer contract. Rollback is one W34-only local
+feature commit. No existing part or live ClickHouse data directory was
+modified.
+
+The pinned ClickHouse 26.7.1.1315 probe produced both exact array types in
+one 13-row, three-column Wide part with seven data marks plus an EOF
+sentinel. Both observed serializer forms (empty list and `Default` key)
+have verified manifests, checksums, logical streams, one-byte Bool/null
+values, and mark offsets. The focused W34 spec passed 12/12, including
+checksum-updated visible bytes 2/255, invalid null flags, shifted marks,
+hidden invalid bytes beneath NULL, owned catalog values, no-publication on
+writer input rejection, and 4,097 all-empty rows at one row per mark for
+both shapes. Full debug and release suites passed 605/605 each.
+
+The bidirectional stock oracle attached both stock fixtures and both
+Crystal writer parts; all four passed `CHECK TABLE` and exact full/key-range
+RowBinary comparisons with independent expected-byte encoding. Four
+adjacent stock oracles (scalar Bool/Enum/Decimal, numeric Array, nullable
+numeric Array, and FixedString Array) also passed. An additional direct
+ClickHouse check attached both 4,097-row all-empty Crystal parts, passed
+`CHECK TABLE`, and returned 4,097 rows with no nonempty arrays. Hostile
+review found no P0/P1/P2 issue after the catalog row-value union and oracle
+encoder corrections: **ROBUST within the exact pinned Wide/LZ4/plain-mark
+and schema profile**. Earlier valid-mark callbacks can precede a later
+corrupt mark; scans are not transactional across marks. This evidence does
+not establish arbitrary nested semantic types, other schemas/codecs/marks,
+MV/projections, other ClickHouse builds, or performance parity. It decays
+if the stock build, serialization/mark layout, platform, or shared
+reader/writer implementation changes.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1900,8 +1956,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W33's design-only FixedString
-   Array family, W32's nullable String Array,
+1. Extend reader and writer together beyond W34's paired Bool Array family,
+   W33's paired FixedString Array family, W32's nullable String Array,
    W31's nullable numeric Array family, and W30's non-null numeric Array family,
    W29's nested nullable Array, W28's nested Array, W27's exact nullable array,
    W25/W26's exact Maps,

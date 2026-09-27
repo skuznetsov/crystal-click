@@ -753,6 +753,83 @@ module CrystalClick
       end
     end
 
+    # Write one immutable part with a sorted UInt64 key and an exact
+    # Array(Bool) payload. Bool remains a semantic type: each child is emitted
+    # as one canonical 0/1 byte rather than through the numeric-array writer.
+    def self.write_uint64_array_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Bool)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_array_bool_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_bool_streams(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Bool)"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_bool_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_bool_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    # Write exact Array(Nullable(Bool)) leaves with separate one-byte null
+    # and value streams. NULL child slots remain present and are zero-filled.
+    def self.write_uint64_array_nullable_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Bool?)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_array_nullable_bool_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_nullable_bool_streams(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(Bool))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_bool_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_nullable_bool_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable part with a sorted UInt64 key and an exact top-level
     # Map(UInt64, String) payload. Map entries are ordered tuples, so duplicate
     # keys and their insertion order are preserved rather than collapsed.
@@ -2254,6 +2331,141 @@ module CrystalClick
         start_row += rows
       end
       checked_array_numeric_checksum_size(total_nested_elements, width, "Array(Nullable(FixedString)) nested")
+      nil
+    end
+
+    private def self.validate_array_bool_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Bool)),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, ["#{value_name}.size0", value_name])
+      raise ArgumentError.new("Array(Bool) rows_per_mark exceeds reader materialization limit") if rows_per_mark.to_u64 > WidePart::MAX_ARRAY_MARK_ROWS
+
+      key_data_bytes = 0_i64
+      size0_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      total_nested_elements = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        size0_data_bytes = add_array_frame_size(size0_data_bytes, fixed_frame_size, "Array size0")
+
+        mark_elements = 0_u64
+        rows.times do |offset|
+          row_elements = values[start_row + offset].size.to_u64
+          if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+            raise ArgumentError.new("Array(Bool) nested element count exceeds per-mark limit")
+          end
+          mark_elements += row_elements
+        end
+
+        nested_raw_size = checked_array_numeric_bytes(mark_elements, 1, "Array(Bool) nested")
+        if nested_raw_size > WidePart::MAX_ARRAY_MARK_BYTES
+          raise ArgumentError.new("Array(Bool) nested bytes exceed per-mark limit")
+        end
+        if nested_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Array(Bool) nested granule exceeds decompressed frame limit")
+        end
+        unless nested_raw_size == 0
+          value_data_bytes = add_array_frame_size(
+            value_data_bytes,
+            checked_array_frame_size(nested_raw_size, "Array(Bool) nested"),
+            "Array(Bool) nested"
+          )
+        end
+
+        if mark_elements > UInt64::MAX - total_nested_elements
+          raise ArgumentError.new("Array(Bool) nested element count overflows")
+        end
+        total_nested_elements += mark_elements
+        start_row += rows
+      end
+      checked_array_numeric_checksum_size(total_nested_elements, 1, "Array(Bool) nested")
+      nil
+    end
+
+    private def self.validate_array_nullable_bool_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Bool?)),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      validate_array_common_inputs(
+        destination,
+        key_name,
+        keys,
+        value_name,
+        rows_per_mark,
+        ["#{value_name}.size0", "#{value_name}.null", value_name]
+      )
+      raise ArgumentError.new("Array(Nullable(Bool)) rows_per_mark exceeds reader materialization limit") if rows_per_mark.to_u64 > WidePart::MAX_ARRAY_MARK_ROWS
+
+      key_data_bytes = 0_i64
+      size0_data_bytes = 0_i64
+      null_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      total_nested_elements = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        size0_data_bytes = add_array_frame_size(size0_data_bytes, fixed_frame_size, "Array size0")
+
+        mark_elements = 0_u64
+        rows.times do |offset|
+          row_elements = values[start_row + offset].size.to_u64
+          if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+            raise ArgumentError.new("Array(Nullable(Bool)) nested element count exceeds per-mark limit")
+          end
+          mark_elements += row_elements
+        end
+
+        null_raw_size = checked_array_numeric_bytes(mark_elements, 1, "Array(Nullable(Bool)) null map")
+        value_raw_size = checked_array_numeric_bytes(mark_elements, 1, "Array(Nullable(Bool)) nested")
+        combined_raw_size = null_raw_size + value_raw_size
+        if combined_raw_size > WidePart::MAX_ARRAY_MARK_BYTES
+          raise ArgumentError.new("Array(Nullable(Bool)) child stream bytes exceed per-mark limit")
+        end
+        if null_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Array(Nullable(Bool)) null-map granule exceeds decompressed frame limit")
+        end
+        if value_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Array(Nullable(Bool)) nested granule exceeds decompressed frame limit")
+        end
+        unless mark_elements == 0
+          null_data_bytes = add_array_frame_size(
+            null_data_bytes,
+            checked_array_frame_size(null_raw_size, "Array(Nullable(Bool)) null map"),
+            "Array(Nullable(Bool)) null map"
+          )
+          value_data_bytes = add_array_frame_size(
+            value_data_bytes,
+            checked_array_frame_size(value_raw_size, "Array(Nullable(Bool)) nested"),
+            "Array(Nullable(Bool)) nested"
+          )
+        end
+
+        if mark_elements > UInt64::MAX - total_nested_elements
+          raise ArgumentError.new("Array(Nullable(Bool)) nested element count overflows")
+        end
+        total_nested_elements += mark_elements
+        start_row += rows
+      end
+      checked_array_element_checksum_size(total_nested_elements, "Array(Nullable(Bool)) null map")
+      checked_array_numeric_checksum_size(total_nested_elements, 1, "Array(Nullable(Bool)) nested")
       nil
     end
 
@@ -5326,6 +5538,251 @@ module CrystalClick
       ]
     end
 
+    private def self.write_array_bool_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(Bool)),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      size0_base = StreamName.hash("#{column}.size0")
+      value_base = StreamName.hash(column)
+      size0_data_name = "#{size0_base}.bin"
+      size0_marks_name = "#{size0_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      size0_data_hash = CityHashV1::FileHasher.new
+      size0_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      size0_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      size0_data_size = 0_u64
+      value_data_size = 0_u64
+      total_nested_elements = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, size0_data_name), "wb") do |size0_data_file|
+        File.open(File.join(stage, value_data_name), "wb") do |value_data_file|
+          while start_row < values.size
+            rows = {rows_per_mark, values.size - start_row}.min
+            size0_raw = Bytes.new(rows * 8, 0_u8)
+            mark_elements = 0_u64
+            rows.times do |row|
+              row_values = values[start_row + row]
+              write_uint64_le(size0_raw, row * 8, row_values.size.to_u64)
+              if row_values.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+                raise ArgumentError.new("Array(Bool) nested element count exceeds per-mark limit")
+              end
+              mark_elements += row_values.size.to_u64
+            end
+
+            value_raw = Bytes.new(mark_elements.to_i, 0_u8)
+            element_offset = 0
+            rows.times do |row|
+              values[start_row + row].each do |value|
+                value_raw[element_offset] = value ? 1_u8 : 0_u8
+                element_offset += 1
+              end
+            end
+
+            write_uint64_le(size0_mark_bytes, size0_data_size)
+            write_uint64_le(size0_mark_bytes, 0_u64)
+            write_uint64_le(size0_mark_bytes, rows.to_u64)
+            write_uint64_le(value_mark_bytes, value_data_size)
+            write_uint64_le(value_mark_bytes, 0_u64)
+            write_uint64_le(value_mark_bytes, rows.to_u64)
+
+            size0_frame = encode_lz4_frame(size0_raw)
+            if size0_data_size > MAX_DATA_FILE_BYTES.to_u64 - size0_frame.size.to_u64
+              raise ArgumentError.new("Array size0 stream exceeds reader limit")
+            end
+            size0_data_file.write(size0_frame)
+            size0_data_hash.update(size0_frame)
+            size0_raw_hash.update(size0_raw)
+            size0_data_size += size0_frame.size.to_u64
+
+            unless value_raw.empty?
+              value_frame = encode_lz4_frame(value_raw)
+              if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+                raise ArgumentError.new("Array(Bool) child stream exceeds reader limit")
+              end
+              value_data_file.write(value_frame)
+              value_data_hash.update(value_frame)
+              value_data_size += value_frame.size.to_u64
+            end
+            value_raw_hash.update(value_raw)
+
+            if mark_elements > UInt64::MAX - total_nested_elements
+              raise ArgumentError.new("Array(Bool) nested element count overflows")
+            end
+            total_nested_elements += mark_elements
+            start_row += rows
+          end
+        end
+      end
+
+      write_uint64_le(size0_mark_bytes, size0_data_size)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      size0_marks = size0_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      {size0_marks, value_marks}.each do |marks|
+        raise ArgumentError.new("mark stream exceeds reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      end
+      File.write(File.join(stage, size0_marks_name), size0_marks)
+      File.write(File.join(stage, value_marks_name), value_marks)
+
+      [
+        ChecksumRecord.new(size0_data_name, size0_data_size, size0_data_hash.finish, true, checked_array_element_checksum_size(values.size.to_u64, "Array size0"), size0_raw_hash.finish),
+        ChecksumRecord.new(size0_marks_name, size0_marks.size.to_u64, CityHashV1.file_hash(size0_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, checked_array_numeric_checksum_size(total_nested_elements, 1, "Array(Bool) child"), value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
+    private def self.write_array_nullable_bool_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(Bool?)),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      size0_base = StreamName.hash("#{column}.size0")
+      null_base = StreamName.hash("#{column}.null")
+      value_base = StreamName.hash(column)
+      size0_data_name = "#{size0_base}.bin"
+      size0_marks_name = "#{size0_base}.mrk2"
+      null_data_name = "#{null_base}.bin"
+      null_marks_name = "#{null_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      size0_data_hash = CityHashV1::FileHasher.new
+      size0_raw_hash = CityHashV1::FileHasher.new
+      null_data_hash = CityHashV1::FileHasher.new
+      null_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      size0_mark_bytes = IO::Memory.new
+      null_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      size0_data_size = 0_u64
+      null_data_size = 0_u64
+      value_data_size = 0_u64
+      total_nested_elements = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, size0_data_name), "wb") do |size0_data_file|
+        File.open(File.join(stage, null_data_name), "wb") do |null_data_file|
+          File.open(File.join(stage, value_data_name), "wb") do |value_data_file|
+            while start_row < values.size
+              rows = {rows_per_mark, values.size - start_row}.min
+              size0_raw = Bytes.new(rows * 8, 0_u8)
+              mark_elements = 0_u64
+              rows.times do |row|
+                row_values = values[start_row + row]
+                write_uint64_le(size0_raw, row * 8, row_values.size.to_u64)
+                if row_values.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+                  raise ArgumentError.new("Array(Nullable(Bool)) nested element count exceeds per-mark limit")
+                end
+                mark_elements += row_values.size.to_u64
+              end
+
+              null_raw = Bytes.new(mark_elements.to_i, 0_u8)
+              value_raw = Bytes.new(mark_elements.to_i, 0_u8)
+              element_offset = 0
+              rows.times do |row|
+                values[start_row + row].each do |value|
+                  if value.nil?
+                    null_raw[element_offset] = 1_u8
+                  else
+                    value_raw[element_offset] = value ? 1_u8 : 0_u8
+                  end
+                  element_offset += 1
+                end
+              end
+
+              write_uint64_le(size0_mark_bytes, size0_data_size)
+              write_uint64_le(size0_mark_bytes, 0_u64)
+              write_uint64_le(size0_mark_bytes, rows.to_u64)
+              write_uint64_le(null_mark_bytes, null_data_size)
+              write_uint64_le(null_mark_bytes, 0_u64)
+              write_uint64_le(null_mark_bytes, rows.to_u64)
+              write_uint64_le(value_mark_bytes, value_data_size)
+              write_uint64_le(value_mark_bytes, 0_u64)
+              write_uint64_le(value_mark_bytes, rows.to_u64)
+
+              size0_frame = encode_lz4_frame(size0_raw)
+              if size0_data_size > MAX_DATA_FILE_BYTES.to_u64 - size0_frame.size.to_u64
+                raise ArgumentError.new("Array size0 stream exceeds reader limit")
+              end
+              size0_data_file.write(size0_frame)
+              size0_data_hash.update(size0_frame)
+              size0_raw_hash.update(size0_raw)
+              size0_data_size += size0_frame.size.to_u64
+
+              unless null_raw.empty?
+                null_frame = encode_lz4_frame(null_raw)
+                if null_data_size > MAX_DATA_FILE_BYTES.to_u64 - null_frame.size.to_u64
+                  raise ArgumentError.new("Array(Nullable(Bool)) null-map stream exceeds reader limit")
+                end
+                null_data_file.write(null_frame)
+                null_data_hash.update(null_frame)
+                null_data_size += null_frame.size.to_u64
+              end
+              null_raw_hash.update(null_raw)
+
+              unless value_raw.empty?
+                value_frame = encode_lz4_frame(value_raw)
+                if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+                  raise ArgumentError.new("Array(Nullable(Bool)) child stream exceeds reader limit")
+                end
+                value_data_file.write(value_frame)
+                value_data_hash.update(value_frame)
+                value_data_size += value_frame.size.to_u64
+              end
+              value_raw_hash.update(value_raw)
+
+              if mark_elements > UInt64::MAX - total_nested_elements
+                raise ArgumentError.new("Array(Nullable(Bool)) nested element count overflows")
+              end
+              total_nested_elements += mark_elements
+              start_row += rows
+            end
+          end
+        end
+      end
+
+      write_uint64_le(size0_mark_bytes, size0_data_size)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(null_mark_bytes, null_data_size)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      size0_marks = size0_mark_bytes.to_slice
+      null_marks = null_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      {size0_marks, null_marks, value_marks}.each do |marks|
+        raise ArgumentError.new("mark stream exceeds reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      end
+      File.write(File.join(stage, size0_marks_name), size0_marks)
+      File.write(File.join(stage, null_marks_name), null_marks)
+      File.write(File.join(stage, value_marks_name), value_marks)
+
+      [
+        ChecksumRecord.new(size0_data_name, size0_data_size, size0_data_hash.finish, true, checked_array_element_checksum_size(values.size.to_u64, "Array size0"), size0_raw_hash.finish),
+        ChecksumRecord.new(size0_marks_name, size0_marks.size.to_u64, CityHashV1.file_hash(size0_marks), false),
+        ChecksumRecord.new(null_data_name, null_data_size, null_data_hash.finish, true, total_nested_elements, null_raw_hash.finish),
+        ChecksumRecord.new(null_marks_name, null_marks.size.to_u64, CityHashV1.file_hash(null_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, total_nested_elements, value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
     private def self.write_map_uint64_string_streams(
       stage : String,
       column : String,
@@ -6950,6 +7407,124 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_array_bool_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Bool)),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      logical_streams = [key_name, "#{value_name}.size0", value_name]
+      expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
+      logical_streams.each do |logical_name|
+        base = StreamName.hash(logical_name)
+        expected_checksum_files << "#{base}.bin"
+        expected_checksum_files << "#{base}.mrk2"
+      end
+      unless checksums.entries.keys.sort == expected_checksum_files.sort
+        raise CorruptPartError.new("staged Array(Bool) checksum inventory differs")
+      end
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Array(Bool) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Array(Bool) column type does not match") unless value_part.column_type == "Array(Bool)"
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Array(Bool)")
+        raise CorruptPartError.new("staged Array(Bool) column metadata does not match")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_bool_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged Array(Bool) substream metadata does not match")
+      end
+      raise CorruptPartError.new("staged Array(Bool) codec metadata does not match") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged Array(Bool) metadata version does not match") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged Array(Bool) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        observed_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        observed_values = value_part.read_array_bool_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless observed_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Array(Bool) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(Bool) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_nullable_bool_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Bool?)),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      logical_streams = [key_name, "#{value_name}.size0", "#{value_name}.null", value_name]
+      expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
+      logical_streams.each do |logical_name|
+        base = StreamName.hash(logical_name)
+        expected_checksum_files << "#{base}.bin"
+        expected_checksum_files << "#{base}.mrk2"
+      end
+      unless checksums.entries.keys.sort == expected_checksum_files.sort
+        raise CorruptPartError.new("staged Array(Nullable(Bool)) checksum inventory differs")
+      end
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Array(Nullable(Bool)) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Array(Nullable(Bool)) column type does not match") unless value_part.column_type == "Array(Nullable(Bool))"
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Array(Nullable(Bool))")
+        raise CorruptPartError.new("staged Array(Nullable(Bool)) column metadata does not match")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_bool_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged Array(Nullable(Bool)) substream metadata does not match")
+      end
+      raise CorruptPartError.new("staged Array(Nullable(Bool)) codec metadata does not match") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged Array(Nullable(Bool)) metadata version does not match") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged Array(Nullable(Bool)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        observed_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        observed_values = value_part.read_array_nullable_bool_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless observed_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Array(Nullable(Bool)) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(Nullable(Bool)) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
     private def self.fixed_string_array_row_identical?(
       observed : Array(String),
       input : Array(String),
@@ -7897,6 +8472,14 @@ module CrystalClick
     end
 
     private def self.array_nullable_fixed_string_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.null\n\t#{value_name}\n"
+    end
+
+    private def self.array_bool_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}\n"
+    end
+
+    private def self.array_nullable_bool_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.null\n\t#{value_name}\n"
     end
 

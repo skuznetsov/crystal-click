@@ -27,6 +27,10 @@ module CrystalClick
                                             Slice(Array(Float32?)) | Slice(Array(Float64?))
   alias WidePartArrayNullableStringArray = Array(Array(String?))
   alias WidePartArrayNullableStringSlice = Slice(Array(String?))
+  alias WidePartArrayBoolArray = Array(Array(Bool))
+  alias WidePartArrayBoolSlice = Slice(Array(Bool))
+  alias WidePartArrayNullableBoolArray = Array(Array(Bool?))
+  alias WidePartArrayNullableBoolSlice = Slice(Array(Bool?))
 
   # A callback view over aligned selected columns from one bounded table batch.
   # Column slices alias per-mark arrays and are valid only until the callback
@@ -57,6 +61,8 @@ module CrystalClick
     @array_array_nullable_uint64_values : Hash(String, Slice(Array(Array(UInt64?))))
     @array_numeric_values : Hash(String, WidePartArrayNumericSlice)
     @array_nullable_numeric_values : Hash(String, WidePartArrayNullableNumericSlice)
+    @array_bool_values : Hash(String, WidePartArrayBoolSlice)
+    @array_nullable_bool_values : Hash(String, WidePartArrayNullableBoolSlice)
     @tuple_string_values : Hash(String, Slice(Tuple(UInt64, String)))
     @map_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64, String))))
     @map_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64))))
@@ -88,6 +94,8 @@ module CrystalClick
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
       @array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericSlice).new
+      @array_bool_values = Hash(String, WidePartArrayBoolSlice).new
+      @array_nullable_bool_values = Hash(String, WidePartArrayNullableBoolSlice).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -121,6 +129,8 @@ module CrystalClick
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
       @array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericSlice).new
+      @array_bool_values = Hash(String, WidePartArrayBoolSlice).new
+      @array_nullable_bool_values = Hash(String, WidePartArrayNullableBoolSlice).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -154,6 +164,8 @@ module CrystalClick
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
       @array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericSlice).new
+      @array_bool_values = Hash(String, WidePartArrayBoolSlice).new
+      @array_nullable_bool_values = Hash(String, WidePartArrayNullableBoolSlice).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -186,6 +198,8 @@ module CrystalClick
       array_numeric_values : Hash(String, WidePartArrayNumericSlice) = Hash(String, WidePartArrayNumericSlice).new,
       array_nullable_numeric_values : Hash(String, WidePartArrayNullableNumericSlice) = Hash(String, WidePartArrayNullableNumericSlice).new,
       array_nullable_string_values : Hash(String, WidePartArrayNullableStringSlice) = Hash(String, WidePartArrayNullableStringSlice).new,
+      @array_bool_values : Hash(String, WidePartArrayBoolSlice) = Hash(String, WidePartArrayBoolSlice).new,
+      @array_nullable_bool_values : Hash(String, WidePartArrayNullableBoolSlice) = Hash(String, WidePartArrayNullableBoolSlice).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
@@ -469,6 +483,18 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("Array(Nullable(FixedString(N))) accessor requires an exact supported column") unless WidePart.array_nullable_fixed_string_width(@column_types[index])
       @array_nullable_string_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(FixedString(N))) column was not materialized in this batch"))
+    end
+
+    def array_bools_for(column : String) : WidePartArrayBoolSlice
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Bool) accessor requires an exact Array(Bool) column") unless WidePart.supports_array_bool_type?(@column_types[index])
+      @array_bool_values[column]? || raise(UnsupportedFormatError.new("Array(Bool) column was not materialized in this batch"))
+    end
+
+    def array_nullable_bools_for(column : String) : WidePartArrayNullableBoolSlice
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Nullable(Bool)) accessor requires an exact Array(Nullable(Bool)) column") unless WidePart.supports_array_nullable_bool_type?(@column_types[index])
+      @array_nullable_bool_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(Bool)) column was not materialized in this batch"))
     end
 
     def array_nullable_uint64s_for(column : String) : Slice(Array(UInt64?))
@@ -848,6 +874,8 @@ module CrystalClick
             preflight_array_nullable_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_string_charge_bytes = Hash(String, UInt64).new
             preflight_array_fixed_string_raw_bytes = Hash(String, UInt64).new
+            preflight_array_bool_raw_bytes = Hash(String, UInt64).new
+            preflight_array_nullable_bool_raw_bytes = Hash(String, UInt64).new
             part.readers.each do |selected|
               if selected.column_type == "String" || WidePart.supports_nullable_string_type?(selected.column_type)
                 bytes = if selected.column_type == "String"
@@ -869,6 +897,12 @@ module CrystalClick
                 raw_bytes = selected.reader.array_nullable_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_fixed_string_raw_bytes[selected.name] = raw_bytes
                 bytes = array_fixed_string_charge_bytes(raw_bytes, width, mark_rows, true)
+              elsif WidePart.supports_array_bool_type?(selected.column_type)
+                bytes = selected.reader.array_bool_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_bool_raw_bytes[selected.name] = bytes
+              elsif WidePart.supports_array_nullable_bool_type?(selected.column_type)
+                bytes = selected.reader.array_nullable_bool_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_bool_raw_bytes[selected.name] = bytes
               elsif WidePart.numeric_array_element_type(selected.column_type)
                 bytes = selected.reader.array_numeric_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_numeric_bytes[selected.name] = bytes
@@ -919,6 +953,8 @@ module CrystalClick
             array_array_nullable_uint64_values = Hash(String, Array(Array(Array(UInt64?)))).new
             array_numeric_values = Hash(String, WidePartArrayNumericArray).new
             array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericArray).new
+            array_bool_values = Hash(String, WidePartArrayBoolArray).new
+            array_nullable_bool_values = Hash(String, WidePartArrayNullableBoolArray).new
             tuple_string_values = Hash(String, Array(Tuple(UInt64, String))).new
             map_uint64_string_values = Hash(String, Array(Array(Tuple(UInt64, String)))).new
             map_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
@@ -979,6 +1015,15 @@ module CrystalClick
                 actual_string_bytes += bytes
                 array_numeric_values[selected.name] = values
                 array_uint64_values[selected.name] = values.as(Array(Array(UInt64))) if selected.column_type == "Array(UInt64)"
+              when "Array(Bool)"
+                values = selected.reader.read_array_bool_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Bool) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_bool_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Bool) mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                raise CorruptPartError.new("selected Array(Bool) decoded bytes differ from preflight") unless elements == preflight_bytes
+                raise CorruptPartError.new("selected Array(Bool) mark exceeds aggregate materialization limit") if elements > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += elements
+                array_bool_values[selected.name] = values
               when "Array(Nullable(String))"
                 values, raw_bytes = selected.reader.read_array_nullable_string_mark_range_with_raw_bytes(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Array(Nullable(String)) mark row count changed") unless values.size.to_u64 == mark_rows
@@ -1003,6 +1048,16 @@ module CrystalClick
                 raise CorruptPartError.new("selected Array(Nullable(FixedString(N))) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_nullable_string_values[selected.name] = values
+              when "Array(Nullable(Bool))"
+                values = selected.reader.read_array_nullable_bool_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Nullable(Bool)) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_bool_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Nullable(Bool)) mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 2_u64
+                raise CorruptPartError.new("selected Array(Nullable(Bool)) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(Nullable(Bool)) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_bool_values[selected.name] = values
               when .starts_with?("Array(Nullable(")
                 element_type = WidePart.nullable_numeric_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported Array nullable numeric type"))
                 values = read_array_nullable_numeric_values(selected.reader, selected.name, mark_index, element_type)
@@ -1124,6 +1179,8 @@ module CrystalClick
               array_array_nullable_uint64_slices = Hash(String, Slice(Array(Array(UInt64?)))).new
               array_numeric_slices = Hash(String, WidePartArrayNumericSlice).new
               array_nullable_numeric_slices = Hash(String, WidePartArrayNullableNumericSlice).new
+              array_bool_slices = Hash(String, WidePartArrayBoolSlice).new
+              array_nullable_bool_slices = Hash(String, WidePartArrayNullableBoolSlice).new
               array_nullable_string_slices = Hash(String, WidePartArrayNullableStringSlice).new
               tuple_string_slices = Hash(String, Slice(Tuple(UInt64, String))).new
               map_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
@@ -1153,6 +1210,10 @@ module CrystalClick
                   if selected.column_type == "Array(Nullable(UInt64))"
                     array_nullable_uint64_slices[selected.name] = selected_slice.as(Slice(Array(UInt64?)))
                   end
+                elsif values = array_bool_values[selected.name]?
+                  array_bool_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = array_nullable_bool_values[selected.name]?
+                  array_nullable_bool_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = array_uint64_values[selected.name]?
                   array_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = array_nullable_uint64_values[selected.name]?
@@ -1201,7 +1262,9 @@ module CrystalClick
                 array_array_nullable_uint64_slices,
                 array_numeric_slices,
                 array_nullable_numeric_slices,
-                array_nullable_string_slices
+                array_nullable_string_slices,
+                array_bool_slices,
+                array_nullable_bool_slices
               )
               yield batch
               mark_row_offset &+= size.to_u64
