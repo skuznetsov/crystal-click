@@ -1,0 +1,7 @@
+columns format version: 1
+5 columns:
+`pk` UInt64
+`scalar` BFloat16
+`maybe` Nullable(BFloat16)
+`plain` Array(BFloat16)
+`nullable_array` Array(Nullable(BFloat16))

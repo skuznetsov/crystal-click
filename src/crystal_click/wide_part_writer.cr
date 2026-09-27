@@ -935,6 +935,32 @@ module CrystalClick
       end
     end
 
+    # Write Array(BFloat16) using the ordinary size0/value streams while
+    # retaining BFloat16's exact two-byte semantic payload.
+    def self.write_uint64_array_bfloat16_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(BFloat16Value)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_numeric_pair(destination, key_name, keys, value_name, values, rows_per_mark)
+    end
+
+    # Write Array(Nullable(BFloat16)) as size0, element null-map, and nested
+    # two-byte payload streams; NULL slots keep the BASIC zero placeholder.
+    def self.write_uint64_array_nullable_bfloat16_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(BFloat16Value?)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_nullable_numeric_pair(destination, key_name, keys, value_name, values, rows_per_mark)
+    end
+
     # Write one immutable part with a sorted UInt64 key and an Array(String)
     # payload. Outer lengths, nested byte lengths, and raw string bytes are
     # separate streams; all nested values are flattened in row order.
@@ -1372,6 +1398,32 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Bool)", rows_per_mark)
+    end
+
+    # Write BFloat16 as its exact two-byte little-endian payload. This named
+    # entry point keeps its semantic identity separate from UInt16 and Float32.
+    def self.write_uint64_bfloat16_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(BFloat16Value),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "BFloat16", rows_per_mark)
+    end
+
+    # BASIC Nullable(BFloat16) stores a separate null map and a zero-filled
+    # nested slot for NULL rows; non-NULL values retain their raw UInt16 bits.
+    def self.write_uint64_nullable_bfloat16_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(BFloat16Value?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(BFloat16)", rows_per_mark)
     end
 
     # Decimal32/64 retain signed scaled integers. ClickHouse normalizes their
@@ -4458,7 +4510,13 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == UUIDValue %}
+      {% if T == BFloat16Value %}
+        raise UnsupportedFormatError.new("BFloat16 writer requires exact BFloat16 metadata") unless type_name == "BFloat16"
+        validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == BFloat16Value? %}
+        raise UnsupportedFormatError.new("Nullable BFloat16 writer requires exact Nullable(BFloat16) metadata") unless type_name == "Nullable(BFloat16)"
+        validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == UUIDValue %}
         raise UnsupportedFormatError.new("UUID writer requires exact UUID metadata") unless type_name == "UUID"
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == IPv4Value %}
@@ -4528,7 +4586,13 @@ module CrystalClick
       rows_per_mark : Int32,
       type_name : String,
     ) : Array(ChecksumRecord) forall T
-      {% if T == UUIDValue %}
+      {% if T == BFloat16Value %}
+        raise UnsupportedFormatError.new("BFloat16 writer requires exact BFloat16 metadata") unless type_name == "BFloat16"
+        write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == BFloat16Value? %}
+        raise UnsupportedFormatError.new("Nullable BFloat16 writer requires exact Nullable(BFloat16) metadata") unless type_name == "Nullable(BFloat16)"
+        write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == UUIDValue %}
         raise UnsupportedFormatError.new("UUID writer requires exact UUID metadata") unless type_name == "UUID"
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == IPv4Value %}
@@ -4595,7 +4659,7 @@ module CrystalClick
       case type_name
       when "UInt8", "Int8", "Bool"
         1
-      when "UInt16", "Int16", "Date"
+      when "UInt16", "Int16", "Date", "BFloat16"
         2
       when "UInt32", "Int32", "Float32", "Date32", "IPv4"
         4
@@ -4968,6 +5032,8 @@ module CrystalClick
     private def self.write_typed_numeric_le(bytes : Bytes, offset : Int, value : T) : Nil forall T
       {% if T == Bool %}
         bytes[offset] = value ? 1_u8 : 0_u8
+      {% elsif T == BFloat16Value %}
+        2.times { |index| bytes[offset + index] = ((value.bits >> (index * 8)) & 0xff_u16).to_u8 }
       {% elsif T == UInt8 %}
         bytes[offset] = value
       {% elsif T == UInt16 %}
@@ -10184,7 +10250,7 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Int256Value? || T == UInt256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == UInt128? || T == Float32? || T == Float64? %}
+      {% if T == BFloat16Value? || T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Int256Value? || T == UInt256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == UInt128? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
@@ -10251,7 +10317,13 @@ module CrystalClick
       values : Slice(T),
       type_name : String,
     ) : Array(T) forall T
-      {% if T == UUIDValue %}
+      {% if T == BFloat16Value %}
+        if type_name == "BFloat16"
+          part.read_bfloat16_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("typed BFloat16 writer requires exact BFloat16 metadata")
+        end
+      {% elsif T == UUIDValue %}
         if type_name == "UUID"
           part.read_uuids_mark_range(column, mark_index, 1)
         else
@@ -10369,7 +10441,9 @@ module CrystalClick
     end
 
     private def self.typed_numeric_value_equal?(expected : T, actual : T) : Bool forall T
-      {% if T == UUIDValue %}
+      {% if T == BFloat16Value %}
+        expected.bits == actual.bits
+      {% elsif T == UUIDValue %}
         expected.high == actual.high && expected.low == actual.low
       {% elsif T == IPv4Value %}
         expected.network_order == actual.network_order
@@ -10495,7 +10569,13 @@ module CrystalClick
       values : Slice(T),
       type_name : String,
     ) : Array(T) forall T
-      {% if T == UUIDValue? %}
+      {% if T == BFloat16Value? %}
+        if type_name == "Nullable(BFloat16)"
+          part.read_nullable_bfloat16_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("typed Nullable BFloat16 writer requires exact Nullable(BFloat16) metadata")
+        end
+      {% elsif T == UUIDValue? %}
         if type_name == "Nullable(UUID)"
           part.read_nullable_uuids_mark_range(column, mark_index, 1)
         else
@@ -10785,7 +10865,7 @@ module CrystalClick
     end
 
     private def self.semantic_fixed_width_type?(type_name : String) : Bool
-      type_name == "Bool" || !WidePart.enum8_codes(type_name).nil? || !WidePart.enum16_codes(type_name).nil? ||
+      type_name == "Bool" || type_name == "BFloat16" || !WidePart.enum8_codes(type_name).nil? || !WidePart.enum16_codes(type_name).nil? ||
         !WidePart.decimal32_scale(type_name).nil? || !WidePart.decimal64_scale(type_name).nil? ||
         !WidePart.decimal128_scale(type_name).nil? || !WidePart.decimal256_scale(type_name).nil?
     end

@@ -91,6 +91,8 @@ module CrystalClick
         # Internal width/codec identity only; semantic Array admission below
         # deliberately does not accept `Array(Decimal256)` as a spelling.
         "Decimal256"
+      {% elsif T == BFloat16Value %}
+        "BFloat16"
       {% else %}
         raise UnsupportedFormatError.new("only exact fixed-width numeric Array accessors are supported")
       {% end %}
@@ -102,13 +104,15 @@ module CrystalClick
         16
       when "Int256", "UInt256", "Decimal256"
         32
+      when "BFloat16"
+        2
       else
         numeric_payload_width(type)
       end
     end
 
     private def self.supports_array_numeric_type?(type : String) : Bool
-      supports_numeric_type?(type) || type == "Int128" || type == "UInt128" || type == "Int256" || type == "UInt256"
+      supports_numeric_type?(type) || type == "Int128" || type == "UInt128" || type == "Int256" || type == "UInt256" || type == "BFloat16"
     end
 
     private def self.nullable_inner(type : String) : String?
@@ -540,7 +544,7 @@ module CrystalClick
 
     def self.supports_semantic_fixed_width_type?(type : String) : Bool
       return false if nullable_inner(type)
-      type == "Bool" || !enum8_codes(type).nil? || !enum16_codes(type).nil? ||
+      type == "Bool" || type == "BFloat16" || !enum8_codes(type).nil? || !enum16_codes(type).nil? ||
         !decimal32_scale(type).nil? || !decimal64_scale(type).nil? || !decimal128_scale(type).nil? ||
         !decimal256_scale(type).nil?
     end
@@ -967,6 +971,20 @@ module CrystalClick
         end
       end
       values
+    end
+
+    # BFloat16 uses two little-endian storage bytes but is not a UInt16
+    # numeric column. Preserve the exact 16-bit payload without Float32.
+    def read_bfloat16_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(BFloat16Value)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("BFloat16 accessor requires an exact BFloat16 column") unless @column_type == "BFloat16"
+      read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 2, BFloat16Value)
+    end
+
+    def read_nullable_bfloat16_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(BFloat16Value?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("BFloat16 accessor requires an exact Nullable(BFloat16) column") unless @column_type == "Nullable(BFloat16)"
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 2, BFloat16Value)
     end
 
     def read_nullable_bool_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Bool?)
@@ -4248,10 +4266,11 @@ module CrystalClick
       w46_ipv4_array_shape = ipv4_array_w46_schema?(columns, selected_column)
       w47_ipv6_array_shape = ipv6_array_w47_schema?(columns, selected_column)
       w48_enum_array_shape = enum_array_w48_schema?(columns, selected_column)
+      w49_bfloat16_array_shape = bfloat16_array_w49_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape || w48_enum_array_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape || w48_enum_array_shape || w49_bfloat16_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -4422,6 +4441,21 @@ module CrystalClick
       selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
       !WidePart.array_enum8_codes(selected_type).nil? || !WidePart.array_nullable_enum8_codes(selected_type).nil? ||
         !WidePart.array_enum16_codes(selected_type).nil? || !WidePart.array_nullable_enum16_codes(selected_type).nil?
+    end
+
+    # Exact W49 stock BFloat16 profile: scalar, nullable scalar, and both
+    # Array forms share one UInt64 key. This exception does not generalize the
+    # empty-serializer path to arbitrary BFloat16 Array schemas.
+    private def bfloat16_array_w49_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns == [
+                            {"pk", "UInt64"},
+                            {"scalar", "BFloat16"},
+                            {"maybe", "Nullable(BFloat16)"},
+                            {"plain", "Array(BFloat16)"},
+                            {"nullable_array", "Array(Nullable(BFloat16))"},
+                          ]
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      selected_type == "Array(BFloat16)" || selected_type == "Array(Nullable(BFloat16))"
     end
 
     # Exact W42 stock fixture shape for the paired Decimal32(2) Array leaves.
@@ -5613,6 +5647,8 @@ module CrystalClick
     private def semantic_type_width(type : String) : Int32
       if type == "Bool" || !WidePart.enum8_codes(type).nil?
         1
+      elsif type == "BFloat16"
+        2
       elsif !WidePart.enum16_codes(type).nil?
         2
       elsif WidePart.decimal32_scale(type)
@@ -6064,6 +6100,8 @@ module CrystalClick
         bytes[offset]
       {% elsif T == UInt16 %}
         u16(bytes, offset)
+      {% elsif T == BFloat16Value %}
+        BFloat16Value.new(u16(bytes, offset))
       {% elsif T == UInt32 %}
         u32(bytes, offset)
       {% elsif T == UInt64 %}

@@ -2890,6 +2890,53 @@ stock insertion paths; only the explicit-`CAST`/`DataTypeEnum` default path
 was matched. Other schemas, Compact/Sparse parts, MV/projections, and any
 memory/performance conclusion remain outside this result.
 
+## W49 frontier: paired BFloat16 scalar and Array values
+
+Admit exact `BFloat16`, `Nullable(BFloat16)`, `Array(BFloat16)`, and
+`Array(Nullable(BFloat16))` payloads beside a sorted `UInt64` key in the
+pinned Wide/LZ4/plain-`.mrk2` profile. Expose a distinct raw-bits value whose
+`UInt16` payload is preserved exactly; neither `Float32` conversion nor the
+existing `UInt16` type may silently stand in for BFloat16. This includes
+signed zero and NaN payload bits. BASIC nullable slots carry a null map and a
+16-bit nested value; an ignored nested value under a NULL bit must not become
+visible or misalign following values. Array adds its size0 stream. Public
+reader and writer support must be paired for all four admitted forms.
+
+This is **CAUTION**: the physical width matches `UInt16` while the logical
+type and bit semantics differ. The initial falsifier is rejection of all four
+types by the current exact reader admission gate. Before widening it, add a
+focused failing spec that distinguishes BFloat16 from UInt16 and checks
+byte-exact raw-bit preservation across multiple marks. The strongest guard is
+a stock-produced fixture and the reverse stock oracle: `ATTACH PART`, `CHECK
+TABLE`, and byte-exact full and key-filtered RowBinary for stock and
+Crystal-written parts, including signed zero, distinct NaN payloads, empty
+Arrays, all-NULL rows, and a short final mark. Reader preflight and staged
+writer validation must bound rows, elements, frame bytes, and substream marks.
+
+DoD: focused W49 spec, full debug and release suites, pinned fixture verifier,
+bidirectional stock oracle, format and diff checks, and a hostile review of
+logical type identity and NULL child handling. Other BFloat16 compositions,
+Compact/Sparse parts, MV/projections, and memory/performance work remain
+guard-only. Rollback is one W49-only local commit. The evidence decays with
+the stock producer version, codec/mark format, platform, or BFloat16
+serialization semantics; refresh the fixture and oracle gates then.
+
+W49 result: the focused spec passed 7/0; the full debug and isolated release
+suites passed 733/0 each. The public synthetic fixture verifier confirmed the
+five-column stock part, nine LZ4 streams, and mark rows `[2, 2, 2, 1]`.
+ClickHouse local 26.7.1.1315 accepted and checked the stock part and all four
+Crystal-written two-column parts, with byte-exact full and key-range RowBinary
+against independently assembled expected bytes. The hostile check found no
+counterexample to exact logical identity, raw-bit preservation, or NULL child
+masking within these shapes. A first full release run failed in an unrelated
+process-lock spec while other Crystal spec processes were active; the isolated
+single-spec and complete release reruns passed. Interference is plausible but
+not proven as the cause. The NULL-child poison spec reseals the compressed
+frame, not `checksums.txt`, so it establishes reader masking rather than stock
+acceptance of a poisoned part. A wholly empty nested stream, an all-NULL-only
+part, other ClickHouse versions, and other schemas/codecs/mark formats remain
+untested. No memory or performance conclusion follows from W49.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2899,7 +2946,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W47's paired IPv6 Arrays,
+1. Extend reader and writer together beyond W49's paired BFloat16 family,
+   W48's paired Enum Arrays, W47's paired IPv6 Arrays,
    W46's paired IPv4 Arrays,
    W45's paired Decimal256 Arrays,
    W44's paired Decimal128 Arrays,

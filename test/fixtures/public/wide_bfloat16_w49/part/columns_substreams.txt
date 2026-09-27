@@ -1,0 +1,16 @@
+columns substreams version: 1
+5 columns:
+1 substreams for column `pk`:
+	pk
+1 substreams for column `scalar`:
+	scalar
+2 substreams for column `maybe`:
+	maybe.null
+	maybe
+2 substreams for column `plain`:
+	plain.size0
+	plain
+3 substreams for column `nullable_array`:
+	nullable_array.size0
+	nullable_array.null
+	nullable_array

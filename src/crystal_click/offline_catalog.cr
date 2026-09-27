@@ -2,14 +2,15 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 | UInt128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value |
-                             Int256Value | UInt256Value | Decimal256Value |
+                             Int256Value | UInt256Value | Decimal256Value | BFloat16Value | BFloat16Value? |
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
                              Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Int128) | Array(UInt128) | Array(Int256Value) | Array(UInt256Value) |
-                             Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) |
+                             Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) | Array(BFloat16Value?) |
                              Array(Decimal256Value) | Array(Decimal256Value?) |
                              Array(UUIDValue) | Array(UUIDValue?) | Array(IPv4Value) | Array(IPv4Value?) | Array(IPv6Value) | Array(IPv6Value?) |
+                             Array(BFloat16Value) |
                              Array(Bool) | Array(Bool?) | Array(Array(Bool)) | Array(Array(Bool?)) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
@@ -156,6 +157,12 @@ module CrystalClick
         return {observed_rows, string_bytes}
       elsif WidePart.supports_nullable_ipv6_type?(selected_type)
         observed_rows = append_materialized_values(values, batch.nullable_ipv6s_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type == "BFloat16"
+        observed_rows = append_materialized_values(values, batch.bfloat16s_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type == "Nullable(BFloat16)"
+        observed_rows = append_materialized_values(values, batch.nullable_bfloat16s_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
       elsif WidePart.supports_uuid_type?(selected_type)
         observed_rows = append_materialized_values(values, batch.uuids_for(column_name), observed_rows, expected_rows)
@@ -344,6 +351,10 @@ module CrystalClick
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(UInt16)"
         selected_values = batch.array_numeric_values(column_name, UInt16)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(BFloat16)"
+        selected_values = batch.array_bfloat16s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(UInt32)"
@@ -1086,20 +1097,21 @@ module CrystalClick
       element_type : String,
     ) : WidePartArrayNullableNumericSlice
       case element_type
-      when "UInt8"   then batch.array_nullable_numeric_values(column, UInt8)
-      when "UInt16"  then batch.array_nullable_numeric_values(column, UInt16)
-      when "UInt32"  then batch.array_nullable_numeric_values(column, UInt32)
-      when "UInt64"  then batch.array_nullable_numeric_values(column, UInt64)
-      when "Int8"    then batch.array_nullable_numeric_values(column, Int8)
-      when "Int16"   then batch.array_nullable_numeric_values(column, Int16)
-      when "Int32"   then batch.array_nullable_numeric_values(column, Int32)
-      when "Int64"   then batch.array_nullable_numeric_values(column, Int64)
-      when "Int128"  then batch.array_nullable_numeric_values(column, Int128)
-      when "UInt128" then batch.array_nullable_numeric_values(column, UInt128)
-      when "Int256"  then batch.array_nullable_numeric_values(column, Int256Value)
-      when "UInt256" then batch.array_nullable_numeric_values(column, UInt256Value)
-      when "Float32" then batch.array_nullable_numeric_values(column, Float32)
-      when "Float64" then batch.array_nullable_numeric_values(column, Float64)
+      when "UInt8"    then batch.array_nullable_numeric_values(column, UInt8)
+      when "UInt16"   then batch.array_nullable_numeric_values(column, UInt16)
+      when "UInt32"   then batch.array_nullable_numeric_values(column, UInt32)
+      when "UInt64"   then batch.array_nullable_numeric_values(column, UInt64)
+      when "Int8"     then batch.array_nullable_numeric_values(column, Int8)
+      when "Int16"    then batch.array_nullable_numeric_values(column, Int16)
+      when "Int32"    then batch.array_nullable_numeric_values(column, Int32)
+      when "Int64"    then batch.array_nullable_numeric_values(column, Int64)
+      when "Int128"   then batch.array_nullable_numeric_values(column, Int128)
+      when "UInt128"  then batch.array_nullable_numeric_values(column, UInt128)
+      when "Int256"   then batch.array_nullable_numeric_values(column, Int256Value)
+      when "UInt256"  then batch.array_nullable_numeric_values(column, UInt256Value)
+      when "BFloat16" then batch.array_nullable_bfloat16s_for(column)
+      when "Float32"  then batch.array_nullable_numeric_values(column, Float32)
+      when "Float64"  then batch.array_nullable_numeric_values(column, Float64)
       else
         raise UnsupportedFormatError.new("unsupported Array nullable numeric leaf type")
       end

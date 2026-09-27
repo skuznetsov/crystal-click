@@ -2,41 +2,41 @@ module CrystalClick
   alias WidePartNumericArray = Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(UInt64) |
                                Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Int128) | Array(UInt128) | Array(Bool) |
                                Array(Float32) | Array(Float64) | Array(UUIDValue) | Array(IPv4Value) | Array(IPv6Value) |
-                               Array(Int256Value) | Array(UInt256Value) | Array(Decimal256Value)
+                               Array(Int256Value) | Array(UInt256Value) | Array(Decimal256Value) | Array(BFloat16Value)
   alias WidePartNumericSlice = Slice(UInt8) | Slice(UInt16) | Slice(UInt32) | Slice(UInt64) |
                                Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Int128) | Slice(UInt128) | Slice(Bool) |
                                Slice(Float32) | Slice(Float64) | Slice(UUIDValue) | Slice(IPv4Value) | Slice(IPv6Value) |
-                               Slice(Int256Value) | Slice(UInt256Value) | Slice(Decimal256Value)
+                               Slice(Int256Value) | Slice(UInt256Value) | Slice(Decimal256Value) | Slice(BFloat16Value)
   alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
                                 Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Int128?) | Array(UInt128?) | Array(Bool?) |
                                 Array(Float32?) | Array(Float64?) | Array(UUIDValue?) | Array(IPv4Value?) | Array(IPv6Value?) |
-                                Array(Int256Value?) | Array(UInt256Value?) | Array(Decimal256Value?)
+                                Array(Int256Value?) | Array(UInt256Value?) | Array(Decimal256Value?) | Array(BFloat16Value?)
   alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
                                 Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Int128?) | Slice(UInt128?) | Slice(Bool?) |
                                 Slice(Float32?) | Slice(Float64?) | Slice(UUIDValue?) | Slice(IPv4Value?) | Slice(IPv6Value?) |
-                                Slice(Int256Value?) | Slice(UInt256Value?) | Slice(Decimal256Value?)
+                                Slice(Int256Value?) | Slice(UInt256Value?) | Slice(Decimal256Value?) | Slice(BFloat16Value?)
   alias WidePartNullableStringArray = Array(String?)
   alias WidePartNullableStringSlice = Slice(String?)
   alias WidePartArrayNumericArray = Array(Array(UInt8)) | Array(Array(UInt16)) | Array(Array(UInt32)) | Array(Array(UInt64)) |
                                     Array(Array(Int8)) | Array(Array(Int16)) | Array(Array(Int32)) | Array(Array(Int64)) |
                                     Array(Array(Float32)) | Array(Array(Float64)) |
                                     Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value)) |
-                                    Array(Array(UUIDValue)) | Array(Array(IPv4Value)) | Array(Array(IPv6Value)) | Array(Array(Decimal256Value))
+                                    Array(Array(UUIDValue)) | Array(Array(IPv4Value)) | Array(Array(IPv6Value)) | Array(Array(Decimal256Value)) | Array(Array(BFloat16Value))
   alias WidePartArrayNumericSlice = Slice(Array(UInt8)) | Slice(Array(UInt16)) | Slice(Array(UInt32)) | Slice(Array(UInt64)) |
                                     Slice(Array(Int8)) | Slice(Array(Int16)) | Slice(Array(Int32)) | Slice(Array(Int64)) |
                                     Slice(Array(Float32)) | Slice(Array(Float64)) |
                                     Slice(Array(Int128)) | Slice(Array(UInt128)) | Slice(Array(Int256Value)) | Slice(Array(UInt256Value)) |
-                                    Slice(Array(UUIDValue)) | Slice(Array(IPv4Value)) | Slice(Array(IPv6Value)) | Slice(Array(Decimal256Value))
+                                    Slice(Array(UUIDValue)) | Slice(Array(IPv4Value)) | Slice(Array(IPv6Value)) | Slice(Array(Decimal256Value)) | Slice(Array(BFloat16Value))
   alias WidePartArrayNullableNumericArray = Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) | Array(Array(UInt64?)) |
                                             Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
                                             Array(Array(Float32?)) | Array(Array(Float64?)) |
                                             Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?)) |
-                                            Array(Array(UUIDValue?)) | Array(Array(IPv4Value?)) | Array(Array(IPv6Value?)) | Array(Array(Decimal256Value?))
+                                            Array(Array(UUIDValue?)) | Array(Array(IPv4Value?)) | Array(Array(IPv6Value?)) | Array(Array(Decimal256Value?)) | Array(Array(BFloat16Value?))
   alias WidePartArrayNullableNumericSlice = Slice(Array(UInt8?)) | Slice(Array(UInt16?)) | Slice(Array(UInt32?)) | Slice(Array(UInt64?)) |
                                             Slice(Array(Int8?)) | Slice(Array(Int16?)) | Slice(Array(Int32?)) | Slice(Array(Int64?)) |
                                             Slice(Array(Float32?)) | Slice(Array(Float64?)) |
                                             Slice(Array(Int128?)) | Slice(Array(UInt128?)) | Slice(Array(Int256Value?)) | Slice(Array(UInt256Value?)) |
-                                            Slice(Array(UUIDValue?)) | Slice(Array(IPv4Value?)) | Slice(Array(IPv6Value?)) | Slice(Array(Decimal256Value?))
+                                            Slice(Array(UUIDValue?)) | Slice(Array(IPv4Value?)) | Slice(Array(IPv6Value?)) | Slice(Array(Decimal256Value?)) | Slice(Array(BFloat16Value?))
   alias WidePartArrayNullableStringArray = Array(Array(String?))
   alias WidePartArrayNullableStringSlice = Slice(Array(String?))
   alias WidePartArrayBoolArray = Array(Array(Bool))
@@ -473,10 +473,23 @@ module CrystalClick
       @column_values[index].as(Slice(IPv6Value))
     end
 
+    def bfloat16s_for(column : String) : Slice(BFloat16Value)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("BFloat16 accessor requires an exact BFloat16 column") unless @column_types[index] == "BFloat16"
+      return @typed_numeric_values[column].as(Slice(BFloat16Value)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(BFloat16Value))
+    end
+
     def nullable_ipv6s_for(column : String) : Slice(IPv6Value?)
       index = column_index(column)
       raise UnsupportedFormatError.new("IPv6 accessor requires an exact Nullable(IPv6) column") unless WidePart.supports_nullable_ipv6_type?(@column_types[index])
       @nullable_values[column]?.try(&.as(Slice(IPv6Value?))) || raise(UnsupportedFormatError.new("Nullable(IPv6) column was not materialized in this batch"))
+    end
+
+    def nullable_bfloat16s_for(column : String) : Slice(BFloat16Value?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("BFloat16 accessor requires an exact Nullable(BFloat16) column") unless @column_types[index] == "Nullable(BFloat16)"
+      @nullable_values[column]?.try(&.as(Slice(BFloat16Value?))) || raise(UnsupportedFormatError.new("Nullable(BFloat16) column was not materialized in this batch"))
     end
 
     def strings_for(column : String) : Slice(String)
@@ -583,6 +596,14 @@ module CrystalClick
       raise UnsupportedFormatError.new("typed Array(Nullable(IPv6)) accessor requires an exact declaration") unless WidePart.nullable_ipv6_array_element_type(@column_types[index])
       values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(IPv6)) column was not materialized in this batch"))
       values.as(Slice(Array(IPv6Value?)))
+    end
+
+    def array_bfloat16s_for(column : String) : Slice(Array(BFloat16Value))
+      array_numeric_values(column, BFloat16Value)
+    end
+
+    def array_nullable_bfloat16s_for(column : String) : Slice(Array(BFloat16Value?))
+      array_nullable_numeric_values(column, BFloat16Value)
     end
 
     def array_enum8_codes_for(column : String) : Slice(Array(Int8))
@@ -1530,7 +1551,8 @@ module CrystalClick
               when "Array(UInt8)", "Array(UInt16)", "Array(UInt32)", "Array(UInt64)",
                    "Array(Int8)", "Array(Int16)", "Array(Int32)", "Array(Int64)",
                    "Array(Float32)", "Array(Float64)",
-                   "Array(Int128)", "Array(UInt128)", "Array(Int256)", "Array(UInt256)"
+                   "Array(Int128)", "Array(UInt128)", "Array(Int256)", "Array(UInt256)",
+                   "Array(BFloat16)"
                 element_type = WidePart.numeric_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported Array numeric type"))
                 values = read_array_numeric_values(selected.reader, selected.name, mark_index, element_type)
                 raise CorruptPartError.new("selected Array numeric mark row count changed") unless values.size.to_u64 == mark_rows
@@ -1894,6 +1916,8 @@ module CrystalClick
         return reader.read_ipv6s_mark_range(selected.name, mark_index, 1)
       elsif type == "Bool"
         return reader.read_bool_mark_range(selected.name, mark_index, 1)
+      elsif type == "BFloat16"
+        return reader.read_bfloat16_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum8_codes(type).nil? && !type.starts_with?("Nullable(")
         return reader.read_enum8_codes_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum16_codes(type).nil? && !type.starts_with?("Nullable(")
@@ -1988,6 +2012,8 @@ module CrystalClick
         reader.read_array_numeric_mark_range(column, mark_index, 1, Float32)
       when "Float64"
         reader.read_array_numeric_mark_range(column, mark_index, 1, Float64)
+      when "BFloat16"
+        reader.read_array_numeric_mark_range(column, mark_index, 1, BFloat16Value)
       else
         raise UnsupportedFormatError.new("unsupported Array numeric leaf type")
       end
@@ -2072,6 +2098,8 @@ module CrystalClick
         reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Float32)
       when "Float64"
         reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Float64)
+      when "BFloat16"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, BFloat16Value)
       else
         raise UnsupportedFormatError.new("unsupported Array nullable numeric leaf type")
       end
@@ -2193,6 +2221,8 @@ module CrystalClick
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Decimal256Value)
         values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(BFloat16Value)
+        values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Bool)
         values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32)
@@ -2221,6 +2251,8 @@ module CrystalClick
         return reader.read_nullable_ipv6s_mark_range(selected.name, mark_index, 1)
       elsif type == "Nullable(Bool)"
         return reader.read_nullable_bool_mark_range(selected.name, mark_index, 1)
+      elsif type == "Nullable(BFloat16)"
+        return reader.read_nullable_bfloat16_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum8_codes(type).nil? && type.starts_with?("Nullable(")
         return reader.read_nullable_enum8_codes_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.enum16_codes(type).nil? && type.starts_with?("Nullable(")
@@ -2280,6 +2312,7 @@ module CrystalClick
       when Array(Int256Value?)     then values.size
       when Array(UInt256Value?)    then values.size
       when Array(Decimal256Value?) then values.size
+      when Array(BFloat16Value?)   then values.size
       when Array(Bool?)            then values.size
       when Array(Float32?)         then values.size
       when Array(Float64?)         then values.size
@@ -2306,6 +2339,7 @@ module CrystalClick
       when Array(Int256Value?)     then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(UInt256Value?)    then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Decimal256Value?) then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(BFloat16Value?)   then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Bool?)            then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32?)         then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float64?)         then values.to_unsafe.to_slice(values.size)[offset, size]
