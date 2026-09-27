@@ -98,6 +98,9 @@ reader, batch, catalog, and writer APIs. Its compatibility evidence and
 remaining exclusions are recorded below.
 W36 separately admits BASIC `Nullable(Int128)` and `Nullable(UInt128)`
 scalar payloads through exact paired APIs; Sparse remains rejected.
+W37 admits bare raw `Int256` and `UInt256` scalar payloads through the
+same exact reader, batch, catalog, and writer boundary; its pinned stock
+compatibility evidence and remaining exclusions are recorded below.
 
 ## Purpose and bounded contexts
 
@@ -2079,6 +2082,70 @@ behavior, or other ClickHouse versions. A reader/writer, format, ClickHouse
 build, platform, or fixture change decays the certificate; refresh the
 focused/full suites and pinned external oracle before reasserting
 compatibility.
+
+## Verified W37 slice: raw 256-bit integer scalar payloads
+
+Admit exactly bare `Int256` and `UInt256` payload columns beside a sorted
+`UInt64` key in the pinned Wide/LZ4/plain-mark profile. Expose distinct
+`Int256Value` and `UInt256Value` structs, each storing the low and high
+`UInt128` halves of the 32-byte little-endian value. Signed values preserve
+two's-complement bits; they are not Decimal256 coefficients. Add exact raw
+reader, typed-batch, offline-catalog, and explicit writer APIs. Keep generic
+numeric access and writer inference closed, even though the physical width
+matches Decimal256. Do not admit Nullable 256-bit integers, Array forms,
+256-bit primary keys, arithmetic/comparison, SQL decimal rendering, or TUI
+formatting in this slice.
+
+A read-only stock ClickHouse local 26.7.1.1315 probe produced one 13-row
+Wide part containing both payloads, each with 416 uncompressed value bytes
+(13 times 32). Seven data marks with row counts 2, 2, 2, 2, 2, 2, and 1
+plus one zero-row EOF mark had 24-byte plain records. Each complete column
+stream occupied one LZ4 frame, so compressed-file offsets remained zero;
+payload decompressed mark offsets advanced 64 bytes for full granules,
+ending at byte 416. `CHECK TABLE` passed. RowBinary stores each
+signed/unsigned value as 32 raw little-endian bytes following the key;
+the signed minimum and unsigned high-bit value share a byte pattern but
+must retain different declared types. `columns_substreams.txt` names
+exactly one stream per column. The
+stock `serialization.json` has version 1, propagated nested versions,
+`string:1`, and complete `Default` records ordered `i`, `pk`, `u` rather
+than schema order; validation must match unique names, not JSON positions.
+The local 26.6 development source is explanatory only; the pinned 26.7
+binary and observed part are the compatibility authority.
+
+Risk is **CAUTION**: shared 32-byte wire layout can make an Int256 part look
+correct in Crystal while ClickHouse sees Decimal256 or the wrong signedness.
+Rollback is one W37-only local feature commit; no push or existing
+ClickHouse data-root mutation. The first falsifier is a focused RED spec for
+exact `Int256`/`UInt256` admission while Decimal256, Nullable, Array, generic
+numeric, and generic writer routes stay distinct. DoD: exact metadata and
+stream checks; hardcoded limb-crossover, signed MIN/MAX, -1, unsigned
+high-bit/MAX and zero bytes; full/later-mark reads and bounded table/catalog
+windows; writer no-publication on invalid input; full debug and release
+suites; formatting/diff checks; and a pinned stock oracle in both directions
+with `ATTACH PART`, `CHECK TABLE`, independently encoded full/key-range
+RowBinary, and same-size corruption detection. The strongest counterexample
+is a shared 32-byte pattern read through the wrong signed, unsigned, or
+Decimal256 API. No memory or speed tuning is admitted before remaining types,
+MV, and projections are implemented.
+
+Observed W37 evidence on this checkout: the focused W37 spec passed 7/7;
+the full debug and release suites each passed 633/633. The public stock
+fixture verifier checked exact named Default records, stream inventory,
+32-byte little-endian payloads, all eight marks including the sentinel,
+SHA256, SQL edge values, and independent RowBinary. The pinned ClickHouse
+local 26.7.1.1315 bidirectional oracle passed stock `ATTACH PART` and
+`CHECK TABLE`, Crystal full and keyed raw reads, and full/keyed RowBinary; both
+Crystal writer parts attached, checked, and returned the independently
+encoded full/keyed RowBinary. Mutating one byte in an attached stock stream
+without changing its size produced `CHECKSUM_DOESNT_MATCH`; restoring it
+restored `CHECK TABLE` and RowBinary. Adjacent W35/W36 raw-integer and
+Decimal256 oracles also passed. Hostile review verdict: **ROBUST within this
+bare-scalar Wide/LZ4/plain-mark profile**; no claim is made for Nullable,
+Array, other part profiles, other ClickHouse versions, MV/projections, or
+performance parity. A source, fixture, pinned binary, or compiler change
+decays this certificate; refresh the focused/full suites and bidirectional
+stock oracle before reasserting compatibility.
 
 ## Rejected and guard-only surfaces
 

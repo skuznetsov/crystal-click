@@ -1290,7 +1290,7 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
+        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
           records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name))
         end
         write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
@@ -1330,6 +1330,32 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "UInt128", rows_per_mark)
+    end
+
+    # Write primitive signed Int256 bit patterns through a separate explicit
+    # API; generic payload-type inference intentionally does not admit them.
+    def self.write_uint64_int256_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Int256Value),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Int256", rows_per_mark)
+    end
+
+    # Write primitive unsigned UInt256 bit patterns without signed or decimal
+    # interpretation; see write_uint64_int256_pair for the signed sibling.
+    def self.write_uint64_uint256_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt256Value),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "UInt256", rows_per_mark)
     end
 
     def self.write_uint64_nullable_int128_pair(
@@ -3263,6 +3289,12 @@ module CrystalClick
       {% elsif T == UInt128 %}
         raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == Int256Value %}
+        raise UnsupportedFormatError.new("Int256 payload requires exact Int256 metadata") unless type_name == "Int256"
+        validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == UInt256Value %}
+        raise UnsupportedFormatError.new("UInt256 payload requires exact UInt256 metadata") unless type_name == "UInt256"
+        validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Int128? %}
         unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
           raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
@@ -3321,6 +3353,12 @@ module CrystalClick
       {% elsif T == UInt128 %}
         raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == Int256Value %}
+        raise UnsupportedFormatError.new("Int256 payload requires exact Int256 metadata") unless type_name == "Int256"
+        write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == UInt256Value %}
+        raise UnsupportedFormatError.new("UInt256 payload requires exact UInt256 metadata") unless type_name == "UInt256"
+        write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Int128? %}
         unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
           raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
@@ -3352,6 +3390,8 @@ module CrystalClick
         8
       when "UUID", "IPv6", "Int128", "UInt128"
         16
+      when "Int256", "UInt256"
+        32
       when "DateTime"
         4
       else
@@ -3737,6 +3777,9 @@ module CrystalClick
         16.times { |index| bytes[offset + index] = ((bits >> (index * 8)) & 0xff_u128).to_u8 }
       {% elsif T == UInt128 %}
         16.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u128).to_u8 }
+      {% elsif T == Int256Value || T == UInt256Value %}
+        16.times { |index| bytes[offset + index] = ((value.low >> (index * 8)) & 0xff_u128).to_u8 }
+        16.times { |index| bytes[offset + 16 + index] = ((value.high >> (index * 8)) & 0xff_u128).to_u8 }
       {% elsif T == Decimal256Value %}
         16.times { |index| bytes[offset + index] = ((value.low >> (index * 8)) & 0xff_u128).to_u8 }
         16.times { |index| bytes[offset + 16 + index] = ((value.high >> (index * 8)) & 0xff_u128).to_u8 }
@@ -8225,6 +8268,18 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata")
         end
+      {% elsif T == Int256Value %}
+        if type_name == "Int256"
+          part.read_int256_raw_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("Int256 payload requires exact Int256 metadata")
+        end
+      {% elsif T == UInt256Value %}
+        if type_name == "UInt256"
+          part.read_uint256_raw_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("UInt256 payload requires exact UInt256 metadata")
+        end
       {% elsif T == Float32 %}
         part.read_numeric_mark_range(column, mark_index, 1, Float32)
       {% elsif T == Float64 %}
@@ -8241,7 +8296,7 @@ module CrystalClick
         expected.network_order == actual.network_order
       {% elsif T == IPv6Value %}
         expected.high == actual.high && expected.low == actual.low
-      {% elsif T == Decimal256Value %}
+      {% elsif T == Decimal256Value || T == Int256Value || T == UInt256Value %}
         expected.low == actual.low && expected.high == actual.high
       {% elsif T == Float32 %}
         expected.unsafe_as(UInt32) == actual.unsafe_as(UInt32)
@@ -8627,7 +8682,7 @@ module CrystalClick
                    "\"string\":1"
                  elsif type_name == "Nullable(String)"
                    "\"nullable\":0,\"string\":1"
-                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
+                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
                    # BASIC Nullable payloads, UUID, IPv4, and IPv6 use this global
                    # serializer-version metadata. Semantic identity is
                    # carried by the exact column type.

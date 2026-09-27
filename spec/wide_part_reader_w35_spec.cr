@@ -123,7 +123,7 @@ private def w35_assert_writer_part(part : String, type_name : String, values : A
 end
 
 describe CrystalClick::WidePart do
-  it "admits raw scalar Int128 and UInt128 while keeping arrays, nullables, and 256-bit scalars closed" do
+  it "admits raw scalar Int128 and UInt128 while keeping generic numeric access closed" do
     CrystalClick::WidePart.supports_typed_type?("Int128").should be_true
     CrystalClick::WidePart.supports_typed_type?("UInt128").should be_true
     CrystalClick::WidePart.supports_numeric_type?("Int128").should be_false
@@ -134,8 +134,10 @@ describe CrystalClick::WidePart do
     # spec owns those assertions while W35 keeps Array and generic gates shut.
     CrystalClick::WidePart.supports_typed_type?("Decimal(38, 0)").should be_true
     CrystalClick::WidePart.supports_typed_type?("Decimal(76, 0)").should be_true
-    CrystalClick::WidePart.supports_typed_type?("Int256").should be_false
-    CrystalClick::WidePart.supports_typed_type?("UInt256").should be_false
+    # W37 admits these exact raw scalar types; its focused spec owns the
+    # value-storage and 256-bit reader/writer coverage.
+    CrystalClick::WidePart.supports_typed_type?("Int256").should be_true
+    CrystalClick::WidePart.supports_typed_type?("UInt256").should be_true
   end
 
   it "reads exact Int128 and UInt128 stock columns across marks without aliasing Decimal128" do
