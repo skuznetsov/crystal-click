@@ -65,12 +65,12 @@ end
 
 describe CrystalClick::WidePart do
   it "admits only the exact supported Array declarations" do
-    ["Array(UInt64)", "Array(String)", "Array(Nullable(UInt64))", "Array(Array(UInt64))", "Array(Array(Nullable(UInt64)))"].each do |type|
+    ["Array(UInt64)", "Array(String)", "Array(Nullable(UInt8))", "Array(Nullable(UInt64))", "Array(Array(UInt64))", "Array(Array(Nullable(UInt64)))"].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
     end
 
     [
-      "Array(Nullable(UInt8))",
+      "Array(Nullable(UInt128))",
       "Array(Int128)",
       "Array(FixedString(8))",
       "Array(Array(Nullable(UInt8)))",

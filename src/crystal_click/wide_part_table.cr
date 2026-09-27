@@ -19,6 +19,12 @@ module CrystalClick
   alias WidePartArrayNumericSlice = Slice(Array(UInt8)) | Slice(Array(UInt16)) | Slice(Array(UInt32)) | Slice(Array(UInt64)) |
                                     Slice(Array(Int8)) | Slice(Array(Int16)) | Slice(Array(Int32)) | Slice(Array(Int64)) |
                                     Slice(Array(Float32)) | Slice(Array(Float64))
+  alias WidePartArrayNullableNumericArray = Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) | Array(Array(UInt64?)) |
+                                            Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
+                                            Array(Array(Float32?)) | Array(Array(Float64?))
+  alias WidePartArrayNullableNumericSlice = Slice(Array(UInt8?)) | Slice(Array(UInt16?)) | Slice(Array(UInt32?)) | Slice(Array(UInt64?)) |
+                                            Slice(Array(Int8?)) | Slice(Array(Int16?)) | Slice(Array(Int32?)) | Slice(Array(Int64?)) |
+                                            Slice(Array(Float32?)) | Slice(Array(Float64?))
 
   # A callback view over aligned selected columns from one bounded table batch.
   # Column slices alias per-mark arrays and are valid only until the callback
@@ -47,6 +53,7 @@ module CrystalClick
     @array_array_uint64_values : Hash(String, Slice(Array(Array(UInt64))))
     @array_array_nullable_uint64_values : Hash(String, Slice(Array(Array(UInt64?))))
     @array_numeric_values : Hash(String, WidePartArrayNumericSlice)
+    @array_nullable_numeric_values : Hash(String, WidePartArrayNullableNumericSlice)
     @tuple_string_values : Hash(String, Slice(Tuple(UInt64, String)))
     @map_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64, String))))
     @map_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64))))
@@ -76,6 +83,7 @@ module CrystalClick
       @array_array_uint64_values = Hash(String, Slice(Array(Array(UInt64)))).new
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
+      @array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericSlice).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -107,6 +115,7 @@ module CrystalClick
       @array_array_uint64_values = Hash(String, Slice(Array(Array(UInt64)))).new
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
+      @array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericSlice).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -138,6 +147,7 @@ module CrystalClick
       @array_array_uint64_values = Hash(String, Slice(Array(Array(UInt64)))).new
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
+      @array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericSlice).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -168,6 +178,7 @@ module CrystalClick
       array_array_uint64_values : Hash(String, Slice(Array(Array(UInt64)))) = Hash(String, Slice(Array(Array(UInt64)))).new,
       array_array_nullable_uint64_values : Hash(String, Slice(Array(Array(UInt64?)))) = Hash(String, Slice(Array(Array(UInt64?)))).new,
       array_numeric_values : Hash(String, WidePartArrayNumericSlice) = Hash(String, WidePartArrayNumericSlice).new,
+      array_nullable_numeric_values : Hash(String, WidePartArrayNullableNumericSlice) = Hash(String, WidePartArrayNullableNumericSlice).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
@@ -178,6 +189,7 @@ module CrystalClick
       @array_array_uint64_values = array_array_uint64_values
       @array_array_nullable_uint64_values = array_array_nullable_uint64_values
       @array_numeric_values = array_numeric_values
+      @array_nullable_numeric_values = array_nullable_numeric_values
     end
 
     def column_names : Array(String)
@@ -401,6 +413,18 @@ module CrystalClick
       raise UnsupportedFormatError.new("typed Array accessor requires an exact Array(T) numeric column") unless WidePart.numeric_array_element_type(@column_types[index]) == type_name
       values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Array numeric column was not materialized in this batch"))
       values.as(Slice(Array(T)))
+    end
+
+    # Return a nullable typed Array(T) view only for an exact
+    # Array(Nullable(T)) numeric declaration.
+    def array_nullable_numeric_values(column : String, type : T.class) : Slice(Array(T?)) forall T
+      index = column_index(column)
+      type_name = WidePart.numeric_type_name(type)
+      unless WidePart.nullable_numeric_array_element_type(@column_types[index]) == type_name
+        raise UnsupportedFormatError.new("typed nullable Array accessor requires an exact Array(Nullable(T)) numeric column")
+      end
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array nullable numeric column was not materialized in this batch"))
+      values.as(Slice(Array(T?)))
     end
 
     def array_array_uint64s_for(column : String) : Slice(Array(Array(UInt64)))
@@ -792,6 +816,7 @@ module CrystalClick
             # checked again before callback exposure.
             preflight_string_bytes = 0_u64
             preflight_array_numeric_bytes = Hash(String, UInt64).new
+            preflight_array_nullable_numeric_bytes = Hash(String, UInt64).new
             preflight_array_array_uint64_bytes = Hash(String, UInt64).new
             preflight_array_array_nullable_uint64_bytes = Hash(String, UInt64).new
             part.readers.each do |selected|
@@ -810,6 +835,9 @@ module CrystalClick
               elsif WidePart.numeric_array_element_type(selected.column_type)
                 bytes = selected.reader.array_numeric_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.nullable_numeric_array_element_type(selected.column_type)
+                bytes = selected.reader.array_nullable_numeric_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_numeric_bytes[selected.name] = bytes
               elsif selected.column_type == "Array(Nullable(UInt64))"
                 bytes = selected.reader.array_nullable_uint64_mark_range_raw_bytes(selected.name, mark_index, 1)
               elsif selected.column_type == "Array(Array(UInt64))"
@@ -847,6 +875,7 @@ module CrystalClick
             array_array_uint64_values = Hash(String, Array(Array(Array(UInt64)))).new
             array_array_nullable_uint64_values = Hash(String, Array(Array(Array(UInt64?)))).new
             array_numeric_values = Hash(String, WidePartArrayNumericArray).new
+            array_nullable_numeric_values = Hash(String, WidePartArrayNullableNumericArray).new
             tuple_string_values = Hash(String, Array(Tuple(UInt64, String))).new
             map_uint64_string_values = Hash(String, Array(Array(Tuple(UInt64, String)))).new
             map_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
@@ -907,6 +936,17 @@ module CrystalClick
                 actual_string_bytes += bytes
                 array_numeric_values[selected.name] = values
                 array_uint64_values[selected.name] = values.as(Array(Array(UInt64))) if selected.column_type == "Array(UInt64)"
+              when .starts_with?("Array(Nullable(")
+                element_type = WidePart.nullable_numeric_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported Array nullable numeric type"))
+                values = read_array_nullable_numeric_values(selected.reader, selected.name, mark_index, element_type)
+                raise CorruptPartError.new("selected Array(Nullable(T)) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Nullable(T)) mark was not preflighted"))
+                bytes = array_nullable_numeric_materialized_bytes(values, element_type)
+                raise CorruptPartError.new("selected Array(Nullable(T)) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(Nullable(T)) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+                array_nullable_uint64_values[selected.name] = values.as(Array(Array(UInt64?))) if element_type == "UInt64"
               when "Array(Nullable(UInt64))"
                 values = selected.reader.read_array_nullable_uint64_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Array(Nullable(UInt64)) mark row count changed") unless values.size.to_u64 == mark_rows
@@ -1004,6 +1044,7 @@ module CrystalClick
               array_array_uint64_slices = Hash(String, Slice(Array(Array(UInt64)))).new
               array_array_nullable_uint64_slices = Hash(String, Slice(Array(Array(UInt64?)))).new
               array_numeric_slices = Hash(String, WidePartArrayNumericSlice).new
+              array_nullable_numeric_slices = Hash(String, WidePartArrayNullableNumericSlice).new
               tuple_string_slices = Hash(String, Slice(Tuple(UInt64, String))).new
               map_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
               map_uint64_uint64_slices = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -1025,6 +1066,12 @@ module CrystalClick
                   array_numeric_slices[selected.name] = selected_slice.as(WidePartArrayNumericSlice)
                   if selected.column_type == "Array(UInt64)"
                     array_uint64_slices[selected.name] = selected_slice.as(Slice(Array(UInt64)))
+                  end
+                elsif values = array_nullable_numeric_values[selected.name]?
+                  selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                  array_nullable_numeric_slices[selected.name] = selected_slice.as(WidePartArrayNullableNumericSlice)
+                  if selected.column_type == "Array(Nullable(UInt64))"
+                    array_nullable_uint64_slices[selected.name] = selected_slice.as(Slice(Array(UInt64?)))
                   end
                 elsif values = array_uint64_values[selected.name]?
                   array_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
@@ -1070,7 +1117,8 @@ module CrystalClick
                 array_nullable_uint64_slices,
                 array_array_uint64_slices,
                 array_array_nullable_uint64_slices,
-                array_numeric_slices
+                array_numeric_slices,
+                array_nullable_numeric_slices
               )
               yield batch
               mark_row_offset &+= size.to_u64
@@ -1232,6 +1280,58 @@ module CrystalClick
       else
         raise UnsupportedFormatError.new("unsupported Array numeric leaf type")
       end
+    end
+
+    private def read_array_nullable_numeric_values(
+      reader : WidePart,
+      column : String,
+      mark_index : Int,
+      element_type : String,
+    ) : WidePartArrayNullableNumericArray
+      case element_type
+      when "UInt8"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, UInt8)
+      when "UInt16"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, UInt16)
+      when "UInt32"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, UInt32)
+      when "UInt64"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, UInt64)
+      when "Int8"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int8)
+      when "Int16"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int16)
+      when "Int32"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int32)
+      when "Int64"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int64)
+      when "Float32"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Float32)
+      when "Float64"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Float64)
+      else
+        raise UnsupportedFormatError.new("unsupported Array nullable numeric leaf type")
+      end
+    end
+
+    private def array_nullable_numeric_materialized_bytes(
+      values : WidePartArrayNullableNumericArray,
+      element_type : String,
+    ) : UInt64
+      elements = 0_u64
+      values.each do |row|
+        row_elements = row.size.to_u64
+        if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - elements
+          raise CorruptPartError.new("selected Array(Nullable(T)) mark element count exceeds materialization limit")
+        end
+        elements += row_elements
+      end
+
+      bytes_per_element = (1 + WidePart.numeric_payload_width(element_type)).to_u64
+      if elements > UInt64::MAX // bytes_per_element
+        raise CorruptPartError.new("selected Array(Nullable(T)) byte count overflows")
+      end
+      elements * bytes_per_element
     end
 
     private def slice_numeric_values(values : WidePartNumericArray, offset : Int, size : Int) : WidePartNumericSlice

@@ -1,0 +1,44 @@
+columns substreams version: 1
+11 columns:
+1 substreams for column `pk`:
+	pk
+3 substreams for column `arr_u8`:
+	arr_u8.size0
+	arr_u8.null
+	arr_u8
+3 substreams for column `arr_u16`:
+	arr_u16.size0
+	arr_u16.null
+	arr_u16
+3 substreams for column `arr_u32`:
+	arr_u32.size0
+	arr_u32.null
+	arr_u32
+3 substreams for column `arr_u64`:
+	arr_u64.size0
+	arr_u64.null
+	arr_u64
+3 substreams for column `arr_i8`:
+	arr_i8.size0
+	arr_i8.null
+	arr_i8
+3 substreams for column `arr_i16`:
+	arr_i16.size0
+	arr_i16.null
+	arr_i16
+3 substreams for column `arr_i32`:
+	arr_i32.size0
+	arr_i32.null
+	arr_i32
+3 substreams for column `arr_i64`:
+	arr_i64.size0
+	arr_i64.null
+	arr_i64
+3 substreams for column `arr_f32`:
+	arr_f32.size0
+	arr_f32.null
+	arr_f32
+3 substreams for column `arr_f64`:
+	arr_f64.size0
+	arr_f64.null
+	arr_f64

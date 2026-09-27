@@ -2,7 +2,8 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
-                             Array(UInt64) | Array(UInt64?) | Array(String) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
+                             Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
+                             Array(String) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
@@ -272,6 +273,11 @@ module CrystalClick
         selected_values = batch.array_numeric_values(column_name, Float64)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Nullable(")
+        element_type = WidePart.nullable_numeric_array_element_type(selected_type) || raise(UnsupportedFormatError.new("selected table column type is unsupported"))
+        selected_values = array_nullable_numeric_values_for(batch, column_name, element_type)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when "Array(Array(UInt64))"
         selected_values = batch.array_array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -839,6 +845,41 @@ module CrystalClick
         row.each { |inner| owned_row << inner.dup }
         values << owned_row
       end
+      next_elements
+    end
+
+    private def array_nullable_numeric_values_for(
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+    ) : WidePartArrayNullableNumericSlice
+      case element_type
+      when "UInt8"   then batch.array_nullable_numeric_values(column, UInt8)
+      when "UInt16"  then batch.array_nullable_numeric_values(column, UInt16)
+      when "UInt32"  then batch.array_nullable_numeric_values(column, UInt32)
+      when "UInt64"  then batch.array_nullable_numeric_values(column, UInt64)
+      when "Int8"    then batch.array_nullable_numeric_values(column, Int8)
+      when "Int16"   then batch.array_nullable_numeric_values(column, Int16)
+      when "Int32"   then batch.array_nullable_numeric_values(column, Int32)
+      when "Int64"   then batch.array_nullable_numeric_values(column, Int64)
+      when "Float32" then batch.array_nullable_numeric_values(column, Float32)
+      when "Float64" then batch.array_nullable_numeric_values(column, Float64)
+      else
+        raise UnsupportedFormatError.new("unsupported Array nullable numeric leaf type")
+      end
+    end
+
+    private def append_materialized_array_nullable_numeric(
+      values : Array(OfflineColumnValue),
+      selected_values : WidePartArrayNullableNumericSlice,
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
+
+      selected_values.each { |row| values << row.dup }
       next_elements
     end
 

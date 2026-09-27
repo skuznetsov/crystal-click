@@ -549,7 +549,26 @@ module CrystalClick
       values : Slice(Array(UInt64?)),
       rows_per_mark : Int32 = 8192,
     ) : String
-      validate_array_nullable_uint64_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+      write_uint64_array_nullable_numeric_pair(destination, key_name, keys, value_name, values, rows_per_mark)
+    end
+
+    # Write one immutable part with a sorted UInt64 key and one exact
+    # Array(Nullable(T)) primitive numeric payload. NULL leaves consume a null
+    # byte and a zero-valued fixed-width placeholder, matching ClickHouse's
+    # physical serialization for all supported numeric leaf widths.
+    def self.write_uint64_array_nullable_numeric_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(T?)),
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      type_name = WidePart.numeric_type_name(T)
+      unless WidePart.supports_numeric_type?(type_name) && WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name
+        raise ArgumentError.new("Array nullable numeric writer requires an exact supported numeric type")
+      end
+      validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_name)
 
       target = File.expand_path(destination)
       parent = File.dirname(target)
@@ -560,16 +579,16 @@ module CrystalClick
       begin
         records = [] of ChecksumRecord
         records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
-        records.concat(write_array_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
+        records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(UInt64))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        validate_staged_array_nullable_numeric_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
         publish_exclusively(stage, target)
         target
       ensure
@@ -1701,6 +1720,80 @@ module CrystalClick
         end
         total_null_bytes += mark_elements
         total_value_bytes += mark_elements * 8_u64
+        start_row += rows
+      end
+      nil
+    end
+
+    private def self.validate_array_nullable_numeric_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(T?)),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Nil forall T
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      unless WidePart.supports_numeric_type?(type_name) && WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name
+        raise ArgumentError.new("Array nullable numeric writer requires an exact supported numeric type")
+      end
+      validate_array_common_inputs(
+        destination,
+        key_name,
+        keys,
+        value_name,
+        rows_per_mark,
+        ["#{value_name}.size0", "#{value_name}.null", value_name]
+      )
+
+      width = WidePart.numeric_payload_width(type_name)
+      label = "Array(Nullable(#{type_name}))"
+      element_limit_label = type_name == "UInt64" ? "Array(Nullable(UInt64))" : label
+      key_data_bytes = 0_i64
+      size0_data_bytes = 0_i64
+      null_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      total_elements = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        size0_data_bytes = add_array_frame_size(size0_data_bytes, fixed_frame_size, "Array size0")
+
+        mark_elements = 0_u64
+        rows.times do |offset|
+          row_elements = values[start_row + offset].size.to_u64
+          if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+            raise ArgumentError.new("#{element_limit_label} nested element count exceeds per-mark limit")
+          end
+          mark_elements += row_elements
+        end
+
+        null_raw_size = checked_array_numeric_bytes(mark_elements, 1, "#{label} null map")
+        value_raw_size = checked_array_numeric_bytes(mark_elements, width, "#{label} nested")
+        combined_raw_size = checked_array_numeric_bytes(mark_elements, width + 1, "#{label} child streams")
+        if combined_raw_size > WidePart::MAX_ARRAY_MARK_BYTES
+          raise ArgumentError.new("#{label} child stream bytes exceed per-mark limit")
+        end
+        unless null_raw_size == 0
+          null_data_bytes = add_array_frame_size(
+            null_data_bytes,
+            checked_array_frame_size(null_raw_size, "#{label} null map"),
+            "#{label} null map"
+          )
+          value_data_bytes = add_array_frame_size(
+            value_data_bytes,
+            checked_array_frame_size(value_raw_size, "#{label} nested"),
+            "#{label} nested"
+          )
+        end
+        if mark_elements > UInt64::MAX - total_elements
+          raise ArgumentError.new("#{label} nested element count overflows")
+        end
+        total_elements += mark_elements
         start_row += rows
       end
       nil
@@ -3967,6 +4060,150 @@ module CrystalClick
       ]
     end
 
+    private def self.write_array_nullable_numeric_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(T?)),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord) forall T
+      width = WidePart.numeric_payload_width(type_name)
+      size0_base = StreamName.hash("#{column}.size0")
+      null_base = StreamName.hash("#{column}.null")
+      value_base = StreamName.hash(column)
+      size0_data_name = "#{size0_base}.bin"
+      size0_marks_name = "#{size0_base}.mrk2"
+      null_data_name = "#{null_base}.bin"
+      null_marks_name = "#{null_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      size0_data_hash = CityHashV1::FileHasher.new
+      size0_raw_hash = CityHashV1::FileHasher.new
+      null_data_hash = CityHashV1::FileHasher.new
+      null_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      size0_mark_bytes = IO::Memory.new
+      null_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      size0_data_size = 0_u64
+      null_data_size = 0_u64
+      value_data_size = 0_u64
+      total_elements = 0_u64
+      start_row = 0
+      label = "Array(Nullable(#{type_name}))"
+
+      File.open(File.join(stage, size0_data_name), "wb") do |size0_data_file|
+        File.open(File.join(stage, null_data_name), "wb") do |null_data_file|
+          File.open(File.join(stage, value_data_name), "wb") do |value_data_file|
+            while start_row < values.size
+              rows = {rows_per_mark, values.size - start_row}.min
+              size0_raw = Bytes.new(rows * 8)
+              mark_elements = 0_u64
+              rows.times do |row|
+                row_elements = values[start_row + row].size.to_u64
+                if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+                  element_limit_label = type_name == "UInt64" ? "Array(Nullable(UInt64))" : label
+                  raise ArgumentError.new("#{element_limit_label} nested element count exceeds per-mark limit")
+                end
+                mark_elements += row_elements
+                write_uint64_le(size0_raw, row * 8, row_elements)
+              end
+
+              null_raw = Bytes.new(mark_elements.to_i)
+              value_raw = Bytes.new(checked_array_numeric_bytes(mark_elements, width, "#{label} nested"))
+              element_offset = 0
+              value_offset = 0
+              rows.times do |row|
+                values[start_row + row].each do |value|
+                  if value.nil?
+                    null_raw[element_offset] = 1_u8
+                  else
+                    null_raw[element_offset] = 0_u8
+                    write_typed_numeric_le(value_raw, value_offset, value.not_nil!)
+                  end
+                  element_offset += 1
+                  value_offset += width
+                end
+              end
+
+              write_uint64_le(size0_mark_bytes, size0_data_size)
+              write_uint64_le(size0_mark_bytes, 0_u64)
+              write_uint64_le(size0_mark_bytes, rows.to_u64)
+              write_uint64_le(null_mark_bytes, null_data_size)
+              write_uint64_le(null_mark_bytes, 0_u64)
+              write_uint64_le(null_mark_bytes, rows.to_u64)
+              write_uint64_le(value_mark_bytes, value_data_size)
+              write_uint64_le(value_mark_bytes, 0_u64)
+              write_uint64_le(value_mark_bytes, rows.to_u64)
+
+              size0_frame = encode_lz4_frame(size0_raw)
+              if size0_data_size > MAX_DATA_FILE_BYTES.to_u64 - size0_frame.size.to_u64
+                raise ArgumentError.new("Array size0 stream exceeds reader limit")
+              end
+              size0_data_file.write(size0_frame)
+              size0_data_hash.update(size0_frame)
+              size0_raw_hash.update(size0_raw)
+              size0_data_size += size0_frame.size.to_u64
+
+              unless null_raw.empty?
+                null_frame = encode_lz4_frame(null_raw)
+                value_frame = encode_lz4_frame(value_raw)
+                if null_data_size > MAX_DATA_FILE_BYTES.to_u64 - null_frame.size.to_u64
+                  raise ArgumentError.new("#{label} null-map stream exceeds reader limit")
+                end
+                if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+                  raise ArgumentError.new("#{label} nested stream exceeds reader limit")
+                end
+                null_data_file.write(null_frame)
+                null_data_hash.update(null_frame)
+                null_data_size += null_frame.size.to_u64
+                value_data_file.write(value_frame)
+                value_data_hash.update(value_frame)
+                value_data_size += value_frame.size.to_u64
+              end
+              null_raw_hash.update(null_raw)
+              value_raw_hash.update(value_raw)
+              if mark_elements > UInt64::MAX - total_elements
+                raise ArgumentError.new("#{label} nested element count overflows")
+              end
+              total_elements += mark_elements
+              start_row += rows
+            end
+          end
+        end
+      end
+
+      write_uint64_le(size0_mark_bytes, size0_data_size)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(null_mark_bytes, null_data_size)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(null_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+
+      size0_marks = size0_mark_bytes.to_slice
+      null_marks = null_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      {size0_marks, null_marks, value_marks}.each do |marks|
+        raise ArgumentError.new("mark stream exceeds reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      end
+      File.write(File.join(stage, size0_marks_name), size0_marks)
+      File.write(File.join(stage, null_marks_name), null_marks)
+      File.write(File.join(stage, value_marks_name), value_marks)
+
+      [
+        ChecksumRecord.new(size0_data_name, size0_data_size, size0_data_hash.finish, true, checked_array_element_checksum_size(values.size.to_u64, "Array size0"), size0_raw_hash.finish),
+        ChecksumRecord.new(size0_marks_name, size0_marks.size.to_u64, CityHashV1.file_hash(size0_marks), false),
+        ChecksumRecord.new(null_data_name, null_data_size, null_data_hash.finish, true, total_elements, null_raw_hash.finish),
+        ChecksumRecord.new(null_marks_name, null_marks.size.to_u64, CityHashV1.file_hash(null_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, checked_array_numeric_checksum_size(total_elements, width, "#{label} nested"), value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
     private def self.write_array_nullable_uint64_streams(
       stage : String,
       column : String,
@@ -5557,6 +5794,62 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_array_nullable_numeric_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(T?)),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      expected_type = "Array(Nullable(#{type_name}))"
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Array(Nullable(T)) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Array(Nullable(T)) column type does not match") unless value_part.column_type == expected_type
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged Array(Nullable(T)) substream metadata does not match")
+      end
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_nullable_numeric_mark_range(value_name, mark_index, 1, T)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && nullable_numeric_array_rows_identical?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged Array(Nullable(T)) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(Nullable(T)) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(Nullable(T)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.nullable_numeric_array_rows_identical?(left : Array(T?), right : Array(T?)) : Bool forall T
+      return false unless left.size == right.size
+      left.each_with_index do |value, index|
+        return false unless typed_nullable_numeric_value_equal?(value, right[index])
+      end
+      true
+    end
+
     private def self.validate_staged_array_nullable_uint64_part(
       stage : String,
       key_name : String,
@@ -6527,6 +6820,10 @@ module CrystalClick
     end
 
     private def self.array_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String
+      array_nullable_numeric_substreams_metadata(key_name, value_name)
+    end
+
+    private def self.array_nullable_numeric_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.null\n\t#{value_name}\n"
     end
 

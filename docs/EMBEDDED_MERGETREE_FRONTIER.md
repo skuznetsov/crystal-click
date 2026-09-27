@@ -79,6 +79,10 @@ oracle and regression gates passed; this is not general recursive type support.
 W30 admits a bounded single-level numeric Array family, replacing
 one-spelling-at-a-time widening with a sealed leaf plan. It does not admit
 nullable numeric leaves or arbitrary recursive Arrays.
+W31 admits paired `Array(Nullable(T))` payloads for those ten primitive
+numeric leaves, retaining W27's exact `UInt64` entry points. Its multi-column
+empty-serializer admission is limited to the pinned 11-column stock shape;
+this does not imply arbitrary table-schema composition.
 
 ## Purpose and bounded contexts
 
@@ -1696,6 +1700,65 @@ decays when the producer build, serializer/mark layout, codec, filesystem,
 or shared reader/writer changes. No memory or throughput optimization was
 admitted in this slice.
 
+## Admitted W31 slice: nullable numeric Array leaves
+
+W31 extends the paired one-level Array contract to `Array(Nullable(T))` for
+the ten primitive numeric leaves already admitted by W30: `UInt8/16/32/64`,
+`Int8/16/32/64`, and `Float32/64`. The existing exact
+`Array(Nullable(UInt64))` contract remains valid. This is a closed leaf family,
+not a recursive grammar: `Nullable(Array(T))`, other nested nullable Arrays,
+semantic/Decimal/String leaves, and alternate type spellings remain outside
+this slice. Public reader, typed-batch, offline-catalog, and immutable-writer
+values must agree; nulls must not be conflated with numeric zero or floating
+point payload bits.
+
+The pinned ClickHouse 26.7.1.1315 Wide/LZ4/plain-marks disposable producer
+confirmed the same three streams for all ten leaves: `<name>.size0`,
+`<name>.null`, and `<name>`. Its 11-row probe had six granules and a sentinel
+mark in every stream. Two all-empty granules left child offsets unchanged;
+an all-null granule advanced both child streams by three flattened slots,
+with zero-valued nested placeholders. Float32/64 `-0`, `+0`, NaN payloads,
+infinities, and subnormals retained their raw bits. The producer's
+`serialization.json` used `columns:[]`; `CHECK TABLE` passed. This probe
+establishes the physical hypothesis only; durable fixture identity and the
+bidirectional reader/writer oracle remain W31 acceptance gates. The
+falsifier fixture must mix empty arrays, `NULL`,
+zero, integer extrema, and floating-point signed zero, infinities, and a NaN
+payload. It must include an empty middle mark and a later selected mark. A
+same-total shifted child mark, malformed null-map byte, declared width
+mismatch, and oversized element count must fail before any typed batch or
+part publication. Floating-point comparisons use raw bits for non-null
+values. An all-null row does not waive the child's physical-slot or mark
+requirements.
+
+Admission requires both directions of the stock oracle: read stock-produced
+parts through full and later-mark ranges; then attach Crystal-produced parts
+to stock ClickHouse and compare exact full/key-range RowBinary plus `CHECK
+TABLE`. Confirm selected typed batches and caller-owned catalog values, run
+debug and release specs, and retain all prior pinned stock-oracle passes.
+Reader self-readback alone cannot establish compatibility. The strongest
+failure mode is shifted flattened null/value alignment that still has the
+correct total byte count; the controls above target that case. Risk is
+**CAUTION** because this widens common Array dispatch and serialization.
+Rollback is one W31-only local feature commit; no live ClickHouse root or
+existing part is mutated. Evidence will decay with a changed stock build,
+serializer/mark layout, codec, filesystem, or shared reader/writer logic.
+MV/projections and performance work remain deferred until type parity.
+
+Observed W31 gate on this host: the fixture verifier checked its SHA-256
+manifest, exact 11-column schema, 31 physical streams, six data marks, and
+sentinels; the W31 focused spec passed 6/6, including byte-level stream
+checks, later-mark reads, typed batches, catalog ownership, a mixed-schema
+rejection, and corrupt null/mark/width/count negatives before callbacks. The
+pinned stock oracle passed attachment and `CHECK TABLE` for the stock part and
+all ten Crystal-written two-column parts, with exact full/key-range RowBinary
+including floating-point payload bits. Debug and release suites each passed
+574 examples, and all 25 stock-oracle scripts passed. Adversary verdict:
+**ROBUST within this pinned profile**. This is not arbitrary table-schema or
+serializer compatibility; populated TUI display of W31 arrays, further type
+compositions, MV/projections, Compact parts, other codecs/platforms, and
+performance remain unverified or guard-only.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1705,7 +1768,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W30's numeric Array family,
+1. Extend reader and writer together beyond W31's nullable numeric Array
+   family and W30's non-null numeric Array family,
    W29's nested nullable Array, W28's nested Array, W27's exact nullable array,
    W25/W26's exact Maps,
    W24's exact JSON typed paths, W23's exact named Tuple,

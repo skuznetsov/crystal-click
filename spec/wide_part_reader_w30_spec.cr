@@ -327,7 +327,6 @@ describe CrystalClick::WidePart do
     end
 
     [
-      "Array(Nullable(UInt8))",
       "Array(Array(UInt8))",
       "Array(Tuple(UInt64, UInt64))",
       "Array(UInt128)",
@@ -339,11 +338,14 @@ describe CrystalClick::WidePart do
     [
       "Array(UInt64)",
       "Array(String)",
-      "Array(Nullable(UInt64))",
       "Array(Array(UInt64))",
       "Array(Array(Nullable(UInt64)))",
     ].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
+    end
+
+    {"UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"}.each do |leaf_type|
+      CrystalClick::WidePart.supports_typed_type?("Array(Nullable(#{leaf_type}))").should be_true
     end
   end
 
