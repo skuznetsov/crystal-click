@@ -6,10 +6,10 @@ module CrystalClick
                                Slice(Int8) | Slice(Int16) | Slice(Int32) | Slice(Int64) | Slice(Int128) | Slice(UInt128) | Slice(Bool) |
                                Slice(Float32) | Slice(Float64) | Slice(UUIDValue) | Slice(IPv4Value) | Slice(IPv6Value) | Slice(Decimal256Value)
   alias WidePartNullableArray = Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(UInt64?) |
-                                Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Int128?) | Array(Bool?) |
+                                Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Int128?) | Array(UInt128?) | Array(Bool?) |
                                 Array(Float32?) | Array(Float64?) | Array(UUIDValue?) | Array(IPv4Value?) | Array(IPv6Value?) | Array(Decimal256Value?)
   alias WidePartNullableSlice = Slice(UInt8?) | Slice(UInt16?) | Slice(UInt32?) | Slice(UInt64?) |
-                                Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Int128?) | Slice(Bool?) |
+                                Slice(Int8?) | Slice(Int16?) | Slice(Int32?) | Slice(Int64?) | Slice(Int128?) | Slice(UInt128?) | Slice(Bool?) |
                                 Slice(Float32?) | Slice(Float64?) | Slice(UUIDValue?) | Slice(IPv4Value?) | Slice(IPv6Value?) | Slice(Decimal256Value?)
   alias WidePartNullableStringArray = Array(String?)
   alias WidePartNullableStringSlice = Slice(String?)
@@ -370,6 +370,18 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_types[index])
       @nullable_values[column]?.try(&.as(Slice(Int128?))) || raise(UnsupportedFormatError.new("Nullable(Decimal128) column was not materialized in this batch"))
+    end
+
+    def nullable_int128_raw_for(column : String) : Slice(Int128?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("raw Int128 accessor requires exact Nullable(Int128)") unless @column_types[index] == "Nullable(Int128)"
+      @nullable_values[column]?.try(&.as(Slice(Int128?))) || raise(UnsupportedFormatError.new("Nullable(Int128) column was not materialized in this batch"))
+    end
+
+    def nullable_uint128_raw_for(column : String) : Slice(UInt128?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("raw UInt128 accessor requires exact Nullable(UInt128)") unless @column_types[index] == "Nullable(UInt128)"
+      @nullable_values[column]?.try(&.as(Slice(UInt128?))) || raise(UnsupportedFormatError.new("Nullable(UInt128) column was not materialized in this batch"))
     end
 
     def decimal256_raw_for(column : String) : Slice(Decimal256Value)
@@ -1626,6 +1638,10 @@ module CrystalClick
         return reader.read_nullable_decimal32_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.nullable_decimal64_scale(type).nil?
         return reader.read_nullable_decimal64_raw_mark_range(selected.name, mark_index, 1)
+      elsif type == "Nullable(Int128)"
+        return reader.read_nullable_int128_raw_mark_range(selected.name, mark_index, 1)
+      elsif type == "Nullable(UInt128)"
+        return reader.read_nullable_uint128_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.nullable_decimal128_scale(type).nil?
         return reader.read_nullable_decimal128_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.nullable_decimal256_scale(type).nil?
@@ -1665,6 +1681,7 @@ module CrystalClick
       when Array(Int32?)           then values.size
       when Array(Int64?)           then values.size
       when Array(Int128?)          then values.size
+      when Array(UInt128?)         then values.size
       when Array(Decimal256Value?) then values.size
       when Array(Bool?)            then values.size
       when Array(Float32?)         then values.size
@@ -1688,6 +1705,7 @@ module CrystalClick
       when Array(Int32?)           then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int64?)           then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Int128?)          then values.to_unsafe.to_slice(values.size)[offset, size]
+      when Array(UInt128?)         then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Decimal256Value?) then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Bool?)            then values.to_unsafe.to_slice(values.size)[offset, size]
       when Array(Float32?)         then values.to_unsafe.to_slice(values.size)[offset, size]

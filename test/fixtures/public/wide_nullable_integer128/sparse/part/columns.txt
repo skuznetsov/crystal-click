@@ -1,0 +1,5 @@
+columns format version: 1
+3 columns:
+`pk` UInt64
+`signed` Nullable(Int128)
+`unsigned` Nullable(UInt128)

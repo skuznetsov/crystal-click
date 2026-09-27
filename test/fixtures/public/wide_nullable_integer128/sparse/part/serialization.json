@@ -1,0 +1,1 @@
+{"columns":[{"kind":"Default","name":"pk","num_defaults":0,"num_rows":32},{"kind":"Sparse","name":"signed","num_defaults":30,"num_rows":32},{"kind":"Sparse","name":"unsigned","num_defaults":30,"num_rows":32}],"propagate_types_serialization_versions_to_nested_types":true,"types_serialization_versions":{"nullable":1,"string":1},"version":1}

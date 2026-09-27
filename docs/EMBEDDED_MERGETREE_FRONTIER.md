@@ -96,6 +96,8 @@ oracle are recorded below; this is not generic semantic Array support.
 W35 admits bare raw `Int128` and `UInt128` scalar payloads through exact
 reader, batch, catalog, and writer APIs. Its compatibility evidence and
 remaining exclusions are recorded below.
+W36 separately admits BASIC `Nullable(Int128)` and `Nullable(UInt128)`
+scalar payloads through exact paired APIs; Sparse remains rejected.
 
 ## Purpose and bounded contexts
 
@@ -1960,9 +1962,10 @@ and writer contracts must retain the signed/unsigned distinction and the
 exact `columns.txt` type. A stock part containing both payloads and separate
 Crystal-written key/payload pairs provide the two compatibility directions.
 
-This slice does not admit `Nullable(Int128)`, `Nullable(UInt128)`, their Array
-forms, 256-bit integers, an Int128 primary key, or generic writer inference
-of `Int128`. The last restriction preserves the earlier requirement that an
+W35 alone did not admit `Nullable(Int128)` or `Nullable(UInt128)`; W36 admits
+them separately below. Neither slice admits their Array forms, 256-bit
+integers, an Int128 primary key, or generic writer inference of `Int128`.
+The last restriction preserves the earlier requirement that an
 unscaled `Int128` slice must not silently become `Decimal(38, S)`. Exact
 raw-type entry points are required; neither `Decimal128` nor another 16-byte
 semantic type may be accepted through them. In particular, the shared
@@ -2014,6 +2017,69 @@ projections, or performance parity. The evidence decays if the stock build,
 serialization/mark layout, platform, or shared reader/writer implementation
 changes.
 
+## Verified W36 slice: BASIC Nullable raw 128-bit integer payloads
+
+Admit exactly `Nullable(Int128)` and `Nullable(UInt128)` payload columns
+beside a sorted `UInt64` key in the pinned Wide/LZ4/plain-mark profile.
+Expose separate exact raw reader, typed-batch, offline-catalog, and explicit
+writer APIs. Do not infer either declaration from a nullable Crystal slice:
+`Int128?` is also the Decimal128 backing representation. Generic numeric,
+nullable-numeric, Array, and recursive admission remain unchanged; 256-bit
+integers, primary keys of these types, and arbitrary serializer layouts are
+still outside this slice.
+
+A temporary stock ClickHouse 26.7.1.1315 probe produced a 32-row Wide part
+with eight four-row data marks and one EOF sentinel. With BASIC nullable
+serialization, each selected column has a `.null` byte stream (0=present,
+1=NULL) and a fixed-width 16-byte-per-row payload stream; NULL payload slots
+were zero-filled. `columns_substreams.txt` named exactly those two streams,
+and `serialization.json` contained version 1, propagated nested versions,
+`string:1`, and an empty `columns` list. A second stock probe with nullable
+ALLOW_SPARSE selected Sparse column records, `nullable:1`, `.sparse.idx`
+streams, and only non-null payload values. That layout must fail closed:
+neither its index nor its shortened payload may be treated as BASIC nulls.
+Serializer records, if present in an admitted BASIC part, must cover unique
+exact column names with Default records; their JSON order is not schema
+order. The 26.6 development source checkout is explanatory only; the pinned
+26.7 binary and observed parts are the compatibility authority.
+
+Risk is **CAUTION**: equal-width Decimal128 bytes can silently produce the
+wrong declared type, and a Sparse nullable part can look plausible until a
+later mark. Rollback is one W36-only local feature commit. The first
+falsifier is a focused RED spec that rejects both nullable raw types before
+implementation and keeps generic/Decimal/Array gates closed. DoD: exact
+metadata and stream assertions, full and later-mark reads, bounded table and
+catalog windows with owned values, invalid null-byte and Sparse rejection,
+no destination publication on writer input failure, full debug and release
+suites, formatting/diff checks, and a pinned stock oracle in both directions
+using `ATTACH PART`, `CHECK TABLE`, and independently encoded full/key-range
+RowBinary. The strongest counterexample is NULL followed by a >64-bit or
+negative non-null value across a granule boundary that self-reads but stock
+ClickHouse interprets differently. No existing ClickHouse data root is a
+test destination; memory and speed tuning remain deferred.
+
+Evidence at parent `05310ad` plus the W36 implementation diff on Crystal
+1.21.0 and Darwin: the exact Nullable type gate first failed the focused
+RED spec. The final W16/W35/W36 focused suite passed 26/26; full debug and
+release suites each passed 626/626. Formatting, shell syntax, and diff
+whitespace checks passed. The pinned ClickHouse local 26.7.1.1315 fixture
+verifier checked the exact BASIC and Sparse layouts, mark rows, null maps,
+payload bytes, and separate SHA256 provenance. The bidirectional oracle
+attached and checked the stock BASIC part and both Crystal-written Nullable
+parts, compared independently encoded full and key-range RowBinary, and
+confirmed Crystal rejected the valid stock Sparse control. The raw integer
+accessors rejected Decimal128 aliases; malformed explicit Nullable-version
+metadata, invalid null-map bytes, duplicate/missing serializer names, and
+generic writer inference were negative controls. Complete `Default`
+serializer records in non-schema order were accepted by name, including an
+explicit BASIC Nullable version 0. Independent hostile review returned
+ROBUST within this bounded scope. This does not establish compatibility for
+Sparse, Compact parts, compressed marks, arbitrary schemas, daemon restart
+behavior, or other ClickHouse versions. A reader/writer, format, ClickHouse
+build, platform, or fixture change decays the certificate; refresh the
+focused/full suites and pinned external oracle before reasserting
+compatibility.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2023,7 +2089,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W34's paired Bool Array family,
+1. Extend reader and writer together beyond W36's paired BASIC Nullable raw
+   128-bit scalars, W35's paired raw 128-bit scalars, W34's paired Bool Array family,
    W33's paired FixedString Array family, W32's nullable String Array,
    W31's nullable numeric Array family, and W30's non-null numeric Array family,
    W29's nested nullable Array, W28's nested Array, W27's exact nullable array,

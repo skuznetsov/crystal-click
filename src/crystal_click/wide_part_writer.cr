@@ -1332,6 +1332,28 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "UInt128", rows_per_mark)
     end
 
+    def self.write_uint64_nullable_int128_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Int128?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Int128)", rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_uint128_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt128?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(UInt128)", rows_per_mark)
+    end
+
     private def self.validate_nullable_uint64_inputs(
       destination : String,
       key_name : String,
@@ -3241,9 +3263,17 @@ module CrystalClick
       {% elsif T == UInt128 %}
         raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == Int128? %}
+        unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
+          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
+        end
+        validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == UInt128? %}
+        raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
+        validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
-      {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
+      {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_nullable_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
@@ -3291,9 +3321,17 @@ module CrystalClick
       {% elsif T == UInt128 %}
         raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == Int128? %}
+        unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
+          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
+        end
+        write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == UInt128? %}
+        raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
+        write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
-      {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
+      {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         write_nullable_string_streams(stage, column, values, rows_per_mark)
@@ -8024,7 +8062,7 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == Float32? || T == Float64? %}
+      {% if T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == UInt128? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
@@ -8406,7 +8444,19 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed Nullable Int64 writer requires exact DateTime64 or numeric metadata")
         end
       {% elsif T == Int128? %}
-        part.read_nullable_decimal128_raw_mark_range(column, mark_index, 1)
+        if type_name == "Nullable(Int128)"
+          part.read_nullable_int128_raw_mark_range(column, mark_index, 1)
+        elsif WidePart.nullable_decimal128_scale(type_name)
+          part.read_nullable_decimal128_raw_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
+        end
+      {% elsif T == UInt128? %}
+        if type_name == "Nullable(UInt128)"
+          part.read_nullable_uint128_raw_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata")
+        end
       {% elsif T == Float32? %}
         part.read_nullable_numeric_mark_range(column, mark_index, 1, Float32)
       {% elsif T == Float64? %}
