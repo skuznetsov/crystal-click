@@ -432,7 +432,7 @@ module CrystalClick
     def self.supports_typed_type?(type : String) : Bool
       supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
-        !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) ||
+        !datetime64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" || supports_numeric_type?(type) ||
         supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
         supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
         supports_ipv4_type?(type) || supports_nullable_ipv4_type?(type) ||
@@ -705,6 +705,21 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Decimal(38, S)") unless WidePart.decimal128_scale(@column_type)
       read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
+    end
+
+    # Raw Int128 is a primitive integer, not a Decimal128 coefficient. Its
+    # exact columns.txt type selects the little-endian Number serialization.
+    def read_int128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int128)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("raw Int128 accessor requires an exact Int128 column") unless @column_type == "Int128"
+      read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
+    end
+
+    # Raw UInt128 is admitted only as the exact non-null primitive scalar type.
+    def read_uint128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt128)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("raw UInt128 accessor requires an exact UInt128 column") unless @column_type == "UInt128"
+      read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 16, UInt128)
     end
 
     def read_nullable_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int128?)
@@ -2781,6 +2796,8 @@ module CrystalClick
         validate_map_serialization(columns, selected, row_count, column_type)
       elsif WidePart.supports_tuple_uint64_string_type?(column_type)
         validate_tuple_uint64_string_serialization(columns, selected, row_count)
+      elsif column_type == "Int128" || column_type == "UInt128"
+        validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
       end
@@ -3368,6 +3385,65 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json is malformed")
     end
 
+    private def validate_raw_integer_serialization(part_columns : Array({String, String}), row_count : UInt64) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for raw 128-bit integers") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      info.each_key do |key|
+        unless ["version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types", "missing_columns"].includes?(key)
+          raise UnsupportedFormatError.new("unsupported serialization.json field")
+        end
+      end
+      raise UnsupportedFormatError.new("raw 128-bit missing-column serialization is unsupported") if info.has_key?("missing_columns")
+
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("serialization.json nested-version flag is unsupported") unless propagated == true
+
+      versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      raise UnsupportedFormatError.new("raw 128-bit integer serialization requires only String version 1") unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+
+      serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("raw 128-bit column serializers are required"))
+      # Crystal's paired writer emits the established empty serializer-list
+      # form. ClickHouse's stock Wide parts emit one Default stats record for
+      # every column. Accept those two forms only; in particular, never treat
+      # Sparse (or partial/mismatched records) as plain fixed-width values.
+      unless serializers.empty?
+        raise UnsupportedFormatError.new("raw 128-bit per-column serializer count differs") unless serializers.size == part_columns.size
+        expected_names = part_columns.map(&.[0]).to_set
+        raise CorruptPartError.new("raw 128-bit part column names are not unique") unless expected_names.size == part_columns.size
+        seen_names = Set(String).new
+        serializers.each do |serializer_json|
+          serializer = serializer_json.as_h
+          unless serializer.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
+            raise UnsupportedFormatError.new("unsupported raw 128-bit column serializer fields")
+          end
+          kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("raw 128-bit serializer kind is malformed"))
+          name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("raw 128-bit serializer name is malformed"))
+          defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("raw 128-bit serializer default count is malformed"))
+          rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("raw 128-bit serializer row count is malformed"))
+          unless expected_names.includes?(name) && !seen_names.includes?(name)
+            raise UnsupportedFormatError.new("raw 128-bit serializer names do not match the part columns")
+          end
+          seen_names << name
+          unless kind == "Default" && rows >= 0 && rows.to_u64 == row_count && defaults >= 0 && defaults.to_u64 <= row_count
+            raise UnsupportedFormatError.new("raw 128-bit serializer is not an exact Default column record")
+          end
+        end
+        raise UnsupportedFormatError.new("raw 128-bit serializer names do not cover the part columns") unless seen_names == expected_names
+      end
+      nil
+    rescue ex : JSON::ParseException | TypeCastError | OverflowError
+      raise CorruptPartError.new("serialization.json is malformed")
+    end
+
     private def validate_json_typed_path_serialization(column : String, paths : Array({String, String})) : Nil
       file = File.join(@path, "serialization.json")
       raise UnsupportedFormatError.new("serialization.json is required for JSON typed paths") unless File.file?(file)
@@ -3898,6 +3974,8 @@ module CrystalClick
         stream_name == "#{@column}.null" ? 1 : 16
       elsif WidePart.supports_ipv6_type?(@column_type)
         16
+      elsif @column_type == "Int128" || @column_type == "UInt128"
+        16
       elsif fixed_width = WidePart.nullable_fixed_string_width(@column_type)
         stream_name == "#{@column}.null" ? 1 : fixed_width
       elsif fixed_width = WidePart.fixed_string_width(@column_type)
@@ -4391,6 +4469,8 @@ module CrystalClick
         u64(bytes, offset).unsafe_as(Int64)
       {% elsif T == Int128 %}
         u128(bytes, offset).unsafe_as(Int128)
+      {% elsif T == UInt128 %}
+        u128(bytes, offset)
       {% elsif T == Float32 %}
         u32(bytes, offset).unsafe_as(Float32)
       {% elsif T == Float64 %}

@@ -93,6 +93,9 @@ Wide/LZ4/plain-mark frontier. Its exact evidence and limits are below.
 W34 admits paired `Array(Bool)` and `Array(Nullable(Bool))` on that pinned
 frontier. Its stock physical probe, exact-domain checks, and bidirectional
 oracle are recorded below; this is not generic semantic Array support.
+W35 admits bare raw `Int128` and `UInt128` scalar payloads through exact
+reader, batch, catalog, and writer APIs. Its compatibility evidence and
+remaining exclusions are recorded below.
 
 ## Purpose and bounded contexts
 
@@ -1946,6 +1949,70 @@ not establish arbitrary nested semantic types, other schemas/codecs/marks,
 MV/projections, other ClickHouse builds, or performance parity. It decays
 if the stock build, serialization/mark layout, platform, or shared
 reader/writer implementation changes.
+
+## Verified W35 slice: raw 128-bit integer scalar payloads
+
+Admit exactly bare `Int128` and `UInt128` scalar payload columns beside the
+existing sorted `UInt64` key, in the pinned Wide/LZ4/plain-mark profile.
+Their physical values are fixed 16-byte little-endian integers; `Int128`
+uses two's-complement bits. The public reader, table-batch, catalog-row,
+and writer contracts must retain the signed/unsigned distinction and the
+exact `columns.txt` type. A stock part containing both payloads and separate
+Crystal-written key/payload pairs provide the two compatibility directions.
+
+This slice does not admit `Nullable(Int128)`, `Nullable(UInt128)`, their Array
+forms, 256-bit integers, an Int128 primary key, or generic writer inference
+of `Int128`. The last restriction preserves the earlier requirement that an
+unscaled `Int128` slice must not silently become `Decimal(38, S)`. Exact
+raw-type entry points are required; neither `Decimal128` nor another 16-byte
+semantic type may be accepted through them. In particular, the shared
+numeric Array predicate and generic `open_numeric`/numeric accessor routes
+must not be widened as a side effect of scalar admission. The stock
+`serialization.json` may carry `Default` column entries with default-row
+statistics; a `Sparse` serializer must be rejected rather than decoded as a
+plain 16-byte stream. Those entries are matched by unique column name,
+not by JSON order: ClickHouse can emit them lexicographically while
+`columns.txt` retains schema order.
+
+Risk is **CAUTION**: conflating raw `Int128` with Decimal128 or silently
+opening nested/nullable dispatch could yield a part that self-reads but has
+the wrong ClickHouse declaration. Rollback is one W35-only local feature
+commit. The first falsifier is a focused RED spec for exact bare-scalar
+admission while the Array/Nullable/Decimal aliases remain rejected. The
+DoD is the focused spec, full debug and release suites, formatting and diff
+checks, and pinned ClickHouse `ATTACH PART`, `CHECK TABLE`, and independently
+encoded full/key-range RowBinary for both stock and Crystal-written parts.
+The strongest counterexample is a boundary value above 64 bits or negative
+`Int128` that round-trips in Crystal but fails the stock reader or has the
+wrong signed interpretation, or a sparse-serializer metadata mutation that
+reaches the plain decoder. No existing ClickHouse data root is a test
+destination. Memory and throughput optimization stay deferred until types,
+MV, and projections have their own admitted coverage.
+
+The pinned ClickHouse 26.7.1.1315 fixture has 13 rows, seven data marks
+plus the EOF sentinel, and exact `Int128` and `UInt128` columns in one Wide
+part. Focused tests passed 10/10; the full debug and release suites each
+passed 615/615 on the formatted final tree. The tests exercise signed and
+unsigned endpoints, values above 64 bits, later-mark and row-window reads,
+caller-owned catalog values, writer bytes and marks, Decimal128 alias
+rejection, no-publication on invalid input, malformed-stream rejection before
+the first callback, and strict serializer-name and `Sparse` guards. The
+bidirectional stock oracle passed `ATTACH PART`, `CHECK TABLE`, and
+independently encoded full/key-range RowBinary for the stock fixture and
+both Crystal-written pair parts; it also detected same-size stream damage.
+Adjacent Decimal128 and Decimal256 stock oracles passed after the shared
+writer-path change. An adversarial stock part with `columns.txt` order
+`zeta, unsigned, alpha` but lexical serializer order `alpha, unsigned,
+zeta` read correctly, directly checking the name-matching fix. Hostile
+review found no blocker: **ROBUST within the exact scalar-only pinned
+profile**. The ClickHouse source checkout used for layout review
+is at `4576ba3bfac` (26.6 development line), so the pinned 26.7.1.1315
+binary and its actual parts, not that source revision, are the compatibility
+authority. This is not evidence for arbitrary serializers, Nullable/Array
+128-bit forms, Int256/UInt256, other schemas or part profiles, MV,
+projections, or performance parity. The evidence decays if the stock build,
+serialization/mark layout, platform, or shared reader/writer implementation
+changes.
 
 ## Rejected and guard-only surfaces
 

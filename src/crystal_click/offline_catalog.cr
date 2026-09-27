@@ -1,6 +1,6 @@
 module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
-                             Int8 | Int16 | Int32 | Int64 | Int128 |
+                             Int8 | Int16 | Int32 | Int64 | Int128 | UInt128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
                              Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
@@ -166,6 +166,12 @@ module CrystalClick
         return {observed_rows, string_bytes}
       elsif !WidePart.enum16_codes(selected_type).nil? && !selected_type.starts_with?("Nullable(")
         observed_rows = append_materialized_values(values, batch.enum16_codes_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type == "Int128"
+        observed_rows = append_materialized_values(values, batch.int128_raw_for(column_name), observed_rows, expected_rows)
+        return {observed_rows, string_bytes}
+      elsif selected_type == "UInt128"
+        observed_rows = append_materialized_values(values, batch.uint128_raw_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
       elsif !WidePart.decimal32_scale(selected_type).nil?
         observed_rows = append_materialized_values(values, batch.decimal32_raw_for(column_name), observed_rows, expected_rows)
