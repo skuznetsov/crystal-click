@@ -2411,6 +2411,71 @@ cross-family adversarial gap. ClickHouse version/profile changes, Array or
 UUID codec changes, and mark/checksum validation changes decay this evidence;
 rerun the focused suite and stock oracle before widening compatibility.
 
+## W42 frontier: paired Decimal32 Array leaves
+
+Admit only one-level `Array(Decimal(9, S))` and BASIC
+`Array(Nullable(Decimal(9, S)))` payloads, with `S` from 0 through 9,
+beside a sorted `UInt64` key in the pinned Wide/LZ4/plain-`.mrk2` profile.
+The leaf representation is a signed little-endian `Int32` raw coefficient;
+the scale remains part of the exact column type, not a floating-point
+conversion or inferred property of the values. Reader, batch, catalog
+`.values`, and paired writer must agree on the declared scale, preserve
+negative/zero/NULL/empty distinctions, and consume one child slot per NULL.
+The writer must preflight cardinality and mark bounds and publish only after
+staged self-readback and exclusive destination creation.
+
+The stock ClickHouse 26.7.1.1315 probe found `size0` and value streams for
+the plain Array, plus a child `.null` stream for the Nullable Array. Treat
+that as physical-layout evidence only until a copied, hashed fixture and
+bidirectional oracle pass. The compatibility DoD is a behavioral RED test
+before production changes, focused and full debug/release Crystal suites,
+format/whitespace checks, stock fixture verification, and stock `ATTACH
+PART`/`CHECK TABLE` with exact full and keyed RowBinary comparison of
+writer output. Use string decimal literals in the oracle: ClickHouse
+`toDecimal32` from a floating-point literal can truncate unexpectedly and
+would make an invalid expected coefficient. Include negative coefficients,
+empty Arrays, NULL vs zero, later marks, scale boundaries, and wrong-type
+rejection.
+
+Risk is **CAUTION**: a shared 4-byte codec could silently accept an `Int32`
+alias, lose the scale, or mishandle NULL child slots. The strongest falsifier
+is a stock-accepted part whose exact raw coefficients or keyed rows disagree
+with our reader/writer. Reject Decimal64/128/256 Arrays, nested and
+outer-Nullable Arrays, malformed scales, inferred numeric APIs, Compact/
+Sparse serialization, arbitrary multi-column schemas, and any performance
+claim. Rollback is a single W42-only local commit; no writes to existing
+ClickHouse data roots and no push. Evidence decays with a producer-version,
+codec, mark/checksum, or platform change and must be refreshed before
+widening this boundary.
+
+The preimplementation behavioral gate was RED: the canonical
+`Array(Decimal(9, 2))` declaration returned false. The pinned stock fixture
+uses alias DDL but canonical three-column part metadata, six LZ4 data streams
+and plain `.mrk2` streams, with mark rows `[2, 2, 2, 1]`; its copied-file
+hashes and source `CHECK TABLE` pass. At final W42 source state, the focused
+W31/W42 specs passed 12/12 and the full debug/release suites each passed
+680 examples without failures or errors. The reader preserves signed raw
+coefficients, later marks, NULL versus non-NULL zero, and catalog DDL alias
+normalization; the writer keeps the signed `Int32` backing range at scales
+0 and 9. Reverse negative tests reject Decimal accessors on both plain and
+nullable `Int32` Arrays. Formatting, shell syntax, and whitespace checks
+passed.
+
+The independent pinned ClickHouse oracle attached and checked the stock
+part and our mixed, all-empty, and all-NULL writer parts, then compared full
+and key-filtered RowBinary byte-for-byte. The all-NULL writer part contains
+one set null flag and a zero-filled four-byte nested slot per NULL on disk;
+RowBinary emits only the null flag. A scale-9 writer part containing
+`Int32::MIN` and `Int32::MAX` also passed ClickHouse `ATTACH PART` and
+`CHECK TABLE`, with exact full/keyed RowBinary. Hostile review returned
+**ROBUST within this exact W42 profile**. The stock three-column serializer
+exception remains bound to `pk`/`plain`/`maybe` at scale 2; arbitrary
+multi-column schemas and Decimal64/128/256 Arrays remain unadmitted.
+Checksum-consistent malformed child/null/mark topology remains a shared
+Array-decoder adversarial gap rather than a W42-specific failure observed
+here. Refresh the focused/full suites and oracle after the decay triggers
+above.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2420,7 +2485,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W41's paired UUID Arrays,
+1. Extend reader and writer together beyond W42's paired Decimal32 Arrays,
+   W41's paired UUID Arrays,
    W40's paired temporal Arrays,
    W39's paired raw 128/256-bit
    Array leaves, W38's paired BASIC Nullable raw 256-bit scalars,

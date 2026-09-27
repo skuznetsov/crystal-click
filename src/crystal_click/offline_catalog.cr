@@ -287,6 +287,11 @@ module CrystalClick
         selected_values = batch.array_datetime64_ticks_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Decimal(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_decimal32_scale(selected_type)
+        selected_values = batch.array_decimal32_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(UInt8)"
         selected_values = batch.array_numeric_values(column_name, UInt8)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -382,6 +387,11 @@ module CrystalClick
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when "Array(Nullable(UUID))"
         selected_values = batch.array_nullable_uuids_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Nullable(Decimal(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_nullable_decimal32_scale(selected_type)
+        selected_values = batch.array_nullable_decimal32_raw_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when .starts_with?("Array(Nullable(DateTime64(")
