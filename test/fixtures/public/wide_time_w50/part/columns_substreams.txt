@@ -1,0 +1,32 @@
+columns substreams version: 1
+11 columns:
+1 substreams for column `pk`:
+	pk
+1 substreams for column `t`:
+	t
+2 substreams for column `nt`:
+	nt.null
+	nt
+2 substreams for column `a`:
+	a.size0
+	a
+3 substreams for column `an`:
+	an.size0
+	an.null
+	an
+1 substreams for column `t64_0`:
+	t64_0
+1 substreams for column `t64_3`:
+	t64_3
+1 substreams for column `t64_9`:
+	t64_9
+2 substreams for column `nt64_3`:
+	nt64_3.null
+	nt64_3
+2 substreams for column `a64_3`:
+	a64_3.size0
+	a64_3
+3 substreams for column `an64_3`:
+	an64_3.size0
+	an64_3.null
+	an64_3

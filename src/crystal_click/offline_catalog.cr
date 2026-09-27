@@ -277,6 +277,8 @@ module CrystalClick
         observed_rows = append_int16_values(values, batch, column_name, observed_rows, expected_rows)
       when "Int32"
         observed_rows = append_int32_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Time"
+        observed_rows = append_time_seconds_values(values, batch, column_name, observed_rows, expected_rows)
       when "Date32"
         observed_rows = append_date32_codes_values(values, batch, column_name, observed_rows, expected_rows)
       when "DateTime"
@@ -288,6 +290,11 @@ module CrystalClick
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         observed_rows = append_datetime64_ticks_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("Time64(")
+        unless WidePart.time64_scale(selected_type)
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_time64_ticks_values(values, batch, column_name, observed_rows, expected_rows)
       when "Float32"
         observed_rows = append_float32_values(values, batch, column_name, observed_rows, expected_rows)
       when "Float64"
@@ -320,9 +327,18 @@ module CrystalClick
         selected_values = batch.array_datetime_seconds_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Time)"
+        selected_values = batch.array_time_seconds_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when .starts_with?("Array(DateTime64(")
         raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_datetime64_scale(selected_type)
         selected_values = batch.array_datetime64_ticks_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Time64(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_time64_scale(selected_type)
+        selected_values = batch.array_time64_ticks_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when .starts_with?("Array(Decimal(9,")
@@ -442,6 +458,10 @@ module CrystalClick
         selected_values = batch.array_nullable_datetime_seconds_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when "Array(Nullable(Time))"
+        selected_values = batch.array_nullable_time_seconds_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when "Array(Nullable(UUID))"
         selected_values = batch.array_nullable_uuids_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -477,6 +497,11 @@ module CrystalClick
       when .starts_with?("Array(Nullable(DateTime64(")
         raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.nullable_array_datetime64_scale(selected_type)
         selected_values = batch.array_nullable_datetime64_ticks_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Nullable(Time64(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.nullable_array_time64_scale(selected_type)
+        selected_values = batch.array_nullable_time64_ticks_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when .starts_with?("Array(Nullable(")
@@ -584,11 +609,18 @@ module CrystalClick
         observed_rows = append_nullable_date32_codes_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(DateTime)"
         observed_rows = append_nullable_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Nullable(Time)"
+        observed_rows = append_nullable_time_seconds_values(values, batch, column_name, observed_rows, expected_rows)
       when .starts_with?("Nullable(DateTime64(")
         unless WidePart.nullable_datetime64_scale(selected_type)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         observed_rows = append_nullable_datetime64_ticks_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("Nullable(Time64(")
+        unless WidePart.nullable_time64_scale(selected_type)
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_nullable_time64_ticks_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt8)"
         observed_rows = append_nullable_uint8_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt16)"
@@ -910,6 +942,14 @@ module CrystalClick
       append_materialized_values(values, batch.datetime64_ticks_for(column_name), observed_rows, expected_rows)
     end
 
+    private def append_time_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.time_seconds_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_time64_ticks_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.time64_ticks_for(column_name), observed_rows, expected_rows)
+    end
+
     private def append_int64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.values_for(column_name, Int64), observed_rows, expected_rows)
     end
@@ -940,6 +980,14 @@ module CrystalClick
 
     private def append_nullable_datetime64_ticks_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.nullable_datetime64_ticks_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_time_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_time_seconds_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_time64_ticks_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_time64_ticks_for(column_name), observed_rows, expected_rows)
     end
 
     private def append_nullable_uint16_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64

@@ -1,0 +1,13 @@
+columns format version: 1
+11 columns:
+`pk` UInt64
+`t` Time
+`nt` Nullable(Time)
+`a` Array(Time)
+`an` Array(Nullable(Time))
+`t64_0` Time64(0)
+`t64_3` Time64(3)
+`t64_9` Time64(9)
+`nt64_3` Nullable(Time64(3))
+`a64_3` Array(Time64(3))
+`an64_3` Array(Nullable(Time64(3)))

@@ -506,6 +506,30 @@ module CrystalClick
       write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
     end
 
+    def self.write_uint64_array_time_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int32)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, "Time", rows_per_mark)
+    end
+
+    def self.write_uint64_array_time64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int64)),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Time64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, "Time64(#{scale})", rows_per_mark)
+    end
+
     # Write signed Decimal32 coefficients without converting through a decimal
     # or floating-point representation. Scale is semantic metadata only.
     def self.write_uint64_array_decimal32_pair(
@@ -605,6 +629,30 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String
       write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+    end
+
+    def self.write_uint64_array_nullable_time_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int32?)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "Time", rows_per_mark)
+    end
+
+    def self.write_uint64_array_nullable_time64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Int64?)),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Time64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "Time64(#{scale})", rows_per_mark)
     end
 
     def self.write_uint64_array_nullable_decimal32_pair(
@@ -1604,6 +1652,32 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, ticks, "DateTime64(#{scale})", rows_per_mark)
     end
 
+    # Write Time as raw signed Int32 seconds, without text or timezone conversion.
+    def self.write_uint64_time_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      seconds : Slice(Int32),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, seconds, "Time", rows_per_mark)
+    end
+
+    # Write Time64 as raw signed Int64 ticks at the explicit precision.
+    def self.write_uint64_time64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      ticks : Slice(Int64),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Time64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, ticks, "Time64(#{scale})", rows_per_mark)
+    end
+
     # Write Nullable(Date) as raw UInt16 day codes. NULL has its own null-map
     # entry and a zero placeholder in the nested value stream; non-NULL codes,
     # including zero, are preserved exactly.
@@ -1658,6 +1732,32 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(DateTime64(#{scale}))", rows_per_mark)
     end
 
+    # Write Nullable(Time) as raw signed Int32 seconds with a separate null map.
+    def self.write_uint64_nullable_time_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Int32?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Time)", rows_per_mark)
+    end
+
+    # Write Nullable(Time64(p)) as raw signed Int64 ticks at explicit precision.
+    def self.write_uint64_nullable_time64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Int64?),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("Time64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Time64(#{scale}))", rows_per_mark)
+    end
+
     private def self.write_uint64_typed_pair_with_type(
       destination : String,
       key_name : String,
@@ -1681,7 +1781,7 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
+        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil?
           records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name))
         end
         write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
@@ -2122,8 +2222,13 @@ module CrystalClick
       element_type : String,
       rows_per_mark : Int32,
     ) : String forall T
-      physical_type = WidePart.temporal_array_physical_type(element_type)
-      unless WidePart.temporal_array_element_type("Array(#{element_type})") == element_type &&
+      time_element = WidePart.time_array_element_type("Array(#{element_type})") == element_type
+      physical_type = if time_element
+                        WidePart.time_array_physical_type(element_type)
+                      else
+                        WidePart.temporal_array_physical_type(element_type)
+                      end
+      unless (time_element || WidePart.temporal_array_element_type("Array(#{element_type})") == element_type) &&
              physical_type == WidePart.array_numeric_type_name(T)
         raise ArgumentError.new("temporal Array writer requires an exact supported semantic leaf and matching physical carrier")
       end
@@ -2165,8 +2270,13 @@ module CrystalClick
       element_type : String,
       rows_per_mark : Int32,
     ) : String forall T
-      physical_type = WidePart.temporal_array_physical_type(element_type)
-      unless WidePart.nullable_temporal_array_element_type("Array(Nullable(#{element_type}))") == element_type &&
+      time_element = WidePart.nullable_time_array_element_type("Array(Nullable(#{element_type}))") == element_type
+      physical_type = if time_element
+                        WidePart.time_array_physical_type(element_type)
+                      else
+                        WidePart.temporal_array_physical_type(element_type)
+                      end
+      unless (time_element || WidePart.nullable_temporal_array_element_type("Array(Nullable(#{element_type}))") == element_type) &&
              physical_type == WidePart.array_numeric_type_name(T)
         raise ArgumentError.new("nullable temporal Array writer requires an exact supported semantic leaf and matching physical carrier")
       end
@@ -4661,7 +4771,7 @@ module CrystalClick
         1
       when "UInt16", "Int16", "Date", "BFloat16"
         2
-      when "UInt32", "Int32", "Float32", "Date32", "IPv4"
+      when "UInt32", "Int32", "Float32", "Date32", "IPv4", "Time"
         4
       when "UInt64", "Int64", "Float64", "DateTime64(0)", "DateTime64(1)", "DateTime64(2)", "DateTime64(3)", "DateTime64(4)", "DateTime64(5)", "DateTime64(6)", "DateTime64(7)", "DateTime64(8)", "DateTime64(9)"
         8
@@ -4678,6 +4788,7 @@ module CrystalClick
         return 8 if WidePart.decimal64_scale(type_name)
         return 16 if WidePart.decimal128_scale(type_name)
         return 32 if WidePart.decimal256_scale(type_name)
+        return 8 if WidePart.time64_scale(type_name)
         raise UnsupportedFormatError.new("typed writer requires an exact fixed-width primitive numeric payload")
       end
     end
@@ -8352,8 +8463,13 @@ module CrystalClick
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
       expected_type = "Array(#{element_type})"
-      physical_type = WidePart.temporal_array_physical_type(element_type)
-      unless WidePart.temporal_array_element_type(expected_type) == element_type &&
+      time_element = WidePart.time_array_element_type(expected_type) == element_type
+      physical_type = if time_element
+                        WidePart.time_array_physical_type(element_type)
+                      else
+                        WidePart.temporal_array_physical_type(element_type)
+                      end
+      unless (time_element || WidePart.temporal_array_element_type(expected_type) == element_type) &&
              physical_type == WidePart.array_numeric_type_name(T)
         raise CorruptPartError.new("staged temporal Array semantic and physical types disagree")
       end
@@ -8374,11 +8490,19 @@ module CrystalClick
         {% if T == UInt16 %}
           expected_values = value_part.read_array_date_codes_mark_range(value_name, mark_index, 1)
         {% elsif T == Int32 %}
-          expected_values = value_part.read_array_date32_codes_mark_range(value_name, mark_index, 1)
+          if element_type == "Time"
+            expected_values = value_part.read_array_time_seconds_mark_range(value_name, mark_index, 1)
+          else
+            expected_values = value_part.read_array_date32_codes_mark_range(value_name, mark_index, 1)
+          end
         {% elsif T == UInt32 %}
           expected_values = value_part.read_array_datetime_seconds_mark_range(value_name, mark_index, 1)
         {% elsif T == Int64 %}
-          expected_values = value_part.read_array_datetime64_ticks_mark_range(value_name, mark_index, 1)
+          if WidePart.time64_scale(element_type)
+            expected_values = value_part.read_array_time64_ticks_mark_range(value_name, mark_index, 1)
+          else
+            expected_values = value_part.read_array_datetime64_ticks_mark_range(value_name, mark_index, 1)
+          end
         {% else %}
           {% raise "unsupported staged temporal Array physical carrier" %}
         {% end %}
@@ -8820,8 +8944,13 @@ module CrystalClick
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
       expected_type = "Array(Nullable(#{element_type}))"
-      physical_type = WidePart.temporal_array_physical_type(element_type)
-      unless WidePart.nullable_temporal_array_element_type(expected_type) == element_type &&
+      time_element = WidePart.nullable_time_array_element_type(expected_type) == element_type
+      physical_type = if time_element
+                        WidePart.time_array_physical_type(element_type)
+                      else
+                        WidePart.temporal_array_physical_type(element_type)
+                      end
+      unless (time_element || WidePart.nullable_temporal_array_element_type(expected_type) == element_type) &&
              physical_type == WidePart.array_numeric_type_name(T)
         raise CorruptPartError.new("staged nullable temporal Array semantic and physical types disagree")
       end
@@ -8842,11 +8971,19 @@ module CrystalClick
         {% if T == UInt16 %}
           expected_values = value_part.read_array_nullable_date_codes_mark_range(value_name, mark_index, 1)
         {% elsif T == Int32 %}
-          expected_values = value_part.read_array_nullable_date32_codes_mark_range(value_name, mark_index, 1)
+          if element_type == "Time"
+            expected_values = value_part.read_array_nullable_time_seconds_mark_range(value_name, mark_index, 1)
+          else
+            expected_values = value_part.read_array_nullable_date32_codes_mark_range(value_name, mark_index, 1)
+          end
         {% elsif T == UInt32 %}
           expected_values = value_part.read_array_nullable_datetime_seconds_mark_range(value_name, mark_index, 1)
         {% elsif T == Int64 %}
-          expected_values = value_part.read_array_nullable_datetime64_ticks_mark_range(value_name, mark_index, 1)
+          if WidePart.time64_scale(element_type)
+            expected_values = value_part.read_array_nullable_time64_ticks_mark_range(value_name, mark_index, 1)
+          else
+            expected_values = value_part.read_array_nullable_datetime64_ticks_mark_range(value_name, mark_index, 1)
+          end
         {% else %}
           {% raise "unsupported staged nullable temporal Array physical carrier" %}
         {% end %}
@@ -10386,7 +10523,9 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed writer requires an exact Int16 or Enum16 payload")
         end
       {% elsif T == Int32 %}
-        if type_name == "Date32"
+        if type_name == "Time"
+          part.read_time_seconds_mark_range(column, mark_index, 1)
+        elsif type_name == "Date32"
           part.read_date32_codes_mark_range(column, mark_index, 1)
         elsif WidePart.decimal32_scale(type_name)
           part.read_decimal32_raw_mark_range(column, mark_index, 1)
@@ -10396,7 +10535,9 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed writer requires an exact Int32 or Date32 payload")
         end
       {% elsif T == Int64 %}
-        if type_name.starts_with?("DateTime64(")
+        if WidePart.time64_scale(type_name)
+          part.read_time64_ticks_mark_range(column, mark_index, 1)
+        elsif type_name.starts_with?("DateTime64(")
           part.read_datetime64_ticks_mark_range(column, mark_index, 1)
         elsif WidePart.decimal64_scale(type_name)
           part.read_decimal64_raw_mark_range(column, mark_index, 1)
@@ -10638,7 +10779,9 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed Nullable Int16 writer requires exact Enum16 or numeric metadata")
         end
       {% elsif T == Int32? %}
-        if type_name == "Nullable(Date32)"
+        if type_name == "Nullable(Time)"
+          part.read_nullable_time_seconds_mark_range(column, mark_index, 1)
+        elsif type_name == "Nullable(Date32)"
           part.read_nullable_date32_codes_mark_range(column, mark_index, 1)
         elsif WidePart.nullable_decimal32_scale(type_name)
           part.read_nullable_decimal32_raw_mark_range(column, mark_index, 1)
@@ -10648,7 +10791,9 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed Nullable Int32 writer requires exact Date32 or numeric metadata")
         end
       {% elsif T == Int64? %}
-        if WidePart.nullable_datetime64_scale(type_name)
+        if WidePart.nullable_time64_scale(type_name)
+          part.read_nullable_time64_ticks_mark_range(column, mark_index, 1)
+        elsif WidePart.nullable_datetime64_scale(type_name)
           part.read_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
         elsif WidePart.nullable_decimal64_scale(type_name)
           part.read_nullable_decimal64_raw_mark_range(column, mark_index, 1)
@@ -10853,7 +10998,7 @@ module CrystalClick
                    "\"string\":1"
                  elsif type_name == "Nullable(String)"
                    "\"nullable\":0,\"string\":1"
-                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name)
+                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil?
                    # BASIC Nullable payloads, UUID, IPv4, and IPv6 use this global
                    # serializer-version metadata. Semantic identity is
                    # carried by the exact column type.

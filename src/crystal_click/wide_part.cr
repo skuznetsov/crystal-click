@@ -611,12 +611,24 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    # Time64 keeps the same one-digit precision grammar as DateTime64 while
+    # remaining a distinct semantic type with its own exact reader gate.
+    def self.time64_scale(type : String) : Int32?
+      match = /\ATime64\(([0-9])\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
     # Nullable temporal values have the same fixed-width nested slots as
     # their non-null semantic types, with nullness stored in a separate map.
     # Keep this recognizer separate from Nullable(primitive numeric): callers
     # must opt into the semantic temporal contract explicitly.
     def self.nullable_datetime64_scale(type : String) : Int32?
       match = /\ANullable\(DateTime64\(([0-9])\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    def self.nullable_time64_scale(type : String) : Int32?
+      match = /\ANullable\(Time64\(([0-9])\)\)\z/.match(type)
       match.try { |value| value[1].to_i }
     end
 
@@ -647,6 +659,22 @@ module CrystalClick
       end
     end
 
+    # Time Array declarations intentionally use separate recognizers from the
+    # Date/DateTime family and primitive numeric Array grammar.
+    def self.time_array_element_type(type : String) : String?
+      return "Time" if type == "Array(Time)"
+      if scale = array_time64_scale(type)
+        "Time64(#{scale})"
+      end
+    end
+
+    def self.nullable_time_array_element_type(type : String) : String?
+      return "Time" if type == "Array(Nullable(Time))"
+      if scale = nullable_array_time64_scale(type)
+        "Time64(#{scale})"
+      end
+    end
+
     def self.array_datetime64_scale(type : String) : Int32?
       match = /\AArray\(DateTime64\(([0-9])\)\)\z/.match(type)
       match.try { |value| value[1].to_i }
@@ -654,6 +682,16 @@ module CrystalClick
 
     def self.nullable_array_datetime64_scale(type : String) : Int32?
       match = /\AArray\(Nullable\(DateTime64\(([0-9])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    def self.array_time64_scale(type : String) : Int32?
+      match = /\AArray\(Time64\(([0-9])\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    def self.nullable_array_time64_scale(type : String) : Int32?
+      match = /\AArray\(Nullable\(Time64\(([0-9])\)\)\)\z/.match(type)
       match.try { |value| value[1].to_i }
     end
 
@@ -669,8 +707,17 @@ module CrystalClick
       end
     end
 
+    def self.time_array_physical_type(element_type : String) : String?
+      return "Int32" if element_type == "Time"
+      "Int64" if time64_scale(element_type)
+    end
+
     def self.supports_nullable_temporal_type?(type : String) : Bool
       type == "Nullable(Date)" || type == "Nullable(Date32)" || type == "Nullable(DateTime)" || !nullable_datetime64_scale(type).nil?
+    end
+
+    def self.supports_nullable_time_type?(type : String) : Bool
+      type == "Nullable(Time)" || !nullable_time64_scale(type).nil?
     end
 
     # Keep the physical Array child grammar bounded while expressing child
@@ -734,6 +781,10 @@ module CrystalClick
           ["#{column}.null", column]
         elsif temporal_array_element_type(type)
           [column]
+        elsif nullable_time_array_element_type(type)
+          ["#{column}.null", column]
+        elsif time_array_element_type(type)
+          [column]
         elsif array_nullable_fixed_string_width(type)
           ["#{column}.null", column]
         elsif array_fixed_string_width(type)
@@ -781,11 +832,11 @@ module CrystalClick
     def self.supports_typed_type?(type : String) : Bool
       supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
-        !datetime64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
+        type == "Time" || !datetime64_scale(type).nil? || !time64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
         type == "Int256" || type == "UInt256" ||
         type == "Nullable(Int128)" || type == "Nullable(UInt128)" ||
         type == "Nullable(Int256)" || type == "Nullable(UInt256)" || supports_numeric_type?(type) ||
-        supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
+        supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) || supports_nullable_time_type?(type) ||
         supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
         supports_ipv4_type?(type) || supports_nullable_ipv4_type?(type) ||
         supports_ipv6_type?(type) || supports_nullable_ipv6_type?(type) ||
@@ -1500,6 +1551,42 @@ module CrystalClick
       values
     end
 
+    # Time uses signed raw Int32 seconds. The exact semantic type gate keeps
+    # this distinct from a primitive Int32 declaration.
+    def read_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Time accessor requires an exact Time column") unless @column_type == "Time"
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 4)
+      values = Array(Int32).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 4) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << u32(bytes, offset).unsafe_as(Int32)
+          offset += 4
+        end
+      end
+      values
+    end
+
+    # Time64 is exposed as raw signed Int64 ticks; precision is retained in
+    # metadata and only canonical Time64(p), p=0..9, passes this gate.
+    def read_time64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Time64 accessor requires a canonical Time64(p) column") unless WidePart.time64_scale(@column_type)
+
+      start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 8)
+      values = Array(Int64).new
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 8) do |bytes|
+        offset = 0
+        while offset < bytes.size
+          values << u64(bytes, offset).unsafe_as(Int64)
+          offset += 8
+        end
+      end
+      values
+    end
+
     # Nullable temporal accessors expose raw nested fixed-width codes without
     # applying date/time conversion. NULL slots are consumed and discarded;
     # the optional result preserves NULL separately from a zero code.
@@ -1524,6 +1611,18 @@ module CrystalClick
     def read_nullable_datetime64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64?)
       ensure_column(column)
       raise UnsupportedFormatError.new("Nullable(DateTime64) accessor requires a canonical Nullable(DateTime64(p)) column") unless WidePart.nullable_datetime64_scale(@column_type)
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+    end
+
+    def read_nullable_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(Time) accessor requires an exact Nullable(Time) column") unless @column_type == "Nullable(Time)"
+      read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
+    end
+
+    def read_nullable_time64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64?)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Nullable(Time64) accessor requires a canonical Nullable(Time64(p)) column") unless WidePart.nullable_time64_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
     end
 
@@ -1614,6 +1713,35 @@ module CrystalClick
       raise CorruptPartError.new("temporal Array substream mark rows differ") unless value_rows == rows
       validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
       checked_array_mark_byte_count(flat_elements, element_width).to_u64
+    end
+
+    def array_time_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.time_array_element_type(@column_type) || raise(UnsupportedFormatError.new("Time Array accessor requires an exact Time or Time64(p) leaf"))
+      element_width = WidePart.array_numeric_payload_width(WidePart.time_array_physical_type(element_type).not_nil!)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Time Array substream mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
+      checked_array_mark_byte_count(flat_elements, element_width).to_u64
+    end
+
+    def array_nullable_time_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.nullable_time_array_element_type(@column_type) || raise(UnsupportedFormatError.new("nullable Time Array accessor requires an exact Time or Time64(p) leaf"))
+      element_width = WidePart.array_numeric_payload_width(WidePart.time_array_physical_type(element_type).not_nil!)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      {"#{column}.null", column}.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Nullable(Time)) child substream mark rows differ") unless child_rows == rows
+        width = stream_name == "#{column}.null" ? 1 : element_width
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
+      end
+      checked_array_mark_byte_count(flat_elements, 1 + element_width).to_u64
     end
 
     def array_decimal32_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
@@ -2349,6 +2477,16 @@ module CrystalClick
       read_array_temporal_mark_range(column, first_mark, mark_count, "DateTime64(#{scale})", Int64)
     end
 
+    def read_array_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int32))
+      read_array_time_mark_range(column, first_mark, mark_count, "Time", Int32)
+    end
+
+    def read_array_time64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int64))
+      ensure_column(column)
+      scale = WidePart.array_time64_scale(@column_type) || -1
+      read_array_time_mark_range(column, first_mark, mark_count, "Time64(#{scale})", Int64)
+    end
+
     def read_array_nullable_date_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UInt16?))
       read_array_nullable_temporal_mark_range(column, first_mark, mark_count, "Date", UInt16)
     end
@@ -2365,6 +2503,16 @@ module CrystalClick
       ensure_column(column)
       scale = WidePart.nullable_array_datetime64_scale(@column_type) || -1
       read_array_nullable_temporal_mark_range(column, first_mark, mark_count, "DateTime64(#{scale})", Int64)
+    end
+
+    def read_array_nullable_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int32?))
+      read_array_nullable_time_mark_range(column, first_mark, mark_count, "Time", Int32)
+    end
+
+    def read_array_nullable_time64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int64?))
+      ensure_column(column)
+      scale = WidePart.nullable_array_time64_scale(@column_type) || -1
+      read_array_nullable_time_mark_range(column, first_mark, mark_count, "Time64(#{scale})", Int64)
     end
 
     def read_array_decimal32_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int32))
@@ -2714,11 +2862,31 @@ module CrystalClick
       read_array_fixed_leaf_mark_range(column, first_mark, mark_count, type)
     end
 
+    private def read_array_time_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T)) forall T
+      ensure_column(column)
+      unless WidePart.time_array_element_type(@column_type) == element_type &&
+             WidePart.time_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed Time Array accessor does not match selected semantic column type")
+      end
+
+      read_array_fixed_leaf_mark_range(column, first_mark, mark_count, type)
+    end
+
     private def read_array_nullable_temporal_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T?)) forall T
       ensure_column(column)
       unless WidePart.nullable_temporal_array_element_type(@column_type) == element_type &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed nullable temporal Array accessor does not match selected semantic column type")
+      end
+
+      read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, type)
+    end
+
+    private def read_array_nullable_time_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T?)) forall T
+      ensure_column(column)
+      unless WidePart.nullable_time_array_element_type(@column_type) == element_type &&
+             WidePart.time_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed nullable Time Array accessor does not match selected semantic column type")
       end
 
       read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, type)
@@ -4021,7 +4189,7 @@ module CrystalClick
         validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
         validate_nullable_raw_integer_serialization(columns, row_count)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_time_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
       end
 
@@ -4214,6 +4382,8 @@ module CrystalClick
         ["#{column}.null", column]
       elsif WidePart.supports_nullable_temporal_type?(type)
         ["#{column}.null", column]
+      elsif WidePart.supports_nullable_time_type?(type)
+        ["#{column}.null", column]
       elsif WidePart.supports_nullable_semantic_fixed_width_type?(type)
         ["#{column}.null", column]
       else
@@ -4267,10 +4437,11 @@ module CrystalClick
       w47_ipv6_array_shape = ipv6_array_w47_schema?(columns, selected_column)
       w48_enum_array_shape = enum_array_w48_schema?(columns, selected_column)
       w49_bfloat16_array_shape = bfloat16_array_w49_schema?(columns, selected_column)
+      w50_time_array_shape = time_array_w50_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape || w48_enum_array_shape || w49_bfloat16_array_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape || w48_enum_array_shape || w49_bfloat16_array_shape || w50_time_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -4389,6 +4560,28 @@ module CrystalClick
         name == selected_column || column_type == "UInt64" ||
           !WidePart.temporal_array_element_type(column_type).nil? || !WidePart.nullable_temporal_array_element_type(column_type).nil?
       end
+    end
+
+    # Exact stock W50 schema with empty per-column serializers. This exception
+    # is limited to the observed column order and names; two-column writer
+    # shapes continue through the existing legacy key/value path.
+    private def time_array_w50_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns == [
+                            {"pk", "UInt64"},
+                            {"t", "Time"},
+                            {"nt", "Nullable(Time)"},
+                            {"a", "Array(Time)"},
+                            {"an", "Array(Nullable(Time))"},
+                            {"t64_0", "Time64(0)"},
+                            {"t64_3", "Time64(3)"},
+                            {"t64_9", "Time64(9)"},
+                            {"nt64_3", "Nullable(Time64(3))"},
+                            {"a64_3", "Array(Time64(3))"},
+                            {"an64_3", "Array(Nullable(Time64(3)))"},
+                          ]
+
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      !WidePart.time_array_element_type(selected_type).nil? || !WidePart.nullable_time_array_element_type(selected_type).nil?
     end
 
     # Exact stock W41 fixture shape: one UInt64 key, one Array(UUID), and one
@@ -4764,6 +4957,9 @@ module CrystalClick
       elsif WidePart.supports_nullable_temporal_type?(type)
         string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("Nullable temporal String serialization version is required"))
         raise UnsupportedFormatError.new("only Nullable temporal String serialization version 1 is supported") unless string_version == 1
+      elsif WidePart.supports_nullable_time_type?(type)
+        string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("Nullable Time String serialization version is required"))
+        raise UnsupportedFormatError.new("only Nullable Time String serialization version 1 is supported") unless string_version == 1
       elsif WidePart.supports_nullable_numeric_type?(type)
         nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("only basic Nullable serialization is supported") unless nullable_version == 0
@@ -5544,6 +5740,14 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("unsupported exact nullable temporal Array substream")
         end
+      elsif element_type = WidePart.nullable_time_array_element_type(@column_type)
+        case stream_name
+        when "#{@column}.null"  then 1
+        when @column            then WidePart.array_numeric_payload_width(WidePart.time_array_physical_type(element_type).not_nil!)
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact nullable Time Array substream")
+        end
       elsif @column_type == "Array(Array(Nullable(UInt64)))"
         stream_name == "#{@column}.null" ? 1 : 8
       elsif element_type = WidePart.numeric_array_element_type(@column_type)
@@ -5554,6 +5758,13 @@ module CrystalClick
         when "#{@column}.size0" then 8
         else
           raise UnsupportedFormatError.new("unsupported exact temporal Array substream")
+        end
+      elsif element_type = WidePart.time_array_element_type(@column_type)
+        case stream_name
+        when @column            then WidePart.array_numeric_payload_width(WidePart.time_array_physical_type(element_type).not_nil!)
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Time Array substream")
         end
       elsif @column_type == "Array(UInt64)"
         8
@@ -5627,6 +5838,8 @@ module CrystalClick
         stream_name == "#{@column}.null" ? 1 : numeric_type_width(nullable_inner_type(@column_type))
       elsif WidePart.supports_nullable_temporal_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : nullable_temporal_width(@column_type)
+      elsif WidePart.supports_nullable_time_type?(@column_type)
+        stream_name == "#{@column}.null" ? 1 : nullable_time_width(@column_type)
       elsif WidePart.supports_nullable_semantic_fixed_width_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : semantic_type_width(nullable_semantic_inner_type(@column_type))
       elsif @column_type == "Date"
@@ -5636,6 +5849,10 @@ module CrystalClick
       elsif @column_type == "DateTime"
         4
       elsif WidePart.datetime64_scale(@column_type)
+        8
+      elsif @column_type == "Time"
+        4
+      elsif WidePart.time64_scale(@column_type)
         8
       elsif WidePart.supports_semantic_fixed_width_type?(@column_type)
         semantic_type_width(@column_type)
@@ -5683,6 +5900,12 @@ module CrystalClick
         raise UnsupportedFormatError.new("exact Nullable temporal type required") unless WidePart.nullable_datetime64_scale(type)
         8
       end
+    end
+
+    private def nullable_time_width(type : String) : Int32
+      return 4 if type == "Nullable(Time)"
+      raise UnsupportedFormatError.new("exact Nullable(Time64(p)) type required") unless WidePart.nullable_time64_scale(type)
+      8
     end
 
     private def read_string_sizes(column : String, first_mark : Int, mark_count : Int) : {Array(UInt64), UInt64}

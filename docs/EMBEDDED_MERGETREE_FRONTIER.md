@@ -126,6 +126,11 @@ IPv4, UUID, UInt128, and FixedString(16); scoped evidence is recorded below.
 W48 admits paired Enum8 and Enum16 Array leaves, including BASIC Nullable
 forms, with exact code membership and stock-canonical metadata in the bounded
 Wide/LZ4/plain-mark profile. Its scoped evidence and limits are below.
+W49 admits paired BFloat16 scalars and single-level Arrays, including BASIC
+Nullable forms, with distinct raw-bit identity on the same pinned profile.
+Its scoped evidence and limits are below. W50 admits paired raw Time and
+Time64 values in the exact scalar, BASIC Nullable, and one-level Array shapes
+recorded below.
 
 ## Purpose and bounded contexts
 
@@ -2937,6 +2942,53 @@ acceptance of a poisoned part. A wholly empty nested stream, an all-NULL-only
 part, other ClickHouse versions, and other schemas/codecs/mark formats remain
 untested. No memory or performance conclusion follows from W49.
 
+## W50 frontier: paired Time and Time64 raw temporal values
+
+Admission: exact `Time` and canonical `Time64(p)` for `p = 0..9`,
+their BASIC Nullable forms, and one-level `Array(T)` and
+`Array(Nullable(T))` leaves beside a sorted `UInt64` key. Expose signed raw
+`Int32` seconds for Time and signed raw `Int64` ticks for Time64 while retaining
+the logical type and precision; these accessors must reject generic Int32,
+Int64, DateTime, and DateTime64 declarations. The writer must emit the same
+eight shapes the reader accepts, not claim support from physical width alone.
+
+This is **CAUTION**: the scalar payloads reuse existing integer widths, but
+ClickHouse gives them distinct type metadata and text semantics. The pre-W50
+reader's exact admission gate rejected them at the initial RED test.
+The pinned stock-part probe established binary
+representation, substream names, serializers, mark topology, NULL child
+slots, and Array size0 streams. Keep semantic parsing and text formatting
+outside this raw storage API. Do not generalize the empty-serializer
+multi-column exception beyond the observed stock schema; malformed or
+recursive declarations must still fail closed.
+
+DoD: a synthetic stock Wide/LZ4/plain-`.mrk2` part containing all eight
+shapes, including Time64 precisions 0, 3, and 9, nontrivial mark boundaries,
+zero/nonzero values, NULL slots, and empty/all-NULL Array rows; a focused
+RED-to-green reader/writer spec; full debug and release suites; fixture
+integrity and format checks; reverse `ATTACH PART`/`CHECK TABLE` and
+independently expected full and key-filtered RowBinary for the stock part and
+each Crystal-written shape; and a hostile review of semantic identity,
+precision, offsets, and NULL handling. Rollback is one W50-only local commit.
+Other temporal wrappers, other physical formats, MV/physical projection
+subparts, and memory/performance work remain guard-only. This evidence
+decays when the pinned ClickHouse producer, platform, codec, marks, or Time
+serialization semantics change.
+
+W50 result: the focused spec passed 8/0, and the full debug and release
+suites passed 741/0 each. The public synthetic fixture verifier confirmed
+11 canonical columns, 19 LZ4 streams, and mark rows `[2, 2, 2, 1]`.
+ClickHouse local 26.7.1.1315 accepted and checked the stock part and all ten
+Crystal-written two-column parts; independently assembled full and
+key-filtered RowBinary matched byte-for-byte. The exact type-gate tests
+reject same-width numeric and DateTime declarations, malformed precision,
+and unadmitted recursive wrappers. The scoped adversary check found no
+counterexample to logical identity, precision preservation, offset/mark
+handling, or NULL separation in these shapes (`ROBUST` within this profile).
+Other ClickHouse versions, text/timezone semantics, other physical formats,
+and arbitrary nested Time compositions remain untested. No memory or
+performance conclusion follows from W50.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2946,7 +2998,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W49's paired BFloat16 family,
+1. Extend reader and writer together beyond W50's paired Time family,
+   W49's paired BFloat16 family,
    W48's paired Enum Arrays, W47's paired IPv6 Arrays,
    W46's paired IPv4 Arrays,
    W45's paired Decimal256 Arrays,

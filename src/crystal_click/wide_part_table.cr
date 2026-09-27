@@ -290,6 +290,20 @@ module CrystalClick
       @column_values[index].as(Slice(Int64))
     end
 
+    def time_seconds_for(column : String) : Slice(Int32)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Time accessor requires an exact Time column") unless @column_types[index] == "Time"
+      return @typed_numeric_values[column].as(Slice(Int32)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int32))
+    end
+
+    def time64_ticks_for(column : String) : Slice(Int64)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Time64 accessor requires a canonical Time64(p) column") unless WidePart.time64_scale(@column_types[index])
+      return @typed_numeric_values[column].as(Slice(Int64)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int64))
+    end
+
     def bools_for(column : String) : Slice(Bool)
       index = column_index(column)
       raise UnsupportedFormatError.new("Bool accessor requires an exact Bool column") unless @column_types[index] == "Bool"
@@ -538,6 +552,20 @@ module CrystalClick
       array_temporal_values_for(column, "DateTime64(#{scale})", Int64)
     end
 
+    def array_time_seconds_for(column : String) : Slice(Array(Int32))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Time Array accessor requires an exact Array(Time) declaration") unless WidePart.time_array_element_type(@column_types[index]) == "Time"
+      values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Time Array column was not materialized in this batch"))
+      values.as(Slice(Array(Int32)))
+    end
+
+    def array_time64_ticks_for(column : String) : Slice(Array(Int64))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Time64 Array accessor requires a canonical Array(Time64(p)) declaration") unless WidePart.array_time64_scale(@column_types[index])
+      values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Time64 Array column was not materialized in this batch"))
+      values.as(Slice(Array(Int64)))
+    end
+
     def array_nullable_date_codes_for(column : String) : Slice(Array(UInt16?))
       array_nullable_temporal_values_for(column, "Date", UInt16)
     end
@@ -554,6 +582,20 @@ module CrystalClick
       index = column_index(column)
       scale = WidePart.nullable_array_datetime64_scale(@column_types[index]) || raise(UnsupportedFormatError.new("typed nullable temporal Array accessor requires a canonical Array(Nullable(DateTime64(p))) column"))
       array_nullable_temporal_values_for(column, "DateTime64(#{scale})", Int64)
+    end
+
+    def array_nullable_time_seconds_for(column : String) : Slice(Array(Int32?))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed nullable Time Array accessor requires an exact Array(Nullable(Time)) declaration") unless WidePart.nullable_time_array_element_type(@column_types[index]) == "Time"
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nullable Time Array column was not materialized in this batch"))
+      values.as(Slice(Array(Int32?)))
+    end
+
+    def array_nullable_time64_ticks_for(column : String) : Slice(Array(Int64?))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed nullable Time64 Array accessor requires a canonical Array(Nullable(Time64(p))) declaration") unless WidePart.nullable_array_time64_scale(@column_types[index])
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nullable Time64 Array column was not materialized in this batch"))
+      values.as(Slice(Array(Int64?)))
     end
 
     def array_uuids_for(column : String) : Slice(Array(UUIDValue))
@@ -833,6 +875,18 @@ module CrystalClick
         raise UnsupportedFormatError.new("Nullable(DateTime64) accessor requires a canonical Nullable(DateTime64(p)) column")
       end
       @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(DateTime64) column was not materialized in this batch"))
+    end
+
+    def nullable_time_seconds_for(column : String) : Slice(Int32?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Nullable(Time) accessor requires an exact Nullable(Time) column") unless @column_types[index] == "Nullable(Time)"
+      @nullable_values[column]?.try(&.as(Slice(Int32?))) || raise(UnsupportedFormatError.new("Nullable(Time) column was not materialized in this batch"))
+    end
+
+    def nullable_time64_ticks_for(column : String) : Slice(Int64?)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Nullable(Time64) accessor requires a canonical Nullable(Time64(p)) column") unless WidePart.nullable_time64_scale(@column_types[index])
+      @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(Time64) column was not materialized in this batch"))
     end
 
     def nullable_strings_for(column : String) : Slice(String?)
@@ -1178,6 +1232,12 @@ module CrystalClick
               elsif WidePart.supports_array_nullable_bool_type?(selected.column_type)
                 bytes = selected.reader.array_nullable_bool_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_nullable_bool_raw_bytes[selected.name] = bytes
+              elsif WidePart.time_array_element_type(selected.column_type)
+                bytes = selected.reader.array_time_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.nullable_time_array_element_type(selected.column_type)
+                bytes = selected.reader.array_nullable_time_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_numeric_bytes[selected.name] = bytes
               elsif WidePart.temporal_array_element_type(selected.column_type)
                 bytes = selected.reader.array_temporal_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_numeric_bytes[selected.name] = bytes
@@ -1496,6 +1556,27 @@ module CrystalClick
                 raise CorruptPartError.new("selected temporal Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_numeric_values[selected.name] = values
+              when "Array(Time)"
+                values = selected.reader.read_array_time_seconds_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Time Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Time Array mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 4_u64
+                raise CorruptPartError.new("selected Time Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Time Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
+              when .starts_with?("Array(Time64(")
+                raise UnsupportedFormatError.new("unsupported exact Time64 Array type") unless WidePart.array_time64_scale(selected.column_type)
+                values = selected.reader.read_array_time64_ticks_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Time64 Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Time64 Array mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 8_u64
+                raise CorruptPartError.new("selected Time64 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Time64 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
               when .starts_with?("Array(DateTime64(")
                 element_type = WidePart.temporal_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported temporal Array type"))
                 values = read_array_temporal_values(selected.reader, selected.name, mark_index, element_type)
@@ -1616,6 +1697,25 @@ module CrystalClick
                 bytes = array_nullable_numeric_materialized_bytes(values, physical_type)
                 raise CorruptPartError.new("selected nullable temporal Array decoded bytes differ from preflight") unless bytes == preflight_bytes
                 raise CorruptPartError.new("selected nullable temporal Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+              when "Array(Nullable(Time))"
+                values = selected.reader.read_array_nullable_time_seconds_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Nullable(Time)) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Nullable(Time)) mark was not preflighted"))
+                bytes = array_nullable_numeric_materialized_bytes(values, "Int32")
+                raise CorruptPartError.new("selected Array(Nullable(Time)) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(Nullable(Time)) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+              when .starts_with?("Array(Nullable(Time64(")
+                raise UnsupportedFormatError.new("unsupported exact Array(Nullable(Time64(p))) type") unless WidePart.nullable_array_time64_scale(selected.column_type)
+                values = selected.reader.read_array_nullable_time64_ticks_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Nullable(Time64(p))) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Nullable(Time64(p))) mark was not preflighted"))
+                bytes = array_nullable_numeric_materialized_bytes(values, "Int64")
+                raise CorruptPartError.new("selected Array(Nullable(Time64(p))) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(Nullable(Time64(p))) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_nullable_numeric_values[selected.name] = values
               when .starts_with?("Array(Nullable(DateTime64(")
@@ -1947,11 +2047,18 @@ module CrystalClick
         reader.read_date32_codes_mark_range(selected.name, mark_index, 1)
       when "DateTime"
         reader.read_datetime_seconds_mark_range(selected.name, mark_index, 1)
+      when "Time"
+        reader.read_time_seconds_mark_range(selected.name, mark_index, 1)
       when .starts_with?("DateTime64(")
         unless WidePart.datetime64_scale(selected.column_type)
           raise UnsupportedFormatError.new("unsupported exact DateTime64 type")
         end
         reader.read_datetime64_ticks_mark_range(selected.name, mark_index, 1)
+      when .starts_with?("Time64(")
+        unless WidePart.time64_scale(selected.column_type)
+          raise UnsupportedFormatError.new("unsupported exact Time64 type")
+        end
+        reader.read_time64_ticks_mark_range(selected.name, mark_index, 1)
       when "UInt8"
         reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt8)
       when "UInt16"
@@ -2279,6 +2386,7 @@ module CrystalClick
       when "Nullable(Date)"     then reader.read_nullable_date_codes_mark_range(selected.name, mark_index, 1)
       when "Nullable(Date32)"   then reader.read_nullable_date32_codes_mark_range(selected.name, mark_index, 1)
       when "Nullable(DateTime)" then reader.read_nullable_datetime_seconds_mark_range(selected.name, mark_index, 1)
+      when "Nullable(Time)"     then reader.read_nullable_time_seconds_mark_range(selected.name, mark_index, 1)
       when "Nullable(UInt8)"    then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt8)
       when "Nullable(UInt16)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt16)
       when "Nullable(UInt32)"   then reader.read_nullable_numeric_mark_range(selected.name, mark_index, 1, UInt32)
@@ -2292,6 +2400,8 @@ module CrystalClick
       else
         if WidePart.nullable_datetime64_scale(selected.column_type)
           return reader.read_nullable_datetime64_ticks_mark_range(selected.name, mark_index, 1)
+        elsif WidePart.nullable_time64_scale(selected.column_type)
+          return reader.read_nullable_time64_ticks_mark_range(selected.name, mark_index, 1)
         end
         raise UnsupportedFormatError.new("unsupported Nullable numeric column type")
       end
