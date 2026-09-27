@@ -25,6 +25,11 @@ module CrystalClick
     MAX_METADATA_SUBSTREAMS              = 65536
     MARK_SIZE                            =    24
 
+    # Conservative allowances for Array(Nullable(String)) table batches;
+    # these bound common object/array overhead but are not exact heap accounting.
+    ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES = 16_u64
+    ARRAY_NULLABLE_STRING_ROW_ACCOUNTING_BYTES  = 32_u64
+
     def self.supports_numeric_type?(type : String) : Bool
       case type
       when "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"
@@ -347,6 +352,8 @@ module CrystalClick
         [column]
       when "Array(String)"
         ["#{column}.size", column]
+      when "Array(Nullable(String))"
+        ["#{column}.null", "#{column}.size", column]
       when "Array(Nullable(UInt64))"
         ["#{column}.null", column]
       when "Array(Array(UInt64))"
@@ -1174,6 +1181,47 @@ module CrystalClick
       total_bytes
     end
 
+    # Preflight one exact Array(Nullable(String)) mark range without creating
+    # String values. The return value is raw nested String bytes, including any
+    # bytes carried by NULL slots.
+    def array_nullable_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      array_nullable_string_mark_range_preflight(column, first_mark, mark_count)[0]
+    end
+
+    # Return {physical raw String bytes, conservative table materialization
+    # charge}. The charge adds fixed allowances per flattened nullable slot and
+    # outer row so NULL/empty-heavy marks cannot evade the aggregate batch limit.
+    def array_nullable_string_mark_range_preflight(column : String, first_mark : Int, mark_count : Int) : {UInt64, UInt64}
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(Nullable(String)) accessor requires an exact Array(Nullable(String)) column") unless @column_type == "Array(Nullable(String))"
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, total_bytes = read_array_string_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_elements,
+        rows,
+        mark_flat_elements,
+        "Array(Nullable(String))"
+      )
+      read_array_nullable_string_null_map(column, first_mark, mark_count, flat_elements, rows, mark_flat_elements)
+      raise CorruptPartError.new("Array(Nullable(String)) size count does not match size0") unless element_sizes.size.to_u64 == flat_elements
+
+      raw_stream = @streams[column]
+      _, _, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(String)) raw substream mark rows differ") unless raw_rows == rows
+      slot_bytes = checked_array_nullable_string_slot_bytes(flat_elements)
+      if rows > UInt64::MAX // ARRAY_NULLABLE_STRING_ROW_ACCOUNTING_BYTES
+        raise CorruptPartError.new("Array(Nullable(String)) row charge overflows")
+      end
+      row_bytes = rows * ARRAY_NULLABLE_STRING_ROW_ACCOUNTING_BYTES
+      if slot_bytes > UInt64::MAX - row_bytes || total_bytes > UInt64::MAX - slot_bytes - row_bytes
+        raise CorruptPartError.new("Array(Nullable(String)) materialization charge overflows")
+      end
+      {total_bytes, total_bytes + slot_bytes + row_bytes}
+    end
+
     # Return nested String bytes for an exact Map(UInt64, String) mark range
     # without allocating the returned row arrays. Map keys and values are
     # positionally paired flattened streams beneath the per-row size0 stream.
@@ -1542,6 +1590,59 @@ module CrystalClick
       raise CorruptPartError.new("Array(String) sizes do not consume selected elements") unless element_offset == element_sizes.size
       raise CorruptPartError.new("Array(String) nested lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
       values
+    end
+
+    # Read exact Array(Nullable(String)) rows. The outer size0, flattened null
+    # map, string-size slots, and raw bytes are validated before String values
+    # are allocated; NULL slots consume their nested size and raw-byte slots
+    # but remain distinct from "".
+    def read_array_nullable_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(String?))
+      read_array_nullable_string_mark_range_with_raw_bytes(column, first_mark, mark_count)[0]
+    end
+
+    # Table scans use this form to confirm the decoded range consumed the same
+    # nested String byte count that was preflighted, including NULL slots.
+    def read_array_nullable_string_mark_range_with_raw_bytes(column : String, first_mark : Int, mark_count : Int) : {Array(Array(String?)), UInt64}
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(Nullable(String)) accessor requires an exact Array(Nullable(String)) column") unless @column_type == "Array(Nullable(String))"
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, total_bytes = read_array_string_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_elements,
+        rows,
+        mark_flat_elements,
+        "Array(Nullable(String))"
+      )
+      null_bytes = read_array_nullable_string_null_map(column, first_mark, mark_count, flat_elements, rows, mark_flat_elements)
+      raise CorruptPartError.new("Array(Nullable(String)) null-map count differs from size0") unless null_bytes.size.to_u64 == flat_elements
+      raise CorruptPartError.new("Array(Nullable(String)) size count does not match size0") unless element_sizes.size.to_u64 == flat_elements
+
+      raw_stream = @streams[column]
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(String)) raw substream mark rows differ") unless raw_rows == rows
+      raw_bytes = read_mark_range_bytes(raw_stream, raw_start, raw_end, total_bytes.to_i, 1)
+
+      values = Array(Array(String?)).new(rows.to_i)
+      element_offset = 0
+      raw_offset = 0
+      outer_sizes.each do |size|
+        row = Array(String?).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(Nullable(String)) sizes exceed selected element lengths") if element_offset >= element_sizes.size
+          length = element_sizes[element_offset].to_i
+          raise CorruptPartError.new("Array(Nullable(String)) size exceeds selected raw bytes") if length > raw_bytes.size - raw_offset
+          row << (null_bytes[element_offset] == 1_u8 ? nil : String.new(raw_bytes[raw_offset, length]))
+          raw_offset += length
+          element_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Nullable(String)) sizes do not consume selected elements") unless element_offset == element_sizes.size
+      raise CorruptPartError.new("Array(Nullable(String)) nested lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
+      {values, total_bytes}
     end
 
     private def read_map_string_element_sizes(
@@ -3445,6 +3546,15 @@ module CrystalClick
         8
       elsif @column_type == "Array(String)"
         stream_name == @column ? 1 : 8
+      elsif @column_type == "Array(Nullable(String))"
+        case stream_name
+        when "#{@column}.size0", "#{@column}.size"
+          8
+        when "#{@column}.null", @column
+          1
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Nullable(String)) substream")
+        end
       elsif @column_type == "String"
         stream_name == "#{@column}.size" ? 8 : 1
       elsif WidePart.supports_nullable_string_type?(@column_type)
@@ -3706,10 +3816,11 @@ module CrystalClick
       flat_elements : UInt64,
       outer_rows : UInt64,
       mark_flat_elements : Array(UInt64),
+      type_name : String = "Array(String)",
     ) : {Array(UInt64), UInt64}
       size_stream = @streams["#{column}.size"]
       size_start, size_end, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
-      raise CorruptPartError.new("Array(String) substream mark rows differ") unless size_rows == outer_rows
+      raise CorruptPartError.new("#{type_name} substream mark rows differ") unless size_rows == outer_rows
       encoded_sizes = read_mark_range_bytes(
         size_stream,
         size_start,
@@ -3731,16 +3842,16 @@ module CrystalClick
 
         mark_raw_bytes = 0_u64
         mark_flat.to_i.times do
-          raise CorruptPartError.new("Array(String) nested size count exceeds selected bytes") if offset > encoded_sizes.size - 8
+          raise CorruptPartError.new("#{type_name} nested size count exceeds selected bytes") if offset > encoded_sizes.size - 8
           size = u64(encoded_sizes, offset)
           if size > MAX_ARRAY_MARK_BYTES.to_u64 - total_bytes
-            raise CorruptPartError.new("Array(String) nested bytes exceed per-range limit")
+            raise CorruptPartError.new("#{type_name} nested bytes exceed per-range limit")
           end
           if size > MAX_DATA_FILE_BYTES.to_u64 - total_bytes
-            raise CorruptPartError.new("Array(String) nested bytes exceed data limit")
+            raise CorruptPartError.new("#{type_name} nested bytes exceed data limit")
           end
           if size > MAX_ARRAY_MARK_BYTES.to_u64 - mark_raw_bytes
-            raise CorruptPartError.new("Array(String) nested bytes exceed per-mark limit")
+            raise CorruptPartError.new("#{type_name} nested bytes exceed per-mark limit")
           end
           total_bytes += size
           mark_raw_bytes += size
@@ -3751,9 +3862,35 @@ module CrystalClick
         raw_mark_end = mark_index + 1 == raw_stream.marks.size ? raw_stream.sentinel : raw_stream.marks[mark_index + 1]
         validate_mark_range_bytes(raw_stream, raw_mark_start, raw_mark_end, mark_raw_bytes.to_i, 1)
       end
-      raise CorruptPartError.new("Array(String) nested size stream has trailing bytes") unless offset == encoded_sizes.size
-      raise CorruptPartError.new("Array(String) nested size count does not match size0") unless element_sizes.size.to_u64 == flat_elements
+      raise CorruptPartError.new("#{type_name} nested size stream has trailing bytes") unless offset == encoded_sizes.size
+      raise CorruptPartError.new("#{type_name} nested size count does not match size0") unless element_sizes.size.to_u64 == flat_elements
       {element_sizes, total_bytes}
+    end
+
+    private def read_array_nullable_string_null_map(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      flat_elements : UInt64,
+      outer_rows : UInt64,
+      mark_flat_elements : Array(UInt64),
+    ) : Bytes
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(String)) null-map mark rows differ") unless null_rows == outer_rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_flat_elements, 1)
+      null_bytes = read_mark_range_bytes(null_stream, null_start, null_end, checked_array_mark_byte_count(flat_elements, 1), 1)
+      null_bytes.each do |value|
+        raise CorruptPartError.new("Array(Nullable(String)) null-map byte is not boolean") unless value <= 1_u8
+      end
+      null_bytes
+    end
+
+    private def checked_array_nullable_string_slot_bytes(flat_elements : UInt64) : UInt64
+      if flat_elements > UInt64::MAX // ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES
+        raise CorruptPartError.new("Array(Nullable(String)) slot charge overflows")
+      end
+      flat_elements * ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES
     end
 
     private def validate_array_nested_stream_marks(

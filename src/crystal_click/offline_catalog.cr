@@ -3,7 +3,7 @@ module CrystalClick
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
-                             Array(String) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
+                             Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
@@ -273,6 +273,16 @@ module CrystalClick
         selected_values = batch.array_numeric_values(column_name, Float64)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Nullable(String))"
+        selected_values = batch.array_nullable_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_nullable_strings(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
       when .starts_with?("Array(Nullable(")
         element_type = WidePart.nullable_numeric_array_element_type(selected_type) || raise(UnsupportedFormatError.new("selected table column type is unsupported"))
         selected_values = array_nullable_numeric_values_for(batch, column_name, element_type)
@@ -916,6 +926,38 @@ module CrystalClick
       selected_values.each do |row|
         owned_row = Array(String).new(row.size)
         row.each { |value| owned_row << String.new(value.to_slice) }
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_nullable_strings(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(String?)),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |value|
+          next if value.nil?
+
+          next_bytes = checked_materialized_value_string_bytes(next_bytes, value.bytesize.to_u64, max_string_bytes)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(String?).new(row.size)
+        row.each do |value|
+          if value.nil?
+            owned_row << nil
+          else
+            owned_row << String.new(value.to_slice)
+          end
+        end
         values << owned_row
       end
       {next_elements, next_bytes}

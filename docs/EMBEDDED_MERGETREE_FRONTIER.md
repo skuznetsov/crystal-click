@@ -83,6 +83,10 @@ W31 admits paired `Array(Nullable(T))` payloads for those ten primitive
 numeric leaves, retaining W27's exact `UInt64` entry points. Its multi-column
 empty-serializer admission is limited to the pinned 11-column stock shape;
 this does not imply arbitrary table-schema composition.
+W32 admits paired `Array(Nullable(String))` payloads beside a sorted `UInt64`
+key, with typed batches and caller-owned offline catalog values. Its stock
+oracle covers four physical streams and both directions; it does not admit
+other nullable String wrappers or arbitrary recursive types.
 
 ## Purpose and bounded contexts
 
@@ -1759,6 +1763,71 @@ serializer compatibility; populated TUI display of W31 arrays, further type
 compositions, MV/projections, Compact parts, other codecs/platforms, and
 performance remain unverified or guard-only.
 
+## Design-sealed W32 slice: nullable String Array leaves
+
+W32 targets exactly one `Array(Nullable(String))` payload beside a sorted
+`UInt64` key. It composes the existing Array outer-row and String child-size
+contracts with a flattened null map, but must not infer compatibility from
+those components alone. A disposable stock ClickHouse 26.7.1.1315 Wide/LZ4/
+plain-marks probe observed four physical streams: `<name>.size0`,
+`<name>.null`, `<name>.size`, and `<name>`. Its `serialization.json` has the
+`string` version and no separate `nullable` version. In the probe, each NULL
+element consumed a zero-valued nested String-size slot but no raw String bytes;
+all-NULL and all-present-empty marks had identical size/raw offsets and differed
+only in the null map. This is a stock-writer observation, not a decoder
+restriction: ClickHouse `SerializationNullable` serializes and deserializes
+the nested column independently of the null map, so a nonzero physical String
+slot beneath NULL must still be consumed while the visible value remains NULL.
+The probe alone did not admit a reader or writer; the gate below does.
+
+Admission requires a pinned stock part containing empty arrays, all-NULL and
+all-empty-string marks, mixed NULL/empty/nonempty values, embedded NUL and
+non-ASCII bytes, an empty middle mark, and a short final mark. Each child
+stream must agree with the outer row marks and flattened element counts;
+`NULL` must consume its physical String-size and raw-byte slots without being
+confused with `""`. The reader, typed batch, caller-owned offline catalog
+values, and immutable writer must agree on full and later-mark ranges. The
+writer must publish no part until staged readback, selected checksums, and
+mark/size bounds pass. A bidirectional oracle must read the stock part and
+attach Crystal-written parts to the pinned stock build, comparing exact full
+and key-range RowBinary plus `CHECK TABLE`.
+
+Falsifiers include an invalid null flag, same-total shifted child marks,
+string-size/raw-byte disagreement, malformed physical slots under NULL, and
+oversized element or byte counts. Direct reader assertions must distinguish
+structural rejection from table-level `checksums.txt` rejection; selected
+table scans must reject before callbacks. Risk is **CAUTION** because this
+widens common Array dispatch and four-stream serialization. Rollback is one
+W32-only local feature commit. Arbitrary recursive types, schema composition,
+other codecs/marks/platforms, populated TUI display, MV/projections, and
+performance remain guard-only. The gate requires focused, debug, release,
+and pinned stock-oracle passes. Evidence decays with a changed stock build,
+serialization, codec/mark layout, filesystem, or shared reader/writer
+implementation.
+
+The table batch preflight charges physical nested String bytes plus fixed
+allowances per flattened nullable slot and outer row. This is an estimated
+retained-output budget, not a strict peak-RSS bound: decoding can temporarily
+hold both the raw stream buffer and copied visible Strings. Tight peak-memory
+accounting belongs to the later optimization phase and must not silently
+reject otherwise compatible large String payloads here.
+
+Observed W32 gate on this host: the pinned fixture verifier checked the exact
+two-column schema, five physical streams including the key, six data marks
+and sentinel, raw null/size/value bytes, and its SHA-256 manifest. The
+focused W32 spec passed 7/7: exact type admission; stock full/later-mark
+reads; typed batch and catalog ownership; writer stream/readback equivalence;
+a checksum-updated positive with a nonzero nested String byte beneath NULL;
+and checksum-updated invalid-null and shifted-mark rejections before table
+callbacks. The pinned ClickHouse 26.7.1.1315 oracle attached both the stock
+and Crystal-written parts, passed `CHECK TABLE`, and matched independently
+encoded full/key-range RowBinary. Debug and release regression suites passed
+581 examples each, and all 26 stock-oracle scripts passed. Adversary verdict:
+**ROBUST within this pinned physical/API profile**, with the estimated
+retained-output versus peak-memory caveat above. This is not a general
+recursive Array, schema-composition, TUI, MV/projection, codec, platform, or
+performance claim.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1768,8 +1837,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W31's nullable numeric Array
-   family and W30's non-null numeric Array family,
+1. Extend reader and writer together beyond W32's nullable String Array,
+   W31's nullable numeric Array family, and W30's non-null numeric Array family,
    W29's nested nullable Array, W28's nested Array, W27's exact nullable array,
    W25/W26's exact Maps,
    W24's exact JSON typed paths, W23's exact named Tuple,
