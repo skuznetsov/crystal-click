@@ -441,6 +441,14 @@ module CrystalClick
       "IPv4" if type == "Array(Nullable(IPv4))"
     end
 
+    def self.ipv6_array_element_type(type : String) : String?
+      "IPv6" if type == "Array(IPv6)"
+    end
+
+    def self.nullable_ipv6_array_element_type(type : String) : String?
+      "IPv6" if type == "Array(Nullable(IPv6))"
+    end
+
     def self.supports_ipv4_type?(type : String) : Bool
       type == "IPv4"
     end
@@ -613,6 +621,10 @@ module CrystalClick
       when "Array(IPv4)"
         [column]
       when "Array(Nullable(IPv4))"
+        ["#{column}.null", column]
+      when "Array(IPv6)"
+        [column]
+      when "Array(Nullable(IPv6))"
         ["#{column}.null", column]
       when "Array(String)"
         ["#{column}.size", column]
@@ -1790,6 +1802,37 @@ module CrystalClick
       checked_array_mark_byte_count(flat_elements, 5).to_u64
     end
 
+    # Count exact IPv6 leaf bytes before a table batch allocates wrappers.
+    # IPv6 remains distinct from UUID and numeric UInt128 arrays.
+    def array_ipv6_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("IPv6 Array accessor requires an exact Array(IPv6) column") unless WidePart.ipv6_array_element_type(@column_type)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(IPv6) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 16)
+      checked_array_mark_byte_count(flat_elements, 16).to_u64
+    end
+
+    # BASIC Array(Nullable(IPv6)) retains a full 16-byte nested slot for every
+    # leaf, including NULL slots, alongside its one-byte null map.
+    def array_nullable_ipv6_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("nullable IPv6 Array accessor requires an exact Array(Nullable(IPv6)) column") unless WidePart.nullable_ipv6_array_element_type(@column_type)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      {"#{column}.null", column}.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Nullable(IPv6)) child substream mark rows differ") unless child_rows == rows
+        width = stream_name == "#{column}.null" ? 1 : 16
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
+      end
+      checked_array_mark_byte_count(flat_elements, 17).to_u64
+    end
+
     # Count the fixed-width child payload of an exact Array(FixedString(N))
     # range after matching each child's marks to the flattened size0 counts.
     def array_fixed_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
@@ -2416,6 +2459,69 @@ module CrystalClick
         values << row
       end
       raise CorruptPartError.new("Array(Nullable(IPv4)) sizes do not consume selected child streams") unless flat_offset.to_u64 == flat_elements
+      values
+    end
+
+    # IPv6 leaves are exact 16-byte network-order addresses, not UUIDs or
+    # little-endian UInt128 values.
+    def read_array_ipv6s_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(IPv6Value))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(IPv6) accessor requires an exact Array(IPv6) column") unless WidePart.ipv6_array_element_type(@column_type)
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(IPv6) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 16)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 16), 16)
+
+      values = Array(Array(IPv6Value)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(IPv6Value).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(IPv6) sizes exceed selected IPv6 bytes") if flat_offset > value_bytes.size - 16
+          row << IPv6Value.new(network_order_u64(value_bytes, flat_offset), network_order_u64(value_bytes, flat_offset + 8))
+          flat_offset += 16
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(IPv6) sizes do not consume selected IPv6 bytes") unless flat_offset == value_bytes.size
+      values
+    end
+
+    def read_array_nullable_ipv6s_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(IPv6Value?))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(Nullable(IPv6)) accessor requires an exact Array(Nullable(IPv6)) column") unless WidePart.nullable_ipv6_array_element_type(@column_type)
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(IPv6)) null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_flat_elements, 1)
+      null_bytes = read_mark_range_bytes(null_stream, null_start, null_end, checked_array_mark_byte_count(flat_elements, 1), 1)
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(IPv6)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 16)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 16), 16)
+
+      values = Array(Array(IPv6Value?)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(IPv6Value?).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(Nullable(IPv6)) sizes exceed selected child streams") if flat_offset >= flat_elements
+          is_null = null_bytes[flat_offset]
+          raise CorruptPartError.new("Array(Nullable(IPv6)) null map contains a value other than 0 or 1") unless is_null <= 1_u8
+          value_offset = flat_offset * 16
+          row << (is_null == 1_u8 ? nil : IPv6Value.new(network_order_u64(value_bytes, value_offset), network_order_u64(value_bytes, value_offset + 8)))
+          flat_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Nullable(IPv6)) sizes do not consume selected child streams") unless flat_offset.to_u64 == flat_elements
       values
     end
 
@@ -3979,10 +4085,11 @@ module CrystalClick
       w44_decimal128_array_shape = decimal128_array_w44_schema?(columns, selected_column)
       w45_decimal256_array_shape = decimal256_array_w45_schema?(columns, selected_column)
       w46_ipv4_array_shape = ipv4_array_w46_schema?(columns, selected_column)
+      w47_ipv6_array_shape = ipv6_array_w47_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -4005,7 +4112,8 @@ module CrystalClick
         w41_keyed_uuid_array_shape = w41_uuid_array_shape && key_columns.size == 1 && key_columns[0] == key_column
         w42_keyed_decimal32_array_shape = w42_decimal32_array_shape && key_columns.size == 1 && key_columns[0] == key_column
         w46_keyed_ipv4_array_shape = w46_ipv4_array_shape && key_columns.size == 1 && key_columns[0] == key_column
-        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape || w39_keyed_wide_array_shape || w40_keyed_temporal_array_shape || w41_keyed_uuid_array_shape || w42_keyed_decimal32_array_shape || w46_keyed_ipv4_array_shape
+        w47_keyed_ipv6_array_shape = w47_ipv6_array_shape && key_columns.size == 1 && key_columns[0] == key_column
+        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape || w39_keyed_wide_array_shape || w40_keyed_temporal_array_shape || w41_keyed_uuid_array_shape || w42_keyed_decimal32_array_shape || w46_keyed_ipv4_array_shape || w47_keyed_ipv6_array_shape
           raise UnsupportedFormatError.new("array serialization requires one supported UInt64 key/value pair")
         end
         unless kind == "Default"
@@ -4125,6 +4233,18 @@ module CrystalClick
                           ]
       selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
       !WidePart.ipv4_array_element_type(selected_type).nil? || !WidePart.nullable_ipv4_array_element_type(selected_type).nil?
+    end
+
+    # Exact W47 stock fixture shape: one UInt64 key with the paired IPv6
+    # Array forms. This exception only admits canonical declarations.
+    private def ipv6_array_w47_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns == [
+                            {"pk", "UInt64"},
+                            {"plain", "Array(IPv6)"},
+                            {"maybe", "Array(Nullable(IPv6))"},
+                          ]
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      !WidePart.ipv6_array_element_type(selected_type).nil? || !WidePart.nullable_ipv6_array_element_type(selected_type).nil?
     end
 
     # Exact W42 stock fixture shape for the paired Decimal32(2) Array leaves.
@@ -5083,6 +5203,21 @@ module CrystalClick
         when "#{@column}.size0" then 8
         else
           raise UnsupportedFormatError.new("unsupported exact Array(IPv4) substream")
+        end
+      elsif WidePart.nullable_ipv6_array_element_type(@column_type)
+        case stream_name
+        when "#{@column}.null"  then 1
+        when @column            then 16
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(Nullable(IPv6)) substream")
+        end
+      elsif WidePart.ipv6_array_element_type(@column_type)
+        case stream_name
+        when @column            then 16
+        when "#{@column}.size0" then 8
+        else
+          raise UnsupportedFormatError.new("unsupported exact Array(IPv6) substream")
         end
       elsif WidePart.array_nullable_decimal32_scale(@column_type)
         case stream_name

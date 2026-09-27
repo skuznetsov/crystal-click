@@ -1,0 +1,5 @@
+columns format version: 1
+3 columns:
+`pk` UInt64
+`plain` Array(IPv6)
+`maybe` Array(Nullable(IPv6))

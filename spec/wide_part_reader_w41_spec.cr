@@ -130,7 +130,7 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UUID))").should be_true
 
     {
-      "Array(IPv6)", "Array(UUID(1))", "Array(UUID )",
+      "Array(UUID(1))", "Array(UUID )",
       "Array(Array(UUID))", "Array(Nullable(Nullable(UUID)))", "Nullable(Array(UUID))",
       "Array(Nullable(UUID), UUID)",
     }.each do |type|

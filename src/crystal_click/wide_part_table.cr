@@ -21,22 +21,22 @@ module CrystalClick
                                     Array(Array(Int8)) | Array(Array(Int16)) | Array(Array(Int32)) | Array(Array(Int64)) |
                                     Array(Array(Float32)) | Array(Array(Float64)) |
                                     Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value)) |
-                                    Array(Array(UUIDValue)) | Array(Array(IPv4Value)) | Array(Array(Decimal256Value))
+                                    Array(Array(UUIDValue)) | Array(Array(IPv4Value)) | Array(Array(IPv6Value)) | Array(Array(Decimal256Value))
   alias WidePartArrayNumericSlice = Slice(Array(UInt8)) | Slice(Array(UInt16)) | Slice(Array(UInt32)) | Slice(Array(UInt64)) |
                                     Slice(Array(Int8)) | Slice(Array(Int16)) | Slice(Array(Int32)) | Slice(Array(Int64)) |
                                     Slice(Array(Float32)) | Slice(Array(Float64)) |
                                     Slice(Array(Int128)) | Slice(Array(UInt128)) | Slice(Array(Int256Value)) | Slice(Array(UInt256Value)) |
-                                    Slice(Array(UUIDValue)) | Slice(Array(IPv4Value)) | Slice(Array(Decimal256Value))
+                                    Slice(Array(UUIDValue)) | Slice(Array(IPv4Value)) | Slice(Array(IPv6Value)) | Slice(Array(Decimal256Value))
   alias WidePartArrayNullableNumericArray = Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) | Array(Array(UInt64?)) |
                                             Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
                                             Array(Array(Float32?)) | Array(Array(Float64?)) |
                                             Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?)) |
-                                            Array(Array(UUIDValue?)) | Array(Array(IPv4Value?)) | Array(Array(Decimal256Value?))
+                                            Array(Array(UUIDValue?)) | Array(Array(IPv4Value?)) | Array(Array(IPv6Value?)) | Array(Array(Decimal256Value?))
   alias WidePartArrayNullableNumericSlice = Slice(Array(UInt8?)) | Slice(Array(UInt16?)) | Slice(Array(UInt32?)) | Slice(Array(UInt64?)) |
                                             Slice(Array(Int8?)) | Slice(Array(Int16?)) | Slice(Array(Int32?)) | Slice(Array(Int64?)) |
                                             Slice(Array(Float32?)) | Slice(Array(Float64?)) |
                                             Slice(Array(Int128?)) | Slice(Array(UInt128?)) | Slice(Array(Int256Value?)) | Slice(Array(UInt256Value?)) |
-                                            Slice(Array(UUIDValue?)) | Slice(Array(IPv4Value?)) | Slice(Array(Decimal256Value?))
+                                            Slice(Array(UUIDValue?)) | Slice(Array(IPv4Value?)) | Slice(Array(IPv6Value?)) | Slice(Array(Decimal256Value?))
   alias WidePartArrayNullableStringArray = Array(Array(String?))
   alias WidePartArrayNullableStringSlice = Slice(Array(String?))
   alias WidePartArrayBoolArray = Array(Array(Bool))
@@ -569,6 +569,20 @@ module CrystalClick
       raise UnsupportedFormatError.new("typed Array(Nullable(IPv4)) accessor requires an exact declaration") unless WidePart.nullable_ipv4_array_element_type(@column_types[index])
       values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(IPv4)) column was not materialized in this batch"))
       values.as(Slice(Array(IPv4Value?)))
+    end
+
+    def array_ipv6s_for(column : String) : Slice(Array(IPv6Value))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(IPv6) accessor requires an exact declaration") unless WidePart.ipv6_array_element_type(@column_types[index])
+      values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(IPv6) column was not materialized in this batch"))
+      values.as(Slice(Array(IPv6Value)))
+    end
+
+    def array_nullable_ipv6s_for(column : String) : Slice(Array(IPv6Value?))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Array(Nullable(IPv6)) accessor requires an exact declaration") unless WidePart.nullable_ipv6_array_element_type(@column_types[index])
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(IPv6)) column was not materialized in this batch"))
+      values.as(Slice(Array(IPv6Value?)))
     end
 
     def array_decimal32_raw_for(column : String) : Slice(Array(Int32))
@@ -1157,6 +1171,12 @@ module CrystalClick
               elsif WidePart.nullable_ipv4_array_element_type(selected.column_type)
                 bytes = selected.reader.array_nullable_ipv4_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.ipv6_array_element_type(selected.column_type)
+                bytes = selected.reader.array_ipv6_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.nullable_ipv6_array_element_type(selected.column_type)
+                bytes = selected.reader.array_nullable_ipv6_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_numeric_bytes[selected.name] = bytes
               elsif WidePart.numeric_array_element_type(selected.column_type)
                 bytes = selected.reader.array_numeric_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_numeric_bytes[selected.name] = bytes
@@ -1339,6 +1359,26 @@ module CrystalClick
                 bytes = elements * 5_u64
                 raise CorruptPartError.new("selected Array(Nullable(IPv4)) decoded bytes differ from preflight") unless bytes == preflight_bytes
                 raise CorruptPartError.new("selected Array(Nullable(IPv4)) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+              when "Array(IPv6)"
+                values = selected.reader.read_array_ipv6s_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(IPv6) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(IPv6) mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 16_u64
+                raise CorruptPartError.new("selected Array(IPv6) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(IPv6) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
+              when "Array(Nullable(IPv6))"
+                values = selected.reader.read_array_nullable_ipv6s_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Nullable(IPv6)) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Nullable(IPv6)) mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 17_u64
+                raise CorruptPartError.new("selected Array(Nullable(IPv6)) decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Array(Nullable(IPv6)) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_nullable_numeric_values[selected.name] = values
               when "Array(Date)", "Array(Date32)", "Array(DateTime)"

@@ -120,8 +120,9 @@ W45 admits paired Decimal256 Array leaves with distinct signed raw
 recorded below. Neither Decimal Array slice admits general decimal arithmetic.
 W46 admits paired single-level IPv4 Arrays with BASIC Nullable leaves on the
 pinned Wide/LZ4/plain-mark profile; its scoped evidence is recorded below.
-IPv6 Arrays are a separate W47 candidate because their physical address
-codec is not the IPv4 codec.
+W47 admits paired single-level IPv6 Arrays with BASIC Nullable leaves on the
+pinned Wide/LZ4/plain-mark profile. Its network-octet codec is distinct from
+IPv4, UUID, UInt128, and FixedString(16); scoped evidence is recorded below.
 
 ## Purpose and bounded contexts
 
@@ -2767,6 +2768,65 @@ or ClickHouse versions, IP functions, MV/projections, or performance parity.
 Refresh this scoped evidence after the producer, codec, or reader/writer
 format boundary changes.
 
+## W47 frontier: paired IPv6 Array leaves
+
+Admit only one-level `Array(IPv6)` and BASIC
+`Array(Nullable(IPv6))` beside a sorted `UInt64` key in the pinned
+Wide/LZ4/plain-`.mrk2` profile. The public leaf is `IPv6Value` with exact
+16 network-order address octets; it must not alias UUID, UInt128, or a
+FixedString(16) leaf. Reader, batch, offline catalog `.values`, and paired
+writer APIs must preserve exact type identity, address-octet order, key order,
+empty Arrays, non-NULL `::`, and NULL placement. A stock NULL-insertion part
+has a 16-byte zero child slot for each NULL while RowBinary emits only the
+NULL flag. The reader must consume and ignore even a nonzero child slot under
+a set NULL bit. Only canonical IPv6 declarations are admitted in physical
+part metadata; the `INET6` DDL alias is a separate catalog-boundary concern.
+
+Risk is **CAUTION**: a same-width UInt128/UUID codec can produce valid-looking
+but byte-swapped addresses, and a hidden NULL slot can shift later leaves.
+The preimplementation falsifier is exact typed admission returning false.
+Use a pinned stock fixture to establish `size0`, optional `null`, child
+stream ordering, BASIC serializer metadata, and adaptive marks including the
+zero-row terminal mark. The bidirectional oracle must cover stock-to-Crystal
+reads and Crystal-to-stock `ATTACH PART`, `CHECK TABLE`, and byte-exact full
+and PK-filtered RowBinary. Include asymmetric IPv6 addresses to distinguish
+octet reversal and swapped 64-bit halves, `::1`, non-NULL zero, NULL versus
+zero, later marks, all-empty and nonempty all-NULL controls. Challenge typed
+alias leakage, a nonzero hidden child under NULL, malformed declarations,
+incorrect dimensions, and rejection before publication. A stock-accepted
+part with a mismatched asymmetric address or keyed row is the strongest
+falsifier.
+
+DoD requires focused W47 spec, full debug and release Crystal suites,
+fixture verifier and bidirectional stock oracle on the pinned build, format
+and shell-syntax checks, diff-whitespace check, and hostile self-review.
+The writer must preflight dimensions and marks, self-read its staged part,
+and publish exclusively only after validation. Reject nested or
+outer-Nullable Arrays, generic `Array(T)` dispatch, Compact/Sparse
+serialization, arbitrary schemas, IP functions, MV/projection semantics,
+and memory/performance work in W47. Rollback is one W47-only local commit,
+without touching existing ClickHouse data roots or remote state. The evidence
+decays when the producer version, codec, mark/checksum implementation, or
+platform changes; refresh focused, full-suite, and stock-oracle gates then.
+
+W47 result on pinned ClickHouse 26.7.1.1315 (Darwin): the stock three-column
+fixture has six LZ4 data streams, matching plain `.mrk2` streams, four data
+marks with row counts `[2, 2, 2, 1]`, and a zero-row terminal mark. Focused
+W47 spec passed 8/0, including explicit asymmetric network octets, typed
+batch/catalog access, UUID/UInt128/FixedString(16) rejection, writer
+preflight, all-empty and all-NULL cases, and a resealed first NULL child
+whose nonzero byte does not shift the following `::` sentinel. Full debug
+and release suites passed 717/0 each. The pinned fixture verifier passed;
+the bidirectional stock oracle passed `ATTACH PART` and `CHECK TABLE` on
+the stock pair plus five Crystal-written controls, with byte-exact full and
+PK-filtered RowBinary in all six cases. Formatting, shell syntax, and diff
+whitespace checks passed. Independent hostile review returned **ROBUST**
+within this profile. The poisoned NULL child was tested by the Crystal
+reader after resealing its frame and marks, but was not independently
+accepted by stock ClickHouse. This result does not admit other schemas,
+aliases in physical metadata, Compact/Sparse parts, MV/projection semantics,
+or any memory/performance conclusion.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2776,7 +2836,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W46's paired IPv4 Arrays,
+1. Extend reader and writer together beyond W47's paired IPv6 Arrays,
+   W46's paired IPv4 Arrays,
    W45's paired Decimal256 Arrays,
    W44's paired Decimal128 Arrays,
    W43's paired Decimal64 Arrays,

@@ -710,6 +710,32 @@ module CrystalClick
       write_uint64_array_nullable_ipv4_pair_internal(destination, key_name, keys, value_name, values, rows_per_mark)
     end
 
+    # Write one immutable part with exact Array(IPv6) leaves. IPv6 values are
+    # encoded as 16 network-order address octets, not UUID or UInt128 bytes.
+    def self.write_uint64_array_ipv6_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(IPv6Value)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_ipv6_pair_internal(destination, key_name, keys, value_name, values, rows_per_mark)
+    end
+
+    # BASIC Array(Nullable(IPv6)) stores a null flag and a full nested address
+    # slot for every leaf; NULL slots are zero-filled by the writer.
+    def self.write_uint64_array_nullable_ipv6_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(IPv6Value?)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_nullable_ipv6_pair_internal(destination, key_name, keys, value_name, values, rows_per_mark)
+    end
+
     # Write a sorted UInt64 key and an exact Array(Array(UInt64)) payload.
     # The two offsets streams and the flattened leaf stream share outer-row
     # mark granules, while their byte positions advance by their own depths.
@@ -2523,6 +2549,78 @@ module CrystalClick
       end
     end
 
+    private def self.write_uint64_array_ipv6_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(IPv6Value)),
+      rows_per_mark : Int32,
+    ) : String
+      validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "IPv6", semantic_ipv6: true)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "IPv6"))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(IPv6)"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_ipv6_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_nullable_ipv6_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(IPv6Value?)),
+      rows_per_mark : Int32,
+    ) : String
+      validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "IPv6", semantic_ipv6: true)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "IPv6"))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(IPv6))"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_ipv6_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # The UUID Array writer uses the generic fixed-width stream machinery, but
     # keeps admission separate from the public numeric Array type family.
     private def self.validate_array_uuid_layout_inputs(
@@ -2603,6 +2701,7 @@ module CrystalClick
       type_name : String,
       semantic_decimal256 : Bool = false,
       semantic_ipv4 : Bool = false,
+      semantic_ipv6 : Bool = false,
     ) : Nil forall T
       raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
       decimal256_semantic_type =
@@ -2617,7 +2716,13 @@ module CrystalClick
         {% else %}
           false
         {% end %}
-      unless WidePart.numeric_array_element_type("Array(#{type_name})") == type_name || decimal256_semantic_type || ipv4_semantic_type
+      ipv6_semantic_type =
+        {% if T == IPv6Value %}
+          semantic_ipv6 && type_name == "IPv6"
+        {% else %}
+          false
+        {% end %}
+      unless WidePart.numeric_array_element_type("Array(#{type_name})") == type_name || decimal256_semantic_type || ipv4_semantic_type || ipv6_semantic_type
         raise ArgumentError.new("Array numeric writer requires an exact supported numeric type")
       end
       validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, ["#{value_name}.size0", value_name])
@@ -2917,6 +3022,7 @@ module CrystalClick
       type_name : String,
       semantic_decimal256 : Bool = false,
       semantic_ipv4 : Bool = false,
+      semantic_ipv6 : Bool = false,
     ) : Nil forall T
       raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
       decimal256_semantic_type =
@@ -2931,7 +3037,13 @@ module CrystalClick
         {% else %}
           false
         {% end %}
-      unless WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name || decimal256_semantic_type || ipv4_semantic_type
+      ipv6_semantic_type =
+        {% if T == IPv6Value %}
+          semantic_ipv6 && type_name == "IPv6"
+        {% else %}
+          false
+        {% end %}
+      unless WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name || decimal256_semantic_type || ipv4_semantic_type || ipv6_semantic_type
         raise ArgumentError.new("Array nullable numeric writer requires an exact supported numeric type")
       end
       validate_array_common_inputs(
@@ -8191,6 +8303,78 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged IPv4 Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_ipv6_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(T)),
+      rows_per_mark : Int32,
+    ) : Nil forall T
+      {% unless T == IPv6Value || T == IPv6Value? %}
+        {% raise "staged IPv6 Array validation requires IPv6Value leaves" %}
+      {% end %}
+      nullable_ipv6 = {% if T == IPv6Value? %}true{% else %}false{% end %}
+      expected_type = nullable_ipv6 ? "Array(Nullable(IPv6))" : "Array(IPv6)"
+      logical_streams = nullable_ipv6 ? [key_name, "#{value_name}.size0", "#{value_name}.null", value_name] : [key_name, "#{value_name}.size0", value_name]
+
+      checksums = PartChecksums.open(stage)
+      expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
+      logical_streams.each do |logical_name|
+        base = StreamName.hash(logical_name)
+        expected_checksum_files << "#{base}.bin"
+        expected_checksum_files << "#{base}.mrk2"
+      end
+      unless checksums.entries.keys.sort == expected_checksum_files.sort
+        raise CorruptPartError.new("staged IPv6 Array checksum inventory differs")
+      end
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      expected_substreams = nullable_ipv6 ? array_nullable_numeric_substreams_metadata(key_name, value_name) : array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged IPv6 Array column metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == expected_substreams
+        raise CorruptPartError.new("staged IPv6 Array substream metadata differs")
+      end
+      raise CorruptPartError.new("staged IPv6 Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged IPv6 Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged IPv6 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged IPv6 Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged IPv6 Array type does not match") unless value_part.column_type == expected_type
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        observed_values = Array(Array(T)).new
+        {% if T == IPv6Value %}
+          observed_values = value_part.read_array_ipv6s_mark_range(value_name, mark_index, 1)
+        {% else %}
+          observed_values = value_part.read_array_nullable_ipv6s_mark_range(value_name, mark_index, 1)
+        {% end %}
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged IPv6 Array stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged IPv6 Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil

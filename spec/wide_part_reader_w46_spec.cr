@@ -178,7 +178,7 @@ describe CrystalClick::WidePart do
     {
       "Array(IPv4 )", "Array( IPv4)", "Array(Nullable( IPv4))",
       "Array(Nullable(Nullable(IPv4)))", "Array(Array(IPv4))",
-      "Nullable(Array(IPv4))", "Array(IPv6)", "Array(Nullable(IPv6))",
+      "Nullable(Array(IPv4))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end
