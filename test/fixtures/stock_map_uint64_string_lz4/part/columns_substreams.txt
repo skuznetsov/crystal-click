@@ -1,0 +1,14 @@
+columns substreams version: 1
+3 columns:
+1 substreams for column `id`:
+	id
+4 substreams for column `m`:
+	m.size0
+	m%2Ekeys
+	m%2Evalues.size
+	m%2Evalues
+4 substreams for column `a`:
+	a.size0
+	a%2Ek
+	a%2Ev.size
+	a%2Ev

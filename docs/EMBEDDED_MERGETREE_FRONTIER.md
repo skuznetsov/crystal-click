@@ -58,6 +58,10 @@ W24 pairs the existing scalar typed-path reader with a writer for exactly
 `JSON(a UInt64, b String)` beside a `UInt64` key. The pinned stock oracle
 passes `ATTACH PART`, exact typed and normalized whole-object reads, and
 `CHECK TABLE`; this is not general JSON support.
+W25 admits one exact top-level `Map(UInt64, String)` payload beside a
+`UInt64` key. Its reader and writer use ordered entry arrays, not a hash,
+to preserve duplicate keys and entry order. See
+`MAP_UINT64_STRING_FRONTIER.md` for the physical probe, evidence, and limits.
 
 ## Purpose and bounded contexts
 
@@ -1414,6 +1418,47 @@ version, Object serialization, codec/mark settings, or writer/reader changes.
 General JSON, dynamic/shared values, other typed-path schemas, recursive
 types, MV/projections, Compact parts, and performance remain guard-only.
 
+## Verified bounded slice W25: paired Map(UInt64, String)
+
+Admit one exact top-level `Map(UInt64, String)` payload beside a sorted
+`UInt64` key in the existing Wide/LZ4/plain-adaptive-mark part layout. The
+public Crystal value is an ordered `Array(Tuple(UInt64, String))`; a `Hash`
+would lose duplicate keys and entry order. The stock part establishes four
+independent Map substreams: per-row `size0` entry counts, flattened UInt64
+keys, flattened String byte lengths, and concatenated String bytes. The
+reader exposes a bounded mark-range API, typed batches, and catalog-owned
+`.values`; the writer publishes an immutable part after staged checks.
+
+The retained stock fixture tests empty maps, duplicate keys, NUL and UTF-8
+bytes, a short final granule, and nonzero later-mark reads. Focused negative
+tests reject other Map spellings, unsupported nested serializer versions,
+malformed marks, conflicting child counts, and over-limit entries or bytes.
+The pinned ClickHouse writer oracle attaches Crystal parts, compares exact
+full and key-range direct Map RowBinary, checks `mapKeys`/`mapValues`, and
+runs `CHECK TABLE`. Separate all-empty Map and all-empty String-value parts
+guard zero-byte nested streams. Self-readback is an additional integration
+check, not the stock compatibility certificate. The original fixture SQL
+was not retained; its snapshot has a SHA-256 manifest and byte-for-byte
+stock-part comparison, not a from-scratch regeneration claim.
+
+The hostile reader pass found that common metadata loading accepted symlinks
+to files outside the part. A RED regression test reproduced acceptance;
+explicit symlink guards now cover `columns.txt`, `columns_substreams.txt`,
+`default_compression_codec.txt`, and `count.txt`, consistently with the
+existing stream/checksum/serialization guards. This is a static path check,
+not a claim of safety against concurrent directory mutation.
+
+At the W25 implementation diff atop `dbf306d`, full debug and release suites
+each pass 533 examples; all 19 pinned stock-oracle scripts pass. The Map
+fixture matches the captured stock part file set and bytes, and formatting,
+shell syntax, and diff checks pass. The hostile verdict is **ROBUST** only
+within the exact type, pinned ClickHouse 26.7.1.1315, Wide/LZ4/mark settings,
+and tested inputs. Risk is CAUTION; rollback is one W25-only local feature
+commit, with no push or mutation of a live ClickHouse root. Evidence decays
+with producer version, serializer or mark layout, codec, platform, or shared
+reader/writer changes. General Map/Nested compositions, MV, projections,
+Compact parts, and performance remain guard-only.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1423,8 +1468,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W24's exact JSON typed paths,
-   W23's exact named Tuple,
+1. Extend reader and writer together beyond W25's exact Map,
+   W24's exact JSON typed paths, W23's exact named Tuple,
    W22's bounded `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
    W19's paired IPv6, W18's paired IPv4, W17's paired UUID, W16's bounded
    semantic scalars, W14's BASIC nullable temporal codes, W13's raw time

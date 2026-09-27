@@ -2,7 +2,7 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
-                             Array(UInt64) | Array(String) | Tuple(UInt64, String) | Nil
+                             Array(UInt64) | Array(String) | Array(Tuple(UInt64, String)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -251,6 +251,16 @@ module CrystalClick
           string_bytes = checked_materialized_value_string_bytes(string_bytes, string_value.bytesize.to_u64, max_string_bytes)
           values << {number, String.new(string_value.to_slice)}
         end
+      when "Map(UInt64, String)"
+        selected_values = batch.map_uint64_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_map_values(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
       when "String"
         selected_values = batch.strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -738,6 +748,30 @@ module CrystalClick
       selected_values.each do |row|
         owned_row = Array(String).new(row.size)
         row.each { |value| owned_row << String.new(value.to_slice) }
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_map_values(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(UInt64, String))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |_key, value|
+          next_bytes = checked_materialized_value_string_bytes(next_bytes, value.bytesize.to_u64, max_string_bytes)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(UInt64, String)).new(row.size)
+        row.each { |key, value| owned_row << {key, String.new(value.to_slice)} }
         values << owned_row
       end
       {next_elements, next_bytes}
