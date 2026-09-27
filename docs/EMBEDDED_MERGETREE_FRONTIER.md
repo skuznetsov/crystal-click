@@ -21,7 +21,8 @@ directly tests DateTime64 precisions 0, 3, and 9; the exact parser and writer
 accept canonical precisions 0 through 9. W15 admits paired reader/writer
 support for bounded Bool, Enum8/16, and Decimal32/64 payloads and their BASIC
 Nullable forms on the same pinned frontier. This is not full ClickHouse type
-parity: JSON typed-path reading remains an intentionally unmatched surface.
+parity: at W15, JSON typed-path reading remained an unmatched surface; W24
+later pairs one exact declaration with a writer.
 W16 admits paired raw Decimal128 and BASIC Nullable(Decimal128) reading and
 writing at canonical scales 0 through 38 on the same pinned Wide/LZ4 frontier.
 The differential oracle directly exercises scales 0, 2, and 38, plus the
@@ -53,6 +54,10 @@ writer shape. Its verification record and exclusions are below.
 W23 admits one exact named `Tuple(a UInt64, b String)` payload beside a
 `UInt64` key. Its stock-to-Crystal reader and Crystal-to-stock writer gates
 passed on the pinned build; this is not general Tuple or recursive type support.
+W24 pairs the existing scalar typed-path reader with a writer for exactly
+`JSON(a UInt64, b String)` beside a `UInt64` key. The pinned stock oracle
+passes `ATTACH PART`, exact typed and normalized whole-object reads, and
+`CHECK TABLE`; this is not general JSON support.
 
 ## Purpose and bounded contexts
 
@@ -1373,8 +1378,41 @@ is ROBUST; it is not a claim of general Tuple support or a speed gain.
 Guard-only after W23: unnamed or differently typed Tuple elements, nested
 Tuple/Array/Map combinations, Nullable(Tuple), Map and Nested layouts,
 general JSON writer parity, TUI Tuple display/filtering, Compact parts, and
-performance claims. In particular, the existing JSON scalar-path reader does not imply a compatible
-Object V3 writer.
+performance claims. At W23, the JSON scalar-path reader did not yet imply a
+compatible Object V3 writer; W24 adds one exact writer shape.
+
+## Verified bounded slice W24: one JSON typed-path writer
+
+Admit `WidePartWriter.write_uint64_json_typed_a_uint64_b_string_pair` for the
+exact `JSON(a UInt64, b String)` payload beside a sorted `UInt64` key. The
+input is an array of positional `{UInt64, String}` path values, including
+ClickHouse's defaults for absent declared paths. It does not accept arbitrary
+JSON documents, dynamic keys, or nonempty shared data. The existing reader
+still exposes only declared scalar virtual paths,
+not a whole-document API. W24's writer emits the Object V3 structure, the
+two typed paths, and all three required empty shared-data streams, each with
+its own plain adaptive marks. See `JSON_TYPED_PATH_FRONTIER.md` for the exact
+physical target and evidence.
+
+The focused spec was RED before the API existed. Its staged checks cover
+exact file and checksum inventory, all stream bytes and marks, primary index,
+metadata, all-empty String, short final granule, and invalid-input refusal
+before publication. The first stock `CHECK TABLE` caught a missing
+`object_structure.mrk2` checksum record that self-readback and `ATTACH PART`
+had not exposed. After adding the record and exact manifest validation, the
+pinned ClickHouse 26.7.1.1315 oracle passed `ATTACH PART`, full/key-range
+typed-path RowBinary, normalized whole-object JSONEachRow, and `CHECK TABLE`
+for mixed and all-empty String parts. Full debug/release suites each passed
+524 examples; all 18 pinned oracle scripts, fixture shape, formatter, shell
+syntax, and diff checks passed at the implementation diff atop `6be7716`.
+
+Risk remains CAUTION; rollback is one W24-only local feature commit. The
+hostile verdict is **ROBUST** only for this exact schema, pinned build,
+Wide/LZ4/plain-adaptive-mark settings, and tested inputs. No byte-for-byte
+canonical stock-part identity is claimed. Evidence decays when the producer
+version, Object serialization, codec/mark settings, or writer/reader changes.
+General JSON, dynamic/shared values, other typed-path schemas, recursive
+types, MV/projections, Compact parts, and performance remain guard-only.
 
 ## Rejected and guard-only surfaces
 
@@ -1385,7 +1423,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W23's exact named Tuple,
+1. Extend reader and writer together beyond W24's exact JSON typed paths,
+   W23's exact named Tuple,
    W22's bounded `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
    W19's paired IPv6, W18's paired IPv4, W17's paired UUID, W16's bounded
    semantic scalars, W14's BASIC nullable temporal codes, W13's raw time

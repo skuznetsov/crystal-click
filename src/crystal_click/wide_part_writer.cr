@@ -209,6 +209,55 @@ module CrystalClick
       end
     end
 
+    # Write one sorted UInt64 key and the exact JSON(a UInt64, b String)
+    # Object V3 shape. Values are positional declared-path pairs; absent
+    # paths must already be normalized to their ClickHouse scalar defaults.
+    def self.write_uint64_json_typed_a_uint64_b_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Array(Tuple(UInt64, String)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_json_typed_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      a_values = values.map { |value| value[0] }
+      b_values = values.map { |value| value[1] }
+      a_slice = a_values.to_unsafe.to_slice(a_values.size)
+      b_slice = b_values.to_unsafe.to_slice(b_values.size)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_uint64_stream(stage, "#{value_name}.a", a_slice, rows_per_mark))
+        records.concat(write_string_streams(stage, "#{value_name}.b", b_slice, rows_per_mark))
+        records.concat(write_json_object_structure_stream(stage, value_name, keys.size, rows_per_mark))
+        records.concat(write_json_shared_size0_stream(stage, "#{value_name}.object_shared_data.0.size0", keys.size, rows_per_mark))
+        records.concat(write_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Epaths", keys.size, rows_per_mark))
+        records.concat(write_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Evalues", keys.size, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
+        write_plain_metadata(stage, "columns.txt", json_typed_columns_metadata(key_name, value_name))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", json_typed_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_json_typed_part(stage, key_name, keys, value_name, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable part with a sorted UInt64 primary key and a shared-
     # dictionary LowCardinality(String) payload. Dictionary keys are assigned
     # in first-seen order and each data mark stores UInt8 dictionary IDs.
@@ -1186,6 +1235,82 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_json_typed_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Array(Tuple(UInt64, String)),
+      rows_per_mark : Int32,
+    ) : Nil
+      # Reuse the established two-column key, row, mark, and primary-index
+      # checks. The JSON paths below have their own physical stream names.
+      validate_tuple_header_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      logical_names = [
+        key_name,
+        "#{value_name}.object_structure",
+        "#{value_name}.a",
+        "#{value_name}.b.size",
+        "#{value_name}.b",
+        "#{value_name}.object_shared_data.0.size0",
+        "#{value_name}.object_shared_data.0%2Epaths",
+        "#{value_name}.object_shared_data.0%2Evalues",
+      ]
+      logical_names.each do |name|
+        if name.empty? || name.bytesize > WidePart::MAX_METADATA_LINE_BYTES
+          raise ArgumentError.new("physical stream name exceeds reader limit")
+        end
+      end
+      stream_bases = logical_names.map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+
+      structure_frame_size = literal_frame_size(json_object_structure_bytes.size.to_i64)
+      raise ArgumentError.new("Object structure frame exceeds reader limit") if structure_frame_size > MAX_FRAME_COMPRESSED.to_i64
+
+      fixed_stream_bytes = 0_i64
+      string_stream_bytes = 0_i64
+      total_string_bytes = 0_i64
+      start_row = 0
+      while start_row < keys.size
+        rows = {rows_per_mark, keys.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        raise ArgumentError.new("JSON typed UInt64 granule exceeds reader limit") if fixed_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+        fixed_frame_size = checked_string_frame_size(fixed_raw_size, "JSON typed UInt64")
+        if fixed_frame_size > MAX_DATA_FILE_BYTES - fixed_stream_bytes
+          raise ArgumentError.new("JSON typed UInt64 stream exceeds reader limit")
+        end
+        fixed_stream_bytes += fixed_frame_size
+
+        raw_string_size = 0_i64
+        rows.times do |offset|
+          value_size = values[start_row + offset][1].bytesize.to_i64
+          if value_size > MAX_FRAME_RAW_BYTES.to_i64 - raw_string_size
+            raise ArgumentError.new("JSON typed String granule exceeds decompressed frame limit")
+          end
+          if value_size > MAX_DATA_FILE_BYTES.to_i64 - total_string_bytes
+            raise ArgumentError.new("JSON typed String stream exceeds reader limit")
+          end
+          raw_string_size += value_size
+          total_string_bytes += value_size
+        end
+
+        unless raw_string_size == 0
+          string_frame_size = checked_string_frame_size(raw_string_size, "JSON typed String")
+          if string_frame_size > MAX_DATA_FILE_BYTES - string_stream_bytes
+            raise ArgumentError.new("JSON typed String stream exceeds reader limit")
+          end
+          string_stream_bytes += string_frame_size
+        end
+        start_row += rows
+      end
+      nil
+    end
+
     private def self.validate_tuple_stream_names(key_name : String, value_name : String) : Nil
       stream_bases = [
         key_name,
@@ -2140,6 +2265,129 @@ module CrystalClick
       [
         ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64 * 8_u64, raw_hash.finish),
         ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false),
+      ]
+    end
+
+    private def self.write_json_object_structure_stream(
+      stage : String,
+      column : String,
+      row_count : Int,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash("#{column}.object_structure")
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      raw = json_object_structure_bytes
+      frame = encode_lz4_frame(raw)
+      raise ArgumentError.new("Object structure stream exceeds reader limit") if frame.size.to_i64 > MAX_DATA_FILE_BYTES
+
+      data_hash = CityHashV1::FileHasher.new
+      data_hash.update(frame)
+      raw_hash = CityHashV1::FileHasher.new
+      raw_hash.update(raw)
+      File.write(File.join(stage, data_name), frame)
+
+      mark_count = checked_mark_count(row_count, rows_per_mark)
+      mark_bytes = IO::Memory.new
+      start_row = 0
+      while start_row < row_count
+        rows = {rows_per_mark, row_count - start_row}.min
+        write_uint64_le(mark_bytes, 0_u64)
+        write_uint64_le(mark_bytes, 11_u64)
+        write_uint64_le(mark_bytes, rows.to_u64)
+        start_row += rows
+      end
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, raw.size.to_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("Object structure marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, frame.size.to_u64, data_hash.finish, true, raw.size.to_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
+    private def self.write_json_shared_size0_stream(
+      stage : String,
+      logical_name : String,
+      row_count : Int,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash(logical_name)
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, data_name), "wb") do |data_file|
+        while start_row < row_count
+          rows = {rows_per_mark, row_count - start_row}.min
+          raw = Bytes.new(rows * 8, 0_u8)
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+
+          frame = encode_lz4_frame(raw)
+          raise ArgumentError.new("JSON shared size0 stream exceeds reader limit") if frame.size.to_i64 > MAX_DATA_FILE_BYTES - data_size.to_i64
+          data_file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(raw)
+          data_size += frame.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("JSON shared size0 marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, row_count.to_u64 * 8_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
+    private def self.write_json_empty_stream(
+      stage : String,
+      logical_name : String,
+      row_count : Int,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash(logical_name)
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      File.open(File.join(stage, data_name), "wb") { }
+
+      mark_bytes = IO::Memory.new
+      start_row = 0
+      while start_row < row_count
+        rows = {rows_per_mark, row_count - start_row}.min
+        write_uint64_le(mark_bytes, 0_u64)
+        write_uint64_le(mark_bytes, 0_u64)
+        write_uint64_le(mark_bytes, rows.to_u64)
+        start_row += rows
+      end
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("JSON shared empty marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, 0_u64, data_hash.finish, true, 0_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
       ]
     end
 
@@ -3260,6 +3508,316 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_json_typed_part(
+      stage : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Array(Tuple(UInt64, String)),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      logical_streams = [
+        key_name,
+        "#{value_name}.object_structure",
+        "#{value_name}.a",
+        "#{value_name}.b.size",
+        "#{value_name}.b",
+        "#{value_name}.object_shared_data.0.size0",
+        "#{value_name}.object_shared_data.0%2Epaths",
+        "#{value_name}.object_shared_data.0%2Evalues",
+      ]
+      expected_checksums = [] of String
+      logical_streams.each do |logical_name|
+        base_name = StreamName.hash(logical_name)
+        expected_checksums << "#{base_name}.bin"
+        expected_checksums << "#{base_name}.mrk2"
+      end
+      expected_checksums.concat(["primary.idx", "count.txt", "serialization.json"])
+      unless expected_checksums.uniq.size == expected_checksums.size &&
+             checksums.entries.keys.sort == expected_checksums.sort
+        raise CorruptPartError.new("staged JSON checksum entries do not match the expected stream inventory")
+      end
+
+      expected_files = expected_checksums + [
+        "checksums.txt",
+        "columns.txt",
+        "columns_substreams.txt",
+        "default_compression_codec.txt",
+        "metadata_version.txt",
+      ]
+      unless Dir.children(stage).sort == expected_files.sort
+        raise CorruptPartError.new("staged JSON file inventory differs from the expected part layout")
+      end
+
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      raise CorruptPartError.new("staged JSON columns metadata differs") unless File.read(File.join(stage, "columns.txt")) == json_typed_columns_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged JSON substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == json_typed_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged JSON serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == json_typed_serialization_metadata(key_name, keys)
+      raise CorruptPartError.new("staged JSON row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
+      raise CorruptPartError.new("staged JSON compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged JSON metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      raise CorruptPartError.new("staged JSON primary index differs from input") unless index.keys == expected_index
+
+      validate_staged_json_data_stream(stage, key_name, keys, values, :key, rows_per_mark)
+      validate_staged_json_data_stream(stage, "#{value_name}.a", keys, values, :a, rows_per_mark)
+      validate_staged_json_data_stream(stage, "#{value_name}.b.size", keys, values, :b_size, rows_per_mark)
+      validate_staged_json_data_stream(stage, "#{value_name}.b", keys, values, :b, rows_per_mark)
+      validate_staged_json_data_stream(
+        stage,
+        "#{value_name}.object_shared_data.0.size0",
+        keys,
+        values,
+        :shared_size0,
+        rows_per_mark
+      )
+      validate_staged_json_object_structure(stage, value_name, keys.size, rows_per_mark)
+      validate_staged_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Epaths", keys.size, rows_per_mark)
+      validate_staged_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Evalues", keys.size, rows_per_mark)
+      nil
+    end
+
+    private def self.validate_staged_json_data_stream(
+      stage : String,
+      logical_name : String,
+      keys : Slice(UInt64),
+      values : Array(Tuple(UInt64, String)),
+      kind : Symbol,
+      rows_per_mark : Int32,
+    ) : Nil
+      base_name = StreamName.hash(logical_name)
+      data_file = File.open(File.join(stage, "#{base_name}.bin"), "r")
+      marks_file = File.open(File.join(stage, "#{base_name}.mrk2"), "r")
+      expected_mark_count = checked_mark_count(keys.size, rows_per_mark)
+      expected_mark_file_size = (expected_mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      unless marks_file.size == expected_mark_file_size
+        data_file.close
+        marks_file.close
+        raise CorruptPartError.new("staged JSON mark file size differs for #{logical_name}")
+      end
+
+      compressed_offset = 0_u64
+      start_row = 0
+      begin
+        while start_row < keys.size
+          rows = {rows_per_mark, keys.size - start_row}.min
+          expected_raw = json_typed_raw_mark(keys, values, start_row, rows, kind)
+          mark = Bytes.new(WidePart::MARK_SIZE)
+          marks_file.read_fully(mark)
+          unless read_uint64_le(mark, 0) == compressed_offset
+            raise CorruptPartError.new("staged JSON mark offset differs for #{logical_name}")
+          end
+          unless read_uint64_le(mark, 8) == 0_u64
+            raise CorruptPartError.new("staged JSON decompressed mark offset differs for #{logical_name}")
+          end
+          unless read_uint64_le(mark, 16) == rows.to_u64
+            raise CorruptPartError.new("staged JSON mark row count differs for #{logical_name}")
+          end
+
+          unless expected_raw.empty?
+            compressed_offset = validate_staged_json_frame(data_file, logical_name, compressed_offset, expected_raw)
+          end
+          start_row += rows
+        end
+
+        sentinel = Bytes.new(WidePart::MARK_SIZE)
+        marks_file.read_fully(sentinel)
+        unless read_uint64_le(sentinel, 0) == compressed_offset &&
+               read_uint64_le(sentinel, 8) == 0_u64 &&
+               read_uint64_le(sentinel, 16) == 0_u64
+          raise CorruptPartError.new("staged JSON sentinel differs for #{logical_name}")
+        end
+        raise CorruptPartError.new("staged JSON mark stream has trailing bytes for #{logical_name}") unless marks_file.gets_to_end.empty?
+        raise CorruptPartError.new("staged JSON data stream has trailing bytes for #{logical_name}") unless data_file.size == compressed_offset
+      ensure
+        data_file.close unless data_file.closed?
+        marks_file.close unless marks_file.closed?
+      end
+      nil
+    end
+
+    private def self.json_typed_raw_mark(
+      keys : Slice(UInt64),
+      values : Array(Tuple(UInt64, String)),
+      start_row : Int,
+      rows : Int,
+      kind : Symbol,
+    ) : Bytes
+      return Bytes.new(rows * 8, 0_u8) if kind == :shared_size0
+
+      if kind == :b
+        byte_size = 0
+        rows.times { |offset| byte_size += values[start_row + offset][1].bytesize }
+        raw = Bytes.new(byte_size)
+        cursor = 0
+        rows.times do |offset|
+          string = values[start_row + offset][1]
+          size = string.bytesize
+          string.to_slice.copy_to(raw[cursor, size]) if size > 0
+          cursor += size
+        end
+        return raw
+      end
+
+      raw = Bytes.new(rows * 8)
+      rows.times do |offset|
+        row = start_row + offset
+        value = case kind
+                when :key    then keys[row]
+                when :a      then values[row][0]
+                when :b_size then values[row][1].bytesize.to_u64
+                else              raise CorruptPartError.new("unknown staged JSON stream kind")
+                end
+        write_uint64_le(raw, offset * 8, value)
+      end
+      raw
+    end
+
+    private def self.validate_staged_json_object_structure(
+      stage : String,
+      column : String,
+      row_count : Int,
+      rows_per_mark : Int32,
+    ) : Nil
+      base_name = StreamName.hash("#{column}.object_structure")
+      data_file = File.open(File.join(stage, "#{base_name}.bin"), "r")
+      marks_file = File.open(File.join(stage, "#{base_name}.mrk2"), "r")
+      raw = json_object_structure_bytes
+      expected_mark_count = checked_mark_count(row_count, rows_per_mark)
+      expected_mark_file_size = (expected_mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      unless marks_file.size == expected_mark_file_size
+        data_file.close
+        marks_file.close
+        raise CorruptPartError.new("staged JSON structure mark file size differs")
+      end
+
+      begin
+        expected_frame_end = validate_staged_json_frame(data_file, "object_structure", 0_u64, raw).to_i64
+        raise CorruptPartError.new("staged JSON structure stream has trailing bytes") unless data_file.size == expected_frame_end
+
+        start_row = 0
+        while start_row < row_count
+          rows = {rows_per_mark, row_count - start_row}.min
+          mark = Bytes.new(WidePart::MARK_SIZE)
+          marks_file.read_fully(mark)
+          unless read_uint64_le(mark, 0) == 0_u64 &&
+                 read_uint64_le(mark, 8) == 11_u64 &&
+                 read_uint64_le(mark, 16) == rows.to_u64
+            raise CorruptPartError.new("staged JSON structure mark differs")
+          end
+          start_row += rows
+        end
+
+        sentinel = Bytes.new(WidePart::MARK_SIZE)
+        marks_file.read_fully(sentinel)
+        unless read_uint64_le(sentinel, 0) == 0_u64 &&
+               read_uint64_le(sentinel, 8) == raw.size.to_u64 &&
+               read_uint64_le(sentinel, 16) == 0_u64
+          raise CorruptPartError.new("staged JSON structure sentinel differs")
+        end
+        raise CorruptPartError.new("staged JSON structure marks have trailing bytes") unless marks_file.gets_to_end.empty?
+      ensure
+        data_file.close unless data_file.closed?
+        marks_file.close unless marks_file.closed?
+      end
+      nil
+    end
+
+    private def self.validate_staged_json_empty_stream(
+      stage : String,
+      logical_name : String,
+      row_count : Int,
+      rows_per_mark : Int32,
+    ) : Nil
+      base_name = StreamName.hash(logical_name)
+      data_file = File.open(File.join(stage, "#{base_name}.bin"), "r")
+      marks_file = File.open(File.join(stage, "#{base_name}.mrk2"), "r")
+      expected_mark_count = checked_mark_count(row_count, rows_per_mark)
+      expected_mark_file_size = (expected_mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      begin
+        raise CorruptPartError.new("staged JSON shared stream is not empty for #{logical_name}") unless data_file.size == 0
+        raise CorruptPartError.new("staged JSON shared mark file size differs for #{logical_name}") unless marks_file.size == expected_mark_file_size
+
+        start_row = 0
+        while start_row < row_count
+          rows = {rows_per_mark, row_count - start_row}.min
+          mark = Bytes.new(WidePart::MARK_SIZE)
+          marks_file.read_fully(mark)
+          unless read_uint64_le(mark, 0) == 0_u64 &&
+                 read_uint64_le(mark, 8) == 0_u64 &&
+                 read_uint64_le(mark, 16) == rows.to_u64
+            raise CorruptPartError.new("staged JSON shared mark differs for #{logical_name}")
+          end
+          start_row += rows
+        end
+
+        sentinel = Bytes.new(WidePart::MARK_SIZE)
+        marks_file.read_fully(sentinel)
+        unless read_uint64_le(sentinel, 0) == 0_u64 &&
+               read_uint64_le(sentinel, 8) == 0_u64 &&
+               read_uint64_le(sentinel, 16) == 0_u64
+          raise CorruptPartError.new("staged JSON shared sentinel differs for #{logical_name}")
+        end
+        raise CorruptPartError.new("staged JSON shared marks have trailing bytes for #{logical_name}") unless marks_file.gets_to_end.empty?
+      ensure
+        data_file.close unless data_file.closed?
+        marks_file.close unless marks_file.closed?
+      end
+      nil
+    end
+
+    private def self.validate_staged_json_frame(
+      data_file : File,
+      logical_name : String,
+      expected_offset : UInt64,
+      expected_raw : Bytes,
+    ) : UInt64
+      data_file.seek(expected_offset.to_i64)
+      header = Bytes.new(CompressedBlock::FRAME_HEADER_SIZE)
+      begin
+        data_file.read_fully(header)
+      rescue ex : IO::EOFError
+        raise CorruptPartError.new("staged JSON frame header is truncated for #{logical_name}")
+      end
+      compressed_size = read_uint32_le(header, CompressedBlock::CHECKSUM_SIZE + 1).to_i64
+      frame_size = CompressedBlock::CHECKSUM_SIZE.to_i64 + compressed_size
+      if frame_size < CompressedBlock::FRAME_HEADER_SIZE || frame_size > MAX_FRAME_COMPRESSED.to_i64 ||
+         expected_offset.to_i64 > data_file.size - frame_size
+        raise CorruptPartError.new("staged JSON frame size is invalid for #{logical_name}")
+      end
+      frame_bytes = Bytes.new(frame_size.to_i)
+      header.copy_to(frame_bytes)
+      remaining = frame_bytes.size - header.size
+      begin
+        data_file.read_fully(frame_bytes[header.size, remaining]) if remaining > 0
+      rescue ex : IO::EOFError
+        raise CorruptPartError.new("staged JSON frame is truncated for #{logical_name}")
+      end
+      frame = CompressedBlock.decode_frame(
+        frame_bytes,
+        0_i64,
+        MAX_FRAME_COMPRESSED.to_i64,
+        MAX_FRAME_RAW_BYTES.to_i64
+      )
+      unless frame.end_offset == frame_size && frame.output == expected_raw
+        raise CorruptPartError.new("staged JSON stream bytes differ for #{logical_name}")
+      end
+      expected_offset + frame.end_offset.to_u64
+    end
+
     private def self.validate_staged_low_cardinality_string_part(
       stage : String,
       key_name : String,
@@ -3934,6 +4492,14 @@ module CrystalClick
       "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` Tuple(a UInt64, b String)\n"
     end
 
+    private def self.json_typed_columns_metadata(key_name : String, value_name : String) : String
+      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` JSON(a UInt64, b String)\n"
+    end
+
+    private def self.json_object_structure_bytes : Bytes
+      Bytes[0x04_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 1_u8, 1_u8, 1_u8, 0_u8]
+    end
+
     private def self.substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n1 substreams for column `#{value_name}`:\n\t#{value_name}\n"
     end
@@ -3948,6 +4514,15 @@ module CrystalClick
 
     private def self.tuple_string_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}%2Ea\n\t#{value_name}%2Eb.size\n\t#{value_name}%2Eb\n"
+    end
+
+    private def self.json_typed_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
+        "7 substreams for column `#{value_name}`:\n\t#{value_name}.object_structure\n\t#{value_name}.a\n" +
+        "\t#{value_name}.b.size\n\t#{value_name}.b\n" +
+        "\t#{value_name}.object_shared_data.0.size0\n" +
+        "\t#{value_name}.object_shared_data.0%2Epaths\n" +
+        "\t#{value_name}.object_shared_data.0%2Evalues\n"
     end
 
     private def self.low_cardinality_string_substreams_metadata(key_name : String, value_name : String) : String
@@ -4030,6 +4605,15 @@ module CrystalClick
         json << "{\"kind\":\"Default\",\"name\":\"#{value_name}\",\"num_defaults\":#{tuple_defaults},\"num_rows\":#{rows},\"subcolumns\":["
         json << "{\"kind\":\"Default\",\"num_defaults\":#{a_defaults},\"num_rows\":#{rows}},"
         json << "{\"kind\":\"Default\",\"num_defaults\":#{b_defaults},\"num_rows\":#{rows}}]}],"
+        json << "\"propagate_types_serialization_versions_to_nested_types\":true,"
+        json << "\"types_serialization_versions\":{\"string\":1},\"version\":1}"
+      end
+    end
+
+    private def self.json_typed_serialization_metadata(key_name : String, keys : Slice(UInt64)) : String
+      key_defaults = keys.count { |key| key == 0_u64 }
+      String.build do |json|
+        json << "{\"columns\":[{\"kind\":\"Default\",\"name\":\"#{key_name}\",\"num_defaults\":#{key_defaults},\"num_rows\":#{keys.size}}],"
         json << "\"propagate_types_serialization_versions_to_nested_types\":true,"
         json << "\"types_serialization_versions\":{\"string\":1},\"version\":1}"
       end

@@ -1,12 +1,83 @@
 # JSON Typed-Path Projection Frontier
 
-Document status: bounded implementation verified against the public ClickHouse
-26.7.1.1315 fixture and the 191-example debug/release suites. General JSON
-document reading is not claimed.
+Document status: bounded typed-path reading and one exact writer shape verified
+against pinned ClickHouse 26.7.1.1315, the public reader fixture, and the
+W24 524-example debug/release suites. General JSON document reading and
+writing are not claimed.
 
 Current frontier: expose only explicitly declared, scalar typed paths of a
 top-level ClickHouse `JSON` column as virtual columns in the existing offline
 Wide-part scanner. This is a projection, not a JSON document reader.
+
+## W24 verified bounded writer: one typed-path Object V3 shape
+
+This compatibility step adds a writer for one sorted `UInt64` key and the
+exact `JSON(a UInt64, b String)` payload already represented by the stock
+reader fixture. Its input values are positional pairs of declared path values;
+there is no arbitrary-document or dynamic-key input. In this shape ClickHouse
+materializes absent declared paths as their scalar defaults, so the writer
+records normalized values rather than claiming to preserve presence. The
+public method name and tests make that restriction visible.
+
+The admitted physical target is a staged, checksummed Wide/LZ4 part with
+independent plain adaptive `.mrk2` streams for the key, `object_structure`,
+`a`, `b.size`, `b`, and all three empty shared-data streams. The V3 structure
+contains zero dynamic paths, one shared-data bucket, and empty shared-path
+statistics. The writer checks its own staged stream bytes and marks, then
+passes a pinned stock ClickHouse `ATTACH PART`, exact typed-path RowBinary and
+whole-object normalized-value reads, and `CHECK TABLE`. A self-readback is
+insufficient because the Crystal reader checks only the V3 prefix of
+`object_structure` and does not interpret shared data.
+
+Risk: CAUTION; the likeliest failure is a plausible typed-path read from a
+malformed structure/shared stream that stock ClickHouse rejects or interprets
+differently. Rollback is one W24-only local commit; no existing server data
+root is a write target. A failing writer test preceded implementation; the
+focused and full debug/release suites, all pinned writer oracles, fixture
+check, format, and diff checks followed. Negative checks require
+rejection before publication for invalid names, unequal rows, unsorted keys,
+and a pre-existing destination. Evidence expires on producer version,
+Object serialization settings, codec/mark format, or writer/reader changes.
+
+Guard-only after W24: general `JSON`, dynamic paths, nonempty shared data,
+whole-document input or arbitrary reconstruction, other typed-path schemas,
+Nullable/recursive paths, Compact parts, and performance claims. The next
+type-parity track should generalize typed paths and then address Map/Nested;
+MV and projections follow type parity rather than being inferred from it.
+
+W24 implementation path: `spec/wide_part_writer_json_typed_spec.cr` first
+recorded the missing writer API as RED; `src/crystal_click/wide_part_writer.cr`
+then emits and validates the eight streams with no changes to reader acceptance;
+`scripts/check_json_typed_writer_oracle.sh` independently compares a produced
+part against stock ClickHouse. Inventory search
+`rg -n 'write_uint64_|write_typed_payload_streams|json_typed_path' src spec`
+locates writer entry points and the three existing reader/catalog consumers.
+The spec covers staged metadata, marks, binary String bytes, short final
+granules, and pre-publication failures; the oracle guards against the
+reader's intentionally partial structure validation.
+
+Observed W24 evidence at the diff atop `6be7716` on 2026-09-27: the focused
+writer spec was RED for the absent API, then passed 3 examples. The full
+debug and release suites each passed 524 examples, and all 18 pinned oracle
+scripts passed. The W24 oracle attached two Crystal-produced parts to pinned
+ClickHouse 26.7.1.1315: mixed values with three granules and a short final
+granule, and an all-empty `b` stream. Exact full and key-range typed-path
+RowBinary, normalized whole-object JSONEachRow, Object V3 bytes, plain
+adaptive marks, and `CHECK TABLE` passed. Invalid names, unequal rows,
+unsorted keys, oversized String granules, and an existing destination were
+rejected without publishing or replacing a part. The public fixture shape,
+Crystal format, shell syntax, and diff checks passed.
+
+The first stock `CHECK TABLE` falsified a plausible part: its
+`object_structure.mrk2` existed but was omitted from `checksums.txt`, though
+`ATTACH PART` and reads succeeded. The writer now checks an exact staged
+checksum and file inventory before publication. A second stock oracle and
+the independent hostile pass found no further concrete defect. Adversary
+verdict: **ROBUST within this exact schema, Wide/LZ4/plain-adaptive-mark
+layout, pinned build, and tested inputs**; byte-for-byte equivalence to a
+stock-generated part, arbitrary JSON semantics, and other versions remain
+unverified. Refresh this evidence on producer version, serialization setting,
+codec/mark format, or writer/reader changes.
 
 ## Factual anchor
 
