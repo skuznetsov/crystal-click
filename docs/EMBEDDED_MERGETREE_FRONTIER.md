@@ -87,6 +87,10 @@ W32 admits paired `Array(Nullable(String))` payloads beside a sorted `UInt64`
 key, with typed batches and caller-owned offline catalog values. Its stock
 oracle covers four physical streams and both directions; it does not admit
 other nullable String wrappers or arbitrary recursive types.
+W33 is design-sealed for the parameterized FixedString Array leaf family:
+`Array(FixedString(N))` and `Array(Nullable(FixedString(N)))`. Neither shape
+is admitted until its stock-produced physical probe, paired implementation,
+and bidirectional oracle pass.
 
 ## Purpose and bounded contexts
 
@@ -1828,6 +1832,65 @@ retained-output versus peak-memory caveat above. This is not a general
 recursive Array, schema-composition, TUI, MV/projection, codec, platform, or
 performance claim.
 
+## Verified W33 slice: FixedString Array leaf family
+
+W33 targets both `Array(FixedString(N))` and
+`Array(Nullable(FixedString(N)))` for canonical widths accepted by the
+existing scalar `FixedString(N)` contract. A sorted `UInt64` key remains the
+only writer key. Public values are arrays of byte-preserving `String` or
+`String?` elements; non-null values are padded to exactly N bytes as in the
+scalar contract. Nullness must not be inferred from zero-filled bytes.
+
+A disposable pinned ClickHouse 26.7.1.1315 Wide/LZ4/plain-mark probe of both
+shapes confirmed `payload.size0` and `payload` for the non-null form; the
+nullable form adds `payload.null`. With N=3 and 11 rows at granularity 2,
+each stream had six data marks and a sentinel. Child byte offsets were
+`[0, 3, 12, 12, 18, 21, 24]` in both forms; nullable null-map offsets were
+`[0, 1, 4, 4, 6, 8, 9]`. Thus NULL still occupies an N-byte child slot and
+an empty middle granule repeats child offsets. The stock fixtures retain both
+observed serialization variants: an empty serializer list and a `Default`
+serializer for the `UInt64` key. A nonzero hidden slot under NULL is tested
+as a reader-only positive control; stock acceptance of that mutated part is
+not claimed.
+
+Admission requires exact type parsing and stream inventory for canonical N,
+bounded full and later-mark reads, typed batches, owned offline catalog
+values, immutable writing, and stock `ATTACH PART`, full/key-range RowBinary,
+and `CHECK TABLE` in both directions. Falsifiers: N of zero or noncanonical
+spelling, wrong child width, missing/shifted marks with unchanged totals,
+invalid null flags, NULL versus zero-padded non-NULL confusion, oversized
+flattened count or byte size, and a writer failure that publishes a part.
+The strongest risk is a wrong flattened-element alignment that yields
+plausible row values while crossing a mark boundary; the selected-scan guard
+must reject such corruption before callbacks.
+
+Risk is **CAUTION** because a parameterized nested serializer widens the
+reader, table, catalog, and writer contract. Rollback is one W33-only local
+feature commit; no live ClickHouse data directory or existing part is
+modified. A red 4097-row all-empty `FixedString(16384)` case exposed an
+incorrect child-stream row cap: marks count outer rows, not flattened child
+elements. W33 child marks now use the eight-byte `size0` row width for this
+cap while retaining their physical-width alignment, frame, exact-byte, and
+sentinel guards; scalar FixedString and all other types keep their prior cap.
+
+The pinned stock fixture verifier checks both serializer variants, exact
+stream inventories, marks, binary values, NULL slots, and SHA256 manifests.
+The W33 oracle attaches both stock parts and both Crystal writer forms,
+including all-empty plain and nullable arrays at N=4; stock `CHECK TABLE`
+and exact full/key-range RowBinary comparisons pass for each. The 4097-row
+all-empty N=16384 case passes writer/self-reader validation but has no
+separate stock attach check. Over-width input is rejected without publishing
+a destination or leaving staging files; injected staged-failure cleanup is
+not separately tested. Focused W33 is 12/12; full debug and release suites
+are 593/593 each. Five adjacent stock oracles
+(scalar FixedString, nullable scalar FixedString, nullable String arrays,
+numeric arrays, and nullable numeric arrays) also pass. These observations
+support **ROBUST within the pinned Wide/LZ4/plain-mark and exact-schema
+profile**; they do not establish arbitrary recursive types, schemas, MV or
+projections, other codecs/marks/platforms, or performance parity. Evidence
+decays with a changed stock build, serialization or mark layout, filesystem,
+or shared reader/writer implementation.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1837,7 +1900,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W32's nullable String Array,
+1. Extend reader and writer together beyond W33's design-only FixedString
+   Array family, W32's nullable String Array,
    W31's nullable numeric Array family, and W30's non-null numeric Array family,
    W29's nested nullable Array, W28's nested Array, W27's exact nullable array,
    W25/W26's exact Maps,

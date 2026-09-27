@@ -176,10 +176,9 @@ private def w32_catalog_root(&)
 end
 
 describe CrystalClick::WidePart do
-  it "admits only the exact Array(Nullable(String)) spelling" do
+  it "admits the exact Array(Nullable(String)) spelling while rejecting unsupported variants" do
     CrystalClick::WidePart.supports_typed_type?("Array(Nullable(String))").should be_true
     [
-      "Array(Nullable(FixedString(2)))",
       "Array(Nullable(LowCardinality(String)))",
       "Nullable(Array(Nullable(String)))",
       "Array( Nullable(String))",

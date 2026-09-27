@@ -283,6 +283,17 @@ module CrystalClick
           string_bytes,
           max_string_bytes
         )
+      when .starts_with?("Array(Nullable(FixedString(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_nullable_fixed_string_width(selected_type)
+        selected_values = batch.array_nullable_fixed_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_nullable_strings(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
       when .starts_with?("Array(Nullable(")
         element_type = WidePart.nullable_numeric_array_element_type(selected_type) || raise(UnsupportedFormatError.new("selected table column type is unsupported"))
         selected_values = array_nullable_numeric_values_for(batch, column_name, element_type)
@@ -302,6 +313,17 @@ module CrystalClick
         array_elements[0] = append_materialized_array_nullable_uint64s(values, selected_values, array_elements[0])
       when "Array(String)"
         selected_values = batch.array_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_strings(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+      when .starts_with?("Array(FixedString(")
+        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_fixed_string_width(selected_type)
+        selected_values = batch.array_fixed_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0], string_bytes = append_materialized_array_strings(
           values,

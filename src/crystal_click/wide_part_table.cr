@@ -459,6 +459,18 @@ module CrystalClick
       @array_nullable_string_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(String)) column was not materialized in this batch"))
     end
 
+    def array_fixed_strings_for(column : String) : Slice(Array(String))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(FixedString(N)) accessor requires an exact supported column") unless WidePart.array_fixed_string_width(@column_types[index])
+      @array_string_values[column]? || raise(UnsupportedFormatError.new("Array(FixedString(N)) column was not materialized in this batch"))
+    end
+
+    def array_nullable_fixed_strings_for(column : String) : WidePartArrayNullableStringSlice
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Nullable(FixedString(N))) accessor requires an exact supported column") unless WidePart.array_nullable_fixed_string_width(@column_types[index])
+      @array_nullable_string_values[column]? || raise(UnsupportedFormatError.new("Array(Nullable(FixedString(N))) column was not materialized in this batch"))
+    end
+
     def array_nullable_uint64s_for(column : String) : Slice(Array(UInt64?))
       index = column_index(column)
       raise UnsupportedFormatError.new("Array(Nullable(UInt64)) accessor requires an exact Array(Nullable(UInt64)) column") unless @column_types[index] == "Array(Nullable(UInt64))"
@@ -835,6 +847,7 @@ module CrystalClick
             preflight_array_array_nullable_uint64_bytes = Hash(String, UInt64).new
             preflight_array_nullable_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_string_charge_bytes = Hash(String, UInt64).new
+            preflight_array_fixed_string_raw_bytes = Hash(String, UInt64).new
             part.readers.each do |selected|
               if selected.column_type == "String" || WidePart.supports_nullable_string_type?(selected.column_type)
                 bytes = if selected.column_type == "String"
@@ -848,6 +861,14 @@ module CrystalClick
                 bytes = selected.reader.fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
               elsif WidePart.nullable_fixed_string_width(selected.column_type)
                 bytes = selected.reader.nullable_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+              elsif width = WidePart.array_fixed_string_width(selected.column_type)
+                raw_bytes = selected.reader.array_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_fixed_string_raw_bytes[selected.name] = raw_bytes
+                bytes = array_fixed_string_charge_bytes(raw_bytes, width, mark_rows, false)
+              elsif width = WidePart.array_nullable_fixed_string_width(selected.column_type)
+                raw_bytes = selected.reader.array_nullable_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_fixed_string_raw_bytes[selected.name] = raw_bytes
+                bytes = array_fixed_string_charge_bytes(raw_bytes, width, mark_rows, true)
               elsif WidePart.numeric_array_element_type(selected.column_type)
                 bytes = selected.reader.array_numeric_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_numeric_bytes[selected.name] = bytes
@@ -970,6 +991,18 @@ module CrystalClick
                 raise CorruptPartError.new("selected Array(Nullable(String)) mark exceeds aggregate materialization limit") if materialized_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += materialized_bytes
                 array_nullable_string_values[selected.name] = values
+              when .starts_with?("Array(Nullable(FixedString(")
+                width = WidePart.array_nullable_fixed_string_width(selected.column_type) || raise(UnsupportedFormatError.new("unsupported exact Array(Nullable(FixedString(N))) type"))
+                values = selected.reader.read_array_nullable_fixed_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Nullable(FixedString(N))) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_raw_bytes = preflight_array_fixed_string_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Nullable(FixedString(N))) mark was not preflighted"))
+                elements = checked_array_fixed_string_elements(values, width)
+                raw_bytes = elements * (width.to_u64 + 1_u64)
+                raise CorruptPartError.new("selected Array(Nullable(FixedString(N))) decoded bytes differ from preflight") unless raw_bytes == preflight_raw_bytes
+                bytes = array_fixed_string_charge_bytes(raw_bytes, width, mark_rows, true)
+                raise CorruptPartError.new("selected Array(Nullable(FixedString(N))) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_string_values[selected.name] = values
               when .starts_with?("Array(Nullable(")
                 element_type = WidePart.nullable_numeric_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported Array nullable numeric type"))
                 values = read_array_nullable_numeric_values(selected.reader, selected.name, mark_index, element_type)
@@ -1019,6 +1052,18 @@ module CrystalClick
                 raise CorruptPartError.new("selected Array(String) mark row count changed") unless values.size.to_u64 == mark_rows
                 bytes = values.sum { |row| row.sum(&.bytesize) }.to_u64
                 raise CorruptPartError.new("selected array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_string_values[selected.name] = values
+              when .starts_with?("Array(FixedString(")
+                width = WidePart.array_fixed_string_width(selected.column_type) || raise(UnsupportedFormatError.new("unsupported exact Array(FixedString(N)) type"))
+                values = selected.reader.read_array_fixed_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(FixedString(N)) mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_raw_bytes = preflight_array_fixed_string_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(FixedString(N)) mark was not preflighted"))
+                elements = checked_array_fixed_string_elements(values, width)
+                raw_bytes = elements * width.to_u64
+                raise CorruptPartError.new("selected Array(FixedString(N)) decoded bytes differ from preflight") unless raw_bytes == preflight_raw_bytes
+                bytes = array_fixed_string_charge_bytes(raw_bytes, width, mark_rows, false)
+                raise CorruptPartError.new("selected Array(FixedString(N)) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_string_values[selected.name] = values
               when "Tuple(a UInt64, b String)"
@@ -1408,6 +1453,36 @@ module CrystalClick
         raise CorruptPartError.new("selected Array(Nullable(String)) materialized byte count overflows")
       end
       {visible_bytes, visible_bytes + slot_bytes + row_bytes}
+    end
+
+    # Charge both the physical child bytes (including hidden NULL slots) and
+    # bounded per-element/row bookkeeping before materializing a selected mark.
+    private def array_fixed_string_charge_bytes(raw_bytes : UInt64, width : Int32, mark_rows : UInt64, nullable : Bool) : UInt64
+      slot_bytes = width.to_u64 + (nullable ? 1_u64 : 0_u64)
+      raise CorruptPartError.new("selected Array(FixedString(N)) child bytes are misaligned") unless raw_bytes % slot_bytes == 0_u64
+      elements = raw_bytes // slot_bytes
+      raise CorruptPartError.new("selected Array(FixedString(N)) mark element count exceeds materialization limit") if elements > WidePart::MAX_ARRAY_MARK_ELEMENTS
+
+      element_accounting = elements * WidePart::ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES
+      row_accounting = mark_rows * WidePart::ARRAY_NULLABLE_STRING_ROW_ACCOUNTING_BYTES
+      raise CorruptPartError.new("selected Array(FixedString(N)) accounting overflows") if raw_bytes > UInt64::MAX - element_accounting - row_accounting
+      raw_bytes + element_accounting + row_accounting
+    end
+
+    private def checked_array_fixed_string_elements(values, width : Int32) : UInt64
+      elements = 0_u64
+      values.each do |row|
+        row_elements = row.size.to_u64
+        if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - elements
+          raise CorruptPartError.new("selected Array(FixedString(N)) mark element count exceeds materialization limit")
+        end
+        elements += row_elements
+        row.each do |value|
+          next if value.nil?
+          raise CorruptPartError.new("selected Array(FixedString(N)) element width changed") unless value.bytesize == width
+        end
+      end
+      elements
     end
 
     private def slice_numeric_values(values : WidePartNumericArray, offset : Int, size : Int) : WidePartNumericSlice
