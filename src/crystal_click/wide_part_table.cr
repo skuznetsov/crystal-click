@@ -571,6 +571,20 @@ module CrystalClick
       values.as(Slice(Array(Int32?)))
     end
 
+    def array_decimal64_raw_for(column : String) : Slice(Array(Int64))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed Decimal64 Array accessor requires an exact Array(Decimal(18, S)) declaration") unless WidePart.array_decimal64_scale(@column_types[index])
+      values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Decimal64 Array column was not materialized in this batch"))
+      values.as(Slice(Array(Int64)))
+    end
+
+    def array_nullable_decimal64_raw_for(column : String) : Slice(Array(Int64?))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("typed nullable Decimal64 Array accessor requires an exact Array(Nullable(Decimal(18, S))) declaration") unless WidePart.array_nullable_decimal64_scale(@column_types[index])
+      values = @array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nullable Decimal64 Array column was not materialized in this batch"))
+      values.as(Slice(Array(Int64?)))
+    end
+
     # Return a nullable typed Array(T) view only for an exact
     # Array(Nullable(T)) numeric declaration.
     def array_nullable_numeric_values(column : String, type : T.class) : Slice(Array(T?)) forall T
@@ -1071,6 +1085,12 @@ module CrystalClick
               elsif WidePart.array_nullable_decimal32_scale(selected.column_type)
                 bytes = selected.reader.array_nullable_decimal32_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_decimal64_scale(selected.column_type)
+                bytes = selected.reader.array_decimal64_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_nullable_decimal64_scale(selected.column_type)
+                bytes = selected.reader.array_nullable_decimal64_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_nullable_numeric_bytes[selected.name] = bytes
               elsif WidePart.uuid_array_element_type(selected.column_type)
                 bytes = selected.reader.array_uuid_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_uuid_bytes[selected.name] = bytes
@@ -1152,6 +1172,27 @@ module CrystalClick
                 bytes = array_nullable_numeric_materialized_bytes(values, "Int32")
                 raise CorruptPartError.new("selected nullable Decimal32 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
                 raise CorruptPartError.new("selected nullable Decimal32 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+                next
+              elsif WidePart.array_decimal64_scale(selected.column_type)
+                values = selected.reader.read_array_decimal64_raw_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Decimal64 Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Decimal64 Array mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 8_u64
+                raise CorruptPartError.new("selected Decimal64 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Decimal64 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
+                next
+              elsif WidePart.array_nullable_decimal64_scale(selected.column_type)
+                values = selected.reader.read_array_nullable_decimal64_raw_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected nullable Decimal64 Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Decimal64 Array mark was not preflighted"))
+                bytes = array_nullable_numeric_materialized_bytes(values, "Int64")
+                raise CorruptPartError.new("selected nullable Decimal64 Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Decimal64 Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_nullable_numeric_values[selected.name] = values
                 next

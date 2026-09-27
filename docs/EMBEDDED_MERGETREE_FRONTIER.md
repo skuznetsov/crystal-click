@@ -2476,6 +2476,68 @@ Array-decoder adversarial gap rather than a W42-specific failure observed
 here. Refresh the focused/full suites and oracle after the decay triggers
 above.
 
+## W43 frontier: paired Decimal64 Array leaves
+
+Admit only one-level `Array(Decimal(18, S))` and BASIC
+`Array(Nullable(Decimal(18, S)))`, with `S` from 0 through 18, beside a
+sorted `UInt64` key in the pinned Wide/LZ4/plain-`.mrk2` profile. Preserve
+signed little-endian `Int64` raw coefficients and the exact scale in column
+metadata; do not convert through floating-point numbers or infer a decimal
+scale from values. Reader, batch, offline catalog `.values`, and paired
+writer must agree on the exact declared type. NULL consumes a child slot,
+and the writer must preflight sizes and marks, self-read the staged part,
+and publish exclusively only after validation.
+
+Risk is **CAUTION**: reusing the eight-byte integer stream without semantic
+gates could accept an `Int64` alias or lose the scale; null flags and later
+marks could also disagree while simple rows still pass. The first gate is a
+behavioral RED test on the current reader. Then generate a synthetic part
+with the pinned official ClickHouse local build, retain hashed physical
+files, and test stock-to-Crystal reading plus Crystal-to-stock `ATTACH PART`,
+`CHECK TABLE`, and exact full/keyed RowBinary comparison. Include empty
+Arrays, NULL versus zero, negative coefficients, later marks, boundary
+scales, wrong-type rejection, and a string-literal oracle for decimal values.
+DoD also requires focused and full debug/release Crystal suites, formatting,
+shell syntax, diff checks, and proportionate hostile review. A stock-accepted
+part whose raw coefficients or keyed rows differ is the strongest falsifier.
+
+Reject Decimal128/256 Arrays, nested and outer-Nullable Arrays, inferred
+numeric APIs, Compact/Sparse serialization, arbitrary multi-column schemas,
+MV/projection semantics, and any performance claim in this slice. Rollback
+is a W43-only local commit; no existing ClickHouse data root is modified and
+there is no push. Evidence is scoped to the pinned producer/consumer build,
+the exact part profile, and this platform. A producer version, codec,
+mark/checksum implementation, or platform change decays the certificate and
+requires rerunning the focused/full suites and external oracle.
+
+The preimplementation W43 assertion was RED: the current reader returned
+false for `Array(Decimal(18, 0))` (one example, one failure). The pinned
+stock fixture has canonical `Decimal(18, 2)` declarations, six LZ4 data
+streams, plain `.mrk2` rows `[2, 2, 2, 1]`, and SHA256-verified files. The
+W31/W43 focused suite passed 12 examples; the full debug and release suites
+each passed 686 examples without failures or errors. Format, shell syntax,
+and diff-whitespace checks passed. Type admission and writer readback cover
+all scales 0..18. The stock reader and scale-2 catalog probes cover later
+marks, exact raw signed coefficients, NULL versus non-NULL zero, and owned
+`.values`; separate negative probes reject malformed grammar, including a
+tampered `columns.txt` declaration, and `Int64` Array aliases.
+
+The independent pinned ClickHouse oracle attached and checked the stock
+fixture, mixed writer parts, all-empty and all-NULL controls, precision
+boundary parts at scales 0, 9, 10, and 18, and a scale-18 writer part with
+`Int64::MIN`/`Int64::MAX` backing coefficients. Full and PK-filtered
+RowBinary matched exact expected bytes in every case. The all-NULL nested
+stream contains eight zero bytes per NULL slot, while RowBinary emits only
+the null flag. The observed stock three-column part has an empty serializer
+list, and W43 admits only that exact `pk`/`plain`/`maybe` scale-2 exception
+plus the paired two-column writer profile. A serializer-bearing three-column
+part, arbitrary schemas, and Decimal128/256 Arrays remain unadmitted.
+Checksum-consistent malformed child/null/mark topology remains a shared
+Array-decoder adversarial gap. Hostile review returned **ROBUST within this
+exact W43 profile**; it treats the absent serializer-bearing three-column
+branch as a conservative rejection, not an observed compatibility failure.
+Refresh the scoped evidence after the decay triggers above.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2485,7 +2547,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W42's paired Decimal32 Arrays,
+1. Extend reader and writer together beyond W43's paired Decimal64 Arrays,
+   W42's paired Decimal32 Arrays,
    W41's paired UUID Arrays,
    W40's paired temporal Arrays,
    W39's paired raw 128/256-bit

@@ -1,0 +1,5 @@
+columns format version: 1
+3 columns:
+`pk` UInt64
+`plain` Array(Decimal(18, 2))
+`maybe` Array(Nullable(Decimal(18, 2)))
