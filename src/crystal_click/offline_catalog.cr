@@ -2,7 +2,7 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
-                             Array(UInt64) | Array(String) | Nil
+                             Array(UInt64) | Array(String) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -244,6 +244,13 @@ module CrystalClick
           string_bytes,
           max_string_bytes
         )
+      when "Tuple(a UInt64, b String)"
+        selected_values = batch.tuples_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        selected_values.each do |number, string_value|
+          string_bytes = checked_materialized_value_string_bytes(string_bytes, string_value.bytesize.to_u64, max_string_bytes)
+          values << {number, String.new(string_value.to_slice)}
+        end
       when "String"
         selected_values = batch.strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)

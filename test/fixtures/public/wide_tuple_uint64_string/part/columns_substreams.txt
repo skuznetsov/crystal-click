@@ -1,0 +1,8 @@
+columns substreams version: 1
+2 columns:
+1 substreams for column `id`:
+	id
+3 substreams for column `payload`:
+	payload%2Ea
+	payload%2Eb.size
+	payload%2Eb

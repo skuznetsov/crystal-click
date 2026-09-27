@@ -322,6 +322,10 @@ module CrystalClick
       type == "Array(UInt64)" || type == "Array(String)"
     end
 
+    def self.supports_tuple_uint64_string_type?(type : String) : Bool
+      type == "Tuple(a UInt64, b String)"
+    end
+
     def self.supports_typed_type?(type : String) : Bool
       supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
@@ -330,7 +334,7 @@ module CrystalClick
         supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
         supports_ipv4_type?(type) || supports_nullable_ipv4_type?(type) ||
         supports_ipv6_type?(type) || supports_nullable_ipv6_type?(type) ||
-        !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil? || supports_array_type?(type)
+        !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil? || supports_array_type?(type) || supports_tuple_uint64_string_type?(type)
     end
 
     def self.json_type?(type : String) : Bool
@@ -1061,6 +1065,52 @@ module CrystalClick
       values
     end
 
+    # Return the nested String byte count for one bounded named Tuple mark
+    # range without materializing tuple rows. The tuple children use
+    # independent size and raw-data streams.
+    def tuple_uint64_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Tuple(UInt64, String) accessor requires the exact named tuple type") unless WidePart.supports_tuple_uint64_string_type?(@column_type)
+
+      sizes, total_bytes = read_tuple_string_sizes(column, first_mark, mark_count)
+      raw_stream = @streams["#{column}%2Eb"]
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Tuple(String) substream mark rows differ") unless raw_rows == sizes.size.to_u64
+      validate_mark_range_bytes(raw_stream, raw_start, raw_end, total_bytes.to_i, 1)
+      total_bytes
+    end
+
+    # Read exact positional (UInt64, String) values from the two named Tuple
+    # children. Each leaf uses its own marks; row counts and byte totals are
+    # validated before tuple or String objects are allocated.
+    def read_tuple_uint64_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Tuple(UInt64, String))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Tuple(UInt64, String) accessor requires the exact named tuple type") unless WidePart.supports_tuple_uint64_string_type?(@column_type)
+
+      value_stream = @streams["#{column}%2Ea"]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Tuple mark row count exceeds materialization limit") if value_rows > MAX_ARRAY_MARK_ROWS
+      encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(value_rows, 8), 8)
+
+      sizes, total_bytes = read_tuple_string_sizes(column, first_mark, mark_count)
+      raise CorruptPartError.new("Tuple substream mark rows differ") unless value_rows == sizes.size.to_u64
+      raw_stream = @streams["#{column}%2Eb"]
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Tuple(String) substream mark rows differ") unless raw_rows == value_rows
+      raw_bytes = read_mark_range_bytes(raw_stream, raw_start, raw_end, total_bytes.to_i, 1)
+
+      values = Array(Tuple(UInt64, String)).new(value_rows.to_i)
+      raw_offset = 0
+      sizes.each_with_index do |length, index|
+        byte_length = length.to_i
+        raise CorruptPartError.new("Tuple(String) sizes exceed selected raw bytes") if byte_length > raw_bytes.size - raw_offset
+        values << {u64(encoded_values, index * 8), String.new(raw_bytes[raw_offset, byte_length])}
+        raw_offset += byte_length
+      end
+      raise CorruptPartError.new("Tuple(String) sizes do not consume selected raw bytes") unless raw_offset == raw_bytes.size
+      values
+    end
+
     # Read a bounded mark range from an exact String column. At most 64 MiB of
     # raw bytes are materialized per call (the whole range, not each mark).
     # Empty values are zero-length; embedded NUL bytes are preserved.
@@ -1741,6 +1791,8 @@ module CrystalClick
                                    stream_name == @column
                                  elsif @column_type == "Array(String)"
                                    stream_name == @column || stream_name == "#{@column}.size"
+                                 elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
+                                   stream_name == "#{@column}%2Eb"
                                  else
                                    (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type)) && stream_name == @column
                                  end
@@ -1811,6 +1863,8 @@ module CrystalClick
         validate_low_cardinality_string_serialization(columns, selected, row_count)
       elsif WidePart.supports_array_type?(column_type)
         validate_array_type_serialization_version(column_type, columns, selected, row_count)
+      elsif WidePart.supports_tuple_uint64_string_type?(column_type)
+        validate_tuple_uint64_string_serialization(columns, selected, row_count)
       elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
       end
@@ -1948,6 +2002,8 @@ module CrystalClick
             raise UnsupportedFormatError.new("JSON physical substreams do not match declared typed-path shape") unless streams == expected_json_streams
             selected_streams = expected_physical_streams(selected_column, selected_type)
           end
+        elsif WidePart.supports_tuple_uint64_string_type?(selected_type)
+          raise UnsupportedFormatError.new("Tuple key column must have one plain UInt64 stream") unless streams == [column]
         end
       end
       raise UnsupportedFormatError.new("trailing columns_substreams.txt data") unless cursor == bytes.size
@@ -1968,6 +2024,8 @@ module CrystalClick
     private def expected_physical_streams(column : String, type : String) : Array(String)
       if type == "LowCardinality(String)"
         ["#{column}.dict", column]
+      elsif WidePart.supports_tuple_uint64_string_type?(type)
+        ["#{column}%2Ea", "#{column}%2Eb.size", "#{column}%2Eb"]
       elsif type == "Array(UInt64)"
         ["#{column}.size0", column]
       elsif type == "Array(String)"
@@ -2049,6 +2107,79 @@ module CrystalClick
         raise CorruptPartError.new("array serializer row count does not match part") unless rows >= 0 && rows.to_u64 == row_count
       end
       raise UnsupportedFormatError.new("unsupported array serializer type") unless WidePart.supports_array_type?(type)
+      nil
+    rescue ex : JSON::ParseException | TypeCastError | OverflowError
+      raise CorruptPartError.new("serialization.json is malformed")
+    end
+
+    private def validate_tuple_uint64_string_serialization(
+      columns : Array({String, String}),
+      selected_column : String,
+      row_count : UInt64,
+    ) : Nil
+      keys = columns.select { |name, type| name != selected_column && type == "UInt64" }
+      unless columns.size == 2 && keys.size == 1 && columns.any? { |name, type| name == selected_column && WidePart.supports_tuple_uint64_string_type?(type) }
+        raise UnsupportedFormatError.new("named UInt64/String Tuple requires one UInt64 key column")
+      end
+
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for this type") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      unless info.keys.to_set == Set{"version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types"}
+        raise UnsupportedFormatError.new("unsupported Tuple serialization.json fields")
+      end
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("Tuple nested serialization versions are unsupported") unless propagated == true
+
+      versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+        raise UnsupportedFormatError.new("only nested String serialization version 1 is supported for Tuple")
+      end
+
+      serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Tuple column serializers are required"))
+      raise UnsupportedFormatError.new("Tuple serialization requires exact key and payload entries") unless serializers.size == 2
+      columns.each_with_index do |(column_name, _column_type), index|
+        entry = serializers[index].as_h
+        name = entry["name"]?.try(&.as_s) || raise(CorruptPartError.new("Tuple serializer name is missing or malformed"))
+        raise UnsupportedFormatError.new("Tuple serializer order does not match columns.txt") unless name == column_name
+        defaults = entry["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple serializer default count is missing or malformed"))
+        rows = entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple serializer row count is missing or malformed"))
+        raise CorruptPartError.new("Tuple serializer row count does not match part") unless rows >= 0 && rows.to_u64 == row_count
+        raise CorruptPartError.new("Tuple serializer default count is invalid") unless defaults >= 0 && defaults <= rows
+        kind = entry["kind"]?.try(&.as_s) || raise(CorruptPartError.new("Tuple serializer kind is missing or malformed"))
+        raise UnsupportedFormatError.new("only Default Tuple serializers are supported") unless kind == "Default"
+
+        if column_name == selected_column
+          unless entry.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows", "subcolumns"}
+            raise UnsupportedFormatError.new("unsupported named Tuple serializer fields")
+          end
+          subcolumns = entry["subcolumns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Tuple child serializer metadata is required"))
+          raise UnsupportedFormatError.new("exactly two Tuple child serializers are required") unless subcolumns.size == 2
+          subcolumns.each do |child|
+            child_entry = child.as_h
+            unless child_entry.keys.to_set == Set{"kind", "num_defaults", "num_rows"}
+              raise UnsupportedFormatError.new("unsupported Tuple child serializer fields")
+            end
+            raise UnsupportedFormatError.new("only Default Tuple child serializers are supported") unless child_entry["kind"]?.try(&.as_s) == "Default"
+            child_defaults = child_entry["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple child default count is missing or malformed"))
+            child_rows = child_entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple child row count is missing or malformed"))
+            raise CorruptPartError.new("Tuple child row count does not match part") unless child_rows >= 0 && child_rows.to_u64 == row_count
+            raise CorruptPartError.new("Tuple child default count is invalid") unless child_defaults >= 0 && child_defaults <= child_rows
+          end
+        else
+          unless entry.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
+            raise UnsupportedFormatError.new("unsupported Tuple key serializer fields")
+          end
+        end
+      end
       nil
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
       raise CorruptPartError.new("serialization.json is malformed")
@@ -2628,6 +2759,11 @@ module CrystalClick
     end
 
     private def primary_stream_name(stream_names : Array(String)) : String
+      if WidePart.supports_tuple_uint64_string_type?(@column_type)
+        stream = "#{@column}%2Ea"
+        raise CorruptPartError.new("selected Tuple UInt64 child stream is missing") unless stream_names.includes?(stream)
+        return stream
+      end
       raise CorruptPartError.new("selected primary stream is missing") unless stream_names.includes?(@column)
       @column
     end
@@ -2635,6 +2771,8 @@ module CrystalClick
     private def stream_element_width(stream_name : String) : Int32
       if @column_type == "LowCardinality(String)"
         1
+      elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
+        stream_name == "#{@column}%2Eb" ? 1 : 8
       elsif @column_type == "Array(UInt64)"
         8
       elsif @column_type == "Array(String)"
@@ -2720,7 +2858,18 @@ module CrystalClick
     end
 
     private def read_string_sizes(column : String, first_mark : Int, mark_count : Int) : {Array(UInt64), UInt64}
-      size_stream = @streams["#{column}.size"]
+      read_string_sizes_from_stream("#{column}.size", first_mark, mark_count)
+    end
+
+    private def read_tuple_string_sizes(column : String, first_mark : Int, mark_count : Int) : {Array(UInt64), UInt64}
+      stream = @streams["#{column}%2Eb.size"]
+      _, _, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      raise CorruptPartError.new("Tuple row count exceeds materialization limit") if rows > MAX_ARRAY_MARK_ROWS
+      read_string_sizes_from_stream("#{column}%2Eb.size", first_mark, mark_count)
+    end
+
+    private def read_string_sizes_from_stream(stream_name : String, first_mark : Int, mark_count : Int) : {Array(UInt64), UInt64}
+      size_stream = @streams[stream_name]
       size_start, size_end, rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
       encoded_sizes = read_mark_range_bytes(size_stream, size_start, size_end, checked_byte_count(rows, 8), 8)
       sizes = Array(UInt64).new(rows.to_i)

@@ -162,6 +162,53 @@ module CrystalClick
       end
     end
 
+    # Write a sorted UInt64 primary key and a named Tuple(a UInt64, b String)
+    # payload. Tuple leaves retain independent Wide-part streams and marks;
+    # the public Crystal values remain positional {UInt64, String} tuples.
+    def self.write_uint64_tuple_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Array(Tuple(UInt64, String)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_tuple_header_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      a_values = values.map { |value| value[0] }
+      b_values = values.map { |value| value[1] }
+      a_slice = a_values.to_unsafe.to_slice(a_values.size)
+      b_slice = b_values.to_unsafe.to_slice(b_values.size)
+      validate_inputs(destination, key_name, keys, value_name, a_slice, rows_per_mark)
+      validate_string_inputs(destination, key_name, keys, value_name, b_slice, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_uint64_stream(stage, "#{value_name}%2Ea", a_slice, rows_per_mark))
+        records.concat(write_string_streams(stage, "#{value_name}%2Eb", b_slice, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", tuple_string_serialization_metadata(key_name, value_name, keys, values))
+        write_plain_metadata(stage, "columns.txt", tuple_string_columns_metadata(key_name, value_name))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", tuple_string_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_tuple_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable part with a sorted UInt64 primary key and a shared-
     # dictionary LowCardinality(String) payload. Dictionary keys are assigned
     # in first-seen order and each data mark stores UInt8 dictionary IDs.
@@ -1104,6 +1151,49 @@ module CrystalClick
         start_row += rows
       end
 
+      nil
+    end
+
+    private def self.validate_tuple_header_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Array(Tuple(UInt64, String)),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+      validate_tuple_stream_names(key_name, value_name)
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+      nil
+    end
+
+    private def self.validate_tuple_stream_names(key_name : String, value_name : String) : Nil
+      stream_bases = [
+        key_name,
+        "#{value_name}%2Ea",
+        "#{value_name}%2Eb.size",
+        "#{value_name}%2Eb",
+      ].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
       nil
     end
 
@@ -3034,6 +3124,142 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_tuple_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Array(Tuple(UInt64, String)),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      unless File.read(File.join(stage, "columns.txt")) == tuple_string_columns_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged Tuple columns metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == tuple_string_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged Tuple substream metadata differs")
+      end
+      unless File.read(File.join(stage, "serialization.json")) == tuple_string_serialization_metadata(key_name, value_name, keys, values)
+        raise CorruptPartError.new("staged Tuple serialization metadata differs")
+      end
+      raise CorruptPartError.new("staged row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
+      raise CorruptPartError.new("staged compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+
+      streams = [] of Tuple(String, File, File, UInt64)
+      begin
+        {key_name, "#{value_name}%2Ea", "#{value_name}%2Eb.size", "#{value_name}%2Eb"}.each do |logical_name|
+          base = StreamName.hash(logical_name)
+          data = File.open(File.join(stage, "#{base}.bin"), "r")
+          marks = File.open(File.join(stage, "#{base}.mrk2"), "r")
+          streams << {logical_name, data, marks, 0_u64}
+        end
+
+        start = 0
+        while start < keys.size
+          rows = {rows_per_mark, keys.size - start}.min
+          key_raw = Bytes.new(rows * 8)
+          a_raw = Bytes.new(rows * 8)
+          size_raw = Bytes.new(rows * 8)
+          b_raw = IO::Memory.new
+          rows.times do |offset|
+            value = values[start + offset]
+            write_uint64_le(key_raw, offset * 8, keys[start + offset])
+            write_uint64_le(a_raw, offset * 8, value[0])
+            write_uint64_le(size_raw, offset * 8, value[1].bytesize.to_u64)
+            b_raw.write(value[1].to_slice)
+          end
+          raw_marks = [key_raw, a_raw, size_raw, b_raw.to_slice]
+          streams.each_with_index do |stream, stream_index|
+            new_offset = validate_staged_tuple_mark(
+              stream[1], stream[2], stream[0], stream[3], rows.to_u64,
+              raw_marks[stream_index], omit_empty_frame: stream_index == 3
+            )
+            streams[stream_index] = {stream[0], stream[1], stream[2], new_offset}
+          end
+          start += rows
+        end
+
+        streams.each do |stream|
+          validate_staged_tuple_sentinel(stream[1], stream[2], stream[0], stream[3])
+        end
+      ensure
+        streams.each do |stream|
+          stream[1].close unless stream[1].closed?
+          stream[2].close unless stream[2].closed?
+        end
+      end
+      nil
+    end
+
+    private def self.validate_staged_tuple_mark(
+      data_file : File,
+      marks_file : File,
+      logical_name : String,
+      expected_offset : UInt64,
+      expected_rows : UInt64,
+      expected_raw : Bytes,
+      omit_empty_frame : Bool = false,
+    ) : UInt64
+      mark = Bytes.new(WidePart::MARK_SIZE)
+      marks_file.read_fully(mark)
+      raise CorruptPartError.new("staged Tuple mark offset differs for #{logical_name}") unless read_uint64_le(mark, 0) == expected_offset
+      raise CorruptPartError.new("staged Tuple decompressed mark offset differs for #{logical_name}") unless read_uint64_le(mark, 8) == 0_u64
+      raise CorruptPartError.new("staged Tuple mark row count differs for #{logical_name}") unless read_uint64_le(mark, 16) == expected_rows
+
+      return expected_offset if omit_empty_frame && expected_raw.empty?
+
+      data_file.seek(expected_offset.to_i64)
+      header = Bytes.new(CompressedBlock::FRAME_HEADER_SIZE)
+      data_file.read_fully(header)
+      compressed_size = read_uint32_le(header, CompressedBlock::CHECKSUM_SIZE + 1).to_i64
+      frame_size = CompressedBlock::CHECKSUM_SIZE.to_i64 + compressed_size
+      unless frame_size >= CompressedBlock::FRAME_HEADER_SIZE && frame_size <= MAX_FRAME_COMPRESSED.to_i64
+        raise CorruptPartError.new("staged Tuple frame size is invalid for #{logical_name}")
+      end
+      frame_bytes = Bytes.new(frame_size.to_i)
+      header.copy_to(frame_bytes)
+      remaining = frame_bytes.size - header.size
+      data_file.read_fully(frame_bytes[header.size, remaining])
+      frame = CompressedBlock.decode_frame(frame_bytes, 0_i64, MAX_FRAME_COMPRESSED.to_i64, MAX_FRAME_RAW_BYTES.to_i64)
+      unless frame.end_offset == frame_size && frame.output == expected_raw
+        raise CorruptPartError.new("staged Tuple stream readback differs for #{logical_name}")
+      end
+      expected_offset + frame.end_offset.to_u64
+    end
+
+    private def self.validate_staged_tuple_sentinel(
+      data_file : File,
+      marks_file : File,
+      logical_name : String,
+      expected_offset : UInt64,
+    ) : Nil
+      sentinel = Bytes.new(WidePart::MARK_SIZE)
+      marks_file.read_fully(sentinel)
+      raise CorruptPartError.new("staged Tuple sentinel offset differs for #{logical_name}") unless read_uint64_le(sentinel, 0) == expected_offset
+      unless read_uint64_le(sentinel, 8) == 0_u64 && read_uint64_le(sentinel, 16) == 0_u64
+        raise CorruptPartError.new("staged Tuple sentinel differs for #{logical_name}")
+      end
+      raise CorruptPartError.new("staged Tuple mark stream has trailing bytes for #{logical_name}") unless marks_file.gets_to_end.empty?
+      raise CorruptPartError.new("staged Tuple data stream has trailing bytes for #{logical_name}") unless data_file.size == expected_offset
+      nil
+    end
+
     private def self.validate_staged_low_cardinality_string_part(
       stage : String,
       key_name : String,
@@ -3704,6 +3930,10 @@ module CrystalClick
       "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` String\n"
     end
 
+    private def self.tuple_string_columns_metadata(key_name : String, value_name : String) : String
+      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` Tuple(a UInt64, b String)\n"
+    end
+
     private def self.substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n1 substreams for column `#{value_name}`:\n\t#{value_name}\n"
     end
@@ -3714,6 +3944,10 @@ module CrystalClick
 
     private def self.string_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size\n\t#{value_name}\n"
+    end
+
+    private def self.tuple_string_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}%2Ea\n\t#{value_name}%2Eb.size\n\t#{value_name}%2Eb\n"
     end
 
     private def self.low_cardinality_string_substreams_metadata(key_name : String, value_name : String) : String
@@ -3777,6 +4011,28 @@ module CrystalClick
 
     private def self.serialization_metadata : String
       "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":1},\"version\":1}"
+    end
+
+    private def self.tuple_string_serialization_metadata(
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Array(Tuple(UInt64, String)),
+    ) : String
+      rows = values.size
+      key_defaults = keys.count { |key| key == 0_u64 }
+      tuple_defaults = values.count { |value| value[0] == 0_u64 && value[1].empty? }
+      a_defaults = values.count { |value| value[0] == 0_u64 }
+      b_defaults = values.count { |value| value[1].empty? }
+      String.build do |json|
+        json << "{\"columns\":["
+        json << "{\"kind\":\"Default\",\"name\":\"#{key_name}\",\"num_defaults\":#{key_defaults},\"num_rows\":#{rows}},"
+        json << "{\"kind\":\"Default\",\"name\":\"#{value_name}\",\"num_defaults\":#{tuple_defaults},\"num_rows\":#{rows},\"subcolumns\":["
+        json << "{\"kind\":\"Default\",\"num_defaults\":#{a_defaults},\"num_rows\":#{rows}},"
+        json << "{\"kind\":\"Default\",\"num_defaults\":#{b_defaults},\"num_rows\":#{rows}}]}],"
+        json << "\"propagate_types_serialization_versions_to_nested_types\":true,"
+        json << "\"types_serialization_versions\":{\"string\":1},\"version\":1}"
+      end
     end
 
     private def self.literal_frame_size(raw_size : Int64) : Int64
@@ -3846,12 +4102,24 @@ module CrystalClick
       8.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u64).to_u8 }
     end
 
+    private def self.read_uint64_le(bytes : Bytes, offset : Int) : UInt64
+      value = 0_u64
+      8.times { |index| value |= bytes[offset + index].to_u64 << (index * 8) }
+      value
+    end
+
     private def self.write_uint64_be(bytes : Bytes, offset : Int, value : UInt64) : Nil
       8.times { |index| bytes[offset + index] = ((value >> ((7 - index) * 8)) & 0xff_u64).to_u8 }
     end
 
     private def self.write_uint32_le(bytes : Bytes, offset : Int, value : UInt32) : Nil
       4.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u32).to_u8 }
+    end
+
+    private def self.read_uint32_le(bytes : Bytes, offset : Int) : UInt32
+      value = 0_u32
+      4.times { |index| value |= bytes[offset + index].to_u32 << (index * 8) }
+      value
     end
   end
 end

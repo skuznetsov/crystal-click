@@ -50,6 +50,9 @@ boundary, not an implied Array variant.
 W22 implements bounded, paired `LowCardinality(String)` payloads, including
 the two observed UInt8 dictionary shapes for reading and one shared-dictionary
 writer shape. Its verification record and exclusions are below.
+W23 admits one exact named `Tuple(a UInt64, b String)` payload beside a
+`UInt64` key. Its stock-to-Crystal reader and Crystal-to-stock writer gates
+passed on the pinned build; this is not general Tuple or recursive type support.
 
 ## Purpose and bounded contexts
 
@@ -65,6 +68,16 @@ not be conflated:
 3. **Execution:** callers select columns and use typed values/filters in
    Crystal. SQL parsing, joins, and a general expression engine are not
    required.
+
+Implementation order: pursue reader/writer parity across ClickHouse type
+families first, including recursive and JSON shapes; then implement
+materialized-view and projection compatibility; only then optimize memory and
+throughput. Interim bounds and regression checks protect correctness, but are
+not a speed-tuning phase. A future like-for-like comparison no more than 10%
+slower than stock ClickHouse may end the optimization phase; its workload,
+output equivalence, and measurement conditions must be pinned before using
+that number as evidence. Passing a speed target cannot replace type, MV, or
+projection compatibility.
 
 Boundary 2 now has bounded table ownership, a two-part logical merge, and
 explicit historical-part reclamation, but power-loss recovery remains open. Existing readers
@@ -1311,6 +1324,58 @@ release and the existing exactly-two-column schema gate: each admitted part
 has only one LC payload. This does not certify general LC shapes, a daemon
 restart path, a performance gain, or immediate GC/RSS reclamation.
 
+## Verified bounded slice W23: paired Tuple(a UInt64, b String)
+
+Admit exactly one non-null `Tuple(a UInt64, b String)` payload beside a sorted
+`UInt64` key in Wide/LZ4 parts. A Crystal row is a typed two-element tuple;
+the reader and writer must preserve the UInt64 value and binary String bytes
+without flattening the payload into two public table columns. The offline
+catalog exposes the tuple through `.values`; TUI Tuple display and filtering
+remain guard-only. This slice does not widen the embedded transactional table
+schema.
+
+Pinned ClickHouse 26.7.1.1315 produced a Wide part with substreams `id`,
+`payload%2Ea`, `payload%2Eb.size`, and `payload%2Eb` for named elements
+`a UInt64` and `b String`. The initial probe used unsupported legacy `.mrk`
+marks. The retained public fixture uses four independent `.mrk2` streams,
+LZ4, exact stock `columns.txt`, `columns_substreams.txt`, and version-1
+`serialization.json` with per-child default statistics. Its generator pins
+the producer version, refuses fixture replacement, and checks an exact
+stream-data digest; a fresh isolated generation reproduced that digest.
+Unfamiliar Tuple grammars and metadata fail closed.
+
+The first focused reader and writer tests were RED before production changes.
+The reader, batch/catalog propagation, and named paired writer API compose
+the existing UInt64 and String leaf codecs with independent marks. The
+bidirectional falsifier passed: exact positional and sparse stock-to-Crystal
+reads, then Crystal-to-stock `ATTACH PART`, full and keyed RowBinary bytes,
+and `CHECK TABLE`, including embedded NUL/invalid UTF-8, all-empty String
+values, multiple marks, and a short final granule. Negative tests reject
+alternate type spelling, unexpected serializer fields, mis-escaped
+substreams, same-size child mark row-count mutation, invalid writer names,
+and unsorted keys before value exposure or publication. A self-readback alone
+was not used to certify stock compatibility. Risk remains CAUTION because a
+new serialization shape could produce plausible but incorrect rows. Rollback
+is one W23-only local feature commit; no push or writes into an existing
+server data root. Evidence decays on producer version, format, codec,
+platform, or reader/writer changes.
+
+W23 evidence at the implementation diff atop `02df34e`: the full debug and
+release Crystal suites each passed 521 examples; all 17 pinned stock/Crystal
+oracle scripts passed, including the dedicated Tuple writer oracle with a
+zero-byte all-empty String stream. The fixture generator reproduced its
+saved stream digest in a fresh temporary directory. Crystal format, shell
+syntax, and diff checks passed. The adversarial same-size mark mutation is
+detected before selected values are returned. Within the exact named
+Tuple/UInt64-key/Wide-LZ4/Darwin/pinned-build scope, the adversary verdict
+is ROBUST; it is not a claim of general Tuple support or a speed gain.
+
+Guard-only after W23: unnamed or differently typed Tuple elements, nested
+Tuple/Array/Map combinations, Nullable(Tuple), Map and Nested layouts,
+general JSON writer parity, TUI Tuple display/filtering, Compact parts, and
+performance claims. In particular, the existing JSON scalar-path reader does not imply a compatible
+Object V3 writer.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1320,8 +1385,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W22's bounded
-   `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
+1. Extend reader and writer together beyond W23's exact named Tuple,
+   W22's bounded `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
    W19's paired IPv6, W18's paired IPv4, W17's paired UUID, W16's bounded
    semantic scalars, W14's BASIC nullable temporal codes, W13's raw time
    codes, W12's raw dates, W11's BASIC `Nullable(FixedString(N))`, W10's plain
