@@ -326,6 +326,10 @@ module CrystalClick
       type == "Map(UInt64, String)"
     end
 
+    def self.supports_map_uint64_uint64_type?(type : String) : Bool
+      type == "Map(UInt64, UInt64)"
+    end
+
     def self.supports_tuple_uint64_string_type?(type : String) : Bool
       type == "Tuple(a UInt64, b String)"
     end
@@ -339,7 +343,7 @@ module CrystalClick
         supports_ipv4_type?(type) || supports_nullable_ipv4_type?(type) ||
         supports_ipv6_type?(type) || supports_nullable_ipv6_type?(type) ||
         !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil? || supports_array_type?(type) ||
-        supports_map_uint64_string_type?(type) || supports_tuple_uint64_string_type?(type)
+        supports_map_uint64_string_type?(type) || supports_map_uint64_uint64_type?(type) || supports_tuple_uint64_string_type?(type)
     end
 
     def self.json_type?(type : String) : Bool
@@ -1059,6 +1063,58 @@ module CrystalClick
       raise CorruptPartError.new("Map sizes do not consume selected nested keys") unless flat_offset == element_sizes.size
       raise CorruptPartError.new("Map String lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
       result
+    end
+
+    # Read exact ordered Map(UInt64, UInt64) rows for selected outer marks.
+    # Duplicate keys and insertion order are preserved. The size0 stream
+    # defines row boundaries; keys and values are aligned flattened UInt64
+    # streams with independent per-mark byte validation.
+    def read_map_uint64_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Tuple(UInt64, UInt64)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Map accessor requires an exact Map(UInt64, UInt64) column") unless WidePart.supports_map_uint64_uint64_type?(@column_type)
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      keys_stream = @streams["#{column}%2Ekeys"]
+      key_start, key_end, key_rows = checked_stream_mark_range(keys_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Map key substream mark rows differ") unless key_rows == rows
+      validate_array_nested_stream_marks(keys_stream, first_mark, mark_flat_elements, 8)
+      encoded_keys = read_mark_range_bytes(keys_stream, key_start, key_end, checked_array_mark_byte_count(flat_elements, 8), 8)
+
+      values_stream = @streams["#{column}%2Evalues"]
+      value_start, value_end, value_rows = checked_stream_mark_range(values_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Map value substream mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(values_stream, first_mark, mark_flat_elements, 8)
+      encoded_values = read_mark_range_bytes(values_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 8), 8)
+
+      result = Array(Array(Tuple(UInt64, UInt64))).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(Tuple(UInt64, UInt64)).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Map outer sizes exceed selected nested keys") if flat_offset >= flat_elements
+          row << {u64(encoded_keys, flat_offset * 8), u64(encoded_values, flat_offset * 8)}
+          flat_offset += 1
+        end
+        result << row
+      end
+      raise CorruptPartError.new("Map sizes do not consume selected nested streams") unless flat_offset.to_u64 == flat_elements
+      result
+    end
+
+    # Return the selected Map(UInt64, UInt64) key and value payload size after
+    # both flattened children have been checked against the outer size0 boundaries.
+    def map_uint64_uint64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Map accessor requires an exact Map(UInt64, UInt64) column") unless WidePart.supports_map_uint64_uint64_type?(@column_type)
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      {"#{column}%2Ekeys", "#{column}%2Evalues"}.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Map child substream mark rows differ") unless child_rows == rows
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, 8)
+      end
+      checked_array_mark_byte_count(flat_elements, 16).to_u64
     end
 
     # Read exact Array(UInt64) rows for a bounded set of outer marks. The mark
@@ -1915,6 +1971,8 @@ module CrystalClick
                                    stream_name == @column || stream_name == "#{@column}.size"
                                  elsif WidePart.supports_map_uint64_string_type?(@column_type)
                                    stream_name == "#{@column}%2Ekeys" || stream_name == "#{@column}%2Evalues.size" || stream_name == "#{@column}%2Evalues"
+                                 elsif WidePart.supports_map_uint64_uint64_type?(@column_type)
+                                   stream_name == "#{@column}%2Ekeys" || stream_name == "#{@column}%2Evalues"
                                  elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
                                    stream_name == "#{@column}%2Eb"
                                  else
@@ -1988,7 +2046,9 @@ module CrystalClick
       elsif WidePart.supports_array_type?(column_type)
         validate_array_type_serialization_version(column_type, columns, selected, row_count)
       elsif WidePart.supports_map_uint64_string_type?(column_type)
-        validate_map_uint64_string_serialization(columns, selected, row_count)
+        validate_map_serialization(columns, selected, row_count, column_type)
+      elsif WidePart.supports_map_uint64_uint64_type?(column_type)
+        validate_map_serialization(columns, selected, row_count, column_type)
       elsif WidePart.supports_tuple_uint64_string_type?(column_type)
         validate_tuple_uint64_string_serialization(columns, selected, row_count)
       elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
@@ -2132,7 +2192,7 @@ module CrystalClick
           end
         elsif WidePart.supports_tuple_uint64_string_type?(selected_type)
           raise UnsupportedFormatError.new("Tuple key column must have one plain UInt64 stream") unless streams == [column]
-        elsif WidePart.supports_map_uint64_string_type?(selected_type)
+        elsif WidePart.supports_map_uint64_string_type?(selected_type) || WidePart.supports_map_uint64_uint64_type?(selected_type)
           if columns.any? { |name, type| name == column && type == "UInt64" }
             raise UnsupportedFormatError.new("Map key column must have one plain UInt64 stream") unless streams == [column]
           end
@@ -2164,6 +2224,8 @@ module CrystalClick
         ["#{column}.size0", "#{column}.size", column]
       elsif WidePart.supports_map_uint64_string_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.size", "#{column}%2Evalues"]
+      elsif WidePart.supports_map_uint64_uint64_type?(type)
+        ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues"]
       elsif type == "String"
         ["#{column}.size", column]
       elsif WidePart.supports_nullable_string_type?(type)
@@ -2246,14 +2308,16 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json is malformed")
     end
 
-    private def validate_map_uint64_string_serialization(
+    private def validate_map_serialization(
       columns : Array({String, String}),
       selected_column : String,
       row_count : UInt64,
+      map_type : String,
     ) : Nil
       keys = columns.select { |name, type| name != selected_column && type == "UInt64" }
-      unless keys.size == 1 && columns.any? { |name, type| name == selected_column && WidePart.supports_map_uint64_string_type?(type) }
-        raise UnsupportedFormatError.new("Map(UInt64, String) requires one UInt64 key column")
+      supported_map = WidePart.supports_map_uint64_string_type?(map_type) || WidePart.supports_map_uint64_uint64_type?(map_type)
+      unless supported_map && keys.size == 1 && columns.any? { |name, type| name == selected_column && type == map_type }
+        raise UnsupportedFormatError.new("#{map_type} requires one UInt64 key column")
       end
 
       file = File.join(@path, "serialization.json")
@@ -2956,7 +3020,7 @@ module CrystalClick
         raise CorruptPartError.new("selected Tuple UInt64 child stream is missing") unless stream_names.includes?(stream)
         return stream
       end
-      if WidePart.supports_map_uint64_string_type?(@column_type)
+      if WidePart.supports_map_uint64_string_type?(@column_type) || WidePart.supports_map_uint64_uint64_type?(@column_type)
         stream = "#{@column}.size0"
         raise CorruptPartError.new("selected Map size0 stream is missing") unless stream_names.includes?(stream)
         return stream
@@ -2972,6 +3036,8 @@ module CrystalClick
         stream_name == "#{@column}%2Eb" ? 1 : 8
       elsif WidePart.supports_map_uint64_string_type?(@column_type)
         stream_name == "#{@column}%2Evalues" ? 1 : 8
+      elsif WidePart.supports_map_uint64_uint64_type?(@column_type)
+        8
       elsif @column_type == "Array(UInt64)"
         8
       elsif @column_type == "Array(String)"
@@ -3423,6 +3489,8 @@ module CrystalClick
                                stream.name == @column || stream.name == "#{@column}.size"
                              elsif WidePart.supports_map_uint64_string_type?(@column_type)
                                stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues.size" || stream.name == "#{@column}%2Evalues"
+                             elsif WidePart.supports_map_uint64_uint64_type?(@column_type)
+                               stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues"
                              else
                                stream.name == @column && (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type))
                              end

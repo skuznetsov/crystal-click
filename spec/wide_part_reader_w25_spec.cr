@@ -127,11 +127,10 @@ private def w25_reader_create_catalog_fixture(root : String) : String
 end
 
 describe CrystalClick::WidePart do
-  it "admits only the exact top-level Map(UInt64, String) type" do
+  it "admits the exact top-level Map(UInt64, String) spelling" do
     CrystalClick::WidePart.supports_typed_type?("Map(UInt64, String)").should be_true
     [
       "Map(String, String)",
-      "Map(UInt64, UInt64)",
       "Map(UInt64, LowCardinality(String))",
       "Nullable(Map(UInt64, String))",
       "Map( UInt64, String)",

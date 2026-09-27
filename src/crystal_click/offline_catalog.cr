@@ -2,7 +2,7 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
-                             Array(UInt64) | Array(String) | Array(Tuple(UInt64, String)) | Tuple(UInt64, String) | Nil
+                             Array(UInt64) | Array(String) | Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -261,6 +261,10 @@ module CrystalClick
           string_bytes,
           max_string_bytes
         )
+      when "Map(UInt64, UInt64)"
+        selected_values = batch.map_uint64_uint64s_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_map_uint64_values(values, selected_values, array_elements[0])
       when "String"
         selected_values = batch.strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -775,6 +779,24 @@ module CrystalClick
         values << owned_row
       end
       {next_elements, next_bytes}
+    end
+
+    private def append_materialized_map_uint64_values(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(UInt64, UInt64))),
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(UInt64, UInt64)).new(row.size)
+        row.each { |key, value| owned_row << {key, value} }
+        values << owned_row
+      end
+      next_elements
     end
 
     private def checked_materialized_value_array_elements(observed : UInt64, batch_elements : UInt64) : UInt64

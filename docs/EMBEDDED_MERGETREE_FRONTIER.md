@@ -62,6 +62,10 @@ W25 admits one exact top-level `Map(UInt64, String)` payload beside a
 `UInt64` key. Its reader and writer use ordered entry arrays, not a hash,
 to preserve duplicate keys and entry order. See
 `MAP_UINT64_STRING_FRONTIER.md` for the physical probe, evidence, and limits.
+W26 admits one more exact top-level payload, `Map(UInt64, UInt64)`, with a
+paired reader and writer on the same pinned frontier. Its three-stream
+physical probe, stock fixture, and bounded evidence are in
+`MAP_UINT64_UINT64_FRONTIER.md`; this is not general Map support.
 
 ## Purpose and bounded contexts
 
@@ -1459,6 +1463,37 @@ with producer version, serializer or mark layout, codec, platform, or shared
 reader/writer changes. General Map/Nested compositions, MV, projections,
 Compact parts, and performance remain guard-only.
 
+## Verified bounded slice W26: paired Map(UInt64, UInt64)
+
+Admit exactly `Map(UInt64, UInt64)` beside one sorted `UInt64` key in the
+pinned Wide/LZ4/plain-adaptive-mark format. The stock-produced part has three
+Map streams: per-row `size0` counts and flattened UInt64 keys and values.
+The public ordered `Array(Tuple(UInt64, UInt64))` preserves duplicate keys,
+zero and maximum values, and entry order. The reader exposes full and bounded
+mark ranges, typed batches, and caller-owned offline catalog `.values`; the
+writer validates a staged part before exclusive publication.
+
+The retained seven-row stock fixture pins physical streams, marks, checksum
+inventory, and bytes against its original stock part. Crystal-produced mixed,
+all-empty, and empty-middle-granule parts pass stock `ATTACH PART`, exact
+RowBinary reads, and `CHECK TABLE`; full and key-range mixed reads also match
+`mapKeys` and `mapValues`. A RED test caught an aggregate materialization
+preflight that counted only one 8-byte child; the corrected bound counts both
+flattened children, 16 bytes per entry. A malformed child-mark control and
+the stock oracle challenge silent key/value misalignment.
+
+At the W26 implementation diff atop `e92c4d0`, full debug and release suites
+each pass 542 examples; all 20 pinned stock-oracle scripts pass. Fixture
+identity, format, shell syntax, and diff checks pass. The hostile verdict is
+**ROBUST** only within this exact type, ClickHouse 26.7.1.1315, pinned
+Wide/LZ4/mark settings, and tested inputs. Risk is CAUTION; rollback is one
+W26-only local feature commit, with no live ClickHouse-root mutation or push.
+Evidence decays with a different stock build, serialization/mark layout,
+codec, platform, or shared reader/writer changes. General recursive Map or
+Nested compositions, MV, projections, Compact parts, and performance remain
+guard-only. The implementation order above keeps type parity and MV/projection
+work ahead of performance tuning.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1468,7 +1503,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W25's exact Map,
+1. Extend reader and writer together beyond W26's exact Map,
+   W25's exact Map,
    W24's exact JSON typed paths, W23's exact named Tuple,
    W22's bounded `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
    W19's paired IPv6, W18's paired IPv4, W17's paired UUID, W16's bounded
