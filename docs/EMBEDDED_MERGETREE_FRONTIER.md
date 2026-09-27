@@ -45,8 +45,11 @@ W21 admits paired `Array(UInt64)` and `Array(String)` payloads in the existing
 two-column Wide/LZ4 part. A pinned bidirectional stock/Crystal oracle,
 debug/release suites, and prior-type oracles passed on this host. This is a
 bounded physical and API compatibility claim, not generic Array support or a
-performance claim. `LowCardinality(String)` remains a separate follow-on
+performance claim. W22 addresses `LowCardinality(String)` as a separate
 boundary, not an implied Array variant.
+W22 implements bounded, paired `LowCardinality(String)` payloads, including
+the two observed UInt8 dictionary shapes for reading and one shared-dictionary
+writer shape. Its verification record and exclusions are below.
 
 ## Purpose and bounded contexts
 
@@ -1200,6 +1203,113 @@ bytes can produce silently shifted rows. Rollback is one W21-only local
 feature commit; no existing ClickHouse data root is in scope. Evidence decays
 with producer version, serializer/substream shape, or shared reader/writer
 changes.
+
+## Verified bounded slice W22: paired LowCardinality(String)
+
+Admit exactly one non-null `LowCardinality(String)` payload beside the sorted
+`UInt64` key in a Wide/LZ4 part. Return owned binary-safe `String` values to
+Crystal callers, while retaining the exact declared type in metadata and
+typed batch accessors. The writer may emit only a single shared dictionary
+with the default empty key at ID 0 and other keys in first-seen order; the
+reader must also recognize the observed stock
+per-granule additional-keys shape. Neither is a generic LowCardinality
+implementation. Catalog `.values` reuses its String-byte and row ceilings;
+the TUI may show bounded escaped previews but must keep equality filtering
+restricted to its existing exact scalar types.
+
+The pinned ClickHouse 26.7.1.1315 producer uses two physical substreams,
+`payload.dict` then `payload`, with `.bin` files and adaptive `.cmrk2` marks.
+`serialization.json` has version 1, nested-version propagation, and
+`types_serialization_versions: {"string": 1}`. Its UInt64 key serializer's
+`num_defaults` is a data statistic, not a fixed format value: pinned stock
+parts with and without a zero key produced 1 and 0 respectively. The
+dictionary stream starts
+with a little-endian UInt64 key-format version `1`; String keys are encoded
+with VarUInt byte lengths followed by raw bytes. In the default shared form,
+the dictionary stream then contains one count and the final keys. Its marks
+start at decompressed offset 8, can repeat the same physical position for
+multiple granules, and end at EOF. In the pinned small part, the zero-row
+sentinel for all three streams addresses raw EOF within the final compressed
+frame rather than the byte after that frame; the dictionary sentinel is
+`(0, 36, 0)`. The index stream's first granule starts
+with a little-endian UInt64 header `0x500` (UInt8 IDs, global dictionary,
+update), subsequent granules with `0x100` (UInt8 IDs, same global dictionary),
+then each has a UInt64 row count and one UInt8 ID per row. A nine-row stock
+part at granularity three had index IDs `[0,0,1]`, `[2,3,2]`, `[4,5,0]` over
+six binary-safe keys; all-empty and single-value parts kept the same form.
+
+With `low_cardinality_max_dictionary_size=0` at process start, stock instead
+writes per-granule `0x600` headers (UInt8 IDs, additional keys and update,
+without global dictionary). Each granule embeds its local count/keys before
+the row count and IDs, with the empty default key at local ID 0 even when
+that granule has no empty rows. Its `.dict` stream still contains version 1 followed
+by one empty/default dictionary record per mark, so a missing `.dict` stream
+is not a valid shortcut. The observed stock part passed `CHECK TABLE`, sparse
+range selection, and a binary String round-trip. These producer observations
+alone do not certify a Crystal reader or handcrafted writer; the independent
+bidirectional oracle is required.
+
+Limit this slice to at most 256 dictionary keys per shared dictionary or
+granule, at most 65,536 selected rows and 64 MiB of materialized String bytes
+per mark, at most 65,536 marks per part, at most 64 MiB of decoded dictionary
+bytes, and at most 64 MiB of aggregate decoded index bytes. Each compressed
+substream is further bounded to 262,208 frames to prevent tiny-frame metadata
+amplification. The writer must
+preflight matching per-mark output, dictionary, and index limits before
+publication.
+The 256-key limit includes the reserved empty key even when input rows never
+contain it (`ColumnUnique` reserves one non-nullable special value).
+The reader must validate exact serializer metadata, stream presence, flag
+sequence, dictionary/version framing, mark boundaries, row counts, ID ranges,
+and trailing bytes. It must load the single shared dictionary before decoding
+any selected range, rather than assuming a range starts with initialized
+state. A LowCardinality-specific dictionary-mark parser may admit the observed
+8-byte prefix offset; the generic stream-mark parser must not silently weaken
+its first-mark invariant. Existing generic `.cmrk2` decompression can be
+reused. The reader validates both entire bounded streams on first selected
+read and caches that state for the immutable-part lifetime; later reads
+reparse only selected marks. In-place mutation after that first read is not
+detected by this cache. A typed table scan releases each part's cache after
+that part is processed, including exceptional callback exits, so one table
+scan does not retain all parts' decoded indices. Direct `WidePart` instances
+retain their own caches until released or collected; this is a reachable-state
+bound, not a guarantee that the GC immediately returns RSS to the OS.
+Reader and writer changes remain separate from the transactional
+`EmbeddedMergeTreeTable` validator.
+
+The bidirectional falsifier is stock-to-Crystal full/key-range reads for both
+observed UInt8 shapes and Crystal-to-stock `ATTACH PART`, full/key-range
+RowBinary, and `CHECK TABLE` for the writer's shared form. Include empty and
+repeated strings across marks, embedded zero/invalid UTF-8 bytes, a short
+last granule, and same-size mutations of dictionary or ID streams. A
+self-readback alone cannot certify stock compatibility.
+
+Rejected for W22: UInt16/32/64 ID widths, more than 256 keys, mid-part global
+dictionary updates/resets, mixed global/additional-key flags, Nullable or
+nested LowCardinality, generic Array/Map/Tuple, Compact parts, non-LZ4 codecs,
+other serializer versions, arbitrary key/table schemas, and a performance
+claim. Risk: CAUTION because plausible but incorrect dictionary state can
+silently relabel rows. Rollback is one W22-only local feature commit, with no
+push or mutation of an existing ClickHouse data root. Evidence decays with
+producer version, serializer flags, dictionary/mark shape, or shared stream
+reader/writer changes.
+
+W22 evidence at the implementation diff atop W21 commit `62e501b`: the full
+debug and release Crystal suites each passed 513 examples. All 16 pinned
+stock/Crystal oracle scripts passed. The W22 oracle compared exact stock
+shared and per-granule dictionary bytes and marks, Crystal full and keyed
+reads, and RowBinary results; a Crystal-written shared-dictionary part
+attached to ClickHouse 26.7.1.1315, returned exact full/key-range rows, and
+passed `CHECK TABLE`. Oracle mutations without checksum repair demonstrate
+ClickHouse checksum detection; Crystal specs with recomputed checksums
+separately reject malformed dictionary versions, flags, IDs, marks, and
+trailing bytes. Focused specs also reject over-limit dictionary/index mark
+files before mark-array allocation and prove table-cache release after both
+successful and exceptional scans. Formatting, shell syntax, and diff checks
+passed. The adversarial memory finding was resolved by per-part scan-cache
+release and the existing exactly-two-column schema gate: each admitted part
+has only one LC payload. This does not certify general LC shapes, a daemon
+restart path, a performance gain, or immediate GC/RSS reclamation.
 
 ## Rejected and guard-only surfaces
 

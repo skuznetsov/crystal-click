@@ -6,15 +6,18 @@ module CrystalClick
   # format maximum per granule so its output stays within this repository's
   # table-reader materialization bound as well as the frame decoder's bounds.
   module WidePartWriter
-    MAX_ROWS_PER_MARK       = 65_536
-    MAX_MARKS               = WidePartTable::MAX_MARKS_PER_READER
-    MAX_COLUMN_NAME_BYTES   = 128
-    MAX_FRAME_RAW_BYTES     = WidePart::MAX_FRAME_DECOMPRESSED_BYTES
-    MAX_FRAME_COMPRESSED    = WidePart::MAX_FRAME_COMPRESSED_BYTES
-    MAX_DATA_FILE_BYTES     = WidePart::MAX_DATA_FILE_BYTES
-    MAX_MARK_FILE_BYTES     = WidePart::MAX_MARK_FILE_BYTES
-    MAX_PRIMARY_INDEX_BYTES = PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
-    RENAME_EXCL             = 0x0000_0004_u32
+    MAX_ROWS_PER_MARK                      = 65_536
+    MAX_LOW_CARDINALITY_KEYS               =    256
+    MAX_LOW_CARDINALITY_DICTIONARY_BYTES   = 64_i64 * 1024 * 1024
+    LOW_CARDINALITY_DICTIONARY_FRAME_BYTES = 32 * 1024 * 1024
+    MAX_MARKS                              = WidePartTable::MAX_MARKS_PER_READER
+    MAX_COLUMN_NAME_BYTES                  = 128
+    MAX_FRAME_RAW_BYTES                    = WidePart::MAX_FRAME_DECOMPRESSED_BYTES
+    MAX_FRAME_COMPRESSED                   = WidePart::MAX_FRAME_COMPRESSED_BYTES
+    MAX_DATA_FILE_BYTES                    = WidePart::MAX_DATA_FILE_BYTES
+    MAX_MARK_FILE_BYTES                    = WidePart::MAX_MARK_FILE_BYTES
+    MAX_PRIMARY_INDEX_BYTES                = PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
+    RENAME_EXCL                            = 0x0000_0004_u32
 
     private struct ChecksumRecord
       getter name : String
@@ -152,6 +155,46 @@ module CrystalClick
         write_plain_metadata(stage, "columns_substreams.txt", string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    # Write one immutable part with a sorted UInt64 primary key and a shared-
+    # dictionary LowCardinality(String) payload. Dictionary keys are assigned
+    # in first-seen order and each data mark stores UInt8 dictionary IDs.
+    def self.write_uint64_low_cardinality_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      dictionary, value_ids = validate_low_cardinality_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_low_cardinality_dictionary_stream(stage, value_name, dictionary, keys.size, rows_per_mark))
+        records.concat(write_low_cardinality_index_stream(stage, value_name, values, value_ids, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "LowCardinality(String)"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", low_cardinality_string_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_low_cardinality_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
         target
       ensure
@@ -1062,6 +1105,114 @@ module CrystalClick
       end
 
       nil
+    end
+
+    private def self.validate_low_cardinality_string_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String),
+      rows_per_mark : Int32,
+    ) : {Array(String), Hash(String, UInt8)}
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      stream_bases = [key_name, "#{value_name}.dict", value_name].map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      raise ArgumentError.new("LowCardinality mark count exceeds reader limit") if mark_count > WidePart::MAX_LOW_CARDINALITY_MARKS
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      # ColumnUnique reserves the default non-nullable value at index zero.
+      # For String this is the empty byte string, including when inputs never
+      # reference it; stock LowCardinality parts serialize this special key.
+      dictionary = [""]
+      value_ids = Hash(String, UInt8).new
+      value_ids[""] = 0_u8
+      dictionary_raw_size = 17_i64 # version, dictionary count, empty-string length
+      key_data_size = 0_i64
+      index_data_size = 0_i64
+      index_raw_data_size = 0_i64
+      dictionary_data_size = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        key_frame_size = checked_string_frame_size(rows.to_i64 * 8_i64, "UInt64 key")
+        raise ArgumentError.new("UInt64 key stream exceeds reader limit") if key_frame_size > MAX_DATA_FILE_BYTES - key_data_size
+        key_data_size += key_frame_size
+
+        index_raw_size = rows.to_i64 + 16_i64
+        if index_raw_size > WidePart::MAX_LOW_CARDINALITY_INDEX_BYTES.to_i64 - index_raw_data_size
+          raise ArgumentError.new("LowCardinality index exceeds reader decoded-size limit")
+        end
+        index_raw_data_size += index_raw_size
+        index_frame_size = checked_string_frame_size(index_raw_size, "LowCardinality index")
+        raise ArgumentError.new("LowCardinality index stream exceeds reader limit") if index_frame_size > MAX_DATA_FILE_BYTES - index_data_size
+        index_data_size += index_frame_size
+
+        mark_value_bytes = 0_i64
+        rows.times do |offset|
+          value = values[start_row + offset]
+          value_size = value.bytesize.to_i64
+          if value_size > WidePart::MAX_STRING_RANGE_BYTES.to_i64 - mark_value_bytes
+            raise ArgumentError.new("LowCardinality String mark exceeds materialization limit")
+          end
+          mark_value_bytes += value_size
+
+          unless value_ids.has_key?(value)
+            raise ArgumentError.new("LowCardinality dictionary exceeds 256 entries including its default key") if dictionary.size >= MAX_LOW_CARDINALITY_KEYS
+            entry_size = value_size + low_cardinality_var_uint_size(value_size.to_u64)
+            if entry_size > MAX_LOW_CARDINALITY_DICTIONARY_BYTES - dictionary_raw_size
+              raise ArgumentError.new("LowCardinality dictionary exceeds decoded-size limit")
+            end
+            value_id = dictionary.size.to_u8
+            dictionary << value
+            value_ids[value] = value_id
+            dictionary_raw_size += entry_size
+          end
+        end
+        start_row += rows
+      end
+
+      # Literal frames are emitted in bounded chunks, so the maximum dictionary
+      # always fits the reader's aggregate data-file limit.
+      cursor = 0_i64
+      while cursor < dictionary_raw_size
+        chunk_size = {LOW_CARDINALITY_DICTIONARY_FRAME_BYTES.to_i64, dictionary_raw_size - cursor}.min
+        frame_size = checked_string_frame_size(chunk_size, "LowCardinality dictionary")
+        raise ArgumentError.new("LowCardinality dictionary stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - dictionary_data_size
+        dictionary_data_size += frame_size
+        cursor += chunk_size
+      end
+
+      {dictionary, value_ids}
+    end
+
+    private def self.low_cardinality_var_uint_size(value : UInt64) : Int64
+      size = 1_i64
+      remaining = value
+      while remaining >= 0x80_u64
+        remaining >>= 7
+        size += 1
+      end
+      size
     end
 
     private def self.validate_fixed_string_inputs(
@@ -2093,6 +2244,132 @@ module CrystalClick
       ]
     end
 
+    private def self.write_low_cardinality_dictionary_stream(
+      stage : String,
+      column : String,
+      dictionary : Array(String),
+      row_count : Int32,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base = StreamName.hash("#{column}.dict")
+      data_name = "#{base}.bin"
+      marks_name = "#{base}.mrk2"
+      data_path = File.join(stage, data_name)
+      marks_path = File.join(stage, marks_name)
+      raw = IO::Memory.new
+      write_uint64_le(raw, 1_u64)
+      write_uint64_le(raw, dictionary.size.to_u64)
+      dictionary.each do |value|
+        value_bytes = value.to_slice
+        write_var_uint(raw, value_bytes.size.to_u64)
+        raw.write(value_bytes)
+      end
+      raw_bytes = raw.to_slice
+      raise ArgumentError.new("LowCardinality dictionary exceeds decoded-size limit") if raw_bytes.size.to_i64 > MAX_LOW_CARDINALITY_DICTIONARY_BYTES
+
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      data_size = 0_u64
+      File.open(data_path, "wb") do |file|
+        cursor = 0
+        while cursor < raw_bytes.size
+          chunk_size = {LOW_CARDINALITY_DICTIONARY_FRAME_BYTES, raw_bytes.size - cursor}.min
+          chunk = raw_bytes[cursor, chunk_size]
+          frame = encode_lz4_frame(chunk)
+          raise ArgumentError.new("LowCardinality dictionary stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+          file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(chunk)
+          data_size += frame.size.to_u64
+          cursor += chunk_size
+        end
+      end
+
+      mark_bytes = IO::Memory.new
+      start_row = 0
+      while start_row < row_count
+        rows = {rows_per_mark, row_count - start_row}.min
+        # The shared dictionary starts after its eight-byte version prefix.
+        write_uint64_le(mark_bytes, 0_u64)
+        write_uint64_le(mark_bytes, 8_u64)
+        write_uint64_le(mark_bytes, rows.to_u64)
+        start_row += rows
+      end
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("LowCardinality dictionary marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(marks_path, marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, raw_bytes.size.to_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
+    private def self.write_low_cardinality_index_stream(
+      stage : String,
+      column : String,
+      values : Slice(String),
+      value_ids : Hash(String, UInt8),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base = StreamName.hash(column)
+      data_name = "#{base}.bin"
+      marks_name = "#{base}.mrk2"
+      data_path = File.join(stage, data_name)
+      marks_path = File.join(stage, marks_name)
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      data_size = 0_u64
+      raw_size = 0_u64
+      mark_bytes = IO::Memory.new
+      start_row = 0
+      mark_index = 0
+
+      File.open(data_path, "wb") do |file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          raw = IO::Memory.new
+          write_uint64_le(raw, mark_index == 0 ? 0x500_u64 : 0x100_u64)
+          write_uint64_le(raw, rows.to_u64)
+          rows.times do |offset|
+            value = values[start_row + offset]
+            value_id = value_ids[value]?
+            raise CorruptPartError.new("LowCardinality dictionary is missing an input value") unless value_id
+            raw.write_byte(value_id)
+          end
+          raw_bytes = raw.to_slice
+
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+          frame = encode_lz4_frame(raw_bytes)
+          raise ArgumentError.new("LowCardinality index stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+          file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(raw_bytes)
+          data_size += frame.size.to_u64
+          raw_size += raw_bytes.size.to_u64
+          start_row += rows
+          mark_index += 1
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("LowCardinality index marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(marks_path, marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, raw_size, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
     private def self.write_array_uint64_streams(
       stage : String,
       column : String,
@@ -2757,6 +3034,48 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_low_cardinality_string_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(String),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged LowCardinality(String) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged LowCardinality(String) type does not match") unless value_part.column_type == "LowCardinality(String)"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_low_cardinality_string_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && expected_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged LowCardinality(String) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged LowCardinality(String) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
     private def self.validate_staged_array_uint64_part(
       stage : String,
       key_name : String,
@@ -3395,6 +3714,10 @@ module CrystalClick
 
     private def self.string_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size\n\t#{value_name}\n"
+    end
+
+    private def self.low_cardinality_string_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.dict\n\t#{value_name}\n"
     end
 
     private def self.array_uint64_substreams_metadata(key_name : String, value_name : String) : String

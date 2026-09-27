@@ -980,6 +980,51 @@ describe CrystalClick::OfflineCatalog do
     end
   end
 
+  it "materializes owned LowCardinality(String) values with String byte and row limits" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `seq` UInt64,\n    `payload` LowCardinality(String)"
+      )
+      keys = [0_u64, 1_u64, 2_u64, 3_u64, 4_u64]
+      binary = String.new(Bytes[0x61_u8, 0_u8, 0xff_u8])
+      values = ["", "repeat", binary, "repeat", "tail"]
+      CrystalClick::WidePartWriter.write_uint64_low_cardinality_string_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 2
+      )
+
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      table.columns.map { |column| {column.name, column.type} }.should eq([
+        {"seq", "UInt64"},
+        {"payload", "LowCardinality(String)"},
+      ])
+      selected = table["payload"]
+      selected.values(max_rows: 5_u64, max_string_bytes: 19_u64).map { |value| value.as(String) }.should eq(values)
+      expect_raises(CrystalClick::BoundsError) { selected.values(max_rows: 4_u64) }
+      expect_raises(CrystalClick::BoundsError) { selected.values(max_string_bytes: 18_u64) }
+
+      first_materialization = selected.values.map { |value| value.as(String) }
+      first_materialization[2].to_unsafe.should_not eq(binary.to_unsafe)
+      first_materialization[1].to_unsafe.should_not eq(first_materialization[3].to_unsafe)
+      first_materialization[2] = "caller replacement"
+      selected.values.map { |value| value.as(String) }.should eq(values)
+
+      scanned_values = [] of String
+      table.scan_typed(["payload"]) do |batch|
+        scanned_values.concat(batch.low_cardinality_strings_for("payload"))
+        expect_raises(CrystalClick::UnsupportedFormatError) { batch.strings_for("payload") }
+        expect_raises(CrystalClick::UnsupportedFormatError) { batch.values_for("payload", UInt64) }
+      end
+      scanned_values.should eq(values)
+    end
+  end
+
   it "materializes owned Array(UInt64) and binary-safe Array(String) values" do
     with_offline_catalog_root do |root|
       offline_catalog_create_database(root)

@@ -262,6 +262,44 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "shows LowCardinality(String) as a bounded binary-safe preview and rejects equality filters" do
+    columns = "    `seq` UInt64,\n    `payload` LowCardinality(String)"
+    keys = [0_u64, 1_u64, 2_u64, 3_u64, 4_u64]
+    binary = String.new(Bytes[0x61_u8, 0_u8, 0xff_u8])
+    long_string = "x" * 300
+    values = ["", "repeat", binary, "repeat", long_string]
+    setup_part = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_low_cardinality_string_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 2
+      )
+      nil
+    }
+
+    with_offline_page_table(columns, nil, setup_part) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 2)
+      first = source.load(0_u64)
+      first.rows.should eq([["\"\""], ["\"repeat\""]])
+      first.row_offsets.should eq([0_u64, 1_u64])
+
+      middle = source.load(2_u64)
+      middle.rows.should eq([["#{binary.inspect}"], ["\"repeat\""]])
+      middle.row_offsets.should eq([2_u64, 3_u64])
+
+      final = source.load(4_u64)
+      final.rows.should eq([["[truncated] #{long_string.byte_slice(0, 256).inspect}"]])
+      final.row_offsets.should eq([4_u64])
+
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("payload", "repeat"))
+      end
+    end
+  end
+
   it "matches an empty String exactly and reports a filtered EOF window" do
     with_offline_page_table do |table, _table_path|
       source = CrystalClick::Examples::OfflinePageSource.new(table, ["label"], 2)

@@ -172,8 +172,10 @@ forms show `NULL` separately from zero-valued entries. Address and UUID
 columns are not equality-filter types in this example.
 Non-NULL Strings are quoted and escaped; only their first 256 source bytes are
 retained for display. Longer values carry a `[truncated]` prefix. Equality
-uses raw typed values, not truncated display text. Each filtered page examines
-one bounded *physical* window, so it may show no matching rows even though
+uses raw typed values, not truncated display text. `LowCardinality(String)`
+cells use the same bounded escaped preview, but the example does not offer
+equality filtering for that declared type. Each filtered page examines one
+bounded *physical* window, so it may show no matching rows even though
 later windows have matches. PageDown still advances through those windows. Row
 offsets follow the resolved physical part order; these candidates are **not**
 ClickHouse server Active parts. The example does not provide global sorting,

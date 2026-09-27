@@ -231,6 +231,8 @@ module CrystalClick
           batch.nullable_uuids_for(column).size
         when "String"
           batch.strings_for(column).size
+        when "LowCardinality(String)"
+          batch.low_cardinality_strings_for(column).size
         when "Array(UInt64)"
           batch.array_uint64s_for(column).size
         when "Array(String)"
@@ -360,6 +362,8 @@ module CrystalClick
           batch.nullable_uuids_for(column)[row_index].try(&.to_s) || "NULL"
         when "String"
           display_string(batch.strings_for(column)[row_index])
+        when "LowCardinality(String)"
+          display_string(batch.low_cardinality_strings_for(column)[row_index])
         when "Array(UInt64)"
           display_array_uint64s(batch.array_uint64s_for(column)[row_index])
         when "Array(String)"

@@ -334,6 +334,12 @@ module CrystalClick
       @string_values[column]? || raise(UnsupportedFormatError.new("String column was not materialized in this batch"))
     end
 
+    def low_cardinality_strings_for(column : String) : Slice(String)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("LowCardinality(String) accessor requires an exact LowCardinality(String) column") unless @column_types[index] == "LowCardinality(String)"
+      @string_values[column]? || raise(UnsupportedFormatError.new("LowCardinality(String) column was not materialized in this batch"))
+    end
+
     def array_uint64s_for(column : String) : Slice(Array(UInt64))
       index = column_index(column)
       raise UnsupportedFormatError.new("Array(UInt64) accessor requires an exact Array(UInt64) column") unless @column_types[index] == "Array(UInt64)"
@@ -660,195 +666,212 @@ module CrystalClick
     ) : Nil
       source_row_offset = 0_u64
       @entries.each_with_index do |part, part_index|
-        part_row_offset = 0_u64
-        selected_marks = candidate_marks ? candidate_marks[part_index] : nil
-        selected_index = 0
-        part.mark_row_counts.each_with_index do |mark_rows, mark_index|
-          mark_start_part_row_offset = part_row_offset
-          part_row_offset &+= mark_rows
+        begin
+          part_row_offset = 0_u64
+          selected_marks = candidate_marks ? candidate_marks[part_index] : nil
+          selected_index = 0
+          part.mark_row_counts.each_with_index do |mark_rows, mark_index|
+            mark_start_part_row_offset = part_row_offset
+            part_row_offset &+= mark_rows
 
-          selected_mark = true
-          if part_marks = selected_marks
-            selected_mark = selected_index < part_marks.size && part_marks[selected_index] == mark_index
-            selected_index += 1 if selected_mark
-          end
-          next unless selected_mark
-
-          selected_mark_row_start = 0_u64
-          selected_mark_row_end = mark_rows
-          if window = window_rows
-            mark_source_start = source_row_offset &+ mark_start_part_row_offset
-            mark_source_end = mark_source_start &+ mark_rows
-            window_start, window_end = window
-            next if mark_rows == 0_u64 || window_start >= mark_source_end || window_end <= mark_source_start
-
-            selected_mark_row_start = window_start > mark_source_start ? window_start - mark_source_start : 0_u64
-            selected_mark_row_end = window_end < mark_source_end ? window_end - mark_source_start : mark_rows
-          end
-
-          # Selected String, Nullable(String), and fixed-width String payloads are
-          # preflighted before any String array is allocated. The immutable-
-          # parts contract is not transactional; the actual aggregate is
-          # checked again before callback exposure.
-          preflight_string_bytes = 0_u64
-          part.readers.each do |selected|
-            if selected.column_type == "String" || WidePart.supports_nullable_string_type?(selected.column_type)
-              bytes = if selected.column_type == "String"
-                        selected.reader.string_mark_range_raw_bytes(selected.name, mark_index, 1)
-                      else
-                        selected.reader.nullable_string_mark_range_raw_bytes(selected.name, mark_index, 1)
-                      end
-            elsif WidePart.fixed_string_width(selected.column_type)
-              bytes = selected.reader.fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
-            elsif WidePart.nullable_fixed_string_width(selected.column_type)
-              bytes = selected.reader.nullable_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
-            elsif selected.column_type == "Array(UInt64)"
-              bytes = selected.reader.array_uint64_mark_range_raw_bytes(selected.name, mark_index, 1)
-            elsif selected.column_type == "Array(String)"
-              bytes = selected.reader.array_string_mark_range_raw_bytes(selected.name, mark_index, 1)
-            else
-              next
+            selected_mark = true
+            if part_marks = selected_marks
+              selected_mark = selected_index < part_marks.size && part_marks[selected_index] == mark_index
+              selected_index += 1 if selected_mark
             end
-            if bytes > (MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes)
-              raise CorruptPartError.new("selected String mark exceeds aggregate materialization limit")
-            end
-            preflight_string_bytes += bytes
-          end
+            next unless selected_mark
 
-          numeric_values = Hash(String, WidePartNumericArray).new
-          string_values = Hash(String, Array(String)).new
-          fixed_string_values = Hash(String, Array(String)).new
-          nullable_values = Hash(String, WidePartNullableArray).new
-          nullable_string_values = Hash(String, WidePartNullableStringArray).new
-          nullable_fixed_string_values = Hash(String, WidePartNullableStringArray).new
-          array_uint64_values = Hash(String, Array(Array(UInt64))).new
-          array_string_values = Hash(String, Array(Array(String))).new
-          actual_string_bytes = 0_u64
-          part.readers.each do |selected|
-            case selected.column_type
-            when "String"
-              values = selected.reader.read_string_mark_range(selected.name, mark_index, 1)
-              raise CorruptPartError.new("selected String mark row count changed") unless values.size.to_u64 == mark_rows
-              values.each do |value|
-                bytes = value.bytesize.to_u64
-                raise CorruptPartError.new("selected String mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-                actual_string_bytes += bytes
-              end
-              string_values[selected.name] = values
-            when "Nullable(String)"
-              values, bytes = selected.reader.read_nullable_string_mark_range_with_raw_bytes(selected.name, mark_index, 1)
-              raise CorruptPartError.new("selected Nullable(String) mark row count changed") unless values.size.to_u64 == mark_rows
-              raise CorruptPartError.new("selected Nullable(String) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-              actual_string_bytes += bytes
-              nullable_string_values[selected.name] = values
-            when .starts_with?("FixedString(")
-              values = selected.reader.read_fixed_string_mark_range(selected.name, mark_index, 1)
-              raise CorruptPartError.new("selected FixedString mark row count changed") unless values.size.to_u64 == mark_rows
-              width = WidePart.fixed_string_width(selected.column_type) || raise(UnsupportedFormatError.new("unsupported exact FixedString type"))
-              bytes = values.size.to_u64 * width.to_u64
-              raise CorruptPartError.new("selected FixedString mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-              actual_string_bytes += bytes
-              fixed_string_values[selected.name] = values
-            when .starts_with?("Nullable(FixedString(")
-              width = WidePart.nullable_fixed_string_width(selected.column_type) || raise(UnsupportedFormatError.new("unsupported exact Nullable(FixedString) type"))
-              values = selected.reader.read_nullable_fixed_string_mark_range(selected.name, mark_index, 1)
-              raise CorruptPartError.new("selected Nullable(FixedString) mark row count changed") unless values.size.to_u64 == mark_rows
-              bytes = values.size.to_u64 * width.to_u64
-              raise CorruptPartError.new("selected Nullable(FixedString) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-              actual_string_bytes += bytes
-              nullable_fixed_string_values[selected.name] = values
-            when "Array(UInt64)"
-              values = selected.reader.read_array_uint64_mark_range(selected.name, mark_index, 1)
-              raise CorruptPartError.new("selected Array(UInt64) mark row count changed") unless values.size.to_u64 == mark_rows
-              elements = values.sum(&.size).to_u64
-              bytes = elements * 8_u64
-              raise CorruptPartError.new("selected array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-              actual_string_bytes += bytes
-              array_uint64_values[selected.name] = values
-            when "Array(String)"
-              values = selected.reader.read_array_string_mark_range(selected.name, mark_index, 1)
-              raise CorruptPartError.new("selected Array(String) mark row count changed") unless values.size.to_u64 == mark_rows
-              bytes = values.sum { |row| row.sum(&.bytesize) }.to_u64
-              raise CorruptPartError.new("selected array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-              actual_string_bytes += bytes
-              array_string_values[selected.name] = values
-            when .starts_with?("Nullable(")
-              values = read_nullable_values(selected, mark_index)
-              raise CorruptPartError.new("selected Nullable mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
-              nullable_values[selected.name] = values
-            else
-              values = read_numeric_values(selected, mark_index)
-              raise CorruptPartError.new("selected column mark row count changed") unless values.size.to_u64 == mark_rows
-              numeric_values[selected.name] = values
-            end
-          end
+            selected_mark_row_start = 0_u64
+            selected_mark_row_end = mark_rows
+            if window = window_rows
+              mark_source_start = source_row_offset &+ mark_start_part_row_offset
+              mark_source_end = mark_source_start &+ mark_rows
+              window_start, window_end = window
+              next if mark_rows == 0_u64 || window_start >= mark_source_end || window_end <= mark_source_start
 
-          mark_row_offset = selected_mark_row_start
-          first_whole_mark_batch = whole_marks
-          while mark_row_offset < selected_mark_row_end || first_whole_mark_batch
-            first_whole_mark_batch = false
-            remaining = selected_mark_row_end - mark_row_offset
-            size = if whole_marks
-                     remaining.to_i
-                   else
-                     remaining < batch_rows.to_u64 ? remaining.to_i : batch_rows
-                   end
-            numeric_slices = Hash(String, WidePartNumericSlice).new
-            string_slices = Hash(String, Slice(String)).new
-            fixed_string_slices = Hash(String, Slice(String)).new
-            nullable_slices = Hash(String, WidePartNullableSlice).new
-            nullable_string_slices = Hash(String, WidePartNullableStringSlice).new
-            nullable_fixed_string_slices = Hash(String, WidePartNullableStringSlice).new
-            array_uint64_slices = Hash(String, Slice(Array(UInt64))).new
-            array_string_slices = Hash(String, Slice(Array(String))).new
+              selected_mark_row_start = window_start > mark_source_start ? window_start - mark_source_start : 0_u64
+              selected_mark_row_end = window_end < mark_source_end ? window_end - mark_source_start : mark_rows
+            end
+
+            # Selected String, Nullable(String), and fixed-width String payloads are
+            # preflighted before any String array is allocated. The immutable-
+            # parts contract is not transactional; the actual aggregate is
+            # checked again before callback exposure.
+            preflight_string_bytes = 0_u64
             part.readers.each do |selected|
-              if values = numeric_values[selected.name]?
-                numeric_slices[selected.name] = slice_numeric_values(values, mark_row_offset.to_i, size)
-              elsif values = string_values[selected.name]?
-                string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
-              elsif values = fixed_string_values[selected.name]?
-                fixed_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
-              elsif values = nullable_values[selected.name]?
-                nullable_slices[selected.name] = slice_nullable_values(values, mark_row_offset.to_i, size)
-              elsif values = nullable_string_values[selected.name]?
-                nullable_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
-              elsif values = nullable_fixed_string_values[selected.name]?
-                nullable_fixed_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
-              elsif values = array_uint64_values[selected.name]?
-                array_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
-              elsif values = array_string_values[selected.name]?
-                array_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+              if selected.column_type == "String" || WidePart.supports_nullable_string_type?(selected.column_type)
+                bytes = if selected.column_type == "String"
+                          selected.reader.string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                        else
+                          selected.reader.nullable_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                        end
+              elsif selected.column_type == "LowCardinality(String)"
+                bytes = selected.reader.low_cardinality_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+              elsif WidePart.fixed_string_width(selected.column_type)
+                bytes = selected.reader.fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+              elsif WidePart.nullable_fixed_string_width(selected.column_type)
+                bytes = selected.reader.nullable_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+              elsif selected.column_type == "Array(UInt64)"
+                bytes = selected.reader.array_uint64_mark_range_raw_bytes(selected.name, mark_index, 1)
+              elsif selected.column_type == "Array(String)"
+                bytes = selected.reader.array_string_mark_range_raw_bytes(selected.name, mark_index, 1)
               else
-                raise CorruptPartError.new("selected typed column was not materialized")
+                next
+              end
+              if bytes > (MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes)
+                raise CorruptPartError.new("selected String mark exceeds aggregate materialization limit")
+              end
+              preflight_string_bytes += bytes
+            end
+
+            numeric_values = Hash(String, WidePartNumericArray).new
+            string_values = Hash(String, Array(String)).new
+            fixed_string_values = Hash(String, Array(String)).new
+            nullable_values = Hash(String, WidePartNullableArray).new
+            nullable_string_values = Hash(String, WidePartNullableStringArray).new
+            nullable_fixed_string_values = Hash(String, WidePartNullableStringArray).new
+            array_uint64_values = Hash(String, Array(Array(UInt64))).new
+            array_string_values = Hash(String, Array(Array(String))).new
+            actual_string_bytes = 0_u64
+            part.readers.each do |selected|
+              case selected.column_type
+              when "String"
+                values = selected.reader.read_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected String mark row count changed") unless values.size.to_u64 == mark_rows
+                values.each do |value|
+                  bytes = value.bytesize.to_u64
+                  raise CorruptPartError.new("selected String mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  actual_string_bytes += bytes
+                end
+                string_values[selected.name] = values
+              when "LowCardinality(String)"
+                values = selected.reader.read_low_cardinality_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected LowCardinality(String) mark row count changed") unless values.size.to_u64 == mark_rows
+                values.each do |value|
+                  bytes = value.bytesize.to_u64
+                  raise CorruptPartError.new("selected LowCardinality(String) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  actual_string_bytes += bytes
+                end
+                string_values[selected.name] = values
+              when "Nullable(String)"
+                values, bytes = selected.reader.read_nullable_string_mark_range_with_raw_bytes(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Nullable(String) mark row count changed") unless values.size.to_u64 == mark_rows
+                raise CorruptPartError.new("selected Nullable(String) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                nullable_string_values[selected.name] = values
+              when .starts_with?("FixedString(")
+                values = selected.reader.read_fixed_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected FixedString mark row count changed") unless values.size.to_u64 == mark_rows
+                width = WidePart.fixed_string_width(selected.column_type) || raise(UnsupportedFormatError.new("unsupported exact FixedString type"))
+                bytes = values.size.to_u64 * width.to_u64
+                raise CorruptPartError.new("selected FixedString mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                fixed_string_values[selected.name] = values
+              when .starts_with?("Nullable(FixedString(")
+                width = WidePart.nullable_fixed_string_width(selected.column_type) || raise(UnsupportedFormatError.new("unsupported exact Nullable(FixedString) type"))
+                values = selected.reader.read_nullable_fixed_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Nullable(FixedString) mark row count changed") unless values.size.to_u64 == mark_rows
+                bytes = values.size.to_u64 * width.to_u64
+                raise CorruptPartError.new("selected Nullable(FixedString) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                nullable_fixed_string_values[selected.name] = values
+              when "Array(UInt64)"
+                values = selected.reader.read_array_uint64_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(UInt64) mark row count changed") unless values.size.to_u64 == mark_rows
+                elements = values.sum(&.size).to_u64
+                bytes = elements * 8_u64
+                raise CorruptPartError.new("selected array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_uint64_values[selected.name] = values
+              when "Array(String)"
+                values = selected.reader.read_array_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(String) mark row count changed") unless values.size.to_u64 == mark_rows
+                bytes = values.sum { |row| row.sum(&.bytesize) }.to_u64
+                raise CorruptPartError.new("selected array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_string_values[selected.name] = values
+              when .starts_with?("Nullable(")
+                values = read_nullable_values(selected, mark_index)
+                raise CorruptPartError.new("selected Nullable mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
+                nullable_values[selected.name] = values
+              else
+                values = read_numeric_values(selected, mark_index)
+                raise CorruptPartError.new("selected column mark row count changed") unless values.size.to_u64 == mark_rows
+                numeric_values[selected.name] = values
               end
             end
-            batch = WidePartTableBatch.new(
-              part_index.to_i32,
-              part.name,
-              part.path,
-              mark_index.to_i32,
-              mark_row_offset,
-              mark_start_part_row_offset &+ mark_row_offset,
-              source_row_offset &+ mark_start_part_row_offset &+ mark_row_offset,
-              @columns,
-              part.column_types,
-              numeric_slices,
-              string_slices,
-              nullable_slices,
-              nullable_string_slices,
-              fixed_string_slices,
-              nullable_fixed_string_slices,
-              array_uint64_slices,
-              array_string_slices
-            )
-            yield batch
-            mark_row_offset &+= size.to_u64
-            break if whole_marks
+
+            mark_row_offset = selected_mark_row_start
+            first_whole_mark_batch = whole_marks
+            while mark_row_offset < selected_mark_row_end || first_whole_mark_batch
+              first_whole_mark_batch = false
+              remaining = selected_mark_row_end - mark_row_offset
+              size = if whole_marks
+                       remaining.to_i
+                     else
+                       remaining < batch_rows.to_u64 ? remaining.to_i : batch_rows
+                     end
+              numeric_slices = Hash(String, WidePartNumericSlice).new
+              string_slices = Hash(String, Slice(String)).new
+              fixed_string_slices = Hash(String, Slice(String)).new
+              nullable_slices = Hash(String, WidePartNullableSlice).new
+              nullable_string_slices = Hash(String, WidePartNullableStringSlice).new
+              nullable_fixed_string_slices = Hash(String, WidePartNullableStringSlice).new
+              array_uint64_slices = Hash(String, Slice(Array(UInt64))).new
+              array_string_slices = Hash(String, Slice(Array(String))).new
+              part.readers.each do |selected|
+                if values = numeric_values[selected.name]?
+                  numeric_slices[selected.name] = slice_numeric_values(values, mark_row_offset.to_i, size)
+                elsif values = string_values[selected.name]?
+                  string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = fixed_string_values[selected.name]?
+                  fixed_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = nullable_values[selected.name]?
+                  nullable_slices[selected.name] = slice_nullable_values(values, mark_row_offset.to_i, size)
+                elsif values = nullable_string_values[selected.name]?
+                  nullable_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = nullable_fixed_string_values[selected.name]?
+                  nullable_fixed_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = array_uint64_values[selected.name]?
+                  array_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = array_string_values[selected.name]?
+                  array_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                else
+                  raise CorruptPartError.new("selected typed column was not materialized")
+                end
+              end
+              batch = WidePartTableBatch.new(
+                part_index.to_i32,
+                part.name,
+                part.path,
+                mark_index.to_i32,
+                mark_row_offset,
+                mark_start_part_row_offset &+ mark_row_offset,
+                source_row_offset &+ mark_start_part_row_offset &+ mark_row_offset,
+                @columns,
+                part.column_types,
+                numeric_slices,
+                string_slices,
+                nullable_slices,
+                nullable_string_slices,
+                fixed_string_slices,
+                nullable_fixed_string_slices,
+                array_uint64_slices,
+                array_string_slices
+              )
+              yield batch
+              mark_row_offset &+= size.to_u64
+              break if whole_marks
+            end
+          end
+
+          raise CorruptPartError.new("part row count changed during scan") unless part_row_offset == part.row_count
+          source_row_offset &+= part.row_count
+        ensure
+          part.readers.each do |selected|
+            selected.reader.release_low_cardinality_string_scan_cache if selected.column_type == "LowCardinality(String)"
           end
         end
-
-        raise CorruptPartError.new("part row count changed during scan") unless part_row_offset == part.row_count
-        source_row_offset &+= part.row_count
       end
 
       raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count

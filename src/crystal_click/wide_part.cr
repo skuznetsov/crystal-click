@@ -2,23 +2,28 @@ require "json"
 
 module CrystalClick
   class WidePart
-    MAX_ROWS                     = 100_000_000_u64
-    MAX_DATA_FILE_BYTES          = 256_i64 * 1024 * 1024
-    MAX_MARK_FILE_BYTES          = 64_i64 * 1024 * 1024
-    MAX_FRAME_COMPRESSED_BYTES   = 64 * 1024 * 1024
-    MAX_FRAME_DECOMPRESSED_BYTES = 64 * 1024 * 1024
-    MAX_STRING_RANGE_BYTES       = 64 * 1024 * 1024
-    MAX_ARRAY_MARK_ELEMENTS      = 65_536_u64
-    MAX_ARRAY_MARK_ROWS          = 65_536_u64
-    MAX_ARRAY_MARK_BYTES         = MAX_STRING_RANGE_BYTES
-    MAX_FIXED_STRING_WIDTH       =     65_536
-    MAX_FIXED_STRING_RANGE_ROWS  = 65_536_u64
-    MAX_CODEC_FILE_BYTES         =         64
-    MAX_METADATA_FILE_BYTES      = 4 * 1024 * 1024
-    MAX_METADATA_LINE_BYTES      = 64 * 1024
-    MAX_METADATA_COLUMNS         =  4096
-    MAX_METADATA_SUBSTREAMS      = 65536
-    MARK_SIZE                    =    24
+    MAX_ROWS                             = 100_000_000_u64
+    MAX_DATA_FILE_BYTES                  = 256_i64 * 1024 * 1024
+    MAX_MARK_FILE_BYTES                  = 64_i64 * 1024 * 1024
+    MAX_FRAME_COMPRESSED_BYTES           = 64 * 1024 * 1024
+    MAX_FRAME_DECOMPRESSED_BYTES         = 64 * 1024 * 1024
+    MAX_STRING_RANGE_BYTES               = 64 * 1024 * 1024
+    MAX_ARRAY_MARK_ELEMENTS              = 65_536_u64
+    MAX_ARRAY_MARK_ROWS                  = 65_536_u64
+    MAX_ARRAY_MARK_BYTES                 = MAX_STRING_RANGE_BYTES
+    MAX_LOW_CARDINALITY_MARK_ROWS        = 65_536_u64
+    MAX_LOW_CARDINALITY_MARKS            =     65_536
+    MAX_LOW_CARDINALITY_DICTIONARY_KEYS  =        256
+    MAX_LOW_CARDINALITY_DICTIONARY_BYTES = 64 * 1024 * 1024
+    MAX_LOW_CARDINALITY_INDEX_BYTES      = 64 * 1024 * 1024
+    MAX_FIXED_STRING_WIDTH               =     65_536
+    MAX_FIXED_STRING_RANGE_ROWS          = 65_536_u64
+    MAX_CODEC_FILE_BYTES                 =         64
+    MAX_METADATA_FILE_BYTES              = 4 * 1024 * 1024
+    MAX_METADATA_LINE_BYTES              = 64 * 1024
+    MAX_METADATA_COLUMNS                 =  4096
+    MAX_METADATA_SUBSTREAMS              = 65536
+    MARK_SIZE                            =    24
 
     def self.supports_numeric_type?(type : String) : Bool
       case type
@@ -319,7 +324,7 @@ module CrystalClick
 
     def self.supports_typed_type?(type : String) : Bool
       supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
-        type == "Date" || type == "Date32" || type == "DateTime" ||
+        type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         !datetime64_scale(type).nil? || type == "String" || supports_numeric_type?(type) ||
         supports_nullable_numeric_type?(type) || supports_nullable_temporal_type?(type) ||
         supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
@@ -1078,6 +1083,363 @@ module CrystalClick
       values
     end
 
+    # Read an exact LowCardinality(String) mark range. The shared dictionary
+    # is initialized from the beginning of the part even when the requested
+    # range starts later. Selected rows are bounded to 65,536 and their
+    # materialized String bytes are bounded independently per mark.
+    def read_low_cardinality_string_mark_range(column : String, first_mark : Int32, mark_count : Int32) : Array(String)
+      values, _ = decode_low_cardinality_string_mark_range(column, first_mark, mark_count, materialize: true)
+      values
+    end
+
+    # Used by the typed table's aggregate per-mark allocation preflight.
+    # This validates the same dictionary, headers, IDs, and per-mark byte
+    # totals as the public reader without constructing the returned row array.
+    def low_cardinality_string_mark_range_raw_bytes(column : String, first_mark : Int32, mark_count : Int32) : UInt64
+      _, bytes = decode_low_cardinality_string_mark_range(column, first_mark, mark_count, materialize: false)
+      bytes
+    end
+
+    # Release the per-part validated cache when WidePartTable completes a
+    # typed scan. Direct WidePart callers retain the cache unless they opt into
+    # this lifecycle hook.
+    def release_low_cardinality_string_scan_cache : Nil
+      @low_cardinality_string_state = nil if @column_type == "LowCardinality(String)"
+    end
+
+    private def decode_low_cardinality_string_mark_range(
+      column : String,
+      first_mark : Int32,
+      mark_count : Int32,
+      materialize : Bool,
+    ) : {Array(String), UInt64}
+      ensure_column(column)
+      raise UnsupportedFormatError.new("LowCardinality accessor requires an exact LowCardinality(String) column") unless @column_type == "LowCardinality(String)"
+
+      index_stream = @streams[column]
+      dictionary_stream = @streams["#{column}.dict"]
+      raise UnsupportedFormatError.new("LowCardinality part exceeds per-reader mark limit") if index_stream.marks.size > MAX_LOW_CARDINALITY_MARKS
+      _, _, selected_rows = checked_stream_mark_range(index_stream, first_mark, mark_count)
+      raise CorruptPartError.new("LowCardinality selected row count exceeds limit") if selected_rows > MAX_LOW_CARDINALITY_MARK_ROWS
+      state = low_cardinality_string_state(index_stream, dictionary_stream)
+      index_marks = index_stream.marks
+      values = Array(String).new(selected_rows.to_i)
+      selected_bytes = 0_u64
+      materialized_bytes = 0_u64
+      (first_mark...first_mark + mark_count).each do |mark_index|
+        mark = index_marks[mark_index]
+        start_offset = state.index_mark_offsets[mark_index]
+        end_offset = state.index_mark_offsets[mark_index + 1]
+        keys, ids_offset = low_cardinality_parse_index_mark(
+          state.index_bytes,
+          start_offset,
+          end_offset,
+          mark,
+          mark_index,
+          state.global_dictionary,
+          state.shared_keys
+        )
+        row_count = mark.rows
+        mark_bytes = 0_u64
+        row_count.to_i.times do |row_index|
+          id = state.index_bytes[ids_offset + row_index].to_i
+          raise CorruptPartError.new("LowCardinality ID is outside its dictionary") if id >= keys.size
+          string_size = keys[id].bytesize.to_u64
+          if string_size > MAX_STRING_RANGE_BYTES.to_u64 - mark_bytes
+            raise CorruptPartError.new("LowCardinality mark exceeds materialized String byte limit")
+          end
+          mark_bytes += string_size
+        end
+
+        if materialized_bytes > MAX_LOW_CARDINALITY_DICTIONARY_BYTES.to_u64 - mark_bytes
+          raise CorruptPartError.new("LowCardinality selected range exceeds materialization limit")
+        end
+        materialized_bytes += mark_bytes
+        selected_bytes += mark_bytes
+        if materialize
+          row_count.to_i.times do |row_index|
+            source = keys[state.index_bytes[ids_offset + row_index].to_i].to_slice
+            owned_bytes = Bytes.new(source.size)
+            source.copy_to(owned_bytes)
+            values << String.new(owned_bytes)
+          end
+        end
+      end
+
+      raise CorruptPartError.new("LowCardinality selected rows differ from marks") unless values.size.to_u64 == selected_rows || !materialize
+      {values, selected_bytes}
+    end
+
+    # A WidePart is opened over an immutable part snapshot. Decode and validate
+    # both bounded streams once, so scans and staged validation do not rescan
+    # every mark for each selected mark.
+    private def low_cardinality_string_state(
+      index_stream : PhysicalStream,
+      dictionary_stream : PhysicalStream,
+    ) : LowCardinalityStringState
+      if state = @low_cardinality_string_state
+        return state
+      end
+
+      index_marks = index_stream.marks
+      dictionary_marks = dictionary_stream.marks
+      raise UnsupportedFormatError.new("LowCardinality part exceeds per-reader mark limit") if index_marks.size > MAX_LOW_CARDINALITY_MARKS
+      raise CorruptPartError.new("LowCardinality dictionary and index marks differ") unless dictionary_marks.size == index_marks.size
+      index_marks.each_with_index do |mark, mark_index|
+        raise CorruptPartError.new("LowCardinality mark row count exceeds limit") if mark.rows > MAX_LOW_CARDINALITY_MARK_ROWS
+        unless dictionary_marks[mark_index].rows == mark.rows
+          raise CorruptPartError.new("LowCardinality dictionary and index mark row counts differ")
+        end
+      end
+
+      dictionary_bytes, dictionary_frame_map = decode_low_cardinality_compressed_stream(
+        dictionary_stream,
+        MAX_LOW_CARDINALITY_DICTIONARY_BYTES
+      )
+      raise CorruptPartError.new("LowCardinality dictionary version is truncated") if dictionary_bytes.size < 8
+      raise UnsupportedFormatError.new("only LowCardinality dictionary version 1 is supported") unless low_cardinality_read_u64(dictionary_bytes, 0) == 1_u64
+      dictionary_mark_offsets = dictionary_marks.map do |mark|
+        low_cardinality_mark_absolute_offset(mark, dictionary_stream, dictionary_frame_map, dictionary_bytes.size)
+      end
+      dictionary_sentinel_offset = low_cardinality_mark_absolute_offset(
+        dictionary_stream.sentinel,
+        dictionary_stream,
+        dictionary_frame_map,
+        dictionary_bytes.size
+      )
+      raise CorruptPartError.new("LowCardinality dictionary sentinel is not at EOF") unless dictionary_sentinel_offset == dictionary_bytes.size.to_u64
+
+      index_bytes, index_frame_map = decode_low_cardinality_compressed_stream(
+        index_stream,
+        MAX_LOW_CARDINALITY_INDEX_BYTES
+      )
+      index_mark_offsets = index_marks.map do |mark|
+        low_cardinality_mark_absolute_offset(mark, index_stream, index_frame_map, index_bytes.size)
+      end
+      index_sentinel_offset = low_cardinality_mark_absolute_offset(
+        index_stream.sentinel,
+        index_stream,
+        index_frame_map,
+        index_bytes.size
+      )
+      raise CorruptPartError.new("LowCardinality index mark does not start at byte zero") unless index_mark_offsets.first? == 0_u64
+      raise CorruptPartError.new("LowCardinality index sentinel is not at EOF") unless index_sentinel_offset == index_bytes.size.to_u64
+
+      first_segment_end = index_mark_offsets[1]? || index_sentinel_offset
+      first_segment = index_bytes[index_mark_offsets[0].to_i, (first_segment_end - index_mark_offsets[0]).to_i]
+      first_header = low_cardinality_read_u64(first_segment, 0)
+      global_dictionary = case first_header
+                          when 0x500_u64
+                            true
+                          when 0x600_u64
+                            false
+                          else
+                            raise UnsupportedFormatError.new("unsupported LowCardinality index flags")
+                          end
+
+      shared_keys = [] of String
+      if global_dictionary
+        dictionary_marks.each do |mark|
+          unless mark.compressed_offset == dictionary_marks[0].compressed_offset && mark.decompressed_offset == dictionary_marks[0].decompressed_offset
+            raise UnsupportedFormatError.new("LowCardinality shared dictionary updates are unsupported")
+          end
+          raise CorruptPartError.new("LowCardinality shared dictionary must start after its version word") unless dictionary_mark_offsets.first? == 8_u64
+        end
+        shared_keys, dictionary_end = low_cardinality_read_dictionary(dictionary_bytes, 8, nil)
+        raise CorruptPartError.new("LowCardinality shared dictionary must reserve the empty default at ID zero") unless shared_keys.first.empty?
+        raise CorruptPartError.new("LowCardinality shared dictionary has trailing bytes") unless dictionary_end == dictionary_bytes.size
+      else
+        raise CorruptPartError.new("LowCardinality dictionary must begin after its version word") unless dictionary_mark_offsets.first? == 8_u64
+        index_marks.size.times do |mark_index|
+          mark_start = dictionary_mark_offsets[mark_index]
+          mark_end = dictionary_mark_offsets[mark_index + 1]? || dictionary_sentinel_offset
+          raise CorruptPartError.new("LowCardinality dictionary marks overlap or reverse") if mark_start > mark_end
+          local_default, next_offset = low_cardinality_read_dictionary(dictionary_bytes, mark_start.to_i, mark_end.to_i)
+          unless local_default.size == 1 && local_default[0].empty? && next_offset.to_u64 == mark_end
+            raise CorruptPartError.new("LowCardinality local dictionary default record is malformed")
+          end
+        end
+      end
+
+      index_marks.each_with_index do |mark, mark_index|
+        mark_end = index_mark_offsets[mark_index + 1]? || index_sentinel_offset
+        keys, ids_offset = low_cardinality_parse_index_mark(
+          index_bytes,
+          index_mark_offsets[mark_index],
+          mark_end,
+          mark,
+          mark_index,
+          global_dictionary,
+          shared_keys
+        )
+        mark.rows.to_i.times do |row_index|
+          id = index_bytes[ids_offset + row_index].to_i
+          raise CorruptPartError.new("LowCardinality ID is outside its dictionary") if id >= keys.size
+        end
+      end
+
+      state = LowCardinalityStringState.new(index_bytes, index_mark_offsets + [index_sentinel_offset], global_dictionary, shared_keys)
+      @low_cardinality_string_state = state
+      state
+    end
+
+    private def low_cardinality_parse_index_mark(
+      bytes : Bytes,
+      start_offset : UInt64,
+      end_offset : UInt64,
+      mark : Mark,
+      mark_index : Int,
+      global_dictionary : Bool,
+      shared_keys : Array(String),
+    ) : {Array(String), Int32}
+      raise CorruptPartError.new("LowCardinality index mark boundaries are invalid") if start_offset > end_offset || end_offset > bytes.size.to_u64
+      segment = bytes[start_offset.to_i, (end_offset - start_offset).to_i]
+      header = low_cardinality_read_u64(segment, 0)
+      expected_header = if global_dictionary
+                          mark_index == 0 ? 0x500_u64 : 0x100_u64
+                        else
+                          0x600_u64
+                        end
+      if header != expected_header
+        raise UnsupportedFormatError.new("unsupported or changing LowCardinality dictionary state")
+      end
+      keys = shared_keys
+      cursor = 8
+      unless global_dictionary
+        key_count = low_cardinality_read_u64(segment, cursor)
+        cursor += 8
+        raise CorruptPartError.new("LowCardinality local dictionary is empty or exceeds key limit") if key_count == 0_u64 || key_count > MAX_LOW_CARDINALITY_DICTIONARY_KEYS
+        keys = Array(String).new(key_count.to_i)
+        seen = Set(String).new
+        key_count.to_i.times do
+          key, cursor = low_cardinality_read_string(segment, cursor)
+          raise CorruptPartError.new("LowCardinality local dictionary contains duplicate keys") unless seen.add?(key)
+          keys << key
+        end
+        raise CorruptPartError.new("LowCardinality local dictionary must reserve the empty default at ID zero") unless keys.first.empty?
+      end
+      row_count = low_cardinality_read_u64(segment, cursor)
+      cursor += 8
+      raise CorruptPartError.new("LowCardinality index row count differs from marks") unless row_count == mark.rows
+      raise CorruptPartError.new("LowCardinality index row count exceeds limit") if row_count > MAX_LOW_CARDINALITY_MARK_ROWS
+      raise CorruptPartError.new("LowCardinality index IDs are truncated or have trailing bytes") unless segment.size - cursor == row_count
+      {keys, start_offset.to_i + cursor}
+    end
+
+    private def decode_low_cardinality_compressed_stream(
+      stream : PhysicalStream,
+      max_decoded_bytes : Int32,
+    ) : {Bytes, Hash(UInt64, Tuple(UInt64, UInt64))}
+      size = File.size(stream.data_path)
+      raise CorruptPartError.new("LowCardinality data exceeds limit") if size > MAX_DATA_FILE_BYTES
+      raise CorruptPartError.new("LowCardinality stream is empty") if size == 0
+
+      output = IO::Memory.new
+      frame_map = Hash(UInt64, Tuple(UInt64, UInt64)).new
+      referenced_frames = Set(UInt64).new
+      stream.marks.each { |mark| referenced_frames << mark.compressed_offset }
+      if stream.sentinel.compressed_offset < size.to_u64
+        referenced_frames << stream.sentinel.compressed_offset
+      end
+      workspace = CompressedBlock::DecodeWorkspace.new
+      compressed_offset = 0_i64
+      frame_count = 0
+      maximum_frames = (MAX_LOW_CARDINALITY_MARKS * 4) + 64
+      MMapDataSource.with_file(stream.data_path, size, MAX_DATA_FILE_BYTES) do |compressed|
+        while compressed_offset < compressed.size
+          frame_count += 1
+          raise UnsupportedFormatError.new("LowCardinality stream has too many compressed frames") if frame_count > maximum_frames
+          frame = CompressedBlock.decode_frame_into(
+            compressed,
+            compressed_offset,
+            workspace,
+            MAX_FRAME_COMPRESSED_BYTES,
+            MAX_FRAME_DECOMPRESSED_BYTES
+          )
+          if frame.output.size.to_i64 > max_decoded_bytes.to_i64 - output.size.to_i64
+            raise CorruptPartError.new("LowCardinality stream exceeds decoded-size limit")
+          end
+          if referenced_frames.includes?(compressed_offset.to_u64)
+            frame_map[compressed_offset.to_u64] = {output.size.to_u64, frame.output.size.to_u64}
+          end
+          output.write(frame.output)
+          raise CorruptPartError.new("LowCardinality compressed frame did not advance") if frame.end_offset <= compressed_offset
+          compressed_offset = frame.end_offset
+        end
+        raise CorruptPartError.new("LowCardinality stream has trailing compressed bytes") unless compressed_offset == compressed.size
+      end
+      raise CorruptPartError.new("LowCardinality stream is empty") if output.size == 0
+      stream.marks.each do |mark|
+        raise CorruptPartError.new("LowCardinality mark does not start at a frame") unless frame_map.has_key?(mark.compressed_offset)
+      end
+      {output.to_slice, frame_map}
+    end
+
+    private def low_cardinality_mark_absolute_offset(
+      mark : Mark,
+      stream : PhysicalStream,
+      frame_map : Hash(UInt64, Tuple(UInt64, UInt64)),
+      decoded_size : Int,
+    ) : UInt64
+      data_size = File.size(stream.data_path).to_u64
+      if mark.compressed_offset == data_size
+        raise CorruptPartError.new("LowCardinality EOF mark has a local offset") unless mark.decompressed_offset == 0_u64
+        return decoded_size.to_u64
+      end
+      frame = frame_map[mark.compressed_offset]?
+      raise CorruptPartError.new("LowCardinality dictionary mark does not start at a frame") unless frame
+      frame_start, frame_size = frame.not_nil!
+      raise CorruptPartError.new("LowCardinality dictionary mark exceeds frame output") if mark.decompressed_offset > frame_size
+      frame_start + mark.decompressed_offset
+    end
+
+    private def low_cardinality_read_dictionary(bytes : Bytes, offset : Int, limit : Int?) : {Array(String), Int32}
+      count = low_cardinality_read_u64(bytes, offset)
+      cursor = offset + 8
+      maximum = limit || bytes.size
+      raise CorruptPartError.new("LowCardinality dictionary is empty or exceeds key limit") if count == 0_u64 || count > MAX_LOW_CARDINALITY_DICTIONARY_KEYS
+      keys = Array(String).new(count.to_i)
+      seen = Set(String).new
+      count.to_i.times do
+        key, cursor = low_cardinality_read_string(bytes, cursor)
+        raise CorruptPartError.new("LowCardinality dictionary contains duplicate keys") unless seen.add?(key)
+        keys << key
+      end
+      raise CorruptPartError.new("LowCardinality dictionary record exceeds mark boundary") if cursor > maximum
+      {keys, cursor.to_i32}
+    end
+
+    private def low_cardinality_read_u64(bytes : Bytes, offset : Int) : UInt64
+      raise CorruptPartError.new("LowCardinality UInt64 field is truncated") if offset < 0 || offset > bytes.size - 8
+      u64(bytes, offset)
+    end
+
+    private def low_cardinality_read_string(bytes : Bytes, offset : Int) : {String, Int32}
+      length, data_offset = low_cardinality_read_var_uint(bytes, offset)
+      raise CorruptPartError.new("LowCardinality String length exceeds remaining bytes") if length > (bytes.size - data_offset).to_u64
+      finish = data_offset + length.to_i
+      {String.new(bytes[data_offset, length.to_i]), finish.to_i32}
+    end
+
+    private def low_cardinality_read_var_uint(bytes : Bytes, offset : Int) : {UInt64, Int32}
+      raise CorruptPartError.new("LowCardinality VarUInt is truncated") if offset < 0
+      value = 0_u64
+      cursor = offset
+      10.times do |index|
+        raise CorruptPartError.new("LowCardinality VarUInt is truncated") if cursor >= bytes.size
+        byte = bytes[cursor]
+        payload = (byte & 0x7f_u8).to_u64
+        raise CorruptPartError.new("LowCardinality VarUInt overflows UInt64") if index == 9 && payload > 1_u64
+        value |= payload << (index * 7)
+        cursor += 1
+        unless byte & 0x80_u8 != 0
+          raise CorruptPartError.new("LowCardinality VarUInt is noncanonical") if index > 0 && payload == 0_u64
+          return {value, cursor.to_i32}
+        end
+      end
+      raise CorruptPartError.new("LowCardinality VarUInt is too long")
+    end
+
     # Read an exact FixedString(N) mark range. Each returned String contains
     # exactly N on-disk bytes, including embedded and trailing NUL bytes.
     # Materialization is bounded by both raw bytes and returned String count.
@@ -1338,6 +1700,7 @@ module CrystalClick
     @marks : Array(Mark)
     @sentinel : Mark
     @streams : Hash(String, PhysicalStream)
+    @low_cardinality_string_state : LowCardinalityStringState?
 
     private struct PhysicalStream
       getter name : String
@@ -1350,10 +1713,21 @@ module CrystalClick
       end
     end
 
+    private struct LowCardinalityStringState
+      getter index_bytes : Bytes
+      getter index_mark_offsets : Array(UInt64)
+      getter global_dictionary : Bool
+      getter shared_keys : Array(String)
+
+      def initialize(@index_bytes : Bytes, @index_mark_offsets : Array(UInt64), @global_dictionary : Bool, @shared_keys : Array(String))
+      end
+    end
+
     private def initialize(path : String, requested_column : String?, mode : Symbol)
       @path = path
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
+      @low_cardinality_string_state = nil
       @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
       expected_mark_rows = nil.as(Array(UInt64)?)
@@ -1370,7 +1744,20 @@ module CrystalClick
                                  else
                                    (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type)) && stream_name == @column
                                  end
-        marks, sentinel = parse_marks(mark_path, data_size, compressed_marks, element_width, allow_empty_string_eof)
+        marks, sentinel = if @column_type == "LowCardinality(String)" && stream_name == "#{@column}.dict"
+                            parse_low_cardinality_dictionary_marks(mark_path, data_size, compressed_marks)
+                          elsif @column_type == "LowCardinality(String)"
+                            parse_marks(
+                              mark_path,
+                              data_size,
+                              compressed_marks,
+                              element_width,
+                              allow_empty_string_eof,
+                              max_records: MAX_LOW_CARDINALITY_MARKS + 1
+                            )
+                          else
+                            parse_marks(mark_path, data_size, compressed_marks, element_width, allow_empty_string_eof)
+                          end
         validate_rows(marks)
         mark_rows = marks.map(&.rows)
         if expected = expected_mark_rows
@@ -1420,6 +1807,8 @@ module CrystalClick
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
+      elsif column_type == "LowCardinality(String)"
+        validate_low_cardinality_string_serialization(columns, selected, row_count)
       elsif WidePart.supports_array_type?(column_type)
         validate_array_type_serialization_version(column_type, columns, selected, row_count)
       elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
@@ -1577,7 +1966,9 @@ module CrystalClick
     end
 
     private def expected_physical_streams(column : String, type : String) : Array(String)
-      if type == "Array(UInt64)"
+      if type == "LowCardinality(String)"
+        ["#{column}.dict", column]
+      elsif type == "Array(UInt64)"
         ["#{column}.size0", column]
       elsif type == "Array(String)"
         ["#{column}.size0", "#{column}.size", column]
@@ -1658,6 +2049,64 @@ module CrystalClick
         raise CorruptPartError.new("array serializer row count does not match part") unless rows >= 0 && rows.to_u64 == row_count
       end
       raise UnsupportedFormatError.new("unsupported array serializer type") unless WidePart.supports_array_type?(type)
+      nil
+    rescue ex : JSON::ParseException | TypeCastError | OverflowError
+      raise CorruptPartError.new("serialization.json is malformed")
+    end
+
+    private def validate_low_cardinality_string_serialization(
+      columns : Array({String, String}),
+      selected_column : String,
+      row_count : UInt64,
+    ) : Nil
+      key_columns = columns.select { |name, type| name != selected_column && type == "UInt64" }
+      unless columns.size == 2 && key_columns.size == 1 && columns.any? { |name, type| name == selected_column && type == "LowCardinality(String)" }
+        raise UnsupportedFormatError.new("LowCardinality(String) requires one UInt64 key column")
+      end
+
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for this type") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      info.each_key do |key|
+        unless ["version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types"].includes?(key)
+          raise UnsupportedFormatError.new("unsupported LowCardinality serialization.json field")
+        end
+      end
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("LowCardinality nested serialization versions are unsupported") unless propagated == true
+
+      versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+        raise UnsupportedFormatError.new("only nested String serialization version 1 is supported")
+      end
+
+      serializers = info["columns"]?.try(&.as_a) || raise(CorruptPartError.new("LowCardinality column serializers are required"))
+      case serializers.size
+      when 0
+        # The paired Crystal writer emits no explicit column serializers.
+      when 1
+        serializer = serializers[0].as_h
+        unless serializer.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
+          raise UnsupportedFormatError.new("unsupported LowCardinality column serializer fields")
+        end
+        name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("LowCardinality serializer name is malformed"))
+        kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("LowCardinality serializer kind is malformed"))
+        defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("LowCardinality serializer default count is malformed"))
+        rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("LowCardinality serializer row count is malformed"))
+        unless name == key_columns[0][0] && kind == "Default" && defaults >= 0 && defaults.to_u64 <= row_count && rows >= 0 && rows.to_u64 == row_count
+          raise UnsupportedFormatError.new("unsupported LowCardinality key serializer")
+        end
+      else
+        raise UnsupportedFormatError.new("LowCardinality per-column serialization is unsupported")
+      end
       nil
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
       raise CorruptPartError.new("serialization.json is malformed")
@@ -2032,27 +2481,108 @@ module CrystalClick
       end
     end
 
+    # LowCardinality's `.dict` marks are the sole admitted exception to the
+    # generic first-mark-at-zero rule: ClickHouse marks the dictionary payload
+    # after its eight-byte version word. Keep this parser type-local, and
+    # require the terminal record to be the actual compressed-file EOF.
+    private def parse_low_cardinality_dictionary_marks(
+      file : String,
+      data_size : Int64,
+      compressed : Bool,
+    ) : {Array(Mark), Mark}
+      size = File.size(file)
+      raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
+      maximum_record_bytes = ((MAX_LOW_CARDINALITY_MARKS + 1) * MARK_SIZE).to_i64
+      raise UnsupportedFormatError.new("LowCardinality mark file exceeds per-reader mark limit") if !compressed && size > maximum_record_bytes
+      bytes = if compressed
+                CompressedBlock.decode_all(
+                  File.read(file).to_slice,
+                  MAX_FRAME_COMPRESSED_BYTES.to_i64,
+                  maximum_record_bytes < MAX_FRAME_DECOMPRESSED_BYTES.to_i64 ? maximum_record_bytes : MAX_FRAME_DECOMPRESSED_BYTES.to_i64,
+                  maximum_record_bytes
+                )
+              else
+                File.read(file).to_slice
+              end
+      raise CorruptPartError.new("mark file is empty or truncated") if bytes.empty? || bytes.size % MARK_SIZE != 0
+      raise UnsupportedFormatError.new("LowCardinality mark file exceeds per-reader mark limit") if bytes.size > maximum_record_bytes
+
+      records = Array(Mark).new(bytes.size // MARK_SIZE)
+      previous_compressed = 0_u64
+      previous_decompressed = 0_u64
+      offset = 0
+      while offset < bytes.size
+        compressed_offset = u64(bytes, offset)
+        decompressed_offset = u64(bytes, offset + 8)
+        rows = u64(bytes, offset + 16)
+        last = offset + MARK_SIZE == bytes.size
+        if offset == 0 && (compressed_offset != 0_u64 || decompressed_offset != 8_u64)
+          raise CorruptPartError.new("LowCardinality dictionary must start after its version word")
+        end
+        raise CorruptPartError.new("LowCardinality dictionary mark offset is not monotonic") if compressed_offset < previous_compressed
+        if compressed_offset == previous_compressed && offset > 0 && decompressed_offset < previous_decompressed
+          raise CorruptPartError.new("LowCardinality dictionary mark offset is not monotonic")
+        end
+        raise CorruptPartError.new("LowCardinality dictionary mark offset exceeds frame limit") if decompressed_offset > MAX_FRAME_DECOMPRESSED_BYTES
+
+        if rows == 0_u64
+          eof_position = if compressed_offset == data_size.to_u64
+                           decompressed_offset == 0_u64
+                         else
+                           compressed_offset < data_size.to_u64
+                         end
+          unless last && eof_position
+            raise CorruptPartError.new("LowCardinality dictionary requires a true EOF sentinel")
+          end
+        else
+          raise CorruptPartError.new("LowCardinality dictionary mark points past data") unless compressed_offset < data_size.to_u64
+          raise CorruptPartError.new("LowCardinality dictionary mark row count exceeds frame limit") if rows > MAX_FRAME_DECOMPRESSED_BYTES.to_u64
+        end
+        records << Mark.new(compressed_offset, decompressed_offset, rows)
+        previous_compressed = compressed_offset
+        previous_decompressed = decompressed_offset
+        offset += MARK_SIZE
+      end
+
+      raise CorruptPartError.new("missing LowCardinality dictionary sentinel") unless records.last.rows == 0_u64
+      sentinel = records.pop
+      raise CorruptPartError.new("LowCardinality dictionary has no data marks") if records.empty?
+      {records, sentinel}
+    end
+
     private def parse_marks(
       file : String,
       data_size : Int64,
       compressed : Bool,
       element_width : Int32,
       allow_empty_string_eof : Bool,
+      max_records : Int? = nil,
     ) : {Array(Mark), Mark}
       size = File.size(file)
       raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
+      maximum_record_bytes = max_records.try { |count| (count * MARK_SIZE).to_i64 }
+      if limit = maximum_record_bytes
+        raise UnsupportedFormatError.new("mark file exceeds per-reader mark limit") if !compressed && size > limit
+      end
       bytes = if compressed
                 compressed_bytes = File.read(file).to_slice
                 CompressedBlock.decode_all(
                   compressed_bytes,
-                  MAX_FRAME_COMPRESSED_BYTES,
-                  MAX_FRAME_DECOMPRESSED_BYTES,
-                  MAX_MARK_FILE_BYTES
+                  MAX_FRAME_COMPRESSED_BYTES.to_i64,
+                  if limit = maximum_record_bytes
+                    limit < MAX_FRAME_DECOMPRESSED_BYTES.to_i64 ? limit : MAX_FRAME_DECOMPRESSED_BYTES.to_i64
+                  else
+                    MAX_FRAME_DECOMPRESSED_BYTES.to_i64
+                  end,
+                  maximum_record_bytes || MAX_MARK_FILE_BYTES
                 )
               else
                 File.read(file).to_slice
               end
       raise CorruptPartError.new("mark file is empty or truncated") if bytes.empty? || bytes.size % MARK_SIZE != 0
+      if limit = maximum_record_bytes
+        raise UnsupportedFormatError.new("mark file exceeds per-reader mark limit") if bytes.size > limit
+      end
       records = Array(Mark).new(bytes.size // MARK_SIZE)
       previous_compressed = 0_u64
       previous_decompressed = 0_u64
@@ -2103,7 +2633,9 @@ module CrystalClick
     end
 
     private def stream_element_width(stream_name : String) : Int32
-      if @column_type == "Array(UInt64)"
+      if @column_type == "LowCardinality(String)"
+        1
+      elsif @column_type == "Array(UInt64)"
         8
       elsif @column_type == "Array(String)"
         stream_name == @column ? 1 : 8
