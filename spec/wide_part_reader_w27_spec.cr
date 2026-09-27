@@ -101,14 +101,14 @@ end
 
 describe CrystalClick::WidePart do
   it "keeps Array(Nullable(UInt64)) and other supported Array admissions exact" do
-    ["Array(UInt64)", "Array(String)", "Array(Nullable(UInt64))", "Array(Array(UInt64))"].each do |type|
+    ["Array(UInt64)", "Array(String)", "Array(Nullable(UInt64))", "Array(Array(UInt64))", "Array(Array(Nullable(UInt64)))"].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
     end
     [
       "Array(Nullable(UInt8))",
       "Array(Nullable(UInt64) trailing)",
       "Nullable(Array(UInt64))",
-      "Array(Array(Nullable(UInt64)))",
+      "Array(Array(Nullable(UInt8)))",
       "Array(Array(UInt64) trailing)",
       "Array(Nullable(Nullable(UInt64)))",
     ].each do |type|

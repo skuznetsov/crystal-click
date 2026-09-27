@@ -56,7 +56,7 @@ describe CrystalClick::WidePart do
     [
       "Array( Array(UInt64))",
       "Array(Array(UInt64, UInt64))",
-      "Array(Array(Nullable(UInt64)))",
+      "Array(Array(Nullable(UInt8)))",
       "Array(Array(UInt64)) trailing",
     ].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
