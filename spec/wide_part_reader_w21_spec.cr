@@ -64,8 +64,8 @@ private def w21_reader_corrupt_u64_frame(path : String, stream : String, frame_i
 end
 
 describe CrystalClick::WidePart do
-  it "admits only exact Array(UInt64) and Array(String) declarations" do
-    ["Array(UInt64)", "Array(String)"].each do |type|
+  it "admits only the exact supported Array declarations" do
+    ["Array(UInt64)", "Array(String)", "Array(Nullable(UInt64))"].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
     end
 
@@ -73,7 +73,6 @@ describe CrystalClick::WidePart do
       "Array(UInt8)",
       "Array(Int64)",
       "Array(FixedString(8))",
-      "Array(Nullable(UInt64))",
       "Array(Array(UInt64))",
       "Array( UInt64)",
       "Array(UInt64, String)",

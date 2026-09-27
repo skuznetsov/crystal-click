@@ -316,10 +316,27 @@ module CrystalClick
       type == "Nullable(Date)" || type == "Nullable(Date32)" || type == "Nullable(DateTime)" || !nullable_datetime64_scale(type).nil?
     end
 
-    # W21 intentionally admits only the two paired array shapes whose nested
-    # stream layouts are represented by dedicated accessors.
+    # Keep the physical Array child grammar bounded while expressing child
+    # substreams independently from the outer size0 stream. This admits only
+    # shapes for which readers and writers have paired codecs.
     def self.supports_array_type?(type : String) : Bool
-      type == "Array(UInt64)" || type == "Array(String)"
+      !array_element_stream_names("payload", type).nil?
+    end
+
+    # Return child-level physical streams for the intentionally small Array
+    # grammar. Array itself contributes size0; callers compose it with these
+    # streams instead of inferring arbitrary nested type syntax.
+    def self.array_element_stream_names(column : String, type : String) : Array(String)?
+      case type
+      when "Array(UInt64)"
+        [column]
+      when "Array(String)"
+        ["#{column}.size", column]
+      when "Array(Nullable(UInt64))"
+        ["#{column}.null", column]
+      else
+        nil
+      end
     end
 
     def self.supports_map_uint64_string_type?(type : String) : Bool
@@ -984,6 +1001,25 @@ module CrystalClick
       checked_array_mark_byte_count(flat_elements, 8).to_u64
     end
 
+    # Count both the Nullable null map and nested UInt64 slots before the
+    # caller materializes Array(Nullable(UInt64)) rows.
+    def array_nullable_uint64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      unless @column_type == "Array(Nullable(UInt64))"
+        raise UnsupportedFormatError.new("Array(Nullable(UInt64)) accessor requires an exact Array(Nullable(UInt64)) column")
+      end
+
+      _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      {"#{column}.null", column}.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, child_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Nullable(UInt64)) child substream mark rows differ") unless child_rows == rows
+        width = stream_name == "#{column}.null" ? 1 : 8
+        validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, width)
+      end
+      checked_array_mark_byte_count(flat_elements, 9).to_u64
+    end
+
     # Return raw nested String bytes for one bounded Array(String) mark range
     # without materializing the returned outer/inner String arrays. WidePartTable
     # uses this to preflight aggregate per-mark bytes across selected columns.
@@ -1144,6 +1180,45 @@ module CrystalClick
         values << row
       end
       raise CorruptPartError.new("Array(UInt64) sizes do not consume selected nested bytes") unless flat_offset == nested_bytes.size
+      values
+    end
+
+    # Read bounded Array(Nullable(UInt64)) rows. The null map and value stream
+    # are flattened child streams with independent mark validation; NULL slots
+    # still consume a UInt64 value slot in the nested stream.
+    def read_array_nullable_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UInt64?))
+      ensure_column(column)
+      unless @column_type == "Array(Nullable(UInt64))"
+        raise UnsupportedFormatError.new("Array(Nullable(UInt64)) accessor requires an exact Array(Nullable(UInt64)) column")
+      end
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(UInt64)) null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_flat_elements, 1)
+      null_bytes = read_mark_range_bytes(null_stream, null_start, null_end, checked_array_mark_byte_count(flat_elements, 1), 1)
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Nullable(UInt64)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 8)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 8), 8)
+
+      values = Array(Array(UInt64?)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(UInt64?).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(Nullable(UInt64)) sizes exceed selected child streams") if flat_offset >= flat_elements
+          is_null = null_bytes[flat_offset]
+          raise CorruptPartError.new("Array(Nullable(UInt64)) null map contains a value other than 0 or 1") unless is_null <= 1_u8
+          row << (is_null == 1_u8 ? nil : u64(value_bytes, flat_offset * 8))
+          flat_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Nullable(UInt64)) sizes do not consume selected child streams") unless flat_offset.to_u64 == flat_elements
       values
     end
 
@@ -1965,10 +2040,9 @@ module CrystalClick
         data_size = File.size(data_path)
         raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
         element_width = stream_element_width(stream_name)
-        allow_empty_string_eof = if @column_type == "Array(UInt64)"
-                                   stream_name == @column
-                                 elsif @column_type == "Array(String)"
-                                   stream_name == @column || stream_name == "#{@column}.size"
+        allow_empty_string_eof = if WidePart.supports_array_type?(@column_type)
+                                   stream_name != "#{@column}.size0" &&
+                                     WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream_name)
                                  elsif WidePart.supports_map_uint64_string_type?(@column_type)
                                    stream_name == "#{@column}%2Ekeys" || stream_name == "#{@column}%2Evalues.size" || stream_name == "#{@column}%2Evalues"
                                  elsif WidePart.supports_map_uint64_uint64_type?(@column_type)
@@ -2218,10 +2292,8 @@ module CrystalClick
         ["#{column}.dict", column]
       elsif WidePart.supports_tuple_uint64_string_type?(type)
         ["#{column}%2Ea", "#{column}%2Eb.size", "#{column}%2Eb"]
-      elsif type == "Array(UInt64)"
-        ["#{column}.size0", column]
-      elsif type == "Array(String)"
-        ["#{column}.size0", "#{column}.size", column]
+      elsif element_streams = WidePart.array_element_stream_names(column, type)
+        ["#{column}.size0"] + element_streams
       elsif WidePart.supports_map_uint64_string_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.size", "#{column}%2Evalues"]
       elsif WidePart.supports_map_uint64_uint64_type?(type)
@@ -2297,10 +2369,12 @@ module CrystalClick
         name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("array serializer name is missing or malformed"))
         defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("array serializer default count is missing or malformed"))
         rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("array serializer row count is missing or malformed"))
-        unless kind == "Default" && name == key_column[0] && defaults == 0
+        unless kind == "Default" && name == key_column[0]
           raise UnsupportedFormatError.new("only Default key serialization is supported for arrays")
         end
-        raise CorruptPartError.new("array serializer row count does not match part") unless rows >= 0 && rows.to_u64 == row_count
+        unless defaults >= 0 && rows >= 0 && defaults <= rows && rows.to_u64 == row_count
+          raise CorruptPartError.new("array serializer default or row count does not match part")
+        end
       end
       raise UnsupportedFormatError.new("unsupported array serializer type") unless WidePart.supports_array_type?(type)
       nil
@@ -3038,6 +3112,8 @@ module CrystalClick
         stream_name == "#{@column}%2Evalues" ? 1 : 8
       elsif WidePart.supports_map_uint64_uint64_type?(@column_type)
         8
+      elsif @column_type == "Array(Nullable(UInt64))"
+        stream_name == "#{@column}.null" ? 1 : 8
       elsif @column_type == "Array(UInt64)"
         8
       elsif @column_type == "Array(String)"
@@ -3483,10 +3559,8 @@ module CrystalClick
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
       start_offset = start_mark.compressed_offset
       end_offset = end_mark.compressed_offset
-      empty_payload_stream = if @column_type == "Array(UInt64)"
-                               stream.name == @column
-                             elsif @column_type == "Array(String)"
-                               stream.name == @column || stream.name == "#{@column}.size"
+      empty_payload_stream = if WidePart.supports_array_type?(@column_type)
+                               WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream.name)
                              elsif WidePart.supports_map_uint64_string_type?(@column_type)
                                stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues.size" || stream.name == "#{@column}%2Evalues"
                              elsif WidePart.supports_map_uint64_uint64_type?(@column_type)

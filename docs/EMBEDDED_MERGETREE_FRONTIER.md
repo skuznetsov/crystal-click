@@ -66,6 +66,10 @@ W26 admits one more exact top-level payload, `Map(UInt64, UInt64)`, with a
 paired reader and writer on the same pinned frontier. Its three-stream
 physical probe, stock fixture, and bounded evidence are in
 `MAP_UINT64_UINT64_FRONTIER.md`; this is not general Map support.
+W27 admits paired `Array(Nullable(UInt64))` reading and writing while reusing
+the existing bounded Array stream topology. Its bidirectional stock oracle and
+full regression gate passed on the pinned build; it does not admit arbitrary
+recursive types or change the optimization priority below.
 
 ## Purpose and bounded contexts
 
@@ -1494,6 +1498,64 @@ Nested compositions, MV, projections, Compact parts, and performance remain
 guard-only. The implementation order above keeps type parity and MV/projection
 work ahead of performance tuning.
 
+## Verified W27 slice: Array of nullable UInt64
+
+W27 admits exactly `Array(Nullable(UInt64))` beside a sorted `UInt64` key, with
+paired bounded-mark reading, typed batch and offline-catalog values, and
+immutable part writing. Keep `Array(UInt64)` and `Array(String)` behavior
+unchanged. A bounded Array child-stream plan may share their physical stream
+inventory, but must not make arbitrary `Array(T)`, `Nullable(Array(T))`,
+recursive Map/Tuple/Nested, or alternate type spellings publicly admissible.
+
+The pinned ClickHouse 26.7.1.1315 Wide/LZ4 physical probe produced three
+payload streams: outer `payload.size0`, flattened `payload.null`, and
+flattened `payload`. This matches the local ClickHouse source's composition
+of Array and Nullable serializers. In particular, a zero-length outer
+array contributes no nullable child elements, and child stream marks must
+stay aligned to the flattened count across empty and nonempty outer marks.
+
+The discriminating RED case has an empty-array mark followed by nonempty
+arrays containing both `NULL` and `0`, plus a maximum `UInt64` value. It
+distinguishes a null bit from the nested zero slot and rejects a shifted
+null/value child mark even if total byte counts still match. Admission required
+stock-produced full and later-mark reads; Crystal-produced stock `ATTACH
+PART`, exact full and key-range values, and `CHECK TABLE`; debug and release
+specs; and all prior stock oracles. The stock input is pinned by
+`test/fixtures/public/wide_array_nullable_uint64/SHA256SUMS` and the
+bidirectional producer gate is `scripts/check_array_nullable_uint64_oracle.sh`.
+A self-readback alone is insufficient.
+The probe's `serialization.json` records `kind=Default` and one default
+`pk` row because `pk=0`: ClickHouse's `SerializationInfo::Data::add` in
+`src/DataTypes/Serializations/SerializationInfo.cpp` counts default-valued
+rows for choosing a serializer, rather than omitting physical bytes. W27
+accepts a bounded Default count in `[0, num_rows]` with the unchanged physical
+key stream and rejects Sparse/unknown kinds; tests cover both the valid
+nonzero count and out-of-range or wrong-kind counterexamples.
+
+Risk is CAUTION: wrong flattened-child alignment can silently pair the wrong
+null flag with a value. Rollback is a W27-only local feature commit; the
+stock probe uses a disposable directory and no live ClickHouse root. Claims
+decay with producer build, serializer or mark layout, codec, filesystem, or
+shared reader/writer changes. MV/projections and performance stay guard-only.
+
+At the W27 implementation diff atop `2f277b5`, the stock fixture's 16 part
+files match the original stock-produced part byte-for-byte. The reader tests
+cover exact child streams and marks, a later-mark range, typed batches, and
+offline-catalog caller-owned values. Same-size shifted child marks, invalid
+null bytes, oversized outer sizes, out-of-range Default statistics, and Sparse
+serializer metadata are rejected. Selected-entry checksum validation is
+size-only, so the shifted-mark control also exercises structural validation;
+only the stock `CHECK TABLE` gate checks the complete part checksums.
+
+The bidirectional oracle passes stock-produced reads and Crystal-produced
+mixed, all-empty, and empty-middle-granule parts through ClickHouse `ATTACH
+PART`, exact full/key-range RowBinary results, and `CHECK TABLE`. Full debug
+and release suites each pass 548 examples; all 21 pinned stock-oracle scripts
+pass. The adversarial verdict is **ROBUST** only for the exact type, pinned
+ClickHouse 26.7.1.1315 build, Wide/LZ4/plain-mark settings, and exercised
+inputs. This does not establish byte-identical serializer statistics, generic
+recursive types, Compact parts, MV, projections, or performance parity.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -1503,8 +1565,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W26's exact Map,
-   W25's exact Map,
+1. Extend reader and writer together beyond W27's exact nullable array,
+   W25/W26's exact Maps,
    W24's exact JSON typed paths, W23's exact named Tuple,
    W22's bounded `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
    W19's paired IPv6, W18's paired IPv4, W17's paired UUID, W16's bounded

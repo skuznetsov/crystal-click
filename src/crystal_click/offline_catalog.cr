@@ -2,7 +2,7 @@ module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
-                             Array(UInt64) | Array(String) | Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
+                             Array(UInt64) | Array(UInt64?) | Array(String) | Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -234,6 +234,10 @@ module CrystalClick
         selected_values = batch.array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_uint64s(values, selected_values, array_elements[0])
+      when "Array(Nullable(UInt64))"
+        selected_values = batch.array_nullable_uint64s_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_uint64s(values, selected_values, array_elements[0])
       when "Array(String)"
         selected_values = batch.array_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -722,6 +726,20 @@ module CrystalClick
     private def append_materialized_array_uint64s(
       values : Array(OfflineColumnValue),
       selected_values : Slice(Array(UInt64)),
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
+
+      selected_values.each { |row| values << row.dup }
+      next_elements
+    end
+
+    private def append_materialized_array_nullable_uint64s(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(UInt64?)),
       observed_elements : UInt64,
     ) : UInt64
       next_elements = observed_elements
