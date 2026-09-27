@@ -1320,12 +1320,13 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W19's paired IPv6, W18's paired
-   IPv4, W17's paired UUID, W16's bounded semantic scalars, W14's BASIC
-   nullable temporal codes, W13's raw time codes, W12's raw dates, W11's
-   BASIC `Nullable(FixedString(N))`, W10's plain `FixedString(N)`, and W9's
-   exact 22 payload shapes, one stock-ClickHouse differential fixture per
-   type and substream shape.
+1. Extend reader and writer together beyond W22's bounded
+   `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
+   W19's paired IPv6, W18's paired IPv4, W17's paired UUID, W16's bounded
+   semantic scalars, W14's BASIC nullable temporal codes, W13's raw time
+   codes, W12's raw dates, W11's BASIC `Nullable(FixedString(N))`, W10's plain
+   `FixedString(N)`, and W9's exact 22 payload shapes, one stock-ClickHouse
+   differential fixture per type and substream shape.
    Reader support never implies writer support. Recheck physical stream naming
    on case-sensitive filesystems before claiming cross-filesystem
    compatibility. Sparse and other String variants remain guard-only.

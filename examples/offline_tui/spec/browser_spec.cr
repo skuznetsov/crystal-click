@@ -25,7 +25,7 @@ def with_offline_tui_catalog(&)
     )
     File.write(
       File.join(database_path, "unsupported.sql"),
-      "ATTACH TABLE _ UUID '#{OFFLINE_TUI_UNSUPPORTED_UUID}'\n(\n    `payload` Array(String)\n)\nENGINE = MergeTree\nORDER BY tuple()\n"
+      "ATTACH TABLE _ UUID '#{OFFLINE_TUI_UNSUPPORTED_UUID}'\n(\n    `payload` Array(Float64)\n)\nENGINE = MergeTree\nORDER BY tuple()\n"
     )
     File.write(File.join(table_path, "format_version.txt"), "1\n")
     Dir.mkdir(File.join(table_path, "detached"))
