@@ -41,6 +41,12 @@ on the same pinned frontier. A bidirectional stock/Crystal oracle exercises
 scales 0, 38, and 76 in both shapes, including the signed 256-bit backing
 extrema at scale 0. This is raw coefficient compatibility, not Decimal SQL
 arithmetic, conversion, or support for arbitrary part layouts.
+W21 admits paired `Array(UInt64)` and `Array(String)` payloads in the existing
+two-column Wide/LZ4 part. A pinned bidirectional stock/Crystal oracle,
+debug/release suites, and prior-type oracles passed on this host. This is a
+bounded physical and API compatibility claim, not generic Array support or a
+performance claim. `LowCardinality(String)` remains a separate follow-on
+boundary, not an implied Array variant.
 
 ## Purpose and bounded contexts
 
@@ -1133,6 +1139,67 @@ beyond the pinned build and Darwin publication boundary. CAUTION: a 32-byte
 stream can remain structurally valid after high-word sign extension or word
 order is wrong. Rollback is one W20-only local feature commit; no push or
 mutation of an existing ClickHouse data root is authorized.
+
+## Verified bounded slice W21: paired Array(UInt64) and Array(String)
+
+Admit exactly one payload column of `Array(UInt64)` or `Array(String)` beside
+the sorted `UInt64` key in the existing Wide/LZ4, plain adaptive-mark part.
+Expose one owned array of element values per row without SQL array functions
+or implicit casts. Empty arrays, empty strings, embedded zero bytes, multiple
+marks, and a short final granule must retain their distinct values. Bound
+each selected mark range to 65,536 outer rows, 65,536 flattened elements,
+and 64 MiB of raw nested bytes; a stock part beyond those limits must fail
+closed before a large allocation. The writer must preflight the same limits
+per mark.
+Catalog `.values` materialization has a separate whole-call ceiling of
+1,000,000 flattened elements, in addition to its existing row and String
+byte ceilings; lazy scans remain available for larger columns.
+Publication remains staged, self-read, and exclusive.
+
+The pinned ClickHouse 26.7.1.1315 physical probe established plain adaptive
+`.mrk2` Wide parts with exactly `payload.size0` then `payload` for
+`Array(UInt64)`, and `payload.size0`, `payload.size`, `payload` for
+`Array(String)`. `size0` stores one little-endian UInt64 length per outer
+row; nested `.size` stores one little-endian UInt64 length per flattened
+String; payload elements are flattened. A seven-row part at granularity two
+has data mark rows `[2, 2, 2, 1]` and a zero-row sentinel. The UInt64
+array's decompressed mark offsets are `size0: [0, 16, 32, 48, 56]` and
+`payload: [0, 8, 32, 40, 56]`. The String array has `size0` offsets as
+above, nested `.size: [0, 8, 24, 48, 56]`, and raw payload offsets
+`[0, 0, 1, 7, 11]`. Stock `serialization.json` declares `string: 1` with
+propagation enabled. Both seven-row stock parts attached to matching clean
+tables, passed `CHECK TABLE`, and returned exact full and key-range RowBinary,
+including empty arrays and embedded-zero String bytes. The Crystal reader
+accepts this stock metadata shape and the writer's bounded metadata shape.
+An independent all-empty probe found a present zero-byte `payload.bin` and
+ordinary `.mrk2` for `Array(UInt64)` rows containing only `[]`. The same
+present zero-byte raw stream occurs for `Array(String)` containing empty
+arrays and only empty strings; its nested `.size` stream remains nonempty.
+Zero-byte stream presence is therefore distinct from a missing stream.
+
+The bidirectional oracle passed stock-to-Crystal positional and key-range
+reading plus Crystal-to-stock `ATTACH PART`, positional and key-range
+RowBinary, and `CHECK TABLE` for both types, including the zero-byte stream
+cases. It also passed isolated same-size offset and nested-data corruption
+controls on each array stream. Full debug and release Crystal suites each
+passed 495 examples with zero failures/errors, and the earlier pinned type
+oracles passed. The independent W21 implementation review found no material
+physical-format defect within this pinned scope. Reader checksum/hash
+verification is still not a general guarantee against arbitrary same-size
+corruption; the oracle's negative controls are narrower than that claim.
+
+Rejected for W21: generic or nested `Array(T)`, Nullable arrays or elements,
+Map/Tuple/Nested, `LowCardinality`, arbitrary key and table schemas, Compact
+parts, other codecs/mark layouts, and a performance claim. The TUI renders
+only bounded, escaped previews and rejects array equality filters. Catalog
+`.values` owns its array/String copies and enforces its whole-call element
+ceiling; direct lazy scans remain available. A selected table batch can still
+materialize up to 16 individually bounded array columns, so worst-case GC
+cost remains a performance risk. Risk: CAUTION because plausible offset/mark
+bytes can produce silently shifted rows. Rollback is one W21-only local
+feature commit; no existing ClickHouse data root is in scope. Evidence decays
+with producer version, serializer/substream shape, or shared reader/writer
+changes.
 
 ## Rejected and guard-only surfaces
 

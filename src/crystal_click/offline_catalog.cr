@@ -1,7 +1,8 @@
 module CrystalClick
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 |
-                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value | Nil
+                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | Decimal256Value |
+                             Array(UInt64) | Array(String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -33,8 +34,9 @@ module CrystalClick
 
   # Read-only view of one table's parsed DDL and physical part candidates.
   class OfflineTable
-    MAX_MATERIALIZED_VALUES_ROWS         = 100_000_u64
-    MAX_MATERIALIZED_VALUES_STRING_BYTES = 64_u64 * 1024 * 1024
+    MAX_MATERIALIZED_VALUES_ROWS           = 100_000_u64
+    MAX_MATERIALIZED_VALUES_STRING_BYTES   = 64_u64 * 1024 * 1024
+    MAX_MATERIALIZED_VALUES_ARRAY_ELEMENTS = 1_000_000_u64
 
     getter name : String
     getter engine : String
@@ -100,6 +102,7 @@ module CrystalClick
       values = Array(OfflineColumnValue).new(expected_rows.to_i)
       observed_rows = 0_u64
       string_bytes = 0_u64
+      array_elements = [0_u64]
 
       unless candidates.empty?
         scan_typed([column_name]) do |batch|
@@ -110,6 +113,7 @@ module CrystalClick
             selected_type,
             observed_rows,
             string_bytes,
+            array_elements,
             expected_rows,
             max_string_bytes
           )
@@ -128,6 +132,7 @@ module CrystalClick
       selected_type : String,
       observed_rows : UInt64,
       string_bytes : UInt64,
+      array_elements : Array(UInt64),
       expected_rows : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
@@ -225,6 +230,20 @@ module CrystalClick
         observed_rows = append_float32_values(values, batch, column_name, observed_rows, expected_rows)
       when "Float64"
         observed_rows = append_float64_values(values, batch, column_name, observed_rows, expected_rows)
+      when "Array(UInt64)"
+        selected_values = batch.array_uint64s_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_uint64s(values, selected_values, array_elements[0])
+      when "Array(String)"
+        selected_values = batch.array_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_strings(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
       when "String"
         selected_values = batch.strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -673,6 +692,52 @@ module CrystalClick
         values << String.new(value.to_slice)
       end
       observed_bytes
+    end
+
+    private def append_materialized_array_uint64s(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(UInt64)),
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
+
+      selected_values.each { |row| values << row.dup }
+      next_elements
+    end
+
+    private def append_materialized_array_strings(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(String)),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |value|
+          next_bytes = checked_materialized_value_string_bytes(next_bytes, value.bytesize.to_u64, max_string_bytes)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(String).new(row.size)
+        row.each { |value| owned_row << String.new(value.to_slice) }
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def checked_materialized_value_array_elements(observed : UInt64, batch_elements : UInt64) : UInt64
+      limit = MAX_MATERIALIZED_VALUES_ARRAY_ELEMENTS
+      if observed > limit || batch_elements > limit - observed
+        raise BoundsError.new("selected column materialization exceeds flattened Array element limit")
+      end
+      observed + batch_elements
     end
 
     private def checked_materialized_value_string_bytes(observed : UInt64, batch_bytes : UInt64, limit : UInt64) : UInt64

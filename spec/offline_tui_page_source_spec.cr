@@ -384,8 +384,81 @@ describe CrystalClick::Examples::OfflinePageSource do
     end
   end
 
+  it "formats array cells with bounded binary-safe previews and rejects array equality filters" do
+    u64_keys = [0_u64, 1_u64]
+    u64_arrays = [Array(UInt64).new(20) { |index| index.to_u64 }, [] of UInt64] of Array(UInt64)
+    u64_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_array_uint64_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        u64_keys.to_unsafe.to_slice(u64_keys.size),
+        "payload",
+        u64_arrays.to_unsafe.to_slice(u64_arrays.size),
+        rows_per_mark: 1
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `payload` Array(UInt64)", nil, u64_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 2)
+      page = source.load(0_u64)
+      display = page.rows[0][0]
+      display.should start_with("[0, 1, 2, 3")
+      display.should contain("15")
+      display.should contain("[truncated]")
+      display.should_not contain("16")
+      page.rows[1][0].should eq("[]")
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("payload", 0_u64))
+      end
+    end
+
+    string_keys = [0_u64, 1_u64, 2_u64, 3_u64]
+    long_binary_string = "\0\n\t\e" + ("x" * 300)
+    invalid_utf8_string = String.new(Bytes[0xff_u8, 0_u8])
+    string_arrays = [
+      Array(String).new(20) { |index| "value#{index}\0" },
+      [long_binary_string],
+      [invalid_utf8_string],
+      [] of String,
+    ] of Array(String)
+    string_setup = ->(table_path : String) : Nil {
+      CrystalClick::WidePartWriter.write_uint64_array_string_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        string_keys.to_unsafe.to_slice(string_keys.size),
+        "payload",
+        string_arrays.to_unsafe.to_slice(string_arrays.size),
+        rows_per_mark: 1
+      )
+      nil
+    }
+    with_offline_page_table("    `seq` UInt64,\n    `payload` Array(String)", nil, string_setup) do |table, _table_path|
+      source = CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 4)
+      page = source.load(0_u64)
+      element_limited = page.rows[0][0]
+      element_limited.should contain("\\u0000")
+      element_limited.should contain("[truncated]")
+      element_limited.should_not contain("value16")
+
+      byte_limited = page.rows[1][0]
+      byte_limited.should contain("\\u0000")
+      byte_limited.should contain("[truncated]")
+      byte_limited.count('x').should eq(252)
+      byte_limited.bytesize.should be < 1_700
+      byte_limited.each_byte.all? { |byte| byte >= 0x20 && byte != 0x7f }.should be_true
+
+      invalid_utf8_display = page.rows[2][0]
+      invalid_utf8_display.should contain("\\xFF")
+      invalid_utf8_display.each_byte.all? { |byte| byte >= 0x20 && byte < 0x7f }.should be_true
+      page.rows[3][0].should eq("[]")
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        source.load(0_u64, CrystalClick::Examples::OfflineEqualityFilter.new("payload", "value0\0"))
+      end
+    end
+  end
+
   it "rejects unsupported selected types and page sizes above the example bound" do
-    columns = "    `payload` Array(String)"
+    columns = "    `payload` Array(UInt8)"
     with_offline_page_table(columns, nil) do |table, _table_path|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::Examples::OfflinePageSource.new(table, ["payload"], 1).load(0_u64)

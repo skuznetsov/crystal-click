@@ -240,6 +240,84 @@ module CrystalClick
       end
     end
 
+    # Write one immutable part with a sorted UInt64 key and an Array(UInt64)
+    # payload. The size0 stream stores one outer-array length per input row;
+    # the payload stream stores all nested elements flattened in row order.
+    def self.write_uint64_array_uint64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(UInt64)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_array_uint64_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_uint64_streams(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(UInt64)"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    # Write one immutable part with a sorted UInt64 key and an Array(String)
+    # payload. Outer lengths, nested byte lengths, and raw string bytes are
+    # separate streams; all nested values are flattened in row order.
+    def self.write_uint64_array_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(String)),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_array_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_string_streams(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(String)"))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_string_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable two-column part with a sorted UInt64 primary key.
     # The payload's Crystal type selects an admitted numeric, String, or
     # BASIC Nullable type; numeric values are encoded by their exact bits.
@@ -708,6 +786,203 @@ module CrystalClick
         key_data_bytes += key_frame_bytes
         null_data_bytes += null_frame_bytes
         nested_data_bytes += nested_frame_bytes
+        start_row += rows
+      end
+      nil
+    end
+
+    private def self.validate_array_common_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      rows_per_mark : Int32,
+      value_streams : Array(String),
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty?
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      stream_bases = ([key_name] + value_streams).map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+      nil
+    end
+
+    private def self.checked_array_frame_size(raw_size : Int64, label : String) : Int64
+      raise ArgumentError.new("#{label} granule exceeds decompressed frame limit") if raw_size <= 0 || raw_size > MAX_FRAME_RAW_BYTES.to_i64
+      frame_size = literal_frame_size(raw_size)
+      raise ArgumentError.new("#{label} granule literal frame exceeds compressed frame limit") if frame_size > MAX_FRAME_COMPRESSED.to_i64
+      frame_size
+    end
+
+    private def self.add_array_frame_size(current : Int64, frame_size : Int64, label : String) : Int64
+      raise ArgumentError.new("#{label} stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - current
+      current + frame_size
+    end
+
+    private def self.checked_array_element_bytes(elements : UInt64, label : String) : Int64
+      raise ArgumentError.new("#{label} byte count overflows") if elements > Int64::MAX.to_u64 // 8_u64
+      (elements * 8_u64).to_i64
+    end
+
+    private def self.checked_array_element_checksum_size(elements : UInt64, label : String) : UInt64
+      checked_array_element_bytes(elements, label).to_u64
+    end
+
+    private def self.validate_array_uint64_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(UInt64)),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, ["#{value_name}.size0", value_name])
+
+      key_data_bytes = 0_i64
+      size0_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      total_nested_bytes = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        size0_data_bytes = add_array_frame_size(size0_data_bytes, fixed_frame_size, "Array size0")
+
+        mark_elements = 0_u64
+        rows.times do |offset|
+          row_elements = values[start_row + offset].size.to_u64
+          if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+            raise ArgumentError.new("Array nested element count exceeds per-mark limit")
+          end
+          if row_elements > UInt64::MAX - mark_elements
+            raise ArgumentError.new("Array nested element count overflows")
+          end
+          mark_elements += row_elements
+        end
+        if mark_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS
+          raise ArgumentError.new("Array nested element count exceeds per-mark limit")
+        end
+
+        nested_raw_size = checked_array_element_bytes(mark_elements, "Array nested")
+        if nested_raw_size > WidePart::MAX_ARRAY_MARK_BYTES
+          raise ArgumentError.new("Array nested bytes exceed per-mark limit")
+        end
+        if nested_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Array nested granule exceeds decompressed frame limit")
+        end
+        mark_nested_bytes = nested_raw_size.to_u64
+        if mark_nested_bytes > UInt64::MAX - total_nested_bytes
+          raise ArgumentError.new("Array nested byte count overflows")
+        end
+        total_nested_bytes += mark_nested_bytes
+        unless nested_raw_size == 0
+          nested_frame_size = checked_array_frame_size(nested_raw_size, "Array nested")
+          value_data_bytes = add_array_frame_size(value_data_bytes, nested_frame_size, "Array nested")
+        end
+        start_row += rows
+      end
+      nil
+    end
+
+    private def self.validate_array_string_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(String)),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, ["#{value_name}.size0", "#{value_name}.size", value_name])
+
+      key_data_bytes = 0_i64
+      size0_data_bytes = 0_i64
+      nested_size_data_bytes = 0_i64
+      value_data_bytes = 0_i64
+      total_nested_elements = 0_u64
+      total_nested_bytes = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        size0_data_bytes = add_array_frame_size(size0_data_bytes, fixed_frame_size, "Array size0")
+
+        mark_elements = 0_u64
+        mark_raw_bytes = 0_u64
+        rows.times do |offset|
+          row = values[start_row + offset]
+          row_elements = row.size.to_u64
+          if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+            raise ArgumentError.new("Array nested element count exceeds per-mark limit")
+          end
+          if row_elements > UInt64::MAX - mark_elements
+            raise ArgumentError.new("Array nested element count overflows")
+          end
+          mark_elements += row_elements
+          row.each do |value|
+            value_bytes = value.bytesize.to_u64
+            if value_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - mark_raw_bytes
+              raise ArgumentError.new("Array nested bytes exceed per-mark limit")
+            end
+            if value_bytes > UInt64::MAX - mark_raw_bytes
+              raise ArgumentError.new("Array nested byte count overflows")
+            end
+            mark_raw_bytes += value_bytes
+          end
+        end
+
+        nested_size_raw_size = checked_array_element_bytes(mark_elements, "Array nested size")
+        if nested_size_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Array nested size granule exceeds decompressed frame limit")
+        end
+        if mark_elements > UInt64::MAX - total_nested_elements
+          raise ArgumentError.new("Array nested element count overflows")
+        end
+        total_nested_elements += mark_elements
+        nested_size_bytes = nested_size_raw_size.to_u64
+        if nested_size_bytes > UInt64::MAX - total_nested_bytes
+          raise ArgumentError.new("Array nested byte count overflows")
+        end
+        total_nested_bytes += nested_size_bytes
+
+        unless nested_size_raw_size == 0
+          nested_size_frame_size = checked_array_frame_size(nested_size_raw_size, "Array nested size")
+          nested_size_data_bytes = add_array_frame_size(nested_size_data_bytes, nested_size_frame_size, "Array nested size")
+        end
+        if mark_raw_bytes > MAX_FRAME_RAW_BYTES.to_u64
+          raise ArgumentError.new("Array nested granule exceeds decompressed frame limit")
+        end
+        if mark_raw_bytes > UInt64::MAX - total_nested_bytes
+          raise ArgumentError.new("Array nested byte count overflows")
+        end
+        total_nested_bytes += mark_raw_bytes
+        unless mark_raw_bytes == 0
+          nested_frame_size = checked_array_frame_size(mark_raw_bytes.to_i64, "Array nested")
+          value_data_bytes = add_array_frame_size(value_data_bytes, nested_frame_size, "Array nested")
+        end
         start_row += rows
       end
       nil
@@ -1818,6 +2093,270 @@ module CrystalClick
       ]
     end
 
+    private def self.write_array_uint64_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(UInt64)),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      size0_base = StreamName.hash("#{column}.size0")
+      value_base = StreamName.hash(column)
+      size0_data_name = "#{size0_base}.bin"
+      size0_marks_name = "#{size0_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      size0_data_hash = CityHashV1::FileHasher.new
+      size0_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      size0_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      size0_data_size = 0_u64
+      value_data_size = 0_u64
+      total_elements = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, size0_data_name), "wb") do |size0_data_file|
+        File.open(File.join(stage, value_data_name), "wb") do |value_data_file|
+          while start_row < values.size
+            rows = {rows_per_mark, values.size - start_row}.min
+            size0_raw = Bytes.new(rows * 8)
+            mark_elements = 0_u64
+            rows.times do |row|
+              row_values = values[start_row + row]
+              write_uint64_le(size0_raw, row * 8, row_values.size.to_u64)
+              if row_values.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+                raise ArgumentError.new("Array nested element count exceeds per-mark limit")
+              end
+              mark_elements += row_values.size.to_u64
+            end
+
+            if mark_elements > UInt64::MAX // 8_u64
+              raise ArgumentError.new("Array nested byte count overflows")
+            end
+            nested_raw = Bytes.new((mark_elements * 8_u64).to_i)
+            nested_offset = 0
+            rows.times do |row|
+              values[start_row + row].each do |value|
+                write_uint64_le(nested_raw, nested_offset, value)
+                nested_offset += 8
+              end
+            end
+
+            write_uint64_le(size0_mark_bytes, size0_data_size)
+            write_uint64_le(size0_mark_bytes, 0_u64)
+            write_uint64_le(size0_mark_bytes, rows.to_u64)
+            write_uint64_le(value_mark_bytes, value_data_size)
+            write_uint64_le(value_mark_bytes, 0_u64)
+            write_uint64_le(value_mark_bytes, rows.to_u64)
+
+            size0_frame = encode_lz4_frame(size0_raw)
+            if size0_data_size > MAX_DATA_FILE_BYTES.to_u64 - size0_frame.size.to_u64
+              raise ArgumentError.new("Array size0 stream exceeds reader limit")
+            end
+            size0_data_file.write(size0_frame)
+            size0_data_hash.update(size0_frame)
+            size0_raw_hash.update(size0_raw)
+            size0_data_size += size0_frame.size.to_u64
+
+            unless nested_raw.empty?
+              value_frame = encode_lz4_frame(nested_raw)
+              if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+                raise ArgumentError.new("Array nested stream exceeds reader limit")
+              end
+              value_data_file.write(value_frame)
+              value_data_hash.update(value_frame)
+              value_data_size += value_frame.size.to_u64
+            end
+            value_raw_hash.update(nested_raw)
+            nested_elements = mark_elements
+            if nested_elements > UInt64::MAX - total_elements
+              raise ArgumentError.new("Array nested element count overflows")
+            end
+            total_elements += nested_elements
+            start_row += rows
+          end
+        end
+      end
+
+      write_uint64_le(size0_mark_bytes, size0_data_size)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      size0_marks = size0_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if size0_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if value_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, size0_marks_name), size0_marks)
+      File.write(File.join(stage, value_marks_name), value_marks)
+
+      [
+        ChecksumRecord.new(size0_data_name, size0_data_size, size0_data_hash.finish, true, checked_array_element_checksum_size(values.size.to_u64, "Array size0"), size0_raw_hash.finish),
+        ChecksumRecord.new(size0_marks_name, size0_marks.size.to_u64, CityHashV1.file_hash(size0_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, checked_array_element_checksum_size(total_elements, "Array nested"), value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
+    private def self.write_array_string_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(String)),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      size0_base = StreamName.hash("#{column}.size0")
+      size_base = StreamName.hash("#{column}.size")
+      value_base = StreamName.hash(column)
+      size0_data_name = "#{size0_base}.bin"
+      size0_marks_name = "#{size0_base}.mrk2"
+      size_data_name = "#{size_base}.bin"
+      size_marks_name = "#{size_base}.mrk2"
+      value_data_name = "#{value_base}.bin"
+      value_marks_name = "#{value_base}.mrk2"
+      size0_data_hash = CityHashV1::FileHasher.new
+      size0_raw_hash = CityHashV1::FileHasher.new
+      size_data_hash = CityHashV1::FileHasher.new
+      size_raw_hash = CityHashV1::FileHasher.new
+      value_data_hash = CityHashV1::FileHasher.new
+      value_raw_hash = CityHashV1::FileHasher.new
+      size0_mark_bytes = IO::Memory.new
+      size_mark_bytes = IO::Memory.new
+      value_mark_bytes = IO::Memory.new
+      size0_data_size = 0_u64
+      size_data_size = 0_u64
+      value_data_size = 0_u64
+      total_nested_elements = 0_u64
+      total_raw_size = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, size0_data_name), "wb") do |size0_data_file|
+        File.open(File.join(stage, size_data_name), "wb") do |size_data_file|
+          File.open(File.join(stage, value_data_name), "wb") do |value_data_file|
+            while start_row < values.size
+              rows = {rows_per_mark, values.size - start_row}.min
+              size0_raw = Bytes.new(rows * 8)
+              mark_elements = 0_u64
+              mark_raw_size = 0_u64
+              rows.times do |row|
+                row_values = values[start_row + row]
+                write_uint64_le(size0_raw, row * 8, row_values.size.to_u64)
+                if row_values.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+                  raise ArgumentError.new("Array nested element count exceeds per-mark limit")
+                end
+                mark_elements += row_values.size.to_u64
+                row_values.each do |value|
+                  value_size = value.bytesize.to_u64
+                  if value_size > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - mark_raw_size
+                    raise ArgumentError.new("Array nested bytes exceed per-mark limit")
+                  end
+                  if value_size > UInt64::MAX - mark_raw_size
+                    raise ArgumentError.new("Array nested byte count overflows")
+                  end
+                  mark_raw_size += value_size
+                end
+              end
+
+              nested_size_raw = Bytes.new((mark_elements * 8_u64).to_i)
+              nested_raw = Bytes.new(mark_raw_size.to_i)
+              nested_index = 0
+              raw_offset = 0
+              rows.times do |row|
+                values[start_row + row].each do |value|
+                  value_bytes = value.to_slice
+                  write_uint64_le(nested_size_raw, nested_index * 8, value_bytes.size.to_u64)
+                  nested_index += 1
+                  unless value_bytes.empty?
+                    value_bytes.copy_to(nested_raw[raw_offset, value_bytes.size])
+                    raw_offset += value_bytes.size
+                  end
+                end
+              end
+
+              write_uint64_le(size0_mark_bytes, size0_data_size)
+              write_uint64_le(size0_mark_bytes, 0_u64)
+              write_uint64_le(size0_mark_bytes, rows.to_u64)
+              write_uint64_le(size_mark_bytes, size_data_size)
+              write_uint64_le(size_mark_bytes, 0_u64)
+              write_uint64_le(size_mark_bytes, rows.to_u64)
+              write_uint64_le(value_mark_bytes, value_data_size)
+              write_uint64_le(value_mark_bytes, 0_u64)
+              write_uint64_le(value_mark_bytes, rows.to_u64)
+
+              size0_frame = encode_lz4_frame(size0_raw)
+              if size0_data_size > MAX_DATA_FILE_BYTES.to_u64 - size0_frame.size.to_u64
+                raise ArgumentError.new("Array size0 stream exceeds reader limit")
+              end
+              size0_data_file.write(size0_frame)
+              size0_data_hash.update(size0_frame)
+              size0_raw_hash.update(size0_raw)
+              size0_data_size += size0_frame.size.to_u64
+
+              unless nested_size_raw.empty?
+                size_frame = encode_lz4_frame(nested_size_raw)
+                if size_data_size > MAX_DATA_FILE_BYTES.to_u64 - size_frame.size.to_u64
+                  raise ArgumentError.new("Array nested size stream exceeds reader limit")
+                end
+                size_data_file.write(size_frame)
+                size_data_hash.update(size_frame)
+                size_raw_hash.update(nested_size_raw)
+                size_data_size += size_frame.size.to_u64
+              end
+              unless nested_raw.empty?
+                value_frame = encode_lz4_frame(nested_raw)
+                if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - value_frame.size.to_u64
+                  raise ArgumentError.new("Array nested stream exceeds reader limit")
+                end
+                value_data_file.write(value_frame)
+                value_data_hash.update(value_frame)
+                value_data_size += value_frame.size.to_u64
+              end
+              value_raw_hash.update(nested_raw)
+
+              if mark_elements > UInt64::MAX - total_nested_elements
+                raise ArgumentError.new("Array nested element count overflows")
+              end
+              total_nested_elements += mark_elements
+              if mark_raw_size > UInt64::MAX - total_raw_size
+                raise ArgumentError.new("Array nested byte count overflows")
+              end
+              total_raw_size += mark_raw_size
+              start_row += rows
+            end
+          end
+        end
+      end
+
+      write_uint64_le(size0_mark_bytes, size0_data_size)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size0_mark_bytes, 0_u64)
+      write_uint64_le(size_mark_bytes, size_data_size)
+      write_uint64_le(size_mark_bytes, 0_u64)
+      write_uint64_le(size_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, value_data_size)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      write_uint64_le(value_mark_bytes, 0_u64)
+      size0_marks = size0_mark_bytes.to_slice
+      size_marks = size_mark_bytes.to_slice
+      value_marks = value_mark_bytes.to_slice
+      raise ArgumentError.new("mark stream exceeds reader limit") if size0_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if size_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      raise ArgumentError.new("mark stream exceeds reader limit") if value_marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, size0_marks_name), size0_marks)
+      File.write(File.join(stage, size_marks_name), size_marks)
+      File.write(File.join(stage, value_marks_name), value_marks)
+
+      [
+        ChecksumRecord.new(size0_data_name, size0_data_size, size0_data_hash.finish, true, checked_array_element_checksum_size(values.size.to_u64, "Array size0"), size0_raw_hash.finish),
+        ChecksumRecord.new(size0_marks_name, size0_marks.size.to_u64, CityHashV1.file_hash(size0_marks), false),
+        ChecksumRecord.new(size_data_name, size_data_size, size_data_hash.finish, true, checked_array_element_checksum_size(total_nested_elements, "Array nested size"), size_raw_hash.finish),
+        ChecksumRecord.new(size_marks_name, size_marks.size.to_u64, CityHashV1.file_hash(size_marks), false),
+        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, total_raw_size, value_raw_hash.finish),
+        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
+      ]
+    end
+
     private def self.write_fixed_string_stream(
       stage : String,
       column : String,
@@ -2215,6 +2754,90 @@ module CrystalClick
       end
       expected_index << keys.last
       raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+      nil
+    end
+
+    private def self.validate_staged_array_uint64_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(UInt64)),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Array(UInt64) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Array(UInt64) column type does not match") unless value_part.column_type == "Array(UInt64)"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_uint64_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && expected_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Array(UInt64) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(UInt64) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_string_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(String)),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Array(String) row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Array(String) column type does not match") unless value_part.column_type == "Array(String)"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_string_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset] && expected_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Array(String) stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(String) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
     end
 
@@ -2772,6 +3395,14 @@ module CrystalClick
 
     private def self.string_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size\n\t#{value_name}\n"
+    end
+
+    private def self.array_uint64_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}\n"
+    end
+
+    private def self.array_string_substreams_metadata(key_name : String, value_name : String) : String
+      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size\n\t#{value_name}\n"
     end
 
     private def self.typed_columns_metadata(key_name : String, value_name : String, type_name : String) : String

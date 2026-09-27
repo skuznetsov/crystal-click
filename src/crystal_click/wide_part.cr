@@ -8,6 +8,9 @@ module CrystalClick
     MAX_FRAME_COMPRESSED_BYTES   = 64 * 1024 * 1024
     MAX_FRAME_DECOMPRESSED_BYTES = 64 * 1024 * 1024
     MAX_STRING_RANGE_BYTES       = 64 * 1024 * 1024
+    MAX_ARRAY_MARK_ELEMENTS      = 65_536_u64
+    MAX_ARRAY_MARK_ROWS          = 65_536_u64
+    MAX_ARRAY_MARK_BYTES         = MAX_STRING_RANGE_BYTES
     MAX_FIXED_STRING_WIDTH       =     65_536
     MAX_FIXED_STRING_RANGE_ROWS  = 65_536_u64
     MAX_CODEC_FILE_BYTES         =         64
@@ -308,6 +311,12 @@ module CrystalClick
       type == "Nullable(Date)" || type == "Nullable(Date32)" || type == "Nullable(DateTime)" || !nullable_datetime64_scale(type).nil?
     end
 
+    # W21 intentionally admits only the two paired array shapes whose nested
+    # stream layouts are represented by dedicated accessors.
+    def self.supports_array_type?(type : String) : Bool
+      type == "Array(UInt64)" || type == "Array(String)"
+    end
+
     def self.supports_typed_type?(type : String) : Bool
       supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         type == "Date" || type == "Date32" || type == "DateTime" ||
@@ -316,7 +325,7 @@ module CrystalClick
         supports_nullable_string_type?(type) || supports_uuid_type?(type) || supports_nullable_uuid_type?(type) ||
         supports_ipv4_type?(type) || supports_nullable_ipv4_type?(type) ||
         supports_ipv6_type?(type) || supports_nullable_ipv6_type?(type) ||
-        !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil?
+        !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil? || supports_array_type?(type)
     end
 
     def self.json_type?(type : String) : Bool
@@ -944,6 +953,109 @@ module CrystalClick
       checked_fixed_string_byte_count(value_rows, width).to_u64
     end
 
+    # Return flattened UInt64 bytes for one bounded Array(UInt64) mark range
+    # without materializing the outer/inner result arrays. WidePartTable uses
+    # this to preflight aggregate per-mark bytes across selected columns.
+    def array_uint64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(UInt64) accessor requires an exact Array(UInt64) column") unless @column_type == "Array(UInt64)"
+
+      _, flat_elements, _, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      nested_stream = @streams[column]
+      validate_array_nested_stream_marks(nested_stream, first_mark, mark_flat_elements, 8)
+      checked_array_mark_byte_count(flat_elements, 8).to_u64
+    end
+
+    # Return raw nested String bytes for one bounded Array(String) mark range
+    # without materializing the returned outer/inner String arrays. WidePartTable
+    # uses this to preflight aggregate per-mark bytes across selected columns.
+    def array_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(String) accessor requires an exact Array(String) column") unless @column_type == "Array(String)"
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, total_bytes = read_array_string_element_sizes(column, first_mark, mark_count, flat_elements, rows, mark_flat_elements)
+      size_stream = @streams["#{column}.size"]
+      _, _, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(String) substream mark rows differ") unless size_rows == rows && outer_sizes.size.to_u64 == rows
+
+      raw_stream = @streams[column]
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(String) substream mark rows differ") unless raw_rows == rows
+      validate_mark_range_bytes(raw_stream, raw_start, raw_end, total_bytes.to_i, 1)
+      raise CorruptPartError.new("Array(String) nested size count changed") unless element_sizes.size.to_u64 == flat_elements
+      total_bytes
+    end
+
+    # Read exact Array(UInt64) rows for a bounded set of outer marks. The mark
+    # range is bounded before row arrays are allocated, even when every row is
+    # empty. The flattened UInt64 stream is independent of outer row counts.
+    def read_array_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(UInt64))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(UInt64) accessor requires an exact Array(UInt64) column") unless @column_type == "Array(UInt64)"
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      nested_stream = @streams[column]
+      nested_start, nested_end, nested_rows = checked_stream_mark_range(nested_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(UInt64) substream mark rows differ") unless nested_rows == rows
+      validate_array_nested_stream_marks(nested_stream, first_mark, mark_flat_elements, 8)
+      expected_bytes = checked_array_mark_byte_count(flat_elements, 8)
+      nested_bytes = read_mark_range_bytes(nested_stream, nested_start, nested_end, expected_bytes, 8)
+
+      values = Array(Array(UInt64)).new(rows.to_i)
+      flat_offset = 0
+      outer_sizes.each do |size|
+        row = Array(UInt64).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(UInt64) sizes exceed selected nested bytes") if flat_offset > nested_bytes.size - 8
+          row << u64(nested_bytes, flat_offset)
+          flat_offset += 8
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(UInt64) sizes do not consume selected nested bytes") unless flat_offset == nested_bytes.size
+      values
+    end
+
+    # Read exact Array(String) rows, retaining empty and arbitrary binary
+    # strings. Outer rows, flattened element count, and raw bytes are all
+    # validated before nested String objects are allocated.
+    def read_array_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(String))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(String) accessor requires an exact Array(String) column") unless @column_type == "Array(String)"
+
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, total_bytes = read_array_string_element_sizes(column, first_mark, mark_count, flat_elements, rows, mark_flat_elements)
+      size_stream = @streams["#{column}.size"]
+      _, _, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(String) substream mark rows differ") unless size_rows == rows
+
+      raw_stream = @streams[column]
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(String) substream mark rows differ") unless raw_rows == rows
+      raw_bytes = read_mark_range_bytes(raw_stream, raw_start, raw_end, total_bytes.to_i, 1)
+
+      values = Array(Array(String)).new(rows.to_i)
+      element_offset = 0
+      raw_offset = 0
+      outer_sizes.each do |size|
+        row = Array(String).new(size.to_i)
+        size.to_i.times do
+          raise CorruptPartError.new("Array(String) sizes exceed selected element lengths") if element_offset >= element_sizes.size
+          length = element_sizes[element_offset]
+          raise CorruptPartError.new("Array(String) size exceeds selected raw bytes") if length > (raw_bytes.size - raw_offset).to_u64
+          byte_length = length.to_i
+          row << String.new(raw_bytes[raw_offset, byte_length])
+          raw_offset += byte_length
+          element_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(String) sizes do not consume selected elements") unless element_offset == element_sizes.size
+      raise CorruptPartError.new("Array(String) nested lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
+      values
+    end
+
     # Read a bounded mark range from an exact String column. At most 64 MiB of
     # raw bytes are materialized per call (the whole range, not each mark).
     # Empty values are zero-length; embedded NUL bytes are preserved.
@@ -1251,7 +1363,13 @@ module CrystalClick
         data_size = File.size(data_path)
         raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
         element_width = stream_element_width(stream_name)
-        allow_empty_string_eof = (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type)) && stream_name == @column
+        allow_empty_string_eof = if @column_type == "Array(UInt64)"
+                                   stream_name == @column
+                                 elsif @column_type == "Array(String)"
+                                   stream_name == @column || stream_name == "#{@column}.size"
+                                 else
+                                   (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type)) && stream_name == @column
+                                 end
         marks, sentinel = parse_marks(mark_path, data_size, compressed_marks, element_width, allow_empty_string_eof)
         validate_rows(marks)
         mark_rows = marks.map(&.rows)
@@ -1294,18 +1412,19 @@ module CrystalClick
         raise UnsupportedFormatError.new("only exact UInt64 columns are supported") unless column_type == "UInt64"
       end
 
+      validate_default_codec
+      row_count = parse_count_file("count.txt")
+      raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
+
       json_paths = [] of {String, String}
       if json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
+      elsif WidePart.supports_array_type?(column_type)
+        validate_array_type_serialization_version(column_type, columns, selected, row_count)
       elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
         validate_type_serialization_version(column_type)
       end
-
-      validate_default_codec
-
-      row_count = parse_count_file("count.txt")
-      raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
 
       physical_streams = parse_substreams(columns, selected, column_type, source_column_name, json_paths)
       {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, physical_streams}
@@ -1458,7 +1577,11 @@ module CrystalClick
     end
 
     private def expected_physical_streams(column : String, type : String) : Array(String)
-      if type == "String"
+      if type == "Array(UInt64)"
+        ["#{column}.size0", column]
+      elsif type == "Array(String)"
+        ["#{column}.size0", "#{column}.size", column]
+      elsif type == "String"
         ["#{column}.size", column]
       elsif WidePart.supports_nullable_string_type?(type)
         ["#{column}.null", "#{column}.size", column]
@@ -1481,6 +1604,63 @@ module CrystalClick
       else
         [column]
       end
+    end
+
+    private def validate_array_type_serialization_version(
+      type : String,
+      columns : Array({String, String}),
+      selected_column : String,
+      row_count : UInt64,
+    ) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for this type") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      info.each_key do |key|
+        unless ["version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types"].includes?(key)
+          raise UnsupportedFormatError.new("unsupported array serialization.json field")
+        end
+      end
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("array nested serialization versions are unsupported") unless propagated == true
+
+      versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+        raise UnsupportedFormatError.new("only nested String serialization version 1 is supported for arrays")
+      end
+
+      key_columns = columns.select { |name, column_type| name != selected_column && column_type == "UInt64" }
+      unless columns.size == 2 && key_columns.size == 1
+        raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair")
+      end
+      key_column = key_columns[0]
+      serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("array column serializers are required"))
+      unless serializers.empty?
+        raise UnsupportedFormatError.new("array per-column serialization is unsupported") unless serializers.size == 1
+        serializer = serializers[0].as_h
+        unless serializer.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
+          raise UnsupportedFormatError.new("array column serializer fields are unsupported")
+        end
+        kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("array serializer kind is missing or malformed"))
+        name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("array serializer name is missing or malformed"))
+        defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("array serializer default count is missing or malformed"))
+        rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("array serializer row count is missing or malformed"))
+        unless kind == "Default" && name == key_column[0] && defaults == 0
+          raise UnsupportedFormatError.new("only Default key serialization is supported for arrays")
+        end
+        raise CorruptPartError.new("array serializer row count does not match part") unless rows >= 0 && rows.to_u64 == row_count
+      end
+      raise UnsupportedFormatError.new("unsupported array serializer type") unless WidePart.supports_array_type?(type)
+      nil
+    rescue ex : JSON::ParseException | TypeCastError | OverflowError
+      raise CorruptPartError.new("serialization.json is malformed")
     end
 
     private def validate_type_serialization_version(type : String) : Nil
@@ -1923,7 +2103,11 @@ module CrystalClick
     end
 
     private def stream_element_width(stream_name : String) : Int32
-      if @column_type == "String"
+      if @column_type == "Array(UInt64)"
+        8
+      elsif @column_type == "Array(String)"
+        stream_name == @column ? 1 : 8
+      elsif @column_type == "String"
         stream_name == "#{@column}.size" ? 8 : 1
       elsif WidePart.supports_nullable_string_type?(@column_type)
         stream_name == "#{@column}.size" ? 8 : 1
@@ -2019,6 +2203,154 @@ module CrystalClick
         offset += 8
       end
       {sizes, total_bytes}
+    end
+
+    private def read_array_outer_sizes(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {Array(UInt64), UInt64, UInt64, Array(UInt64)}
+      size_stream = @streams["#{column}.size0"]
+      size_start, size_end, rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array outer row count exceeds materialization limit") if rows > MAX_ARRAY_MARK_ROWS
+      encoded_sizes = read_mark_range_bytes(size_stream, size_start, size_end, checked_byte_count(rows, 8), 8)
+
+      outer_sizes = Array(UInt64).new(rows.to_i)
+      flat_elements = 0_u64
+      offset = 0
+      while offset < encoded_sizes.size
+        size = u64(encoded_sizes, offset)
+        if size > MAX_ARRAY_MARK_ELEMENTS - flat_elements
+          raise CorruptPartError.new("Array nested element count exceeds per-range limit")
+        end
+        flat_elements += size
+        outer_sizes << size
+        offset += 8
+      end
+      raise CorruptPartError.new("Array size0 count does not match outer rows") unless outer_sizes.size.to_u64 == rows
+
+      mark_flat_elements = Array(UInt64).new(mark_count)
+      row_offset = 0
+      mark_count.times do |range_mark_index|
+        mark_index = first_mark + range_mark_index
+        mark_rows = size_stream.marks[mark_index].rows
+        mark_flat = 0_u64
+        mark_rows.times do
+          raise CorruptPartError.new("Array size0 mark rows exceed selected range") if row_offset >= outer_sizes.size
+          size = outer_sizes[row_offset]
+          raise CorruptPartError.new("Array nested element count exceeds per-range limit") if size > MAX_ARRAY_MARK_ELEMENTS - mark_flat
+          mark_flat += size
+          row_offset += 1
+        end
+        mark_flat_elements << mark_flat
+      end
+      raise CorruptPartError.new("Array size0 marks do not consume selected rows") unless row_offset == outer_sizes.size
+      {outer_sizes, flat_elements, rows, mark_flat_elements}
+    end
+
+    private def read_array_string_element_sizes(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      flat_elements : UInt64,
+      outer_rows : UInt64,
+      mark_flat_elements : Array(UInt64),
+    ) : {Array(UInt64), UInt64}
+      size_stream = @streams["#{column}.size"]
+      size_start, size_end, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(String) substream mark rows differ") unless size_rows == outer_rows
+      encoded_sizes = read_mark_range_bytes(
+        size_stream,
+        size_start,
+        size_end,
+        checked_array_mark_byte_count(flat_elements, 8),
+        8
+      )
+
+      element_sizes = Array(UInt64).new(flat_elements.to_i)
+      total_bytes = 0_u64
+      offset = 0
+      raw_stream = @streams[column]
+      mark_flat_elements.each_with_index do |mark_flat, range_mark_index|
+        mark_index = first_mark + range_mark_index
+        mark_size_bytes = checked_array_mark_byte_count(mark_flat, 8)
+        size_mark_start = size_stream.marks[mark_index]
+        size_mark_end = mark_index + 1 == size_stream.marks.size ? size_stream.sentinel : size_stream.marks[mark_index + 1]
+        validate_mark_range_bytes(size_stream, size_mark_start, size_mark_end, mark_size_bytes, 8)
+
+        mark_raw_bytes = 0_u64
+        mark_flat.to_i.times do
+          raise CorruptPartError.new("Array(String) nested size count exceeds selected bytes") if offset > encoded_sizes.size - 8
+          size = u64(encoded_sizes, offset)
+          if size > MAX_ARRAY_MARK_BYTES.to_u64 - total_bytes
+            raise CorruptPartError.new("Array(String) nested bytes exceed per-range limit")
+          end
+          if size > MAX_DATA_FILE_BYTES.to_u64 - total_bytes
+            raise CorruptPartError.new("Array(String) nested bytes exceed data limit")
+          end
+          if size > MAX_ARRAY_MARK_BYTES.to_u64 - mark_raw_bytes
+            raise CorruptPartError.new("Array(String) nested bytes exceed per-mark limit")
+          end
+          total_bytes += size
+          mark_raw_bytes += size
+          element_sizes << size
+          offset += 8
+        end
+        raw_mark_start = raw_stream.marks[mark_index]
+        raw_mark_end = mark_index + 1 == raw_stream.marks.size ? raw_stream.sentinel : raw_stream.marks[mark_index + 1]
+        validate_mark_range_bytes(raw_stream, raw_mark_start, raw_mark_end, mark_raw_bytes.to_i, 1)
+      end
+      raise CorruptPartError.new("Array(String) nested size stream has trailing bytes") unless offset == encoded_sizes.size
+      raise CorruptPartError.new("Array(String) nested size count does not match size0") unless element_sizes.size.to_u64 == flat_elements
+      {element_sizes, total_bytes}
+    end
+
+    private def validate_array_nested_stream_marks(
+      stream : PhysicalStream,
+      first_mark : Int,
+      mark_flat_elements : Array(UInt64),
+      element_width : Int32,
+    ) : Nil
+      mark_flat_elements.each_with_index do |elements, range_mark_index|
+        mark_index = first_mark + range_mark_index
+        start_mark = stream.marks[mark_index]
+        end_mark = mark_index + 1 == stream.marks.size ? stream.sentinel : stream.marks[mark_index + 1]
+        expected_bytes = checked_array_mark_byte_count(elements, element_width)
+        validate_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, element_width)
+      end
+      nil
+    end
+
+    private def checked_array_mark_byte_count(elements : UInt64, width : Int32) : Int
+      if elements > MAX_ARRAY_MARK_ELEMENTS
+        raise CorruptPartError.new("Array nested element count exceeds per-range limit")
+      end
+      byte_width = width.to_u64
+      if byte_width == 0 || elements > UInt64::MAX // byte_width
+        raise CorruptPartError.new("Array nested byte count overflows")
+      end
+      bytes = elements * byte_width
+      if bytes > MAX_ARRAY_MARK_BYTES.to_u64 || bytes > MAX_DATA_FILE_BYTES.to_u64 || bytes > Int32::MAX.to_u64
+        raise CorruptPartError.new("Array nested bytes exceed per-range limit")
+      end
+      bytes.to_i
+    end
+
+    private def validate_mark_range_bytes(
+      stream : PhysicalStream,
+      start_mark : Mark,
+      end_mark : Mark,
+      expected_bytes : Int,
+      element_width : Int32,
+    ) : Nil
+      raise CorruptPartError.new("selected byte count exceeds limit") if expected_bytes < 0 || expected_bytes > MAX_DATA_FILE_BYTES
+      selected_bytes = 0
+      each_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, element_width) do |chunk|
+        raise CorruptPartError.new("selected byte count exceeds allocation") if chunk.size > expected_bytes - selected_bytes
+        selected_bytes += chunk.size
+      end
+      raise CorruptPartError.new("selected byte count mismatch") unless selected_bytes == expected_bytes
+      nil
     end
 
     private def ensure_column(column : String)
@@ -2205,13 +2537,19 @@ module CrystalClick
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
       start_offset = start_mark.compressed_offset
       end_offset = end_mark.compressed_offset
-      string_raw_stream = stream.name == @column && (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type))
+      empty_payload_stream = if @column_type == "Array(UInt64)"
+                               stream.name == @column
+                             elsif @column_type == "Array(String)"
+                               stream.name == @column || stream.name == "#{@column}.size"
+                             else
+                               stream.name == @column && (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type))
+                             end
       eof_boundary = end_offset == data_size.to_u64 && end_mark.decompressed_offset == 0 &&
-                     (end_mark == stream.sentinel || string_raw_stream && end_mark.rows > 0)
+                     (end_mark == stream.sentinel || empty_payload_stream && end_mark.rows > 0)
       if start_offset == data_size.to_u64
-        unless string_raw_stream && expected_bytes == 0 && end_offset == data_size.to_u64 &&
+        unless empty_payload_stream && expected_bytes == 0 && end_offset == data_size.to_u64 &&
                start_mark.decompressed_offset == 0 && end_mark.decompressed_offset == 0 && eof_boundary
-          raise CorruptPartError.new("empty String range at EOF must select zero expected bytes")
+          raise CorruptPartError.new("empty payload range at EOF must select zero expected bytes")
         end
         return
       end

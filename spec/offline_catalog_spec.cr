@@ -980,6 +980,170 @@ describe CrystalClick::OfflineCatalog do
     end
   end
 
+  it "materializes owned Array(UInt64) and binary-safe Array(String) values" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `seq` UInt64,\n    `payload` Array(UInt64)"
+      )
+      keys = [0_u64, 1_u64, 2_u64]
+      uint64_arrays = [
+        [] of UInt64,
+        [7_u64, UInt64::MAX],
+        [0_u64],
+      ] of Array(UInt64)
+      CrystalClick::WidePartWriter.write_uint64_array_uint64_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        uint64_arrays.to_unsafe.to_slice(uint64_arrays.size),
+        rows_per_mark: 2
+      )
+
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      selected = table["payload"]
+      selected.values.map { |value| value.as(Array(UInt64)) }.should eq(uint64_arrays)
+
+      owned = selected.values.map { |value| value.as(Array(UInt64)) }
+      owned[1][0] = 99_u64
+      selected.values.map { |value| value.as(Array(UInt64)) }.should eq(uint64_arrays)
+      table.scan_typed(["payload"]) do |batch|
+        expect_raises(CrystalClick::UnsupportedFormatError) { batch.values_for("payload", UInt64) }
+      end
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `seq` UInt64,\n    `payload` Array(String)"
+      )
+      keys = [0_u64, 1_u64, 2_u64]
+      binary_string = String.new(Bytes[0x61_u8, 0x00_u8, 0xff_u8])
+      long_string = "owned nested string " * 8
+      string_arrays = [
+        [] of String,
+        [""],
+        [binary_string, long_string],
+      ] of Array(String)
+      CrystalClick::WidePartWriter.write_uint64_array_string_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        string_arrays.to_unsafe.to_slice(string_arrays.size),
+        rows_per_mark: 2
+      )
+
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      selected = table["payload"]
+      source_string = ""
+      table.scan_typed(["payload"]) do |batch|
+        batch.array_strings_for("payload").each do |row|
+          row.each do |value|
+            source_string = value if value == long_string
+          end
+        end
+      end
+
+      selected.values.map { |value| value.as(Array(String)) }.should eq(string_arrays)
+      materialized = selected.values.map { |value| value.as(Array(String)) }
+      materialized[2][1].to_unsafe.should_not eq(source_string.to_unsafe)
+      materialized[2][0] = "caller-owned replacement"
+      selected.values.map { |value| value.as(Array(String)) }.should eq(string_arrays)
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        table.scan_typed(["payload"]) { |batch| batch.strings_for("payload") }
+      end
+    end
+  end
+
+  it "rejects whole-call array element and String byte overflow without limiting lazy scans" do
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `seq` UInt64,\n    `payload` Array(UInt64)"
+      )
+      keys = Array(UInt64).new(17) { |index| index.to_u64 }
+      uint64_arrays = Array(Array(UInt64)).new(17) do |index|
+        Array(UInt64).new(60_000, index.to_u64)
+      end
+      CrystalClick::WidePartWriter.write_uint64_array_uint64_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        uint64_arrays.to_unsafe.to_slice(uint64_arrays.size),
+        rows_per_mark: 1
+      )
+
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      error = expect_raises(CrystalClick::BoundsError) { table["payload"].values }
+      error.message.not_nil!.should contain("flattened Array element limit")
+
+      flattened = 0_u64
+      table.scan_typed(["payload"]) do |batch|
+        batch.array_uint64s_for("payload").each do |row|
+          flattened += row.size.to_u64
+        end
+      end
+      flattened.should eq(1_020_000_u64)
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `seq` UInt64,\n    `payload` Array(String)"
+      )
+      keys = Array(UInt64).new(17) { |index| index.to_u64 }
+      string_arrays = Array(Array(String)).new(17) do
+        Array(String).new(60_000, "")
+      end
+      CrystalClick::WidePartWriter.write_uint64_array_string_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        string_arrays.to_unsafe.to_slice(string_arrays.size),
+        rows_per_mark: 1
+      )
+
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      error = expect_raises(CrystalClick::BoundsError) { table["payload"].values }
+      error.message.not_nil!.should contain("flattened Array element limit")
+    end
+
+    with_offline_catalog_root do |root|
+      offline_catalog_create_database(root)
+      table_path = offline_catalog_create_table(
+        root,
+        columns: "    `seq` UInt64,\n    `payload` Array(String)"
+      )
+      keys = [0_u64, 1_u64]
+      string_arrays = [["a\0b", ""], ["last"]] of Array(String)
+      CrystalClick::WidePartWriter.write_uint64_array_string_pair(
+        File.join(table_path, "all_1_1_0"),
+        "seq",
+        keys.to_unsafe.to_slice(keys.size),
+        "payload",
+        string_arrays.to_unsafe.to_slice(string_arrays.size),
+        rows_per_mark: 1
+      )
+
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      error = expect_raises(CrystalClick::BoundsError) do
+        table["payload"].values(max_string_bytes: 6_u64)
+      end
+      error.message.not_nil!.should contain("String payload limit")
+      table["payload"].values(max_string_bytes: 7_u64).map do |value|
+        value.as(Array(String))
+      end.should eq(string_arrays)
+    end
+  end
+
   it "materializes Nullable(String), retains values after another scan, and enforces cumulative String bounds" do
     with_offline_catalog_root do |root|
       offline_catalog_create_database(root)

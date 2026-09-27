@@ -35,6 +35,8 @@ module CrystalClick
     @nullable_values : Hash(String, WidePartNullableSlice)
     @nullable_string_values : Hash(String, WidePartNullableStringSlice)
     @nullable_fixed_string_values : Hash(String, WidePartNullableStringSlice)
+    @array_uint64_values : Hash(String, Slice(Array(UInt64)))
+    @array_string_values : Hash(String, Slice(Array(String)))
 
     def initialize(
       @part_index : Int32,
@@ -55,6 +57,8 @@ module CrystalClick
       @nullable_values = Hash(String, WidePartNullableSlice).new
       @nullable_string_values = Hash(String, WidePartNullableStringSlice).new
       @nullable_fixed_string_values = Hash(String, WidePartNullableStringSlice).new
+      @array_uint64_values = Hash(String, Slice(Array(UInt64))).new
+      @array_string_values = Hash(String, Slice(Array(String))).new
     end
 
     # Preserve the original UInt64 batch construction contract.
@@ -77,6 +81,8 @@ module CrystalClick
       @nullable_values = Hash(String, WidePartNullableSlice).new
       @nullable_string_values = Hash(String, WidePartNullableStringSlice).new
       @nullable_fixed_string_values = Hash(String, WidePartNullableStringSlice).new
+      @array_uint64_values = Hash(String, Slice(Array(UInt64))).new
+      @array_string_values = Hash(String, Slice(Array(String))).new
     end
 
     # Preserve the existing typed/hash construction contract. Batches created
@@ -99,6 +105,8 @@ module CrystalClick
       @fixed_string_values = Hash(String, Slice(String)).new
       @nullable_string_values = Hash(String, WidePartNullableStringSlice).new
       @nullable_fixed_string_values = Hash(String, WidePartNullableStringSlice).new
+      @array_uint64_values = Hash(String, Slice(Array(UInt64))).new
+      @array_string_values = Hash(String, Slice(Array(String))).new
     end
 
     def initialize(
@@ -117,6 +125,8 @@ module CrystalClick
       @nullable_string_values : Hash(String, WidePartNullableStringSlice),
       fixed_string_values : Hash(String, Slice(String)) = Hash(String, Slice(String)).new,
       nullable_fixed_string_values : Hash(String, WidePartNullableStringSlice) = Hash(String, WidePartNullableStringSlice).new,
+      @array_uint64_values : Hash(String, Slice(Array(UInt64))) = Hash(String, Slice(Array(UInt64))).new,
+      @array_string_values : Hash(String, Slice(Array(String))) = Hash(String, Slice(Array(String))).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
@@ -322,6 +332,18 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_types[index] == "String"
       @string_values[column]? || raise(UnsupportedFormatError.new("String column was not materialized in this batch"))
+    end
+
+    def array_uint64s_for(column : String) : Slice(Array(UInt64))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(UInt64) accessor requires an exact Array(UInt64) column") unless @column_types[index] == "Array(UInt64)"
+      @array_uint64_values[column]? || raise(UnsupportedFormatError.new("Array(UInt64) column was not materialized in this batch"))
+    end
+
+    def array_strings_for(column : String) : Slice(Array(String))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(String) accessor requires an exact Array(String) column") unless @column_types[index] == "Array(String)"
+      @array_string_values[column]? || raise(UnsupportedFormatError.new("Array(String) column was not materialized in this batch"))
     end
 
     def fixed_strings_for(column : String) : Slice(String)
@@ -680,6 +702,10 @@ module CrystalClick
               bytes = selected.reader.fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
             elsif WidePart.nullable_fixed_string_width(selected.column_type)
               bytes = selected.reader.nullable_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+            elsif selected.column_type == "Array(UInt64)"
+              bytes = selected.reader.array_uint64_mark_range_raw_bytes(selected.name, mark_index, 1)
+            elsif selected.column_type == "Array(String)"
+              bytes = selected.reader.array_string_mark_range_raw_bytes(selected.name, mark_index, 1)
             else
               next
             end
@@ -695,6 +721,8 @@ module CrystalClick
           nullable_values = Hash(String, WidePartNullableArray).new
           nullable_string_values = Hash(String, WidePartNullableStringArray).new
           nullable_fixed_string_values = Hash(String, WidePartNullableStringArray).new
+          array_uint64_values = Hash(String, Array(Array(UInt64))).new
+          array_string_values = Hash(String, Array(Array(String))).new
           actual_string_bytes = 0_u64
           part.readers.each do |selected|
             case selected.column_type
@@ -729,6 +757,21 @@ module CrystalClick
               raise CorruptPartError.new("selected Nullable(FixedString) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
               actual_string_bytes += bytes
               nullable_fixed_string_values[selected.name] = values
+            when "Array(UInt64)"
+              values = selected.reader.read_array_uint64_mark_range(selected.name, mark_index, 1)
+              raise CorruptPartError.new("selected Array(UInt64) mark row count changed") unless values.size.to_u64 == mark_rows
+              elements = values.sum(&.size).to_u64
+              bytes = elements * 8_u64
+              raise CorruptPartError.new("selected array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+              actual_string_bytes += bytes
+              array_uint64_values[selected.name] = values
+            when "Array(String)"
+              values = selected.reader.read_array_string_mark_range(selected.name, mark_index, 1)
+              raise CorruptPartError.new("selected Array(String) mark row count changed") unless values.size.to_u64 == mark_rows
+              bytes = values.sum { |row| row.sum(&.bytesize) }.to_u64
+              raise CorruptPartError.new("selected array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+              actual_string_bytes += bytes
+              array_string_values[selected.name] = values
             when .starts_with?("Nullable(")
               values = read_nullable_values(selected, mark_index)
               raise CorruptPartError.new("selected Nullable mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
@@ -756,6 +799,8 @@ module CrystalClick
             nullable_slices = Hash(String, WidePartNullableSlice).new
             nullable_string_slices = Hash(String, WidePartNullableStringSlice).new
             nullable_fixed_string_slices = Hash(String, WidePartNullableStringSlice).new
+            array_uint64_slices = Hash(String, Slice(Array(UInt64))).new
+            array_string_slices = Hash(String, Slice(Array(String))).new
             part.readers.each do |selected|
               if values = numeric_values[selected.name]?
                 numeric_slices[selected.name] = slice_numeric_values(values, mark_row_offset.to_i, size)
@@ -769,6 +814,10 @@ module CrystalClick
                 nullable_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
               elsif values = nullable_fixed_string_values[selected.name]?
                 nullable_fixed_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+              elsif values = array_uint64_values[selected.name]?
+                array_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+              elsif values = array_string_values[selected.name]?
+                array_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
               else
                 raise CorruptPartError.new("selected typed column was not materialized")
               end
@@ -788,7 +837,9 @@ module CrystalClick
               nullable_slices,
               nullable_string_slices,
               fixed_string_slices,
-              nullable_fixed_string_slices
+              nullable_fixed_string_slices,
+              array_uint64_slices,
+              array_string_slices
             )
             yield batch
             mark_row_offset &+= size.to_u64

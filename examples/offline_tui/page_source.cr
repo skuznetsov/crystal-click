@@ -33,9 +33,10 @@ module CrystalClick
 
     # Bounded, owned display pages over an OfflineTable's resolved physical rows.
     class OfflinePageSource
-      MAX_PAGE_ROWS           = 256
-      MAX_PAGE_COLUMNS        = WidePartTable::MAX_COLUMNS
-      MAX_STRING_SOURCE_BYTES = 256
+      MAX_PAGE_ROWS              = 256
+      MAX_PAGE_COLUMNS           = WidePartTable::MAX_COLUMNS
+      MAX_STRING_SOURCE_BYTES    = 256
+      MAX_ARRAY_DISPLAY_ELEMENTS =  16
 
       @table : OfflineTable
       @columns : Array(String)
@@ -230,6 +231,10 @@ module CrystalClick
           batch.nullable_uuids_for(column).size
         when "String"
           batch.strings_for(column).size
+        when "Array(UInt64)"
+          batch.array_uint64s_for(column).size
+        when "Array(String)"
+          batch.array_strings_for(column).size
         when "Nullable(UInt8)"
           batch.nullable_values_for(column, UInt8).size
         when "Nullable(UInt16)"
@@ -355,6 +360,10 @@ module CrystalClick
           batch.nullable_uuids_for(column)[row_index].try(&.to_s) || "NULL"
         when "String"
           display_string(batch.strings_for(column)[row_index])
+        when "Array(UInt64)"
+          display_array_uint64s(batch.array_uint64s_for(column)[row_index])
+        when "Array(String)"
+          display_array_strings(batch.array_strings_for(column)[row_index])
         when "Nullable(UInt8)"
           nullable_numeric_cell(batch, column, UInt8, row_index)
         when "Nullable(UInt16)"
@@ -454,6 +463,63 @@ module CrystalClick
         # a multibyte sequence cut by this raw-byte display limit.
         display = value.byte_slice(0, byte_count).inspect
         value.bytesize > MAX_STRING_SOURCE_BYTES ? "[truncated] #{display}" : display
+      end
+
+      private def display_array_uint64s(values : Array(UInt64)) : String
+        String.build do |output|
+          output << '['
+          displayed = 0
+          values.each do |value|
+            if displayed >= MAX_ARRAY_DISPLAY_ELEMENTS
+              break
+            end
+            output << ", " if displayed > 0
+            output << value.to_s
+            displayed += 1
+          end
+          if values.size > displayed
+            output << ", " if displayed > 0
+            output << "... [truncated]"
+          end
+          output << ']'
+        end
+      end
+
+      private def display_array_strings(values : Array(String)) : String
+        String.build do |output|
+          output << '['
+          remaining_bytes = MAX_STRING_SOURCE_BYTES
+          displayed = 0
+          truncated = false
+          values.each do |value|
+            if displayed >= MAX_ARRAY_DISPLAY_ELEMENTS
+              truncated = true
+              break
+            end
+
+            if value.bytesize > remaining_bytes
+              if remaining_bytes > 0
+                output << ", " if displayed > 0
+                output << value.byte_slice(0, remaining_bytes).inspect
+                displayed += 1
+              end
+              truncated = true
+              break
+            end
+
+            output << ", " if displayed > 0
+            output << value.inspect
+            remaining_bytes -= value.bytesize
+            displayed += 1
+          end
+
+          truncated ||= values.size > displayed
+          if truncated
+            output << ", " if displayed > 0
+            output << "... [truncated]"
+          end
+          output << ']'
+        end
       end
     end
   end
