@@ -221,8 +221,8 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("Nullable(Decimal(38, 0))").should be_true
     CrystalClick::WidePart.supports_numeric_type?("Int128").should be_false
     CrystalClick::WidePart.supports_numeric_type?("UInt128").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int128))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UInt128))").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int128))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UInt128))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(Int128))").should be_false
     CrystalClick::WidePart.supports_typed_type?("Nullable(Int256)").should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(UInt256)").should be_true

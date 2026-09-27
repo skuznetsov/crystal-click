@@ -1,0 +1,11 @@
+columns format version: 1
+9 columns:
+`pk` UInt64
+`a_i128` Array(Int128)
+`a_u128` Array(UInt128)
+`a_i256` Array(Int256)
+`a_u256` Array(UInt256)
+`n_i128` Array(Nullable(Int128))
+`n_u128` Array(Nullable(UInt128))
+`n_i256` Array(Nullable(Int256))
+`n_u256` Array(Nullable(UInt256))

@@ -63,6 +63,11 @@ module CrystalClick
           raise UnsupportedFormatError.new("ALIAS columns cannot be materialized") if column.alias_column
           column_type = WidePart.catalog_type(column.type) ||
                         raise(UnsupportedFormatError.new("selected table column type is unsupported"))
+          # The catalog admits more Array types than this example can render.
+          # Reject them even when the table has no rows to format.
+          if column_type.starts_with?("Array(") && column_type != "Array(UInt64)" && column_type != "Array(String)"
+            raise UnsupportedFormatError.new("selected table column type is unsupported by the page source")
+          end
           column_types << column_type.dup
         end
 

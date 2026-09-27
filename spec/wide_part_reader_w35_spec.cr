@@ -128,10 +128,9 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("UInt128").should be_true
     CrystalClick::WidePart.supports_numeric_type?("Int128").should be_false
     CrystalClick::WidePart.supports_numeric_type?("UInt128").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Int128)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(UInt128)").should be_false
-    # W36 admits the exact Nullable(Int128/UInt128) scalar types; its focused
-    # spec owns those assertions while W35 keeps Array and generic gates shut.
+    CrystalClick::WidePart.supports_typed_type?("Array(Int128)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(UInt128)").should be_true
+    # W39 admits exact Array leaves; generic scalar numeric gates remain shut.
     CrystalClick::WidePart.supports_typed_type?("Decimal(38, 0)").should be_true
     CrystalClick::WidePart.supports_typed_type?("Decimal(76, 0)").should be_true
     # W37 admits these exact raw scalar types; its focused spec owns the

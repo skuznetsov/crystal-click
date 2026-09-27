@@ -101,6 +101,11 @@ scalar payloads through exact paired APIs; Sparse remains rejected.
 W37 admits bare raw `Int256` and `UInt256` scalar payloads through the
 same exact reader, batch, catalog, and writer boundary; its pinned stock
 compatibility evidence and remaining exclusions are recorded below.
+W38 separately admits BASIC `Nullable(Int256)` and `Nullable(UInt256)`
+scalar payloads through exact paired APIs; Sparse remains rejected.
+W39 admits single-level Arrays of the already admitted raw 128- and 256-bit
+integer values, with BASIC Nullable leaves on the pinned Wide/LZ4/plain-mark
+frontier. It does not admit generic recursive Arrays or semantic aliases.
 
 ## Purpose and bounded contexts
 
@@ -2216,6 +2221,64 @@ fixture, pinned binary, compiler, or filesystem-case change decays this
 certificate; refresh the focused/full suites and pinned bidirectional
 oracle before reasserting compatibility.
 
+## W39 slice: paired wide-integer Array leaves
+
+Admit only one-level `Array(Int128)`, `Array(UInt128)`, `Array(Int256)`,
+`Array(UInt256)`, and their `Array(Nullable(T))` BASIC counterparts beside a
+sorted `UInt64` key, provided the pinned stock physical probe confirms the
+expected `size0`, optional nested null-map, and fixed-width value streams.
+The public Array accessors, typed batches, offline catalog, and explicit
+writer must preserve signed/unsigned type identity, flattened element count,
+and mark boundaries. Decimal128/256 aliases, arbitrary nesting, Sparse
+serialization, Compact parts, other table schemas, and inferred generic
+writer routes remain closed. The offline TUI page source does not render the
+new arrays and must reject their selection even for an empty table.
+
+A pinned stock ClickHouse local 26.7.1.1315 scratch probe accepted all eight
+types in a seven-row Wide part and passed `CHECK TABLE`. All eight report
+`Default` serialization with no column overrides in `serialization.json`.
+Plain `.mrk2` marks and LZ4 data use `size0` plus the nested payload for
+non-null leaves, and `size0`, a `null` map, and the nested payload for BASIC
+Nullable leaves. Nullable physical payloads retain zero-filled slots under
+NULL, whereas RowBinary omits the child value. This establishes the stream
+topology independently of the Crystal codecs.
+
+Risk is **CAUTION**: a correct-looking 16- or 32-byte stream can conceal a
+wrong signedness or Decimal interpretation, and nullable child marks may be
+misread as outer-row counts rather than flattened element counts. Rollback is
+one W39-only local commit; do not mutate an existing ClickHouse data root or
+push. First falsifier: a focused RED spec rejecting all eight currently
+unsupported forms, then requiring exact typed admission and independent
+edge-value bytes while cross-type and Decimal aliases still fail closed.
+DoD: stock physical stream/metadata/mark probe, later-mark and empty-row
+reads, corruption negatives, no-publication invalid writer inputs, focused
+and full debug/release suites, and a pinned bidirectional stock oracle with
+`ATTACH PART`, `CHECK TABLE`, and independently encoded full/keyed RowBinary.
+The strongest counterexample is a same-width Decimal or signed/unsigned
+array accepted by the wrong accessor. The fixture, pinned executable,
+source, compiler, or filesystem-case change decays any W39 certificate.
+Observed W39 checks on the pinned build and fixture: the checked-in fixture
+verifier confirms all eight types, 21 physical streams, the exact nine-column
+schema and `Default` serialization, four data marks with row counts
+`[2, 2, 2, 1]`, and SHA-256 for all 50 part files. The focused spec reads
+all eight stock columns and writer outputs across the full part and later
+marks, checks byte-exact stream payloads and typed batch/catalog values,
+rejects cross-type and Decimal aliases, rejects malformed plain reads and
+nullable streams before typed-batch publication, and checks writer preflight does not
+publish a destination on invalid row counts. The pinned oracle attaches the
+stock part and all eight Crystal-written shapes to isolated ClickHouse tables,
+passes `CHECK TABLE`, and compares independently encoded full and keyed
+RowBinary byte-for-byte. This evidence does not establish compatibility with
+other part profiles, recursive Arrays, or newer ClickHouse versions.
+At this source state, `spec/wide_part_reader_w39_spec.cr` passed 9/0, the
+complete debug and release `crystal spec` runs each passed 655/0, and
+`scripts/check_array_integer128_256_oracle.sh` passed on ClickHouse local
+26.7.1.1315. The neighboring W31 nullable-numeric Array and W38 nullable
+256-bit scalar bidirectional oracles also passed. A proportionate adversarial
+review found no remaining W39 correctness or scope counterexample (`ROBUST`
+within this pinned profile). Any codec, fixture, compiler, pinned ClickHouse
+binary, or reader/writer source change requires those checks to be rerun.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2225,8 +2288,9 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W38's paired BASIC Nullable raw
-   256-bit scalars, W37's paired raw 256-bit scalars, W36's paired BASIC
+1. Extend reader and writer together beyond W39's paired raw 128/256-bit
+   Array leaves, W38's paired BASIC Nullable raw 256-bit scalars,
+   W37's paired raw 256-bit scalars, W36's paired BASIC
    Nullable raw 128-bit scalars, W35's paired raw 128-bit scalars,
    W34's paired Bool Array family,
    W33's paired FixedString Array family, W32's nullable String Array,

@@ -259,14 +259,14 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_numeric_type?("UInt256").should be_false
     CrystalClick::WidePart.supports_nullable_numeric_type?("Nullable(Int256)").should be_false
     CrystalClick::WidePart.supports_nullable_numeric_type?("Nullable(UInt256)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Int256)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(UInt256)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int256))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UInt256))").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Array(Int256)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(UInt256)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int256))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UInt256))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(Int256))").should be_false
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(UInt256))").should be_false
-    CrystalClick::WidePart.catalog_type("Array(Nullable(Int256))").should be_nil
-    CrystalClick::WidePart.catalog_type("Array(Nullable(UInt256))").should be_nil
+    CrystalClick::WidePart.catalog_type("Array(Nullable(Int256))").should eq("Array(Nullable(Int256))")
+    CrystalClick::WidePart.catalog_type("Array(Nullable(UInt256))").should eq("Array(Nullable(UInt256))")
   end
 
   it "reads stock BASIC Nullable raw 256-bit streams exactly across marks and the final sentinel" do

@@ -54,6 +54,59 @@ module CrystalClick
       end
     end
 
+    # Array codecs intentionally have a wider leaf set than scalar numeric
+    # accessors. Keep Int128/UInt128 and the wrapper-backed Int256/UInt256
+    # types out of supports_numeric_type? and numeric_type_name so JSON and
+    # scalar admission remain unchanged.
+    def self.array_numeric_type_name(type : T.class) : String forall T
+      {% if T == UInt8 %}
+        "UInt8"
+      {% elsif T == UInt16 %}
+        "UInt16"
+      {% elsif T == UInt32 %}
+        "UInt32"
+      {% elsif T == UInt64 %}
+        "UInt64"
+      {% elsif T == Int8 %}
+        "Int8"
+      {% elsif T == Int16 %}
+        "Int16"
+      {% elsif T == Int32 %}
+        "Int32"
+      {% elsif T == Int64 %}
+        "Int64"
+      {% elsif T == Float32 %}
+        "Float32"
+      {% elsif T == Float64 %}
+        "Float64"
+      {% elsif T == Int128 %}
+        "Int128"
+      {% elsif T == UInt128 %}
+        "UInt128"
+      {% elsif T == Int256Value %}
+        "Int256"
+      {% elsif T == UInt256Value %}
+        "UInt256"
+      {% else %}
+        raise UnsupportedFormatError.new("only exact fixed-width numeric Array accessors are supported")
+      {% end %}
+    end
+
+    def self.array_numeric_payload_width(type : String) : Int32
+      case type
+      when "Int128", "UInt128"
+        16
+      when "Int256", "UInt256"
+        32
+      else
+        numeric_payload_width(type)
+      end
+    end
+
+    private def self.supports_array_numeric_type?(type : String) : Bool
+      supports_numeric_type?(type) || type == "Int128" || type == "UInt128" || type == "Int256" || type == "UInt256"
+    end
+
     private def self.nullable_inner(type : String) : String?
       return nil unless type.starts_with?("Nullable(") && type.ends_with?(")")
       inner = type.byte_slice("Nullable(".bytesize, type.bytesize - "Nullable()".bytesize)
@@ -405,7 +458,7 @@ module CrystalClick
     def self.nullable_numeric_array_element_type(type : String) : String?
       return nil unless type.starts_with?("Array(Nullable(") && type.ends_with?("))")
       element_type = type.byte_slice("Array(Nullable(".bytesize, type.bytesize - "Array(Nullable())".bytesize)
-      supports_numeric_type?(element_type) ? element_type : nil
+      supports_array_numeric_type?(element_type) ? element_type : nil
     end
 
     # Admit only one Array level whose complete child spelling is one of the
@@ -414,7 +467,7 @@ module CrystalClick
     def self.numeric_array_element_type(type : String) : String?
       return nil unless type.starts_with?("Array(") && type.ends_with?(")")
       element_type = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      supports_numeric_type?(element_type) ? element_type : nil
+      supports_array_numeric_type?(element_type) ? element_type : nil
     end
 
     def self.supports_map_uint64_string_type?(type : String) : Bool
@@ -1230,8 +1283,9 @@ module CrystalClick
       value_stream = @streams[column]
       _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
       raise CorruptPartError.new("Array numeric substream mark rows differ") unless value_rows == rows
-      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, numeric_type_width(element_type))
-      checked_array_mark_byte_count(flat_elements, numeric_type_width(element_type)).to_u64
+      element_width = WidePart.array_numeric_payload_width(element_type)
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
+      checked_array_mark_byte_count(flat_elements, element_width).to_u64
     end
 
     # Count all three physical streams of Array(Array(UInt64)) before a table
@@ -1309,7 +1363,7 @@ module CrystalClick
     def array_nullable_numeric_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
       element_type = WidePart.nullable_numeric_array_element_type(@column_type) || raise(UnsupportedFormatError.new("Array numeric nullable accessor requires an exact Array(Nullable(T)) numeric column"))
-      element_width = numeric_type_width(element_type)
+      element_width = WidePart.array_numeric_payload_width(element_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       {"#{column}.null", column}.each do |stream_name|
@@ -1614,7 +1668,7 @@ module CrystalClick
     # are allocated; floats preserve their on-disk bit patterns.
     def read_array_numeric_mark_range(column : String, first_mark : Int, mark_count : Int, type : T.class) : Array(Array(T)) forall T
       ensure_column(column)
-      element_type = WidePart.numeric_type_name(type)
+      element_type = WidePart.array_numeric_type_name(type)
       unless WidePart.numeric_array_element_type(@column_type) == element_type
         raise UnsupportedFormatError.new("typed Array accessor does not match selected column type")
       end
@@ -1623,7 +1677,7 @@ module CrystalClick
       value_stream = @streams[column]
       value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
       raise CorruptPartError.new("Array numeric substream mark rows differ") unless value_rows == rows
-      element_width = numeric_type_width(element_type)
+      element_width = WidePart.array_numeric_payload_width(element_type)
       validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
       expected_bytes = checked_array_mark_byte_count(flat_elements, element_width)
       value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, expected_bytes, element_width)
@@ -1634,7 +1688,7 @@ module CrystalClick
         row = Array(T).new(size.to_i)
         size.to_i.times do
           raise CorruptPartError.new("Array sizes exceed selected numeric bytes") if flat_offset > value_bytes.size - element_width
-          row << decode_numeric_value(value_bytes, flat_offset, type)
+          row << decode_array_numeric_value(value_bytes, flat_offset, type)
           flat_offset += element_width
         end
         values << row
@@ -1648,13 +1702,13 @@ module CrystalClick
     # arrays are allocated; null value slots are consumed but not interpreted.
     def read_array_nullable_numeric_mark_range(column : String, first_mark : Int, mark_count : Int, type : T.class) : Array(Array(T?)) forall T
       ensure_column(column)
-      element_type = WidePart.numeric_type_name(type)
+      element_type = WidePart.array_numeric_type_name(type)
       unless WidePart.nullable_numeric_array_element_type(@column_type) == element_type
         raise UnsupportedFormatError.new("typed nullable Array accessor does not match selected column type")
       end
 
       outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
-      element_width = numeric_type_width(element_type)
+      element_width = WidePart.array_numeric_payload_width(element_type)
 
       null_stream = @streams["#{column}.null"]
       null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
@@ -1676,7 +1730,7 @@ module CrystalClick
           raise CorruptPartError.new("Array(Nullable(T)) sizes exceed selected child streams") if flat_offset >= flat_elements
           is_null = null_bytes[flat_offset]
           raise CorruptPartError.new("Array(Nullable(T)) null map contains a value other than 0 or 1") unless is_null <= 1_u8
-          row << (is_null == 1_u8 ? nil : decode_numeric_value(value_bytes, flat_offset * element_width, type))
+          row << (is_null == 1_u8 ? nil : decode_array_numeric_value(value_bytes, flat_offset * element_width, type))
           flat_offset += 1
         end
         values << row
@@ -3160,10 +3214,11 @@ module CrystalClick
       serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("array column serializers are required"))
       w33_fixed_string_pair_shape = fixed_string_array_w33_schema?(columns, selected_column)
       w34_bool_pair_shape = bool_array_w34_schema?(columns, selected_column)
+      w39_wide_array_shape = wide_integer_array_w39_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape
+        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else
@@ -3181,7 +3236,8 @@ module CrystalClick
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1 && key_columns[0] == key_column
         w33_keyed_fixed_string_shape = w33_fixed_string_pair_shape && key_columns.size == 1 && key_columns[0] == key_column
         w34_keyed_bool_shape = w34_bool_pair_shape && key_columns.size == 1 && key_columns[0] == key_column
-        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape
+        w39_keyed_wide_array_shape = w39_wide_array_shape && key_columns.size == 1 && key_columns[0] == key_column
+        unless numeric_array || legacy_two_column_shape || w33_keyed_fixed_string_shape || w34_keyed_bool_shape || w39_keyed_wide_array_shape
           raise UnsupportedFormatError.new("array serialization requires one supported UInt64 key/value pair")
         end
         unless kind == "Default"
@@ -3216,6 +3272,35 @@ module CrystalClick
 
       columns.all? do |name, column_type|
         name == selected_column || column_type == "UInt64" || !WidePart.nullable_numeric_array_element_type(column_type).nil?
+      end
+    end
+
+    # Exact stock ClickHouse fixture shape for the four BASIC wide integer
+    # Array leaves, paired with their BASIC Nullable forms and one UInt64 key.
+    # This narrow exception admits the no-per-column-serializer metadata used
+    # by that part without relaxing serializer admission for other arrays.
+    private def wide_integer_array_w39_schema?(columns : Array({String, String}), selected_column : String) : Bool
+      return false unless columns.size == 9
+      return false unless columns.any? { |name, _| name == selected_column }
+
+      key_columns = columns.select { |name, column_type| name != selected_column && column_type == "UInt64" }
+      return false unless key_columns.size == 1 && columns.count { |_, column_type| column_type == "UInt64" } == 1
+
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1]) || return false
+      return false unless !WidePart.numeric_array_element_type(selected_type).nil? || !WidePart.nullable_numeric_array_element_type(selected_type).nil?
+
+      array_types = columns.compact_map do |_, column_type|
+        column_type if !WidePart.numeric_array_element_type(column_type).nil? || !WidePart.nullable_numeric_array_element_type(column_type).nil?
+      end
+      expected_types = Set{
+        "Array(Int128)", "Array(UInt128)", "Array(Int256)", "Array(UInt256)",
+        "Array(Nullable(Int128))", "Array(Nullable(UInt128))", "Array(Nullable(Int256))", "Array(Nullable(UInt256))",
+      }
+      return false unless array_types.size == 8 && array_types.to_set == expected_types
+
+      columns.all? do |name, column_type|
+        name == selected_column || column_type == "UInt64" ||
+          !WidePart.numeric_array_element_type(column_type).nil? || !WidePart.nullable_numeric_array_element_type(column_type).nil?
       end
     end
 
@@ -4109,14 +4194,14 @@ module CrystalClick
         if stream_name == "#{@column}.null"
           1
         elsif stream_name == @column
-          numeric_type_width(element_type)
+          WidePart.array_numeric_payload_width(element_type)
         else
           8
         end
       elsif @column_type == "Array(Array(Nullable(UInt64)))"
         stream_name == "#{@column}.null" ? 1 : 8
       elsif element_type = WidePart.numeric_array_element_type(@column_type)
-        stream_name == @column ? numeric_type_width(element_type) : 8
+        stream_name == @column ? WidePart.array_numeric_payload_width(element_type) : 8
       elsif @column_type == "Array(UInt64)"
         8
       elsif @column_type == "Array(Array(UInt64))"
@@ -4682,6 +4767,26 @@ module CrystalClick
         u64(bytes, offset).unsafe_as(Float64)
       {% else %}
         raise UnsupportedFormatError.new("only exact fixed-width primitive numeric accessors are supported")
+      {% end %}
+    end
+
+    private def decode_array_numeric_value(bytes : Bytes, offset : Int, type : T.class) : T forall T
+      {% if T == Int256Value %}
+        Int256Value.from_words(
+          u64(bytes, offset),
+          u64(bytes, offset + 8),
+          u64(bytes, offset + 16),
+          u64(bytes, offset + 24)
+        )
+      {% elsif T == UInt256Value %}
+        UInt256Value.from_words(
+          u64(bytes, offset),
+          u64(bytes, offset + 8),
+          u64(bytes, offset + 16),
+          u64(bytes, offset + 24)
+        )
+      {% else %}
+        decode_numeric_value(bytes, offset, type)
       {% end %}
     end
 

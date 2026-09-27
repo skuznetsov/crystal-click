@@ -1,0 +1,32 @@
+columns substreams version: 1
+9 columns:
+1 substreams for column `pk`:
+	pk
+2 substreams for column `a_i128`:
+	a_i128.size0
+	a_i128
+2 substreams for column `a_u128`:
+	a_u128.size0
+	a_u128
+2 substreams for column `a_i256`:
+	a_i256.size0
+	a_i256
+2 substreams for column `a_u256`:
+	a_u256.size0
+	a_u256
+3 substreams for column `n_i128`:
+	n_i128.size0
+	n_i128.null
+	n_i128
+3 substreams for column `n_u128`:
+	n_u128.size0
+	n_u128.null
+	n_u128
+3 substreams for column `n_i256`:
+	n_i256.size0
+	n_i256.null
+	n_i256
+3 substreams for column `n_u256`:
+	n_u256.size0
+	n_u256.null
+	n_u256

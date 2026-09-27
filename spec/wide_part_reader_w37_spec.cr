@@ -145,10 +145,10 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_numeric_type?("UInt256").should be_false
     CrystalClick::WidePart.supports_typed_type?("Nullable(Int256)").should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(UInt256)").should be_true
-    CrystalClick::WidePart.supports_typed_type?("Array(Int256)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(UInt256)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int256))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UInt256))").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Array(Int256)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(UInt256)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Int256))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Nullable(UInt256))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(Int256))").should be_false
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(UInt256))").should be_false
     CrystalClick::WidePart.supports_typed_type?("Decimal(76, 0)").should be_true

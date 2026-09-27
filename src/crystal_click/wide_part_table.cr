@@ -19,16 +19,20 @@ module CrystalClick
   alias WidePartNullableStringSlice = Slice(String?)
   alias WidePartArrayNumericArray = Array(Array(UInt8)) | Array(Array(UInt16)) | Array(Array(UInt32)) | Array(Array(UInt64)) |
                                     Array(Array(Int8)) | Array(Array(Int16)) | Array(Array(Int32)) | Array(Array(Int64)) |
-                                    Array(Array(Float32)) | Array(Array(Float64))
+                                    Array(Array(Float32)) | Array(Array(Float64)) |
+                                    Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value))
   alias WidePartArrayNumericSlice = Slice(Array(UInt8)) | Slice(Array(UInt16)) | Slice(Array(UInt32)) | Slice(Array(UInt64)) |
                                     Slice(Array(Int8)) | Slice(Array(Int16)) | Slice(Array(Int32)) | Slice(Array(Int64)) |
-                                    Slice(Array(Float32)) | Slice(Array(Float64))
+                                    Slice(Array(Float32)) | Slice(Array(Float64)) |
+                                    Slice(Array(Int128)) | Slice(Array(UInt128)) | Slice(Array(Int256Value)) | Slice(Array(UInt256Value))
   alias WidePartArrayNullableNumericArray = Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) | Array(Array(UInt64?)) |
                                             Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
-                                            Array(Array(Float32?)) | Array(Array(Float64?))
+                                            Array(Array(Float32?)) | Array(Array(Float64?)) |
+                                            Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?))
   alias WidePartArrayNullableNumericSlice = Slice(Array(UInt8?)) | Slice(Array(UInt16?)) | Slice(Array(UInt32?)) | Slice(Array(UInt64?)) |
                                             Slice(Array(Int8?)) | Slice(Array(Int16?)) | Slice(Array(Int32?)) | Slice(Array(Int64?)) |
-                                            Slice(Array(Float32?)) | Slice(Array(Float64?))
+                                            Slice(Array(Float32?)) | Slice(Array(Float64?)) |
+                                            Slice(Array(Int128?)) | Slice(Array(UInt128?)) | Slice(Array(Int256Value?)) | Slice(Array(UInt256Value?))
   alias WidePartArrayNullableStringArray = Array(Array(String?))
   alias WidePartArrayNullableStringSlice = Slice(Array(String?))
   alias WidePartArrayBoolArray = Array(Array(Bool))
@@ -487,7 +491,7 @@ module CrystalClick
     # numeric declaration. Existing specialized array accessors remain intact.
     def array_numeric_values(column : String, type : T.class) : Slice(Array(T)) forall T
       index = column_index(column)
-      type_name = WidePart.numeric_type_name(type)
+      type_name = WidePart.array_numeric_type_name(type)
       raise UnsupportedFormatError.new("typed Array accessor requires an exact Array(T) numeric column") unless WidePart.numeric_array_element_type(@column_types[index]) == type_name
       values = @array_numeric_values[column]? || raise(UnsupportedFormatError.new("Array numeric column was not materialized in this batch"))
       values.as(Slice(Array(T)))
@@ -497,7 +501,7 @@ module CrystalClick
     # Array(Nullable(T)) numeric declaration.
     def array_nullable_numeric_values(column : String, type : T.class) : Slice(Array(T?)) forall T
       index = column_index(column)
-      type_name = WidePart.numeric_type_name(type)
+      type_name = WidePart.array_numeric_type_name(type)
       unless WidePart.nullable_numeric_array_element_type(@column_types[index]) == type_name
         raise UnsupportedFormatError.new("typed nullable Array accessor requires an exact Array(Nullable(T)) numeric column")
       end
@@ -1059,13 +1063,14 @@ module CrystalClick
                 nullable_fixed_string_values[selected.name] = values
               when "Array(UInt8)", "Array(UInt16)", "Array(UInt32)", "Array(UInt64)",
                    "Array(Int8)", "Array(Int16)", "Array(Int32)", "Array(Int64)",
-                   "Array(Float32)", "Array(Float64)"
+                   "Array(Float32)", "Array(Float64)",
+                   "Array(Int128)", "Array(UInt128)", "Array(Int256)", "Array(UInt256)"
                 element_type = WidePart.numeric_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported Array numeric type"))
                 values = read_array_numeric_values(selected.reader, selected.name, mark_index, element_type)
                 raise CorruptPartError.new("selected Array numeric mark row count changed") unless values.size.to_u64 == mark_rows
                 preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Array numeric mark was not preflighted"))
                 elements = values.sum(&.size).to_u64
-                bytes = elements * WidePart.numeric_payload_width(element_type).to_u64
+                bytes = elements * WidePart.array_numeric_payload_width(element_type).to_u64
                 raise CorruptPartError.new("selected Array numeric decoded bytes differ from preflight") unless bytes == preflight_bytes
                 raise CorruptPartError.new("selected Array numeric mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
@@ -1483,6 +1488,14 @@ module CrystalClick
         reader.read_array_numeric_mark_range(column, mark_index, 1, Int32)
       when "Int64"
         reader.read_array_numeric_mark_range(column, mark_index, 1, Int64)
+      when "Int128"
+        reader.read_array_numeric_mark_range(column, mark_index, 1, Int128)
+      when "UInt128"
+        reader.read_array_numeric_mark_range(column, mark_index, 1, UInt128)
+      when "Int256"
+        reader.read_array_numeric_mark_range(column, mark_index, 1, Int256Value)
+      when "UInt256"
+        reader.read_array_numeric_mark_range(column, mark_index, 1, UInt256Value)
       when "Float32"
         reader.read_array_numeric_mark_range(column, mark_index, 1, Float32)
       when "Float64"
@@ -1515,6 +1528,14 @@ module CrystalClick
         reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int32)
       when "Int64"
         reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int64)
+      when "Int128"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int128)
+      when "UInt128"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, UInt128)
+      when "Int256"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Int256Value)
+      when "UInt256"
+        reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, UInt256Value)
       when "Float32"
         reader.read_array_nullable_numeric_mark_range(column, mark_index, 1, Float32)
       when "Float64"
@@ -1537,7 +1558,7 @@ module CrystalClick
         elements += row_elements
       end
 
-      bytes_per_element = (1 + WidePart.numeric_payload_width(element_type)).to_u64
+      bytes_per_element = (1 + WidePart.array_numeric_payload_width(element_type)).to_u64
       if elements > UInt64::MAX // bytes_per_element
         raise CorruptPartError.new("selected Array(Nullable(T)) byte count overflows")
       end

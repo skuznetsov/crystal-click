@@ -429,8 +429,10 @@ module CrystalClick
       values : Slice(Array(T)),
       rows_per_mark : Int32 = 8192,
     ) : String forall T
-      type_name = WidePart.numeric_type_name(T)
-      raise ArgumentError.new("Array numeric writer requires an exact supported numeric type") unless WidePart.supports_numeric_type?(type_name)
+      type_name = WidePart.array_numeric_type_name(T)
+      unless WidePart.numeric_array_element_type("Array(#{type_name})") == type_name
+        raise ArgumentError.new("Array numeric writer requires an exact supported numeric type")
+      end
       validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_name)
 
       target = File.expand_path(destination)
@@ -564,8 +566,8 @@ module CrystalClick
       values : Slice(Array(T?)),
       rows_per_mark : Int32 = 8192,
     ) : String forall T
-      type_name = WidePart.numeric_type_name(T)
-      unless WidePart.supports_numeric_type?(type_name) && WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name
+      type_name = WidePart.array_numeric_type_name(T)
+      unless WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name
         raise ArgumentError.new("Array nullable numeric writer requires an exact supported numeric type")
       end
       validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_name)
@@ -2030,7 +2032,7 @@ module CrystalClick
       type_name : String,
     ) : Nil forall T
       raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
-      unless WidePart.supports_numeric_type?(type_name) && WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name
+      unless WidePart.nullable_numeric_array_element_type("Array(Nullable(#{type_name}))") == type_name
         raise ArgumentError.new("Array nullable numeric writer requires an exact supported numeric type")
       end
       validate_array_common_inputs(
@@ -2042,7 +2044,7 @@ module CrystalClick
         ["#{value_name}.size0", "#{value_name}.null", value_name]
       )
 
-      width = WidePart.numeric_payload_width(type_name)
+      width = numeric_width(type_name)
       label = "Array(Nullable(#{type_name}))"
       element_limit_label = type_name == "UInt64" ? "Array(Nullable(UInt64))" : label
       key_data_bytes = 0_i64
@@ -4817,7 +4819,7 @@ module CrystalClick
       rows_per_mark : Int32,
       type_name : String,
     ) : Array(ChecksumRecord) forall T
-      width = WidePart.numeric_payload_width(type_name)
+      width = numeric_width(type_name)
       size0_base = StreamName.hash("#{column}.size0")
       null_base = StreamName.hash("#{column}.null")
       value_base = StreamName.hash(column)

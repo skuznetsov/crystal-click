@@ -6,6 +6,8 @@ module CrystalClick
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
                              Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
+                             Array(Int128) | Array(UInt128) | Array(Int256Value) | Array(UInt256Value) |
+                             Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) |
                              Array(Bool) | Array(Bool?) | Array(Array(Bool)) | Array(Array(Bool?)) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
@@ -297,6 +299,22 @@ module CrystalClick
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(Float64)"
         selected_values = batch.array_numeric_values(column_name, Float64)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Int128)"
+        selected_values = batch.array_numeric_values(column_name, Int128)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(UInt128)"
+        selected_values = batch.array_numeric_values(column_name, UInt128)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(Int256)"
+        selected_values = batch.array_numeric_values(column_name, Int256Value)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when "Array(UInt256)"
+        selected_values = batch.array_numeric_values(column_name, UInt256Value)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(Bool)"
@@ -954,6 +972,10 @@ module CrystalClick
       when "Int16"   then batch.array_nullable_numeric_values(column, Int16)
       when "Int32"   then batch.array_nullable_numeric_values(column, Int32)
       when "Int64"   then batch.array_nullable_numeric_values(column, Int64)
+      when "Int128"  then batch.array_nullable_numeric_values(column, Int128)
+      when "UInt128" then batch.array_nullable_numeric_values(column, UInt128)
+      when "Int256"  then batch.array_nullable_numeric_values(column, Int256Value)
+      when "UInt256" then batch.array_nullable_numeric_values(column, UInt256Value)
       when "Float32" then batch.array_nullable_numeric_values(column, Float32)
       when "Float64" then batch.array_nullable_numeric_values(column, Float64)
       else
