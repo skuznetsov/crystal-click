@@ -130,7 +130,9 @@ W49 admits paired BFloat16 scalars and single-level Arrays, including BASIC
 Nullable forms, with distinct raw-bit identity on the same pinned profile.
 Its scoped evidence and limits are below. W50 admits paired raw Time and
 Time64 values in the exact scalar, BASIC Nullable, and one-level Array shapes
-recorded below.
+recorded below. W51 admits the two exact named-Tuple Array declarations below
+for paired reading, table/catalog access, and immutable writing. Its recursive
+syntax parser does not admit other physical type compositions.
 
 ## Purpose and bounded contexts
 
@@ -2989,6 +2991,64 @@ Other ClickHouse versions, text/timezone semantics, other physical formats,
 and arbitrary nested Time compositions remain untested. No memory or
 performance conclusion follows from W50.
 
+## W51 admitted frontier: recursive physical plan for Array of named Tuple
+
+Admit `Array(Tuple(a UInt64, b String))` and
+`Array(Tuple(a Nullable(UInt64), b String))` beside a sorted `UInt64` key,
+with paired mark-range reader, typed-table/catalog values, and immutable
+writer. A recursive type-plan parser may describe Array, named Tuple,
+Nullable, and leaf nodes, but parsing alone must not admit other
+compositions. The public admission seal remains exactly these two new
+declarations plus previously admitted types. Derive the escaped Tuple child
+stream inventory and widths from the sealed plan, rather than accepting a
+matching physical width under the wrong logical type.
+
+Risk is **CAUTION**: outer sizes, two flattened Tuple children, String byte
+sizes, and the optional child null map must share exact mark boundaries.
+A wrong boundary can silently pair a valid `a` value with the next row's
+`b` value. Preflight all child mark/count/byte relationships and aggregate
+materialization bounds before a batch callback; staged writer readback must
+recheck the same invariant before exclusive publication. Rollback is one
+W51-only local commit. This plan must not alter generic admission of
+`Tuple`, `Map`, `Array`, `Nullable(Array)`, or JSON, and must not begin
+memory/performance tuning.
+
+First falsifier: a focused RED test opens a pinned stock Wide/LZ4/plain-mark
+part containing both exact declarations and fails at current type admission.
+The stock probe must establish escaped stream names, serializer metadata,
+mark topology, NULL placeholders, empty arrays, and String framing before
+the reader/writer changes. DoD: mixed and empty/all-NULL arrays over multiple
+marks including a short final mark; exact full and later-mark reads; typed
+batch and offline catalog values; malformed logical type and shifted child
+mark rejection before callback/publication; a stock-to-Crystal fixture and
+Crystal-to-stock `ATTACH PART`, `CHECK TABLE`, full/key-range RowBinary oracle;
+full debug/release suites, fixture integrity, format/diff checks, and hostile
+review of row/element alignment. Evidence decays with a change in the pinned
+ClickHouse producer, codec, mark or Tuple escaping format, platform, or
+shared recursive plan.
+
+W51 result: the focused spec passed 7/0, and the full debug and release
+suites each passed 748/0 at the formatted source state. The public synthetic
+stock fixture verifier confirmed the exact two declarations, ten escaped
+LZ4 streams, and mark rows `[2, 2, 2, 1]`. ClickHouse local 26.7.1.1315
+accepted and checked five Crystal-written parts: mixed plain and nullable
+arrays, all-empty arrays, an all-NULL nullable field, and a nonempty middle
+mark whose String raw stream has repeated boundaries. Independently assembled
+full and key-filtered RowBinary matched byte-for-byte for all five parts.
+Reader opening rejects a shifted child row-count mark, and reader preflight
+rejects a String raw-stream decompressed-offset mutation that preserves every
+child mark's row vector and the `.bin` bytes. The table exposes zero
+callbacks in both cases. The mutated mark files retain their lengths, so
+they pass the table's documented size-only selected-checksum gate; the
+tests also pin the distinct mark-row and byte-boundary error messages.
+Admission tests reject unadmitted recursive wrappers and mismatched Tuple
+leaves. The adversarial verdict is **ROBUST within this exact W51 profile**;
+the review found no concrete counterexample after the checksum premise was
+checked against the size-only implementation. This evidence does not
+establish content-hash validation for mutated marks, other ClickHouse
+versions, arbitrary recursive types, MV/projection subparts, total heap use,
+or performance.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -2998,7 +3058,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W50's paired Time family,
+1. Extend reader and writer together beyond W51's paired named-Tuple Arrays,
+   W50's paired Time family,
    W49's paired BFloat16 family,
    W48's paired Enum Arrays, W47's paired IPv6 Arrays,
    W46's paired IPv4 Arrays,

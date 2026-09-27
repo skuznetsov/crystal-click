@@ -1321,6 +1321,86 @@ module CrystalClick
       end
     end
 
+    # Write an Array(Tuple(a UInt64, b String)) payload. The array offsets and
+    # tuple leaves retain separate Wide-part streams and marks.
+    def self.write_uint64_array_tuple_uint64_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(UInt64, String))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_plan = WideTypePlan.admitted("Array(Tuple(a UInt64, b String))") ||
+                  raise ArgumentError.new("writer requires exact Array(Tuple(a UInt64, b String)) type")
+      validate_array_tuple_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_plan, nullable_a: false)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_tuple_string_streams(stage, value_name, values, rows_per_mark, type_plan))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_plan.column_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_tuple_substreams_metadata(key_name, value_name, type_plan))
+        write_checksums(stage, records)
+        validate_staged_array_tuple_part(stage, key_name, value_name, keys, values, rows_per_mark, type_plan)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    # Write an Array(Tuple(a Nullable(UInt64), b String)) payload. NULL values
+    # use a one-byte null flag and a zero placeholder in the nested UInt64 stream.
+    def self.write_uint64_array_tuple_nullable_uint64_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(UInt64?, String))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_plan = WideTypePlan.admitted("Array(Tuple(a Nullable(UInt64), b String))") ||
+                  raise ArgumentError.new("writer requires exact Array(Tuple(a Nullable(UInt64), b String)) type")
+      validate_array_tuple_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_plan, nullable_a: true)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_tuple_string_streams(stage, value_name, values, rows_per_mark, type_plan))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_plan.column_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_tuple_substreams_metadata(key_name, value_name, type_plan))
+        write_checksums(stage, records)
+        validate_staged_array_tuple_part(stage, key_name, value_name, keys, values, rows_per_mark, type_plan)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write one immutable two-column part with a sorted UInt64 primary key.
     # The payload's Crystal type selects an admitted numeric, String, or
     # BASIC Nullable type; numeric values are encoded by their exact bits.
@@ -3903,6 +3983,99 @@ module CrystalClick
       end
       checked_array_element_checksum_size(total_nested_elements, "Array(Nullable(Bool)) null map")
       checked_array_numeric_checksum_size(total_nested_elements, 1, "Array(Nullable(Bool)) nested")
+      nil
+    end
+
+    private def self.validate_array_tuple_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(T, String))),
+      rows_per_mark : Int32,
+      type_plan : WideTypePlan,
+      nullable_a : Bool,
+    ) : Nil forall T
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      expected_type = nullable_a ? "Array(Tuple(a Nullable(UInt64), b String))" : "Array(Tuple(a UInt64, b String))"
+      raise ArgumentError.new("writer requires an exact Array(Tuple(a UInt64, b String)) type") unless type_plan.column_type == expected_type
+      {% if T == UInt64 %}
+        raise ArgumentError.new("non-nullable tuple writer requires UInt64 values") if nullable_a
+      {% elsif T == UInt64? %}
+        raise ArgumentError.new("nullable tuple writer requires Nullable(UInt64) values") unless nullable_a
+      {% else %}
+        raise ArgumentError.new("tuple writer requires UInt64 or Nullable(UInt64) values")
+      {% end %}
+
+      physical_streams = type_plan.physical_substreams(value_name)
+      expected_stream_count = nullable_a ? 5 : 4
+      raise ArgumentError.new("tuple type plan has an unexpected physical stream count") unless physical_streams.size == expected_stream_count
+      validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, physical_streams)
+
+      stream_data_bytes = Array(Int64).new(physical_streams.size, 0_i64)
+      key_data_bytes = 0_i64
+      total_nested_elements = 0_u64
+      total_string_bytes = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Array Tuple size0")
+        key_data_bytes = add_array_frame_size(key_data_bytes, fixed_frame_size, "UInt64 key")
+        stream_data_bytes[0] = add_array_frame_size(stream_data_bytes[0], fixed_frame_size, "Array Tuple size0")
+
+        mark_elements = 0_u64
+        mark_string_bytes = 0_i64
+        rows.times do |offset|
+          row_values = values[start_row + offset]
+          row_elements = row_values.size.to_u64
+          if row_elements > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+            raise ArgumentError.new("Array Tuple nested element count exceeds per-mark limit")
+          end
+          mark_elements += row_elements
+          row_values.each do |value|
+            value_bytes = value[1].bytesize.to_i64
+            if value_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_i64 - mark_string_bytes ||
+               value_bytes > MAX_FRAME_RAW_BYTES.to_i64 - mark_string_bytes
+              raise ArgumentError.new("Array Tuple String bytes exceed per-mark limit")
+            end
+            mark_string_bytes += value_bytes
+          end
+        end
+
+        if mark_elements > UInt64::MAX - total_nested_elements
+          raise ArgumentError.new("Array Tuple nested element count overflows")
+        end
+        total_nested_elements += mark_elements
+        if mark_string_bytes > MAX_DATA_FILE_BYTES - total_string_bytes
+          raise ArgumentError.new("Array Tuple String stream exceeds reader limit")
+        end
+        total_string_bytes += mark_string_bytes
+
+        unless mark_elements == 0
+          nested_raw_size = checked_array_element_bytes(mark_elements, "Array Tuple UInt64")
+          nested_frame_size = checked_array_frame_size(nested_raw_size, "Array Tuple UInt64")
+          value_stream_index = nullable_a ? 2 : 1
+          size_stream_index = nullable_a ? 3 : 2
+          stream_data_bytes[value_stream_index] = add_array_frame_size(stream_data_bytes[value_stream_index], nested_frame_size, "Array Tuple UInt64")
+          stream_data_bytes[size_stream_index] = add_array_frame_size(stream_data_bytes[size_stream_index], nested_frame_size, "Array Tuple String size")
+          if nullable_a
+            null_raw_size = mark_elements.to_i64
+            null_frame_size = checked_array_frame_size(null_raw_size, "Array Tuple UInt64 null map")
+            stream_data_bytes[1] = add_array_frame_size(stream_data_bytes[1], null_frame_size, "Array Tuple UInt64 null map")
+          end
+          unless mark_string_bytes == 0
+            string_frame_size = checked_array_frame_size(mark_string_bytes, "Array Tuple String")
+            string_stream_index = nullable_a ? 4 : 3
+            stream_data_bytes[string_stream_index] = add_array_frame_size(stream_data_bytes[string_stream_index], string_frame_size, "Array Tuple String")
+          end
+        end
+        start_row += rows
+      end
+
+      checked_array_element_checksum_size(keys.size.to_u64, "Array Tuple size0")
+      checked_array_element_checksum_size(total_nested_elements, "Array Tuple UInt64")
+      checked_array_element_checksum_size(total_nested_elements, "Array Tuple String size")
       nil
     end
 
@@ -7302,6 +7475,158 @@ module CrystalClick
       ]
     end
 
+    private def self.write_array_tuple_string_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(Tuple(T, String))),
+      rows_per_mark : Int32,
+      type_plan : WideTypePlan,
+    ) : Array(ChecksumRecord) forall T
+      logical_streams = type_plan.physical_substreams(column)
+      data_names = logical_streams.map { |name| "#{StreamName.hash(name)}.bin" }
+      mark_names = logical_streams.map { |name| "#{StreamName.hash(name)}.mrk2" }
+      data_hashes = Array(CityHashV1::FileHasher).new(logical_streams.size) { CityHashV1::FileHasher.new }
+      raw_hashes = Array(CityHashV1::FileHasher).new(logical_streams.size) { CityHashV1::FileHasher.new }
+      mark_bytes = Array(IO::Memory).new(logical_streams.size) { IO::Memory.new }
+      data_sizes = Array(UInt64).new(logical_streams.size, 0_u64)
+      raw_sizes = Array(UInt64).new(logical_streams.size, 0_u64)
+      total_nested_elements = 0_u64
+      total_string_bytes = 0_u64
+      start_row = 0
+
+      files = data_names.map { |name| File.open(File.join(stage, name), "wb") }
+      begin
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          size0_raw = Bytes.new(rows * 8)
+          mark_elements = 0_u64
+          mark_string_bytes = 0_u64
+          rows.times do |row|
+            row_values = values[start_row + row]
+            write_uint64_le(size0_raw, row * 8, row_values.size.to_u64)
+            if row_values.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_elements
+              raise ArgumentError.new("Array Tuple nested element count exceeds per-mark limit")
+            end
+            mark_elements += row_values.size.to_u64
+            row_values.each do |entry|
+              entry_bytes = entry[1].bytesize.to_u64
+              if entry_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - mark_string_bytes ||
+                 entry_bytes > MAX_FRAME_RAW_BYTES.to_u64 - mark_string_bytes
+                raise ArgumentError.new("Array Tuple String bytes exceed per-mark limit")
+              end
+              mark_string_bytes += entry_bytes
+            end
+          end
+
+          nested_raw_size = checked_array_element_bytes(mark_elements, "Array Tuple UInt64")
+          a_raw = Bytes.new(nested_raw_size.to_i)
+          b_size_raw = Bytes.new(nested_raw_size.to_i)
+          a_null_raw = Bytes.new(0)
+          {% if T == UInt64? %}
+            a_null_raw = Bytes.new(mark_elements.to_i)
+          {% end %}
+          b_raw = Bytes.new(mark_string_bytes.to_i)
+          element_offset = 0
+          string_offset = 0
+          rows.times do |row|
+            values[start_row + row].each do |entry|
+              a_value = entry[0]
+              {% if T == UInt64? %}
+                if a_value.nil?
+                  a_null_raw[element_offset] = 1_u8
+                  write_uint64_le(a_raw, element_offset * 8, 0_u64)
+                else
+                  a_null_raw[element_offset] = 0_u8
+                  write_uint64_le(a_raw, element_offset * 8, a_value.not_nil!)
+                end
+              {% else %}
+                write_uint64_le(a_raw, element_offset * 8, a_value)
+              {% end %}
+              entry_bytes = entry[1].to_slice
+              write_uint64_le(b_size_raw, element_offset * 8, entry_bytes.size.to_u64)
+              unless entry_bytes.empty?
+                entry_bytes.copy_to(b_raw[string_offset, entry_bytes.size])
+                string_offset += entry_bytes.size
+              end
+              element_offset += 1
+            end
+          end
+
+          raw_streams = [] of Bytes
+          raw_streams << size0_raw
+          {% if T == UInt64? %}
+            raw_streams << a_null_raw
+          {% end %}
+          raw_streams << a_raw
+          raw_streams << b_size_raw
+          raw_streams << b_raw
+          raw_streams.each_with_index do |raw, stream_index|
+            write_uint64_le(mark_bytes[stream_index], data_sizes[stream_index])
+            write_uint64_le(mark_bytes[stream_index], 0_u64)
+            write_uint64_le(mark_bytes[stream_index], rows.to_u64)
+
+            unless stream_index > 0 && raw.empty?
+              frame = encode_lz4_frame(raw)
+              if data_sizes[stream_index] > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+                raise ArgumentError.new("Array Tuple data stream exceeds reader limit")
+              end
+              files[stream_index].write(frame)
+              data_hashes[stream_index].update(frame)
+              data_sizes[stream_index] += frame.size.to_u64
+            end
+            if raw.size.to_u64 > UInt64::MAX - raw_sizes[stream_index]
+              raise ArgumentError.new("Array Tuple raw stream size overflows")
+            end
+            raw_sizes[stream_index] += raw.size.to_u64
+            raw_hashes[stream_index].update(raw)
+          end
+
+          if mark_elements > UInt64::MAX - total_nested_elements
+            raise ArgumentError.new("Array Tuple nested element count overflows")
+          end
+          total_nested_elements += mark_elements
+          if mark_string_bytes > UInt64::MAX - total_string_bytes
+            raise ArgumentError.new("Array Tuple String byte count overflows")
+          end
+          total_string_bytes += mark_string_bytes
+          start_row += rows
+        end
+      ensure
+        files.each { |file| file.close unless file.closed? }
+      end
+
+      mark_bytes.each_with_index do |bytes, stream_index|
+        write_uint64_le(bytes, data_sizes[stream_index])
+        write_uint64_le(bytes, 0_u64)
+        write_uint64_le(bytes, 0_u64)
+      end
+      marks = mark_bytes.map(&.to_slice)
+      marks.each do |bytes|
+        raise ArgumentError.new("mark stream exceeds reader limit") if bytes.size.to_i64 > MAX_MARK_FILE_BYTES
+      end
+      marks.each_with_index do |bytes, stream_index|
+        File.write(File.join(stage, mark_names[stream_index]), bytes)
+      end
+
+      expected_raw_sizes = [] of UInt64
+      expected_raw_sizes << checked_array_element_checksum_size(values.size.to_u64, "Array Tuple size0")
+      {% if T == UInt64? %}
+        expected_raw_sizes << total_nested_elements
+      {% end %}
+      nested_value_bytes = checked_array_element_checksum_size(total_nested_elements, "Array Tuple UInt64")
+      expected_raw_sizes << nested_value_bytes
+      expected_raw_sizes << nested_value_bytes
+      expected_raw_sizes << total_string_bytes
+      raise CorruptPartError.new("Array Tuple raw stream size differs") unless raw_sizes == expected_raw_sizes
+
+      records = [] of ChecksumRecord
+      data_names.each_with_index do |name, stream_index|
+        records << ChecksumRecord.new(name, data_sizes[stream_index], data_hashes[stream_index].finish, true, raw_sizes[stream_index], raw_hashes[stream_index].finish)
+        records << ChecksumRecord.new(mark_names[stream_index], marks[stream_index].size.to_u64, CityHashV1.file_hash(marks[stream_index]), false)
+      end
+      records
+    end
+
     private def self.write_map_uint64_string_streams(
       stage : String,
       column : String,
@@ -8047,6 +8372,135 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged Tuple mark stream has trailing bytes for #{logical_name}") unless marks_file.gets_to_end.empty?
       raise CorruptPartError.new("staged Tuple data stream has trailing bytes for #{logical_name}") unless data_file.size == expected_offset
+      nil
+    end
+
+    private def self.validate_staged_array_tuple_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Tuple(T, String))),
+      rows_per_mark : Int32,
+      type_plan : WideTypePlan,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      logical_streams = [key_name] + type_plan.physical_substreams(value_name)
+      expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
+      logical_streams.each do |logical_name|
+        base = StreamName.hash(logical_name)
+        expected_checksum_files << "#{base}.bin"
+        expected_checksum_files << "#{base}.mrk2"
+      end
+      unless checksums.entries.keys.sort == expected_checksum_files.sort
+        raise CorruptPartError.new("staged Array Tuple checksum inventory differs")
+      end
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, type_plan.column_type)
+        raise CorruptPartError.new("staged Array Tuple columns metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_tuple_substreams_metadata(key_name, value_name, type_plan)
+        raise CorruptPartError.new("staged Array Tuple substream metadata differs")
+      end
+      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+        raise CorruptPartError.new("staged Array Tuple serialization metadata differs")
+      end
+      raise CorruptPartError.new("staged Array Tuple row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
+      raise CorruptPartError.new("staged Array Tuple compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged Array Tuple metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+
+      expected_files = expected_checksum_files + [
+        "checksums.txt",
+        "columns.txt",
+        "columns_substreams.txt",
+        "default_compression_codec.txt",
+        "metadata_version.txt",
+      ]
+      unless Dir.children(stage).sort == expected_files.sort
+        raise CorruptPartError.new("staged Array Tuple file inventory differs")
+      end
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged Array Tuple key row count differs") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Array Tuple row count differs") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Array Tuple column type differs") unless value_part.column_type == type_plan.column_type
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      mark_index = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        rows.times do |offset|
+          unless expected_keys[offset] == keys[start + offset]
+            raise CorruptPartError.new("staged Array Tuple key readback differs from input")
+          end
+        end
+
+        flattened_elements = 0_u64
+        expected_string_bytes = 0_u64
+        rows.times do |offset|
+          row_values = values[start + offset]
+          if row_values.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - flattened_elements
+            raise CorruptPartError.new("staged Array Tuple input exceeds per-mark element limit")
+          end
+          flattened_elements += row_values.size.to_u64
+          row_values.each do |entry|
+            string_bytes = entry[1].bytesize.to_u64
+            if string_bytes > UInt64::MAX - expected_string_bytes
+              raise CorruptPartError.new("staged Array Tuple String byte count overflows")
+            end
+            expected_string_bytes += string_bytes
+          end
+        end
+
+        nested_width = {% if T == UInt64? %} 17_u64 {% else %} 16_u64 {% end %}
+        observed_raw_bytes = 0_u64
+        observed_values = Array(Array(Tuple(T, String))).new
+        {% if T == UInt64? %}
+          observed_raw_bytes = value_part.preflight_array_tuple_nullable_uint64_string_mark_range_raw_bytes(value_name, mark_index, 1)
+          observed_values = value_part.read_array_tuple_nullable_uint64_string_mark_range(value_name, mark_index, 1)
+        {% else %}
+          observed_raw_bytes = value_part.preflight_array_tuple_uint64_string_mark_range_raw_bytes(value_name, mark_index, 1)
+          observed_values = value_part.read_array_tuple_uint64_string_mark_range(value_name, mark_index, 1)
+        {% end %}
+        if flattened_elements > UInt64::MAX // nested_width
+          raise CorruptPartError.new("staged Array Tuple raw byte count overflows")
+        end
+        expected_raw_bytes = rows.to_u64 * 8_u64
+        nested_raw_bytes = flattened_elements * nested_width
+        if nested_raw_bytes > UInt64::MAX - expected_raw_bytes
+          raise CorruptPartError.new("staged Array Tuple raw byte count overflows")
+        end
+        expected_raw_bytes += nested_raw_bytes
+        if expected_string_bytes > UInt64::MAX - expected_raw_bytes
+          raise CorruptPartError.new("staged Array Tuple raw byte count overflows")
+        end
+        expected_raw_bytes += expected_string_bytes
+        unless observed_raw_bytes == expected_raw_bytes
+          raise CorruptPartError.new("staged Array Tuple preflight byte count differs")
+        end
+        unless observed_values.size == rows
+          raise CorruptPartError.new("staged Array Tuple mark row count differs")
+        end
+        rows.times do |offset|
+          unless observed_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Array Tuple stream readback differs from input")
+          end
+        end
+
+        start += rows
+        mark_index += 1
+      end
+      raise CorruptPartError.new("staged Array Tuple key marks differ") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array Tuple marks differ") unless value_part.mark_row_counts == expected_mark_rows
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
     end
 
@@ -10901,6 +11355,19 @@ module CrystalClick
 
     private def self.tuple_string_substreams_metadata(key_name : String, value_name : String) : String
       "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}%2Ea\n\t#{value_name}%2Eb.size\n\t#{value_name}%2Eb\n"
+    end
+
+    private def self.array_tuple_substreams_metadata(
+      key_name : String,
+      value_name : String,
+      type_plan : WideTypePlan,
+    ) : String
+      value_streams = type_plan.physical_substreams(value_name)
+      payload = IO::Memory.new
+      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
+      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
+      value_streams.each { |stream| payload << "\t#{stream}\n" }
+      payload.to_s
     end
 
     private def self.json_typed_substreams_metadata(key_name : String, value_name : String) : String

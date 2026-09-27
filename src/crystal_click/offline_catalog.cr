@@ -12,7 +12,7 @@ module CrystalClick
                              Array(UUIDValue) | Array(UUIDValue?) | Array(IPv4Value) | Array(IPv4Value?) | Array(IPv6Value) | Array(IPv6Value?) |
                              Array(BFloat16Value) |
                              Array(Bool) | Array(Bool?) | Array(Array(Bool)) | Array(Array(Bool?)) |
-                             Array(Tuple(UInt64, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
+                             Array(Tuple(UInt64, String)) | Array(Tuple(UInt64?, String)) | Array(Tuple(UInt64, UInt64)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -525,6 +525,26 @@ module CrystalClick
         selected_values = batch.array_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0], string_bytes = append_materialized_array_strings(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+      when WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_STRING
+        selected_values = batch.array_tuple_uint64_string_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_tuple_uint64_strings(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+      when WideTypePlan::TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING
+        selected_values = batch.array_tuple_nullable_uint64_string_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_tuple_nullable_uint64_strings(
           values,
           selected_values,
           array_elements[0],
@@ -1212,6 +1232,54 @@ module CrystalClick
       selected_values.each do |row|
         owned_row = Array(String).new(row.size)
         row.each { |value| owned_row << String.new(value.to_slice) }
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_tuple_uint64_strings(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(UInt64, String))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |_number, value|
+          next_bytes = checked_materialized_value_string_bytes(next_bytes, value.bytesize.to_u64, max_string_bytes)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(UInt64, String)).new(row.size)
+        row.each { |number, value| owned_row << {number, String.new(value.to_slice)} }
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_tuple_nullable_uint64_strings(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(UInt64?, String))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |_number, value|
+          next_bytes = checked_materialized_value_string_bytes(next_bytes, value.bytesize.to_u64, max_string_bytes)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(UInt64?, String)).new(row.size)
+        row.each { |number, value| owned_row << {number, String.new(value.to_slice)} }
         values << owned_row
       end
       {next_elements, next_bytes}

@@ -1,0 +1,15 @@
+columns substreams version: 1
+3 columns:
+1 substreams for column `pk`:
+	pk
+4 substreams for column `arr_tuple`:
+	arr_tuple.size0
+	arr_tuple%2Ea
+	arr_tuple%2Eb.size
+	arr_tuple%2Eb
+5 substreams for column `arr_tuple_nullable`:
+	arr_tuple_nullable.size0
+	arr_tuple_nullable%2Ea.null
+	arr_tuple_nullable%2Ea
+	arr_tuple_nullable%2Eb.size
+	arr_tuple_nullable%2Eb
