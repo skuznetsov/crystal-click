@@ -4570,10 +4570,11 @@ can silently reinterpret values. Rollback is one W74 feature commit without
 touching existing server data roots or remote history. The first falsifier is
 a RED focused spec for a missing String-only `Dynamic` reader/writer API and
 an independently produced Wide/LZ4/plain-mark stock part. The guard check is
-rejection before yielding or publishing when the dictionary, discriminators,
-shared streams, mark row counts, or String cardinalities violate the admitted
-shape. Include multiple marks, empty and binary Strings, short final marks,
-and malformed later marks. The DoD is focused specs; stock-to-Crystal read;
+rejection before yielding the affected mark or publishing when the dictionary,
+discriminators, shared streams, mark row counts, or String cardinalities violate
+the admitted shape. Include multiple marks, empty and binary Strings, short
+final marks, and malformed later marks. The DoD is focused specs;
+stock-to-Crystal read;
 Crystal-to-stock `ATTACH PART`, full and keyed RowBinary, and `CHECK TABLE`;
 all pinned regression oracles; full debug and release specs; formatter and
 diff checks; and hostile review of both directions and publication safety.
