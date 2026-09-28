@@ -820,6 +820,32 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    # W66's paired nested Time family remains separate from the W65
+    # Date/DateTime semantic gate despite sharing fixed-width carriers.
+    def self.array_array_time_element_type(type : String) : String?
+      return "Time" if type == "Array(Array(Time))"
+      if scale = array_array_time64_scale(type)
+        "Time64(#{scale})"
+      end
+    end
+
+    def self.array_array_nullable_time_element_type(type : String) : String?
+      return "Time" if type == "Array(Array(Nullable(Time)))"
+      if scale = array_array_nullable_time64_scale(type)
+        "Time64(#{scale})"
+      end
+    end
+
+    def self.array_array_time64_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Time64\(([0-9])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    def self.array_array_nullable_time64_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Nullable\(Time64\(([0-9])\)\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
     # Time Array declarations intentionally use separate recognizers from the
     # Date/DateTime family and primitive numeric Array grammar.
     def self.time_array_element_type(type : String) : String?
@@ -951,6 +977,10 @@ module CrystalClick
         elsif array_array_nullable_temporal_element_type(type)
           ["#{column}.size1", "#{column}.null", column]
         elsif array_array_temporal_element_type(type)
+          ["#{column}.size1", column]
+        elsif array_array_nullable_time_element_type(type)
+          ["#{column}.size1", "#{column}.null", column]
+        elsif array_array_time_element_type(type)
           ["#{column}.size1", column]
         elsif nullable_temporal_array_element_type(type)
           ["#{column}.null", column]
@@ -2003,6 +2033,34 @@ module CrystalClick
       element_type = WidePart.array_array_nullable_temporal_element_type(@column_type) ||
                      raise(UnsupportedFormatError.new("nested nullable temporal Array accessor requires an exact Array(Array(Nullable(T))) temporal column"))
       physical_type = WidePart.temporal_array_physical_type(element_type).not_nil!
+      array_array_decimal_mark_range_raw_bytes(
+        column,
+        first_mark,
+        mark_count,
+        WidePart.array_numeric_payload_width(physical_type),
+        true
+      )
+    end
+
+    def array_array_time_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.array_array_time_element_type(@column_type) ||
+                     raise(UnsupportedFormatError.new("nested Time Array accessor requires an exact Array(Array(Time)) declaration"))
+      physical_type = WidePart.time_array_physical_type(element_type).not_nil!
+      array_array_decimal_mark_range_raw_bytes(
+        column,
+        first_mark,
+        mark_count,
+        WidePart.array_numeric_payload_width(physical_type),
+        false
+      )
+    end
+
+    def array_array_nullable_time_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.array_array_nullable_time_element_type(@column_type) ||
+                     raise(UnsupportedFormatError.new("nested nullable Time Array accessor requires an exact Array(Array(Nullable(Time))) declaration"))
+      physical_type = WidePart.time_array_physical_type(element_type).not_nil!
       array_array_decimal_mark_range_raw_bytes(
         column,
         first_mark,
@@ -3798,6 +3856,56 @@ module CrystalClick
         raise UnsupportedFormatError.new("typed nested nullable temporal Array accessor does not match selected semantic column type")
       end
       read_array_array_nullable_temporal_values(column, first_mark, mark_count, type)
+    end
+
+    def read_array_array_time_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_type : String,
+      type : T.class,
+    ) : Array(Array(Array(T))) forall T
+      ensure_column(column)
+      unless WidePart.array_array_time_element_type(@column_type) == element_type &&
+             WidePart.time_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed nested Time Array accessor does not match selected semantic column type")
+      end
+      read_array_array_temporal_values(column, first_mark, mark_count, type)
+    end
+
+    def read_array_array_nullable_time_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_type : String,
+      type : T.class,
+    ) : Array(Array(Array(T?))) forall T
+      ensure_column(column)
+      unless WidePart.array_array_nullable_time_element_type(@column_type) == element_type &&
+             WidePart.time_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed nested nullable Time Array accessor does not match selected semantic column type")
+      end
+      read_array_array_nullable_temporal_values(column, first_mark, mark_count, type)
+    end
+
+    def read_array_array_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int32)))
+      read_array_array_time_mark_range(column, first_mark, mark_count, "Time", Int32)
+    end
+
+    def read_array_array_time64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int64)))
+      ensure_column(column)
+      scale = WidePart.array_array_time64_scale(@column_type) || -1
+      read_array_array_time_mark_range(column, first_mark, mark_count, "Time64(#{scale})", Int64)
+    end
+
+    def read_array_array_nullable_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int32?)))
+      read_array_array_nullable_time_mark_range(column, first_mark, mark_count, "Time", Int32)
+    end
+
+    def read_array_array_nullable_time64_ticks_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int64?)))
+      ensure_column(column)
+      scale = WidePart.array_array_nullable_time64_scale(@column_type) || -1
+      read_array_array_nullable_time_mark_range(column, first_mark, mark_count, "Time64(#{scale})", Int64)
     end
 
     def read_array_array_date_codes_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(UInt16)))
@@ -8473,6 +8581,24 @@ module CrystalClick
           8
         else
           raise UnsupportedFormatError.new("unsupported exact nested temporal Array substream")
+        end
+      elsif element_type = WidePart.array_array_nullable_time_element_type(@column_type)
+        if stream_name == "#{@column}.null"
+          1
+        elsif stream_name == @column
+          WidePart.array_numeric_payload_width(WidePart.time_array_physical_type(element_type).not_nil!)
+        elsif stream_name == "#{@column}.size0" || stream_name == "#{@column}.size1"
+          8
+        else
+          raise UnsupportedFormatError.new("unsupported exact nested nullable Time Array substream")
+        end
+      elsif element_type = WidePart.array_array_time_element_type(@column_type)
+        if stream_name == @column
+          WidePart.array_numeric_payload_width(WidePart.time_array_physical_type(element_type).not_nil!)
+        elsif stream_name == "#{@column}.size0" || stream_name == "#{@column}.size1"
+          8
+        else
+          raise UnsupportedFormatError.new("unsupported exact nested Time Array substream")
         end
       elsif element_type = WidePart.array_array_nullable_numeric_element_type(@column_type)
         if stream_name == "#{@column}.null"

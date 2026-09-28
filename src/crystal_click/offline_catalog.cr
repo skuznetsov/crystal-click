@@ -251,7 +251,17 @@ module CrystalClick
         return {observed_rows, string_bytes}
       end
 
-      if element_type = WidePart.array_array_nullable_temporal_element_type(selected_type)
+      if element_type = WidePart.array_array_nullable_time_element_type(selected_type)
+        selected_rows = array_array_nullable_time_row_count(batch, column_name, element_type)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_rows, expected_rows)
+        array_elements[0] = append_array_array_nullable_time_values(values, batch, column_name, element_type, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif element_type = WidePart.array_array_time_element_type(selected_type)
+        selected_rows = array_array_time_row_count(batch, column_name, element_type)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_rows, expected_rows)
+        array_elements[0] = append_array_array_time_values(values, batch, column_name, element_type, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif element_type = WidePart.array_array_nullable_temporal_element_type(selected_type)
         selected_rows = array_array_nullable_temporal_row_count(batch, column_name, element_type)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_rows, expected_rows)
         array_elements[0] = append_array_array_nullable_temporal_values(values, batch, column_name, element_type, array_elements[0])
@@ -1528,6 +1538,66 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("unsupported nested temporal Array leaf type")
         end
+      end
+    end
+
+    private def array_array_time_row_count(
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+    ) : UInt64
+      if element_type == "Time"
+        batch.array_array_time_seconds_for(column).size.to_u64
+      elsif WidePart.time64_scale(element_type)
+        batch.array_array_time64_ticks_for(column).size.to_u64
+      else
+        raise UnsupportedFormatError.new("unsupported nested Time Array leaf type")
+      end
+    end
+
+    private def array_array_nullable_time_row_count(
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+    ) : UInt64
+      if element_type == "Time"
+        batch.array_array_nullable_time_seconds_for(column).size.to_u64
+      elsif WidePart.time64_scale(element_type)
+        batch.array_array_nullable_time64_ticks_for(column).size.to_u64
+      else
+        raise UnsupportedFormatError.new("unsupported nested nullable Time Array leaf type")
+      end
+    end
+
+    private def append_array_array_time_values(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+      observed_elements : UInt64,
+    ) : UInt64
+      if element_type == "Time"
+        append_materialized_array_array_numeric(values, batch.array_array_time_seconds_for(column), observed_elements)
+      elsif WidePart.time64_scale(element_type)
+        append_materialized_array_array_numeric(values, batch.array_array_time64_ticks_for(column), observed_elements)
+      else
+        raise UnsupportedFormatError.new("unsupported nested Time Array leaf type")
+      end
+    end
+
+    private def append_array_array_nullable_time_values(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+      observed_elements : UInt64,
+    ) : UInt64
+      if element_type == "Time"
+        append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_time_seconds_for(column), observed_elements)
+      elsif WidePart.time64_scale(element_type)
+        append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_time64_ticks_for(column), observed_elements)
+      else
+        raise UnsupportedFormatError.new("unsupported nested nullable Time Array leaf type")
       end
     end
 

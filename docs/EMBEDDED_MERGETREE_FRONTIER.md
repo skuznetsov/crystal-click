@@ -170,7 +170,9 @@ observed stock topology, verification, and guard-only boundary are recorded
 below. This does not advance MV/projections or memory/performance optimization.
 W64 admits paired two-level Decimal Arrays with BASIC nullable leaves at the
 four canonical backing widths. W65 admits paired two-level temporal Arrays
-with BASIC nullable leaves; its verification and limits are below.
+with BASIC nullable leaves; its verification and limits are below. W66
+admits paired two-level Time and Time64 Arrays with BASIC nullable leaves;
+its bounded bidirectional oracle evidence and limits are below.
 
 ## Purpose and bounded contexts
 
@@ -3938,6 +3940,77 @@ this exact W65 scope. These signals do not establish arbitrary temporal
 composition, timezone variants, other part formats or ClickHouse versions,
 or a memory/performance gain.
 
+## Verified W66 slice: paired two-level Time and Time64 Arrays
+
+Target admission is exactly `Array(Array(Time))`,
+`Array(Array(Nullable(Time)))`, `Array(Array(Time64(p)))`, and
+`Array(Array(Nullable(Time64(p))))` for canonical one-digit `p = 0..9`.
+The part profile remains one sorted `UInt64` key plus one payload in
+Wide/LZ4/plain-`.mrk2` format. Public values are raw signed `Int32` Time
+seconds or raw signed `Int64` Time64 ticks; preserve the exact logical type and
+precision without text, clock, or timezone conversion. Reader, typed batch,
+offline catalog, and immutable writer APIs must agree. No other wrapper or
+composition is admitted.
+
+The first admission falsifier was a RED spec for these exact declarations:
+on the pre-W66 source `Array(Array(Time))` was not admitted, while malformed
+precision, timezone, double-nullable, and nullable-outer controls rejected.
+W66 now admits only the listed forms; Time64 scales 0 through 9 are parsed
+canonically and the same-width numeric and other temporal accessors reject the
+W66 metadata. Raw accessors are
+`read_array_array_time_seconds_mark_range`,
+`read_array_array_time64_ticks_mark_range`, and their nullable counterparts;
+the paired writers are `write_uint64_array_array_time_pair`,
+`write_uint64_array_array_time64_pair`,
+`write_uint64_array_array_nullable_time_pair`, and
+`write_uint64_array_array_nullable_time64_pair`. Table batches and offline
+catalog projections are covered by the focused reader spec.
+
+The pinned ClickHouse local 26.7.1.1315 probe created a five-row Wide part
+with nested `Time`, nullable nested `Time`, `Time64(3)`, and nullable nested
+`Time64(3)` payloads. `columns_substreams.txt` ordered plain streams as
+`size0`, `size1`, data, and nullable streams as `size0`, `size1`, `null`,
+data. Its `.mrk2` rows were `[2, 2, 1, 0]`; sample decompressed data offsets
+were `[0, 0, 16, 20]` for Time and `[0, 0, 32, 40]` for Time64(3), while
+nullable null-stream offsets were `[0, 0, 5, 6]`. The nested decimal-seconds
+SQL probe needed explicit `CAST(... AS Time64(3))`; without it, the expression
+inferred Float64 and failed before part creation (an input typing issue, not a
+storage divergence).
+
+The completed bidirectional oracle on that pinned binary covers all eight
+plain/nullable variants: Time and Time64 scales 0, 3, and 9. Stock-produced
+parts are checked for exact metadata, substream order, Wide/LZ4/plain-`.mrk2`
+shape, and mark rows `[2, 2, 2, 1, 0]`; Crystal reads exact types and raw
+values over full and later-mark ranges. Crystal-produced parts are attached to
+stock tables and pass `CHECK TABLE`; independently encoded full and keyed
+RowBinary match exactly. Crystal-written Time vectors include `Int32::MIN` and
+`Int32::MAX`; Time64(0/3/9) vectors include `Int64::MIN` and `Int64::MAX`,
+including nullable variants, and stock preserves those raw codes through
+attachment and RowBinary. Vectors also cover empty outer/inner arrays, zero
+versus NULL, an all-NULL middle mark, and a one-row short tail.
+
+Focused W66 reader/writer specs pass (6 examples); combined W50/W65/W66 reader
+and W66 writer controls pass (18 examples). The full debug and release suites
+each pass (865 examples, 0 failures/errors/pending). The reader corruption
+spec shifts selected later-mark `.size0`, `.size1`, `.null`, and data offsets;
+each fails with `CorruptPartError` before a callback. A resealed nullable
+frame with nonzero hidden child bytes under NULL is consumed and those bytes
+are ignored. Invalid Time64 scale and unsorted keys fail before a writer
+publishes output. W50's stock oracle also passes its temporal writer controls;
+the W65 bidirectional oracle passes 12 stock and 12 Crystal parts.
+
+Risk remains CAUTION: Time shares an `Int32` carrier with other semantic types
+and Time64 shares `Int64` with other semantic types, while wrong nested
+offsets can shift otherwise plausible values. The verified compatibility
+claim is scoped to one sorted `UInt64` key plus one payload, Wide/LZ4/plain
+`.mrk2`, and the pinned ClickHouse 26.7.1.1315 producer/consumer. It does not
+establish timezone-qualified forms, other codecs/part formats or ClickHouse
+versions, arbitrary Array depth, generic recursive types, MV/projections, or
+memory/performance behavior. Evidence decays on ClickHouse
+producer/serializer, codec/mark, platform, or shared nested/temporal codec
+changes. Rollback is the isolated W66 diff or one local W66 feature commit;
+do not push.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3947,7 +4020,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W65's exact nested temporal,
+1. Extend reader and writer together beyond W66's exact nested Time/Time64
+   Arrays and W65's exact nested Date/Date32/DateTime/DateTime64 temporal,
    W64's exact nested Decimal, W63's exact `Map(String, Array(UInt64))`,
    W62's exact nested extended numeric, and W61's exact nested nullable
    String Arrays, W60's exact nested nullable primitive numerics,

@@ -895,6 +895,26 @@ module CrystalClick
       values.as(Slice(Array(Array(T?))))
     end
 
+    private def array_array_time_values_for(column : String, element_type : String, type : T.class) : Slice(Array(Array(T))) forall T
+      index = column_index(column)
+      unless WidePart.array_array_time_element_type(@column_types[index]) == element_type &&
+             WidePart.time_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed nested Time Array accessor requires an exact semantic Time column")
+      end
+      values = @array_array_numeric_values[column]? || raise(UnsupportedFormatError.new("nested Time Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(T))))
+    end
+
+    private def array_array_nullable_time_values_for(column : String, element_type : String, type : T.class) : Slice(Array(Array(T?))) forall T
+      index = column_index(column)
+      unless WidePart.array_array_nullable_time_element_type(@column_types[index]) == element_type &&
+             WidePart.time_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
+        raise UnsupportedFormatError.new("typed nested nullable Time Array accessor requires an exact semantic Time column")
+      end
+      values = @array_array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nested nullable Time Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(T?))))
+    end
+
     def array_array_uint64s_for(column : String) : Slice(Array(Array(UInt64)))
       index = column_index(column)
       raise UnsupportedFormatError.new("Array(Array(UInt64)) accessor requires an exact Array(Array(UInt64)) column") unless @column_types[index] == "Array(Array(UInt64))"
@@ -1040,6 +1060,28 @@ module CrystalClick
       scale = WidePart.array_array_nullable_datetime64_scale(@column_types[index]) ||
               raise(UnsupportedFormatError.new("typed nullable temporal nested Array accessor requires canonical Array(Array(Nullable(DateTime64(p))))"))
       array_array_nullable_temporal_values_for(column, "DateTime64(#{scale})", Int64)
+    end
+
+    def array_array_time_seconds_for(column : String) : Slice(Array(Array(Int32)))
+      array_array_time_values_for(column, "Time", Int32)
+    end
+
+    def array_array_time64_ticks_for(column : String) : Slice(Array(Array(Int64)))
+      index = column_index(column)
+      scale = WidePart.array_array_time64_scale(@column_types[index]) ||
+              raise(UnsupportedFormatError.new("typed nested Time64 accessor requires canonical Array(Array(Time64(p)))"))
+      array_array_time_values_for(column, "Time64(#{scale})", Int64)
+    end
+
+    def array_array_nullable_time_seconds_for(column : String) : Slice(Array(Array(Int32?)))
+      array_array_nullable_time_values_for(column, "Time", Int32)
+    end
+
+    def array_array_nullable_time64_ticks_for(column : String) : Slice(Array(Array(Int64?)))
+      index = column_index(column)
+      scale = WidePart.array_array_nullable_time64_scale(@column_types[index]) ||
+              raise(UnsupportedFormatError.new("typed nested nullable Time64 accessor requires canonical Array(Array(Nullable(Time64(p))))"))
+      array_array_nullable_time_values_for(column, "Time64(#{scale})", Int64)
     end
 
     def array_strings_for(column : String) : Slice(Array(String))
@@ -1711,6 +1753,12 @@ module CrystalClick
               elsif WidePart.array_array_temporal_element_type(selected.column_type)
                 bytes = selected.reader.array_array_temporal_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_nullable_time_element_type(selected.column_type)
+                bytes = selected.reader.array_array_nullable_time_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_time_element_type(selected.column_type)
+                bytes = selected.reader.array_array_time_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_numeric_bytes[selected.name] = bytes
               elsif WidePart.array_array_nullable_decimal32_scale(selected.column_type)
                 bytes = selected.reader.array_array_nullable_decimal32_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_array_nullable_numeric_bytes[selected.name] = bytes
@@ -2344,6 +2392,28 @@ module CrystalClick
                 actual_string_bytes += bytes
                 array_array_nullable_uint64_values[selected.name] = values
                 array_array_nullable_numeric_values[selected.name] = values.as(WidePartArrayArrayNullableNumericArray)
+              when .starts_with?("Array(Array(Nullable(Time")
+                element_type = WidePart.array_array_nullable_time_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported nested nullable Time declaration"))
+                physical_type = WidePart.time_array_physical_type(element_type).not_nil!
+                values = read_array_array_nullable_time_values(selected.reader, selected.name, mark_index, element_type)
+                raise CorruptPartError.new("selected nullable Time nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Time nested Array mark was not preflighted"))
+                bytes = array_array_nullable_numeric_materialized_bytes(values, physical_type)
+                raise CorruptPartError.new("selected nullable Time nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Time nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_nullable_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Time")
+                element_type = WidePart.array_array_time_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported nested Time declaration"))
+                physical_type = WidePart.time_array_physical_type(element_type).not_nil!
+                values = read_array_array_time_values(selected.reader, selected.name, mark_index, element_type)
+                raise CorruptPartError.new("selected Time nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Time nested Array mark was not preflighted"))
+                bytes = array_array_numeric_materialized_bytes(values, physical_type)
+                raise CorruptPartError.new("selected Time nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Time nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_numeric_values[selected.name] = values
               when .starts_with?("Array(Array(Nullable(Date")
                 element_type = WidePart.array_array_nullable_temporal_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported nested nullable temporal declaration"))
                 physical_type = WidePart.temporal_array_physical_type(element_type).not_nil!
@@ -3232,6 +3302,42 @@ module CrystalClick
           reader.read_array_array_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
         else
           raise UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type")
+        end
+      end
+    end
+
+    private def read_array_array_time_values(
+      reader : WidePart,
+      column : String,
+      mark_index : Int,
+      element_type : String,
+    ) : WidePartArrayArrayNumericArray
+      case element_type
+      when "Time"
+        reader.read_array_array_time_seconds_mark_range(column, mark_index, 1)
+      else
+        if WidePart.time64_scale(element_type)
+          reader.read_array_array_time64_ticks_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("unsupported nested Time Array leaf type")
+        end
+      end
+    end
+
+    private def read_array_array_nullable_time_values(
+      reader : WidePart,
+      column : String,
+      mark_index : Int,
+      element_type : String,
+    ) : WidePartArrayArrayNullableNumericArray
+      case element_type
+      when "Time"
+        reader.read_array_array_nullable_time_seconds_mark_range(column, mark_index, 1)
+      else
+        if WidePart.time64_scale(element_type)
+          reader.read_array_array_nullable_time64_ticks_mark_range(column, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("unsupported nested nullable Time Array leaf type")
         end
       end
     end

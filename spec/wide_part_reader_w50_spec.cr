@@ -151,11 +151,9 @@ describe CrystalClick::WidePart do
       "Time64(10)",
       "Time64(3, 'UTC')",
       "Nullable(Nullable(Time))",
-      "Array(Array(Time))",
       "Array(Nullable(Nullable(Time)))",
       "Nullable(Array(Time))",
       "Nullable(Nullable(Time64(3)))",
-      "Array(Array(Time64(3)))",
       "Array(Nullable(Nullable(Time64(3))))",
       "Nullable(Array(Time64(3)))",
     }.each do |type|
