@@ -43,6 +43,12 @@ module CrystalClick
       UInt64Values
     end
 
+    private enum VariantBoolSparseStream
+      BoolValues
+      StringSizes
+      UInt64Values
+    end
+
     {% if flag?(:darwin) %}
       @[Link("c")]
       lib LibWidePartWriterAtomicPublish
@@ -199,6 +205,44 @@ module CrystalClick
         write_plain_metadata(stage, "columns_substreams.txt", variant_string_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_variant_string_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    # Write the exact canonical Variant(Bool, String, UInt64) profile admitted
+    # by W57. Each sparse child keeps a top-level mark for every input granule.
+    def self.write_uint64_variant_bool_string_uint64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_variant_bool_string_uint64_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_variant_bool_string_uint64_streams(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, WideVariantBoolStringUInt64TypePlan::TYPE))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", variant_bool_string_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_variant_bool_string_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5322,6 +5366,143 @@ module CrystalClick
       nil
     end
 
+    private def self.variant_bool_string_uint64_tag(value : VariantBoolStringUInt64Value) : UInt8
+      case value
+      when Bool
+        WideVariantBoolStringUInt64TypePlan::TAG_BOOL
+      when String
+        WideVariantBoolStringUInt64TypePlan::TAG_STRING
+      when UInt64
+        WideVariantBoolStringUInt64TypePlan::TAG_UINT64
+      when Nil
+        WideVariantBoolStringUInt64TypePlan::TAG_NULL
+      else
+        raise ArgumentError.new("Variant value is outside the admitted Bool/String/UInt64/NULL domain")
+      end
+    end
+
+    private def self.validate_variant_bool_string_uint64_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      value_streams = WideVariantBoolStringUInt64TypePlan.physical_streams(value_name)
+      expected_streams = [
+        WideVariantBoolStringUInt64TypePlan.discriminator_stream(value_name),
+        WideVariantBoolStringUInt64TypePlan.bool_stream(value_name),
+        WideVariantBoolStringUInt64TypePlan.string_size_stream(value_name),
+        WideVariantBoolStringUInt64TypePlan.string_stream(value_name),
+        WideVariantBoolStringUInt64TypePlan.uint64_stream(value_name),
+      ]
+      raise UnsupportedFormatError.new("Variant writer plan differs from the admitted W57 stream order") unless value_streams == expected_streams
+      stream_hashes = ([key_name] + value_streams).map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_hashes.uniq.size == stream_hashes.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      key_data_bytes = 0_i64
+      discriminator_data_bytes = 0_i64
+      bool_data_bytes = 0_i64
+      string_size_data_bytes = 0_i64
+      string_data_bytes = 0_i64
+      uint64_data_bytes = 0_i64
+      total_string_bytes = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        key_frame_size = checked_string_frame_size(rows.to_i64 * 8_i64, "UInt64 key")
+        raise ArgumentError.new("UInt64 key stream exceeds reader limit") if key_frame_size > MAX_DATA_FILE_BYTES - key_data_bytes
+        key_data_bytes += key_frame_size
+
+        bool_count = 0_i64
+        string_count = 0_i64
+        uint64_count = 0_i64
+        mark_string_bytes = 0_i64
+        first_tag : UInt8? = nil
+        uniform_tag = true
+        rows.times do |offset|
+          value = values[start_row + offset]
+          tag = variant_bool_string_uint64_tag(value)
+          if first_tag.nil?
+            first_tag = tag
+          elsif first_tag != tag
+            uniform_tag = false
+          end
+
+          case value
+          when Bool
+            bool_count += 1_i64
+          when String
+            value_bytes = value.bytesize.to_i64
+            raise ArgumentError.new("Variant String payload granule exceeds decompressed frame limit") if value_bytes > MAX_FRAME_RAW_BYTES.to_i64 - mark_string_bytes
+            raise ArgumentError.new("Variant String payload exceeds reader limit") if value_bytes.to_u64 > MAX_DATA_FILE_BYTES.to_u64 - total_string_bytes
+            mark_string_bytes += value_bytes
+            total_string_bytes += value_bytes.to_u64
+            string_count += 1_i64
+          when UInt64
+            uint64_count += 1_i64
+          when Nil
+          else
+            raise ArgumentError.new("Variant value is outside the admitted Bool/String/UInt64/NULL domain")
+          end
+        end
+
+        mode_prefix_size = start_row == 0 ? 8_i64 : 0_i64
+        tag_bytes = uniform_tag ? 1_i64 : rows.to_i64
+        discriminator_raw_size = mode_prefix_size + low_cardinality_var_uint_size(rows.to_u64) + 1_i64 + tag_bytes
+        discriminator_frame_size = checked_string_frame_size(discriminator_raw_size, "Variant discriminator")
+        raise ArgumentError.new("Variant discriminator stream exceeds reader limit") if discriminator_frame_size > MAX_DATA_FILE_BYTES - discriminator_data_bytes
+        discriminator_data_bytes += discriminator_frame_size
+
+        unless bool_count == 0
+          bool_frame_size = checked_string_frame_size(bool_count, "Variant Bool")
+          raise ArgumentError.new("Variant Bool stream exceeds reader limit") if bool_frame_size > MAX_DATA_FILE_BYTES - bool_data_bytes
+          bool_data_bytes += bool_frame_size
+        end
+        string_size_raw_size = string_count * 8_i64
+        unless string_size_raw_size == 0
+          string_size_frame_size = checked_string_frame_size(string_size_raw_size, "Variant String size")
+          raise ArgumentError.new("Variant String size stream exceeds reader limit") if string_size_frame_size > MAX_DATA_FILE_BYTES - string_size_data_bytes
+          string_size_data_bytes += string_size_frame_size
+        end
+        unless mark_string_bytes == 0
+          string_frame_size = checked_string_frame_size(mark_string_bytes, "Variant String payload")
+          raise ArgumentError.new("Variant String stream exceeds reader limit") if string_frame_size > MAX_DATA_FILE_BYTES - string_data_bytes
+          string_data_bytes += string_frame_size
+        end
+        uint64_raw_size = uint64_count * 8_i64
+        unless uint64_raw_size == 0
+          uint64_frame_size = checked_string_frame_size(uint64_raw_size, "Variant UInt64")
+          raise ArgumentError.new("Variant UInt64 stream exceeds reader limit") if uint64_frame_size > MAX_DATA_FILE_BYTES - uint64_data_bytes
+          uint64_data_bytes += uint64_frame_size
+        end
+        start_row += rows
+      end
+      nil
+    end
+
     private def self.validate_string_inputs(
       destination : String,
       key_name : String,
@@ -7053,6 +7234,220 @@ module CrystalClick
             if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
               raise ArgumentError.new("Variant String stream exceeds reader limit")
             end
+            data_file.write(frame)
+            data_hash.update(frame)
+            data_size += frame.size.to_u64
+          end
+          raw_hash.update(raw)
+          raw_size += raw.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("Variant String marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, raw_size, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
+    private def self.write_variant_bool_string_uint64_streams(
+      stage : String,
+      column : String,
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      streams = WideVariantBoolStringUInt64TypePlan.physical_streams(column)
+      records = [] of ChecksumRecord
+      records.concat(write_variant_bool_string_uint64_discriminator_stream(stage, streams[0], values, rows_per_mark))
+      records.concat(write_variant_bool_string_uint64_sparse_stream(stage, streams[1], values, rows_per_mark, VariantBoolSparseStream::BoolValues))
+      records.concat(write_variant_bool_string_uint64_sparse_stream(stage, streams[2], values, rows_per_mark, VariantBoolSparseStream::StringSizes))
+      records.concat(write_variant_bool_string_uint64_string_stream(stage, streams[3], values, rows_per_mark))
+      records.concat(write_variant_bool_string_uint64_sparse_stream(stage, streams[4], values, rows_per_mark, VariantBoolSparseStream::UInt64Values))
+      records
+    end
+
+    private def self.write_variant_bool_string_uint64_discriminator_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash(logical_name)
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      raw_size = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, data_name), "wb") do |data_file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          first_tag = variant_bool_string_uint64_tag(values[start_row])
+          uniform_tag = true
+          rows.times do |offset|
+            uniform_tag = false if variant_bool_string_uint64_tag(values[start_row + offset]) != first_tag
+          end
+
+          raw_memory = IO::Memory.new
+          if start_row == 0
+            write_uint64_le(raw_memory, WideVariantBoolStringUInt64TypePlan::MODE_COMPACT)
+          end
+          write_var_uint(raw_memory, rows.to_u64)
+          if uniform_tag
+            raw_memory.write_byte(WideVariantBoolStringUInt64TypePlan::FORMAT_UNIFORM_TAG)
+            raw_memory.write_byte(first_tag)
+          else
+            raw_memory.write_byte(WideVariantBoolStringUInt64TypePlan::FORMAT_ROW_TAGS)
+            rows.times do |offset|
+              raw_memory.write_byte(variant_bool_string_uint64_tag(values[start_row + offset]))
+            end
+          end
+          raw = raw_memory.to_slice
+          raise ArgumentError.new("Variant discriminator granule exceeds decompressed frame limit") if raw.size.to_i64 > MAX_FRAME_RAW_BYTES
+
+          write_uint64_le(mark_bytes, data_size)
+          # The mode prefix shares the first compressed frame; ClickHouse
+          # positions its first discriminator mark after the eight-byte mode.
+          write_uint64_le(mark_bytes, start_row == 0 ? 8_u64 : 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+          frame = encode_lz4_frame(raw)
+          raise ArgumentError.new("Variant discriminator stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+          data_file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(raw)
+          data_size += frame.size.to_u64
+          raw_size += raw.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("Variant discriminator marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, raw_size, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
+    private def self.write_variant_bool_string_uint64_sparse_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32,
+      stream_kind : VariantBoolSparseStream,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash(logical_name)
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      raw_size = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, data_name), "wb") do |data_file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          raw_memory = IO::Memory.new
+          rows.times do |offset|
+            value = values[start_row + offset]
+            case stream_kind
+            when .bool_values?
+              if value.is_a?(Bool)
+                raw_memory.write_byte(value.as(Bool) ? 1_u8 : 0_u8)
+              end
+            when .string_sizes?
+              if string_value = value.as?(String)
+                write_uint64_le(raw_memory, string_value.bytesize.to_u64)
+              end
+            when .u_int64_values?
+              if uint64_value = value.as?(UInt64)
+                write_uint64_le(raw_memory, uint64_value)
+              end
+            end
+          end
+          raw = raw_memory.to_slice
+          raise ArgumentError.new("Variant sparse child granule exceeds decompressed frame limit") if raw.size.to_i64 > MAX_FRAME_RAW_BYTES
+
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+          unless raw.empty?
+            frame = encode_lz4_frame(raw)
+            raise ArgumentError.new("Variant sparse child stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+            data_file.write(frame)
+            data_hash.update(frame)
+            data_size += frame.size.to_u64
+          end
+          raw_hash.update(raw)
+          raw_size += raw.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("Variant sparse child marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, raw_size, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
+    private def self.write_variant_bool_string_uint64_string_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash(logical_name)
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      raw_size = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, data_name), "wb") do |data_file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          raw_memory = IO::Memory.new
+          rows.times do |offset|
+            if string_value = values[start_row + offset].as?(String)
+              raw_memory.write(string_value.to_slice)
+            end
+          end
+          raw = raw_memory.to_slice
+          raise ArgumentError.new("Variant String granule exceeds decompressed frame limit") if raw.size.to_i64 > MAX_FRAME_RAW_BYTES
+
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+          unless raw.empty?
+            frame = encode_lz4_frame(raw)
+            raise ArgumentError.new("Variant String stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
             data_file.write(frame)
             data_hash.update(frame)
             data_size += frame.size.to_u64
@@ -10561,6 +10956,69 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_variant_bool_string_uint64_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, WideVariantBoolStringUInt64TypePlan::TYPE)
+        raise CorruptPartError.new("staged Variant columns metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == variant_bool_string_uint64_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged Variant substream metadata differs")
+      end
+      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+        raise CorruptPartError.new("staged Variant serialization metadata differs")
+      end
+      raise CorruptPartError.new("staged row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
+      raise CorruptPartError.new("staged compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged Variant row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged Variant column type does not match") unless value_part.column_type == WideVariantBoolStringUInt64TypePlan::TYPE
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        expected_mark_rows << rows.to_u64
+        mark_index = expected_mark_rows.size - 1
+        observed_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        observed_values = value_part.read_variant_bool_string_uint64_mark_range(value_name, mark_index, 1)
+        rows.times do |offset|
+          unless observed_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Variant stream readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Variant marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
+      nil
+    end
+
     private def self.validate_staged_tuple_part(
       stage : String,
       key_name : String,
@@ -13972,6 +14430,15 @@ module CrystalClick
 
     private def self.variant_string_uint64_substreams_metadata(key_name : String, value_name : String) : String
       value_streams = WideVariantStringUInt64TypePlan.physical_streams(value_name)
+      payload = IO::Memory.new
+      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
+      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
+      value_streams.each { |stream| payload << "\t#{stream}\n" }
+      payload.to_s
+    end
+
+    private def self.variant_bool_string_uint64_substreams_metadata(key_name : String, value_name : String) : String
+      value_streams = WideVariantBoolStringUInt64TypePlan.physical_streams(value_name)
       payload = IO::Memory.new
       payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
       payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"

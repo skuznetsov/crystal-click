@@ -663,6 +663,17 @@ module CrystalClick
             values << value
           end
         end
+      when WideVariantBoolStringUInt64TypePlan::TYPE
+        selected_values = batch.variant_bool_string_uint64_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        selected_values.each do |value|
+          if string_value = value.as?(String)
+            string_bytes = checked_materialized_value_string_bytes(string_bytes, string_value.bytesize.to_u64, max_string_bytes)
+            values << String.new(string_value.to_slice)
+          else
+            values << value
+          end
+        end
       when "LowCardinality(String)"
         selected_values = batch.low_cardinality_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)

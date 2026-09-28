@@ -36,9 +36,10 @@ module CrystalClick
     ARRAY_TUPLE_ROW_ACCOUNTING_BYTES   =  8_u64
     ARRAY_TUPLE_ENTRY_ACCOUNTING_BYTES = 16_u64
 
-    # W56 typed table accounting: one bounded Variant union slot per row.
+    # Bounded Variant table accounting: one union slot per row.
     # This is conservative batch accounting, not an exact heap measurement.
-    VARIANT_STRING_UINT64_ROW_ACCOUNTING_BYTES = 64_u64
+    VARIANT_STRING_UINT64_ROW_ACCOUNTING_BYTES      = 64_u64
+    VARIANT_BOOL_STRING_UINT64_ROW_ACCOUNTING_BYTES = 64_u64
 
     def self.supports_numeric_type?(type : String) : Bool
       case type
@@ -873,6 +874,18 @@ module CrystalClick
       WideVariantStringUInt64TypePlan.admitted?(type)
     end
 
+    def self.supports_variant_bool_string_uint64_type?(type : String) : Bool
+      WideVariantBoolStringUInt64TypePlan.admitted?(type)
+    end
+
+    def self.variant_type_plan(type : String) : WideVariantTypePlanDescriptor?
+      WideVariantTypePlanDescriptor.for_type(type)
+    end
+
+    def self.supports_variant_type?(type : String) : Bool
+      !variant_type_plan(type).nil?
+    end
+
     def self.supports_typed_type?(type : String) : Bool
       supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
@@ -889,7 +902,7 @@ module CrystalClick
         supports_map_string_uint64_type?(type) || supports_map_string_string_type?(type) ||
         supports_map_uint64_nullable_uint64_type?(type) || supports_map_string_nullable_uint64_type?(type) ||
         supports_map_uint64_nullable_string_type?(type) || supports_map_string_nullable_string_type?(type) ||
-        supports_tuple_uint64_string_type?(type) || supports_variant_string_uint64_type?(type)
+        supports_tuple_uint64_string_type?(type) || supports_variant_type?(type)
     end
 
     def self.json_type?(type : String) : Bool
@@ -4254,6 +4267,136 @@ module CrystalClick
       {raw_string_bytes, raw_string_bytes + rows * row_charge}
     end
 
+    # W57's exact Bool/String/UInt64 paired codec keeps an independent public
+    # value type so the W56 accessor cannot accidentally admit Bool.
+    def read_variant_bool_string_uint64_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : Array(VariantBoolStringUInt64Value)
+      ensure_column(column)
+      unless WidePart.supports_variant_bool_string_uint64_type?(@column_type)
+        raise UnsupportedFormatError.new("Variant accessor requires exact Variant(Bool, String, UInt64)")
+      end
+      values, _raw_string_bytes = decode_variant_bool_string_uint64_mark_range(column, first_mark, mark_count, materialize: true)
+      values
+    end
+
+    def variant_bool_string_uint64_mark_range_materialization_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {UInt64, UInt64}
+      ensure_column(column)
+      unless WidePart.supports_variant_bool_string_uint64_type?(@column_type)
+        raise UnsupportedFormatError.new("Variant preflight requires exact Variant(Bool, String, UInt64)")
+      end
+      _, raw_string_bytes = decode_variant_bool_string_uint64_mark_range(column, first_mark, mark_count, materialize: false)
+      discriminator_stream = @streams[WideVariantBoolStringUInt64TypePlan.discriminator_stream(column)]
+      _, _, rows = checked_stream_mark_range(discriminator_stream, first_mark, mark_count)
+      row_charge = VARIANT_BOOL_STRING_UINT64_ROW_ACCOUNTING_BYTES
+      raise CorruptPartError.new("Variant mark allocation charge overflows") if rows > (UInt64::MAX - raw_string_bytes) // row_charge
+      {raw_string_bytes, raw_string_bytes + rows * row_charge}
+    end
+
+    private def decode_variant_bool_string_uint64_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      materialize : Bool,
+    ) : {Array(VariantBoolStringUInt64Value), UInt64}
+      discriminator_stream = @streams[WideVariantBoolStringUInt64TypePlan.discriminator_stream(column)]
+      _, _, selected_rows = checked_stream_mark_range(discriminator_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Variant mark range exceeds row limit") if selected_rows > MAX_VARIANT_RANGE_ROWS
+
+      mode = variant_discriminator_mode(discriminator_stream)
+      bool_stream = @streams[WideVariantBoolStringUInt64TypePlan.bool_stream(column)]
+      string_size_stream = @streams[WideVariantBoolStringUInt64TypePlan.string_size_stream(column)]
+      string_stream = @streams[WideVariantBoolStringUInt64TypePlan.string_stream(column)]
+      uint64_stream = @streams[WideVariantBoolStringUInt64TypePlan.uint64_stream(column)]
+      values = materialize ? Array(VariantBoolStringUInt64Value).new(selected_rows.to_i) : Array(VariantBoolStringUInt64Value).new(0)
+      total_string_bytes = 0_u64
+
+      mark_count.times do |range_offset|
+        mark_index = first_mark + range_offset
+        start_mark = discriminator_stream.marks[mark_index]
+        end_mark = mark_index + 1 == discriminator_stream.marks.size ? discriminator_stream.sentinel : discriminator_stream.marks[mark_index + 1]
+        rows = start_mark.rows
+        tags = read_variant_discriminator_mark(discriminator_stream, start_mark, end_mark, mark_index, rows, mode, WideVariantBoolStringUInt64TypePlan::DESCRIPTOR)
+        bool_count = tags.count { |tag| tag == WideVariantBoolStringUInt64TypePlan::TAG_BOOL }.to_u64
+        string_count = tags.count { |tag| tag == WideVariantBoolStringUInt64TypePlan::TAG_STRING }.to_u64
+        uint64_count = tags.count { |tag| tag == WideVariantBoolStringUInt64TypePlan::TAG_UINT64 }.to_u64
+
+        bool_start, bool_end, bool_rows = checked_stream_mark_range(bool_stream, mark_index, 1)
+        raise CorruptPartError.new("Variant Bool child mark rows differ") unless bool_rows == rows
+        bool_bytes = read_mark_range_bytes(bool_stream, bool_start, bool_end, bool_count.to_i, 1)
+        bool_bytes.each do |code|
+          raise CorruptPartError.new("Variant Bool child code is unsupported") unless code == 0_u8 || code == 1_u8
+        end
+
+        size_start, size_end, size_rows = checked_stream_mark_range(string_size_stream, mark_index, 1)
+        raise CorruptPartError.new("Variant String-size child mark rows differ") unless size_rows == rows
+        size_bytes = checked_byte_count(string_count, 8)
+        encoded_sizes = read_mark_range_bytes(string_size_stream, size_start, size_end, size_bytes, 8)
+        sizes = Array(UInt64).new(string_count.to_i) { |index| u64(encoded_sizes, index * 8) }
+        mark_string_bytes = 0_u64
+        sizes.each do |length|
+          if length > MAX_STRING_RANGE_BYTES.to_u64 - mark_string_bytes || length > MAX_STRING_RANGE_BYTES.to_u64 - total_string_bytes
+            raise CorruptPartError.new("Variant String bytes exceed materialization limit")
+          end
+          mark_string_bytes += length
+          total_string_bytes += length
+        end
+
+        raw_start, raw_end, raw_rows = checked_stream_mark_range(string_stream, mark_index, 1)
+        raise CorruptPartError.new("Variant String child mark rows differ") unless raw_rows == rows
+        raw_byte_count = mark_string_bytes.to_i
+        raw_bytes = if materialize
+                      read_mark_range_bytes(string_stream, raw_start, raw_end, raw_byte_count, 1)
+                    else
+                      validate_mark_range_bytes(string_stream, raw_start, raw_end, raw_byte_count, 1)
+                      Bytes.empty
+                    end
+
+        uint64_start, uint64_end, uint64_rows = checked_stream_mark_range(uint64_stream, mark_index, 1)
+        raise CorruptPartError.new("Variant UInt64 child mark rows differ") unless uint64_rows == rows
+        uint64_bytes = read_mark_range_bytes(uint64_stream, uint64_start, uint64_end, checked_byte_count(uint64_count, 8), 8)
+
+        if materialize
+          bool_index = 0
+          string_index = 0
+          uint64_index = 0
+          raw_offset = 0
+          tags.each do |tag|
+            case tag
+            when WideVariantBoolStringUInt64TypePlan::TAG_BOOL
+              values << (bool_bytes[bool_index] == 1_u8)
+              bool_index += 1
+            when WideVariantBoolStringUInt64TypePlan::TAG_STRING
+              length = sizes[string_index].to_i
+              raise CorruptPartError.new("Variant String sizes exceed selected raw bytes") if length > raw_bytes.size - raw_offset
+              values << String.new(raw_bytes[raw_offset, length])
+              raw_offset += length
+              string_index += 1
+            when WideVariantBoolStringUInt64TypePlan::TAG_UINT64
+              values << u64(uint64_bytes, uint64_index * 8)
+              uint64_index += 1
+            when WideVariantBoolStringUInt64TypePlan::TAG_NULL
+              values << nil
+            else
+              raise CorruptPartError.new("Variant discriminator tag is unsupported")
+            end
+          end
+          unless bool_index.to_u64 == bool_count && string_index == sizes.size && uint64_index.to_u64 == uint64_count && raw_offset == raw_bytes.size
+            raise CorruptPartError.new("Variant child cardinality differs from discriminator")
+          end
+        end
+      end
+
+      raise CorruptPartError.new("Variant materialized row count differs from marks") if materialize && values.size.to_u64 != selected_rows
+      {values, total_string_bytes}
+    end
+
     private def decode_variant_string_uint64_mark_range(
       column : String,
       first_mark : Int,
@@ -4277,7 +4420,7 @@ module CrystalClick
         start_mark = discriminator_stream.marks[mark_index]
         end_mark = mark_index + 1 == discriminator_stream.marks.size ? discriminator_stream.sentinel : discriminator_stream.marks[mark_index + 1]
         rows = start_mark.rows
-        tags = read_variant_discriminator_mark(discriminator_stream, start_mark, end_mark, mark_index, rows, mode)
+        tags = read_variant_discriminator_mark(discriminator_stream, start_mark, end_mark, mark_index, rows, mode, WideVariantStringUInt64TypePlan::DESCRIPTOR)
         string_count = tags.count { |tag| tag == WideVariantStringUInt64TypePlan::TAG_STRING }.to_u64
         uint64_count = tags.count { |tag| tag == WideVariantStringUInt64TypePlan::TAG_UINT64 }.to_u64
 
@@ -4356,7 +4499,7 @@ module CrystalClick
         )
         raise CorruptPartError.new("Variant discriminator prefix is truncated") if frame.output.size < 8
         mode = u64(frame.output, 0)
-        unless mode == WideVariantStringUInt64TypePlan::MODE_BASIC || mode == WideVariantStringUInt64TypePlan::MODE_COMPACT
+        unless mode == WideVariantTypePlanDescriptor::MODE_BASIC || mode == WideVariantTypePlanDescriptor::MODE_COMPACT
           raise CorruptPartError.new("Variant discriminator mode is unsupported")
         end
       end
@@ -4370,6 +4513,7 @@ module CrystalClick
       mark_index : Int,
       rows : UInt64,
       mode : UInt64,
+      plan : WideVariantTypePlanDescriptor,
     ) : Array(UInt8)
       if rows > MAX_VARIANT_RANGE_ROWS
         raise CorruptPartError.new("Variant mark range exceeds row limit")
@@ -4384,7 +4528,7 @@ module CrystalClick
       end
 
       tags = Array(UInt8).new(rows.to_i)
-      if mode == WideVariantStringUInt64TypePlan::MODE_BASIC
+      if mode == WideVariantTypePlanDescriptor::MODE_BASIC
         raise CorruptPartError.new("Variant BASIC discriminator is truncated") if bytes.size - offset < rows
         raise CorruptPartError.new("Variant BASIC discriminator has extra bytes") unless bytes.size - offset == rows
         rows.to_i.times do |index|
@@ -4398,13 +4542,13 @@ module CrystalClick
         format = bytes[cursor]
         cursor += 1
         case format
-        when WideVariantStringUInt64TypePlan::FORMAT_ROW_TAGS
+        when WideVariantTypePlanDescriptor::FORMAT_ROW_TAGS
           raise CorruptPartError.new("Variant COMPACT discriminator tags are truncated") if rows > (bytes.size - cursor).to_u64
           rows.to_i.times do |index|
             tags << bytes[cursor + index]
           end
           cursor += rows.to_i
-        when WideVariantStringUInt64TypePlan::FORMAT_UNIFORM_TAG
+        when WideVariantTypePlanDescriptor::FORMAT_UNIFORM_TAG
           raise CorruptPartError.new("Variant COMPACT uniform discriminator is truncated") if cursor >= bytes.size
           tag = bytes[cursor]
           rows.to_i.times { tags << tag }
@@ -4415,9 +4559,7 @@ module CrystalClick
         raise CorruptPartError.new("Variant COMPACT discriminator has extra bytes") unless cursor == bytes.size
       end
       tags.each do |tag|
-        unless tag == WideVariantStringUInt64TypePlan::TAG_STRING || tag == WideVariantStringUInt64TypePlan::TAG_UINT64 || tag == WideVariantStringUInt64TypePlan::TAG_NULL
-          raise CorruptPartError.new("Variant discriminator tag is unsupported")
-        end
+        raise CorruptPartError.new("Variant discriminator tag is unsupported") unless plan.valid_tag?(tag)
       end
       tags
     end
@@ -5133,18 +5275,19 @@ module CrystalClick
       @low_cardinality_string_state = nil
       @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
+      variant_plan = WidePart.variant_type_plan(@column_type)
       expected_mark_rows = nil.as(Array(UInt64)?)
       physical_streams.each do |stream_name|
         validate_selected_stream_name(stream_name)
         data_path, mark_path, compressed_marks = resolve_stream(stream_name)
-        if WidePart.supports_variant_string_uint64_type?(@column_type) && compressed_marks
+        if variant_plan && compressed_marks
           raise UnsupportedFormatError.new("Variant requires plain .mrk2 marks")
         end
         data_size = File.size(data_path)
         raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
         element_width = stream_element_width(stream_name)
-        allow_empty_string_eof = if WidePart.supports_variant_string_uint64_type?(@column_type)
-                                   stream_name != WideVariantStringUInt64TypePlan.discriminator_stream(@column)
+        allow_empty_string_eof = if plan = variant_plan
+                                   stream_name != plan.discriminator_stream(@column)
                                  elsif WidePart.supports_array_type?(@column_type)
                                    stream_name != "#{@column}.size0" &&
                                      WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream_name)
@@ -5174,7 +5317,7 @@ module CrystalClick
                                  else
                                    (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type)) && stream_name == @column
                                  end
-        mark_row_width = if WidePart.supports_variant_string_uint64_type?(@column_type)
+        mark_row_width = if variant_plan
                            1
                          elsif stream_name != "#{@column}.size0" &&
                                (WidePart.array_fixed_string_width(@column_type) || WidePart.array_nullable_fixed_string_width(@column_type) ||
@@ -5203,8 +5346,8 @@ module CrystalClick
                               element_width,
                               allow_empty_string_eof,
                               mark_row_width: mark_row_width,
-                              require_first_mark_offset_eight: WidePart.supports_variant_string_uint64_type?(@column_type) &&
-                                                               stream_name == WideVariantStringUInt64TypePlan.discriminator_stream(@column)
+                              require_first_mark_offset_eight: !!variant_plan &&
+                                                               stream_name == variant_plan.not_nil!.discriminator_stream(@column)
                             )
                           end
         validate_rows(marks)
@@ -5249,7 +5392,7 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if WidePart.supports_variant_string_uint64_type?(column_type) && codec != "CODEC(LZ4)"
+      if WidePart.supports_variant_type?(column_type) && codec != "CODEC(LZ4)"
         raise UnsupportedFormatError.new("Variant requires CODEC(LZ4)")
       end
       row_count = parse_count_file("count.txt")
@@ -5271,8 +5414,8 @@ module CrystalClick
             WidePart.supports_map_uint64_nullable_uint64_type?(column_type) || WidePart.supports_map_string_nullable_uint64_type?(column_type) ||
             WidePart.supports_map_uint64_nullable_string_type?(column_type) || WidePart.supports_map_string_nullable_string_type?(column_type)
         validate_map_serialization(columns, selected, row_count, column_type)
-      elsif WidePart.supports_variant_string_uint64_type?(column_type)
-        validate_variant_string_uint64_serialization(columns, selected, row_count)
+      elsif WidePart.supports_variant_type?(column_type)
+        validate_variant_serialization(columns, selected, row_count)
       elsif WidePart.supports_tuple_uint64_string_type?(column_type)
         validate_tuple_uint64_string_serialization(columns, selected, row_count)
       elsif column_type == "Int128" || column_type == "UInt128" || column_type == "Int256" || column_type == "UInt256"
@@ -5425,7 +5568,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("W51 sibling physical substreams do not match exact serialization shape") unless streams == expected_streams
         elsif WidePart.supports_tuple_uint64_string_type?(selected_type)
           raise UnsupportedFormatError.new("Tuple key column must have one plain UInt64 stream") unless streams == [column]
-        elsif WidePart.supports_variant_string_uint64_type?(selected_type)
+        elsif WidePart.supports_variant_type?(selected_type)
           raise UnsupportedFormatError.new("Variant key column must have one plain UInt64 stream") unless streams == [column]
         elsif WidePart.supports_map_uint64_string_type?(selected_type) || WidePart.supports_map_uint64_uint64_type?(selected_type) ||
               WidePart.supports_map_string_uint64_type?(selected_type) || WidePart.supports_map_string_string_type?(selected_type) ||
@@ -5452,8 +5595,8 @@ module CrystalClick
     end
 
     private def expected_physical_streams(column : String, type : String) : Array(String)
-      if WidePart.supports_variant_string_uint64_type?(type)
-        WideVariantStringUInt64TypePlan.physical_streams(column)
+      if variant_plan = WidePart.variant_type_plan(type)
+        variant_plan.physical_streams(column)
       elsif type == "LowCardinality(String)"
         ["#{column}.dict", column]
       elsif WidePart.supports_tuple_uint64_string_type?(type)
@@ -5992,14 +6135,14 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json is malformed")
     end
 
-    private def validate_variant_string_uint64_serialization(
+    private def validate_variant_serialization(
       columns : Array({String, String}),
       selected_column : String,
       row_count : UInt64,
     ) : Nil
       key_columns = columns.select { |name, type| name != selected_column && type == "UInt64" }
       unless columns.size == 2 && key_columns.size == 1 &&
-             columns.any? { |name, type| name == selected_column && WidePart.supports_variant_string_uint64_type?(type) }
+             columns.any? { |name, type| name == selected_column && WidePart.supports_variant_type?(type) }
         raise UnsupportedFormatError.new("Variant requires one UInt64 key column")
       end
 
@@ -6745,8 +6888,8 @@ module CrystalClick
     end
 
     private def primary_stream_name(stream_names : Array(String)) : String
-      if WidePart.supports_variant_string_uint64_type?(@column_type)
-        stream = WideVariantStringUInt64TypePlan.discriminator_stream(@column)
+      if plan = WidePart.variant_type_plan(@column_type)
+        stream = plan.discriminator_stream(@column)
         raise CorruptPartError.new("selected Variant discriminator stream is missing") unless stream_names.includes?(stream)
         return stream
       end
@@ -6776,16 +6919,8 @@ module CrystalClick
     end
 
     private def stream_element_width(stream_name : String) : Int32
-      if WidePart.supports_variant_string_uint64_type?(@column_type)
-        plan = WideVariantStringUInt64TypePlan
-        case stream_name
-        when plan.discriminator_stream(@column), plan.string_stream(@column)
-          1
-        when plan.string_size_stream(@column), plan.uint64_stream(@column)
-          8
-        else
-          raise UnsupportedFormatError.new("unsupported Variant substream")
-        end
+      if plan = WidePart.variant_type_plan(@column_type)
+        plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported Variant substream"))
       elsif @column_type == "LowCardinality(String)"
         1
       elsif plan = WideTypePlan.admitted(@column_type)
@@ -7824,8 +7959,8 @@ module CrystalClick
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
       start_offset = start_mark.compressed_offset
       end_offset = end_mark.compressed_offset
-      empty_payload_stream = if WidePart.supports_variant_string_uint64_type?(@column_type)
-                               stream.name != WideVariantStringUInt64TypePlan.discriminator_stream(@column)
+      empty_payload_stream = if plan = WidePart.variant_type_plan(@column_type)
+                               stream.name != plan.discriminator_stream(@column)
                              elsif WidePart.supports_array_type?(@column_type)
                                WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream.name)
                              elsif WidePart.supports_map_uint64_string_type?(@column_type)
@@ -7870,7 +8005,7 @@ module CrystalClick
         started = false
         workspace = CompressedBlock::DecodeWorkspace.new
         loop do
-          if WidePart.supports_variant_string_uint64_type?(@column_type)
+          if WidePart.supports_variant_type?(@column_type)
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
               raise UnsupportedFormatError.new("Variant requires LZ4 compressed streams")

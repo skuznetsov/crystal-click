@@ -1,0 +1,10 @@
+columns substreams version: 1
+2 columns:
+1 substreams for column `pk`:
+	pk
+5 substreams for column `payload`:
+	payload.variant_discr
+	payload.Bool
+	payload.String.size
+	payload.String
+	payload.UInt64

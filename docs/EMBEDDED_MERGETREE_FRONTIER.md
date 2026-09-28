@@ -146,6 +146,9 @@ path; it does not admit arbitrary recursive types. W56 targets an exact
 `Variant(String, UInt64)` paired codec with stock BASIC/COMPACT discriminator
 reads and a COMPACT writer; its verification status is recorded below. This
 does not admit arbitrary Variant alternatives, Dynamic, or general JSON.
+W57 targets one three-alternative `Variant(Bool, String, UInt64)` paired
+profile, preserving W56; its admitted boundary and verification status are
+recorded below.
 
 ## Purpose and bounded contexts
 
@@ -3378,6 +3381,67 @@ other ClickHouse versions, or memory/performance gains. Open-time checksum
 admission is size-only, so same-size content or mark mutations are not
 promised to be detected unless a selected decode or other explicit guard
 rejects them.
+
+## W57 admitted frontier: paired three-arm Variant
+
+Admit exactly `Variant(Bool, String, UInt64)` as another Wide/LZ4/plain-mark
+payload beside one sorted `UInt64` key; preserve W56's exact two-arm contract.
+The public value domain is `Bool | String | UInt64 | Nil`. A physical probe
+with pinned ClickHouse 26.7.1.1315, checked by `CHECK TABLE` and stock
+`RowBinary`, established canonical order Bool, String, UInt64, with tags
+0, 1, 2 and NULL tag 255. The five payload substreams are discriminator,
+Bool, String size, String data, and UInt64. Bool contributes one byte per
+non-NULL Bool value; empty String remains a distinct String-tagged value.
+The producer's nested serialization metadata is the W56 shape with only
+`string: 1`, and its COMPACT discriminator first mark has decompressed
+offset 8 after the mode prefix. BASIC and COMPACT retain the same stream
+topology. These are observations from the pinned binary, not a claim that
+the separate local ClickHouse source checkout matches that binary exactly.
+The first falsifier is a stock-produced part whose SQL declares alternatives
+out of order and whose granules include mixed values, all NULL, one uniform
+arm, no Bool values, and a short tail. Compare exact typed values on full and
+later-mark reads, table batches, and offline-catalog scans; reject illegal
+tags, malformed mode/format/count, mismatched child marks or cardinality,
+noncanonical/unsupported Variant declarations, and wrong Bool codes before
+yielding callbacks for the affected mark. Earlier valid marks may already
+have been yielded by the streaming table scan. A Crystal writer must pass
+the pinned consumer's `ATTACH PART`, `CHECK TABLE`, exact type metadata,
+full and primary-key-range `RowBinary` against separately encoded
+expectations. The stock fixture first calibrates those RowBinary expectations.
+
+Risk tier is CAUTION: reusing W56's tag constants for a new canonical arm
+order could silently swap values, while omitting a sparse child mark could
+publish an unreadable part. The guard is a descriptor-driven tag/stream plan,
+stock BASIC and COMPACT controls, exact child-count checks, and the reverse
+oracle. Implementation inventory: `variant_type_plan.cr`, `wide_part.cr`,
+`wide_part_writer.cr`, `wide_part_table.cr`, and `offline_catalog.cr` all
+contain exact W56 admission or dispatch and must be covered together. Rollback
+is one local W57 feature commit or removal of the uncommitted W57 diff; no
+existing ClickHouse data root is changed and no remote push is authorized.
+DoD is a RED pre-change spec, focused W57/W56 specs, pinned stock fixture and
+reverse writer oracles, full debug/release `crystal spec`, and a hostile
+counterexample review. This does not admit generic Variant, `Dynamic`, full
+JSON, arbitrary schema composition, MV/projection semantics, or any memory or
+throughput optimization. Evidence decays if the pinned producer, serializer,
+codec, mark format, platform, or shared type dispatch changes.
+
+Observed W57 result: the pinned stock BASIC and COMPACT fixtures passed
+full and later-mark typed reads, table batches, and offline-catalog values.
+The focused W56/W57 specs passed 14/0; W57's invalid Bool code and unknown
+discriminator tag probes failed before callbacks for their affected mark.
+A two-mark corruption probe confirms an earlier valid mark can be yielded
+while the later malformed mark is rejected before its own callback.
+The Crystal COMPACT writer passed the pinned ClickHouse 26.7.1.1315
+`ATTACH PART`, `CHECK TABLE`, exact schema, and independently encoded full
+and key-range `RowBinary` checks for mixed, all-NULL, all-Bool, and
+Bool-absent parts. The prior W56 reverse oracle also passed. Complete debug
+and release `crystal spec` suites each passed 795/0 on Crystal 1.21.0 with
+the local linker flag. This evidence is restricted to the declared
+Wide/LZ4/plain-mark profile and does not establish arbitrary Variant, other
+ClickHouse versions, MV/projections, or performance gains. Open-time
+checksum admission remains size-only; content integrity is established by
+selected decodes and the explicit stock consumer checks above, not by
+the open-time checksum size guard alone.
 
 ## Rejected and guard-only surfaces
 
