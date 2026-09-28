@@ -4235,6 +4235,101 @@ speed/allocation parity. Hostile review returned ROBUST within this exact
 pinned type/part scope after checking the corrected stock value offsets,
 NULL-hidden-slot mutation, per-mark preflight, and writer publication path.
 
+## W70 design-sealed: String keys with nullable String Array values
+
+The next exact payload is `Map(String, Array(Nullable(String)))` beside one
+sorted `UInt64` primary key in a Wide/LZ4/plain-`.mrk2` part. It composes
+the existing String-key Map and nullable String Array paths without admitting
+a general recursive Map. A pinned ClickHouse 26.7.1.1315 producer emitted
+seven payload streams, in order: `m.size0`, `m%2Ekeys.size`, `m%2Ekeys`,
+`m%2Evalues.size1`, `m%2Evalues.null`, `m%2Evalues.size`, and
+`m%2Evalues`. The final seven-row stock vector has Map entry counts
+`[3, 0, 1, 2, 2, 1, 2]`: its four data marks contain `[3, 3, 3, 2]`
+entries but `[2, 2, 2, 1]` table rows. This distinction is essential: an
+earlier probe happened to have equal entry and row counts and could not
+falsify a wrong coordinate system. Every stream's fifth, terminal mark has
+zero rows.
+
+All compressed mark offsets in this small one-block stock vector are zero.
+Decompressed offsets including the terminal mark are `[0, 16, 32, 48, 56]`
+for the primary key and `m.size0`, `[0, 24, 48, 72, 88]` for
+`m%2Ekeys.size` and `m%2Evalues.size1`, `[0, 9, 23, 39, 48]` for
+`m%2Ekeys`, `[0, 6, 9, 13, 16]` for `m%2Evalues.null`,
+`[0, 48, 72, 104, 128]` for `m%2Evalues.size`, and
+`[0, 21, 28, 28, 43]` for `m%2Evalues`. The stock part passed
+`CHECK TABLE`; full and keyed RowBinary stock readback preserved same-Map
+duplicate keys, an empty Map, empty nested Arrays, NULL versus empty String,
+embedded NUL/UTF-8, an all-NULL data mark followed by a non-NULL tail, and
+the short final mark. With the stock sparse-serialization threshold, its
+`serialization.json` records an `id` entry with `kind=Default`,
+`num_defaults=1`, and `num_rows=7`, plus global `string: 1` with
+nested-version propagation. A separate stock DDL setting
+`ratio_of_defaults_for_sparse_serialization=1.0` suppresses per-column
+entries, yielding `columns: []` for the same physical Default serializer.
+The `id` statistic is therefore setting-dependent, not a universal schema
+requirement; neither form licenses a different physical serializer.
+
+Admit an exact typed reader, table/batch/catalog accessor, physical-plan
+shadow, and immutable pair writer only. `size0` counts Map entries per table
+row; key sizes and `values.size1` count one slot per entry; the null and
+String-size streams count one slot per flattened Array leaf. The raw key and
+value streams count bytes, which may be zero across a positive-row mark.
+Each child `.mrk2` row count still refers to table rows. Preserve entry
+order, duplicate keys, String bytes, NULL versus empty String, and all
+independent axes. A checksum-valid mutation of a stock part reassigned one
+existing raw byte from a later visible String to a preceding NULL leaf by
+changing their size slots, without changing the raw bytes or mark offsets.
+ClickHouse accepted the part via `ATTACH PART`/`CHECK TABLE` and returned
+the expected shifted visible tail;
+the Crystal reader matched it. Thus nonzero hidden String sizes must consume
+their raw spans while still returning `nil`. This probe is specific to the
+pinned serializer profile, not a general authorization for malformed parts.
+The reader must reject changed cardinalities, invalid null codes, raw-byte
+extents, and shifted mark boundaries before yielding the affected mark.
+Earlier valid marks may have yielded. The writer emits canonical zero-size,
+zero-byte NULL leaves and validates bounds and staged readback before
+exclusive publication.
+
+Risk is CAUTION: variable-length children can self-read while shifting a
+later Map entry or causing stock `ATTACH PART`/`CHECK TABLE` failure.
+Rollback is the isolated W70 diff or its one local commit; existing parts
+and remote history remain untouched. DoD is RED-to-green exact
+reader/writer/table/catalog/type-plan tests; a checksum-valid shifted-mark
+or malformed-child falsifier with no callback for the affected mark; focused
+prior-type controls; the pinned stock producer vector above; a bidirectional
+stock/Crystal oracle with `ATTACH PART`, `CHECK TABLE`, and exact full/keyed
+RowBinary; full debug and release suites; and hostile review. The oracle
+must keep Map-entry count distinct from table-row count at each mark. Other
+Map declarations, Compact parts, other codecs or marks, server lifecycle,
+MV/projections, and speed/allocation parity remain outside this claim.
+Evidence decays on a ClickHouse serializer/mark-layout/version change or
+shared reader/writer/table/catalog dispatch change; refresh the producer
+probe and both oracle directions before reuse.
+
+W70 implementation evidence: the exact reader, immutable pair writer,
+typed table/batch accessor, offline-catalog materializer, and physical-plan
+shadow admit only this declaration. Focused W68/W69/W70 controls passed with
+41 examples; the complete debug and release suites each passed with 914
+examples, 0 failures, 0 errors, and 0 pending. The pinned ClickHouse
+26.7.1.1315 oracle command was
+`bash scripts/check_map_string_array_nullable_string_oracle.sh`; both stock
+producer to Crystal reader and Crystal writer to stock `ATTACH PART`,
+`CHECK TABLE`, and exact full/keyed RowBinary passed. A checksum-valid stock
+mutation proved that a nonzero hidden String span under NULL is consumed
+without shifting the following leaf. A second Crystal-written part with a
+positive-row all-empty Map mark followed by empty String key/value slots
+also passed stock attach/check and full/keyed readback; its repeated child
+stream compressed offsets and mark rows were checked independently. The
+full-suite commands were `crystal spec --link-flags='-fuse-ld=ld'` and
+`crystal spec --release --link-flags='-fuse-ld=ld'` with isolated Crystal
+caches. These observations do not widen the exclusions above or establish
+speed/allocation parity. Hostile review returned ROBUST within this exact
+pinned scope after checking row/entry/leaf accounting, hidden-NULL spans,
+mark boundaries, the setting-dependent serializer metadata, and staged
+publication. The second writer part's later entry mark still has zero raw
+String bytes; the main oracle independently covers a zero-byte value mark
+followed by a nonzero raw-value tail.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,

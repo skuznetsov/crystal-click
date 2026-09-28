@@ -50,7 +50,7 @@ module CrystalClick
       end
     end
 
-    # A correctness-only shadow of the known W51/W55/W59/W61/W63/W69 physical
+    # A correctness-only shadow of the known W51/W55/W59/W61/W63/W69/W70 physical
     # shapes. This deliberately does not participate in codec admission.
     struct WidePhysicalPlanShadow
       enum AxisKind
@@ -171,6 +171,8 @@ module CrystalClick
           exact_map_shape?(root, "String", false)
         when "Map(String, Array(Nullable(UInt64)))"
           exact_map_shape?(root, "String", true)
+        when "Map(String, Array(Nullable(String)))"
+          exact_map_shape?(root, "String", true, "String")
         when "Map(UInt64, Array(Nullable(UInt64)))"
           exact_map_shape?(root, "UInt64", true)
         else
@@ -178,7 +180,7 @@ module CrystalClick
         end
       end
 
-      private def self.exact_map_shape?(root : Node, key_type : String, nullable_value : Bool) : Bool
+      private def self.exact_map_shape?(root : Node, key_type : String, nullable_value : Bool, value_type : String = "UInt64") : Bool
         return false unless root.name == "Map" && root.children.size == 2
         key = root.child(0)
         return false unless key.name == key_type && key.children.empty?
@@ -188,9 +190,9 @@ module CrystalClick
         element = values.child(0)
         if nullable_value
           element.name == "Nullable" && element.children.size == 1 &&
-            element.child(0).name == "UInt64" && element.child(0).children.empty?
+            element.child(0).name == value_type && element.child(0).children.empty?
         else
-          element.name == "UInt64" && element.children.empty?
+          element.name == value_type && element.children.empty?
         end
       end
 
