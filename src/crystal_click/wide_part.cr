@@ -1807,6 +1807,22 @@ module CrystalClick
       outer_bytes + inner_bytes + value_bytes
     end
 
+    # Preflight all four physical streams for the exact W59 nested String
+    # shape before a table batch allocates values. The returned count includes
+    # size0, size1, String-size slots, and raw String bytes.
+    def array_array_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      components = array_array_string_components(column, first_mark, mark_count)
+      outer_bytes = checked_byte_count(components.rows, 8).to_u64
+      inner_bytes = checked_array_mark_byte_count(components.flat_inner_arrays, 8).to_u64
+      string_size_bytes = checked_array_mark_byte_count(components.flat_strings, 8).to_u64
+      payload_bytes = components.string_bytes
+      if inner_bytes > UInt64::MAX - outer_bytes || string_size_bytes > UInt64::MAX - outer_bytes - inner_bytes ||
+         payload_bytes > UInt64::MAX - outer_bytes - inner_bytes - string_size_bytes
+        raise CorruptPartError.new("Array(Array(String)) raw byte count overflows")
+      end
+      outer_bytes + inner_bytes + string_size_bytes + payload_bytes
+    end
+
     # Temporal Arrays share fixed-width storage with selected numeric leaves,
     # but reach it only through this exact semantic gate. Keep numeric Array
     # accessors closed to Date/Date32/DateTime/DateTime64 declarations.
@@ -3262,6 +3278,46 @@ module CrystalClick
       end
       raise CorruptPartError.new("Array(Array(T)) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
       raise CorruptPartError.new("Array(Array(T)) sizes do not consume selected numeric bytes") unless value_offset == value_bytes.size
+      values
+    end
+
+    # Read the exact W59 Array(Array(String)) shape. Counts and mark-local
+    # byte boundaries for size0, size1, String sizes, and String data are all
+    # validated before nested values are allocated.
+    def read_array_array_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(String)))
+      components = array_array_string_components(column, first_mark, mark_count)
+      raw_stream = @streams[column]
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(String)) raw mark rows differ") unless raw_rows == components.rows
+      raw_bytes = read_mark_range_bytes(raw_stream, raw_start, raw_end, components.string_bytes.to_i, 1)
+
+      values = Array(Array(Array(String))).new(components.rows.to_i)
+      inner_offset = 0
+      string_offset = 0
+      raw_offset = 0
+      components.outer_sizes.each do |inner_count|
+        row = Array(Array(String)).new(inner_count.to_i)
+        inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(String)) size1 count exceeds selected sizes") if inner_offset >= components.inner_sizes.size
+          string_count = components.inner_sizes[inner_offset]
+          inner = Array(String).new(string_count.to_i)
+          string_count.to_i.times do
+            raise CorruptPartError.new("Array(Array(String)) size count exceeds selected sizes") if string_offset >= components.string_sizes.size
+            length = components.string_sizes[string_offset]
+            raise CorruptPartError.new("Array(Array(String)) size exceeds selected raw bytes") if length > (raw_bytes.size - raw_offset).to_u64
+            byte_length = length.to_i
+            inner << String.new(raw_bytes[raw_offset, byte_length])
+            raw_offset += byte_length
+            string_offset += 1
+          end
+          row << inner
+          inner_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Array(String)) sizes do not consume selected inner Arrays") unless inner_offset == components.inner_sizes.size
+      raise CorruptPartError.new("Array(Array(String)) sizes do not consume selected String lengths") unless string_offset == components.string_sizes.size
+      raise CorruptPartError.new("Array(Array(String)) lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
       values
     end
 
@@ -5364,6 +5420,30 @@ module CrystalClick
         @second_numeric_values : Bytes?,
         @null_map : Bytes?,
         @string_values : Bytes?,
+      )
+      end
+    end
+
+    # Shared, mark-preflighted counts for the exact W59
+    # Array(Array(String)) shape. `inner_sizes` contains one String count per
+    # flattened inner Array; `string_sizes` contains one byte length per leaf.
+    private struct ArrayArrayStringComponents
+      getter outer_sizes : Array(UInt64)
+      getter inner_sizes : Array(UInt64)
+      getter string_sizes : Array(UInt64)
+      getter flat_inner_arrays : UInt64
+      getter flat_strings : UInt64
+      getter rows : UInt64
+      getter string_bytes : UInt64
+
+      def initialize(
+        @outer_sizes : Array(UInt64),
+        @inner_sizes : Array(UInt64),
+        @string_sizes : Array(UInt64),
+        @flat_inner_arrays : UInt64,
+        @flat_strings : UInt64,
+        @rows : UInt64,
+        @string_bytes : UInt64,
       )
       end
     end
@@ -7543,6 +7623,88 @@ module CrystalClick
       raise CorruptPartError.new("Array(Array(UInt64)) size1 count does not match size0") unless element_sizes.size.to_u64 == flat_inner_arrays
       checked_array_mark_byte_count(total_leaf_elements, 8)
       {element_sizes, total_leaf_elements, mark_leaf_elements}
+    end
+
+    # Build one bounded depth-two count/leaf plan used by both W59 table
+    # preflight and direct materialization. The existing nested count decoder
+    # validates each size1 mark; the String-size decoder then validates each
+    # flattened leaf length and its corresponding raw-data mark.
+    private def array_array_string_components(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : ArrayArrayStringComponents
+      ensure_column(column)
+      unless @column_type == "Array(Array(String))"
+        raise UnsupportedFormatError.new("nested Array String accessor requires an exact Array(Array(String)) column")
+      end
+
+      validate_array_array_string_stream_marks(column, first_mark, mark_count)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      inner_sizes, flat_strings, mark_string_counts = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        8
+      )
+      string_sizes, string_bytes = read_array_string_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_strings,
+        rows,
+        mark_string_counts,
+        "Array(Array(String))",
+        "#{column}.size",
+        column
+      )
+      raise CorruptPartError.new("Array(Array(String)) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(String)) size1 count changed") unless inner_sizes.size.to_u64 == flat_inner_arrays
+      raise CorruptPartError.new("Array(Array(String)) String size count changed") unless string_sizes.size.to_u64 == flat_strings
+
+      ArrayArrayStringComponents.new(
+        outer_sizes,
+        inner_sizes,
+        string_sizes,
+        flat_inner_arrays,
+        flat_strings,
+        rows,
+        string_bytes
+      )
+    end
+
+    # Every nested stream keeps the base row cardinality, even when a mark
+    # contains no inner Arrays, no String leaves, or only zero-length Strings.
+    # Validate that agreement at each selected mark before decoding its counts.
+    private def validate_array_array_string_stream_marks(column : String, first_mark : Int, mark_count : Int) : Nil
+      size0_stream = @streams["#{column}.size0"]
+      size1_stream = @streams["#{column}.size1"]
+      string_size_stream = @streams["#{column}.size"]
+      raw_stream = @streams[column]
+      _, _, rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |range_mark_index|
+        mark_index = first_mark + range_mark_index
+        mark_rows = raw_stream.marks[mark_index].rows
+        expected_mark_rows << mark_rows
+      end
+
+      [size0_stream, size1_stream, string_size_stream].each do |stream|
+        _, _, stream_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Array(String)) substream mark rows differ") unless stream_rows == rows
+        mark_count.times do |range_mark_index|
+          mark_index = first_mark + range_mark_index
+          unless stream.marks[mark_index].rows == expected_mark_rows[range_mark_index]
+            raise CorruptPartError.new("Array(Array(String)) substream mark rows differ")
+          end
+        end
+      end
+
+      validate_array_nested_stream_marks(size0_stream, first_mark, expected_mark_rows, 8)
+      nil
     end
 
     private def read_array_array_numeric_element_sizes(

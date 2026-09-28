@@ -327,7 +327,6 @@ describe CrystalClick::WidePart do
     end
 
     [
-      "Array(Array(String))",
       "Array(Tuple(UInt64, UInt64))",
       "Array(Decimal(75, 0))",
       "Array(UInt8) trailing",
@@ -339,6 +338,7 @@ describe CrystalClick::WidePart do
       "Array(UInt64)",
       "Array(String)",
       "Array(Array(UInt64))",
+      "Array(Array(String))",
       "Array(Array(Nullable(UInt64)))",
     ].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true

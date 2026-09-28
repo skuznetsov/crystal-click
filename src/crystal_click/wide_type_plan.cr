@@ -5,15 +5,18 @@ module CrystalClick
     TYPE_ARRAY_TUPLE_UINT64_STRING          = "Array(Tuple(a UInt64, b String))"
     TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING = "Array(Tuple(a Nullable(UInt64), b String))"
     TYPE_ARRAY_TUPLE_UINT64_UINT64          = "Array(Tuple(a UInt64, b UInt64))"
+    TYPE_ARRAY_ARRAY_STRING                 = "Array(Array(String))"
 
     enum Shape
       ArrayTupleUInt64String
       ArrayTupleNullableUInt64String
       ArrayTupleUInt64UInt64
+      ArrayArrayString
     end
 
     enum PhysicalSubstreamKind
       ArraySize0
+      ArraySize1
       NullMap
       UInt64
       StringSize
@@ -35,7 +38,7 @@ module CrystalClick
 
       def element_width : Int32
         case @kind
-        when .array_size0?, .u_int64?, .string_size?
+        when .array_size0?, .array_size1?, .u_int64?, .string_size?
           8
         when .null_map?, .string_data?
           1
@@ -89,8 +92,8 @@ module CrystalClick
     end
 
     # Keep physical admission intentionally sealed to the exact declarations
-    # covered by W51 and W55. Syntax parsing never acts as a broad physical-
-    # format allowlist.
+    # covered by W51, W55, and W59. Syntax parsing never acts as a broad
+    # physical-format allowlist.
     def self.admitted(type : String) : WideTypePlan?
       root = parse(type) || return nil
       if type == TYPE_ARRAY_TUPLE_UINT64_STRING && exact_array_tuple?(root, false)
@@ -99,6 +102,8 @@ module CrystalClick
         new(root, type.dup, Shape::ArrayTupleNullableUInt64String)
       elsif type == TYPE_ARRAY_TUPLE_UINT64_UINT64 && exact_array_tuple_uint64_uint64?(root)
         new(root, type.dup, Shape::ArrayTupleUInt64UInt64)
+      elsif type == TYPE_ARRAY_ARRAY_STRING && exact_array_array_string?(root)
+        new(root, type.dup, Shape::ArrayArrayString)
       else
         nil
       end
@@ -123,24 +128,32 @@ module CrystalClick
       path : String,
       field_path : Array(String),
       streams : Array(PhysicalSubstream),
+      array_depth : Int32 = 0,
     ) : Nil
       case node.name
       when "Array"
         raise UnsupportedFormatError.new("admitted Array node has invalid arity") unless node.children.size == 1
-        streams << PhysicalSubstream.new("#{path}.size0", PhysicalSubstreamKind::ArraySize0, field_path)
-        append_physical_streams(node.child(0), path, field_path, streams)
+        case array_depth
+        when 0
+          streams << PhysicalSubstream.new("#{path}.size0", PhysicalSubstreamKind::ArraySize0, field_path)
+        when 1
+          streams << PhysicalSubstream.new("#{path}.size1", PhysicalSubstreamKind::ArraySize1, field_path)
+        else
+          raise UnsupportedFormatError.new("admitted nested Array depth is unsupported")
+        end
+        append_physical_streams(node.child(0), path, field_path, streams, array_depth + 1)
       when "Tuple"
         node.children.each_with_index do |child, index|
           field_name = node.field_name(index)
           raise UnsupportedFormatError.new("admitted Tuple member is unnamed") if field_name.empty?
           child_path = field_path.dup
           child_path << field_name
-          append_physical_streams(child, "#{path}%2E#{field_name}", child_path, streams)
+          append_physical_streams(child, "#{path}%2E#{field_name}", child_path, streams, 0)
         end
       when "Nullable"
         raise UnsupportedFormatError.new("admitted Nullable node has invalid arity") unless node.children.size == 1
         streams << PhysicalSubstream.new("#{path}.null", PhysicalSubstreamKind::NullMap, field_path)
-        append_physical_streams(node.child(0), path, field_path, streams)
+        append_physical_streams(node.child(0), path, field_path, streams, array_depth)
       when "String"
         streams << PhysicalSubstream.new("#{path}.size", PhysicalSubstreamKind::StringSize, field_path)
         streams << PhysicalSubstream.new(path, PhysicalSubstreamKind::StringData, field_path)
@@ -177,6 +190,14 @@ module CrystalClick
       return false unless tuple.field_names == ["a", "b"]
 
       tuple.children.all? { |child| child.name == "UInt64" && child.children.empty? }
+    end
+
+    private def self.exact_array_array_string?(root : Node) : Bool
+      return false unless root.name == "Array" && root.children.size == 1
+      inner = root.child(0)
+      return false unless inner.name == "Array" && inner.children.size == 1
+      leaf = inner.child(0)
+      leaf.name == "String" && leaf.children.empty?
     end
 
     # Recursive syntax parser kept separate from W51's exact shape admission.

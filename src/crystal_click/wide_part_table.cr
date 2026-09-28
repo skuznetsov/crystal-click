@@ -76,6 +76,7 @@ module CrystalClick
     @array_string_values : Hash(String, Slice(Array(String)))
     @array_nullable_string_values : Hash(String, WidePartArrayNullableStringSlice)
     @array_array_uint64_values : Hash(String, Slice(Array(Array(UInt64))))
+    @array_array_string_values : Hash(String, Slice(Array(Array(String))))
     @array_array_nullable_uint64_values : Hash(String, Slice(Array(Array(UInt64?))))
     @array_array_numeric_values : Hash(String, WidePartArrayArrayNumericSlice)
     @array_numeric_values : Hash(String, WidePartArrayNumericSlice)
@@ -121,6 +122,7 @@ module CrystalClick
       @array_string_values = Hash(String, Slice(Array(String))).new
       @array_nullable_string_values = Hash(String, WidePartArrayNullableStringSlice).new
       @array_array_uint64_values = Hash(String, Slice(Array(Array(UInt64)))).new
+      @array_array_string_values = Hash(String, Slice(Array(Array(String)))).new
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_array_numeric_values = Hash(String, WidePartArrayArrayNumericSlice).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
@@ -168,6 +170,7 @@ module CrystalClick
       @array_string_values = Hash(String, Slice(Array(String))).new
       @array_nullable_string_values = Hash(String, WidePartArrayNullableStringSlice).new
       @array_array_uint64_values = Hash(String, Slice(Array(Array(UInt64)))).new
+      @array_array_string_values = Hash(String, Slice(Array(Array(String)))).new
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_array_numeric_values = Hash(String, WidePartArrayArrayNumericSlice).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
@@ -215,6 +218,7 @@ module CrystalClick
       @array_string_values = Hash(String, Slice(Array(String))).new
       @array_nullable_string_values = Hash(String, WidePartArrayNullableStringSlice).new
       @array_array_uint64_values = Hash(String, Slice(Array(Array(UInt64)))).new
+      @array_array_string_values = Hash(String, Slice(Array(Array(String)))).new
       @array_array_nullable_uint64_values = Hash(String, Slice(Array(Array(UInt64?)))).new
       @array_array_numeric_values = Hash(String, WidePartArrayArrayNumericSlice).new
       @array_numeric_values = Hash(String, WidePartArrayNumericSlice).new
@@ -278,6 +282,7 @@ module CrystalClick
       @array_tuple_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64)))) = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new,
       @variant_string_uint64_values : Hash(String, Slice(VariantStringUInt64Value)) = Hash(String, Slice(VariantStringUInt64Value)).new,
       @variant_bool_string_uint64_values : Hash(String, Slice(VariantBoolStringUInt64Value)) = Hash(String, Slice(VariantBoolStringUInt64Value)).new,
+      @array_array_string_values : Hash(String, Slice(Array(Array(String)))) = Hash(String, Slice(Array(Array(String)))).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
@@ -843,6 +848,12 @@ module CrystalClick
       @array_array_uint64_values[column]? || raise(UnsupportedFormatError.new("Array(Array(UInt64)) column was not materialized in this batch"))
     end
 
+    def array_array_strings_for(column : String) : Slice(Array(Array(String)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Array(String)) accessor requires an exact Array(Array(String)) column") unless @column_types[index] == "Array(Array(String))"
+      @array_array_string_values[column]? || raise(UnsupportedFormatError.new("Array(Array(String)) column was not materialized in this batch"))
+    end
+
     def array_array_nullable_uint64s_for(column : String) : Slice(Array(Array(UInt64?)))
       index = column_index(column)
       raise UnsupportedFormatError.new("Array(Array(Nullable(UInt64))) accessor requires an exact Array(Array(Nullable(UInt64))) column") unless @column_types[index] == "Array(Array(Nullable(UInt64)))"
@@ -1350,6 +1361,7 @@ module CrystalClick
             preflight_array_uuid_bytes = Hash(String, UInt64).new
             preflight_array_nullable_uuid_bytes = Hash(String, UInt64).new
             preflight_array_array_uint64_bytes = Hash(String, UInt64).new
+            preflight_array_array_string_bytes = Hash(String, UInt64).new
             preflight_array_array_nullable_uint64_bytes = Hash(String, UInt64).new
             preflight_array_array_numeric_bytes = Hash(String, UInt64).new
             preflight_array_nullable_string_raw_bytes = Hash(String, UInt64).new
@@ -1387,6 +1399,8 @@ module CrystalClick
                 bytes = charge_bytes
               elsif plan = WideTypePlan.admitted(selected.column_type)
                 bytes = case plan.shape
+                        when WideTypePlan::Shape::ArrayArrayString
+                          selected.reader.array_array_string_mark_range_raw_bytes(selected.name, mark_index, 1)
                         when WideTypePlan::Shape::ArrayTupleUInt64String
                           selected.reader.preflight_array_tuple_uint64_string_mark_range_raw_bytes(selected.name, mark_index, 1)
                         when WideTypePlan::Shape::ArrayTupleNullableUInt64String
@@ -1396,7 +1410,11 @@ module CrystalClick
                         else
                           raise UnsupportedFormatError.new("unsupported admitted Array(Tuple) plan")
                         end
-                preflight_array_tuple_bytes[selected.name] = bytes
+                if plan.shape == WideTypePlan::Shape::ArrayArrayString
+                  preflight_array_array_string_bytes[selected.name] = bytes
+                else
+                  preflight_array_tuple_bytes[selected.name] = bytes
+                end
               elsif selected.column_type == "String" || WidePart.supports_nullable_string_type?(selected.column_type)
                 bytes = if selected.column_type == "String"
                           selected.reader.string_mark_range_raw_bytes(selected.name, mark_index, 1)
@@ -1569,6 +1587,7 @@ module CrystalClick
             array_string_values = Hash(String, Array(Array(String))).new
             array_nullable_string_values = Hash(String, WidePartArrayNullableStringArray).new
             array_array_uint64_values = Hash(String, Array(Array(Array(UInt64)))).new
+            array_array_string_values = Hash(String, Array(Array(Array(String)))).new
             array_array_nullable_uint64_values = Hash(String, Array(Array(Array(UInt64?)))).new
             array_array_numeric_values = Hash(String, WidePartArrayArrayNumericArray).new
             array_numeric_values = Hash(String, WidePartArrayNumericArray).new
@@ -1758,9 +1777,18 @@ module CrystalClick
               end
 
               if plan = WideTypePlan.admitted(selected.column_type)
-                preflight_bytes = preflight_array_tuple_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Tuple) mark was not preflighted"))
                 case plan.shape
+                when WideTypePlan::Shape::ArrayArrayString
+                  values = selected.reader.read_array_array_string_mark_range(selected.name, mark_index, 1)
+                  raise CorruptPartError.new("selected Array(Array(String)) mark row count changed") unless values.size.to_u64 == mark_rows
+                  preflight_bytes = preflight_array_array_string_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Array(String)) mark was not preflighted"))
+                  decoded_bytes = array_array_string_materialized_bytes(values)
+                  raise CorruptPartError.new("selected Array(Array(String)) decoded bytes differ from preflight") unless decoded_bytes == preflight_bytes
+                  raise CorruptPartError.new("selected Array(Array(String)) mark exceeds aggregate materialization limit") if decoded_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  actual_string_bytes += decoded_bytes
+                  array_array_string_values[selected.name] = values
                 when WideTypePlan::Shape::ArrayTupleUInt64String
+                  preflight_bytes = preflight_array_tuple_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Tuple) mark was not preflighted"))
                   values = selected.reader.read_array_tuple_uint64_string_mark_range(selected.name, mark_index, 1)
                   raise CorruptPartError.new("selected Array(Tuple) mark row count changed") unless values.size.to_u64 == mark_rows
                   decoded_bytes = array_tuple_materialized_bytes(values, 16_u64)
@@ -1769,6 +1797,7 @@ module CrystalClick
                   actual_string_bytes += decoded_bytes
                   array_tuple_uint64_string_values[selected.name] = values
                 when WideTypePlan::Shape::ArrayTupleNullableUInt64String
+                  preflight_bytes = preflight_array_tuple_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Tuple) mark was not preflighted"))
                   values = selected.reader.read_array_tuple_nullable_uint64_string_mark_range(selected.name, mark_index, 1)
                   raise CorruptPartError.new("selected nullable Array(Tuple) mark row count changed") unless values.size.to_u64 == mark_rows
                   decoded_bytes = array_tuple_materialized_bytes(values, 17_u64)
@@ -1777,6 +1806,7 @@ module CrystalClick
                   actual_string_bytes += decoded_bytes
                   array_tuple_nullable_uint64_string_values[selected.name] = values
                 when WideTypePlan::Shape::ArrayTupleUInt64UInt64
+                  preflight_bytes = preflight_array_tuple_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Tuple) mark was not preflighted"))
                   values = selected.reader.read_array_tuple_uint64_uint64_mark_range(selected.name, mark_index, 1)
                   raise CorruptPartError.new("selected Array(Tuple) mark row count changed") unless values.size.to_u64 == mark_rows
                   decoded_bytes = array_tuple_uint64_uint64_materialized_bytes(values)
@@ -2344,6 +2374,7 @@ module CrystalClick
               array_nullable_uint64_slices = Hash(String, Slice(Array(UInt64?))).new
               array_string_slices = Hash(String, Slice(Array(String))).new
               array_array_uint64_slices = Hash(String, Slice(Array(Array(UInt64)))).new
+              array_array_string_slices = Hash(String, Slice(Array(Array(String)))).new
               array_array_nullable_uint64_slices = Hash(String, Slice(Array(Array(UInt64?)))).new
               array_array_numeric_slices = Hash(String, WidePartArrayArrayNumericSlice).new
               array_numeric_slices = Hash(String, WidePartArrayNumericSlice).new
@@ -2402,6 +2433,8 @@ module CrystalClick
                   selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                   array_array_uint64_slices[selected.name] = selected_slice
                   array_array_numeric_slices[selected.name] = selected_slice.as(WidePartArrayArrayNumericSlice)
+                elsif values = array_array_string_values[selected.name]?
+                  array_array_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = array_array_nullable_uint64_values[selected.name]?
                   array_array_nullable_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = array_array_numeric_values[selected.name]?
@@ -2482,7 +2515,8 @@ module CrystalClick
                 map_string_nullable_string_slices,
                 array_tuple_uint64_uint64_slices,
                 variant_string_uint64_slices,
-                variant_bool_string_uint64_slices
+                variant_bool_string_uint64_slices,
+                array_array_string_slices
               )
               yield batch
               mark_row_offset &+= size.to_u64
@@ -3257,6 +3291,54 @@ module CrystalClick
       total_bytes = outer_bytes + inner_bytes + leaf_bytes
       if total_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64
         raise CorruptPartError.new("selected Array(Array(UInt64)) mark exceeds aggregate materialization limit")
+      end
+      total_bytes
+    end
+
+    private def array_array_string_materialized_bytes(values : Array(Array(Array(String)))) : UInt64
+      outer_rows = values.size.to_u64
+      inner_arrays = 0_u64
+      leaf_strings = 0_u64
+      payload_bytes = 0_u64
+      values.each do |row|
+        row_inner_arrays = row.size.to_u64
+        if row_inner_arrays > WidePart::MAX_ARRAY_MARK_ELEMENTS - inner_arrays
+          raise CorruptPartError.new("selected Array(Array(String)) inner-array count exceeds materialization limit")
+        end
+        inner_arrays += row_inner_arrays
+        row.each do |inner|
+          row_leaf_strings = inner.size.to_u64
+          if row_leaf_strings > WidePart::MAX_ARRAY_MARK_ELEMENTS - leaf_strings
+            raise CorruptPartError.new("selected Array(Array(String)) leaf string count exceeds materialization limit")
+          end
+          leaf_strings += row_leaf_strings
+          inner.each do |value|
+            value_bytes = value.bytesize.to_u64
+            if value_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - payload_bytes
+              raise CorruptPartError.new("selected Array(Array(String)) mark exceeds aggregate materialization limit")
+            end
+            payload_bytes += value_bytes
+          end
+        end
+      end
+
+      max_count = UInt64::MAX // 8_u64
+      if outer_rows > max_count || inner_arrays > max_count || leaf_strings > max_count
+        raise CorruptPartError.new("selected Array(Array(String)) byte count overflows")
+      end
+      outer_bytes = outer_rows * 8_u64
+      inner_bytes = inner_arrays * 8_u64
+      string_size_bytes = leaf_strings * 8_u64
+      if inner_bytes > UInt64::MAX - outer_bytes || string_size_bytes > UInt64::MAX - outer_bytes - inner_bytes
+        raise CorruptPartError.new("selected Array(Array(String)) byte count overflows")
+      end
+      metadata_bytes = outer_bytes + inner_bytes + string_size_bytes
+      if payload_bytes > UInt64::MAX - metadata_bytes
+        raise CorruptPartError.new("selected Array(Array(String)) byte count overflows")
+      end
+      total_bytes = metadata_bytes + payload_bytes
+      if total_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64
+        raise CorruptPartError.new("selected Array(Array(String)) mark exceeds aggregate materialization limit")
       end
       total_bytes
     end

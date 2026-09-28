@@ -234,7 +234,7 @@ describe CrystalClick::WidePart do
       "Array(Array(Bool))",
       "Array(Array(Nullable(Int32)))",
       "Array(Array(Decimal(9, 2)))",
-      "Array(Array(String))",
+      "Array(Array(Nullable(String)))",
       "Array(Array(Array(Int32)))",
       "Array(Array(Int32)) trailing",
     }.each do |type|

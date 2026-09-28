@@ -153,6 +153,8 @@ W58 admits paired two-level `Array(Array(T))` support for the ten existing
 fixed-width primitive numeric leaves, reusing W28's nested offset topology
 without widening nullable, string, or arbitrary recursive shapes. Its
 admitted boundary and verification status are recorded below.
+W59 admits paired `Array(Array(String))` only, with the exact four-stream
+reader/writer, typed table, and offline catalog boundary recorded below.
 
 ## Purpose and bounded contexts
 
@@ -3492,6 +3494,69 @@ the local linker flag. This is evidence for the declared Wide/LZ4/plain-mark
 profile only, not arbitrary nested shapes, other ClickHouse versions, or
 MV/projection support. Complete type compatibility and then MV/projections
 remain ahead of memory/performance work.
+
+## Completed slice W59: two-level String Arrays
+
+Target paired read and immutable write for exactly `Array(Array(String))`
+beside a sorted `UInt64` key. The reader, typed table batch, and offline
+catalog must preserve each outer/inner boundary and every String's bytes,
+including empty, embedded-NUL, and non-ASCII values. The expected Wide/LZ4/
+plain-mark streams are outer `.size0`, inner `.size1`, String `.size`, and
+String data. A pinned ClickHouse 26.7.1.1315 producer probe confirmed this
+logical order in a Wide part with plain marks and `string: 1` serialization
+metadata. The W21
+String codec and W58 two-level count validation may be reused, but their
+separate successes do not prove the composition.
+
+The first physical falsifier is a stock-produced part with empty outer rows,
+empty inner Arrays, zero-length Strings, a later nonempty mark after an
+all-empty middle mark, a short tail, binary/multibyte Strings, and a String
+crossing a compressed frame boundary. Inspect the exact stream inventory,
+marks, child cardinalities, and full/key-range `RowBinary`. The first code
+falsifier requires this exact type to be admitted and read from that stock
+part; it must fail on the pre-W59 reader. After implementation, mutate each
+child mark's offset or row count independently and require rejection before
+the affected table callback. A Crystal-written part must pass stock
+`ATTACH PART`, `CHECK TABLE`, exact schema, and independently encoded full
+and key-range `RowBinary`; self-readback alone is insufficient.
+
+The pre-implementation admission test in `wide_part_reader_w59_spec.cr`
+failed as predicted on the W58 source (`Expected: true / got: false`, one
+example, one failure). This RED result established the missing type gate,
+not physical compatibility. The pinned stock producer/consumer oracle now
+passes on the exact Wide/LZ4/plain-mark profile: Crystal reads stock parts
+with empty middle marks, zero-length and binary/multibyte Strings, a
+short tail, and a 5000-byte String spanning two LZ4 frames. The oracle
+asserts that the stock 4096-byte frame boundary falls inside that String.
+Stock ClickHouse accepts Crystal parts via `ATTACH PART`, passes
+`CHECK TABLE`, and returns independently encoded full and key-range
+`RowBinary` values. Corruption tests shift each of the four stream marks
+independently, reject the selected corrupt mark before callback exposure,
+and still read a later valid mark.
+
+Execution order: establish the pinned physical oracle and RED spec in
+`scripts/check_array_array_string_oracle.*` and
+`spec/wide_part_reader_w59_spec.cr`; then admit and decode the exact shape in
+`src/crystal_click/wide_part.cr` with a bounded depth-two plan; then implement
+staged writing in `src/crystal_click/wide_part_writer.cr`; finally connect
+`src/crystal_click/wide_part_table.cr` and
+`src/crystal_click/offline_catalog.cr`. Each step must retain W21/W58
+controls and the unsupported-shape guards. Do not treat plan syntax or a
+Crystal self-read as physical compatibility evidence.
+
+Risk is CAUTION: a String length stream can appear locally consistent while
+later marks or stock ClickHouse consume different byte boundaries. The guard
+is mark-local count/byte validation plus the pinned bidirectional oracle.
+Full debug and release `crystal spec` suites each passed 808/0 on Crystal
+1.21.0 with the local linker flag; formatting and diff whitespace checks
+passed. The hostile review found no concrete W59 blocker within this profile.
+Local checksum preflight only validates selected file sizes; stock
+`CHECK TABLE` supplies the separate content-integrity check for the writer
+oracle. Rollback is the W59-only local feature commit; no existing part was
+modified. Keep `Array(Array(Nullable(String)))`, deeper recursion,
+other leaves, Compact/compressed marks, general JSON, MV/projections, and
+performance guard-only. Evidence decays if the pinned producer, serializer,
+codec, marks, platform, or shared reader/writer helpers change.
 
 ## Rejected and guard-only surfaces
 
