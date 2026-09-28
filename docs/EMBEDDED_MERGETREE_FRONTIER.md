@@ -4330,6 +4330,94 @@ publication. The second writer part's later entry mark still has zero raw
 String bytes; the main oracle independently covers a zero-byte value mark
 followed by a nonzero raw-value tail.
 
+## W71 admitted frontier: numeric Map keys with nullable String Array values
+
+The next exact payload is `Map(UInt64, Array(Nullable(String)))` beside one
+sorted `UInt64` primary key in a Wide/LZ4/plain-`.mrk2` part. This combines
+W69's fixed-width numeric Map keys with W70's variable-width nullable String
+Array values; neither neighboring certificate admits their cross-product.
+The pinned stock producer confirmed six payload streams: `m.size0`, `m%2Ekeys`,
+`m%2Evalues.size1`, `m%2Evalues.null`, `m%2Evalues.size`, and
+`m%2Evalues`, in that order. The fresh 26.7.1.1315 part passed stock
+`CHECK TABLE`. Its seven rows have Map entry counts `[3, 0, 1, 2, 2, 1, 2]`
+and flattened nullable String leaf counts `[6, 0, 0, 3, 3, 1, 3]`.
+Every stream has five marks with table-row counts `[2, 2, 2, 1, 0]` and
+compressed offsets all zero. Decompressed offsets including the terminal
+mark are `[0, 16, 32, 48, 56]` for `id` and `m.size0`,
+`[0, 24, 48, 72, 88]` for numeric keys and `values.size1`,
+`[0, 6, 9, 13, 16]` for the null map,
+`[0, 48, 72, 104, 128]` for String sizes, and
+`[0, 21, 28, 28, 43]` for raw String bytes. The stock vector preserves
+duplicate numeric keys, empty Maps and Arrays, NULL versus empty String,
+embedded NUL/UTF-8, maximum UInt64, and an all-NULL mark followed by a
+non-NULL tail. The baseline NULL leaves have size zero and no raw bytes;
+the value stream has 43 raw bytes overall. Its `serialization.json` has
+global `string: 1` and nested-version propagation plus a setting-dependent
+Default statistic for `id`;
+that statistic is not a universal serializer requirement. This is producer
+evidence, not yet proof that Crystal consumes or emits the type.
+
+Admit only the exact typed reader, table/batch/catalog materialization,
+physical-plan shadow, and immutable ordered-pair writer. `size0` maps table
+rows to Map entries; the numeric key and `values.size1` streams have one slot
+per entry; the nullable and String-size streams have one slot per flattened
+Array leaf; the raw String stream counts bytes, including nonzero hidden
+spans under NULL. Every `.mrk2` row field remains in table-row coordinates.
+The stock vector must make entries differ from rows at each relevant mark,
+preserve duplicate keys and empty Map/Array values, distinguish NULL from
+empty String, and include an all-NULL or zero-byte mark followed by a
+nonempty tail. A checksum-valid hidden-NULL size mutation must not shift the
+later visible String. Invalid null codes, child cardinalities, extents, or
+shifted marks must reject before yielding the affected mark; earlier valid
+marks may already have yielded. The writer emits canonical zero-size NULL
+children and publishes only after staged readback and validation.
+
+Risk is CAUTION: independent entry, leaf, and byte axes can self-read while
+shifting a value under the wrong key or yielding a stock-invalid part.
+Rollback is the isolated W71 diff or its one local commit, with existing
+parts and remote history untouched. DoD is RED-to-green focused exact
+reader/writer/table/catalog/type-plan tests, producer-confirmed stream and
+mark topology, checksum-valid corruption guards, focused adjacent-type
+controls, a bidirectional pinned stock oracle with `ATTACH PART`,
+`CHECK TABLE`, and exact full/keyed RowBinary, full debug and release suites,
+and hostile review. Other Map declarations, Compact parts, other codecs or
+marks, server lifecycle, MV/projections, and speed/allocation parity stay
+outside this claim. Evidence decays on a serializer/mark-layout/version or
+shared reader/writer/table/catalog dispatch change; refresh the producer
+probe and both oracle directions before reuse.
+
+The continuation order is paired reader/writer type compatibility first,
+then MV and projection support, and only then memory and performance work.
+No W71 optimization result is claimed.
+
+The first W71 RED test executed with the project's system-linker override:
+`WidePhysicalPlanShadow.for_type` returned nil for the exact candidate.
+This is an admission falsifier only; it does not yet verify any reader or
+writer behavior.
+
+W71 implementation evidence: the exact reader, immutable pair writer,
+typed table/batch accessor, offline-catalog materializer, and physical-plan
+shadow admit only this declaration. Focused W71 reader/writer tests passed
+with 7 examples, and adjacent W69/W70 controls passed with 12 examples.
+The complete debug and release suites each passed with 926 examples, 0
+failures, 0 errors, and 0 pending after the distinct entry- and leaf-overflow
+guards were tested. The suite commands were
+`crystal spec --link-flags='-fuse-ld=ld'` and
+`crystal spec --release --link-flags='-fuse-ld=ld'` with isolated caches.
+The pinned ClickHouse 26.7.1.1315 oracle command was
+`bash scripts/check_map_uint64_array_nullable_string_oracle.sh`; stock
+producer to Crystal reader and Crystal writer to stock `ATTACH PART`,
+`CHECK TABLE`, and exact full/keyed RowBinary passed. Its checksum-valid
+hidden-NULL size mutation did not shift the next visible String. A
+positive-row zero-byte child mark retained its table-row count and equal
+child offsets before a nonempty tail. The oracle also exposed a real
+setting-dependent `Default` key-serializer count, now also accepted for this
+exact W71 declaration; the writer's zero-primary-key case covers it. Hostile
+review returned ROBUST for this pinned exact surface after checking the
+separate row, entry, leaf, and byte axes, materialization bounds, type gate,
+and staged publication. These observations do not widen the exclusions
+above or establish any memory or performance result.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -4339,7 +4427,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W66's exact nested Time/Time64
+1. Extend reader and writer together beyond W68-W71's exact nested nullable
+   Map combinations and W66's exact nested Time/Time64
    Arrays and W65's exact nested Date/Date32/DateTime/DateTime64 temporal,
    W64's exact nested Decimal, W63's exact `Map(String, Array(UInt64))`,
    W62's exact nested extended numeric, and W61's exact nested nullable

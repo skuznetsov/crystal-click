@@ -27,6 +27,7 @@ module CrystalClick
                              Array(Tuple(String, Array(UInt64?))) |
                              Array(Tuple(String, Array(String?))) |
                              Array(Tuple(UInt64, Array(UInt64?))) |
+                             Array(Tuple(UInt64, Array(String?))) |
                              Array(Tuple(UInt64, UInt64?)) | Array(Tuple(String, UInt64?)) |
                              Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) | Tuple(UInt64, String) | Nil
 
@@ -748,6 +749,16 @@ module CrystalClick
           values,
           selected_values,
           array_elements[0]
+        )
+      when "Map(UInt64, Array(Nullable(String)))"
+        selected_values = batch.map_uint64_array_nullable_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_uint64_key_map_array_nullable_string_values(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
         )
       when "Map(String, String)"
         selected_values = batch.map_string_strings_for(column_name)
@@ -2127,6 +2138,40 @@ module CrystalClick
         values << owned_row
       end
       next_elements
+    end
+
+    private def append_materialized_uint64_key_map_array_nullable_string_values(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(UInt64, Array(String?)))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |_key, nested_values|
+          next_elements = checked_materialized_value_array_elements(next_elements, nested_values.size.to_u64)
+          nested_values.each do |value|
+            next unless value
+            next_bytes = checked_materialized_value_string_bytes(next_bytes, value.not_nil!.bytesize.to_u64, max_string_bytes)
+          end
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(UInt64, Array(String?))).new(row.size)
+        row.each do |key, nested_values|
+          owned_values = Array(String?).new(nested_values.size) do |index|
+            value = nested_values[index]
+            value.nil? ? nil : String.new(value.not_nil!.to_slice)
+          end
+          owned_row << {key, owned_values}
+        end
+        values << owned_row
+      end
+      {next_elements, next_bytes}
     end
 
     private def append_materialized_string_key_map_nullable_uint64_values(

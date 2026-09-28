@@ -1072,6 +1072,10 @@ module CrystalClick
       type == "Map(UInt64, Array(Nullable(UInt64)))"
     end
 
+    def self.supports_map_uint64_array_nullable_string_type?(type : String) : Bool
+      type == "Map(UInt64, Array(Nullable(String)))"
+    end
+
     def self.supports_map_string_string_type?(type : String) : Bool
       type == "Map(String, String)"
     end
@@ -1128,7 +1132,7 @@ module CrystalClick
         supports_map_string_uint64_type?(type) || supports_map_string_array_uint64_type?(type) ||
         supports_map_string_array_nullable_uint64_type?(type) || supports_map_string_array_nullable_string_type?(type) ||
         supports_map_string_string_type?(type) ||
-        supports_map_uint64_array_nullable_uint64_type?(type) ||
+        supports_map_uint64_array_nullable_uint64_type?(type) || supports_map_uint64_array_nullable_string_type?(type) ||
         supports_map_uint64_nullable_uint64_type?(type) || supports_map_string_nullable_uint64_type?(type) ||
         supports_map_uint64_nullable_string_type?(type) || supports_map_string_nullable_string_type?(type) ||
         supports_tuple_uint64_string_type?(type) || supports_variant_type?(type)
@@ -3901,6 +3905,138 @@ module CrystalClick
       raise CorruptPartError.new("Map nested sizes do not consume selected null-map slots") unless leaf_offset == null_map.size
       raise CorruptPartError.new("Map nested sizes do not consume selected UInt64 slots") unless value_offset == encoded_values.size
       result
+    end
+
+    # Return fixed-width UInt64 key slots plus the nested nullable String
+    # payload bytes for one exact W71 Map range, validating each mark against
+    # its own row, entry, leaf, and byte counts.
+    def map_uint64_array_nullable_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      map_uint64_array_nullable_string_payload_preflight(column, first_mark, mark_count)[0]
+    end
+
+    def map_uint64_array_nullable_string_mark_range_materialization_preflight(column : String, first_mark : Int, mark_count : Int) : {UInt64, UInt64}
+      payload_bytes, entries, rows, leaves = map_uint64_array_nullable_string_payload_preflight(column, first_mark, mark_count)
+      {payload_bytes, checked_map_uint64_array_nullable_string_charge(payload_bytes, entries, leaves, rows)}
+    end
+
+    private def map_uint64_array_nullable_string_payload_preflight(column : String, first_mark : Int, mark_count : Int) : {UInt64, UInt64, UInt64, UInt64}
+      ensure_column(column)
+      unless WidePart.supports_map_uint64_array_nullable_string_type?(@column_type)
+        raise UnsupportedFormatError.new("Map accessor requires an exact Map(UInt64, Array(Nullable(String))) column")
+      end
+
+      _, entries, rows, mark_entries = read_array_outer_sizes(column, first_mark, mark_count)
+      validate_map_array_uint64_size0_marks(column, first_mark, mark_count, rows)
+
+      keys_stream = @streams["#{column}%2Ekeys"]
+      _, _, key_rows = checked_stream_mark_range(keys_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Map key substream mark rows differ") unless key_rows == rows
+      validate_array_nested_stream_marks(keys_stream, first_mark, mark_entries, 8)
+
+      _, leaves, mark_leaf_counts = read_map_array_nullable_string_value_sizes(
+        column, first_mark, mark_count, entries, rows, mark_entries
+      )
+      read_map_nullable_string_null_map(column, first_mark, mark_count, leaves, rows, mark_leaf_counts)
+      string_sizes, raw_bytes, raw_mark_bytes = read_map_string_child_sizes(
+        column, "%2Evalues", "Map nested Nullable String", first_mark, mark_count, leaves, rows, mark_leaf_counts
+      )
+      raise CorruptPartError.new("Map nested String size count differs from size1") unless string_sizes.size.to_u64 == leaves
+
+      key_bytes = checked_array_mark_byte_count(entries, 8).to_u64
+      entry_size_bytes = checked_array_mark_byte_count(entries, 8).to_u64
+      leaf_metadata_bytes = checked_array_mark_byte_count(leaves, 9).to_u64
+      key_mark_bytes = mark_entries.map { |count| checked_array_mark_byte_count(count, 8).to_u64 }
+      value_mark_bytes = mark_entries.each_with_index.map do |entry_count, index|
+        leaf_count = mark_leaf_counts[index]
+        checked_array_mark_byte_count(entry_count, 8).to_u64 + checked_array_mark_byte_count(leaf_count, 9).to_u64 + raw_mark_bytes[index]
+      end.to_a
+      value_bytes = entry_size_bytes + leaf_metadata_bytes + raw_bytes
+      payload_bytes = checked_map_materialized_bytes(key_bytes, value_bytes, key_mark_bytes, value_mark_bytes)
+      {payload_bytes, entries, rows, leaves}
+    end
+
+    # Decode exact ordered Map(UInt64, Array(Nullable(String))) rows. A NULL
+    # leaf still consumes its full String-size span; the writer canonicalizes
+    # NULL sizes to zero, while readers safely preserve foreign hidden bytes.
+    def read_map_uint64_array_nullable_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Tuple(UInt64, Array(String?))))
+      ensure_column(column)
+      unless WidePart.supports_map_uint64_array_nullable_string_type?(@column_type)
+        raise UnsupportedFormatError.new("Map accessor requires an exact Map(UInt64, Array(Nullable(String))) column")
+      end
+
+      payload_bytes, entries, rows, leaves = map_uint64_array_nullable_string_payload_preflight(column, first_mark, mark_count)
+      checked_map_uint64_array_nullable_string_charge(payload_bytes, entries, leaves, rows)
+      outer_sizes, checked_entries, checked_rows, mark_entries = read_array_outer_sizes(column, first_mark, mark_count)
+      unless checked_entries == entries && checked_rows == rows
+        raise CorruptPartError.new("Map size0 changed after preflight")
+      end
+      validate_map_array_uint64_size0_marks(column, first_mark, mark_count, rows)
+
+      keys_stream = @streams["#{column}%2Ekeys"]
+      key_start, key_end, key_rows = checked_stream_mark_range(keys_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Map key substream mark rows differ") unless key_rows == rows
+      validate_array_nested_stream_marks(keys_stream, first_mark, mark_entries, 8)
+      encoded_keys = read_mark_range_bytes(keys_stream, key_start, key_end, checked_array_mark_byte_count(entries, 8), 8)
+
+      value_sizes, checked_leaves, mark_leaf_counts = read_map_array_nullable_string_value_sizes(
+        column, first_mark, mark_count, entries, rows, mark_entries
+      )
+      raise CorruptPartError.new("Map size1 changed after preflight") unless checked_leaves == leaves
+      string_sizes, raw_bytes_total, _ = read_map_string_child_sizes(
+        column, "%2Evalues", "Map nested Nullable String", first_mark, mark_count, leaves, rows, mark_leaf_counts
+      )
+      raise CorruptPartError.new("Map nested String size count differs from size1") unless string_sizes.size.to_u64 == leaves
+      null_map = read_map_nullable_string_null_map(column, first_mark, mark_count, leaves, rows, mark_leaf_counts)
+      values_stream = @streams["#{column}%2Evalues"]
+      value_start, value_end, value_rows = checked_stream_mark_range(values_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Map nested String raw substream mark rows differ") unless value_rows == rows
+      raw_bytes = read_mark_range_bytes(values_stream, value_start, value_end, raw_bytes_total.to_i, 1)
+
+      result = Array(Array(Tuple(UInt64, Array(String?)))).new(rows.to_i)
+      entry_offset = 0
+      leaf_offset = 0
+      raw_offset = 0
+      outer_sizes.each do |entry_count|
+        row = Array(Tuple(UInt64, Array(String?))).new(entry_count.to_i)
+        entry_count.to_i.times do
+          raise CorruptPartError.new("Map outer sizes exceed selected nested keys") if entry_offset >= value_sizes.size
+          value_count = value_sizes[entry_offset]
+          if value_count > leaves - leaf_offset.to_u64
+            raise CorruptPartError.new("Map nested sizes exceed selected Nullable String leaves")
+          end
+
+          nested_values = Array(String?).new(value_count.to_i)
+          value_count.to_i.times do
+            raise CorruptPartError.new("Map Nullable String values exceed selected null-map bytes") if leaf_offset >= null_map.size
+            length = string_sizes[leaf_offset].to_i
+            if raw_offset > raw_bytes.size || length > raw_bytes.size - raw_offset
+              raise CorruptPartError.new("Map nested String sizes exceed selected raw bytes")
+            end
+            nested_values << (null_map[leaf_offset] == 1_u8 ? nil : String.new(raw_bytes[raw_offset, length]))
+            raw_offset += length
+            leaf_offset += 1
+          end
+          row << {u64(encoded_keys, entry_offset * 8), nested_values}
+          entry_offset += 1
+        end
+        result << row
+      end
+      raise CorruptPartError.new("Map sizes do not consume selected nested keys") unless entry_offset.to_u64 == entries
+      raise CorruptPartError.new("Map nested sizes do not consume selected Nullable String leaves") unless leaf_offset.to_u64 == leaves
+      raise CorruptPartError.new("Map nested String lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
+      result
+    end
+
+    private def checked_map_uint64_array_nullable_string_charge(payload_bytes : UInt64, entries : UInt64, leaves : UInt64, rows : UInt64) : UInt64
+      array_charge = checked_map_string_array_charge(payload_bytes, entries, rows, "Map(UInt64, Array(Nullable(String)))")
+      if leaves > UInt64::MAX // ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES
+        raise CorruptPartError.new("Map(UInt64, Array(Nullable(String))) materialization charge overflows")
+      end
+      leaf_bytes = leaves * ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES
+      if leaf_bytes > MAX_ARRAY_MARK_BYTES.to_u64 || array_charge > MAX_ARRAY_MARK_BYTES.to_u64 - leaf_bytes
+        raise CorruptPartError.new("Map(UInt64, Array(Nullable(String))) materialization charge exceeds per-range limit")
+      end
+      array_charge + leaf_bytes
     end
 
     # Read ordered Map(String, Nullable(UInt64)) entries. String key bytes,
@@ -7158,6 +7294,10 @@ module CrystalClick
                                  elsif WidePart.supports_map_uint64_array_nullable_uint64_type?(@column_type)
                                    stream_name == "#{@column}%2Ekeys" || stream_name == "#{@column}%2Evalues.size1" ||
                                      stream_name == "#{@column}%2Evalues.null" || stream_name == "#{@column}%2Evalues"
+                                 elsif WidePart.supports_map_uint64_array_nullable_string_type?(@column_type)
+                                   stream_name == "#{@column}%2Ekeys" || stream_name == "#{@column}%2Evalues.size1" ||
+                                     stream_name == "#{@column}%2Evalues.null" || stream_name == "#{@column}%2Evalues.size" ||
+                                     stream_name == "#{@column}%2Evalues"
                                  elsif WidePart.supports_map_string_uint64_type?(@column_type)
                                    stream_name == "#{@column}%2Ekeys.size" || stream_name == "#{@column}%2Ekeys" || stream_name == "#{@column}%2Evalues"
                                  elsif WidePart.supports_map_string_array_nullable_uint64_type?(@column_type)
@@ -7286,6 +7426,7 @@ module CrystalClick
             WidePart.supports_map_string_array_nullable_uint64_type?(column_type) ||
             WidePart.supports_map_string_array_nullable_string_type?(column_type) ||
             WidePart.supports_map_uint64_array_nullable_uint64_type?(column_type) ||
+            WidePart.supports_map_uint64_array_nullable_string_type?(column_type) ||
             WidePart.supports_map_string_string_type?(column_type) ||
             WidePart.supports_map_uint64_nullable_uint64_type?(column_type) || WidePart.supports_map_string_nullable_uint64_type?(column_type) ||
             WidePart.supports_map_uint64_nullable_string_type?(column_type) || WidePart.supports_map_string_nullable_string_type?(column_type)
@@ -7451,6 +7592,7 @@ module CrystalClick
               WidePart.supports_map_string_array_nullable_uint64_type?(selected_type) ||
               WidePart.supports_map_string_array_nullable_string_type?(selected_type) ||
               WidePart.supports_map_uint64_array_nullable_uint64_type?(selected_type) ||
+              WidePart.supports_map_uint64_array_nullable_string_type?(selected_type) ||
               WidePart.supports_map_string_string_type?(selected_type) ||
               WidePart.supports_map_uint64_nullable_uint64_type?(selected_type) || WidePart.supports_map_string_nullable_uint64_type?(selected_type) ||
               WidePart.supports_map_uint64_nullable_string_type?(selected_type) || WidePart.supports_map_string_nullable_string_type?(selected_type)
@@ -7491,6 +7633,8 @@ module CrystalClick
         ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.null", "#{column}%2Evalues"]
       elsif WidePart.supports_map_uint64_array_nullable_uint64_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues.null", "#{column}%2Evalues"]
+      elsif WidePart.supports_map_uint64_array_nullable_string_type?(type)
+        ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues.null", "#{column}%2Evalues.size", "#{column}%2Evalues"]
       elsif WidePart.supports_map_string_uint64_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys.size", "#{column}%2Ekeys", "#{column}%2Evalues"]
       elsif WidePart.supports_map_string_array_uint64_type?(type)
@@ -7895,6 +8039,7 @@ module CrystalClick
       uint64_key_map = WidePart.supports_map_uint64_string_type?(map_type) || WidePart.supports_map_uint64_uint64_type?(map_type) ||
                        WidePart.supports_map_uint64_nullable_uint64_type?(map_type) ||
                        WidePart.supports_map_uint64_array_nullable_uint64_type?(map_type) ||
+                       WidePart.supports_map_uint64_array_nullable_string_type?(map_type) ||
                        WidePart.supports_map_uint64_nullable_string_type?(map_type)
       string_key_map = WidePart.supports_map_string_uint64_type?(map_type) ||
                        WidePart.supports_map_string_array_uint64_type?(map_type) ||
@@ -7934,6 +8079,7 @@ module CrystalClick
 
       serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Map column serializers are required"))
       w70_map = WidePart.supports_map_string_array_nullable_string_type?(map_type)
+      w71_map = WidePart.supports_map_uint64_array_nullable_string_type?(map_type)
       unless serializers.empty? || (uint64_key_map || w70_map) && serializers.size == 1
         raise UnsupportedFormatError.new("Map serialization has unsupported child serializers")
       end
@@ -7946,7 +8092,7 @@ module CrystalClick
         name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("Map key serializer name is missing or malformed"))
         defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Map key serializer default count is missing or malformed"))
         rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Map key serializer row count is missing or malformed"))
-        valid_default_count = w70_map ? defaults >= 0 && defaults <= row_count.to_i64 : defaults == 0
+        valid_default_count = w70_map || w71_map ? defaults >= 0 && defaults <= row_count.to_i64 : defaults == 0
         unless kind == "Default" && name == keys[0][0] && valid_default_count
           raise UnsupportedFormatError.new("only Default key serialization is supported for Map")
         end
@@ -8811,6 +8957,7 @@ module CrystalClick
          WidePart.supports_map_string_array_nullable_uint64_type?(@column_type) ||
          WidePart.supports_map_string_array_nullable_string_type?(@column_type) ||
          WidePart.supports_map_uint64_array_nullable_uint64_type?(@column_type) ||
+         WidePart.supports_map_uint64_array_nullable_string_type?(@column_type) ||
          WidePart.supports_map_string_string_type?(@column_type) ||
          WidePart.supports_map_uint64_nullable_uint64_type?(@column_type) || WidePart.supports_map_string_nullable_uint64_type?(@column_type) ||
          WidePart.supports_map_uint64_nullable_string_type?(@column_type) || WidePart.supports_map_string_nullable_string_type?(@column_type)
@@ -8976,6 +9123,8 @@ module CrystalClick
         stream_name == "#{@column}%2Evalues.null" ? 1 : 8
       elsif WidePart.supports_map_uint64_array_nullable_uint64_type?(@column_type)
         stream_name == "#{@column}%2Evalues.null" ? 1 : 8
+      elsif WidePart.supports_map_uint64_array_nullable_string_type?(@column_type)
+        stream_name == "#{@column}%2Evalues.null" || stream_name == "#{@column}%2Evalues" ? 1 : 8
       elsif WidePart.supports_map_string_uint64_type?(@column_type)
         stream_name == "#{@column}%2Ekeys" ? 1 : 8
       elsif WidePart.supports_map_string_array_uint64_type?(@column_type)
@@ -10280,6 +10429,10 @@ module CrystalClick
                              elsif WidePart.supports_map_uint64_array_nullable_uint64_type?(@column_type)
                                stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues.size1" ||
                                  stream.name == "#{@column}%2Evalues.null" || stream.name == "#{@column}%2Evalues"
+                             elsif WidePart.supports_map_uint64_array_nullable_string_type?(@column_type)
+                               stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues.size1" ||
+                                 stream.name == "#{@column}%2Evalues.null" || stream.name == "#{@column}%2Evalues.size" ||
+                                 stream.name == "#{@column}%2Evalues"
                              elsif WidePart.supports_map_string_uint64_type?(@column_type)
                                stream.name == "#{@column}%2Ekeys.size" || stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues"
                              elsif WidePart.supports_map_string_array_nullable_uint64_type?(@column_type)

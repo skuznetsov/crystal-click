@@ -50,7 +50,7 @@ module CrystalClick
       end
     end
 
-    # A correctness-only shadow of the known W51/W55/W59/W61/W63/W69/W70 physical
+    # A correctness-only shadow of the known W51/W55/W59/W61/W63/W69/W70/W71 physical
     # shapes. This deliberately does not participate in codec admission.
     struct WidePhysicalPlanShadow
       enum AxisKind
@@ -175,6 +175,8 @@ module CrystalClick
           exact_map_shape?(root, "String", true, "String")
         when "Map(UInt64, Array(Nullable(UInt64)))"
           exact_map_shape?(root, "UInt64", true)
+        when "Map(UInt64, Array(Nullable(String)))"
+          exact_map_shape?(root, "UInt64", true, "String")
         else
           false
         end

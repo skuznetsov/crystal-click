@@ -65,7 +65,6 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
 
     {
       "Map(String, Array(String))",
-      "Map(UInt64, Array(Nullable(String)))",
       "Map(String, Array(Nullable(Int64)))",
       "Map(String, Array(Array(Nullable(String))))",
       "Map(String, Nullable(Array(Nullable(String))))",
