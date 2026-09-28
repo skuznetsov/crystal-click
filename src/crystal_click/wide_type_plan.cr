@@ -50,6 +50,314 @@ module CrystalClick
       end
     end
 
+    # A correctness-only shadow of the known W51/W55/W59/W61/W63 physical
+    # shapes. This deliberately does not participate in codec admission.
+    struct WidePhysicalPlanShadow
+      enum AxisKind
+        TableRows
+        MapEntries
+        ArrayElements
+        StringBytes
+      end
+
+      enum StreamRole
+        MapSize0
+        ArraySize0
+        ArraySize1
+        StringSize
+        NullMap
+        Value
+      end
+
+      enum StorageMode
+        Counts
+        NullMapBytes
+        FixedWidthValues
+        VariableBytes
+      end
+
+      struct Axis
+        getter id : String
+        getter kind : AxisKind
+
+        def initialize(@id : String, @kind : AxisKind)
+        end
+      end
+
+      struct Stream
+        getter name : String
+        getter semantic_type : String
+        @semantic_path : Array(String)
+        getter role : StreamRole
+        getter element_width : Int32
+        getter storage_mode : StorageMode
+        getter storage_axis : Axis
+        getter cardinality_parent_axis : Axis?
+        getter cardinality_child_axis : Axis?
+        getter mark_row_axis : Axis
+
+        def initialize(
+          @name : String,
+          @semantic_type : String,
+          semantic_path : Array(String),
+          @role : StreamRole,
+          @element_width : Int32,
+          @storage_mode : StorageMode,
+          @storage_axis : Axis,
+          @cardinality_parent_axis : Axis?,
+          @cardinality_child_axis : Axis?,
+          @mark_row_axis : Axis,
+        )
+          @semantic_path = semantic_path.dup
+        end
+
+        def semantic_path : Array(String)
+          @semantic_path.dup
+        end
+      end
+
+      @column_type : String
+      @streams : Array(Stream)
+      @axes : Array(Axis)
+      @mark_row_axis : Axis
+
+      private def initialize(
+        column_type : String,
+        streams : Array(Stream),
+        axes : Array(Axis),
+        @mark_row_axis : Axis,
+      )
+        @column_type = column_type.dup
+        @streams = streams.dup
+        @axes = axes.dup
+      end
+
+      def column_type : String
+        @column_type.dup
+      end
+
+      def streams : Array(Stream)
+        @streams.dup
+      end
+
+      def axes : Array(Axis)
+        @axes.dup
+      end
+
+      def mark_row_axis : Axis
+        @mark_row_axis
+      end
+
+      # Accept only the exact shadowed declarations. Parsing is syntax-only;
+      # neither this descriptor nor a successful result widens admission.
+      def self.for_type(type : String, column : String = "payload") : WidePhysicalPlanShadow?
+        root = WideTypePlan.parse(type) || return nil
+        return nil unless shadow_shape?(type, root)
+
+        builder = Builder.new(column)
+        builder.append_root(root)
+        new(type, builder.streams, builder.axes, builder.mark_row_axis)
+      end
+
+      private def self.shadow_shape?(type : String, root : Node) : Bool
+        case type
+        when TYPE_ARRAY_TUPLE_UINT64_STRING,
+             TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING,
+             TYPE_ARRAY_TUPLE_UINT64_UINT64,
+             TYPE_ARRAY_ARRAY_STRING,
+             TYPE_ARRAY_ARRAY_NULLABLE_STRING
+          !WideTypePlan.admitted(type).nil?
+        when "Map(String, Array(UInt64))"
+          exact_map_shape?(root, false)
+        when "Map(String, Array(Nullable(UInt64)))"
+          exact_map_shape?(root, true)
+        else
+          false
+        end
+      end
+
+      private def self.exact_map_shape?(root : Node, nullable_value : Bool) : Bool
+        return false unless root.name == "Map" && root.children.size == 2
+        key = root.child(0)
+        return false unless key.name == "String" && key.children.empty?
+        values = root.child(1)
+        return false unless values.name == "Array" && values.children.size == 1
+
+        element = values.child(0)
+        if nullable_value
+          element.name == "Nullable" && element.children.size == 1 &&
+            element.child(0).name == "UInt64" && element.child(0).children.empty?
+        else
+          element.name == "UInt64" && element.children.empty?
+        end
+      end
+
+      private class Builder
+        getter streams : Array(Stream)
+        getter axes : Array(Axis)
+        getter mark_row_axis : Axis
+
+        @column : String
+
+        def initialize(@column : String)
+          @streams = [] of Stream
+          @axes = [] of Axis
+          @mark_row_axis = add_axis("table_rows", AxisKind::TableRows)
+        end
+
+        def append_root(root : Node) : Nil
+          append_node(root, @column, [] of String, @mark_row_axis, 0)
+        end
+
+        private def append_node(
+          node : Node,
+          stream_path : String,
+          semantic_path : Array(String),
+          storage_axis : Axis,
+          array_depth : Int32,
+          logical_leaf_type : String? = nil,
+        ) : Nil
+          case node.name
+          when "Array"
+            append_array(node, stream_path, semantic_path, storage_axis, array_depth)
+          when "Tuple"
+            node.children.each_with_index do |child, index|
+              field = node.field_name(index)
+              raise UnsupportedFormatError.new("shadow Tuple member is unnamed") if field.empty?
+              child_path = semantic_path.dup
+              child_path << field
+              append_node(child, "#{stream_path}%2E#{field}", child_path, storage_axis, 0)
+            end
+          when "Map"
+            append_map(node, stream_path, semantic_path, storage_axis)
+          when "Nullable"
+            nullable_type = render_type(node)
+            append_stream(
+              "#{stream_path}.null", nullable_type, semantic_path,
+              StreamRole::NullMap, 1, StorageMode::NullMapBytes, storage_axis
+            )
+            append_node(
+              node.child(0), stream_path, semantic_path, storage_axis,
+              array_depth, nullable_type
+            )
+          when "String"
+            leaf_type = logical_leaf_type || render_type(node)
+            bytes_axis = add_axis(axis_id(semantic_path, "string_bytes"), AxisKind::StringBytes)
+            append_stream(
+              "#{stream_path}.size", leaf_type, semantic_path,
+              StreamRole::StringSize, 8, StorageMode::Counts, storage_axis,
+              storage_axis, bytes_axis
+            )
+            append_stream(
+              stream_path, leaf_type, semantic_path,
+              StreamRole::Value, 1, StorageMode::VariableBytes, bytes_axis
+            )
+          when "UInt64"
+            leaf_type = logical_leaf_type || render_type(node)
+            append_stream(
+              stream_path, leaf_type, semantic_path,
+              StreamRole::Value, 8, StorageMode::FixedWidthValues, storage_axis
+            )
+          else
+            raise UnsupportedFormatError.new("unsupported node in bounded shadow plan")
+          end
+          nil
+        end
+
+        private def append_array(
+          node : Node,
+          stream_path : String,
+          semantic_path : Array(String),
+          parent_axis : Axis,
+          array_depth : Int32,
+        ) : Nil
+          raise UnsupportedFormatError.new("shadow Array node has invalid arity") unless node.children.size == 1
+          raise UnsupportedFormatError.new("shadow Array nesting exceeds its bound") if array_depth > 1
+
+          child_axis = add_axis(
+            axis_id(semantic_path, "array#{array_depth}_elements"), AxisKind::ArrayElements
+          )
+          role = array_depth == 0 ? StreamRole::ArraySize0 : StreamRole::ArraySize1
+          append_stream(
+            "#{stream_path}.size#{array_depth}", render_type(node), semantic_path,
+            role, 8, StorageMode::Counts, parent_axis, parent_axis, child_axis
+          )
+          append_node(node.child(0), stream_path, semantic_path, child_axis, array_depth + 1)
+          nil
+        end
+
+        # ClickHouse serializes Map as an Array(Tuple(keys, values)). Lower the
+        # two semantic lanes explicitly so their shared entry axis is retained.
+        private def append_map(
+          node : Node,
+          stream_path : String,
+          semantic_path : Array(String),
+          parent_axis : Axis,
+        ) : Nil
+          raise UnsupportedFormatError.new("shadow Map node has invalid arity") unless node.children.size == 2
+          entries_axis = add_axis(axis_id(semantic_path, "map_entries"), AxisKind::MapEntries)
+          append_stream(
+            "#{stream_path}.size0", render_type(node), semantic_path,
+            StreamRole::MapSize0, 8, StorageMode::Counts, parent_axis,
+            parent_axis, entries_axis
+          )
+
+          key_path = semantic_path.dup
+          key_path << "keys"
+          append_node(node.child(0), "#{stream_path}%2Ekeys", key_path, entries_axis, 0)
+
+          value_path = semantic_path.dup
+          value_path << "values"
+          append_node(node.child(1), "#{stream_path}%2Evalues", value_path, entries_axis, 1)
+          nil
+        end
+
+        private def append_stream(
+          name : String,
+          semantic_type : String,
+          semantic_path : Array(String),
+          role : StreamRole,
+          element_width : Int32,
+          storage_mode : StorageMode,
+          storage_axis : Axis,
+          cardinality_parent_axis : Axis? = nil,
+          cardinality_child_axis : Axis? = nil,
+        ) : Nil
+          @streams << Stream.new(
+            name, semantic_type, semantic_path, role, element_width, storage_mode,
+            storage_axis, cardinality_parent_axis, cardinality_child_axis, @mark_row_axis
+          )
+        end
+
+        private def add_axis(id : String, kind : AxisKind) : Axis
+          if axis = @axes.find { |existing| existing.id == id }
+            raise UnsupportedFormatError.new("shadow axis has inconsistent kinds") unless axis.kind == kind
+            axis
+          else
+            axis = Axis.new(id, kind)
+            @axes << axis
+            axis
+          end
+        end
+
+        private def axis_id(semantic_path : Array(String), suffix : String) : String
+          scope = semantic_path.empty? ? "root" : semantic_path.join(".")
+          "#{@column}:#{scope}:#{suffix}"
+        end
+
+        private def render_type(node : Node) : String
+          return node.name if node.children.empty?
+
+          arguments = node.children.each_with_index.map do |child, index|
+            field = node.name == "Tuple" ? node.field_name(index) : ""
+            rendered = render_type(child)
+            field.empty? ? rendered : "#{field} #{rendered}"
+          end
+          "#{node.name}(#{arguments.join(", ")})"
+        end
+      end
+    end
+
     struct Node
       getter name : String
       @children : Array(Node)

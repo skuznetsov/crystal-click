@@ -4011,6 +4011,75 @@ producer/serializer, codec/mark, platform, or shared nested/temporal codec
 changes. Rollback is the isolated W66 diff or one local W66 feature commit;
 do not push.
 
+## W67 verified: compositional physical plan in shadow mode
+
+The type-compatibility goal needs a reusable physical plan before more
+Array/Map/Tuple/Nullable combinations are admitted. `WideTypePlan.parse`
+currently accepts more syntax than `WideTypePlan.admitted`, while the latter
+describes physical streams for only five exact declarations. W63's
+`Map(String, Array(UInt64))` has a separate physical path. W67 adds a
+bounded shadow descriptor for stream order, semantic leaf identity, width,
+and cardinality axes; it must not make a parseable type readable or writable.
+Existing exact admission and public reader/writer behavior stay unchanged.
+
+The first candidate falsifier is `Map(String, Array(Nullable(UInt64)))`.
+A pinned ClickHouse local 26.7.1.1315 Wide/LZ4/plain-`.mrk2` producer probe
+observed six payload streams in serializer order: `payload.size0`,
+`payload%2Ekeys.size`, `payload%2Ekeys`, `payload%2Evalues.size1`,
+`payload%2Evalues.null`, and `payload%2Evalues`. The stock table preserved
+duplicate String keys, empty maps and value Arrays, and NULL distinct from
+zero. This is topology evidence, not reader/writer admission. Exact mark and
+stream cardinalities were probed separately. Each of the seven streams,
+including `pk`, has four 24-byte `.mrk2` records with row counts
+`[2, 2, 1, 0]` (the final record is a zero-row sentinel). Raw decompressed
+offsets by stream are `pk` and `payload.size0` `[0, 16, 32, 40]`,
+`keys.size` and `values.size1` `[0, 16, 40, 48]`, key bytes
+`[0, 6, 19, 23]`, `values.null` `[0, 2, 4, 5]`, and value bytes
+`[0, 16, 32, 40]`. The three data granules have respectively
+`(Map entries, key bytes, value elements)` counts `(2, 6, 2)`,
+`(3, 13, 2)`, and `(1, 4, 1)`. The vector includes duplicate `dup` keys,
+empty Maps/Arrays, `[NULL, 0]`, `[NULL]`, `[0]`, and `UInt64::MAX`;
+the null and UInt64 streams retain a slot for each value element, even
+when NULL. The part reports Wide and `CODEC(LZ4)` with uncompressed marks;
+this producer evidence is pinned to binary 26.7.1.1315, not the older
+local source checkout. The probe's temporary stock part remains under
+`/private/tmp/w67-map-nullable.GUqdjX/`, but the temporary path is not a
+durable oracle; repeat the pinned producer probe if the serializer changes.
+
+The shadow plan must model independent axes: table rows, Map entries,
+per-entry Array elements, and variable String bytes. The `.mrk2` rows field
+remains table rows on every stream; it does not replace the payload's axis.
+Map keys and values share the entry axis; `values.size1` maps entries to
+elements; `values.null` and the UInt64 child data share the element axis.
+An Array count stream maps its parent slots to child slots, Tuple fields
+share parent slots, and Nullable's null map and child share slots. The plan
+must preserve semantic leaf identity when multiple types have equal width.
+
+The RED test failed to compile on the absent `WidePhysicalPlanShadow`.
+The green descriptor tests use literal expected fingerprints for the stock
+candidate and W51/W55/W59/W61/W63 controls: ordered stream names, semantic
+types and paths, widths, one-byte-per-slot null maps, storage/cardinality
+axes, and the table-row mark axis. Map keys and values share the same entry
+axis, and nullable flags and value bytes share the element axis. The existing
+`admitted` set and `WidePart.supports_typed_type?` still reject the candidate.
+The type-only plan cannot validate the stock vector's numeric mark offsets;
+the next reader/writer slice must make them executable oracle evidence before
+admission. No generic recursive codec, new readable/writable column type,
+MV/projection, or performance claim is admitted by W67. A future consumer
+must pass the canonical physical column name to `for_type`.
+
+Risk remains CAUTION: an apparently equivalent stream list can conceal wrong
+per-mark cardinalities or accidentally broaden type admission. The focused
+descriptor spec passes 2 examples; focused W51/W55/W59/W61/W63 controls pass
+32 examples. Full debug and release specs each pass 867 examples with 0
+failures/errors/pending. The pinned W63 bidirectional stock oracle passes;
+formatting and diff-whitespace checks pass. A hostile static review returned
+ROBUST within this type-only scope, while marking numeric producer-backed
+assertions as mandatory for the next codec slice. Rollback is the isolated
+W67 diff or one local feature commit; no part or remote history was mutated.
+Evidence decays on a ClickHouse serializer, mark-layout, parser, or shared
+type-dispatch change.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
