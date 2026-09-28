@@ -2231,7 +2231,8 @@ module CrystalClick
     end
 
     def preflight_array_tuple_uint64_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
-      array_tuple_components(column, first_mark, mark_count, false, false).materialized_bytes
+      ensure_array_tuple_type(column, WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_STRING)
+      array_tuple_components(column, first_mark, mark_count, false).materialized_bytes
     end
 
     # Nullable slots retain their UInt64 payload and add one null-map byte to
@@ -2245,14 +2246,25 @@ module CrystalClick
     end
 
     def preflight_array_tuple_nullable_uint64_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
-      array_tuple_components(column, first_mark, mark_count, true, false).materialized_bytes
+      ensure_array_tuple_type(column, WideTypePlan::TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING)
+      array_tuple_components(column, first_mark, mark_count, false).materialized_bytes
+    end
+
+    def array_tuple_uint64_uint64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      preflight_array_tuple_uint64_uint64_mark_range_raw_bytes(column, first_mark, mark_count)
+    end
+
+    def preflight_array_tuple_uint64_uint64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_array_tuple_type(column, WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_UINT64)
+      array_tuple_components(column, first_mark, mark_count, false).materialized_bytes
     end
 
     # Read exact W51 Array(Tuple(a UInt64, b String)) rows. Each selected
     # mark's flattened child counts are checked independently before strings
     # and nested row arrays are assembled.
     def read_array_tuple_uint64_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Tuple(UInt64, String)))
-      components = array_tuple_components(column, first_mark, mark_count, false, true)
+      ensure_array_tuple_type(column, WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_STRING)
+      components = array_tuple_components(column, first_mark, mark_count, true)
       numeric_values = components.numeric_values.not_nil!
       string_values = components.string_values.not_nil!
       rows = Array(Array(Tuple(UInt64, String))).new(components.rows.to_i)
@@ -2279,7 +2291,8 @@ module CrystalClick
     # Read exact W51 Array(Tuple(a Nullable(UInt64), b String)) rows. The
     # nested UInt64 payload is consumed even where the null map says NULL.
     def read_array_tuple_nullable_uint64_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Tuple(UInt64?, String)))
-      components = array_tuple_components(column, first_mark, mark_count, true, true)
+      ensure_array_tuple_type(column, WideTypePlan::TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING)
+      components = array_tuple_components(column, first_mark, mark_count, true)
       numeric_values = components.numeric_values.not_nil!
       null_map = components.null_map.not_nil!
       string_values = components.string_values.not_nil!
@@ -2301,6 +2314,28 @@ module CrystalClick
       end
       raise CorruptPartError.new("Array(Tuple) size0 does not consume child values") unless element_offset == components.element_sizes.size
       raise CorruptPartError.new("Array(Tuple) String sizes do not consume raw bytes") unless string_offset == string_values.size
+      rows
+    end
+
+    # Read exact W55 Array(Tuple(a UInt64, b UInt64)) rows through the shared
+    # plan-driven child validation and fixed-width leaf reader used by W51.
+    def read_array_tuple_uint64_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Tuple(UInt64, UInt64)))
+      ensure_array_tuple_type(column, WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_UINT64)
+      components = array_tuple_components(column, first_mark, mark_count, true)
+      first_values = components.numeric_values.not_nil!
+      second_values = components.second_numeric_values.not_nil!
+      rows = Array(Array(Tuple(UInt64, UInt64))).new(components.rows.to_i)
+      element_offset = 0
+      components.outer_sizes.each do |size|
+        row = Array(Tuple(UInt64, UInt64)).new(size.to_i)
+        size.to_i.times do
+          value_offset = element_offset * 8
+          row << {u64(first_values, value_offset), u64(second_values, value_offset)}
+          element_offset += 1
+        end
+        rows << row
+      end
+      raise CorruptPartError.new("Array(Tuple) size0 does not consume child values") unless element_offset.to_u64 == components.flat_elements
       rows
     end
 
@@ -4811,6 +4846,7 @@ module CrystalClick
       getter string_bytes : UInt64
       getter materialized_bytes : UInt64
       getter numeric_values : Bytes?
+      getter second_numeric_values : Bytes?
       getter null_map : Bytes?
       getter string_values : Bytes?
 
@@ -4822,6 +4858,7 @@ module CrystalClick
         @string_bytes : UInt64,
         @materialized_bytes : UInt64,
         @numeric_values : Bytes?,
+        @second_numeric_values : Bytes?,
         @null_map : Bytes?,
         @string_values : Bytes?,
       )
@@ -6390,8 +6427,11 @@ module CrystalClick
     end
 
     private def primary_stream_name(stream_names : Array(String)) : String
-      if WideTypePlan.admitted(@column_type)
-        stream = "#{@column}.size0"
+      if plan = WideTypePlan.admitted(@column_type)
+        stream = plan.physical_streams(@column).find do |candidate|
+          candidate.kind.array_size0? && candidate.field_path.empty?
+        end.try(&.name)
+        raise CorruptPartError.new("selected Array(Tuple) size0 stream is missing from its plan") unless stream
         raise CorruptPartError.new("selected Array(Tuple) size0 stream is missing") unless stream_names.includes?(stream)
         return stream
       end
@@ -6416,16 +6456,9 @@ module CrystalClick
       if @column_type == "LowCardinality(String)"
         1
       elsif plan = WideTypePlan.admitted(@column_type)
-        streams = plan.physical_substreams(@column)
-        index = streams.index(stream_name) || raise(UnsupportedFormatError.new("unsupported exact Array(Tuple) substream"))
-        case plan.shape
-        when WideTypePlan::Shape::ArrayTupleUInt64String
-          [8, 8, 8, 1][index]
-        when WideTypePlan::Shape::ArrayTupleNullableUInt64String
-          [8, 1, 8, 8, 1][index]
-        else
-          raise UnsupportedFormatError.new("unsupported exact Array(Tuple) substream")
-        end
+        stream = plan.physical_streams(@column).find(&.name.==(stream_name)) ||
+                 raise(UnsupportedFormatError.new("unsupported exact Array(Tuple) substream"))
+        stream.element_width
       elsif WidePart.nullable_uuid_array_element_type(@column_type)
         case stream_name
         when "#{@column}.null"  then 1
@@ -6799,8 +6832,9 @@ module CrystalClick
       column : String,
       first_mark : Int,
       mark_count : Int,
+      size_stream_name : String? = nil,
     ) : {Array(UInt64), UInt64, UInt64, Array(UInt64)}
-      size_stream = @streams["#{column}.size0"]
+      size_stream = @streams[size_stream_name || "#{column}.size0"]
       size_start, size_end, rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
       raise CorruptPartError.new("Array outer row count exceeds materialization limit") if rows > MAX_ARRAY_MARK_ROWS
       encoded_sizes = read_mark_range_bytes(size_stream, size_start, size_end, checked_byte_count(rows, 8), 8)
@@ -7002,70 +7036,109 @@ module CrystalClick
       {element_sizes, total_bytes}
     end
 
+    private def ensure_array_tuple_type(column : String, expected_type : String) : Nil
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Array(Tuple) accessor requires its exact admitted declaration") unless @column_type == expected_type
+      nil
+    end
+
     private def array_tuple_components(
       column : String,
       first_mark : Int,
       mark_count : Int,
-      nullable_first_field : Bool,
       materialize : Bool,
     ) : ArrayTupleComponents
       ensure_column(column)
-      expected_type = nullable_first_field ? WideTypePlan::TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING : WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_STRING
-      raise UnsupportedFormatError.new("Array(Tuple) accessor requires one of the exact W51 declarations") unless @column_type == expected_type
       plan = WideTypePlan.admitted(@column_type) || raise(UnsupportedFormatError.new("Array(Tuple) type plan is not admitted"))
-      streams = plan.physical_substreams(column)
-      expected_stream_count = nullable_first_field ? 5 : 4
-      raise UnsupportedFormatError.new("admitted Array(Tuple) plan has an unexpected stream topology") unless streams.size == expected_stream_count
+      streams = plan.physical_streams(column)
+      streams.each do |stream_plan|
+        raise CorruptPartError.new("Array(Tuple) planned child stream is missing: #{stream_plan.name}") unless @streams.has_key?(stream_plan.name)
+      end
+      size_plan = streams.find { |stream| stream.kind.array_size0? && stream.field_path.empty? } ||
+                  raise(UnsupportedFormatError.new("admitted Array(Tuple) plan has no outer size stream"))
+      first_value_plan = streams.find { |stream| stream.field_path == ["a"] && stream.kind.u_int64? } ||
+                         raise(UnsupportedFormatError.new("admitted Array(Tuple) plan has no UInt64 `a` leaf"))
+      first_null_plan = streams.find { |stream| stream.field_path == ["a"] && stream.kind.null_map? }
+      second_value_plan = streams.find { |stream| stream.field_path == ["b"] && stream.kind.u_int64? }
+      second_size_plan = streams.find { |stream| stream.field_path == ["b"] && stream.kind.string_size? }
+      second_raw_plan = streams.find { |stream| stream.field_path == ["b"] && stream.kind.string_data? }
+      second_is_string = !second_size_plan.nil? && !second_raw_plan.nil?
+      raise UnsupportedFormatError.new("admitted Array(Tuple) plan has an invalid `b` leaf") unless second_value_plan || second_is_string
+      raise UnsupportedFormatError.new("admitted Array(Tuple) plan has ambiguous `b` leaves") if second_value_plan && second_is_string
 
-      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
-      value_index = nullable_first_field ? 2 : 1
-      size_index = nullable_first_field ? 3 : 2
-      value_stream = @streams[streams[value_index]]
-      _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
-      raise CorruptPartError.new("Array(Tuple) UInt64 substream mark rows differ") unless value_rows == rows
-      validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, 8)
-      numeric_values = if materialize
-                         value_start, value_end, _ = checked_stream_mark_range(value_stream, first_mark, mark_count)
-                         read_mark_range_bytes(value_stream, value_start, value_end, checked_array_mark_byte_count(flat_elements, 8), 8)
-                       else
-                         nil
-                       end
-
-      element_sizes, string_bytes = read_array_string_element_sizes(
+      outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(
         column,
+        first_mark,
+        mark_count,
+        size_plan.name
+      )
+      numeric_values = read_array_tuple_uint64_leaf(
+        first_value_plan,
         first_mark,
         mark_count,
         flat_elements,
         rows,
         mark_flat_elements,
-        "Array(Tuple(String))",
-        streams[size_index],
-        streams[size_index + 1]
+        materialize,
+        "Array(Tuple) `a`"
       )
-      raise CorruptPartError.new("Array(Tuple) String-size count differs from size0") unless element_sizes.size.to_u64 == flat_elements
+      second_numeric_values = if value_plan = second_value_plan
+                                read_array_tuple_uint64_leaf(
+                                  value_plan,
+                                  first_mark,
+                                  mark_count,
+                                  flat_elements,
+                                  rows,
+                                  mark_flat_elements,
+                                  materialize,
+                                  "Array(Tuple) `b`"
+                                )
+                              else
+                                nil
+                              end
 
-      null_map = nil.as(Bytes?)
-      if nullable_first_field
-        null_stream = @streams[streams[1]]
-        null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
-        raise CorruptPartError.new("Array(Tuple) null-map mark rows differ") unless null_rows == rows
-        validate_array_nested_stream_marks(null_stream, first_mark, mark_flat_elements, 1)
-        encoded_null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_array_mark_byte_count(flat_elements, 1), 1)
-        encoded_null_map.each do |value|
-          raise CorruptPartError.new("Array(Tuple) null-map byte is not boolean") unless value <= 1_u8
+      element_sizes = [] of UInt64
+      string_bytes = 0_u64
+      string_values = nil.as(Bytes?)
+      if size_stream_plan = second_size_plan
+        raw_stream_plan = second_raw_plan.not_nil!
+        element_sizes, string_bytes = read_array_string_element_sizes(
+          column,
+          first_mark,
+          mark_count,
+          flat_elements,
+          rows,
+          mark_flat_elements,
+          "Array(Tuple(String))",
+          size_stream_plan.name,
+          raw_stream_plan.name
+        )
+        raise CorruptPartError.new("Array(Tuple) String-size count differs from size0") unless element_sizes.size.to_u64 == flat_elements
+        if materialize
+          raw_stream = @streams[raw_stream_plan.name]
+          raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+          raise CorruptPartError.new("Array(Tuple) String substream mark rows differ") unless raw_rows == rows
+          string_values = read_mark_range_bytes(
+            raw_stream,
+            raw_start,
+            raw_end,
+            string_bytes.to_i,
+            raw_stream_plan.element_width
+          )
         end
-        null_map = encoded_null_map
       end
 
-      materialized_bytes = checked_array_tuple_materialization_bytes(rows, flat_elements, string_bytes, nullable_first_field)
-      string_values = if materialize
-                        raw_stream = @streams[streams[size_index + 1]]
-                        raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
-                        raise CorruptPartError.new("Array(Tuple) String substream mark rows differ") unless raw_rows == rows
-                        read_mark_range_bytes(raw_stream, raw_start, raw_end, string_bytes.to_i, 1)
-                      else
-                        nil
-                      end
+      null_map = if null_plan = first_null_plan
+                   read_array_tuple_null_leaf(null_plan, first_mark, mark_count, flat_elements, rows, mark_flat_elements)
+                 else
+                   nil
+                 end
+      materialized_bytes = checked_array_tuple_materialization_bytes(
+        rows,
+        flat_elements,
+        string_bytes,
+        !first_null_plan.nil?
+      )
 
       ArrayTupleComponents.new(
         outer_sizes,
@@ -7075,9 +7148,59 @@ module CrystalClick
         string_bytes,
         materialized_bytes,
         numeric_values,
+        second_numeric_values,
         null_map,
         string_values
       )
+    end
+
+    private def read_array_tuple_uint64_leaf(
+      stream_plan : WideTypePlan::PhysicalSubstream,
+      first_mark : Int,
+      mark_count : Int,
+      flat_elements : UInt64,
+      rows : UInt64,
+      mark_flat_elements : Array(UInt64),
+      materialize : Bool,
+      label : String,
+    ) : Bytes?
+      stream = @streams[stream_plan.name]
+      value_start, value_end, value_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      raise CorruptPartError.new("#{label} mark rows differ from size0") unless value_rows == rows
+      validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, stream_plan.element_width)
+      return nil unless materialize
+      read_mark_range_bytes(
+        stream,
+        value_start,
+        value_end,
+        checked_array_mark_byte_count(flat_elements, stream_plan.element_width),
+        stream_plan.element_width
+      )
+    end
+
+    private def read_array_tuple_null_leaf(
+      stream_plan : WideTypePlan::PhysicalSubstream,
+      first_mark : Int,
+      mark_count : Int,
+      flat_elements : UInt64,
+      rows : UInt64,
+      mark_flat_elements : Array(UInt64),
+    ) : Bytes
+      stream = @streams[stream_plan.name]
+      null_start, null_end, null_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Tuple) null-map mark rows differ from size0") unless null_rows == rows
+      validate_array_nested_stream_marks(stream, first_mark, mark_flat_elements, stream_plan.element_width)
+      encoded_null_map = read_mark_range_bytes(
+        stream,
+        null_start,
+        null_end,
+        checked_array_mark_byte_count(flat_elements, stream_plan.element_width),
+        stream_plan.element_width
+      )
+      encoded_null_map.each do |value|
+        raise CorruptPartError.new("Array(Tuple) null-map byte is not boolean") unless value <= 1_u8
+      end
+      encoded_null_map
     end
 
     private def checked_array_tuple_materialization_bytes(

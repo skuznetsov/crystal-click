@@ -4,10 +4,45 @@ module CrystalClick
   class WideTypePlan
     TYPE_ARRAY_TUPLE_UINT64_STRING          = "Array(Tuple(a UInt64, b String))"
     TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING = "Array(Tuple(a Nullable(UInt64), b String))"
+    TYPE_ARRAY_TUPLE_UINT64_UINT64          = "Array(Tuple(a UInt64, b UInt64))"
 
     enum Shape
       ArrayTupleUInt64String
       ArrayTupleNullableUInt64String
+      ArrayTupleUInt64UInt64
+    end
+
+    enum PhysicalSubstreamKind
+      ArraySize0
+      NullMap
+      UInt64
+      StringSize
+      StringData
+    end
+
+    struct PhysicalSubstream
+      getter name : String
+      getter kind : PhysicalSubstreamKind
+      @field_path : Array(String)
+
+      def initialize(@name : String, @kind : PhysicalSubstreamKind, field_path : Array(String))
+        @field_path = field_path.dup
+      end
+
+      def field_path : Array(String)
+        @field_path.dup
+      end
+
+      def element_width : Int32
+        case @kind
+        when .array_size0?, .u_int64?, .string_size?
+          8
+        when .null_map?, .string_data?
+          1
+        else
+          raise UnsupportedFormatError.new("unsupported planned Array(Tuple) stream kind")
+        end
+      end
     end
 
     struct Node
@@ -53,50 +88,64 @@ module CrystalClick
       Parser.new(type).parse
     end
 
-    # Keep physical admission intentionally sealed to the two W51 stock
-    # declarations. The syntax tree is checked as well as the exact spelling,
-    # so syntax parsing never acts as a broad physical-format allowlist.
+    # Keep physical admission intentionally sealed to the exact declarations
+    # covered by W51 and W55. Syntax parsing never acts as a broad physical-
+    # format allowlist.
     def self.admitted(type : String) : WideTypePlan?
       root = parse(type) || return nil
       if type == TYPE_ARRAY_TUPLE_UINT64_STRING && exact_array_tuple?(root, false)
         new(root, type.dup, Shape::ArrayTupleUInt64String)
       elsif type == TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING && exact_array_tuple?(root, true)
         new(root, type.dup, Shape::ArrayTupleNullableUInt64String)
+      elsif type == TYPE_ARRAY_TUPLE_UINT64_UINT64 && exact_array_tuple_uint64_uint64?(root)
+        new(root, type.dup, Shape::ArrayTupleUInt64UInt64)
       else
         nil
       end
     end
 
-    # Return the full serializer-order stream list, including the outer
-    # Array size0 stream. These names are safe to share with the writer only
-    # after exact admission succeeds.
-    def physical_substreams(column : String) : Array(String)
-      streams = [] of String
-      append_physical_streams(@root, column, streams)
+    # Return serializer-order stream descriptors from the parsed type tree,
+    # including each stream's leaf role and named Tuple path. These are safe
+    # to share with readers and writers only after exact admission succeeds.
+    def physical_streams(column : String) : Array(PhysicalSubstream)
+      streams = [] of PhysicalSubstream
+      append_physical_streams(@root, column, [] of String, streams)
       streams
     end
 
-    private def append_physical_streams(node : Node, path : String, streams : Array(String)) : Nil
+    # Preserve the established API while keeping one recursive stream walk.
+    def physical_substreams(column : String) : Array(String)
+      physical_streams(column).map(&.name)
+    end
+
+    private def append_physical_streams(
+      node : Node,
+      path : String,
+      field_path : Array(String),
+      streams : Array(PhysicalSubstream),
+    ) : Nil
       case node.name
       when "Array"
         raise UnsupportedFormatError.new("admitted Array node has invalid arity") unless node.children.size == 1
-        streams << "#{path}.size0"
-        append_physical_streams(node.child(0), path, streams)
+        streams << PhysicalSubstream.new("#{path}.size0", PhysicalSubstreamKind::ArraySize0, field_path)
+        append_physical_streams(node.child(0), path, field_path, streams)
       when "Tuple"
         node.children.each_with_index do |child, index|
           field_name = node.field_name(index)
           raise UnsupportedFormatError.new("admitted Tuple member is unnamed") if field_name.empty?
-          append_physical_streams(child, "#{path}%2E#{field_name}", streams)
+          child_path = field_path.dup
+          child_path << field_name
+          append_physical_streams(child, "#{path}%2E#{field_name}", child_path, streams)
         end
       when "Nullable"
         raise UnsupportedFormatError.new("admitted Nullable node has invalid arity") unless node.children.size == 1
-        streams << "#{path}.null"
-        append_physical_streams(node.child(0), path, streams)
+        streams << PhysicalSubstream.new("#{path}.null", PhysicalSubstreamKind::NullMap, field_path)
+        append_physical_streams(node.child(0), path, field_path, streams)
       when "String"
-        streams << "#{path}.size"
-        streams << path
+        streams << PhysicalSubstream.new("#{path}.size", PhysicalSubstreamKind::StringSize, field_path)
+        streams << PhysicalSubstream.new(path, PhysicalSubstreamKind::StringData, field_path)
       when "UInt64"
-        streams << path
+        streams << PhysicalSubstream.new(path, PhysicalSubstreamKind::UInt64, field_path)
       else
         raise UnsupportedFormatError.new("admitted type plan contains an unsupported physical leaf")
       end
@@ -119,6 +168,15 @@ module CrystalClick
       else
         first.name == "UInt64" && first.children.empty?
       end
+    end
+
+    private def self.exact_array_tuple_uint64_uint64?(root : Node) : Bool
+      return false unless root.name == "Array" && root.children.size == 1
+      tuple = root.child(0)
+      return false unless tuple.name == "Tuple" && tuple.children.size == 2
+      return false unless tuple.field_names == ["a", "b"]
+
+      tuple.children.all? { |child| child.name == "UInt64" && child.children.empty? }
     end
 
     # Recursive syntax parser kept separate from W51's exact shape admission.

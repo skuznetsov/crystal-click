@@ -554,6 +554,14 @@ module CrystalClick
           string_bytes,
           max_string_bytes
         )
+      when WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_UINT64
+        selected_values = batch.array_tuple_uint64_uint64_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_map_uint64_values(
+          values,
+          selected_values,
+          array_elements[0]
+        )
       when .starts_with?("Array(FixedString(")
         raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.array_fixed_string_width(selected_type)
         selected_values = batch.array_fixed_strings_for(column_name)

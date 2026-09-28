@@ -161,17 +161,17 @@ describe "W51 Array of named Tuple reader" do
     nullable.column_type.should eq("Array(Tuple(a Nullable(UInt64), b String))")
   end
 
-  it "keeps admission sealed to the two exact recursive declarations" do
+  it "admits only the three exact recursive declarations" do
     {
       "Array(Tuple(a UInt64, b String))",
       "Array(Tuple(a Nullable(UInt64), b String))",
+      "Array(Tuple(a UInt64, b UInt64))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
     end
 
     {
       "Array(Tuple(UInt64, String))",
-      "Array(Tuple(a UInt64, b UInt64))",
       "Array(Tuple(a Nullable(UInt64), b String, c UInt64))",
       "Array(Nullable(Tuple(a UInt64, b String)))",
       "Nullable(Array(Tuple(a UInt64, b String)))",
@@ -190,6 +190,7 @@ describe "W51 Array of named Tuple reader" do
 
     plain = CrystalClick::WideTypePlan.admitted("Array(Tuple(a UInt64, b String))").not_nil!
     nullable = CrystalClick::WideTypePlan.admitted("Array(Tuple(a Nullable(UInt64), b String))").not_nil!
+    uint64_pair = CrystalClick::WideTypePlan.admitted("Array(Tuple(a UInt64, b UInt64))").not_nil!
     plain.physical_substreams("arr_tuple").should eq([
       "arr_tuple.size0",
       "arr_tuple%2Ea",
@@ -202,6 +203,11 @@ describe "W51 Array of named Tuple reader" do
       "arr_tuple_nullable%2Ea",
       "arr_tuple_nullable%2Eb.size",
       "arr_tuple_nullable%2Eb",
+    ])
+    uint64_pair.physical_substreams("arr_tuple_u64_pair").should eq([
+      "arr_tuple_u64_pair.size0",
+      "arr_tuple_u64_pair%2Ea",
+      "arr_tuple_u64_pair%2Eb",
     ])
   end
 

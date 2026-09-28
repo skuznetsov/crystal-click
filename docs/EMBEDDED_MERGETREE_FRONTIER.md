@@ -139,7 +139,10 @@ reader/writer implementation; verification status is recorded in its section.
 W53 admits two exact nullable-UInt64-value Map declarations over the same
 key families within the paired oracle below. W54 admits the corresponding
 nullable-String-value Map pair within its pinned physical and paired oracle
-below; it is not generic recursive Map support.
+below; it is not generic recursive Map support. W55 admits the exact
+`Array(Tuple(a UInt64, b UInt64))` declaration alongside W51's two named-Tuple
+Arrays, sharing their parsed physical stream plan and bounded reader/writer
+path; it does not admit arbitrary recursive types.
 
 ## Purpose and bounded contexts
 
@@ -3239,6 +3242,75 @@ before returning to memory or performance optimization. Refresh W54 evidence
 when the pinned producer, serialization, codec, marks, platform, or shared
 reader/writer helpers change.
 
+## W55 admitted frontier: paired recursive Array of named Tuple codec
+
+This type-coverage slice admits exactly `Array(Tuple(a UInt64, b UInt64))`
+alongside W51's two existing named-Tuple Array declarations. Use the parsed
+type tree to select and traverse the physical child streams for all three
+admitted declarations; do not infer physical support merely from successful
+syntax parsing. The new declaration has `column.size0`, `column%2Ea`, and
+`column%2Eb` in serializer order. Keep its public read/write values concrete
+and row-aligned, while sharing the physical plan and fixed-width leaf handling
+with the existing W51 paths. This is a type-compatibility change, not a
+memory or performance optimization.
+
+The first falsifier was W51's rejection of the exact new declaration: the
+test was flipped to require admission and the three-stream plan, followed by a
+stock-produced Wide/LZ4 fixture with empty/nonempty rows, zero and maximum
+UInt64 values, multiple marks, and a short tail. Compare full and later-mark
+reads, selected-table and offline-catalog scans. Independently verify a
+Crystal-written part through ClickHouse 26.7.1.1315 `ATTACH PART`,
+`CHECK TABLE`, full `RowBinary`, and primary-key-range `RowBinary` against
+separately encoded expectations. Re-run W51's existing cases to detect a
+regression in String framing and Nullable child cardinality. Negative cases
+must reject malformed/unnamed/unsupported recursive types and inconsistent
+child marks or stream inventory before yielding values.
+
+Admission remains exact: positional Tuple members, changed field names or
+arity, other leaves, nested or nullable outer Arrays, arbitrary recursion,
+`Variant`, `Dynamic`, general JSON, MV, and projections stay guard-only. The
+strongest likely failure is a plausible three-stream schema whose children
+have mismatched per-mark row counts or offsets; retain the existing mark and
+staged-writer inventory/readback guards rather than trusting the syntax tree.
+Rollback is a single local feature commit (or removal of the uncommitted W55
+diff). DoD is a failing pre-change test followed by the focused W55/W51 tests,
+full debug and release suites, fixture integrity, and the independent stock
+round trip above. Refresh evidence when the pinned ClickHouse producer,
+serializer, codec, marks, platform, or shared reader/writer helpers change.
+
+## W55 result: exact two-UInt64 named-Tuple Array
+
+The pinned seven-row stock fixture verifies the exact declaration, three
+payload streams plus the UInt64 key stream, LZ4 frames, plain `.mrk2`
+marks, and mark rows `[2, 2, 2, 1]`. Its later all-empty granule and short
+nonempty tail are read correctly. The reader, typed-table batches (including
+one-row batches and a later-row window), and offline catalog preserve both
+UInt64 tuple fields and row alignment. Independent mutations of each child
+stream's mark row counts and offsets are rejected before any table callback;
+the mutations retain the same mark-file length, so size-only checksum checks
+are not the reason for rejection.
+
+The immutable writer uses the admitted physical plan for stream order,
+mark/frame emission, and staged readback. Stock ClickHouse 26.7.1.1315
+accepted the Crystal-written part with `ATTACH PART` and `CHECK TABLE`; its
+exact type metadata, full `RowBinary`, and primary-key-range `RowBinary`
+matched separately encoded expectations. Repeating W51's stock reverse
+oracle after the shared writer change preserved both String-child forms,
+including their empty and nullable cases. At this source state, full debug
+and release suites each passed 781 examples with zero failures/errors;
+fixture integrity, shell syntax, Crystal formatting, and diff checks passed.
+A read-only hostile review returned **ROBUST** for this exact scope.
+
+This result establishes only the exact named declaration on the pinned
+Wide/LZ4/plain-mark profile. It does not establish all ClickHouse types,
+other part profiles or server versions, MV/projection behavior, or a memory
+or performance improvement. Table checksum admission is size-only, not
+content-hash verification; the tested mark guards are a separate property.
+Complete paired type coverage and MV/projection support before returning to
+optimization. Refresh W55 evidence if the pinned
+producer, serializer, codec, marks, platform, or shared reader/writer helpers
+change.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3248,8 +3320,9 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W54's exact nullable-String
-   Maps and W53's nullable-UInt64-value Maps,
+1. Extend reader and writer together beyond W55's exact two-UInt64
+   named-Tuple Array, W54's exact nullable-String Maps, and W53's
+   nullable-UInt64-value Maps,
    W52's paired String-key Maps,
    W51's paired named-Tuple Arrays,
    W50's paired Time family,

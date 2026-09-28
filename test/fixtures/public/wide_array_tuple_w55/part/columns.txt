@@ -1,0 +1,4 @@
+columns format version: 1
+2 columns:
+`pk` UInt64
+`payload` Array(Tuple(a UInt64, b UInt64))
