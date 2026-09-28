@@ -165,6 +165,9 @@ W62 admits paired two-level Arrays over the five already supported
 fixed-width numeric Array leaves beyond the primitive family: `Int128`,
 `UInt128`, `Int256`, `UInt256`, and `BFloat16`, both plain and BASIC nullable.
 Its physical and verification boundary is specified below.
+W63 admits one exact `Map(String, Array(UInt64))` paired part profile. Its
+observed stock topology, verification, and guard-only boundary are recorded
+below. This does not advance MV/projections or memory/performance optimization.
 
 ## Purpose and bounded contexts
 
@@ -3758,6 +3761,59 @@ tested for nullable `BFloat16`; the other four wide leaves have explicit
 dispatch and stock/read/write tests, not separate table/catalog integration
 fixtures. This evidence does not establish arbitrary recursive types, other
 part profiles, MV/projections, or any performance result.
+
+## W63: bounded Map of UInt64 Arrays
+
+Admit paired reading and immutable writing for exactly
+`Map(String, Array(UInt64))` in the existing one-sorted-`UInt64`-key,
+one-payload Wide/LZ4/plain-MRK2 part profile. Preserve the Map as an ordered
+array of key/value tuples: duplicate String keys and their insertion order
+are observable and must not be collapsed into a Hash. Expose direct selected
+mark reading, typed table batches, and offline catalog values. This slice
+does not admit other Map key or value types, arbitrary composition, Compact
+parts, MV/projections, or a performance claim.
+
+The pinned ClickHouse 26.7.1.1315 producer accepted this exact type and
+`CHECK TABLE` passed. `columns_substreams.txt` listed the payload streams in
+serializer order as `payload.size0`, `payload%2Ekeys.size`,
+`payload%2Ekeys`, `payload%2Evalues.size1`, and `payload%2Evalues`.
+`size0` counts Map entries per row; `values.size1` counts UInt64 elements
+per Map entry. The two offset levels must not be interchanged or inferred
+from existing root-Array readers. A pre-change admission spec is the first
+falsifier; then test stock-produced parts decoded by Crystal and
+Crystal-written parts accepted by stock `ATTACH PART` and `CHECK TABLE`.
+Compare exact type/substream metadata plus independently encoded full and
+key-range RowBinary. Fixtures include empty maps, empty value Arrays,
+duplicate keys, repeated equal values, a short tail, and an empty middle
+mark followed by data. Shifted selected-stream mark boundaries or invalid
+cardinalities must fail before the affected table callback.
+
+Risk is CAUTION: wrongly nested offsets can silently shift later marks while
+plausibly decoding early values. Guard exact per-mark row, Map-entry,
+String-key, and UInt64-element counts; stream byte consumption; overflow;
+and selected mark boundaries. DoD is focused W63 tests, existing Map and
+nested-Array controls, the pinned bidirectional oracle, complete debug and
+release specs, formatting/diff checks, and a hostile counterexample review.
+Rollback is the isolated uncommitted diff or one local W63 feature commit;
+existing parts and remote history are untouched. Evidence decays if the
+pinned producer, serializer/version, codec/mark format, platform, or shared
+Map/Array codec changes.
+
+The pre-change admission spec failed as predicted. The pinned ClickHouse
+26.7.1.1315 bidirectional oracle passed: Crystal decoded a stock-produced
+part; stock `ATTACH PART` and `CHECK TABLE` accepted a Crystal-written part;
+exact metadata and independent full/key-range RowBinary matched. Focused
+reader tests rejected shifted selected boundaries in each of the five
+physical streams and a mismatched `values.size1` count. Typed table tests
+rejected selected key and nested-value corruption before callbacks; catalog
+tests checked ordered duplicate keys, owned values, and the string budget.
+Existing String-key Map and nested UInt64 Array stock oracles passed. Complete
+debug and release `crystal spec` each passed 845/0 with the host linker
+override; Crystal formatting, shell syntax, and diff whitespace checks
+passed. A bounded hostile review found no concrete W63 blocker. This evidence
+does not establish arbitrary recursive Maps, other part profiles, MV or
+projection support, detection of arbitrary same-size payload bit flips beyond
+existing checksum semantics, or a performance result.
 
 ## Rejected and guard-only surfaces
 
