@@ -354,7 +354,7 @@ describe CrystalClick::WidePart do
     {
       "Array(DateTime('UTC'))", "Array(DateTime64(03))", "Array(DateTime64(10))",
       "Array(DateTime64(3, 'UTC'))", "Array(Nullable(DateTime64(03)))",
-      "Array(Nullable(DateTime64(3, 'UTC')))", "Array(Array(Date))",
+      "Array(Nullable(DateTime64(3, 'UTC')))",
       "Array(Nullable(Nullable(Date)))", "Nullable(Array(Date))", "Array(Date )",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false

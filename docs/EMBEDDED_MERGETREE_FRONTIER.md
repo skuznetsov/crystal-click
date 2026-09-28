@@ -168,6 +168,9 @@ Its physical and verification boundary is specified below.
 W63 admits one exact `Map(String, Array(UInt64))` paired part profile. Its
 observed stock topology, verification, and guard-only boundary are recorded
 below. This does not advance MV/projections or memory/performance optimization.
+W64 admits paired two-level Decimal Arrays with BASIC nullable leaves at the
+four canonical backing widths. W65 admits paired two-level temporal Arrays
+with BASIC nullable leaves; its verification and limits are below.
 
 ## Purpose and bounded contexts
 
@@ -3871,6 +3874,70 @@ gain. A bounded hostile review returned ROBUST within the W64 scope and found
 no concrete blocker; its out-of-precision raw-coefficient candidate was
 falsified by the pinned Decimal32 backing-extrema probe.
 
+## W65 admitted frontier: two-level temporal Arrays
+
+Admit paired reading and immutable writing for `Array(Array(T))` and
+`Array(Array(Nullable(T)))` where `T` is exactly `Date`, `Date32`,
+`DateTime`, or canonical `DateTime64(p)` with one digit `0 <= p <= 9`.
+The part profile remains one sorted `UInt64` key plus one payload in
+Wide/LZ4/plain-`.mrk2` format. Public values are raw `UInt16` day codes,
+`Int32` day codes, `UInt32` epoch seconds, or `Int64` ticks. The exact
+temporal declaration, including `p`, is mandatory even where the physical
+width matches an integer leaf. Selected-mark readers, typed batches,
+offline catalog values, and explicit writers must agree. This does not
+admit timezone-qualified declarations, calendar conversion, deeper Arrays,
+other codecs/part formats, or generic recursive type composition.
+
+The first falsifier is pre-change rejection of a representative nested
+`DateTime64(3)` declaration. The pinned ClickHouse 26.7.1.1315 producer
+must establish serializer-order `size0`, `size1`, optional leaf null-map,
+and temporal data streams, their exact marks, canonical metadata, and
+RowBinary semantics before admission. Exercise empty outer and inner
+Arrays, zero versus NULL, signed date/tick boundaries, scales 0/3/9,
+an all-NULL middle granule, and a short final granule. Reject selected
+offset/null/data cardinality or mark-boundary corruption before the affected
+table callback, and reject wrong declarations or invalid writer input
+before publication. A bidirectional stock oracle must compare independent
+full and key-range RowBinary and require `ATTACH PART` plus `CHECK TABLE`
+for Crystal-written parts.
+
+Risk is CAUTION: same-width numeric substitution or wrong nested offsets
+can silently return plausible rows or publish an unreadable part. Guard
+exact type identity, all three cardinality levels, selected stream bytes,
+and the stock producer/consumer oracle. Rollback is the isolated W65 diff
+or one local W65 feature commit; existing parts and remote history are
+untouched. DoD is the RED admission spec, focused W65 tests, W40 temporal
+and W58/W60 nested controls, the bidirectional stock oracle, complete
+debug and release suites, format/diff checks, and hostile self-review.
+Evidence decays on producer/serializer version, codec/marks, platform,
+or shared nested/temporal codec changes. General `JSON`, `Dynamic`, arbitrary
+`Variant`, MV/projections, and memory/performance optimization remain
+guard-only.
+
+The RED admission spec failed before implementation. The pinned ClickHouse
+26.7.1.1315 bidirectional oracle passed for 12 stock-produced and 12
+Crystal-produced paired profiles: plain and BASIC nullable `Date`, `Date32`,
+`DateTime`, and `DateTime64` at scales 0, 3, and 9. It checked exact
+declarations, `serialization.json`/codec/substream metadata, stream topology,
+plain `.mrk2` rows, raw readback, independent
+full/key-range `RowBinary`, and stock `ATTACH PART`/`CHECK TABLE` for each
+Crystal part. The stock producer pins
+`ratio_of_defaults_for_sparse_serialization = 1.0`; without that setting,
+stock adds an adaptive default-serialization entry for the key, so exact
+metadata equality is not claimed for that alternate profile. Focused W65
+specs cover empty outer/inner Arrays, raw carrier
+extrema, zero versus NULL, an all-NULL middle mark, a short tail, typed
+batch/catalog values, same-width numeric accessor rejection, invalid scale
+and pre-stage input rejection, nonzero child bytes hidden under NULL, and
+selected later-mark size0/size1/null/data corruption before any callback.
+The W40 one-level temporal, W58 nested numeric, and pinned W40 stock controls
+passed. Complete debug and release `crystal spec` each passed 859/0 with the
+host linker override; formatting, shell syntax, and diff checks passed. A
+bounded hostile review found no concrete blocker and returned ROBUST within
+this exact W65 scope. These signals do not establish arbitrary temporal
+composition, timezone variants, other part formats or ClickHouse versions,
+or a memory/performance gain.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3880,7 +3947,9 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W61's exact nested nullable
+1. Extend reader and writer together beyond W65's exact nested temporal,
+   W64's exact nested Decimal, W63's exact `Map(String, Array(UInt64))`,
+   W62's exact nested extended numeric, and W61's exact nested nullable
    String Arrays, W60's exact nested nullable primitive numerics,
    W59's nested String Arrays, W58's nested primitive
    numerics, W57's three-alternative Variant, W56's paired Variant,

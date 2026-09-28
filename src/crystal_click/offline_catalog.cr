@@ -251,7 +251,17 @@ module CrystalClick
         return {observed_rows, string_bytes}
       end
 
-      if !WidePart.array_array_decimal32_scale(selected_type).nil?
+      if element_type = WidePart.array_array_nullable_temporal_element_type(selected_type)
+        selected_rows = array_array_nullable_temporal_row_count(batch, column_name, element_type)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_rows, expected_rows)
+        array_elements[0] = append_array_array_nullable_temporal_values(values, batch, column_name, element_type, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif element_type = WidePart.array_array_temporal_element_type(selected_type)
+        selected_rows = array_array_temporal_row_count(batch, column_name, element_type)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_rows, expected_rows)
+        array_elements[0] = append_array_array_temporal_values(values, batch, column_name, element_type, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_decimal32_scale(selected_type).nil?
         selected_values = batch.array_array_decimal32_raw_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_array_numeric(values, selected_values, array_elements[0])
@@ -1500,6 +1510,82 @@ module CrystalClick
       when "BFloat16" then batch.array_array_nullable_numeric_values(column, BFloat16Value).size.to_u64
       else
         raise UnsupportedFormatError.new("unsupported Array(Array(Nullable(T))) numeric leaf type")
+      end
+    end
+
+    private def array_array_temporal_row_count(
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+    ) : UInt64
+      case element_type
+      when "Date"     then batch.array_array_date_codes_for(column).size.to_u64
+      when "Date32"   then batch.array_array_date32_codes_for(column).size.to_u64
+      when "DateTime" then batch.array_array_datetime_seconds_for(column).size.to_u64
+      else
+        if WidePart.datetime64_scale(element_type)
+          batch.array_array_datetime64_ticks_for(column).size.to_u64
+        else
+          raise UnsupportedFormatError.new("unsupported nested temporal Array leaf type")
+        end
+      end
+    end
+
+    private def array_array_nullable_temporal_row_count(
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+    ) : UInt64
+      case element_type
+      when "Date"     then batch.array_array_nullable_date_codes_for(column).size.to_u64
+      when "Date32"   then batch.array_array_nullable_date32_codes_for(column).size.to_u64
+      when "DateTime" then batch.array_array_nullable_datetime_seconds_for(column).size.to_u64
+      else
+        if WidePart.datetime64_scale(element_type)
+          batch.array_array_nullable_datetime64_ticks_for(column).size.to_u64
+        else
+          raise UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type")
+        end
+      end
+    end
+
+    private def append_array_array_temporal_values(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+      observed_elements : UInt64,
+    ) : UInt64
+      case element_type
+      when "Date"     then append_materialized_array_array_numeric(values, batch.array_array_date_codes_for(column), observed_elements)
+      when "Date32"   then append_materialized_array_array_numeric(values, batch.array_array_date32_codes_for(column), observed_elements)
+      when "DateTime" then append_materialized_array_array_numeric(values, batch.array_array_datetime_seconds_for(column), observed_elements)
+      else
+        if WidePart.datetime64_scale(element_type)
+          append_materialized_array_array_numeric(values, batch.array_array_datetime64_ticks_for(column), observed_elements)
+        else
+          raise UnsupportedFormatError.new("unsupported nested temporal Array leaf type")
+        end
+      end
+    end
+
+    private def append_array_array_nullable_temporal_values(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+      observed_elements : UInt64,
+    ) : UInt64
+      case element_type
+      when "Date"     then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_date_codes_for(column), observed_elements)
+      when "Date32"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_date32_codes_for(column), observed_elements)
+      when "DateTime" then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_datetime_seconds_for(column), observed_elements)
+      else
+        if WidePart.datetime64_scale(element_type)
+          append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_datetime64_ticks_for(column), observed_elements)
+        else
+          raise UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type")
+        end
       end
     end
 

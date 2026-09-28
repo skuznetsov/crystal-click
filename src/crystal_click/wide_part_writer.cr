@@ -1138,6 +1138,101 @@ module CrystalClick
       end
     end
 
+    # Write two Array levels over an exact W65 temporal leaf. The physical
+    # carrier is encoded with the fixed-width numeric codec, while metadata
+    # and staged readback retain the semantic temporal declaration.
+    def self.write_uint64_array_array_date_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(UInt16))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, "Date", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_date32_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int32))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, "Date32", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_datetime_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(UInt32))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_datetime64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int64))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_nullable_date_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(UInt16?))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "Date", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_nullable_date32_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int32?))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "Date32", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_nullable_datetime_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(UInt32?))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_nullable_datetime64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int64?))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
+      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+    end
+
     # Write two Array levels over signed Decimal32 coefficients. Values are
     # raw Int32 coefficients; scale is preserved only in the canonical type.
     def self.write_uint64_array_array_decimal32_pair(
@@ -3839,6 +3934,94 @@ module CrystalClick
         write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_decimal_part(stage, key_name, value_name, keys, values, rows_per_mark, precision, scale, physical_type)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_array_temporal_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(T))),
+      element_type : String,
+      rows_per_mark : Int32,
+    ) : String forall T
+      expected_type = "Array(Array(#{element_type}))"
+      physical_type = WidePart.temporal_array_physical_type(element_type)
+      unless WidePart.array_array_temporal_element_type(expected_type) == element_type &&
+             physical_type == WidePart.array_numeric_type_name(T)
+        raise ArgumentError.new("nested temporal Array writer requires an exact semantic leaf and matching physical carrier")
+      end
+      carrier = physical_type.not_nil!
+      validate_array_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, carrier)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_array_numeric_streams(stage, value_name, values, rows_per_mark, carrier))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_array_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_array_nullable_temporal_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(T?))),
+      element_type : String,
+      rows_per_mark : Int32,
+    ) : String forall T
+      expected_type = "Array(Array(Nullable(#{element_type})))"
+      physical_type = WidePart.temporal_array_physical_type(element_type)
+      unless WidePart.array_array_nullable_temporal_element_type(expected_type) == element_type &&
+             physical_type == WidePart.array_numeric_type_name(T)
+        raise ArgumentError.new("nested nullable temporal Array writer requires an exact semantic leaf and matching physical carrier")
+      end
+      carrier = physical_type.not_nil!
+      validate_array_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, carrier)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, carrier))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_array_nullable_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
         publish_exclusively(stage, target)
         target
       ensure
@@ -14282,6 +14465,142 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged nested nullable numeric Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_array_temporal_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Array(T))),
+      rows_per_mark : Int32,
+      element_type : String,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      expected_type = "Array(Array(#{element_type}))"
+      carrier = WidePart.temporal_array_physical_type(element_type)
+      unless WidePart.array_array_temporal_element_type(expected_type) == element_type &&
+             carrier == WidePart.array_numeric_type_name(T)
+        raise CorruptPartError.new("staged nested temporal Array semantic type is invalid")
+      end
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged nested temporal Array column metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_uint64_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged nested temporal Array substream metadata differs")
+      end
+      raise CorruptPartError.new("staged nested temporal Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged nested temporal Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged nested temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged nested temporal Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged nested temporal Array type does not match") unless value_part.column_type == expected_type
+
+      physical_type = carrier.not_nil!
+      element_width = numeric_width(physical_type).to_u64
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_array_temporal_mark_range(value_name, mark_index, 1, element_type, T)
+        mark_inner_arrays = 0_u64
+        mark_leaf_elements = 0_u64
+        rows.times do |offset|
+          values[start + offset].each do |inner|
+            mark_inner_arrays += 1_u64
+            mark_leaf_elements += inner.size.to_u64
+          end
+          unless expected_keys[offset] == keys[start + offset] && array_array_numeric_rows_identical?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged nested temporal Array readback differs from input")
+          end
+        end
+        expected_raw_bytes = rows.to_u64 * 8_u64 + mark_inner_arrays * 8_u64 + mark_leaf_elements * element_width
+        observed_raw_bytes = value_part.array_array_temporal_mark_range_raw_bytes(value_name, mark_index, 1)
+        raise CorruptPartError.new("staged nested temporal Array raw-byte preflight differs from input") unless observed_raw_bytes == expected_raw_bytes
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged nested temporal Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_array_nullable_temporal_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Array(T?))),
+      rows_per_mark : Int32,
+      element_type : String,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      expected_type = "Array(Array(Nullable(#{element_type})))"
+      carrier = WidePart.temporal_array_physical_type(element_type)
+      unless WidePart.array_array_nullable_temporal_element_type(expected_type) == element_type &&
+             carrier == WidePart.array_numeric_type_name(T)
+        raise CorruptPartError.new("staged nested nullable temporal Array semantic type is invalid")
+      end
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged nested nullable temporal Array column metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_numeric_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged nested nullable temporal Array substream metadata differs")
+      end
+      raise CorruptPartError.new("staged nested nullable temporal Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged nested nullable temporal Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged nested nullable temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged nested nullable temporal Array row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged nested nullable temporal Array type does not match") unless value_part.column_type == expected_type
+
+      physical_type = carrier.not_nil!
+      element_width = numeric_width(physical_type).to_u64
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = value_part.read_array_array_nullable_temporal_mark_range(value_name, mark_index, 1, element_type, T)
+        mark_inner_arrays = 0_u64
+        mark_leaf_elements = 0_u64
+        rows.times do |offset|
+          values[start + offset].each do |inner|
+            mark_inner_arrays += 1_u64
+            mark_leaf_elements += inner.size.to_u64
+          end
+          unless expected_keys[offset] == keys[start + offset] && array_array_nullable_numeric_rows_identical?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged nested nullable temporal Array readback differs from input")
+          end
+        end
+        expected_raw_bytes = rows.to_u64 * 8_u64 + mark_inner_arrays * 8_u64 + mark_leaf_elements * (element_width + 1_u64)
+        observed_raw_bytes = value_part.array_array_nullable_temporal_mark_range_raw_bytes(value_name, mark_index, 1)
+        raise CorruptPartError.new("staged nested nullable temporal Array raw-byte preflight differs from input") unless observed_raw_bytes == expected_raw_bytes
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged nested nullable temporal Array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
