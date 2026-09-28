@@ -136,8 +136,10 @@ syntax parser does not admit other physical type compositions.
 W52 admits the two remaining String-key Map combinations over the existing
 `{UInt64, String}` leaf matrix for a pinned physical probe and paired
 reader/writer implementation; verification status is recorded in its section.
-W53 targets two exact nullable-value Map declarations over the same key
-families; its admission remains conditional on the paired oracle below.
+W53 admits two exact nullable-UInt64-value Map declarations over the same
+key families within the paired oracle below. W54 admits the corresponding
+nullable-String-value Map pair within its pinned physical and paired oracle
+below; it is not generic recursive Map support.
 
 ## Purpose and bounded contexts
 
@@ -3168,6 +3170,75 @@ All-empty parts were checked through the direct reader and stock ClickHouse,
 but not separately through table/catalog materialization. Refresh this evidence
 after a producer, serializer, mark codec, or shared reader/writer helper change.
 
+## W54 admitted frontier: nullable String values in ordered Maps
+
+Admit exactly `Map(UInt64, Nullable(String))` and
+`Map(String, Nullable(String))` beside a sorted `UInt64` primary key on the
+pinned ClickHouse 26.7.1.1315 Wide/LZ4/plain-`.mrk2` profile. Reader,
+typed-table/catalog, and immutable writer must preserve ordered duplicate
+entries and distinguish a null value from an empty non-null String. Do not
+admit nullable keys, arbitrary Map or Array(Map) composition, other physical
+layouts, MV/projection ownership, or performance claims. A wider recursive
+codec remains guard-only until these child-stream contracts are established.
+
+This is **CAUTION**: an off-by-one in the flattened String sizes, null map,
+key bytes, or per-mark child cursor can silently pair a key with the wrong
+value. The first falsifier is the pre-W54 exact type gate rejecting both
+declarations in a stock-generated part. The pre-code RED assertion observed
+this rejection. A pinned stock plain-mark probe then produced seven rows
+with populated mark row counts `[2, 2, 2, 1]` plus a zero-row terminal mark.
+Its exact UInt64-key child inventory is `size0`, `keys`, `values.null`,
+`values.size`, and `values`; the String-key variant adds `keys.size` before
+raw `keys`. All three columns together have twelve `.bin` and twelve plain
+`.mrk2` streams, and stock `ATTACH PART`/`CHECK TABLE` accepts the scratch
+part. This initial probe established topology only; the committed fixture,
+negative tests, and reverse writer compatibility are recorded below.
+
+DoD: pinned stock fixture with ordered duplicate keys, null versus empty
+values, empty Maps, multiple marks and a short tail; exact full and later-mark
+reads, typed-table/catalog values, shifted child-boundary and malformed null
+rejection before the affected mark callback, budget and invalid-input guards;
+reverse stock `ATTACH PART`/`CHECK TABLE` and independently encoded full and
+key-range `RowBinary` for both Crystal writer shapes, including zero-byte
+String child cases; focused and full debug/release suites, fixture integrity,
+format/diff checks, and hostile review. The writer must validate staged
+inventory/readback before exclusive publication. Rollback is one W54-only
+local commit; no existing ClickHouse data root is modified. Evidence decays
+on a change in the pinned producer, Map/String serialization, codec, marks,
+platform, or shared reader/writer helpers.
+
+## W54 result: exact nullable String-value Map pairs
+
+The pinned seven-row stock fixture verifies both exact declarations, twelve
+data/mark stream pairs, LZ4 framing, plain `.mrk2` marks, and populated mark
+rows `[2, 2, 2, 1]`. Reader, typed-table batches, and offline catalog retain
+duplicate ordered entries, binary String keys, embedded-NUL/UTF-8 data, and
+the difference between `NULL` and empty non-null String values. A
+checksum-refreshed non-boolean null flag is rejected before any table
+callback. Shifted value-size and raw-value child boundaries are rejected
+before the affected mark callback; an earlier valid mark may already have
+been yielded, consistent with streaming scan semantics.
+
+The writer's staged inventory/readback checks and exclusive publication
+boundary remain intact. Stock ClickHouse 26.7.1.1315 accepted and checked
+both Crystal-written shapes, plus all-empty Map variants and a String-key
+variant whose raw key and value streams are zero bytes. Exact type metadata,
+full `RowBinary`, and primary-key-range `RowBinary` matched separately
+encoded expectations. At this source state, full debug and release suites
+each passed 776 examples with zero failures/errors; the focused
+reader/table/catalog run passed 13 examples. Fixture integrity, shell
+syntax, formatting, and diff checks passed. A read-only hostile review
+returned **ROBUST** for this exact scope.
+
+This does not establish all ClickHouse types, other part profiles or server
+versions, MV/projection behavior, or a memory/performance improvement. The
+shifted-child adversary tests cover the UInt64-key value children, not every
+String-key child independently; large budget edges were source-audited but
+not stress-tested. Complete paired type coverage and MV/projection support
+before returning to memory or performance optimization. Refresh W54 evidence
+when the pinned producer, serialization, codec, marks, platform, or shared
+reader/writer helpers change.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3177,7 +3248,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W53's nullable-value Maps,
+1. Extend reader and writer together beyond W54's exact nullable-String
+   Maps and W53's nullable-UInt64-value Maps,
    W52's paired String-key Maps,
    W51's paired named-Tuple Arrays,
    W50's paired Time family,
