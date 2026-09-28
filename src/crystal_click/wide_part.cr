@@ -1149,7 +1149,7 @@ module CrystalClick
         supports_map_uint64_array_string_type?(type) ||
         supports_map_uint64_nullable_uint64_type?(type) || supports_map_string_nullable_uint64_type?(type) ||
         supports_map_uint64_nullable_string_type?(type) || supports_map_string_nullable_string_type?(type) ||
-        supports_tuple_uint64_string_type?(type) || supports_variant_type?(type)
+        supports_tuple_uint64_string_type?(type) || supports_variant_type?(type) || type == "Dynamic"
     end
 
     def self.json_type?(type : String) : Bool
@@ -6514,6 +6514,200 @@ module CrystalClick
       values
     end
 
+    # Read the admitted W74 Dynamic profile: one String arm, compact uniform
+    # discriminators, no NULLs, and no SharedVariant payload.
+    def read_dynamic_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String)
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Dynamic accessor requires exact Dynamic metadata") unless @column_type == "Dynamic"
+      values, _raw_bytes = decode_dynamic_string_mark_range(column, first_mark, mark_count, materialize: true)
+      values
+    end
+
+    # Validate discriminator and child bytes before the table allocates a
+    # String array or exposes the selected mark to a callback.
+    def dynamic_string_mark_range_materialization_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Dynamic preflight requires exact Dynamic metadata") unless @column_type == "Dynamic"
+      _, raw_bytes = decode_dynamic_string_mark_range(column, first_mark, mark_count, materialize: false)
+      raw_bytes
+    end
+
+    private def decode_dynamic_string_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      materialize : Bool,
+    ) : {Array(String), UInt64}
+      discriminator = @streams["#{column}.variant_discr"]
+      _, _, selected_rows = checked_stream_mark_range(discriminator, first_mark, mark_count)
+      raise CorruptPartError.new("Dynamic mark range exceeds row limit") if selected_rows > MAX_VARIANT_RANGE_ROWS
+      dynamic_discriminator_mode(discriminator)
+
+      shared_size = @streams["#{column}.SharedVariant.size"]
+      shared_data = @streams["#{column}.SharedVariant"]
+      string_sizes = @streams["#{column}.String.size"]
+      string_data = @streams["#{column}.String"]
+      values = materialize ? Array(String).new(selected_rows.to_i) : Array(String).new(0)
+      total_string_bytes = 0_u64
+
+      mark_count.times do |range_offset|
+        mark_index = first_mark + range_offset
+        start_mark = discriminator.marks[mark_index]
+        end_mark = mark_index + 1 == discriminator.marks.size ? discriminator.sentinel : discriminator.marks[mark_index + 1]
+        rows = start_mark.rows
+        read_dynamic_string_discriminator_mark(discriminator, start_mark, end_mark, mark_index, rows)
+
+        _, _, shared_size_rows = checked_stream_mark_range(shared_size, mark_index, 1)
+        _, _, shared_rows = checked_stream_mark_range(shared_data, mark_index, 1)
+        raise CorruptPartError.new("Dynamic SharedVariant mark rows differ") unless shared_size_rows == rows && shared_rows == rows
+
+        size_start, size_end, size_rows = checked_stream_mark_range(string_sizes, mark_index, 1)
+        raise CorruptPartError.new("Dynamic String-size mark rows differ") unless size_rows == rows
+        encoded_sizes = read_mark_range_bytes(string_sizes, size_start, size_end, checked_byte_count(rows, 8), 8)
+        sizes = Array(UInt64).new(rows.to_i)
+        mark_string_bytes = 0_u64
+        rows.to_i.times do |index|
+          length = u64(encoded_sizes, index * 8)
+          if length > MAX_STRING_RANGE_BYTES.to_u64 - mark_string_bytes ||
+             length > MAX_STRING_RANGE_BYTES.to_u64 - total_string_bytes
+            raise CorruptPartError.new("Dynamic String bytes exceed materialization limit")
+          end
+          mark_string_bytes += length
+          total_string_bytes += length
+          sizes << length
+        end
+
+        raw_start, raw_end, raw_rows = checked_stream_mark_range(string_data, mark_index, 1)
+        raise CorruptPartError.new("Dynamic String mark rows differ") unless raw_rows == rows
+        raw_byte_count = mark_string_bytes.to_i
+        raw_bytes = if materialize
+                      read_mark_range_bytes(string_data, raw_start, raw_end, raw_byte_count, 1)
+                    else
+                      validate_mark_range_bytes(string_data, raw_start, raw_end, raw_byte_count, 1)
+                      Bytes.empty
+                    end
+
+        if materialize
+          offset = 0
+          sizes.each do |length|
+            byte_length = length.to_i
+            raise CorruptPartError.new("Dynamic String sizes exceed selected raw bytes") if byte_length > raw_bytes.size - offset
+            values << String.new(raw_bytes[offset, byte_length])
+            offset += byte_length
+          end
+          raise CorruptPartError.new("Dynamic String sizes do not consume selected raw bytes") unless offset == raw_bytes.size
+        end
+      end
+
+      raise CorruptPartError.new("Dynamic materialized row count differs from marks") if materialize && values.size.to_u64 != selected_rows
+      {values, total_string_bytes}
+    end
+
+    private def validate_dynamic_string_structure : Nil
+      structure = @streams["#{@column}.dynamic_structure"]
+      marks = structure.marks
+      unless marks.all? { |mark| mark.compressed_offset == 0_u64 && mark.decompressed_offset == 10_u64 }
+        raise CorruptPartError.new("Dynamic structure marks do not point to the V3 dictionary prefix")
+      end
+
+      bytes = read_lz4_stream_bounded(structure, 1024)
+      unless structure.sentinel.compressed_offset == 0_u64 && structure.sentinel.decompressed_offset == bytes.size.to_u64
+        raise CorruptPartError.new("Dynamic structure sentinel does not point to the decompressed structure end")
+      end
+      raise CorruptPartError.new("Dynamic structure is truncated") if bytes.size < 8
+      version = u64(bytes, 0)
+      raise UnsupportedFormatError.new("only Dynamic V3 structure is supported") unless version == 4_u64
+      dynamic_type_count, cursor = variant_read_var_uint(bytes, 8)
+      raise UnsupportedFormatError.new("Dynamic requires exactly one dictionary arm") unless dynamic_type_count == 1_u64
+      type_code, cursor = variant_read_var_uint(bytes, cursor)
+      raise UnsupportedFormatError.new("Dynamic dictionary arm must be String") unless type_code == 0x15_u64
+      raise CorruptPartError.new("Dynamic V3 statistics flag is truncated") if cursor >= bytes.size
+      has_statistics = bytes[cursor]
+      cursor += 1
+      raise UnsupportedFormatError.new("Dynamic V3 prefix statistics are required") unless has_statistics == 1_u8
+      shared_rows, cursor = variant_read_var_uint(bytes, cursor)
+      string_rows, cursor = variant_read_var_uint(bytes, cursor)
+      shared_statistics_count, cursor = variant_read_var_uint(bytes, cursor)
+      raise CorruptPartError.new("Dynamic String statistics do not match part row count") unless string_rows == @row_count
+      raise CorruptPartError.new("Dynamic SharedVariant statistics must be zero") unless shared_rows == 0_u64
+      raise UnsupportedFormatError.new("Dynamic shared-type statistics are unsupported") unless shared_statistics_count == 0_u64
+      raise CorruptPartError.new("Dynamic structure has trailing bytes") unless cursor == bytes.size
+      nil
+    end
+
+    private def dynamic_discriminator_mode(stream : PhysicalStream) : UInt64
+      data_size = File.size(stream.data_path)
+      raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
+      raise CorruptPartError.new("Dynamic discriminator prefix is truncated") if data_size == 0
+      mode = 0_u64
+      MMapDataSource.with_file(stream.data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
+        if data.size <= CompressedBlock::CHECKSUM_SIZE || data[CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
+          raise UnsupportedFormatError.new("Dynamic requires LZ4 compressed streams")
+        end
+        frame = CompressedBlock.decode_frame_into(data, 0_i64, CompressedBlock::DecodeWorkspace.new, MAX_FRAME_COMPRESSED_BYTES, MAX_FRAME_DECOMPRESSED_BYTES)
+        raise CorruptPartError.new("Dynamic discriminator prefix is truncated") if frame.output.size < 8
+        mode = u64(frame.output, 0)
+      end
+      raise UnsupportedFormatError.new("Dynamic requires COMPACT discriminators") unless mode == 1_u64
+      mode
+    end
+
+    private def read_dynamic_string_discriminator_mark(
+      stream : PhysicalStream,
+      start_mark : Mark,
+      end_mark : Mark,
+      mark_index : Int,
+      rows : UInt64,
+    ) : Nil
+      raise CorruptPartError.new("Dynamic mark range exceeds row limit") if rows > MAX_VARIANT_RANGE_ROWS
+      if mark_index == 0 && !(start_mark.compressed_offset == 0_u64 && start_mark.decompressed_offset == 8_u64)
+        raise CorruptPartError.new("Dynamic discriminator first mark must start after eight-byte mode prefix")
+      end
+      bytes = read_bounded_mark_range_bytes(stream, start_mark, end_mark, rows.to_i + 11, 1)
+      encoded_rows, cursor = variant_read_var_uint(bytes, 0)
+      raise CorruptPartError.new("Dynamic discriminator row count does not match marks") unless encoded_rows == rows
+      raise CorruptPartError.new("Dynamic discriminator format is truncated") if cursor >= bytes.size
+      format = bytes[cursor]
+      cursor += 1
+      raise UnsupportedFormatError.new("Dynamic requires compact uniform discriminator marks") unless format == 1_u8
+      raise CorruptPartError.new("Dynamic uniform discriminator tag is truncated") if cursor >= bytes.size
+      tag = bytes[cursor]
+      cursor += 1
+      raise UnsupportedFormatError.new("Dynamic discriminator must select String") unless tag == 1_u8
+      raise CorruptPartError.new("Dynamic discriminator mark has trailing bytes") unless cursor == bytes.size
+      nil
+    end
+
+    private def read_lz4_stream_bounded(stream : PhysicalStream, maximum_output : Int) : Bytes
+      data_size = File.size(stream.data_path)
+      raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
+      raise CorruptPartError.new("Dynamic structure stream is empty") if data_size == 0
+      output = IO::Memory.new
+      total_output = 0
+      MMapDataSource.with_file(stream.data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
+        offset = 0_i64
+        workspace = CompressedBlock::DecodeWorkspace.new
+        while offset < data.size.to_i64
+          if offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
+             data[offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
+            raise UnsupportedFormatError.new("Dynamic requires LZ4 compressed streams")
+          end
+          frame = CompressedBlock.decode_frame_into(data, offset, workspace, MAX_FRAME_COMPRESSED_BYTES, MAX_FRAME_DECOMPRESSED_BYTES)
+          raise CorruptPartError.new("Dynamic structure exceeds parser limit") if frame.output.size > maximum_output - total_output
+          output.write(frame.output)
+          total_output += frame.output.size
+          raise CorruptPartError.new("Dynamic structure frame did not advance") if frame.end_offset <= offset
+          offset = frame.end_offset
+        end
+        raise CorruptPartError.new("Dynamic structure stream has trailing bytes") unless offset == data.size.to_i64
+      end
+      output.to_slice
+    end
+
     # Read one bounded mark range from the admitted Variant(String, UInt64)
     # profile. Sparse child streams are indexed by the discriminator tags, but
     # their mark records retain the top-level row count.
@@ -7610,18 +7804,26 @@ module CrystalClick
       @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
       variant_plan = WidePart.variant_type_plan(@column_type)
+      dynamic_string = @column_type == "Dynamic"
       expected_mark_rows = nil.as(Array(UInt64)?)
       physical_streams.each do |stream_name|
         validate_selected_stream_name(stream_name)
         data_path, mark_path, compressed_marks = resolve_stream(stream_name)
-        if variant_plan && compressed_marks
-          raise UnsupportedFormatError.new("Variant requires plain .mrk2 marks")
+        if (variant_plan || dynamic_string) && compressed_marks
+          raise UnsupportedFormatError.new("Variant and Dynamic require plain .mrk2 marks")
         end
         data_size = File.size(data_path)
         raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
+        if dynamic_string && (stream_name == "#{@column}.SharedVariant.size" || stream_name == "#{@column}.SharedVariant") && data_size != 0
+          raise UnsupportedFormatError.new("Dynamic String-only profile requires empty SharedVariant streams")
+        end
         element_width = stream_element_width(stream_name)
         allow_empty_string_eof = if plan = variant_plan
                                    stream_name != plan.discriminator_stream(@column)
+                                 elsif dynamic_string
+                                   stream_name == "#{@column}.SharedVariant.size" ||
+                                     stream_name == "#{@column}.SharedVariant" ||
+                                     stream_name == "#{@column}.String"
                                  elsif WidePart.supports_array_type?(@column_type)
                                    stream_name != "#{@column}.size0" &&
                                      WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream_name)
@@ -7681,6 +7883,8 @@ module CrystalClick
                                  end
         mark_row_width = if variant_plan
                            1
+                         elsif dynamic_string && stream_name == "#{@column}.variant_discr"
+                           1
                          elsif stream_name != "#{@column}.size0" &&
                                (WidePart.array_fixed_string_width(@column_type) || WidePart.array_nullable_fixed_string_width(@column_type) ||
                                WidePart.supports_array_bool_type?(@column_type) || WidePart.supports_array_nullable_bool_type?(@column_type))
@@ -7708,8 +7912,15 @@ module CrystalClick
                               element_width,
                               allow_empty_string_eof,
                               mark_row_width: mark_row_width,
-                              require_first_mark_offset_eight: !!variant_plan &&
-                                                               stream_name == variant_plan.not_nil!.discriminator_stream(@column)
+                              required_first_mark_decompressed_offset: if (!!variant_plan &&
+                                                                           stream_name == variant_plan.not_nil!.discriminator_stream(@column)) ||
+                                                                          dynamic_string && stream_name == "#{@column}.variant_discr"
+                                8_u64
+                              elsif dynamic_string && stream_name == "#{@column}.dynamic_structure"
+                                10_u64
+                              else
+                                0_u64
+                              end
                             )
                           end
         validate_rows(marks)
@@ -7721,6 +7932,8 @@ module CrystalClick
         end
         @streams[stream_name] = PhysicalStream.new(stream_name, data_path, mark_path, marks, sentinel)
       end
+
+      validate_dynamic_string_structure if dynamic_string
 
       primary_stream = primary_stream_name(physical_streams)
       selected_stream = @streams[primary_stream]
@@ -7754,8 +7967,8 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if WidePart.supports_variant_type?(column_type) && codec != "CODEC(LZ4)"
-        raise UnsupportedFormatError.new("Variant requires CODEC(LZ4)")
+      if (WidePart.supports_variant_type?(column_type) || column_type == "Dynamic") && codec != "CODEC(LZ4)"
+        raise UnsupportedFormatError.new("Variant and Dynamic require CODEC(LZ4)")
       end
       row_count = parse_count_file("count.txt")
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
@@ -7786,6 +7999,8 @@ module CrystalClick
         validate_map_serialization(columns, selected, row_count, column_type)
       elsif WidePart.supports_variant_type?(column_type)
         validate_variant_serialization(columns, selected, row_count)
+      elsif column_type == "Dynamic"
+        validate_dynamic_string_serialization(columns, selected, row_count)
       elsif WidePart.supports_tuple_uint64_string_type?(column_type)
         validate_tuple_uint64_string_serialization(columns, selected, row_count)
       elsif column_type == "Int128" || column_type == "UInt128" || column_type == "Int256" || column_type == "UInt256"
@@ -7973,7 +8188,9 @@ module CrystalClick
     end
 
     private def expected_physical_streams(column : String, type : String) : Array(String)
-      if variant_plan = WidePart.variant_type_plan(type)
+      if type == "Dynamic"
+        ["#{column}.dynamic_structure", "#{column}.variant_discr", "#{column}.SharedVariant.size", "#{column}.SharedVariant", "#{column}.String.size", "#{column}.String"]
+      elsif variant_plan = WidePart.variant_type_plan(type)
         variant_plan.physical_streams(column)
       elsif type == "LowCardinality(String)"
         ["#{column}.dict", column]
@@ -8574,6 +8791,57 @@ module CrystalClick
       raise UnsupportedFormatError.new("only nested String serialization version 1 is supported for Variant") unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
       serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Variant column serializers are required"))
       raise UnsupportedFormatError.new("Variant per-column serializers are unsupported") unless serializers.empty?
+      nil
+    rescue ex : JSON::ParseException | TypeCastError | OverflowError
+      raise CorruptPartError.new("serialization.json is malformed")
+    end
+
+    private def validate_dynamic_string_serialization(
+      columns : Array({String, String}),
+      selected_column : String,
+      row_count : UInt64,
+    ) : Nil
+      key_columns = columns.select { |name, type| name != selected_column && type == "UInt64" }
+      unless columns.size == 2 && key_columns.size == 1 && columns.any? { |name, type| name == selected_column && type == "Dynamic" }
+        raise UnsupportedFormatError.new("Dynamic String-only profile requires one UInt64 key column")
+      end
+
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for Dynamic") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      expected_fields = Set{"version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types"}
+      raise UnsupportedFormatError.new("unsupported Dynamic serialization.json fields") unless info.keys.to_set == expected_fields
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("Dynamic nested serialization versions are unsupported") unless propagated == true
+      versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      raise UnsupportedFormatError.new("only nested String serialization version 1 is supported for Dynamic") unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+      serializers = info["columns"]?.try(&.as_a) || raise(CorruptPartError.new("Dynamic column serializers are required"))
+      case serializers.size
+      when 0
+        # Stock ClickHouse emits no per-column serializer records for this shape.
+      when 1
+        serializer = serializers[0].as_h
+        unless serializer.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
+          raise UnsupportedFormatError.new("unsupported Dynamic key serializer fields")
+        end
+        name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("Dynamic key serializer name is malformed"))
+        kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("Dynamic key serializer kind is malformed"))
+        defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Dynamic key serializer default count is malformed"))
+        rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Dynamic key serializer row count is malformed"))
+        unless name == key_columns[0][0] && kind == "Default" && defaults >= 0 && defaults <= rows && rows >= 0 && rows.to_u64 == row_count
+          raise UnsupportedFormatError.new("unsupported Dynamic key serializer")
+        end
+      else
+        raise UnsupportedFormatError.new("Dynamic per-column serializers are unsupported")
+      end
       nil
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
       raise CorruptPartError.new("serialization.json is malformed")
@@ -9213,7 +9481,7 @@ module CrystalClick
       allow_empty_string_eof : Bool,
       mark_row_width : Int32,
       max_records : Int? = nil,
-      require_first_mark_offset_eight : Bool = false,
+      required_first_mark_decompressed_offset : UInt64 = 0_u64,
     ) : {Array(Mark), Mark}
       size = File.size(file)
       raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
@@ -9249,16 +9517,18 @@ module CrystalClick
         decompressed = u64(bytes, offset + 8)
         rows = u64(bytes, offset + 16)
         if offset == 0
-          first_mark_offset_valid = if require_first_mark_offset_eight
-                                      compressed == 0 && decompressed == 8
-                                    else
-                                      compressed == 0 && decompressed == 0
-                                    end
+          first_mark_offset_valid = compressed == 0 && decompressed == required_first_mark_decompressed_offset
           unless first_mark_offset_valid
-            if require_first_mark_offset_eight
-              raise CorruptPartError.new("Variant discriminator first mark must start after eight-byte mode prefix")
-            end
-            raise CorruptPartError.new("first mark must start at zero")
+            message = if required_first_mark_decompressed_offset == 0_u64
+                        "first mark must start at zero"
+                      elsif required_first_mark_decompressed_offset == 8_u64 && @column_type == "Dynamic"
+                        "Dynamic discriminator first mark must start after eight-byte mode prefix"
+                      elsif required_first_mark_decompressed_offset == 8_u64
+                        "Variant discriminator first mark must start after eight-byte mode prefix"
+                      else
+                        "first mark does not start at the expected stream prefix"
+                      end
+            raise CorruptPartError.new(message)
           end
         end
         string_eof = allow_empty_string_eof && compressed == data_size.to_u64 && decompressed == 0
@@ -9297,6 +9567,11 @@ module CrystalClick
     end
 
     private def primary_stream_name(stream_names : Array(String)) : String
+      if @column_type == "Dynamic"
+        stream = "#{@column}.variant_discr"
+        raise CorruptPartError.new("selected Dynamic discriminator stream is missing") unless stream_names.includes?(stream)
+        return stream
+      end
       if plan = WidePart.variant_type_plan(@column_type)
         stream = plan.discriminator_stream(@column)
         raise CorruptPartError.new("selected Variant discriminator stream is missing") unless stream_names.includes?(stream)
@@ -9341,7 +9616,9 @@ module CrystalClick
     end
 
     private def stream_element_width(stream_name : String) : Int32
-      if plan = WidePart.variant_type_plan(@column_type)
+      if @column_type == "Dynamic"
+        stream_name == "#{@column}.String.size" ? 8 : 1
+      elsif plan = WidePart.variant_type_plan(@column_type)
         plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported Variant substream"))
       elsif @column_type == "LowCardinality(String)"
         1
@@ -10795,6 +11072,10 @@ module CrystalClick
       end_offset = end_mark.compressed_offset
       empty_payload_stream = if plan = WidePart.variant_type_plan(@column_type)
                                stream.name != plan.discriminator_stream(@column)
+                             elsif @column_type == "Dynamic"
+                               stream.name == "#{@column}.SharedVariant.size" ||
+                                 stream.name == "#{@column}.SharedVariant" ||
+                                 stream.name == "#{@column}.String"
                              elsif WidePart.supports_array_type?(@column_type)
                                WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream.name)
                              elsif WidePart.supports_map_uint64_string_type?(@column_type)
@@ -10867,10 +11148,11 @@ module CrystalClick
         started = false
         workspace = CompressedBlock::DecodeWorkspace.new
         loop do
-          if WidePart.supports_variant_type?(@column_type)
+          if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic"
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
-              raise UnsupportedFormatError.new("Variant requires LZ4 compressed streams")
+              message = @column_type == "Dynamic" ? "Dynamic requires LZ4 compressed streams" : "Variant requires LZ4 compressed streams"
+              raise UnsupportedFormatError.new(message)
             end
           end
           frame = CompressedBlock.decode_frame_into(

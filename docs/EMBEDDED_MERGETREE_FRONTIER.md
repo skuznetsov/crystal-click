@@ -4543,6 +4543,68 @@ compatibility evidence only for pinned Wide/LZ4/plain `.mrk2` parts with the
 declared two-column schema;
 it is not a performance claim and does not extend to MV or projections.
 
+## W74 design seal: standalone Dynamic with one String alternative
+
+The next type-parity step admits a top-level `Dynamic` column only when its
+physical type dictionary contains the single `String` alternative, every row
+selects that alternative, and the SharedVariant streams are empty. The public
+Crystal view is a String-valued column; it does not erase or reinterpret
+non-String, NULL, or shared values. Reader, batch/table/catalog dispatch, and
+an immutable `UInt64`-keyed writer must agree on this exact shape. This is a
+reusable physical codec for a later JSON dynamic-path feature, not admission
+of JSON dynamic-path discovery or whole-document access.
+
+The pinned ClickHouse 26.7.1.1315 producer established six ordered streams:
+`dynamic_structure`, `variant_discr`, `SharedVariant.size`, `SharedVariant`,
+`String.size`, and `String`. In a two-row String-only probe, the decompressed
+structure is `0400000000000000011501000200`, the discriminator stream is
+`0100000000000000020101`, shared streams are empty, String sizes are 5 and 4,
+and String bytes concatenate `alpha` and `beta`. A one-off probe with that
+pinned build also observed byte-identical streams when the column was embedded
+as one dynamic path inside `JSON(max_dynamic_paths=1)`. The tracked W74 oracle
+does not reproduce the JSON comparison, so this observation cannot admit JSON
+dynamic-path reading or writing; that boundary needs its own fixture.
+
+Risk is CAUTION because a plausible-looking discriminator or type dictionary
+can silently reinterpret values. Rollback is one W74 feature commit without
+touching existing server data roots or remote history. The first falsifier is
+a RED focused spec for a missing String-only `Dynamic` reader/writer API and
+an independently produced Wide/LZ4/plain-mark stock part. The guard check is
+rejection before yielding or publishing when the dictionary, discriminators,
+shared streams, mark row counts, or String cardinalities violate the admitted
+shape. Include multiple marks, empty and binary Strings, short final marks,
+and malformed later marks. The DoD is focused specs; stock-to-Crystal read;
+Crystal-to-stock `ATTACH PART`, full and keyed RowBinary, and `CHECK TABLE`;
+all pinned regression oracles; full debug and release specs; formatter and
+diff checks; and hostile review of both directions and publication safety.
+An observed mismatch narrows the admitted shape rather than weakening the
+guard. Evidence expires on a ClickHouse Dynamic serializer/version, mark or
+codec change, or shared dispatch change.
+
+Guard-only: additional Dynamic alternatives, NULL and SharedVariant values,
+heterogeneous rows, nested Dynamic, JSON dynamic/shared paths, Compact parts,
+other codecs/mark settings, MV/projections, and memory/performance claims.
+The broader type-parity and MV/projection frontier remains active before any
+optimization phase.
+
+W74 implementation evidence: the focused spec passed 11 examples, including
+empty and binary Strings, a zero-byte String child with 130 rows and a
+multi-byte row statistic, catalog materialization, later-mark tag and offset
+corruption, dictionary/statistic corruption, child row disagreement, a
+nonempty SharedVariant, and pre-publication writer rejection. The pinned
+ClickHouse 26.7.1.1315 oracle passed both directions for mixed and 130-row
+all-empty parts: six-stream inventory, plain mark rows, exact stock V3
+structure bytes `04 00 00 00 00 00 00 00 01 15 01 00 82 01 00`,
+stock-to-Crystal typed scans, and Crystal-to-stock `ATTACH PART`,
+`CHECK TABLE`, full and primary-key-range RowBinary. The full debug and release
+suites each passed 959 examples with no failures, errors, or pending tests;
+release used the host-compatible `-fuse-ld=ld` linker override. All 67 pinned
+oracle scripts passed before the oracle-only 130-row extension, and the
+extended W74 oracle passed separately afterward; the other 66 scripts and
+production source were unchanged. Formatting, shell syntax, and diff checks
+passed. This evidence covers the admitted profile, not arbitrary `Dynamic`,
+JSON dynamic paths, MV/projections, or performance parity.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,

@@ -663,6 +663,12 @@ module CrystalClick
       @string_values[column]? || raise(UnsupportedFormatError.new("String column was not materialized in this batch"))
     end
 
+    def dynamic_strings_for(column : String) : Slice(String)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Dynamic accessor requires an exact Dynamic column") unless @column_types[index] == "Dynamic"
+      @string_values[column]? || raise(UnsupportedFormatError.new("Dynamic column was not materialized in this batch"))
+    end
+
     def low_cardinality_strings_for(column : String) : Slice(String)
       index = column_index(column)
       raise UnsupportedFormatError.new("LowCardinality(String) accessor requires an exact LowCardinality(String) column") unless @column_types[index] == "LowCardinality(String)"
@@ -1673,6 +1679,7 @@ module CrystalClick
             preflight_variant_string_uint64_charge_bytes = Hash(String, UInt64).new
             preflight_variant_bool_string_uint64_raw_bytes = Hash(String, UInt64).new
             preflight_variant_bool_string_uint64_charge_bytes = Hash(String, UInt64).new
+            preflight_dynamic_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_fixed_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_bool_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_bool_raw_bytes = Hash(String, UInt64).new
@@ -1705,7 +1712,10 @@ module CrystalClick
             preflight_map_string_nullable_string_payload_bytes = Hash(String, UInt64).new
             preflight_map_string_nullable_string_charge_bytes = Hash(String, UInt64).new
             part.readers.each do |selected|
-              if selected.column_type == "Variant(String, UInt64)"
+              if selected.column_type == "Dynamic"
+                bytes = selected.reader.dynamic_string_mark_range_materialization_preflight(selected.name, mark_index, 1)
+                preflight_dynamic_string_raw_bytes[selected.name] = bytes
+              elsif selected.column_type == "Variant(String, UInt64)"
                 raw_bytes, charge_bytes = selected.reader.variant_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
                 preflight_variant_string_uint64_raw_bytes[selected.name] = raw_bytes
                 preflight_variant_string_uint64_charge_bytes[selected.name] = charge_bytes
@@ -2352,6 +2362,15 @@ module CrystalClick
                   raise CorruptPartError.new("selected String mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                   actual_string_bytes += bytes
                 end
+                string_values[selected.name] = values
+              when "Dynamic"
+                values = selected.reader.read_dynamic_string_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Dynamic mark row count changed") unless values.size.to_u64 == mark_rows
+                bytes = values.sum(&.bytesize).to_u64
+                preflight_bytes = preflight_dynamic_string_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Dynamic mark was not preflighted"))
+                raise CorruptPartError.new("selected Dynamic decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Dynamic mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
                 string_values[selected.name] = values
               when "LowCardinality(String)"
                 values = selected.reader.read_low_cardinality_string_mark_range(selected.name, mark_index, 1)

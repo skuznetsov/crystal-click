@@ -827,6 +827,10 @@ module CrystalClick
           string_bytes,
           max_string_bytes
         )
+      when "Dynamic"
+        selected_values = batch.dynamic_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        string_bytes = append_materialized_strings(values, selected_values, string_bytes, max_string_bytes)
       when "String"
         selected_values = batch.strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
