@@ -1833,6 +1833,23 @@ module CrystalClick
       outer_bytes + inner_bytes + string_size_bytes + payload_bytes
     end
 
+    # Preflight all five physical streams for the exact W61 nested nullable
+    # String shape before a table batch allocates values.
+    def array_array_nullable_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      components = array_array_nullable_string_components(column, first_mark, mark_count)
+      total_bytes = checked_byte_count(components.rows, 8).to_u64
+      {
+        checked_array_mark_byte_count(components.flat_inner_arrays, 8).to_u64,
+        checked_array_mark_byte_count(components.flat_strings, 1).to_u64,
+        checked_array_mark_byte_count(components.flat_strings, 8).to_u64,
+        components.string_bytes,
+      }.each do |bytes|
+        raise CorruptPartError.new("Array(Array(Nullable(String))) raw byte count overflows") if bytes > UInt64::MAX - total_bytes
+        total_bytes += bytes
+      end
+      total_bytes
+    end
+
     # Temporal Arrays share fixed-width storage with selected numeric leaves,
     # but reach it only through this exact semantic gate. Keep numeric Array
     # accessors closed to Date/Date32/DateTime/DateTime64 declarations.
@@ -3373,6 +3390,46 @@ module CrystalClick
       raise CorruptPartError.new("Array(Array(String)) sizes do not consume selected inner Arrays") unless inner_offset == components.inner_sizes.size
       raise CorruptPartError.new("Array(Array(String)) sizes do not consume selected String lengths") unless string_offset == components.string_sizes.size
       raise CorruptPartError.new("Array(Array(String)) lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
+      values
+    end
+
+    # Read exactly two Array levels over Nullable(String). All five selected
+    # stream ranges are preflighted before the nested result rows are allocated;
+    # bytes hidden below NULL slots are still consumed to preserve alignment.
+    def read_array_array_nullable_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(String?)))
+      components = array_array_nullable_string_components(column, first_mark, mark_count)
+      raw_stream = @streams[column]
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(String))) raw mark rows differ") unless raw_rows == components.rows
+      raw_bytes = read_mark_range_bytes(raw_stream, raw_start, raw_end, components.string_bytes.to_i, 1)
+
+      values = Array(Array(Array(String?))).new(components.rows.to_i)
+      inner_offset = 0
+      string_offset = 0
+      raw_offset = 0
+      components.outer_sizes.each do |inner_count|
+        row = Array(Array(String?)).new(inner_count.to_i)
+        inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(Nullable(String))) size1 count exceeds selected sizes") if inner_offset >= components.inner_sizes.size
+          string_count = components.inner_sizes[inner_offset]
+          inner = Array(String?).new(string_count.to_i)
+          string_count.to_i.times do
+            raise CorruptPartError.new("Array(Array(Nullable(String))) size count exceeds selected sizes") if string_offset >= components.string_sizes.size
+            length = components.string_sizes[string_offset]
+            raise CorruptPartError.new("Array(Array(Nullable(String))) size exceeds selected raw bytes") if length > (raw_bytes.size - raw_offset).to_u64
+            byte_length = length.to_i
+            inner << (components.null_map[string_offset] == 1_u8 ? nil : String.new(raw_bytes[raw_offset, byte_length]))
+            raw_offset += byte_length
+            string_offset += 1
+          end
+          row << inner
+          inner_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Array(Nullable(String))) sizes do not consume selected inner Arrays") unless inner_offset == components.inner_sizes.size
+      raise CorruptPartError.new("Array(Array(Nullable(String))) sizes do not consume selected String lengths") unless string_offset == components.string_sizes.size
+      raise CorruptPartError.new("Array(Array(Nullable(String))) lengths do not consume selected raw bytes") unless raw_offset == raw_bytes.size
       values
     end
 
@@ -5580,6 +5637,32 @@ module CrystalClick
         @outer_sizes : Array(UInt64),
         @inner_sizes : Array(UInt64),
         @string_sizes : Array(UInt64),
+        @flat_inner_arrays : UInt64,
+        @flat_strings : UInt64,
+        @rows : UInt64,
+        @string_bytes : UInt64,
+      )
+      end
+    end
+
+    # Shared mark-preflighted counts for W61. `inner_sizes` has one child
+    # count per flattened inner Array; the leaf sizes and null map each have
+    # one entry per flattened Nullable(String) slot.
+    private struct ArrayArrayNullableStringComponents
+      getter outer_sizes : Array(UInt64)
+      getter inner_sizes : Array(UInt64)
+      getter string_sizes : Array(UInt64)
+      getter null_map : Bytes
+      getter flat_inner_arrays : UInt64
+      getter flat_strings : UInt64
+      getter rows : UInt64
+      getter string_bytes : UInt64
+
+      def initialize(
+        @outer_sizes : Array(UInt64),
+        @inner_sizes : Array(UInt64),
+        @string_sizes : Array(UInt64),
+        @null_map : Bytes,
         @flat_inner_arrays : UInt64,
         @flat_strings : UInt64,
         @rows : UInt64,
@@ -7853,6 +7936,67 @@ module CrystalClick
       )
     end
 
+    # Build the bounded W61 topology and preflight each selected mark across
+    # size0, size1, null-map, String-size, and raw String streams.
+    private def array_array_nullable_string_components(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : ArrayArrayNullableStringComponents
+      ensure_column(column)
+      unless @column_type == "Array(Array(Nullable(String)))"
+        raise UnsupportedFormatError.new("nested nullable Array String accessor requires an exact Array(Array(Nullable(String))) column")
+      end
+
+      validate_array_array_nullable_string_stream_marks(column, first_mark, mark_count)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      inner_sizes, flat_strings, mark_string_counts = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        8
+      )
+      string_sizes, string_bytes = read_array_string_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_strings,
+        rows,
+        mark_string_counts,
+        "Array(Array(Nullable(String)))",
+        "#{column}.size",
+        column
+      )
+
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(String))) null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_string_counts, 1)
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_array_mark_byte_count(flat_strings, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Array(Array(Nullable(String))) null-map byte is not boolean") unless value <= 1_u8
+      end
+
+      raise CorruptPartError.new("Array(Array(Nullable(String))) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(Nullable(String))) size1 count changed") unless inner_sizes.size.to_u64 == flat_inner_arrays
+      raise CorruptPartError.new("Array(Array(Nullable(String))) String size count changed") unless string_sizes.size.to_u64 == flat_strings
+      raise CorruptPartError.new("Array(Array(Nullable(String))) null-map count changed") unless null_map.size.to_u64 == flat_strings
+
+      ArrayArrayNullableStringComponents.new(
+        outer_sizes,
+        inner_sizes,
+        string_sizes,
+        null_map,
+        flat_inner_arrays,
+        flat_strings,
+        rows,
+        string_bytes
+      )
+    end
+
     # Every nested stream keeps the base row cardinality, even when a mark
     # contains no inner Arrays, no String leaves, or only zero-length Strings.
     # Validate that agreement at each selected mark before decoding its counts.
@@ -7881,6 +8025,34 @@ module CrystalClick
       end
 
       validate_array_nested_stream_marks(size0_stream, first_mark, expected_mark_rows, 8)
+      nil
+    end
+
+    private def validate_array_array_nullable_string_stream_marks(column : String, first_mark : Int, mark_count : Int) : Nil
+      root_stream = @streams[column]
+      _, _, rows = checked_stream_mark_range(root_stream, first_mark, mark_count)
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |range_mark_index|
+        expected_mark_rows << root_stream.marks[first_mark + range_mark_index].rows
+      end
+
+      [
+        @streams["#{column}.size0"],
+        @streams["#{column}.size1"],
+        @streams["#{column}.null"],
+        @streams["#{column}.size"],
+      ].each do |stream|
+        _, _, stream_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Array(Nullable(String))) substream mark rows differ") unless stream_rows == rows
+        mark_count.times do |range_mark_index|
+          mark_index = first_mark + range_mark_index
+          unless stream.marks[mark_index].rows == expected_mark_rows[range_mark_index]
+            raise CorruptPartError.new("Array(Array(Nullable(String))) substream mark rows differ")
+          end
+        end
+      end
+
+      validate_array_nested_stream_marks(@streams["#{column}.size0"], first_mark, expected_mark_rows, 8)
       nil
     end
 

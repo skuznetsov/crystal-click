@@ -27,7 +27,7 @@ describe CrystalClick::WidePart do
     end
 
     {
-      "Array(Array(Nullable(String)))",
+      "Array(Array(Nullable(FixedString(4))))",
       "Array(Array(Nullable(Decimal32(9))))",
       "Array(Array(Array(Nullable(Int32))))",
       "Array(Array(Nullable(Int32))) trailing",

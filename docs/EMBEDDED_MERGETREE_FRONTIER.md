@@ -158,6 +158,9 @@ reader/writer, typed table, and offline catalog boundary recorded below.
 W60 admits paired `Array(Array(Nullable(T)))` for the ten primitive numeric
 leaves already admitted by W31 and W58. Its evidence and limits are recorded
 below; this does not admit arbitrary recursive types.
+W61 admits paired `Array(Array(Nullable(String)))` within the exact five-stream
+Wide/LZ4/plain-mark BASIC profile below. Its stock oracle and verification
+status do not generalize to arbitrary nested types or serializers.
 
 ## Purpose and bounded contexts
 
@@ -3629,6 +3632,72 @@ scope. This evidence does not generalize to other serializers, marks, codecs,
 or arbitrary nested types. MV/projection coverage and type compatibility
 remain ahead of memory or performance tuning.
 
+## W61: two-level nullable String Arrays
+
+Admit paired immutable writing and typed reading for exactly
+`Array(Array(Nullable(String)))` beside a sorted `UInt64` key in one
+Wide/LZ4/plain-mark part. Preserve NULL versus empty String, arbitrary String
+bytes (including embedded NUL and multibyte text), every outer and inner
+Array boundary, and W59/W32 entry points. Expose the values through direct
+mark reads, typed table batches, and offline catalog columns. Parser
+acceptance or Crystal self-readback alone is not physical compatibility.
+
+The refreshed pinned ClickHouse 26.7.1.1315 BASIC/Wide probe confirms five
+streams in order: outer `.size0`, inner `.size1`, BASIC `.null`, String `.size`,
+and root String data, with String serialization version 1. Every leaf,
+including NULL, contributes one byte to `.null` and one UInt64 to `.size`;
+stock NULL writes length zero and no raw payload. The direct reader must still
+consume valid noncanonical hidden String bytes for a NULL leaf, as in the
+W32 reader contract. The oracle must independently recheck exact
+`columns.txt`, `columns_substreams.txt`, `serialization.json`, mark rows and
+offsets, zero-byte child-stream behavior, and per-mark cardinality.
+The probe must distinguish NULL from an empty non-NULL String and include
+empty outer and inner Arrays, an all-NULL middle mark, an all-empty middle
+mark followed by nonempty leaves, a short tail, binary/multibyte bytes, and
+a String crossing a compressed frame boundary.
+
+A pre-change admission spec must fail for the exact W61 type. Reader and
+table tests must mutate each of the five selected stream marks independently
+and reject the affected mark before its callback; earlier valid callbacks
+may already have occurred. The writer must stage and validate before atomic
+publication, then pass stock `ATTACH PART`, `CHECK TABLE`, exact type and
+substream metadata, and independently encoded full and key-range
+`RowBinary`. Retain W59/W32/W60 controls, including rejection of deeper
+nesting and unsupported wrappers. The DoD is the focused falsifiers, pinned
+bidirectional oracle, complete debug and release `crystal spec`, formatting
+and diff checks, and hostile counterexample review.
+
+Risk is CAUTION: nullable String lengths and raw bytes can be internally
+consistent while shifting a later mark or confusing NULL with empty String.
+Guard every selected mark's five row counts, nested cardinalities, null-map
+domain, length count, and raw-byte consumption before exposing rows. The
+existing nested-nullable numeric prefix dispatch in table and catalog code
+must not claim the exact String shape; test W61 dispatch ahead of that branch.
+Rollback is removal of the isolated W61 diff or its single local feature
+commit; no existing part is mutated. Other recursive types, Sparse
+serialization, Compact parts, compressed marks, arbitrary schemas,
+MV/projections, and performance remain guard-only. Evidence decays when the
+pinned producer, serializer, codec/mark format, platform, or shared
+nested-array dispatch changes. The full type frontier, then MV/projections,
+precedes memory and performance optimization.
+
+The RED admission spec failed before implementation. W61 now has the exact
+five-stream reader, staged writer, typed table batches, and deep-owned offline
+catalog materialization. Reader specs exercise NULL versus empty String,
+hidden noncanonical bytes under NULL, per-mark raw-byte preflight, invalid
+null-map bytes, and shifted boundaries in each selected stream; table specs
+reject a corrupt selected mark before callback. The pinned ClickHouse
+26.7.1.1315 oracle passed in both directions: stock-produced bytes and MRK2
+offsets were independently checked and decoded by Crystal; a Crystal-written
+part passed stock `ATTACH PART` and `CHECK TABLE`, exact metadata, and full
+and key-range `RowBinary`. The stock fixture also crossed a 4096-byte LZ4
+frame boundary and exercised all-NULL and empty-child middle marks. Full
+debug and release `crystal spec` each passed 825/0 with the host linker
+override; formatting and diff whitespace checks passed. Hostile review found
+no concrete blocker within this scope, but compressed-offset and sentinel
+mutation coverage can still be strengthened. This is not evidence for other
+serializations, mark formats, codecs, or MV/projections.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3638,8 +3707,9 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W60's exact nested nullable
-   primitive numerics, W59's nested String Arrays, W58's nested primitive
+1. Extend reader and writer together beyond W61's exact nested nullable
+   String Arrays, W60's exact nested nullable primitive numerics,
+   W59's nested String Arrays, W58's nested primitive
    numerics, W57's three-alternative Variant, W56's paired Variant,
    W55's exact two-UInt64 named-Tuple Array, W54's exact nullable-String Maps,
    and W53's

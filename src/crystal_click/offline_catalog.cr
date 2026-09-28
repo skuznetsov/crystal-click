@@ -5,6 +5,7 @@ module CrystalClick
                              Int256Value | UInt256Value | Decimal256Value | BFloat16Value | BFloat16Value? |
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
                              Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) | Array(Array(String)) |
+                             Array(Array(String?)) |
                              Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) |
                              Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
                              Array(Array(Float32?)) | Array(Array(Float64?)) |
@@ -526,6 +527,16 @@ module CrystalClick
         selected_values = batch.array_array_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0], string_bytes = append_materialized_array_array_strings(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+      when "Array(Array(Nullable(String)))"
+        selected_values = batch.array_array_nullable_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_array_nullable_strings(
           values,
           selected_values,
           array_elements[0],
@@ -1319,6 +1330,46 @@ module CrystalClick
         row.each do |inner|
           owned_inner = Array(String).new(inner.size)
           inner.each { |value| owned_inner << String.new(value.to_slice) }
+          owned_row << owned_inner
+        end
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_array_nullable_strings(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Array(String?))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        # Count inner arrays and every nullable leaf slot before copying the
+        # catalog-owned values; empty inner arrays still consume capacity.
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |inner|
+          next_elements = checked_materialized_value_array_elements(next_elements, inner.size.to_u64)
+          inner.each do |value|
+            next unless string_value = value
+            next_bytes = checked_materialized_value_string_bytes(next_bytes, string_value.bytesize.to_u64, max_string_bytes)
+          end
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Array(String?)).new(row.size)
+        row.each do |inner|
+          owned_inner = Array(String?).new(inner.size)
+          inner.each do |value|
+            if string_value = value
+              owned_inner << String.new(string_value.to_slice)
+            else
+              owned_inner << nil
+            end
+          end
           owned_row << owned_inner
         end
         values << owned_row

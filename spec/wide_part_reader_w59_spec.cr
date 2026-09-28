@@ -18,7 +18,7 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("Array(Array(String))").should be_true
 
     {
-      "Array(Array(Nullable(String)))",
+      "Array(Array(Nullable(FixedString(4))))",
       "Array(Array(Array(String)))",
       "Array(Array(String)) trailing",
     }.each do |type|

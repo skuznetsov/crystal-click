@@ -6,12 +6,14 @@ module CrystalClick
     TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING = "Array(Tuple(a Nullable(UInt64), b String))"
     TYPE_ARRAY_TUPLE_UINT64_UINT64          = "Array(Tuple(a UInt64, b UInt64))"
     TYPE_ARRAY_ARRAY_STRING                 = "Array(Array(String))"
+    TYPE_ARRAY_ARRAY_NULLABLE_STRING        = "Array(Array(Nullable(String)))"
 
     enum Shape
       ArrayTupleUInt64String
       ArrayTupleNullableUInt64String
       ArrayTupleUInt64UInt64
       ArrayArrayString
+      ArrayArrayNullableString
     end
 
     enum PhysicalSubstreamKind
@@ -92,7 +94,7 @@ module CrystalClick
     end
 
     # Keep physical admission intentionally sealed to the exact declarations
-    # covered by W51, W55, and W59. Syntax parsing never acts as a broad
+    # covered by W51, W55, W59, and W61. Syntax parsing never acts as a broad
     # physical-format allowlist.
     def self.admitted(type : String) : WideTypePlan?
       root = parse(type) || return nil
@@ -104,6 +106,8 @@ module CrystalClick
         new(root, type.dup, Shape::ArrayTupleUInt64UInt64)
       elsif type == TYPE_ARRAY_ARRAY_STRING && exact_array_array_string?(root)
         new(root, type.dup, Shape::ArrayArrayString)
+      elsif type == TYPE_ARRAY_ARRAY_NULLABLE_STRING && exact_array_array_nullable_string?(root)
+        new(root, type.dup, Shape::ArrayArrayNullableString)
       else
         nil
       end
@@ -197,6 +201,16 @@ module CrystalClick
       inner = root.child(0)
       return false unless inner.name == "Array" && inner.children.size == 1
       leaf = inner.child(0)
+      leaf.name == "String" && leaf.children.empty?
+    end
+
+    private def self.exact_array_array_nullable_string?(root : Node) : Bool
+      return false unless root.name == "Array" && root.children.size == 1
+      inner = root.child(0)
+      return false unless inner.name == "Array" && inner.children.size == 1
+      nullable = inner.child(0)
+      return false unless nullable.name == "Nullable" && nullable.children.size == 1
+      leaf = nullable.child(0)
       leaf.name == "String" && leaf.children.empty?
     end
 
