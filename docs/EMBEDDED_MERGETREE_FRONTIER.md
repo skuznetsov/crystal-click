@@ -149,6 +149,10 @@ does not admit arbitrary Variant alternatives, Dynamic, or general JSON.
 W57 targets one three-alternative `Variant(Bool, String, UInt64)` paired
 profile, preserving W56; its admitted boundary and verification status are
 recorded below.
+W58 admits paired two-level `Array(Array(T))` support for the ten existing
+fixed-width primitive numeric leaves, reusing W28's nested offset topology
+without widening nullable, string, or arbitrary recursive shapes. Its
+admitted boundary and verification status are recorded below.
 
 ## Purpose and bounded contexts
 
@@ -3442,6 +3446,52 @@ ClickHouse versions, MV/projections, or performance gains. Open-time
 checksum admission remains size-only; content integrity is established by
 selected decodes and the explicit stock consumer checks above, not by
 the open-time checksum size guard alone.
+
+## Observed slice W58: two-level primitive numeric Arrays
+
+W58 admits paired read and immutable write for `Array(Array(T))` where `T` is one
+of `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Int8`, `Int16`, `Int32`, `Int64`,
+`Float32`, or `Float64`. The physical plan is the existing Wide/LZ4/plain-mark
+three-stream topology: per-row outer `.size0` counts, per-inner `.size1`
+counts, and one fixed-width leaf stream. The writer retains one sorted
+`UInt64` key and one payload column; the reader, typed table batch, and
+offline catalog agree on the same admitted set and value type. W28's
+`Array(Array(UInt64))` API and W29's `Array(Array(Nullable(UInt64)))` remain
+unchanged. The shape is not an admission of generic recursive `Array`,
+`Nullable` leaves, semantic numeric types, or other codecs/mark formats.
+
+The pre-implementation gate required a failing test for at least `Int32` and
+`Float64` across empty outer/inner arrays, multiple marks, and a short tail.
+Reader checks compare both count-stream cardinalities, the selected leaf
+byte count and width, and mark rows before exposing an affected mark. Float
+values are compared by raw bits where NaNs or signed zero make ordinary
+equality insufficient. The independent producer/consumer gate used pinned
+ClickHouse 26.7.1.1315: stock-created parts read by Crystal, and
+Crystal-created parts accepted by `ATTACH PART`, `CHECK TABLE`, and exact
+full/key-range `RowBinary` checks. W28/W29 controls, complete debug and
+release specs, and hostile review are required for the W58 claim below.
+
+Risk is CAUTION: a width-dependent leaf stream may self-read while remaining
+incompatible with ClickHouse or misalign later marks. Rollback is the W58
+feature commit (or the uncommitted diff before it); no existing part is
+modified. Failure policy is to reject unsupported shapes and malformed
+stream cardinality without yielding rows for the affected mark. The
+certificate decays when the producer version, serializer,
+codec, mark layout, typed dispatch, or leaf-width handling changes.
+
+Observed W58 evidence: a direct multi-mark `.size0` boundary mutation was
+rejected only after the new mark-local guard; the pre-fix test failed and its
+post-fix regression passed. The focused W58/W28/W29/W30 specs passed 24/0.
+The pinned stock ClickHouse 26.7.1.1315 oracle passed both producer/consumer
+directions for all ten leaves, including raw Float bit identity, an empty
+middle child mark followed by nonempty data, and fully empty `.size1`/leaf
+files. Stock `ATTACH PART`, `CHECK TABLE`, and independently encoded full and
+key-range `RowBinary` checks passed for the Crystal writer. Complete debug
+and release `crystal spec` suites each passed 801/0 on Crystal 1.21.0 with
+the local linker flag. This is evidence for the declared Wide/LZ4/plain-mark
+profile only, not arbitrary nested shapes, other ClickHouse versions, or
+MV/projection support. Complete type compatibility and then MV/projections
+remain ahead of memory/performance work.
 
 ## Rejected and guard-only surfaces
 

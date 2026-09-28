@@ -810,6 +810,8 @@ module CrystalClick
           ["#{column}.null", column]
         elsif element_type = numeric_array_element_type(type)
           [column]
+        elsif array_array_numeric_element_type(type)
+          ["#{column}.size1", column]
         else
           nil
         end
@@ -832,6 +834,15 @@ module CrystalClick
       return nil unless type.starts_with?("Array(") && type.ends_with?(")")
       element_type = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
       supports_array_numeric_type?(element_type) ? element_type : nil
+    end
+
+    # Admit exactly two Array levels with one of the ten primitive numeric
+    # leaves used by the scalar numeric family. This is deliberately not a
+    # recursive grammar and does not extend to nullable or semantic leaves.
+    def self.array_array_numeric_element_type(type : String) : String?
+      return nil unless type.starts_with?("Array(Array(") && type.ends_with?("))")
+      element_type = type.byte_slice("Array(Array(".bytesize, type.bytesize - "Array(Array())".bytesize)
+      supports_numeric_type?(element_type) ? element_type : nil
     end
 
     def self.supports_map_uint64_string_type?(type : String) : Bool
@@ -1756,6 +1767,44 @@ module CrystalClick
       element_width = WidePart.array_numeric_payload_width(element_type)
       validate_array_nested_stream_marks(value_stream, first_mark, mark_flat_elements, element_width)
       checked_array_mark_byte_count(flat_elements, element_width).to_u64
+    end
+
+    # Count the three physical streams of Array(Array(T)) before a table batch
+    # allocates nested values. Both offset streams are decoded and validated;
+    # the leaf stream is boundary-checked with its exact primitive width.
+    def array_array_numeric_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.array_array_numeric_element_type(@column_type) ||
+                     raise(UnsupportedFormatError.new("nested Array numeric accessor requires an exact Array(Array(T)) numeric column"))
+
+      validate_array_array_numeric_size0_marks(column, first_mark, mark_count)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, flat_elements, mark_leaf_elements = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        WidePart.array_numeric_payload_width(element_type)
+      )
+      raise CorruptPartError.new("Array(Array(T)) outer row count changed") unless outer_sizes.size.to_u64 == rows
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(T)) value mark rows differ") unless value_rows == rows
+      element_width = WidePart.array_numeric_payload_width(element_type)
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, element_width)
+      value_bytes = checked_array_mark_byte_count(flat_elements, element_width).to_u64
+      validate_mark_range_bytes(value_stream, value_start, value_end, value_bytes.to_i, element_width)
+      raise CorruptPartError.new("Array(Array(T)) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      outer_bytes = checked_byte_count(rows, 8).to_u64
+      inner_bytes = checked_array_mark_byte_count(flat_inner_arrays, 8).to_u64
+      if inner_bytes > UInt64::MAX - outer_bytes || value_bytes > UInt64::MAX - outer_bytes - inner_bytes
+        raise CorruptPartError.new("Array(Array(T)) raw byte count overflows")
+      end
+      outer_bytes + inner_bytes + value_bytes
     end
 
     # Temporal Arrays share fixed-width storage with selected numeric leaves,
@@ -3152,6 +3201,67 @@ module CrystalClick
         values << row
       end
       raise CorruptPartError.new("Array sizes do not consume selected numeric bytes") unless flat_offset == value_bytes.size
+      values
+    end
+
+    # Read two exact Array levels over one fixed-width primitive numeric leaf.
+    # Both offset streams and the leaf's width-dependent mark boundaries are
+    # checked before allocating the nested result arrays.
+    def read_array_array_numeric_mark_range(column : String, first_mark : Int, mark_count : Int, type : T.class) : Array(Array(Array(T))) forall T
+      ensure_column(column)
+      element_type = WidePart.array_numeric_type_name(type)
+      unless WidePart.array_array_numeric_element_type(@column_type) == element_type
+        raise UnsupportedFormatError.new("typed nested Array accessor does not match selected column type")
+      end
+
+      validate_array_array_numeric_size0_marks(column, first_mark, mark_count)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_width = WidePart.array_numeric_payload_width(element_type)
+      element_sizes, flat_elements, mark_leaf_elements = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        element_width
+      )
+      raise CorruptPartError.new("Array(Array(T)) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(T)) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(T)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, element_width)
+      value_bytes = read_mark_range_bytes(
+        value_stream,
+        value_start,
+        value_end,
+        checked_array_mark_byte_count(flat_elements, element_width),
+        element_width
+      )
+
+      values = Array(Array(Array(T))).new(rows.to_i)
+      inner_offset = 0
+      value_offset = 0
+      outer_sizes.each do |inner_count|
+        row = Array(Array(T)).new(inner_count.to_i)
+        inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(T)) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
+          leaf_count = element_sizes[inner_offset]
+          inner = Array(T).new(leaf_count.to_i)
+          leaf_count.to_i.times do
+            raise CorruptPartError.new("Array(Array(T)) sizes exceed selected numeric bytes") if value_offset > value_bytes.size - element_width
+            inner << decode_array_numeric_value(value_bytes, value_offset, type)
+            value_offset += element_width
+          end
+          row << inner
+          inner_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Array(T)) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
+      raise CorruptPartError.new("Array(Array(T)) sizes do not consume selected numeric bytes") unless value_offset == value_bytes.size
       values
     end
 
@@ -6906,6 +7016,11 @@ module CrystalClick
         raise CorruptPartError.new("selected Tuple UInt64 child stream is missing") unless stream_names.includes?(stream)
         return stream
       end
+      if WidePart.array_array_numeric_element_type(@column_type)
+        stream = "#{@column}.size0"
+        raise CorruptPartError.new("selected nested numeric Array size0 stream is missing") unless stream_names.includes?(stream)
+        return stream
+      end
       if WidePart.supports_map_uint64_string_type?(@column_type) || WidePart.supports_map_uint64_uint64_type?(@column_type) ||
          WidePart.supports_map_string_uint64_type?(@column_type) || WidePart.supports_map_string_string_type?(@column_type) ||
          WidePart.supports_map_uint64_nullable_uint64_type?(@column_type) || WidePart.supports_map_string_nullable_uint64_type?(@column_type) ||
@@ -7109,6 +7224,15 @@ module CrystalClick
         end
       elsif @column_type == "Array(Array(Nullable(UInt64)))"
         stream_name == "#{@column}.null" ? 1 : 8
+      elsif @column_type == "Array(Array(UInt64))"
+        8
+      elsif element_type = WidePart.array_array_numeric_element_type(@column_type)
+        case stream_name
+        when "#{@column}.size0", "#{@column}.size1" then 8
+        when @column                                then WidePart.array_numeric_payload_width(element_type)
+        else
+          raise UnsupportedFormatError.new("unsupported exact nested numeric Array substream")
+        end
       elsif element_type = WidePart.numeric_array_element_type(@column_type)
         stream_name == @column ? WidePart.array_numeric_payload_width(element_type) : 8
       elsif element_type = WidePart.temporal_array_element_type(@column_type)
@@ -7340,6 +7464,36 @@ module CrystalClick
       {outer_sizes, flat_elements, rows, mark_flat_elements}
     end
 
+    # The generic Array(size0) reader checks only the combined selected byte
+    # range. W58 also needs every physical .size0 mark boundary checked before
+    # it consumes those decoded counts; keep this guard scoped to the new
+    # numeric Array(Array(T)) readers so the established W28/W29 paths stay
+    # unchanged.
+    private def validate_array_array_numeric_size0_marks(column : String, first_mark : Int, mark_count : Int) : Nil
+      value_stream = @streams[column]
+      size_stream = @streams["#{column}.size0"]
+      _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      _, _, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(T)) size0 mark rows differ") unless size_rows == value_rows
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |range_mark_index|
+        mark_index = first_mark + range_mark_index
+        expected_rows = value_stream.marks[mark_index].rows
+        unless size_stream.marks[mark_index].rows == expected_rows
+          raise CorruptPartError.new("Array(Array(T)) size0 mark rows differ")
+        end
+        expected_mark_rows << expected_rows
+      end
+
+      begin
+        validate_array_nested_stream_marks(size_stream, first_mark, expected_mark_rows, 8)
+      rescue error : CorruptPartError
+        raise CorruptPartError.new("Array(Array(T)) size0 mark boundary is corrupt: #{error.message}")
+      end
+      nil
+    end
+
     private def read_array_array_uint64_element_sizes(
       column : String,
       first_mark : Int,
@@ -7388,6 +7542,58 @@ module CrystalClick
       raise CorruptPartError.new("Array(Array(UInt64)) size1 has trailing bytes") unless size_offset == encoded_sizes.size
       raise CorruptPartError.new("Array(Array(UInt64)) size1 count does not match size0") unless element_sizes.size.to_u64 == flat_inner_arrays
       checked_array_mark_byte_count(total_leaf_elements, 8)
+      {element_sizes, total_leaf_elements, mark_leaf_elements}
+    end
+
+    private def read_array_array_numeric_element_sizes(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      flat_inner_arrays : UInt64,
+      outer_rows : UInt64,
+      mark_inner_arrays : Array(UInt64),
+      element_width : Int32,
+    ) : {Array(UInt64), UInt64, Array(UInt64)}
+      size_stream = @streams["#{column}.size1"]
+      size_start, size_end, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(T)) size1 mark rows differ") unless size_rows == outer_rows
+      validate_array_nested_stream_marks(size_stream, first_mark, mark_inner_arrays, 8)
+      encoded_sizes = read_mark_range_bytes(
+        size_stream,
+        size_start,
+        size_end,
+        checked_array_mark_byte_count(flat_inner_arrays, 8),
+        8
+      )
+
+      element_sizes = Array(UInt64).new(flat_inner_arrays.to_i)
+      mark_leaf_elements = Array(UInt64).new(mark_count)
+      total_leaf_elements = 0_u64
+      size_offset = 0
+      mark_inner_arrays.each_with_index do |mark_inner_count, range_mark_index|
+        mark_leaf_count = 0_u64
+        mark_inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(T)) size1 count exceeds selected bytes") if size_offset > encoded_sizes.size - 8
+          leaf_count = u64(encoded_sizes, size_offset)
+          if leaf_count > MAX_ARRAY_MARK_ELEMENTS - mark_leaf_count || leaf_count > MAX_ARRAY_MARK_ELEMENTS - total_leaf_elements
+            raise CorruptPartError.new("Array(Array(T)) leaf element count exceeds per-range limit")
+          end
+          mark_leaf_count += leaf_count
+          total_leaf_elements += leaf_count
+          element_sizes << leaf_count
+          size_offset += 8
+        end
+        checked_array_mark_byte_count(mark_leaf_count, element_width)
+        mark_leaf_elements << mark_leaf_count
+
+        mark_index = first_mark + range_mark_index
+        mark_start = size_stream.marks[mark_index]
+        mark_end = mark_index + 1 == size_stream.marks.size ? size_stream.sentinel : size_stream.marks[mark_index + 1]
+        validate_mark_range_bytes(size_stream, mark_start, mark_end, checked_array_mark_byte_count(mark_inner_count, 8), 8)
+      end
+      raise CorruptPartError.new("Array(Array(T)) size1 has trailing bytes") unless size_offset == encoded_sizes.size
+      raise CorruptPartError.new("Array(Array(T)) size1 count does not match size0") unless element_sizes.size.to_u64 == flat_inner_arrays
+      checked_array_mark_byte_count(total_leaf_elements, element_width)
       {element_sizes, total_leaf_elements, mark_leaf_elements}
     end
 

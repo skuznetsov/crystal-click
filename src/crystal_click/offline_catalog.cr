@@ -5,6 +5,9 @@ module CrystalClick
                              Int256Value | UInt256Value | Decimal256Value | BFloat16Value | BFloat16Value? |
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
                              Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) |
+                             Array(Array(UInt8)) | Array(Array(UInt16)) | Array(Array(UInt32)) |
+                             Array(Array(Int8)) | Array(Array(Int16)) | Array(Array(Int32)) | Array(Array(Int64)) |
+                             Array(Array(Float32)) | Array(Array(Float64)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Int128) | Array(UInt128) | Array(Int256Value) | Array(UInt256Value) |
                              Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) | Array(BFloat16Value?) |
@@ -520,6 +523,11 @@ module CrystalClick
         selected_values = batch.array_array_nullable_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_array_nullable_uint64s(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Array(")
+        element_type = WidePart.array_array_numeric_element_type(selected_type) || raise(UnsupportedFormatError.new("selected table column type is unsupported"))
+        selected_rows = array_array_numeric_row_count(batch, column_name, element_type)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_rows, expected_rows)
+        array_elements[0] = append_array_array_numeric_values(values, batch, column_name, element_type, array_elements[0])
       when "Array(Nullable(UInt64))"
         selected_values = batch.array_nullable_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -1244,6 +1252,71 @@ module CrystalClick
         values << owned_row
       end
       next_elements
+    end
+
+    private def append_materialized_array_array_numeric(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Array(T))),
+      observed_elements : UInt64,
+    ) : UInt64 forall T
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |inner|
+          next_elements = checked_materialized_value_array_elements(next_elements, inner.size.to_u64)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Array(T)).new(row.size)
+        row.each { |inner| owned_row << inner.dup }
+        values << owned_row
+      end
+      next_elements
+    end
+
+    private def array_array_numeric_row_count(
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+    ) : UInt64
+      case element_type
+      when "UInt8"   then batch.array_array_numeric_values(column, UInt8).size.to_u64
+      when "UInt16"  then batch.array_array_numeric_values(column, UInt16).size.to_u64
+      when "UInt32"  then batch.array_array_numeric_values(column, UInt32).size.to_u64
+      when "UInt64"  then batch.array_array_numeric_values(column, UInt64).size.to_u64
+      when "Int8"    then batch.array_array_numeric_values(column, Int8).size.to_u64
+      when "Int16"   then batch.array_array_numeric_values(column, Int16).size.to_u64
+      when "Int32"   then batch.array_array_numeric_values(column, Int32).size.to_u64
+      when "Int64"   then batch.array_array_numeric_values(column, Int64).size.to_u64
+      when "Float32" then batch.array_array_numeric_values(column, Float32).size.to_u64
+      when "Float64" then batch.array_array_numeric_values(column, Float64).size.to_u64
+      else
+        raise UnsupportedFormatError.new("unsupported Array(Array(T)) numeric leaf type")
+      end
+    end
+
+    private def append_array_array_numeric_values(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column : String,
+      element_type : String,
+      observed_elements : UInt64,
+    ) : UInt64
+      case element_type
+      when "UInt8"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt8), observed_elements)
+      when "UInt16"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt16), observed_elements)
+      when "UInt32"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt32), observed_elements)
+      when "UInt64"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt64), observed_elements)
+      when "Int8"    then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int8), observed_elements)
+      when "Int16"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int16), observed_elements)
+      when "Int32"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int32), observed_elements)
+      when "Int64"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int64), observed_elements)
+      when "Float32" then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Float32), observed_elements)
+      when "Float64" then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Float64), observed_elements)
+      else
+        raise UnsupportedFormatError.new("unsupported Array(Array(T)) numeric leaf type")
+      end
     end
 
     private def array_nullable_numeric_values_for(

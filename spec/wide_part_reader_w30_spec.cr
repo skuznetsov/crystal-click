@@ -321,13 +321,13 @@ private def w30_check_catalog(type : T.class, column : String) : Nil forall T
 end
 
 describe CrystalClick::WidePart do
-  it "admits only one-level Array of the exact supported numeric leaves" do
+  it "admits W30 numeric arrays and retains supported legacy nested UInt64 arrays" do
     {"UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"}.each do |leaf_type|
       CrystalClick::WidePart.supports_typed_type?("Array(#{leaf_type})").should be_true
     end
 
     [
-      "Array(Array(UInt8))",
+      "Array(Array(String))",
       "Array(Tuple(UInt64, UInt64))",
       "Array(Decimal(75, 0))",
       "Array(UInt8) trailing",
