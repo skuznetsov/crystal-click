@@ -1138,6 +1138,111 @@ module CrystalClick
       end
     end
 
+    # Write two Array levels over signed Decimal32 coefficients. Values are
+    # raw Int32 coefficients; scale is preserved only in the canonical type.
+    def self.write_uint64_array_array_decimal32_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int32))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 9, "Int32", rows_per_mark)
+    end
+
+    # Write two Array levels over signed Decimal64 coefficients. Values are
+    # raw Int64 coefficients; scale is preserved only in the canonical type.
+    def self.write_uint64_array_array_decimal64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int64))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 18, "Int64", rows_per_mark)
+    end
+
+    # Write two Array levels over signed Decimal128 coefficients. Values are
+    # raw Int128 coefficients; scale is preserved only in the canonical type.
+    def self.write_uint64_array_array_decimal128_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int128))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 38, "Int128", rows_per_mark)
+    end
+
+    # Decimal256 retains its exact signed two's-complement coefficient type.
+    def self.write_uint64_array_array_decimal256_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Decimal256Value))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 76, "Decimal256", rows_per_mark)
+    end
+
+    # Write two Array levels over Nullable Decimal32 coefficients. NULL leaves
+    # carry a null-map byte and a zero placeholder in the fixed-width stream.
+    def self.write_uint64_array_array_nullable_decimal32_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int32?))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 9, "Int32", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_nullable_decimal64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int64?))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 18, "Int64", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_nullable_decimal128_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Int128?))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 38, "Int128", rows_per_mark)
+    end
+
+    def self.write_uint64_array_array_nullable_decimal256_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Decimal256Value?))),
+      scale : Int32,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 76, "Decimal256", rows_per_mark)
+    end
+
     # Write one immutable part with a sorted UInt64 key and the exact
     # Array(Array(Nullable(String))) payload. NULL leaves have a null-map byte
     # and a zero String-size slot, with no bytes in the root String stream.
@@ -3693,6 +3798,89 @@ module CrystalClick
         write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_array_decimal_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(T))),
+      scale : Int32,
+      precision : Int32,
+      physical_type : String,
+      rows_per_mark : Int32,
+    ) : String forall T
+      raise ArgumentError.new("Decimal Array(Array) scale must be in range 0..#{precision}") unless 0 <= scale <= precision
+      validate_array_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, physical_type)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_array_numeric_streams(stage, value_name, values, rows_per_mark, physical_type))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        decimal_type = "Decimal(#{precision}, #{scale})"
+        expected_type = "Array(Array(#{decimal_type}))"
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_array_decimal_part(stage, key_name, value_name, keys, values, rows_per_mark, precision, scale, physical_type)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_uint64_array_array_nullable_decimal_pair_internal(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(T?))),
+      scale : Int32,
+      precision : Int32,
+      physical_type : String,
+      rows_per_mark : Int32,
+    ) : String forall T
+      raise ArgumentError.new("Nullable Decimal Array(Array) scale must be in range 0..#{precision}") unless 0 <= scale <= precision
+      validate_array_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, physical_type)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, physical_type))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        decimal_type = "Decimal(#{precision}, #{scale})"
+        expected_type = "Array(Array(Nullable(#{decimal_type})))"
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_checksums(stage, records)
+        validate_staged_array_array_nullable_decimal_part(stage, key_name, value_name, keys, values, rows_per_mark, precision, scale, physical_type)
         publish_exclusively(stage, target)
         target
       ensure
@@ -14097,6 +14285,245 @@ module CrystalClick
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
+    end
+
+    private def self.validate_staged_array_array_decimal_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Array(T))),
+      rows_per_mark : Int32,
+      precision : Int32,
+      scale : Int32,
+      physical_type : String,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      expected_type = "Array(Array(Decimal(#{precision}, #{scale})))"
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged nested Decimal column metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_uint64_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged nested Decimal substream metadata differs")
+      end
+      raise CorruptPartError.new("staged nested Decimal codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged nested Decimal serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      unless decimal_array_array_scale(expected_type, precision) == scale
+        raise CorruptPartError.new("staged nested Decimal scale or semantic declaration is invalid")
+      end
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged nested Decimal row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged nested Decimal type does not match") unless value_part.column_type == expected_type
+
+      element_width = numeric_width(physical_type).to_u64
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = read_array_array_decimal_mark_range(value_part, value_name, mark_index, T)
+        mark_inner_arrays = 0_u64
+        mark_leaf_elements = 0_u64
+        rows.times do |offset|
+          values[start + offset].each do |inner|
+            mark_inner_arrays += 1_u64
+            mark_leaf_elements += inner.size.to_u64
+          end
+          unless expected_keys[offset] == keys[start + offset] && array_array_numeric_rows_identical?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged nested Decimal readback differs from input")
+          end
+        end
+        expected_raw_bytes = rows.to_u64 * 8_u64 + mark_inner_arrays * 8_u64 + mark_leaf_elements * element_width
+        observed_raw_bytes = array_array_decimal_mark_range_raw_bytes(value_part, value_name, mark_index, T)
+        raise CorruptPartError.new("staged nested Decimal raw-byte preflight differs from input") unless observed_raw_bytes == expected_raw_bytes
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged nested Decimal marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.validate_staged_array_array_nullable_decimal_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Array(T?))),
+      rows_per_mark : Int32,
+      precision : Int32,
+      scale : Int32,
+      physical_type : String,
+    ) : Nil forall T
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      expected_type = "Array(Array(Nullable(Decimal(#{precision}, #{scale}))))"
+      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+        raise CorruptPartError.new("staged nested nullable Decimal column metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_numeric_substreams_metadata(key_name, value_name)
+        raise CorruptPartError.new("staged nested nullable Decimal substream metadata differs")
+      end
+      raise CorruptPartError.new("staged nested nullable Decimal codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged nested nullable Decimal metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+      raise CorruptPartError.new("staged nested nullable Decimal serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+
+      unless nullable_decimal_array_array_scale(expected_type, precision) == scale
+        raise CorruptPartError.new("staged nested nullable Decimal scale or semantic declaration is invalid")
+      end
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_name)
+      value_part = WidePart.open_typed(stage, value_name)
+      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged nested nullable Decimal row count does not match") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged nested nullable Decimal type does not match") unless value_part.column_type == expected_type
+
+      element_width = numeric_width(physical_type).to_u64
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        expected_values = read_array_array_nullable_decimal_mark_range(value_part, value_name, mark_index, T)
+        mark_inner_arrays = 0_u64
+        mark_leaf_elements = 0_u64
+        rows.times do |offset|
+          values[start + offset].each do |inner|
+            mark_inner_arrays += 1_u64
+            mark_leaf_elements += inner.size.to_u64
+          end
+          unless expected_keys[offset] == keys[start + offset] && array_array_nullable_numeric_rows_identical?(expected_values[offset], values[start + offset])
+            raise CorruptPartError.new("staged nested nullable Decimal readback differs from input")
+          end
+        end
+        expected_raw_bytes = rows.to_u64 * 8_u64 + mark_inner_arrays * 8_u64 + mark_leaf_elements * (element_width + 1_u64)
+        observed_raw_bytes = array_array_nullable_decimal_mark_range_raw_bytes(value_part, value_name, mark_index, T)
+        raise CorruptPartError.new("staged nested nullable Decimal raw-byte preflight differs from input") unless observed_raw_bytes == expected_raw_bytes
+        start += rows
+      end
+      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged nested nullable Decimal marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
+    private def self.decimal_array_array_scale(type : String, precision : Int32) : Int32?
+      case precision
+      when 9
+        WidePart.array_array_decimal32_scale(type)
+      when 18
+        WidePart.array_array_decimal64_scale(type)
+      when 38
+        WidePart.array_array_decimal128_scale(type)
+      when 76
+        WidePart.array_array_decimal256_scale(type)
+      else
+        nil
+      end
+    end
+
+    private def self.nullable_decimal_array_array_scale(type : String, precision : Int32) : Int32?
+      case precision
+      when 9
+        WidePart.array_array_nullable_decimal32_scale(type)
+      when 18
+        WidePart.array_array_nullable_decimal64_scale(type)
+      when 38
+        WidePart.array_array_nullable_decimal128_scale(type)
+      when 76
+        WidePart.array_array_nullable_decimal256_scale(type)
+      else
+        nil
+      end
+    end
+
+    private def self.read_array_array_decimal_mark_range(
+      value_part : WidePart,
+      column : String,
+      first_mark : Int32,
+      type : T.class,
+    ) : Array(Array(Array(T))) forall T
+      {% if T == Int32 %}
+        value_part.read_array_array_decimal32_mark_range(column, first_mark, 1)
+      {% elsif T == Int64 %}
+        value_part.read_array_array_decimal64_mark_range(column, first_mark, 1)
+      {% elsif T == Int128 %}
+        value_part.read_array_array_decimal128_mark_range(column, first_mark, 1)
+      {% elsif T == Decimal256Value %}
+        value_part.read_array_array_decimal256_mark_range(column, first_mark, 1)
+      {% else %}
+        {% raise "nested Decimal readback requires an admitted coefficient type" %}
+      {% end %}
+    end
+
+    private def self.read_array_array_nullable_decimal_mark_range(
+      value_part : WidePart,
+      column : String,
+      first_mark : Int32,
+      type : T.class,
+    ) : Array(Array(Array(T?))) forall T
+      {% if T == Int32 %}
+        value_part.read_array_array_nullable_decimal32_mark_range(column, first_mark, 1)
+      {% elsif T == Int64 %}
+        value_part.read_array_array_nullable_decimal64_mark_range(column, first_mark, 1)
+      {% elsif T == Int128 %}
+        value_part.read_array_array_nullable_decimal128_mark_range(column, first_mark, 1)
+      {% elsif T == Decimal256Value %}
+        value_part.read_array_array_nullable_decimal256_mark_range(column, first_mark, 1)
+      {% else %}
+        {% raise "nested nullable Decimal readback requires an admitted coefficient type" %}
+      {% end %}
+    end
+
+    private def self.array_array_decimal_mark_range_raw_bytes(
+      value_part : WidePart,
+      column : String,
+      first_mark : Int32,
+      type : T.class,
+    ) : UInt64 forall T
+      {% if T == Int32 %}
+        value_part.array_array_decimal32_mark_range_raw_bytes(column, first_mark, 1)
+      {% elsif T == Int64 %}
+        value_part.array_array_decimal64_mark_range_raw_bytes(column, first_mark, 1)
+      {% elsif T == Int128 %}
+        value_part.array_array_decimal128_mark_range_raw_bytes(column, first_mark, 1)
+      {% elsif T == Decimal256Value %}
+        value_part.array_array_decimal256_mark_range_raw_bytes(column, first_mark, 1)
+      {% else %}
+        {% raise "nested Decimal preflight requires an admitted coefficient type" %}
+      {% end %}
+    end
+
+    private def self.array_array_nullable_decimal_mark_range_raw_bytes(
+      value_part : WidePart,
+      column : String,
+      first_mark : Int32,
+      type : T.class,
+    ) : UInt64 forall T
+      {% if T == Int32 %}
+        value_part.array_array_nullable_decimal32_mark_range_raw_bytes(column, first_mark, 1)
+      {% elsif T == Int64 %}
+        value_part.array_array_nullable_decimal64_mark_range_raw_bytes(column, first_mark, 1)
+      {% elsif T == Int128 %}
+        value_part.array_array_nullable_decimal128_mark_range_raw_bytes(column, first_mark, 1)
+      {% elsif T == Decimal256Value %}
+        value_part.array_array_nullable_decimal256_mark_range_raw_bytes(column, first_mark, 1)
+      {% else %}
+        {% raise "nested nullable Decimal preflight requires an admitted coefficient type" %}
+      {% end %}
     end
 
     private def self.validate_staged_array_nullable_numeric_part(

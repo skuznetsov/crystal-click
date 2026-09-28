@@ -96,7 +96,7 @@ private def with_w42_catalog_root(& : String ->)
 end
 
 describe CrystalClick::WidePart do
-  it "admits only one-level Decimal32 arrays with exact canonical scale metadata" do
+  it "admits one-level Decimal32 arrays with exact canonical scale metadata" do
     {
       "Array(Decimal(9, 0))", "Array(Decimal(9, 2))", "Array(Decimal(9, 9))",
       "Array(Nullable(Decimal(9, 0)))", "Array(Nullable(Decimal(9, 2)))", "Array(Nullable(Decimal(9, 9)))",
@@ -107,7 +107,7 @@ describe CrystalClick::WidePart do
     {
       "Array(Decimal(9, 10))", "Array(Decimal(9, 2) )", "Array(Decimal32(2))",
       "Array(Nullable(Decimal(9, 10)))", "Array(Nullable(Nullable(Decimal(9, 2))))",
-      "Array(Array(Decimal(9, 2)))", "Nullable(Array(Decimal(9, 2)))",
+      "Nullable(Array(Decimal(9, 2)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end
@@ -154,7 +154,7 @@ describe CrystalClick::WidePart do
     {
       "Array(Decimal(9, 10))", "Array(Decimal(09, 2))", "Array(Decimal(9, 02))",
       "Array(Decimal(9,2))", "Array(Decimal32(2))", "Array(Nullable(Decimal(9, 10)))",
-      "Array(Nullable(Nullable(Decimal(9, 2))))", "Array(Array(Decimal(9, 2)))",
+      "Array(Nullable(Nullable(Decimal(9, 2))))",
       "Nullable(Array(Decimal(9, 2)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false

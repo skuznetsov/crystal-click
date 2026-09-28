@@ -259,6 +259,46 @@ module CrystalClick
       match.try { |value| value[1].to_i }
     end
 
+    private def self.array_array_decimal32_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Decimal32\(([0-9])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_array_nullable_decimal32_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Nullable\(Decimal32\(([0-9])\)\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_array_decimal64_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Decimal64\(([0-9]|1[0-8])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_array_nullable_decimal64_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Nullable\(Decimal64\(([0-9]|1[0-8])\)\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_array_decimal128_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_array_nullable_decimal128_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Nullable\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_array_decimal256_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Decimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
+    private def self.array_array_nullable_decimal256_alias_scale(type : String) : Int32?
+      match = /\AArray\(Array\(Nullable\(Decimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\)\)\)\z/.match(type)
+      match.try { |value| value[1].to_i }
+    end
+
     private def self.decimal64_alias_scale(type : String) : Int32?
       match = /\ADecimal64\(([0-9]|1[0-8])\)\z/.match(type)
       match.try { |value| value[1].to_i }
@@ -447,6 +487,57 @@ module CrystalClick
       nullable_decimal256_scale(inner)
     end
 
+    # W64 admits only exactly two Array levels over canonical Decimal(P, S)
+    # declarations. Keep these semantic gates separate from primitive numeric
+    # Array parsing so equal-width Int* leaves do not inherit Decimal admission.
+    def self.array_array_decimal32_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 9, false)
+    end
+
+    def self.array_array_nullable_decimal32_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 9, true)
+    end
+
+    def self.array_array_decimal64_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 18, false)
+    end
+
+    def self.array_array_nullable_decimal64_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 18, true)
+    end
+
+    def self.array_array_decimal128_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 38, false)
+    end
+
+    def self.array_array_nullable_decimal128_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 38, true)
+    end
+
+    def self.array_array_decimal256_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 76, false)
+    end
+
+    def self.array_array_nullable_decimal256_scale(type : String) : Int32?
+      array_array_decimal_scale(type, 76, true)
+    end
+
+    private def self.array_array_decimal_scale(type : String, precision : Int32, nullable : Bool) : Int32?
+      prefix = nullable ? "Array(Array(Nullable(" : "Array(Array("
+      suffix_bytes = nullable ? 3 : 2
+      return nil unless type.starts_with?(prefix) && type.ends_with?(")" * suffix_bytes)
+      decimal_type = type.byte_slice(prefix.bytesize, type.bytesize - prefix.bytesize - suffix_bytes)
+      decimal_precision_scale(decimal_type, precision, precision)
+    end
+
+    def self.array_array_decimal_payload_width(type : String) : Int32?
+      return 4 if array_array_decimal32_scale(type) || array_array_nullable_decimal32_scale(type)
+      return 8 if array_array_decimal64_scale(type) || array_array_nullable_decimal64_scale(type)
+      return 16 if array_array_decimal128_scale(type) || array_array_nullable_decimal128_scale(type)
+      return 32 if array_array_decimal256_scale(type) || array_array_nullable_decimal256_scale(type)
+      nil
+    end
+
     # Normalize only the Decimal DDL aliases observed in stock metadata. The
     # caller retains the exact source spelling separately for API metadata.
     def self.catalog_type(type : String) : String?
@@ -468,6 +559,24 @@ module CrystalClick
         return "Array(Decimal(76, #{scale}))"
       elsif scale = array_nullable_decimal256_alias_scale(type)
         return "Array(Nullable(Decimal(76, #{scale})))"
+      end
+
+      if scale = array_array_decimal32_alias_scale(type)
+        return "Array(Array(Decimal(9, #{scale})))"
+      elsif scale = array_array_nullable_decimal32_alias_scale(type)
+        return "Array(Array(Nullable(Decimal(9, #{scale}))))"
+      elsif scale = array_array_decimal64_alias_scale(type)
+        return "Array(Array(Decimal(18, #{scale})))"
+      elsif scale = array_array_nullable_decimal64_alias_scale(type)
+        return "Array(Array(Nullable(Decimal(18, #{scale}))))"
+      elsif scale = array_array_decimal128_alias_scale(type)
+        return "Array(Array(Decimal(38, #{scale})))"
+      elsif scale = array_array_nullable_decimal128_alias_scale(type)
+        return "Array(Array(Nullable(Decimal(38, #{scale}))))"
+      elsif scale = array_array_decimal256_alias_scale(type)
+        return "Array(Array(Decimal(76, #{scale})))"
+      elsif scale = array_array_nullable_decimal256_alias_scale(type)
+        return "Array(Array(Nullable(Decimal(76, #{scale}))))"
       end
 
       if inner = nullable_inner(type)
@@ -796,6 +905,12 @@ module CrystalClick
           [column]
         elsif array_decimal256_scale(type)
           [column]
+        elsif array_array_nullable_decimal32_scale(type) || array_array_nullable_decimal64_scale(type) ||
+              array_array_nullable_decimal128_scale(type) || array_array_nullable_decimal256_scale(type)
+          ["#{column}.size1", "#{column}.null", column]
+        elsif array_array_decimal32_scale(type) || array_array_decimal64_scale(type) ||
+              array_array_decimal128_scale(type) || array_array_decimal256_scale(type)
+          ["#{column}.size1", column]
         elsif nullable_temporal_array_element_type(type)
           ["#{column}.null", column]
         elsif temporal_array_element_type(type)
@@ -2106,6 +2221,124 @@ module CrystalClick
       {inner_bytes, null_bytes, value_bytes}.each do |bytes|
         raise CorruptPartError.new("Array(Array(Nullable(T))) raw byte count overflows") if bytes > UInt64::MAX - outer_bytes
         outer_bytes += bytes
+      end
+      outer_bytes
+    end
+
+    # W64 Decimal accessors use the same bounded depth-two offset codec as
+    # primitive numeric leaves, but reach it only through exact Decimal(P, S)
+    # metadata gates. These byte counts preflight every selected physical
+    # stream before table materialization.
+    def array_array_decimal32_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal32 nested Array accessor requires exact Array(Array(Decimal(9, S)))") unless WidePart.array_array_decimal32_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 4, false)
+    end
+
+    def array_array_decimal64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal64 nested Array accessor requires exact Array(Array(Decimal(18, S)))") unless WidePart.array_array_decimal64_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 8, false)
+    end
+
+    def array_array_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 nested Array accessor requires exact Array(Array(Decimal(38, S)))") unless WidePart.array_array_decimal128_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 16, false)
+    end
+
+    def array_array_decimal256_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal256 nested Array accessor requires exact Array(Array(Decimal(76, S)))") unless WidePart.array_array_decimal256_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 32, false)
+    end
+
+    def array_array_nullable_decimal32_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal32 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(9, S))))") unless WidePart.array_array_nullable_decimal32_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 4, true)
+    end
+
+    def array_array_nullable_decimal64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal64 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(18, S))))") unless WidePart.array_array_nullable_decimal64_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 8, true)
+    end
+
+    def array_array_nullable_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(38, S))))") unless WidePart.array_array_nullable_decimal128_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 16, true)
+    end
+
+    def array_array_nullable_decimal256_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal256 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(76, S))))") unless WidePart.array_array_nullable_decimal256_scale(@column_type)
+      array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 32, true)
+    end
+
+    private def array_array_decimal_mark_range_raw_bytes(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_width : Int32,
+      nullable : Bool,
+    ) : UInt64
+      validate_array_array_numeric_size0_marks(column, first_mark, mark_count)
+      validate_array_array_decimal_stream_mark_rows(column, first_mark, mark_count, nullable)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, flat_leaf_elements, mark_leaf_elements = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        element_width
+      )
+      raise CorruptPartError.new("Array(Array(Decimal)) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(Decimal)) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Decimal)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, element_width)
+      validate_mark_range_bytes(
+        value_stream,
+        value_start,
+        value_end,
+        checked_array_mark_byte_count(flat_leaf_elements, element_width),
+        element_width
+      )
+
+      outer_bytes = checked_byte_count(rows, 8).to_u64
+      inner_bytes = checked_array_mark_byte_count(flat_inner_arrays, 8).to_u64
+      value_bytes = checked_array_mark_byte_count(flat_leaf_elements, element_width).to_u64
+      if nullable
+        null_stream = @streams["#{column}.null"]
+        null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Array(Nullable(Decimal))) null-map mark rows differ") unless null_rows == rows
+        validate_array_nested_stream_marks(null_stream, first_mark, mark_leaf_elements, 1)
+        null_map = read_mark_range_bytes(
+          null_stream,
+          null_start,
+          null_end,
+          checked_array_mark_byte_count(flat_leaf_elements, 1),
+          1
+        )
+        null_map.each do |value|
+          raise CorruptPartError.new("Array(Array(Nullable(Decimal))) null-map byte is not boolean") unless value <= 1_u8
+        end
+        null_bytes = checked_array_mark_byte_count(flat_leaf_elements, 1).to_u64
+        {inner_bytes, null_bytes, value_bytes}.each do |bytes|
+          raise CorruptPartError.new("Array(Array(Nullable(Decimal))) raw byte count overflows") if bytes > UInt64::MAX - outer_bytes
+          outer_bytes += bytes
+        end
+      else
+        if inner_bytes > UInt64::MAX - outer_bytes || value_bytes > UInt64::MAX - outer_bytes - inner_bytes
+          raise CorruptPartError.new("Array(Array(Decimal)) raw byte count overflows")
+        end
+        outer_bytes += inner_bytes + value_bytes
       end
       outer_bytes
     end
@@ -3458,6 +3691,193 @@ module CrystalClick
       end
       raise CorruptPartError.new("Array(Array(T)) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
       raise CorruptPartError.new("Array(Array(T)) sizes do not consume selected numeric bytes") unless value_offset == value_bytes.size
+      values
+    end
+
+    def read_array_array_decimal32_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int32)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal32 nested Array accessor requires exact Array(Array(Decimal(9, S)))") unless WidePart.array_array_decimal32_scale(@column_type)
+      read_array_array_decimal_values(column, first_mark, mark_count, 4, Int32)
+    end
+
+    def read_array_array_decimal64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int64)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal64 nested Array accessor requires exact Array(Array(Decimal(18, S)))") unless WidePart.array_array_decimal64_scale(@column_type)
+      read_array_array_decimal_values(column, first_mark, mark_count, 8, Int64)
+    end
+
+    def read_array_array_decimal128_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int128)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 nested Array accessor requires exact Array(Array(Decimal(38, S)))") unless WidePart.array_array_decimal128_scale(@column_type)
+      read_array_array_decimal_values(column, first_mark, mark_count, 16, Int128)
+    end
+
+    def read_array_array_decimal256_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Decimal256Value)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal256 nested Array accessor requires exact Array(Array(Decimal(76, S)))") unless WidePart.array_array_decimal256_scale(@column_type)
+      read_array_array_decimal_values(column, first_mark, mark_count, 32, Decimal256Value)
+    end
+
+    def read_array_array_nullable_decimal32_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int32?)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal32 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(9, S))))") unless WidePart.array_array_nullable_decimal32_scale(@column_type)
+      read_array_array_nullable_decimal_values(column, first_mark, mark_count, 4, Int32)
+    end
+
+    def read_array_array_nullable_decimal64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int64?)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal64 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(18, S))))") unless WidePart.array_array_nullable_decimal64_scale(@column_type)
+      read_array_array_nullable_decimal_values(column, first_mark, mark_count, 8, Int64)
+    end
+
+    def read_array_array_nullable_decimal128_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int128?)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal128 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(38, S))))") unless WidePart.array_array_nullable_decimal128_scale(@column_type)
+      read_array_array_nullable_decimal_values(column, first_mark, mark_count, 16, Int128)
+    end
+
+    def read_array_array_nullable_decimal256_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Decimal256Value?)))
+      ensure_column(column)
+      raise UnsupportedFormatError.new("Decimal256 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(76, S))))") unless WidePart.array_array_nullable_decimal256_scale(@column_type)
+      read_array_array_nullable_decimal_values(column, first_mark, mark_count, 32, Decimal256Value)
+    end
+
+    private def read_array_array_decimal_values(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_width : Int32,
+      type : T.class,
+    ) : Array(Array(Array(T))) forall T
+      validate_array_array_numeric_size0_marks(column, first_mark, mark_count)
+      validate_array_array_decimal_stream_mark_rows(column, first_mark, mark_count, false)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, flat_elements, mark_leaf_elements = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        element_width
+      )
+      raise CorruptPartError.new("Array(Array(Decimal)) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(Decimal)) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Decimal)) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, element_width)
+      value_bytes = read_mark_range_bytes(
+        value_stream,
+        value_start,
+        value_end,
+        checked_array_mark_byte_count(flat_elements, element_width),
+        element_width
+      )
+
+      values = Array(Array(Array(T))).new(rows.to_i)
+      inner_offset = 0
+      value_offset = 0
+      outer_sizes.each do |inner_count|
+        row = Array(Array(T)).new(inner_count.to_i)
+        inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(Decimal)) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
+          leaf_count = element_sizes[inner_offset]
+          inner = Array(T).new(leaf_count.to_i)
+          leaf_count.to_i.times do
+            raise CorruptPartError.new("Array(Array(Decimal)) sizes exceed selected coefficient bytes") if value_offset > value_bytes.size - element_width
+            inner << decode_array_decimal_value(value_bytes, value_offset, type)
+            value_offset += element_width
+          end
+          row << inner
+          inner_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Array(Decimal)) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
+      raise CorruptPartError.new("Array(Array(Decimal)) sizes do not consume selected coefficient bytes") unless value_offset == value_bytes.size
+      values
+    end
+
+    private def read_array_array_nullable_decimal_values(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      element_width : Int32,
+      type : T.class,
+    ) : Array(Array(Array(T?))) forall T
+      validate_array_array_numeric_size0_marks(column, first_mark, mark_count)
+      validate_array_array_decimal_stream_mark_rows(column, first_mark, mark_count, true)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, flat_leaf_elements, mark_leaf_elements = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        element_width
+      )
+      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_leaf_elements, 1)
+      null_map = read_mark_range_bytes(
+        null_stream,
+        null_start,
+        null_end,
+        checked_array_mark_byte_count(flat_leaf_elements, 1),
+        1
+      )
+      null_map.each do |value|
+        raise CorruptPartError.new("Array(Array(Nullable(Decimal))) null-map byte is not boolean") unless value <= 1_u8
+      end
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, element_width)
+      value_bytes = read_mark_range_bytes(
+        value_stream,
+        value_start,
+        value_end,
+        checked_array_mark_byte_count(flat_leaf_elements, element_width),
+        element_width
+      )
+
+      values = Array(Array(Array(T?))).new(rows.to_i)
+      inner_offset = 0
+      leaf_offset = 0
+      value_offset = 0
+      outer_sizes.each do |inner_count|
+        row = Array(Array(T?)).new(inner_count.to_i)
+        inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(Nullable(Decimal))) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
+          leaf_count = element_sizes[inner_offset]
+          inner = Array(T?).new(leaf_count.to_i)
+          leaf_count.to_i.times do
+            raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes exceed selected child streams") if leaf_offset >= flat_leaf_elements
+            raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes exceed selected coefficient bytes") if value_offset > value_bytes.size - element_width
+            if null_map[leaf_offset] == 1_u8
+              inner << nil
+            else
+              inner << decode_array_decimal_value(value_bytes, value_offset, type)
+            end
+            value_offset += element_width
+            leaf_offset += 1
+          end
+          row << inner
+          inner_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
+      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes do not consume selected null-map bytes") unless leaf_offset.to_u64 == flat_leaf_elements
+      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes do not consume selected coefficient bytes") unless value_offset == value_bytes.size
       values
     end
 
@@ -7532,7 +7952,7 @@ module CrystalClick
         raise CorruptPartError.new("selected Tuple UInt64 child stream is missing") unless stream_names.includes?(stream)
         return stream
       end
-      if WidePart.array_array_numeric_element_type(@column_type)
+      if WidePart.array_array_numeric_element_type(@column_type) || WidePart.array_array_decimal_payload_width(@column_type)
         stream = "#{@column}.size0"
         raise CorruptPartError.new("selected nested numeric Array size0 stream is missing") unless stream_names.includes?(stream)
         return stream
@@ -7740,6 +8160,16 @@ module CrystalClick
         when "#{@column}.size0" then 8
         else
           raise UnsupportedFormatError.new("unsupported exact nullable Time Array substream")
+        end
+      elsif element_width = WidePart.array_array_decimal_payload_width(@column_type)
+        if stream_name == "#{@column}.null"
+          1
+        elsif stream_name == @column
+          element_width
+        elsif stream_name == "#{@column}.size0" || stream_name == "#{@column}.size1"
+          8
+        else
+          raise UnsupportedFormatError.new("unsupported exact nested Decimal Array substream")
         end
       elsif element_type = WidePart.array_array_nullable_numeric_element_type(@column_type)
         if stream_name == "#{@column}.null"
@@ -7987,6 +8417,35 @@ module CrystalClick
       end
       raise CorruptPartError.new("Array size0 marks do not consume selected rows") unless row_offset == outer_sizes.size
       {outer_sizes, flat_elements, rows, mark_flat_elements}
+    end
+
+    # Each nested Decimal child mark must agree with its root row boundary
+    # before materialization, including the nullable leaf's null-map.
+    private def validate_array_array_decimal_stream_mark_rows(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      nullable : Bool,
+    ) : Nil
+      root_stream = @streams[column]
+      _, _, rows = checked_stream_mark_range(root_stream, first_mark, mark_count)
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |range_mark_index|
+        expected_mark_rows << root_stream.marks[first_mark + range_mark_index].rows
+      end
+
+      stream_names = nullable ? ["#{column}.size1", "#{column}.null"] : ["#{column}.size1"]
+      stream_names.each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, stream_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Array(Decimal)) substream mark rows differ") unless stream_rows == rows
+        mark_count.times do |range_mark_index|
+          unless stream.marks[first_mark + range_mark_index].rows == expected_mark_rows[range_mark_index]
+            raise CorruptPartError.new("Array(Array(Decimal)) substream mark rows differ")
+          end
+        end
+      end
+      nil
     end
 
     # The generic Array(size0) reader checks only the combined selected byte
@@ -8847,6 +9306,25 @@ module CrystalClick
         )
       {% else %}
         decode_numeric_value(bytes, offset, type)
+      {% end %}
+    end
+
+    private def decode_array_decimal_value(bytes : Bytes, offset : Int, type : T.class) : T forall T
+      {% if T == Int32 %}
+        u32(bytes, offset).unsafe_as(Int32)
+      {% elsif T == Int64 %}
+        u64(bytes, offset).unsafe_as(Int64)
+      {% elsif T == Int128 %}
+        u128(bytes, offset).unsafe_as(Int128)
+      {% elsif T == Decimal256Value %}
+        Decimal256Value.from_words(
+          u64(bytes, offset),
+          u64(bytes, offset + 8),
+          u64(bytes, offset + 16),
+          u64(bytes, offset + 24)
+        )
+      {% else %}
+        raise UnsupportedFormatError.new("only exact Decimal coefficient widths are supported")
       {% end %}
     end
 

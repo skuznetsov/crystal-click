@@ -45,22 +45,22 @@ module CrystalClick
                                          Array(Array(Array(Int8))) | Array(Array(Array(Int16))) | Array(Array(Array(Int32))) | Array(Array(Array(Int64))) |
                                          Array(Array(Array(Float32))) | Array(Array(Array(Float64))) |
                                          Array(Array(Array(Int128))) | Array(Array(Array(UInt128))) |
-                                         Array(Array(Array(Int256Value))) | Array(Array(Array(UInt256Value))) | Array(Array(Array(BFloat16Value)))
+                                         Array(Array(Array(Int256Value))) | Array(Array(Array(UInt256Value))) | Array(Array(Array(Decimal256Value))) | Array(Array(Array(BFloat16Value)))
   alias WidePartArrayArrayNumericSlice = Slice(Array(Array(UInt8))) | Slice(Array(Array(UInt16))) | Slice(Array(Array(UInt32))) | Slice(Array(Array(UInt64))) |
                                          Slice(Array(Array(Int8))) | Slice(Array(Array(Int16))) | Slice(Array(Array(Int32))) | Slice(Array(Array(Int64))) |
                                          Slice(Array(Array(Float32))) | Slice(Array(Array(Float64))) |
                                          Slice(Array(Array(Int128))) | Slice(Array(Array(UInt128))) |
-                                         Slice(Array(Array(Int256Value))) | Slice(Array(Array(UInt256Value))) | Slice(Array(Array(BFloat16Value)))
+                                         Slice(Array(Array(Int256Value))) | Slice(Array(Array(UInt256Value))) | Slice(Array(Array(Decimal256Value))) | Slice(Array(Array(BFloat16Value)))
   alias WidePartArrayArrayNullableNumericArray = Array(Array(Array(UInt8?))) | Array(Array(Array(UInt16?))) | Array(Array(Array(UInt32?))) | Array(Array(Array(UInt64?))) |
                                                  Array(Array(Array(Int8?))) | Array(Array(Array(Int16?))) | Array(Array(Array(Int32?))) | Array(Array(Array(Int64?))) |
                                                  Array(Array(Array(Float32?))) | Array(Array(Array(Float64?))) |
                                                  Array(Array(Array(Int128?))) | Array(Array(Array(UInt128?))) |
-                                                 Array(Array(Array(Int256Value?))) | Array(Array(Array(UInt256Value?))) | Array(Array(Array(BFloat16Value?)))
+                                                 Array(Array(Array(Int256Value?))) | Array(Array(Array(UInt256Value?))) | Array(Array(Array(Decimal256Value?))) | Array(Array(Array(BFloat16Value?)))
   alias WidePartArrayArrayNullableNumericSlice = Slice(Array(Array(UInt8?))) | Slice(Array(Array(UInt16?))) | Slice(Array(Array(UInt32?))) | Slice(Array(Array(UInt64?))) |
                                                  Slice(Array(Array(Int8?))) | Slice(Array(Array(Int16?))) | Slice(Array(Array(Int32?))) | Slice(Array(Array(Int64?))) |
                                                  Slice(Array(Array(Float32?))) | Slice(Array(Array(Float64?))) |
                                                  Slice(Array(Array(Int128?))) | Slice(Array(Array(UInt128?))) |
-                                                 Slice(Array(Array(Int256Value?))) | Slice(Array(Array(UInt256Value?))) | Slice(Array(Array(BFloat16Value?)))
+                                                 Slice(Array(Array(Int256Value?))) | Slice(Array(Array(UInt256Value?))) | Slice(Array(Array(Decimal256Value?))) | Slice(Array(Array(BFloat16Value?)))
   alias WidePartArrayBoolArray = Array(Array(Bool))
   alias WidePartArrayBoolSlice = Slice(Array(Bool))
   alias WidePartArrayNullableBoolArray = Array(Array(Bool?))
@@ -923,6 +923,64 @@ module CrystalClick
       values.as(Slice(Array(Array(T?))))
     end
 
+    # Decimal raw accessors keep Decimal declarations distinct from same-width
+    # signed integers while sharing the bounded nested-numeric batch storage.
+    def array_array_decimal32_raw_for(column : String) : Slice(Array(Array(Int32)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires exact Array(Array(Decimal(9, S)))") unless WidePart.array_array_decimal32_scale(@column_types[index])
+      values = @array_array_numeric_values[column]? || raise(UnsupportedFormatError.new("Decimal32 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Int32))))
+    end
+
+    def array_array_decimal64_raw_for(column : String) : Slice(Array(Array(Int64)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires exact Array(Array(Decimal(18, S)))") unless WidePart.array_array_decimal64_scale(@column_types[index])
+      values = @array_array_numeric_values[column]? || raise(UnsupportedFormatError.new("Decimal64 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Int64))))
+    end
+
+    def array_array_decimal128_raw_for(column : String) : Slice(Array(Array(Int128)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires exact Array(Array(Decimal(38, S)))") unless WidePart.array_array_decimal128_scale(@column_types[index])
+      values = @array_array_numeric_values[column]? || raise(UnsupportedFormatError.new("Decimal128 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Int128))))
+    end
+
+    def array_array_decimal256_raw_for(column : String) : Slice(Array(Array(Decimal256Value)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires exact Array(Array(Decimal(76, S)))") unless WidePart.array_array_decimal256_scale(@column_types[index])
+      values = @array_array_numeric_values[column]? || raise(UnsupportedFormatError.new("Decimal256 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Decimal256Value))))
+    end
+
+    def array_array_nullable_decimal32_raw_for(column : String) : Slice(Array(Array(Int32?)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires exact Array(Array(Nullable(Decimal(9, S))))") unless WidePart.array_array_nullable_decimal32_scale(@column_types[index])
+      values = @array_array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nullable Decimal32 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Int32?))))
+    end
+
+    def array_array_nullable_decimal64_raw_for(column : String) : Slice(Array(Array(Int64?)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires exact Array(Array(Nullable(Decimal(18, S))))") unless WidePart.array_array_nullable_decimal64_scale(@column_types[index])
+      values = @array_array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nullable Decimal64 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Int64?))))
+    end
+
+    def array_array_nullable_decimal128_raw_for(column : String) : Slice(Array(Array(Int128?)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires exact Array(Array(Nullable(Decimal(38, S))))") unless WidePart.array_array_nullable_decimal128_scale(@column_types[index])
+      values = @array_array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nullable Decimal128 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Int128?))))
+    end
+
+    def array_array_nullable_decimal256_raw_for(column : String) : Slice(Array(Array(Decimal256Value?)))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires exact Array(Array(Nullable(Decimal(76, S))))") unless WidePart.array_array_nullable_decimal256_scale(@column_types[index])
+      values = @array_array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("nullable Decimal256 nested Array column was not materialized in this batch"))
+      values.as(Slice(Array(Array(Decimal256Value?))))
+    end
+
     def array_strings_for(column : String) : Slice(Array(String))
       index = column_index(column)
       raise UnsupportedFormatError.new("Array(String) accessor requires an exact Array(String) column") unless @column_types[index] == "Array(String)"
@@ -1586,6 +1644,30 @@ module CrystalClick
               elsif selected.column_type == "Array(Array(Nullable(UInt64)))"
                 bytes = selected.reader.array_array_nullable_uint64_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_array_nullable_uint64_bytes[selected.name] = bytes
+              elsif WidePart.array_array_nullable_decimal32_scale(selected.column_type)
+                bytes = selected.reader.array_array_nullable_decimal32_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_nullable_decimal64_scale(selected.column_type)
+                bytes = selected.reader.array_array_nullable_decimal64_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_nullable_decimal128_scale(selected.column_type)
+                bytes = selected.reader.array_array_nullable_decimal128_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_nullable_decimal256_scale(selected.column_type)
+                bytes = selected.reader.array_array_nullable_decimal256_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_nullable_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_decimal32_scale(selected.column_type)
+                bytes = selected.reader.array_array_decimal32_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_decimal64_scale(selected.column_type)
+                bytes = selected.reader.array_array_decimal64_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_decimal128_scale(selected.column_type)
+                bytes = selected.reader.array_array_decimal128_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_numeric_bytes[selected.name] = bytes
+              elsif WidePart.array_array_decimal256_scale(selected.column_type)
+                bytes = selected.reader.array_array_decimal256_mark_range_raw_bytes(selected.name, mark_index, 1)
+                preflight_array_array_numeric_bytes[selected.name] = bytes
               elsif WidePart.array_array_nullable_numeric_element_type(selected.column_type)
                 bytes = selected.reader.array_array_nullable_numeric_mark_range_raw_bytes(selected.name, mark_index, 1)
                 preflight_array_array_nullable_numeric_bytes[selected.name] = bytes
@@ -2195,6 +2277,86 @@ module CrystalClick
                 actual_string_bytes += bytes
                 array_array_nullable_uint64_values[selected.name] = values
                 array_array_nullable_numeric_values[selected.name] = values.as(WidePartArrayArrayNullableNumericArray)
+              when .starts_with?("Array(Array(Nullable(Decimal(9,")
+                raise UnsupportedFormatError.new("unsupported nested nullable Decimal32 declaration") unless WidePart.array_array_nullable_decimal32_scale(selected.column_type)
+                values = selected.reader.read_array_array_nullable_decimal32_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected nullable Decimal32 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Decimal32 nested Array mark was not preflighted"))
+                bytes = array_array_nullable_numeric_materialized_bytes(values, "Int32")
+                raise CorruptPartError.new("selected nullable Decimal32 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Decimal32 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_nullable_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Nullable(Decimal(18,")
+                raise UnsupportedFormatError.new("unsupported nested nullable Decimal64 declaration") unless WidePart.array_array_nullable_decimal64_scale(selected.column_type)
+                values = selected.reader.read_array_array_nullable_decimal64_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected nullable Decimal64 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Decimal64 nested Array mark was not preflighted"))
+                bytes = array_array_nullable_numeric_materialized_bytes(values, "Int64")
+                raise CorruptPartError.new("selected nullable Decimal64 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Decimal64 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_nullable_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Nullable(Decimal(38,")
+                raise UnsupportedFormatError.new("unsupported nested nullable Decimal128 declaration") unless WidePart.array_array_nullable_decimal128_scale(selected.column_type)
+                values = selected.reader.read_array_array_nullable_decimal128_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected nullable Decimal128 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Decimal128 nested Array mark was not preflighted"))
+                bytes = array_array_nullable_numeric_materialized_bytes(values, "Int128")
+                raise CorruptPartError.new("selected nullable Decimal128 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Decimal128 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_nullable_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Nullable(Decimal(76,")
+                raise UnsupportedFormatError.new("unsupported nested nullable Decimal256 declaration") unless WidePart.array_array_nullable_decimal256_scale(selected.column_type)
+                values = selected.reader.read_array_array_nullable_decimal256_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected nullable Decimal256 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable Decimal256 nested Array mark was not preflighted"))
+                bytes = array_array_nullable_numeric_materialized_bytes(values, "Decimal256")
+                raise CorruptPartError.new("selected nullable Decimal256 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable Decimal256 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_nullable_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Decimal(9,")
+                raise UnsupportedFormatError.new("unsupported nested Decimal32 declaration") unless WidePart.array_array_decimal32_scale(selected.column_type)
+                values = selected.reader.read_array_array_decimal32_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Decimal32 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Decimal32 nested Array mark was not preflighted"))
+                bytes = array_array_numeric_materialized_bytes(values, "Int32")
+                raise CorruptPartError.new("selected Decimal32 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Decimal32 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Decimal(18,")
+                raise UnsupportedFormatError.new("unsupported nested Decimal64 declaration") unless WidePart.array_array_decimal64_scale(selected.column_type)
+                values = selected.reader.read_array_array_decimal64_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Decimal64 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Decimal64 nested Array mark was not preflighted"))
+                bytes = array_array_numeric_materialized_bytes(values, "Int64")
+                raise CorruptPartError.new("selected Decimal64 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Decimal64 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Decimal(38,")
+                raise UnsupportedFormatError.new("unsupported nested Decimal128 declaration") unless WidePart.array_array_decimal128_scale(selected.column_type)
+                values = selected.reader.read_array_array_decimal128_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Decimal128 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Decimal128 nested Array mark was not preflighted"))
+                bytes = array_array_numeric_materialized_bytes(values, "Int128")
+                raise CorruptPartError.new("selected Decimal128 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Decimal128 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_numeric_values[selected.name] = values
+              when .starts_with?("Array(Array(Decimal(76,")
+                raise UnsupportedFormatError.new("unsupported nested Decimal256 declaration") unless WidePart.array_array_decimal256_scale(selected.column_type)
+                values = selected.reader.read_array_array_decimal256_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Decimal256 nested Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Decimal256 nested Array mark was not preflighted"))
+                bytes = array_array_numeric_materialized_bytes(values, "Decimal256")
+                raise CorruptPartError.new("selected Decimal256 nested Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected Decimal256 nested Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_array_numeric_values[selected.name] = values
               when .starts_with?("Array(Array(Nullable(")
                 element_type = WidePart.array_array_nullable_numeric_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported Array(Array(Nullable(T))) numeric type"))
                 values = read_array_array_nullable_numeric_values(selected.reader, selected.name, mark_index, element_type)

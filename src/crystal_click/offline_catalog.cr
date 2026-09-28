@@ -9,11 +9,11 @@ module CrystalClick
                              Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) |
                              Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
                              Array(Array(Float32?)) | Array(Array(Float64?)) |
-                             Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?)) | Array(Array(BFloat16Value?)) |
+                             Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?)) | Array(Array(Decimal256Value?)) | Array(Array(BFloat16Value?)) |
                              Array(Array(UInt8)) | Array(Array(UInt16)) | Array(Array(UInt32)) |
                              Array(Array(Int8)) | Array(Array(Int16)) | Array(Array(Int32)) | Array(Array(Int64)) |
                              Array(Array(Float32)) | Array(Array(Float64)) |
-                             Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value)) | Array(Array(BFloat16Value)) |
+                             Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value)) | Array(Array(Decimal256Value)) | Array(Array(BFloat16Value)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Int128) | Array(UInt128) | Array(Int256Value) | Array(UInt256Value) |
                              Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) | Array(BFloat16Value?) |
@@ -251,7 +251,47 @@ module CrystalClick
         return {observed_rows, string_bytes}
       end
 
-      if WidePart.array_enum8_codes(selected_type)
+      if !WidePart.array_array_decimal32_scale(selected_type).nil?
+        selected_values = batch.array_array_decimal32_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_decimal64_scale(selected_type).nil?
+        selected_values = batch.array_array_decimal64_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_decimal128_scale(selected_type).nil?
+        selected_values = batch.array_array_decimal128_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_decimal256_scale(selected_type).nil?
+        selected_values = batch.array_array_decimal256_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_nullable_decimal32_scale(selected_type).nil?
+        selected_values = batch.array_array_nullable_decimal32_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_nullable_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_nullable_decimal64_scale(selected_type).nil?
+        selected_values = batch.array_array_nullable_decimal64_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_nullable_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_nullable_decimal128_scale(selected_type).nil?
+        selected_values = batch.array_array_nullable_decimal128_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_nullable_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif !WidePart.array_array_nullable_decimal256_scale(selected_type).nil?
+        selected_values = batch.array_array_nullable_decimal256_raw_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_array_nullable_numeric(values, selected_values, array_elements[0])
+        return {observed_rows, string_bytes}
+      elsif WidePart.array_enum8_codes(selected_type)
         selected_values = batch.array_enum8_codes_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])

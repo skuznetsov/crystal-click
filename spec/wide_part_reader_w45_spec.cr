@@ -153,7 +153,7 @@ describe CrystalClick::WidePart do
       "Array(Decimal(76, 77))", "Array(Decimal(76, 076))", "Array(Decimal(076, 2))",
       "Array(Decimal(76,2))", "Array(Decimal(76, 2) )", "Array(Decimal256(2))",
       "Array(Nullable(Decimal(76, 77)))", "Array(Nullable(Decimal256(02)))",
-      "Array(Nullable(Nullable(Decimal(76, 2))))", "Array(Array(Decimal(76, 2)))",
+      "Array(Nullable(Nullable(Decimal(76, 2))))",
       "Nullable(Array(Decimal(76, 2)))", "Array(Decimal(75, 2))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
@@ -198,7 +198,6 @@ describe CrystalClick::WidePart do
         {"Array(Decimal(76, 2))", "Array(Decimal256(2))"},
         {"Array(Decimal(76, 2))", "Array(Decimal(75, 2))"},
         {"Array(Nullable(Decimal(76, 2)))", "Array(Nullable(Decimal(76, 77)))"},
-        {"Array(Decimal(76, 2))", "Array(Array(Decimal(76, 2)))"},
       ].each_with_index do |(canonical, malformed), index|
         bad_part = File.join(parent, "bad-grammar-#{index}")
         FileUtils.cp_r(W45_DECIMAL256_FIXTURE, bad_part)

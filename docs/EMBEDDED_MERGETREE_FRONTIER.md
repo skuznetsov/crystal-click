@@ -3815,6 +3815,62 @@ does not establish arbitrary recursive Maps, other part profiles, MV or
 projection support, detection of arbitrary same-size payload bit flips beyond
 existing checksum semantics, or a performance result.
 
+## W64: two-level Decimal Arrays
+
+Admit paired reading and immutable writing for exactly
+`Array(Array(Decimal(P, S)))` and
+`Array(Array(Nullable(Decimal(P, S))))`, where `P` is one of 9, 18, 38, or
+76 and `0 <= S <= P`, in the existing sorted-`UInt64`-key, one-payload
+Wide/LZ4/plain-MRK2 part profile. Crystal values are raw signed coefficients
+(`Int32`, `Int64`, `Int128`, or `Decimal256Value`); the declared scale and
+precision are retained in metadata, not inferred from coefficient values.
+Expose selected-mark reading, typed table batches, and offline catalog values.
+Do not admit arbitrary `Decimal(P, S)` precision, deeper Array nesting,
+Compact parts, or other codecs. Complete paired type coverage first, then
+MV/projection support, before memory or performance optimization.
+
+The first falsifier observed pre-change rejection of a representative nested
+Decimal declaration; the remaining widths had no admitted branch. The pinned
+ClickHouse 26.7.1.1315 producer must then
+establish exact canonical declarations and serializer-order streams, including
+two independent offset levels and nullable leaf null-map. Reader and writer
+must agree on per-mark row, inner-array, and flattened-leaf cardinality; raw
+width, NULL placeholder, stream-byte, and selected-mark boundaries; and reject
+corruption before the affected table callback. Exercise zero and maximum
+scales, positive/negative coefficient extremes, empty outer and inner arrays,
+all-NULL middle marks, and short tails. The bidirectional stock oracle must
+compare metadata and independent full/key-range RowBinary and pass stock
+`ATTACH PART` plus `CHECK TABLE` on Crystal-written parts.
+
+Risk is CAUTION: a wrong nested offset, signed-width, or scale identity can
+silently produce plausible but shifted data. Rollback is the isolated W64 diff
+or one local feature commit; no existing parts or remote history are changed.
+DoD is focused W64 specs, existing nested numeric and single-level Decimal
+controls, the pinned bidirectional oracle, complete debug and release specs,
+format/diff checks, and hostile counterexample review. Evidence decays when
+the pinned producer, serializer/version, codec/mark format, platform, or
+shared nested/Decimal codec changes.
+
+The pre-change admission falsifier failed as predicted. The pinned ClickHouse
+26.7.1.1315 bidirectional oracle passed for all eight width/nullability
+profiles: Crystal decoded stock parts; stock `ATTACH PART` and `CHECK TABLE`
+accepted Crystal parts; exact column/substream/serialization metadata and
+independent full/key-range `RowBinary` matched. A separate writer-only
+Decimal32 probe passed stock attach, check, and RowBinary for the full raw
+`Int32::MIN`/`Int32::MAX` backing range, which intentionally exceeds SQL
+`Decimal(9, S)` precision while retaining the existing raw-coefficient API
+contract. Focused specs covered zero/maximum legal scales, empty and all-NULL
+middle marks, short tails, catalog-owned values, and rejection of shifted
+selected-stream boundaries before callbacks. Complete debug and release
+`crystal spec` each passed 853/0 with the host linker override; the W58/W60
+nested numeric and W42-W45 one-level Decimal stock controls passed. Crystal
+formatting, shell syntax, and diff whitespace checks passed. This evidence
+does not establish arbitrary Decimal precision/composition, MV or projection
+semantics, other part formats or ClickHouse versions, or a memory/performance
+gain. A bounded hostile review returned ROBUST within the W64 scope and found
+no concrete blocker; its out-of-precision raw-coefficient candidate was
+falsified by the pinned Decimal32 backing-extrema probe.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
