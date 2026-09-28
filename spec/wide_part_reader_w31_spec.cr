@@ -422,7 +422,7 @@ describe CrystalClick::WidePart do
 
     [
       "Array(Nullable(Decimal(75, 0)))", "Array(Nullable(Decimal(38, 39)))",
-      "Array(Nullable(Nullable(UInt64)))", "Array(Array(Nullable(UInt8)))", "Nullable(Array(UInt64))",
+      "Array(Nullable(Nullable(UInt64)))", "Array(Array(Nullable(Bool)))", "Nullable(Array(UInt64))",
       "Array(Nullable(UInt64) trailing)", "Array(Nullable(UInt64)) trailing",
     ].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false

@@ -232,7 +232,7 @@ describe CrystalClick::WidePart do
 
     {
       "Array(Array(Bool))",
-      "Array(Array(Nullable(Int32)))",
+      "Array(Array(Nullable(Bool)))",
       "Array(Array(Decimal(9, 2)))",
       "Array(Array(Nullable(String)))",
       "Array(Array(Array(Int32)))",

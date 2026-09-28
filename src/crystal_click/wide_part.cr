@@ -771,8 +771,6 @@ module CrystalClick
         ["#{column}.null", column]
       when "Array(Array(UInt64))"
         ["#{column}.size1", column]
-      when "Array(Array(Nullable(UInt64)))"
-        ["#{column}.size1", "#{column}.null", column]
       when "Array(Bool)"
         [column]
       when "Array(Nullable(Bool))"
@@ -808,6 +806,8 @@ module CrystalClick
           [column]
         elsif element_type = nullable_numeric_array_element_type(type)
           ["#{column}.null", column]
+        elsif array_array_nullable_numeric_element_type(type)
+          ["#{column}.size1", "#{column}.null", column]
         elsif element_type = numeric_array_element_type(type)
           [column]
         elsif array_array_numeric_element_type(type)
@@ -842,6 +842,16 @@ module CrystalClick
     def self.array_array_numeric_element_type(type : String) : String?
       return nil unless type.starts_with?("Array(Array(") && type.ends_with?("))")
       element_type = type.byte_slice("Array(Array(".bytesize, type.bytesize - "Array(Array())".bytesize)
+      supports_numeric_type?(element_type) ? element_type : nil
+    end
+
+    # Admit exactly two Array levels with one nullable wrapper around a
+    # primitive numeric leaf. Nullable semantic and wrapper-backed numeric
+    # types remain outside this bounded grammar.
+    def self.array_array_nullable_numeric_element_type(type : String) : String?
+      prefix = "Array(Array(Nullable("
+      return nil unless type.starts_with?(prefix) && type.ends_with?(")))")
+      element_type = type.byte_slice(prefix.bytesize, type.bytesize - prefix.bytesize - 3)
       supports_numeric_type?(element_type) ? element_type : nil
     end
 
@@ -2029,6 +2039,51 @@ module CrystalClick
       inner_bytes = checked_array_mark_byte_count(flat_inner_arrays, 8).to_u64
       leaf_bytes = checked_array_mark_byte_count(flat_leaf_elements, 8).to_u64
       outer_bytes + inner_bytes + leaf_bytes + flat_leaf_elements
+    end
+
+    # Count all four physical streams for an exact
+    # Array(Array(Nullable(T))) range before allocating nested rows. Nullable
+    # slots retain one null byte and one fixed-width value slot per leaf.
+    def array_array_nullable_numeric_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      ensure_column(column)
+      element_type = WidePart.array_array_nullable_numeric_element_type(@column_type) ||
+                     raise(UnsupportedFormatError.new("nested Array nullable numeric accessor requires an exact Array(Array(Nullable(T))) numeric column"))
+
+      validate_array_array_numeric_size0_marks(column, first_mark, mark_count)
+      validate_array_array_nullable_numeric_stream_mark_rows(column, first_mark, mark_count)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_sizes, flat_leaf_elements, mark_leaf_elements = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        WidePart.array_numeric_payload_width(element_type)
+      )
+      raise CorruptPartError.new("Array(Array(Nullable(T))) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(Nullable(T))) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(T))) null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_leaf_elements, 1)
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(T))) value mark rows differ") unless value_rows == rows
+      element_width = WidePart.array_numeric_payload_width(element_type)
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, element_width)
+
+      outer_bytes = checked_byte_count(rows, 8).to_u64
+      inner_bytes = checked_array_mark_byte_count(flat_inner_arrays, 8).to_u64
+      null_bytes = checked_array_mark_byte_count(flat_leaf_elements, 1).to_u64
+      value_bytes = checked_array_mark_byte_count(flat_leaf_elements, element_width).to_u64
+      {inner_bytes, null_bytes, value_bytes}.each do |bytes|
+        raise CorruptPartError.new("Array(Array(Nullable(T))) raw byte count overflows") if bytes > UInt64::MAX - outer_bytes
+        outer_bytes += bytes
+      end
+      outer_bytes
     end
 
     # Count both child streams before the caller materializes
@@ -4033,6 +4088,91 @@ module CrystalClick
       end
       raise CorruptPartError.new("Array(Array(Nullable(UInt64))) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
       raise CorruptPartError.new("Array(Array(Nullable(UInt64))) sizes do not consume selected child streams") unless leaf_offset.to_u64 == flat_leaf_elements
+      values
+    end
+
+    # Read exactly two Array levels over a nullable primitive numeric leaf.
+    # size0, size1, null-map, and value marks are checked per selected mark
+    # before result rows are allocated; floating leaves retain their raw bits.
+    def read_array_array_nullable_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(Array(Array(T?))) forall T
+      ensure_column(column)
+      element_type = WidePart.array_numeric_type_name(type)
+      unless WidePart.array_array_nullable_numeric_element_type(@column_type) == element_type
+        raise UnsupportedFormatError.new("typed nested nullable Array accessor does not match selected column type")
+      end
+
+      validate_array_array_numeric_size0_marks(column, first_mark, mark_count)
+      validate_array_array_nullable_numeric_stream_mark_rows(column, first_mark, mark_count)
+      outer_sizes, flat_inner_arrays, rows, mark_inner_arrays = read_array_outer_sizes(column, first_mark, mark_count)
+      element_width = WidePart.array_numeric_payload_width(element_type)
+      element_sizes, flat_leaf_elements, mark_leaf_elements = read_array_array_numeric_element_sizes(
+        column,
+        first_mark,
+        mark_count,
+        flat_inner_arrays,
+        rows,
+        mark_inner_arrays,
+        element_width
+      )
+      raise CorruptPartError.new("Array(Array(Nullable(T))) outer row count changed") unless outer_sizes.size.to_u64 == rows
+      raise CorruptPartError.new("Array(Array(Nullable(T))) nested size count changed") unless element_sizes.size.to_u64 == flat_inner_arrays
+
+      null_stream = @streams["#{column}.null"]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(T))) null-map mark rows differ") unless null_rows == rows
+      validate_array_nested_stream_marks(null_stream, first_mark, mark_leaf_elements, 1)
+      null_bytes = read_mark_range_bytes(
+        null_stream,
+        null_start,
+        null_end,
+        checked_array_mark_byte_count(flat_leaf_elements, 1),
+        1
+      )
+
+      value_stream = @streams[column]
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Array(Nullable(T))) value mark rows differ") unless value_rows == rows
+      validate_array_nested_stream_marks(value_stream, first_mark, mark_leaf_elements, element_width)
+      value_bytes = read_mark_range_bytes(
+        value_stream,
+        value_start,
+        value_end,
+        checked_array_mark_byte_count(flat_leaf_elements, element_width),
+        element_width
+      )
+
+      values = Array(Array(Array(T?))).new(rows.to_i)
+      inner_offset = 0
+      leaf_offset = 0
+      value_offset = 0
+      outer_sizes.each do |inner_count|
+        row = Array(Array(T?)).new(inner_count.to_i)
+        inner_count.to_i.times do
+          raise CorruptPartError.new("Array(Array(Nullable(T))) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
+          leaf_count = element_sizes[inner_offset]
+          inner = Array(T?).new(leaf_count.to_i)
+          leaf_count.to_i.times do
+            raise CorruptPartError.new("Array(Array(Nullable(T))) sizes exceed selected child streams") if leaf_offset >= flat_leaf_elements
+            is_null = null_bytes[leaf_offset]
+            raise CorruptPartError.new("Array(Array(Nullable(T))) null map contains a value other than 0 or 1") unless is_null <= 1_u8
+            raise CorruptPartError.new("Array(Array(Nullable(T))) sizes exceed selected value bytes") if value_offset > value_bytes.size - element_width
+            inner << (is_null == 1_u8 ? nil : decode_array_numeric_value(value_bytes, value_offset, type))
+            value_offset += element_width
+            leaf_offset += 1
+          end
+          row << inner
+          inner_offset += 1
+        end
+        values << row
+      end
+      raise CorruptPartError.new("Array(Array(Nullable(T))) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
+      raise CorruptPartError.new("Array(Array(Nullable(T))) sizes do not consume selected child streams") unless leaf_offset.to_u64 == flat_leaf_elements
+      raise CorruptPartError.new("Array(Array(Nullable(T))) sizes do not consume selected value bytes") unless value_offset == value_bytes.size
       values
     end
 
@@ -7302,8 +7442,14 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("unsupported exact nullable Time Array substream")
         end
-      elsif @column_type == "Array(Array(Nullable(UInt64)))"
-        stream_name == "#{@column}.null" ? 1 : 8
+      elsif element_type = WidePart.array_array_nullable_numeric_element_type(@column_type)
+        if stream_name == "#{@column}.null"
+          1
+        elsif stream_name == @column
+          WidePart.array_numeric_payload_width(element_type)
+        else
+          8
+        end
       elsif @column_type == "Array(Array(UInt64))"
         8
       elsif element_type = WidePart.array_array_numeric_element_type(@column_type)
@@ -7570,6 +7716,37 @@ module CrystalClick
         validate_array_nested_stream_marks(size_stream, first_mark, expected_mark_rows, 8)
       rescue error : CorruptPartError
         raise CorruptPartError.new("Array(Array(T)) size0 mark boundary is corrupt: #{error.message}")
+      end
+      nil
+    end
+
+    # Nullable nested numeric children keep one base-row mark per selected
+    # mark, even when their flattened leaf payload is empty. Match each child
+    # mark's row count to the root stream; equal selected totals alone are not
+    # sufficient to prove mark alignment.
+    private def validate_array_array_nullable_numeric_stream_mark_rows(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : Nil
+      root_stream = @streams[column]
+      _, _, rows = checked_stream_mark_range(root_stream, first_mark, mark_count)
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |range_mark_index|
+        expected_mark_rows << root_stream.marks[first_mark + range_mark_index].rows
+      end
+
+      ["#{column}.size1", "#{column}.null"].each do |stream_name|
+        stream = @streams[stream_name]
+        _, _, stream_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        unless stream_rows == rows
+          raise CorruptPartError.new("Array(Array(Nullable(T))) substream mark rows differ")
+        end
+        mark_count.times do |range_mark_index|
+          unless stream.marks[first_mark + range_mark_index].rows == expected_mark_rows[range_mark_index]
+            raise CorruptPartError.new("Array(Array(Nullable(T))) substream mark rows differ")
+          end
+        end
       end
       nil
     end

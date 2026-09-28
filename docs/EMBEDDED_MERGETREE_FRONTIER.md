@@ -155,6 +155,9 @@ without widening nullable, string, or arbitrary recursive shapes. Its
 admitted boundary and verification status are recorded below.
 W59 admits paired `Array(Array(String))` only, with the exact four-stream
 reader/writer, typed table, and offline catalog boundary recorded below.
+W60 admits paired `Array(Array(Nullable(T)))` for the ten primitive numeric
+leaves already admitted by W31 and W58. Its evidence and limits are recorded
+below; this does not admit arbitrary recursive types.
 
 ## Purpose and bounded contexts
 
@@ -3558,6 +3561,74 @@ other leaves, Compact/compressed marks, general JSON, MV/projections, and
 performance guard-only. Evidence decays if the pinned producer, serializer,
 codec, marks, platform, or shared reader/writer helpers change.
 
+## W60: two-level nullable primitive numeric Arrays
+
+Admit paired immutable writing and typed reading for exactly
+`Array(Array(Nullable(T)))`, where `T` is `UInt8`, `UInt16`, `UInt32`,
+`UInt64`, `Int8`, `Int16`, `Int32`, `Int64`, `Float32`, or `Float64`.
+Preserve W29's existing `UInt64` entry points. The target is one sorted
+`UInt64` key and one payload in a Wide/LZ4/plain-mark part. It must expose
+the same values through direct mark reads, typed table batches, and offline
+catalog columns, without treating parser acceptance as physical admission.
+Other nullable leaves, deeper nesting, Sparse serialization, Compact parts,
+compressed marks, and arbitrary schemas remain guard-only.
+
+The expected physical plan is four independently checked streams: outer
+`.size0`, inner `.size1`, BASIC null map, and fixed-width leaf data. First
+confirm their exact names, serialization metadata, mark rows, empty-stream
+behavior, and mark-local cardinalities with a pinned ClickHouse 26.7.1.1315
+producer. A pre-change RED spec must fail on at least `Int32` and `Float64`
+type admission. Stock-produced test rows must distinguish NULL from numeric
+zero (and signed zero/NaN by raw bits), cover empty outer and inner Arrays,
+all-NULL and all-empty middle marks followed by nonempty leaves, and a short
+tail. Mutate the selected mark of each physical stream independently and
+require rejection before the affected table callback; earlier valid marks
+may already have been yielded. Reverse evidence requires stock `ATTACH PART`,
+`CHECK TABLE`, exact type metadata, and independently encoded full and
+key-range `RowBinary` for Crystal-written parts. Self-readback is insufficient.
+
+Risk is CAUTION: nullable leaf slots have physical bytes even for NULL, and
+incorrect count or mark alignment could silently shift later values. Guard
+each selected mark's rows and flattened child cardinality before exposing
+it. Implement only after the physical probe and RED spec; connect reader,
+writer, table, catalog, specs, and oracle as one feature. The DoD is focused
+W60/W29/W31/W58 controls, the bidirectional pinned oracle, full debug and
+release `crystal spec`, and a hostile counterexample review. Rollback is
+removal of the isolated uncommitted diff or one local W60 feature commit;
+existing parts and remote history are untouched. Evidence decays when the
+pinned ClickHouse serializer, codec/mark format, platform, or shared nested
+array dispatch changes. Type compatibility, then MV/projections, remain
+ahead of memory/performance tuning.
+
+The pre-change admission spec failed as predicted (`Expected: true`, got
+`false`) for a formerly unsupported leaf. An isolated stock-producer probe
+for `Int32` and `Float64` confirmed `.size0`, `.size1`, `.null`, and the root
+value stream, in that order, with one null byte and one fixed-width physical
+slot per flattened leaf. NULL slots contained zero data bytes of the leaf
+width; an all-empty middle mark advanced only `.size0`, while the other
+stream offsets repeated. Each stream carried base-row MRK2 counts
+`[2, 2, 2, 1, 0]` including the short tail and sentinel. The probe alone
+did not establish paired implementation or all-ten stock compatibility.
+
+The paired reader and staged writer now admit all ten leaves on this exact
+profile. Direct reads, typed table batches, and catalog-owned materialization
+were checked, including W29 `UInt64` API preservation and four-stream
+corruption rejection before the selected table callback. The pinned
+ClickHouse 26.7.1.1315 bidirectional oracle passed for all ten leaves:
+stock-produced parts decoded in Crystal, and Crystal-written parts passed
+stock `ATTACH PART` and `CHECK TABLE` plus independently encoded full and
+key-range `RowBinary`. It also checked exact column and substream metadata,
+per-stream mark rows, empty and all-NULL middle marks, nonempty outer Arrays
+with empty inner Arrays, and raw Float bit patterns. W29 and W58 stock oracles
+passed as regression controls. Full debug and release `crystal spec` each
+passed 815/0 on Crystal 1.21.0 with the local linker flag; formatting and
+diff whitespace checks passed. A read-only hostile review of the oracle first
+found missing edge cases; after adding them and rerunning the oracle, repeat
+oracle and implementation reviews found no concrete blocker in the pinned
+scope. This evidence does not generalize to other serializers, marks, codecs,
+or arbitrary nested types. MV/projection coverage and type compatibility
+remain ahead of memory or performance tuning.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3567,8 +3638,11 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W55's exact two-UInt64
-   named-Tuple Array, W54's exact nullable-String Maps, and W53's
+1. Extend reader and writer together beyond W60's exact nested nullable
+   primitive numerics, W59's nested String Arrays, W58's nested primitive
+   numerics, W57's three-alternative Variant, W56's paired Variant,
+   W55's exact two-UInt64 named-Tuple Array, W54's exact nullable-String Maps,
+   and W53's
    nullable-UInt64-value Maps,
    W52's paired String-key Maps,
    W51's paired named-Tuple Arrays,

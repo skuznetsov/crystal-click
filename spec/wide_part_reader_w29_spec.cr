@@ -64,13 +64,13 @@ private def w29_shift_mark_rows(path : String, stream : String) : Nil
 end
 
 describe CrystalClick::WidePart do
-  it "admits only the exact Array(Array(Nullable(UInt64))) nested-array shape" do
+  it "admits the exact W29 nested nullable UInt64 shape while rejecting malformed neighbors" do
     CrystalClick::WidePart.supports_typed_type?("Array(Array(Nullable(UInt64)))").should be_true
     [
       "Array(Array( Nullable(UInt64)))",
       "Array(Array(Nullable(UInt64), UInt64))",
       "Array(Array(Nullable(UInt64))) trailing",
-      "Array(Array(Nullable(UInt8)))",
+      "Array(Array(Nullable(Bool)))",
       "Array(Array(Array(Nullable(UInt64))))",
     ].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
