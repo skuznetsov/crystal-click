@@ -78,6 +78,7 @@ module CrystalClick
     @array_tuple_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64, String))))
     @array_tuple_nullable_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64?, String))))
     @array_tuple_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64))))
+    @variant_string_uint64_values : Hash(String, Slice(VariantStringUInt64Value))
     @tuple_string_values : Hash(String, Slice(Tuple(UInt64, String)))
     @map_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64, String))))
     @map_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64))))
@@ -120,6 +121,7 @@ module CrystalClick
       @array_tuple_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @array_tuple_nullable_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64?, String)))).new
       @array_tuple_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+      @variant_string_uint64_values = Hash(String, Slice(VariantStringUInt64Value)).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -164,6 +166,7 @@ module CrystalClick
       @array_tuple_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @array_tuple_nullable_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64?, String)))).new
       @array_tuple_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+      @variant_string_uint64_values = Hash(String, Slice(VariantStringUInt64Value)).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -208,6 +211,7 @@ module CrystalClick
       @array_tuple_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @array_tuple_nullable_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64?, String)))).new
       @array_tuple_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+      @variant_string_uint64_values = Hash(String, Slice(VariantStringUInt64Value)).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
@@ -257,6 +261,7 @@ module CrystalClick
       map_uint64_nullable_string_values : Hash(String, Slice(Array(Tuple(UInt64, String?)))) = Hash(String, Slice(Array(Tuple(UInt64, String?)))).new,
       map_string_nullable_string_values : Hash(String, Slice(Array(Tuple(String, String?)))) = Hash(String, Slice(Array(Tuple(String, String?)))).new,
       @array_tuple_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64)))) = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new,
+      @variant_string_uint64_values : Hash(String, Slice(VariantStringUInt64Value)) = Hash(String, Slice(VariantStringUInt64Value)).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
@@ -851,6 +856,12 @@ module CrystalClick
       @array_tuple_uint64_uint64_values[column]? || raise(UnsupportedFormatError.new("Array(Tuple(UInt64, UInt64)) column was not materialized in this batch"))
     end
 
+    def variant_string_uint64_for(column : String) : Slice(VariantStringUInt64Value)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Variant accessor requires exact Variant(String, UInt64) metadata") unless @column_types[index] == "Variant(String, UInt64)"
+      @variant_string_uint64_values[column]? || raise(UnsupportedFormatError.new("Variant column was not materialized in this batch"))
+    end
+
     def array_nullable_strings_for(column : String) : WidePartArrayNullableStringSlice
       index = column_index(column)
       raise UnsupportedFormatError.new("Array(Nullable(String)) accessor requires an exact Array(Nullable(String)) column") unless @column_types[index] == "Array(Nullable(String))"
@@ -1308,6 +1319,8 @@ module CrystalClick
             preflight_array_nullable_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_string_charge_bytes = Hash(String, UInt64).new
             preflight_array_tuple_bytes = Hash(String, UInt64).new
+            preflight_variant_string_uint64_raw_bytes = Hash(String, UInt64).new
+            preflight_variant_string_uint64_charge_bytes = Hash(String, UInt64).new
             preflight_array_fixed_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_bool_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_bool_raw_bytes = Hash(String, UInt64).new
@@ -1324,7 +1337,12 @@ module CrystalClick
             preflight_map_string_nullable_string_payload_bytes = Hash(String, UInt64).new
             preflight_map_string_nullable_string_charge_bytes = Hash(String, UInt64).new
             part.readers.each do |selected|
-              if plan = WideTypePlan.admitted(selected.column_type)
+              if selected.column_type == "Variant(String, UInt64)"
+                raw_bytes, charge_bytes = selected.reader.variant_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
+                preflight_variant_string_uint64_raw_bytes[selected.name] = raw_bytes
+                preflight_variant_string_uint64_charge_bytes[selected.name] = charge_bytes
+                bytes = charge_bytes
+              elsif plan = WideTypePlan.admitted(selected.column_type)
                 bytes = case plan.shape
                         when WideTypePlan::Shape::ArrayTupleUInt64String
                           selected.reader.preflight_array_tuple_uint64_string_mark_range_raw_bytes(selected.name, mark_index, 1)
@@ -1513,6 +1531,7 @@ module CrystalClick
             array_tuple_uint64_string_values = Hash(String, Array(Array(Tuple(UInt64, String)))).new
             array_tuple_nullable_uint64_string_values = Hash(String, Array(Array(Tuple(UInt64?, String)))).new
             array_tuple_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
+            variant_string_uint64_values = Hash(String, Array(VariantStringUInt64Value)).new
             tuple_string_values = Hash(String, Array(Tuple(UInt64, String))).new
             map_uint64_string_values = Hash(String, Array(Array(Tuple(UInt64, String)))).new
             map_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
@@ -1524,7 +1543,26 @@ module CrystalClick
             map_string_nullable_string_values = Hash(String, Array(Array(Tuple(String, String?)))).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
-              if WidePart.array_enum8_codes(selected.column_type)
+              if selected.column_type == "Variant(String, UInt64)"
+                values = selected.reader.read_variant_string_uint64_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Variant mark row count changed") unless values.size.to_u64 == mark_rows
+                expected_raw = preflight_variant_string_uint64_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Variant mark was not preflighted"))
+                expected_charge = preflight_variant_string_uint64_charge_bytes[selected.name]? || raise(CorruptPartError.new("selected Variant charge was not preflighted"))
+                decoded_raw = 0_u64
+                values.each do |value|
+                  next unless value.is_a?(String)
+                  string_bytes = value.bytesize.to_u64
+                  raise CorruptPartError.new("selected Variant String bytes changed after preflight") if string_bytes > expected_raw - decoded_raw
+                  decoded_raw += string_bytes
+                end
+                raise CorruptPartError.new("selected Variant String bytes differ from preflight") unless decoded_raw == expected_raw
+                row_charge = WidePart::VARIANT_STRING_UINT64_ROW_ACCOUNTING_BYTES
+                raise CorruptPartError.new("selected Variant charge changed after preflight") unless mark_rows <= (UInt64::MAX - decoded_raw) // row_charge && decoded_raw + mark_rows * row_charge == expected_charge
+                raise CorruptPartError.new("selected Variant mark exceeds aggregate materialization limit") if expected_charge > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += expected_charge
+                variant_string_uint64_values[selected.name] = values
+                next
+              elsif WidePart.array_enum8_codes(selected.column_type)
                 values = selected.reader.read_array_enum8_codes_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Enum8 Array mark row count changed") unless values.size.to_u64 == mark_rows
                 preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected Enum8 Array mark was not preflighted"))
@@ -2236,6 +2274,7 @@ module CrystalClick
               array_tuple_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
               array_tuple_nullable_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64?, String)))).new
               array_tuple_uint64_uint64_slices = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
+              variant_string_uint64_slices = Hash(String, Slice(VariantStringUInt64Value)).new
               array_nullable_string_slices = Hash(String, WidePartArrayNullableStringSlice).new
               tuple_string_slices = Hash(String, Slice(Tuple(UInt64, String))).new
               map_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
@@ -2293,6 +2332,8 @@ module CrystalClick
                   array_tuple_nullable_uint64_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = array_tuple_uint64_uint64_values[selected.name]?
                   array_tuple_uint64_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = variant_string_uint64_values[selected.name]?
+                  variant_string_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = tuple_string_values[selected.name]?
                   tuple_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = map_uint64_string_values[selected.name]?
@@ -2352,7 +2393,8 @@ module CrystalClick
                 map_string_nullable_uint64_slices,
                 map_uint64_nullable_string_slices,
                 map_string_nullable_string_slices,
-                array_tuple_uint64_uint64_slices
+                array_tuple_uint64_uint64_slices,
+                variant_string_uint64_slices
               )
               yield batch
               mark_row_offset &+= size.to_u64

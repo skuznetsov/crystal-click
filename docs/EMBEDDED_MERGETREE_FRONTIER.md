@@ -142,7 +142,10 @@ nullable-String-value Map pair within its pinned physical and paired oracle
 below; it is not generic recursive Map support. W55 admits the exact
 `Array(Tuple(a UInt64, b UInt64))` declaration alongside W51's two named-Tuple
 Arrays, sharing their parsed physical stream plan and bounded reader/writer
-path; it does not admit arbitrary recursive types.
+path; it does not admit arbitrary recursive types. W56 targets an exact
+`Variant(String, UInt64)` paired codec with stock BASIC/COMPACT discriminator
+reads and a COMPACT writer; its verification status is recorded below. This
+does not admit arbitrary Variant alternatives, Dynamic, or general JSON.
 
 ## Purpose and bounded contexts
 
@@ -3310,6 +3313,71 @@ Complete paired type coverage and MV/projection support before returning to
 optimization. Refresh W55 evidence if the pinned
 producer, serializer, codec, marks, platform, or shared reader/writer helpers
 change.
+
+## W56 admitted frontier: paired `Variant(String, UInt64)`
+
+Admit exactly `Variant(String, UInt64)` as a Wide/LZ4/plain-mark payload beside
+the existing sorted `UInt64` key. Its typed value domain is `String | UInt64 |
+Nil`; `Nil` is the implicit Variant NULL, not a declared `Nothing` arm. The
+physical streams are `column.variant_discr`, `column.String.size`,
+`column.String`, and `column.UInt64`, in that order. The pinned ClickHouse
+26.7.1.1315 producer uses global tags `0` for String, `1` for UInt64, and
+`255` for NULL. The discriminator stream starts with an eight-byte
+little-endian mode before the first granule: its first plain mark is at
+compressed offset `0`, decompressed offset `8`, while the other streams start
+at `0, 0`. Mode `1` (COMPACT) carries a VarUInt granule row count,
+then format `0` with one tag per row or format `1` with one shared tag; the
+format may change between granules. Reader admission must validate the mode,
+tag domain, exact granule row counts, child-stream cardinality and marks, and
+short-tail/empty-child behavior before returning typed rows. A second stock
+probe with `use_compact_variant_discriminators_serialization=0` establishes
+mode `0` (BASIC): after the same eight-byte prefix it stores one tag byte per
+row, with no granule header. The reader must cover both modes; the first
+paired writer may emit COMPACT only.
+
+The first falsifier is a RED spec that requires this exact type to be admitted
+and reads a stock-produced fixture with mixed String/UInt64/NULL, an all-NULL
+granule, a uniform granule, empty String, and a short final granule. Compare
+full and later-mark reads, typed-table and offline-catalog scans. A Crystal
+writer must produce an immutable part that the pinned ClickHouse consumer
+accepts with `ATTACH PART`, `CHECK TABLE`, exact full `RowBinary`, and
+primary-key-range `RowBinary` against separately encoded expectations.
+Negative probes must reject illegal tags or formats, wrong count, truncated
+discriminators, mismatched child cardinality/marks, and unsupported Variant
+declarations before yielding table callbacks. Repeat adjacent scalar String
+and UInt64 tests and the full debug/release suites.
+
+This adds a bounded Variant foundation, not arbitrary alternative sets,
+`Dynamic`, general JSON, other part formats, MV, projections, or an
+optimization. `Dynamic` has structure and SharedVariant streams; general
+JSON additionally has Object V3 and shared-data buckets, so neither is
+inferred from this admission. Risk tier is CAUTION: a wrong tag-to-child
+mapping can return plausible but incorrect rows or publish a part that
+ClickHouse rejects. The guard is independent producer/consumer oracles plus
+explicit child counts at every mark. Rollback is the one local W56 feature
+commit (or removal of its uncommitted diff); do not push or mutate existing
+ClickHouse data. Refresh this evidence if the pinned producer, serializer,
+codec, mark format, platform, or shared reader/writer helpers change.
+
+Observed W56 result: both pinned stock COMPACT and BASIC fixtures passed the
+exact typed reader, later-mark, table-batch, and offline-catalog checks. A
+negative first-mark probe established that accepting discriminator offset
+`(0, 0)` masked a real compatibility failure: `ATTACH` and `CHECK TABLE`
+accepted the Crystal part, but ClickHouse rejected its full `RowBinary` read.
+The writer now emits the stock `(0, 8)` first discriminator mark, and the
+reader rejects `(0, 0)`. The reverse oracle first checks independently
+encoded full and key-range `RowBinary` against a stock COMPACT part, then
+checks mixed, all-NULL, and all-String Crystal-written parts through
+`ATTACH PART`, `CHECK TABLE`, exact type metadata, and full/key-range
+`RowBinary` in ClickHouse 26.7.1.1315. Focused W56 specs passed 8/0;
+complete debug and release `crystal spec` suites each passed 789/0 on
+Crystal 1.21.0 with the local linker flag. These results cover only the
+bounded Wide/LZ4/plain-mark profile and declared schema above; they do not
+establish general Variant, arbitrary schema composition, MV/projections,
+other ClickHouse versions, or memory/performance gains. Open-time checksum
+admission is size-only, so same-size content or mark mutations are not
+promised to be detected unless a selected decode or other explicit guard
+rejects them.
 
 ## Rejected and guard-only surfaces
 
