@@ -4080,6 +4080,92 @@ W67 diff or one local feature commit; no part or remote history was mutated.
 Evidence decays on a ClickHouse serializer, mark-layout, parser, or shared
 type-dispatch change.
 
+## W68 design-sealed: nullable UInt64 Arrays inside String-key Maps
+
+The next exact type is `Map(String, Array(Nullable(UInt64)))` for a sorted
+`UInt64` key and one payload column in Wide/LZ4/plain-`.mrk2` parts. W63
+already reads and writes the non-nullable sibling, and W67 has a shadow
+physical plan for both. The pinned 26.7.1.1315 stock producer probe above
+is the format anchor; it does not itself prove Crystal can consume or produce
+this candidate. A second pinned stock probe extended the vector to seven rows:
+rows 5 and 6 carry only NULL nested values and row 7 has a non-NULL tail.
+All seven streams have `.mrk2` row counts `[2, 2, 2, 1, 0]`. Decompressed
+offsets are `pk` and `payload.size0` `[0, 16, 32, 48, 56]`,
+`keys.size` and `values.size1` `[0, 16, 40, 56, 64]`, key bytes
+`[0, 6, 19, 36, 40]`, `values.null` `[0, 2, 4, 7, 8]`, and values data
+`[0, 16, 32, 56, 64]`. This gives `(entries, key bytes, value elements)`
+per data mark `(2, 6, 2)`, `(3, 13, 2)`, `(2, 17, 3)`, `(1, 4, 1)`; the
+third mark proves that NULL elements still occupy 8-byte value slots.
+No performance or allocation change is intended.
+
+Admit one typed reader accessor, the matching table/batch/catalog value
+surface, and one immutable-part writer only after their own RED tests and
+the bidirectional stock oracle pass. Preserve ordered Map entries and
+duplicate keys; never collapse them into a dictionary. `size0` counts entries
+per table row, `keys.size` counts bytes per entry, `values.size1` counts
+nullable UInt64 elements per entry, and `.values.null` plus `.values` each
+contains one slot per flattened element, including NULL. Every `.mrk2` row
+coordinate remains the table-row coordinate. NULL payload bytes are consumed
+but ignored by the reader; the writer emits a deterministic hidden value.
+
+Reject generic Map admission, non-String keys, a different value leaf or
+Array depth, Compact parts, unrelated codecs, and server MV/projection or
+merge behavior. Parsing a broader type remains guard-only. Malformed stream
+sets, shifted marks, per-mark count/byte mismatches, inconsistent null/data
+cardinality, unsorted primary keys, and writer overflow must fail closed.
+Construction-time metadata corruption is rejected before any callback;
+data corruption discovered during a mark-lazy scan is rejected before a
+callback for that affected mark, while earlier valid marks may already have
+been delivered. Writer validation must fail before output publication. The
+current stock vector's empty Map,
+empty Array, repeated key, NULL versus zero, and short terminal granule are
+mandatory tests; an all-NULL granule and selected later-mark read are the
+adversarial additions.
+
+Risk is CAUTION because the writer could produce an attachable but shifted
+part, or the reader could return plausible wrong values after an empty mark.
+Rollback is the isolated W68 diff or one local feature commit; do not mutate
+existing parts or remote history. DoD is RED-to-green reader/writer and
+catalog/table specs, selected-mark corruption guards, exact metadata/stream
+order/marks, pinned stock-to-Crystal and Crystal-to-stock `ATTACH PART` plus
+`CHECK TABLE` and exact full/keyed RowBinary, existing W63 controls, full
+debug and release suites, and a hostile counterexample review. Evidence
+decays on a ClickHouse serializer/mark change, a shared nested codec or
+catalog dispatch change, or a different ClickHouse version.
+
+## W68 verified: exact nested nullable Map reader and writer
+
+The missing writer API, table batch accessor, and catalog value-union member
+were first observed as RED checks. W68 reader, writer, table, and catalog
+focused specs then passed; the combined W63/W68 reader/writer/table control
+passed 23 examples before the later-mark falsifier was added. The stale W63
+and W67 negative-admission expectations
+were updated only for this exact type; the generic physical-plan admission
+remains closed. A later-mark null-frame mutation with a valid compressed
+checksum was rejected before that mark's callback after four valid earlier
+rows had been delivered. This falsified the stronger whole-scan zero-callback
+wording and established the mark-local guarantee above.
+
+At the final W68 source state on Crystal 1.21.0 and Darwin, the full debug
+and release suites each passed 882 examples with zero failures/errors. The
+debug/release commands used an isolated `CRYSTAL_CACHE_DIR` because a prior
+concurrent run lost its temporary spec executable while a process-reexec
+test was active; that prior run is not counted as product evidence. The
+pinned official ClickHouse local 26.7.1.1315 bidirectional oracle passed:
+stock-produced seven-row Wide/LZ4 part metadata and every `.mrk2` vector,
+full/all-NULL/later/cross-mark Crystal reads, then Crystal writer output
+accepted via `ATTACH PART`, clean `CHECK TABLE`, and exact full/keyed
+RowBinary. Formatting, shell syntax, and diff-whitespace checks passed.
+Hostile review returned ROBUST within this exact type and part scope after
+the callback claim was narrowed and the late-corruption falsifier added.
+
+This certificate does not cover generic Maps, Compact parts, alternative
+codecs, a running server's restart lifecycle, MV/projection semantics, or
+speed/allocation parity. Its evidence decays on a ClickHouse serializer,
+mark-layout or version change, a shared reader/writer/table/catalog dispatch
+change, or a platform change; refresh the focused/full tests and pinned
+bidirectional oracle before reusing the interoperability claim.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,

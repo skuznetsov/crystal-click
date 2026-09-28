@@ -103,7 +103,6 @@ describe CrystalClick::WidePart do
     {
       "Map(UInt64, Array(UInt64))",
       "Map(String, Array(String))",
-      "Map(String, Array(Nullable(UInt64)))",
       "Map(String, Array(Array(UInt64)))",
       "Map(String, Array(UInt64)) trailing",
     }.each do |type|

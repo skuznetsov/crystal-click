@@ -94,11 +94,11 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
     end
   end
 
-  it "keeps the candidate shadow-only and rejects malformed or unbounded Map shapes" do
+  it "keeps the physical plan shadow-only while the exact W68 Map shape is typed" do
     candidate = "Map(String, Array(Nullable(UInt64)))"
     CrystalClick::WideTypePlan.parse(candidate).should_not be_nil
     CrystalClick::WideTypePlan.admitted(candidate).should be_nil
-    CrystalClick::WidePart.supports_typed_type?(candidate).should be_false
+    CrystalClick::WidePart.supports_typed_type?(candidate).should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(UInt64))").should be_true
 
     plan = CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(candidate).not_nil!
@@ -111,7 +111,7 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
     values.storage_axis.id.should eq(nulls.storage_axis.id)
     values.element_width.should eq(8)
 
-    # The pinned stock probe has table-row counts [2, 2, 1, 0], Map-entry
+    # The initial pinned stock probe has table-row counts [2, 2, 1, 0], Map-entry
     # counts [2, 3, 1], and value-element counts [2, 2, 1]. Those counts are
     # producer-data evidence; this type-only descriptor checks that they cannot
     # be mistaken for the same axis. Every stream still carries table rows in

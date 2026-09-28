@@ -24,6 +24,7 @@ module CrystalClick
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64?, String)) | Array(Tuple(UInt64, UInt64)) |
                              Array(Tuple(String, UInt64)) | Array(Tuple(String, String)) |
                              Array(Tuple(String, Array(UInt64))) |
+                             Array(Tuple(String, Array(UInt64?))) |
                              Array(Tuple(UInt64, UInt64?)) | Array(Tuple(String, UInt64?)) |
                              Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) | Tuple(UInt64, String) | Nil
 
@@ -712,6 +713,16 @@ module CrystalClick
         selected_values = batch.map_string_array_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0], string_bytes = append_materialized_string_key_map_array_uint64_values(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+      when "Map(String, Array(Nullable(UInt64)))"
+        selected_values = batch.map_string_array_nullable_uint64s_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_string_key_map_array_nullable_uint64_values(
           values,
           selected_values,
           array_elements[0],
@@ -2005,6 +2016,33 @@ module CrystalClick
 
       selected_values.each do |row|
         owned_row = Array(Tuple(String, Array(UInt64))).new(row.size)
+        row.each do |key, nested_values|
+          owned_row << {String.new(key.to_slice), nested_values.dup}
+        end
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_string_key_map_array_nullable_uint64_values(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(String, Array(UInt64?)))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |key, nested_values|
+          next_elements = checked_materialized_value_array_elements(next_elements, nested_values.size.to_u64)
+          next_bytes = checked_materialized_value_string_bytes(next_bytes, key.bytesize.to_u64, max_string_bytes)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(String, Array(UInt64?))).new(row.size)
         row.each do |key, nested_values|
           owned_row << {String.new(key.to_slice), nested_values.dup}
         end
