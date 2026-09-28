@@ -136,6 +136,8 @@ syntax parser does not admit other physical type compositions.
 W52 admits the two remaining String-key Map combinations over the existing
 `{UInt64, String}` leaf matrix for a pinned physical probe and paired
 reader/writer implementation; verification status is recorded in its section.
+W53 targets two exact nullable-value Map declarations over the same key
+families; its admission remains conditional on the paired oracle below.
 
 ## Purpose and bounded contexts
 
@@ -3105,6 +3107,67 @@ review returned **ROBUST** for the per-mark contract. Budget overflow and
 exact-limit edges were source-audited, not separately stress-tested; no total
 heap, other ClickHouse version, MV/projection, or performance claim follows.
 
+## W53 admitted frontier: nullable UInt64 values in ordered Maps
+
+Admit exactly `Map(UInt64, Nullable(UInt64))` and
+`Map(String, Nullable(UInt64))` on the existing Wide/LZ4/plain-`.mrk2`
+profile, beside a sorted `UInt64` primary key. Reader, typed table/catalog,
+and immutable writer must preserve ordered duplicate entries and distinguish
+`NULL` from non-null zero. No Nullable keys, other Nullable value leaves,
+generic Map composition, mutation, MV/projection ownership, or performance
+claim is admitted. The API may use `Array(Tuple(K, UInt64?))` for each row;
+it must not collapse duplicate keys into a Hash.
+
+The pinned ClickHouse 26.7.1.1315 stock probe observed `size0`, flattened
+keys, `values.null`, and fixed-width `values` for the UInt64-key case; the
+String-key case adds `keys.size` before raw `keys`. Every child has per-mark
+row counts `[2, 2, 1, 0]` in the five-row probe. Its flattened null bytes
+were `01 00 00 01 00`, while flattened UInt64 bytes represented
+`[0, 0, 42, 0, 1]`: zero storage for a null slot does not make it non-null.
+This scratch probe is physical evidence, not a committed fixture or writer
+compatibility result.
+
+This is **CAUTION**: misaligned null bits can silently turn a null into zero
+or shift one Map entry into the next row. Preflight each selected mark's
+outer counts, key child, null child, value child, raw byte limits, and
+materialization charge before that mark's callback. The writer must validate
+the staged inventory and readback before exclusive publication. Rollback is
+one W53-only local commit; no existing ClickHouse data root is modified.
+
+First falsifier: the pre-W53 type gate rejects both stock declarations.
+DoD: preserve a pinned stock fixture with duplicate ordered keys, null and
+non-null zero values, empty rows, multiple marks, and a short final mark;
+verify full/later-mark reader and table/catalog access, corrupt or shifted
+null/value child rejection at the per-mark boundary, invalid-input and
+publish-safety checks; independently attach Crystal-written parts in stock
+ClickHouse, run `CHECK TABLE`, and compare full/key-range output against
+independently encoded expectations. Run focused and full debug/release specs,
+fixture integrity, format/diff/shell checks, then a hostile self-review of
+null semantics, child alignment, bounds, and rollback. Evidence decays when
+the pinned producer, serialization, mark codec, or shared helpers change.
+
+## W53 result: exact nullable-value Map pairs
+
+The pinned ClickHouse 26.7.1.1315 seven-row fixture verifies both declared
+types, escaped child-stream inventory, LZ4 framing, and plain `.mrk2` marks.
+The reader, typed-table batches, and offline catalog preserve ordered duplicate
+keys and distinguish `NULL` from non-null zero. Checksum-refreshed tests reject
+both a shifted null-child mark boundary and a non-boolean null byte. The writer
+also preserves fully empty Maps and nonempty `Map(String, Nullable(UInt64))`
+rows whose keys are all empty Strings, leaving the raw key stream zero bytes.
+
+At this source state, the full debug and release spec suites each passed 766
+examples with zero failures/errors. The independent stock oracle attached and
+checked the pinned fixture and both Crystal writer forms, including all-empty
+variants and the all-blank String-key variant; exact full and primary-key-range
+`RowBinary` bytes matched independently encoded expectations. The scoped
+adversary review found no must-fix defect in the admitted reader/table/catalog
+or writer paths. It did not establish generic Map composition, MV/projection
+semantics, other physical part profiles, or any memory/performance result.
+All-empty parts were checked through the direct reader and stock ClickHouse,
+but not separately through table/catalog materialization. Refresh this evidence
+after a producer, serializer, mark codec, or shared reader/writer helper change.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -3114,7 +3177,8 @@ TTL, and arbitrary partition expressions. No performance claim is admitted.
 
 Residual guard-only surfaces:
 
-1. Extend reader and writer together beyond W52's paired String-key Maps,
+1. Extend reader and writer together beyond W53's nullable-value Maps,
+   W52's paired String-key Maps,
    W51's paired named-Tuple Arrays,
    W50's paired Time family,
    W49's paired BFloat16 family,

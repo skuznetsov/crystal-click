@@ -13,7 +13,8 @@ module CrystalClick
                              Array(BFloat16Value) |
                              Array(Bool) | Array(Bool?) | Array(Array(Bool)) | Array(Array(Bool?)) |
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64?, String)) | Array(Tuple(UInt64, UInt64)) |
-                             Array(Tuple(String, UInt64)) | Array(Tuple(String, String)) | Tuple(UInt64, String) | Nil
+                             Array(Tuple(String, UInt64)) | Array(Tuple(String, String)) |
+                             Array(Tuple(UInt64, UInt64?)) | Array(Tuple(String, UInt64?)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -584,6 +585,10 @@ module CrystalClick
         selected_values = batch.map_uint64_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_map_uint64_values(values, selected_values, array_elements[0])
+      when "Map(UInt64, Nullable(UInt64))"
+        selected_values = batch.map_uint64_nullable_uint64s_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_map_nullable_uint64_values(values, selected_values, array_elements[0])
       when "Map(String, UInt64)"
         selected_values = batch.map_string_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -598,6 +603,16 @@ module CrystalClick
         selected_values = batch.map_string_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0], string_bytes = append_materialized_string_map_values(
+          values,
+          selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+      when "Map(String, Nullable(UInt64))"
+        selected_values = batch.map_string_nullable_uint64s_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_string_key_map_nullable_uint64_values(
           values,
           selected_values,
           array_elements[0],
@@ -1380,6 +1395,24 @@ module CrystalClick
       next_elements
     end
 
+    private def append_materialized_map_nullable_uint64_values(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(UInt64, UInt64?))),
+      observed_elements : UInt64,
+    ) : UInt64
+      next_elements = observed_elements
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(UInt64, UInt64?)).new(row.size)
+        row.each { |key, value| owned_row << {key, value} }
+        values << owned_row
+      end
+      next_elements
+    end
+
     private def append_materialized_string_key_map_uint64_values(
       values : Array(OfflineColumnValue),
       selected_values : Slice(Array(Tuple(String, UInt64))),
@@ -1398,6 +1431,30 @@ module CrystalClick
 
       selected_values.each do |row|
         owned_row = Array(Tuple(String, UInt64)).new(row.size)
+        row.each { |key, value| owned_row << {String.new(key.to_slice), value} }
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_string_key_map_nullable_uint64_values(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Tuple(String, UInt64?))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64}
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |key, _value|
+          next_bytes = checked_materialized_value_string_bytes(next_bytes, key.bytesize.to_u64, max_string_bytes)
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Tuple(String, UInt64?)).new(row.size)
         row.each { |key, value| owned_row << {String.new(key.to_slice), value} }
         values << owned_row
       end
