@@ -181,12 +181,13 @@ describe CrystalClick::WidePartWriter do
     write_w60_writer_case([0x8000_0000_0000_0000_u64.unsafe_as(Float64), 0x7ff8_0000_0000_1234_u64.unsafe_as(Float64)] of Float64?, "Float64", "float64")
   end
 
-  it "rejects nullable numeric leaves outside the W60 primitive profile before staging" do
+  it "rejects nullable numeric leaves outside the admitted nested profile before staging" do
     parent = File.tempname("crystal-click-wide-writer-w60-reject")
     Dir.mkdir(parent)
     destination = File.join(parent, "part")
     keys = [1_u64]
-    values = [[[1_i128] of Int128?] of Array(Int128?)] of Array(Array(Int128?))
+    decimal = CrystalClick::Decimal256Value.from_words(1_u64, 0_u64, 0_u64, 0_u64)
+    values = [[[decimal] of CrystalClick::Decimal256Value?] of Array(CrystalClick::Decimal256Value?)] of Array(Array(CrystalClick::Decimal256Value?))
 
     begin
       expect_raises(CrystalClick::UnsupportedFormatError) do

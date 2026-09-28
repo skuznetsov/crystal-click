@@ -9,9 +9,11 @@ module CrystalClick
                              Array(Array(UInt8?)) | Array(Array(UInt16?)) | Array(Array(UInt32?)) |
                              Array(Array(Int8?)) | Array(Array(Int16?)) | Array(Array(Int32?)) | Array(Array(Int64?)) |
                              Array(Array(Float32?)) | Array(Array(Float64?)) |
+                             Array(Array(Int128?)) | Array(Array(UInt128?)) | Array(Array(Int256Value?)) | Array(Array(UInt256Value?)) | Array(Array(BFloat16Value?)) |
                              Array(Array(UInt8)) | Array(Array(UInt16)) | Array(Array(UInt32)) |
                              Array(Array(Int8)) | Array(Array(Int16)) | Array(Array(Int32)) | Array(Array(Int64)) |
                              Array(Array(Float32)) | Array(Array(Float64)) |
+                             Array(Array(Int128)) | Array(Array(UInt128)) | Array(Array(Int256Value)) | Array(Array(UInt256Value)) | Array(Array(BFloat16Value)) |
                              Array(UInt8) | Array(UInt16) | Array(UInt32) | Array(Int8) | Array(Int16) | Array(Int32) | Array(Int64) | Array(Float32) | Array(Float64) |
                              Array(Int128) | Array(UInt128) | Array(Int256Value) | Array(UInt256Value) |
                              Array(Int128?) | Array(UInt128?) | Array(Int256Value?) | Array(UInt256Value?) | Array(BFloat16Value?) |
@@ -1404,16 +1406,21 @@ module CrystalClick
       element_type : String,
     ) : UInt64
       case element_type
-      when "UInt8"   then batch.array_array_numeric_values(column, UInt8).size.to_u64
-      when "UInt16"  then batch.array_array_numeric_values(column, UInt16).size.to_u64
-      when "UInt32"  then batch.array_array_numeric_values(column, UInt32).size.to_u64
-      when "UInt64"  then batch.array_array_numeric_values(column, UInt64).size.to_u64
-      when "Int8"    then batch.array_array_numeric_values(column, Int8).size.to_u64
-      when "Int16"   then batch.array_array_numeric_values(column, Int16).size.to_u64
-      when "Int32"   then batch.array_array_numeric_values(column, Int32).size.to_u64
-      when "Int64"   then batch.array_array_numeric_values(column, Int64).size.to_u64
-      when "Float32" then batch.array_array_numeric_values(column, Float32).size.to_u64
-      when "Float64" then batch.array_array_numeric_values(column, Float64).size.to_u64
+      when "UInt8"    then batch.array_array_numeric_values(column, UInt8).size.to_u64
+      when "UInt16"   then batch.array_array_numeric_values(column, UInt16).size.to_u64
+      when "UInt32"   then batch.array_array_numeric_values(column, UInt32).size.to_u64
+      when "UInt64"   then batch.array_array_numeric_values(column, UInt64).size.to_u64
+      when "Int8"     then batch.array_array_numeric_values(column, Int8).size.to_u64
+      when "Int16"    then batch.array_array_numeric_values(column, Int16).size.to_u64
+      when "Int32"    then batch.array_array_numeric_values(column, Int32).size.to_u64
+      when "Int64"    then batch.array_array_numeric_values(column, Int64).size.to_u64
+      when "Float32"  then batch.array_array_numeric_values(column, Float32).size.to_u64
+      when "Float64"  then batch.array_array_numeric_values(column, Float64).size.to_u64
+      when "Int128"   then batch.array_array_numeric_values(column, Int128).size.to_u64
+      when "UInt128"  then batch.array_array_numeric_values(column, UInt128).size.to_u64
+      when "Int256"   then batch.array_array_numeric_values(column, Int256Value).size.to_u64
+      when "UInt256"  then batch.array_array_numeric_values(column, UInt256Value).size.to_u64
+      when "BFloat16" then batch.array_array_numeric_values(column, BFloat16Value).size.to_u64
       else
         raise UnsupportedFormatError.new("unsupported Array(Array(T)) numeric leaf type")
       end
@@ -1425,16 +1432,21 @@ module CrystalClick
       element_type : String,
     ) : UInt64
       case element_type
-      when "UInt8"   then batch.array_array_nullable_numeric_values(column, UInt8).size.to_u64
-      when "UInt16"  then batch.array_array_nullable_numeric_values(column, UInt16).size.to_u64
-      when "UInt32"  then batch.array_array_nullable_numeric_values(column, UInt32).size.to_u64
-      when "UInt64"  then batch.array_array_nullable_numeric_values(column, UInt64).size.to_u64
-      when "Int8"    then batch.array_array_nullable_numeric_values(column, Int8).size.to_u64
-      when "Int16"   then batch.array_array_nullable_numeric_values(column, Int16).size.to_u64
-      when "Int32"   then batch.array_array_nullable_numeric_values(column, Int32).size.to_u64
-      when "Int64"   then batch.array_array_nullable_numeric_values(column, Int64).size.to_u64
-      when "Float32" then batch.array_array_nullable_numeric_values(column, Float32).size.to_u64
-      when "Float64" then batch.array_array_nullable_numeric_values(column, Float64).size.to_u64
+      when "UInt8"    then batch.array_array_nullable_numeric_values(column, UInt8).size.to_u64
+      when "UInt16"   then batch.array_array_nullable_numeric_values(column, UInt16).size.to_u64
+      when "UInt32"   then batch.array_array_nullable_numeric_values(column, UInt32).size.to_u64
+      when "UInt64"   then batch.array_array_nullable_numeric_values(column, UInt64).size.to_u64
+      when "Int8"     then batch.array_array_nullable_numeric_values(column, Int8).size.to_u64
+      when "Int16"    then batch.array_array_nullable_numeric_values(column, Int16).size.to_u64
+      when "Int32"    then batch.array_array_nullable_numeric_values(column, Int32).size.to_u64
+      when "Int64"    then batch.array_array_nullable_numeric_values(column, Int64).size.to_u64
+      when "Float32"  then batch.array_array_nullable_numeric_values(column, Float32).size.to_u64
+      when "Float64"  then batch.array_array_nullable_numeric_values(column, Float64).size.to_u64
+      when "Int128"   then batch.array_array_nullable_numeric_values(column, Int128).size.to_u64
+      when "UInt128"  then batch.array_array_nullable_numeric_values(column, UInt128).size.to_u64
+      when "Int256"   then batch.array_array_nullable_numeric_values(column, Int256Value).size.to_u64
+      when "UInt256"  then batch.array_array_nullable_numeric_values(column, UInt256Value).size.to_u64
+      when "BFloat16" then batch.array_array_nullable_numeric_values(column, BFloat16Value).size.to_u64
       else
         raise UnsupportedFormatError.new("unsupported Array(Array(Nullable(T))) numeric leaf type")
       end
@@ -1448,16 +1460,21 @@ module CrystalClick
       observed_elements : UInt64,
     ) : UInt64
       case element_type
-      when "UInt8"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt8), observed_elements)
-      when "UInt16"  then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt16), observed_elements)
-      when "UInt32"  then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt32), observed_elements)
-      when "UInt64"  then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt64), observed_elements)
-      when "Int8"    then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int8), observed_elements)
-      when "Int16"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int16), observed_elements)
-      when "Int32"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int32), observed_elements)
-      when "Int64"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int64), observed_elements)
-      when "Float32" then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Float32), observed_elements)
-      when "Float64" then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Float64), observed_elements)
+      when "UInt8"    then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt8), observed_elements)
+      when "UInt16"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt16), observed_elements)
+      when "UInt32"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt32), observed_elements)
+      when "UInt64"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt64), observed_elements)
+      when "Int8"     then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int8), observed_elements)
+      when "Int16"    then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int16), observed_elements)
+      when "Int32"    then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int32), observed_elements)
+      when "Int64"    then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int64), observed_elements)
+      when "Float32"  then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Float32), observed_elements)
+      when "Float64"  then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Float64), observed_elements)
+      when "Int128"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int128), observed_elements)
+      when "UInt128"  then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt128), observed_elements)
+      when "Int256"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, Int256Value), observed_elements)
+      when "UInt256"  then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, UInt256Value), observed_elements)
+      when "BFloat16" then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_numeric_values(column, BFloat16Value), observed_elements)
       else
         raise UnsupportedFormatError.new("unsupported Array(Array(Nullable(T))) numeric leaf type")
       end
@@ -1471,16 +1488,21 @@ module CrystalClick
       observed_elements : UInt64,
     ) : UInt64
       case element_type
-      when "UInt8"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt8), observed_elements)
-      when "UInt16"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt16), observed_elements)
-      when "UInt32"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt32), observed_elements)
-      when "UInt64"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt64), observed_elements)
-      when "Int8"    then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int8), observed_elements)
-      when "Int16"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int16), observed_elements)
-      when "Int32"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int32), observed_elements)
-      when "Int64"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int64), observed_elements)
-      when "Float32" then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Float32), observed_elements)
-      when "Float64" then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Float64), observed_elements)
+      when "UInt8"    then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt8), observed_elements)
+      when "UInt16"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt16), observed_elements)
+      when "UInt32"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt32), observed_elements)
+      when "UInt64"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt64), observed_elements)
+      when "Int8"     then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int8), observed_elements)
+      when "Int16"    then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int16), observed_elements)
+      when "Int32"    then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int32), observed_elements)
+      when "Int64"    then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int64), observed_elements)
+      when "Float32"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Float32), observed_elements)
+      when "Float64"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Float64), observed_elements)
+      when "Int128"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int128), observed_elements)
+      when "UInt128"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt128), observed_elements)
+      when "Int256"   then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, Int256Value), observed_elements)
+      when "UInt256"  then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, UInt256Value), observed_elements)
+      when "BFloat16" then append_materialized_array_array_numeric(values, batch.array_array_numeric_values(column, BFloat16Value), observed_elements)
       else
         raise UnsupportedFormatError.new("unsupported Array(Array(T)) numeric leaf type")
       end

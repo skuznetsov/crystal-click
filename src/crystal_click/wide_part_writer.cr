@@ -1094,10 +1094,10 @@ module CrystalClick
       end
     end
 
-    # Write the bounded W60 Array(Array(Nullable(T))) primitive numeric
-    # family. Each input mark gets independent outer-size, inner-size,
-    # nullable-map, and fixed-width leaf streams; NULL leaves retain zero
-    # bytes in the physical leaf stream.
+    # Write the bounded W60/W62 Array(Array(Nullable(T))) numeric family.
+    # Each input mark gets independent outer-size, inner-size, nullable-map,
+    # and fixed-width leaf streams; NULL leaves retain zero bytes in the
+    # physical leaf stream.
     def self.write_uint64_array_array_nullable_numeric_pair(
       destination : String,
       key_name : String,
@@ -1107,8 +1107,8 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = WidePart.array_numeric_type_name(T)
-      unless {"UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"}.includes?(type_name)
-        raise UnsupportedFormatError.new("W60 writer requires an exact primitive numeric leaf type")
+      unless WidePart.array_array_nullable_numeric_element_type("Array(Array(Nullable(#{type_name})))") == type_name
+        raise UnsupportedFormatError.new("nested nullable Array writer requires an exact admitted numeric leaf type")
       end
       validate_array_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, type_name)
 

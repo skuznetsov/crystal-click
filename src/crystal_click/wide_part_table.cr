@@ -43,16 +43,24 @@ module CrystalClick
   alias WidePartArrayArrayNullableStringSlice = Slice(Array(Array(String?)))
   alias WidePartArrayArrayNumericArray = Array(Array(Array(UInt8))) | Array(Array(Array(UInt16))) | Array(Array(Array(UInt32))) | Array(Array(Array(UInt64))) |
                                          Array(Array(Array(Int8))) | Array(Array(Array(Int16))) | Array(Array(Array(Int32))) | Array(Array(Array(Int64))) |
-                                         Array(Array(Array(Float32))) | Array(Array(Array(Float64)))
+                                         Array(Array(Array(Float32))) | Array(Array(Array(Float64))) |
+                                         Array(Array(Array(Int128))) | Array(Array(Array(UInt128))) |
+                                         Array(Array(Array(Int256Value))) | Array(Array(Array(UInt256Value))) | Array(Array(Array(BFloat16Value)))
   alias WidePartArrayArrayNumericSlice = Slice(Array(Array(UInt8))) | Slice(Array(Array(UInt16))) | Slice(Array(Array(UInt32))) | Slice(Array(Array(UInt64))) |
                                          Slice(Array(Array(Int8))) | Slice(Array(Array(Int16))) | Slice(Array(Array(Int32))) | Slice(Array(Array(Int64))) |
-                                         Slice(Array(Array(Float32))) | Slice(Array(Array(Float64)))
+                                         Slice(Array(Array(Float32))) | Slice(Array(Array(Float64))) |
+                                         Slice(Array(Array(Int128))) | Slice(Array(Array(UInt128))) |
+                                         Slice(Array(Array(Int256Value))) | Slice(Array(Array(UInt256Value))) | Slice(Array(Array(BFloat16Value)))
   alias WidePartArrayArrayNullableNumericArray = Array(Array(Array(UInt8?))) | Array(Array(Array(UInt16?))) | Array(Array(Array(UInt32?))) | Array(Array(Array(UInt64?))) |
                                                  Array(Array(Array(Int8?))) | Array(Array(Array(Int16?))) | Array(Array(Array(Int32?))) | Array(Array(Array(Int64?))) |
-                                                 Array(Array(Array(Float32?))) | Array(Array(Array(Float64?)))
+                                                 Array(Array(Array(Float32?))) | Array(Array(Array(Float64?))) |
+                                                 Array(Array(Array(Int128?))) | Array(Array(Array(UInt128?))) |
+                                                 Array(Array(Array(Int256Value?))) | Array(Array(Array(UInt256Value?))) | Array(Array(Array(BFloat16Value?)))
   alias WidePartArrayArrayNullableNumericSlice = Slice(Array(Array(UInt8?))) | Slice(Array(Array(UInt16?))) | Slice(Array(Array(UInt32?))) | Slice(Array(Array(UInt64?))) |
                                                  Slice(Array(Array(Int8?))) | Slice(Array(Array(Int16?))) | Slice(Array(Array(Int32?))) | Slice(Array(Array(Int64?))) |
-                                                 Slice(Array(Array(Float32?))) | Slice(Array(Array(Float64?)))
+                                                 Slice(Array(Array(Float32?))) | Slice(Array(Array(Float64?))) |
+                                                 Slice(Array(Array(Int128?))) | Slice(Array(Array(UInt128?))) |
+                                                 Slice(Array(Array(Int256Value?))) | Slice(Array(Array(UInt256Value?))) | Slice(Array(Array(BFloat16Value?)))
   alias WidePartArrayBoolArray = Array(Array(Bool))
   alias WidePartArrayBoolSlice = Slice(Array(Bool))
   alias WidePartArrayNullableBoolArray = Array(Array(Bool?))
@@ -885,25 +893,25 @@ module CrystalClick
       @array_array_nullable_uint64_values[column]? || raise(UnsupportedFormatError.new("Array(Array(Nullable(UInt64))) column was not materialized in this batch"))
     end
 
-    # Return a typed two-level numeric Array view only for one of the exact
-    # primitive numeric leaves admitted by the Wide-part reader.
+    # Return a typed two-level numeric Array view only for an exact admitted
+    # leaf type, including the bounded wide numeric family.
     def array_array_numeric_values(column : String, type : T.class) : Slice(Array(Array(T))) forall T
       index = column_index(column)
-      type_name = WidePart.numeric_type_name(type)
+      type_name = WidePart.array_numeric_type_name(type)
       unless WidePart.array_array_numeric_element_type(@column_types[index]) == type_name
-        raise UnsupportedFormatError.new("typed Array(Array) accessor requires an exact two-level primitive numeric column")
+        raise UnsupportedFormatError.new("typed Array(Array) accessor requires an exact admitted numeric column")
       end
       values = @array_array_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Array) numeric column was not materialized in this batch"))
       values.as(Slice(Array(Array(T))))
     end
 
     # Return a typed nested nullable numeric view only for the exact admitted
-    # Array(Array(Nullable(T))) declaration and matching primitive leaf type.
+    # Array(Array(Nullable(T))) declaration and matching admitted leaf type.
     def array_array_nullable_numeric_values(column : String, type : T.class) : Slice(Array(Array(T?))) forall T
       index = column_index(column)
-      type_name = WidePart.numeric_type_name(type)
+      type_name = WidePart.array_numeric_type_name(type)
       unless WidePart.array_array_nullable_numeric_element_type(@column_types[index]) == type_name
-        raise UnsupportedFormatError.new("typed Array(Array(Nullable(T))) accessor requires an exact nested nullable primitive numeric column")
+        raise UnsupportedFormatError.new("typed Array(Array(Nullable(T))) accessor requires an exact nested nullable numeric column")
       end
       values = @array_array_nullable_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Array(Nullable(T))) numeric column was not materialized in this batch"))
       values.as(Slice(Array(Array(T?))))
@@ -2812,6 +2820,16 @@ module CrystalClick
         reader.read_array_array_numeric_mark_range(column, mark_index, 1, Float32)
       when "Float64"
         reader.read_array_array_numeric_mark_range(column, mark_index, 1, Float64)
+      when "Int128"
+        reader.read_array_array_numeric_mark_range(column, mark_index, 1, Int128)
+      when "UInt128"
+        reader.read_array_array_numeric_mark_range(column, mark_index, 1, UInt128)
+      when "Int256"
+        reader.read_array_array_numeric_mark_range(column, mark_index, 1, Int256Value)
+      when "UInt256"
+        reader.read_array_array_numeric_mark_range(column, mark_index, 1, UInt256Value)
+      when "BFloat16"
+        reader.read_array_array_numeric_mark_range(column, mark_index, 1, BFloat16Value)
       else
         raise UnsupportedFormatError.new("unsupported Array(Array(T)) numeric leaf type")
       end
@@ -2844,6 +2862,16 @@ module CrystalClick
         reader.read_array_array_nullable_numeric_mark_range(column, mark_index, 1, Float32)
       when "Float64"
         reader.read_array_array_nullable_numeric_mark_range(column, mark_index, 1, Float64)
+      when "Int128"
+        reader.read_array_array_nullable_numeric_mark_range(column, mark_index, 1, Int128)
+      when "UInt128"
+        reader.read_array_array_nullable_numeric_mark_range(column, mark_index, 1, UInt128)
+      when "Int256"
+        reader.read_array_array_nullable_numeric_mark_range(column, mark_index, 1, Int256Value)
+      when "UInt256"
+        reader.read_array_array_nullable_numeric_mark_range(column, mark_index, 1, UInt256Value)
+      when "BFloat16"
+        reader.read_array_array_nullable_numeric_mark_range(column, mark_index, 1, BFloat16Value)
       else
         raise UnsupportedFormatError.new("unsupported Array(Array(Nullable(T))) numeric leaf type")
       end
@@ -3603,7 +3631,7 @@ module CrystalClick
         end
       end
 
-      width = WidePart.numeric_payload_width(element_type).to_u64
+      width = WidePart.array_numeric_payload_width(element_type).to_u64
       max_offset_count = UInt64::MAX // 8_u64
       if outer_rows > max_offset_count || inner_arrays > max_offset_count || leaf_elements > UInt64::MAX // width
         raise CorruptPartError.new("selected Array(Array(T)) byte count overflows")

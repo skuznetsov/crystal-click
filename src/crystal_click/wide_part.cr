@@ -836,23 +836,22 @@ module CrystalClick
       supports_array_numeric_type?(element_type) ? element_type : nil
     end
 
-    # Admit exactly two Array levels with one of the ten primitive numeric
-    # leaves used by the scalar numeric family. This is deliberately not a
-    # recursive grammar and does not extend to nullable or semantic leaves.
+    # Admit exactly two Array levels over the numeric leaves supported by the
+    # one-level Array codec. This deliberately does not extend the bounded
+    # grammar to recursive or semantic leaves.
     def self.array_array_numeric_element_type(type : String) : String?
       return nil unless type.starts_with?("Array(Array(") && type.ends_with?("))")
       element_type = type.byte_slice("Array(Array(".bytesize, type.bytesize - "Array(Array())".bytesize)
-      supports_numeric_type?(element_type) ? element_type : nil
+      supports_array_numeric_type?(element_type) ? element_type : nil
     end
 
-    # Admit exactly two Array levels with one nullable wrapper around a
-    # primitive numeric leaf. Nullable semantic and wrapper-backed numeric
-    # types remain outside this bounded grammar.
+    # Admit exactly two Array levels with one nullable wrapper around a leaf
+    # from the same bounded nested numeric family.
     def self.array_array_nullable_numeric_element_type(type : String) : String?
       prefix = "Array(Array(Nullable("
       return nil unless type.starts_with?(prefix) && type.ends_with?(")))")
       element_type = type.byte_slice(prefix.bytesize, type.bytesize - prefix.bytesize - 3)
-      supports_numeric_type?(element_type) ? element_type : nil
+      supports_array_numeric_type?(element_type) ? element_type : nil
     end
 
     def self.supports_map_uint64_string_type?(type : String) : Bool

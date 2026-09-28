@@ -161,6 +161,10 @@ below; this does not admit arbitrary recursive types.
 W61 admits paired `Array(Array(Nullable(String)))` within the exact five-stream
 Wide/LZ4/plain-mark BASIC profile below. Its stock oracle and verification
 status do not generalize to arbitrary nested types or serializers.
+W62 admits paired two-level Arrays over the five already supported
+fixed-width numeric Array leaves beyond the primitive family: `Int128`,
+`UInt128`, `Int256`, `UInt256`, and `BFloat16`, both plain and BASIC nullable.
+Its physical and verification boundary is specified below.
 
 ## Purpose and bounded contexts
 
@@ -3697,6 +3701,63 @@ override; formatting and diff whitespace checks passed. Hostile review found
 no concrete blocker within this scope, but compressed-offset and sentinel
 mutation coverage can still be strengthened. This is not evidence for other
 serializations, mark formats, codecs, or MV/projections.
+
+## W62: two-level wide numeric Arrays
+
+Admit paired reading and immutable writing for exactly `Array(Array(T))` and
+`Array(Array(Nullable(T)))`, where `T` is `Int128`, `UInt128`, `Int256`,
+`UInt256`, or `BFloat16`. These five leaves already have paired one-level
+Array codecs. Reuse the existing three- and four-stream nested-array path;
+do not infer arbitrary recursive composition from type-parser acceptance.
+The public scope is one sorted `UInt64` key and one payload in a
+Wide/LZ4/plain-MRK2 part, with direct mark reads, typed table batches, and
+offline catalog access. Existing W58/W60 primitive leaves and W59/W61 String
+leaves remain unchanged. `Bool`, temporal, UUID/IP, Decimal, Enum,
+FixedString, Map-of-Array, deeper Arrays, JSON, arbitrary table schemas,
+MV/projections, and performance tuning remain guard-only.
+
+The falsifier is a pre-change admission spec for a wide leaf and a nullable
+wide leaf. Before implementation, the pinned ClickHouse 26.7.1.1315 producer
+must confirm the selected physical stream names, mark-local cardinalities,
+nullable placeholder bytes, and metadata for representative 2-, 16-, and
+32-byte leaves. The paired oracle must then check every one of the five
+leaves in both nullability modes: stock-produced parts decoded by Crystal,
+and Crystal-written parts passing stock `ATTACH PART`, `CHECK TABLE`, exact
+type/substream metadata, and independently encoded full and key-range
+`RowBinary`. Fixtures must cover empty outer and inner Arrays, NULL versus
+zero or signed values, an all-empty or all-NULL middle mark followed by data,
+and a short tail. A selected-mark corruption in each physical stream must be
+rejected before that mark's table callback; earlier valid callbacks may have
+been yielded.
+
+Risk is CAUTION: 16/32-byte widths and BASIC NULL placeholders can silently
+shift later marks or deserialize as plausible but wrong values. Guard all
+selected stream row counts, flattened cardinalities, widths, null-map domain,
+and byte consumption. The DoD is focused W62 and W58/W60 controls, the pinned
+bidirectional oracle, complete debug and release `crystal spec`, formatting
+and diff checks, then hostile counterexample review. Rollback is the isolated
+uncommitted diff or one local W62 feature commit; existing parts and remote
+history are untouched. Evidence decays when the pinned producer, serializer,
+codec/mark format, platform, or shared numeric/nested-array codec changes.
+This type-parity slice does not advance the later MV/projection or optimization
+phases.
+
+The pre-change admission spec failed as predicted. W62 now reuses the
+one-level numeric leaf whitelist for exact two-level plain and nullable
+admission, with paired writer, typed table batch, and offline catalog paths.
+The pinned ClickHouse 26.7.1.1315 oracle passed for all five leaves in both
+directions: Crystal read stock parts; stock `ATTACH PART` and `CHECK TABLE`
+accepted Crystal parts; exact metadata and full/key-range `RowBinary`
+matched. The W58/W60 primitive nested-numeric oracles also passed. Complete
+debug and release `crystal spec` each passed 834/0 with the host linker
+override; formatting and diff whitespace checks passed. Reader and writer
+specs cover exact leaf bytes, NULL placeholders, empty/all-NULL middle marks,
+selected marks, and shifted mark boundaries. Hostile review found no concrete
+blocker within this pinned scope. Direct table/catalog materialization is
+tested for nullable `BFloat16`; the other four wide leaves have explicit
+dispatch and stock/read/write tests, not separate table/catalog integration
+fixtures. This evidence does not establish arbitrary recursive types, other
+part profiles, MV/projections, or any performance result.
 
 ## Rejected and guard-only surfaces
 

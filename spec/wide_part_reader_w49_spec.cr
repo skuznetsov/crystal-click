@@ -186,7 +186,7 @@ private def with_w49_selected_part(& : String ->)
 end
 
 describe CrystalClick::WidePart do
-  it "admits only the exact BFloat16 reader shapes in W49" do
+  it "retains the W49 BFloat16 reader shapes and rejects deeper nesting" do
     {
       "BFloat16",
       "Nullable(BFloat16)",
@@ -202,7 +202,7 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("Float32").should be_true
     CrystalClick::WidePart.supports_typed_type?("BFLOAT16").should be_false
     CrystalClick::WidePart.supports_typed_type?("Nullable(Nullable(BFloat16))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Array(BFloat16))").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Array(Array(Array(BFloat16)))").should be_false
     CrystalClick::WidePart.supports_typed_type?("Array(Nullable(Nullable(BFloat16)))").should be_false
   end
 

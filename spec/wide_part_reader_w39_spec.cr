@@ -321,7 +321,7 @@ private def with_w39_catalog_root(& : String ->)
 end
 
 describe CrystalClick::WidePart do
-  it "admits only one-level raw 128/256-bit integer Array leaves and their BASIC Nullable forms" do
+  it "retains raw 128/256-bit integer Array leaves and their BASIC Nullable forms" do
     {
       "Array(Int128)", "Array(UInt128)", "Array(Int256)", "Array(UInt256)",
       "Array(Nullable(Int128))", "Array(Nullable(UInt128))",
@@ -333,7 +333,7 @@ describe CrystalClick::WidePart do
     {
       "Array(Decimal(38, 39))", "Array(Nullable(Decimal(38, 39)))",
       "Array(Decimal(75, 0))", "Array(Nullable(Decimal(75, 0)))",
-      "Array(Array(Int128))", "Array(Nullable(Nullable(Int128)))",
+      "Array(Nullable(Nullable(Int128)))",
       "Array(Int128) trailing", "Nullable(Array(Int128))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
