@@ -58,6 +58,12 @@ W24 pairs the existing scalar typed-path reader with a writer for exactly
 `JSON(a UInt64, b String)` beside a `UInt64` key. The pinned stock oracle
 passes `ATTACH PART`, exact typed and normalized whole-object reads, and
 `CHECK TABLE`; this is not general JSON support.
+W72 extends that writer to arbitrary nonempty lists of the reader's simple
+top-level `String` and ten primitive numeric JSON typed paths. Both metadata
+declarations and physical streams are canonicalized by path name. The pinned
+reverse oracle accepts a mixed-width three-path Crystal part; dynamic paths,
+arbitrary documents, and general JSON remain outside scope. See
+`JSON_TYPED_PATH_FRONTIER.md` for the evidence and limits.
 W25 admits one exact top-level `Map(UInt64, String)` payload beside a
 `UInt64` key. Its reader and writer use ordered entry arrays, not a hash,
 to preserve duplicate keys and entry order. See
@@ -4418,6 +4424,45 @@ separate row, entry, leaf, and byte axes, materialization bounds, type gate,
 and staged publication. These observations do not widen the exclusions
 above or establish any memory or performance result.
 
+## W72 admitted frontier: scalar JSON typed-path writer parity
+
+W72 closes the reader/writer mismatch for the existing simple top-level
+declared JSON typed-path grammar: `String` and the ten primitive numeric
+types. `JSONTypedPathColumn` binds a path name, exact scalar type name, and
+row-aligned values; `write_uint64_json_typed_paths` accepts a nonempty set of
+such columns next to a sorted `UInt64` key. It preserves each name/type/value
+association while sorting `columns.txt`, `columns_substreams.txt`, and typed
+physical streams by path name, matching the pinned ClickHouse producer.
+Missing declared-path values must be supplied as normalized scalar defaults;
+the API neither models path presence nor accepts dynamic/shared values.
+
+Risk is CAUTION: a self-readable part can still mis-map typed paths or have
+invalid Object V3 auxiliary streams. Rollback is the isolated W72 commit;
+existing parts and remote history are untouched. The focused API test was RED
+before implementation. It then passed 5 examples, including mixed widths,
+multiple marks, input order differing from physical order, String empty/NUL
+bytes, and pre-publication rejection of invalid inputs and an oversized
+String granule. The full debug and release suites each passed 931 examples,
+0 failures/errors/pending. The pinned 26.7.1.1315 reverse oracle attached a
+Crystal-generated `JSON(z String, a Int16, m Float32)` Wide part and passed
+exact full/keyed RowBinary, normalized whole-object JSONEachRow, canonical
+metadata, Object V3 byte/mark checks, checksum/file inventory, and `CHECK
+TABLE`. The old exact-shape JSON oracle and 63 other pinned oracles passed.
+Format, shell syntax, and diff checks passed. The stock producer probe
+independently established sorted metadata and stream order and the zero-
+dynamic-path structure. The focused test confirms raw Float32 `-0`/NaN/Inf
+bit preservation; the durable reverse oracle covers finite Float32 values.
+This evidence does not establish all JSON shapes or physical MV/projections,
+and decays on a producer version, Object serialization setting, codec/mark
+layout, or relevant code change. Memory/performance work remains deferred
+until type parity and MV/projection support.
+The hostile pass found an off-by-one estimate for the reader's metadata-line
+limit; an over-limit case was RED before the exact LF-inclusive guard and
+green afterward, while an exact-limit line still opens in Crystal. All
+gates above were rerun on the corrected source. The adversary verdict is
+ROBUST within the pinned mixed-path/reader-limit scope, not arbitrary JSON
+or acceptance of 64 KiB path names by stock ClickHouse.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,
@@ -4459,7 +4504,7 @@ Residual guard-only surfaces:
    W31's nullable numeric Array family, and W30's non-null numeric Array family,
    W29's nested nullable Array, W28's nested Array, W27's exact nullable array,
    W25/W26's exact Maps,
-   W24's exact JSON typed paths, W23's exact named Tuple,
+   W72's bounded scalar JSON typed paths, W23's exact named Tuple,
    W22's bounded `LowCardinality(String)`, W21's paired arrays, W20's paired Decimal256,
    W19's paired IPv6, W18's paired IPv4, W17's paired UUID, W16's bounded
    semantic scalars, W14's BASIC nullable temporal codes, W13's raw time

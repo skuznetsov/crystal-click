@@ -6,6 +6,20 @@ module CrystalClick
   # format maximum per granule so its output stays within this repository's
   # table-reader materialization bound as well as the frame decoder's bounds.
   module WidePartWriter
+    alias JSONTypedPathValue = Int8 | Int16 | Int32 | Int64 | UInt8 | UInt16 | UInt32 | UInt64 | Float32 | Float64 | String
+
+    # One declared scalar JSON typed path. The explicit type name is checked
+    # against every value before any staging directory is created.
+    struct JSONTypedPathColumn
+      getter name : String
+      getter type_name : String
+      getter values : Array(JSONTypedPathValue)
+
+      def initialize(@name : String, @type_name : String, values : Array(T)) forall T
+        @values = values.map { |value| value.as(JSONTypedPathValue) }
+      end
+    end
+
     MAX_ROWS_PER_MARK                      = 65_536
     MAX_LOW_CARDINALITY_KEYS               =    256
     MAX_LOW_CARDINALITY_DICTIONARY_BYTES   = 64_i64 * 1024 * 1024
@@ -339,6 +353,53 @@ module CrystalClick
         write_plain_metadata(stage, "columns_substreams.txt", json_typed_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_json_typed_part(stage, key_name, keys, value_name, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    # Accept explicitly declared scalar JSON typed paths in caller order.
+    # Metadata and typed-path streams use ClickHouse's lexicographic path order.
+    # Values must already contain ClickHouse-normalized defaults for absent
+    # paths; this API does not preserve path presence or accept dynamic data.
+    def self.write_uint64_json_typed_paths(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      paths : Array(JSONTypedPathColumn),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_json_typed_paths_inputs(destination, key_name, keys, value_name, paths, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      sorted_paths = paths.sort_by(&.name)
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        sorted_paths.each do |path|
+          records.concat(write_json_typed_path_stream(stage, value_name, path, rows_per_mark))
+        end
+        records.concat(write_json_object_structure_stream(stage, value_name, keys.size, rows_per_mark))
+        records.concat(write_json_shared_size0_stream(stage, "#{value_name}.object_shared_data.0.size0", keys.size, rows_per_mark))
+        records.concat(write_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Epaths", keys.size, rows_per_mark))
+        records.concat(write_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Evalues", keys.size, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
+        write_plain_metadata(stage, "columns.txt", json_typed_paths_columns_metadata(key_name, value_name, paths))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", json_typed_paths_substreams_metadata(key_name, value_name, sorted_paths))
+        write_checksums(stage, records)
+        validate_staged_json_typed_paths_part(stage, key_name, keys, value_name, paths, rows_per_mark)
         publish_exclusively(stage, target)
         target
       ensure
@@ -7581,6 +7642,154 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_json_typed_paths_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      paths : Array(JSONTypedPathColumn),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("columns must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty?
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+      raise ArgumentError.new("JSON typed-path declaration must be nonempty") if paths.empty?
+      raise ArgumentError.new("JSON typed-path declaration exceeds reader limit") if paths.size > WidePart::MAX_METADATA_COLUMNS
+
+      seen_paths = Set(String).new
+      logical_names = [key_name, "#{value_name}.object_structure"]
+      declaration_bytes = 0
+      paths.each do |path|
+        unless /\A[A-Za-z_][A-Za-z0-9_]*\z/.matches?(path.name)
+          raise ArgumentError.new("JSON typed-path name must be a simple top-level identifier")
+        end
+        raise ArgumentError.new("duplicate JSON typed path") unless seen_paths.add?(path.name)
+        unless path.type_name == "String" || WidePart.supports_numeric_type?(path.type_name)
+          raise ArgumentError.new("JSON typed-path type must be an exact supported scalar")
+        end
+        raise ArgumentError.new("JSON typed path row count differs from key column") unless path.values.size == keys.size
+        path.values.each do |value|
+          unless json_typed_value_type_name(value) == path.type_name
+            raise ArgumentError.new("JSON typed-path declared type differs from its values")
+          end
+        end
+
+        declaration_bytes += path.name.bytesize + 1 + path.type_name.bytesize
+        typed_name = "#{value_name}.#{path.name}"
+        logical_names << "#{typed_name}.size" if path.type_name == "String"
+        logical_names << typed_name
+      end
+      # The reader counts the entire line, including its terminating LF.
+      metadata_line_bytes = "`#{value_name}` JSON(".bytesize + declaration_bytes + 2 * (paths.size - 1) + ")\n".bytesize
+      raise ArgumentError.new("JSON typed-path metadata line exceeds reader limit") if metadata_line_bytes > WidePart::MAX_METADATA_LINE_BYTES
+      logical_names.concat([
+        "#{value_name}.object_shared_data.0.size0",
+        "#{value_name}.object_shared_data.0%2Epaths",
+        "#{value_name}.object_shared_data.0%2Evalues",
+      ])
+      logical_names.each do |name|
+        raise ArgumentError.new("physical stream name exceeds reader limit") if name.empty? || name.bytesize > WidePart::MAX_METADATA_LINE_BYTES
+      end
+      stream_bases = logical_names.map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+      structure_frame_size = literal_frame_size(json_object_structure_bytes.size.to_i64)
+      raise ArgumentError.new("Object structure frame exceeds reader limit") if structure_frame_size > MAX_FRAME_COMPRESSED.to_i64
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      key_data_bytes = 0_i64
+      start_row = 0
+      while start_row < keys.size
+        rows = {rows_per_mark, keys.size - start_row}.min
+        raw_size = rows.to_i64 * 8_i64
+        raise ArgumentError.new("UInt64 key granule exceeds decompressed frame limit") if raw_size > MAX_FRAME_RAW_BYTES.to_i64
+        frame_size = checked_string_frame_size(raw_size, "UInt64 key")
+        raise ArgumentError.new("UInt64 key stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - key_data_bytes
+        key_data_bytes += frame_size
+        start_row += rows
+      end
+
+      paths.each do |path|
+        if path.type_name == "String"
+          size_data_bytes = 0_i64
+          string_data_bytes = 0_i64
+          total_string_bytes = 0_i64
+          start_row = 0
+          while start_row < path.values.size
+            rows = {rows_per_mark, path.values.size - start_row}.min
+            fixed_raw_size = rows.to_i64 * 8_i64
+            fixed_frame_size = checked_string_frame_size(fixed_raw_size, "JSON typed String sizes")
+            raise ArgumentError.new("JSON typed String size stream exceeds reader limit") if fixed_frame_size > MAX_DATA_FILE_BYTES - size_data_bytes
+            size_data_bytes += fixed_frame_size
+
+            raw_string_size = 0_i64
+            rows.times do |offset|
+              value_size = path.values[start_row + offset].as(String).bytesize.to_i64
+              raise ArgumentError.new("JSON typed String granule exceeds decompressed frame limit") if value_size > MAX_FRAME_RAW_BYTES.to_i64 - raw_string_size
+              raise ArgumentError.new("JSON typed String stream exceeds reader limit") if value_size > MAX_DATA_FILE_BYTES.to_i64 - total_string_bytes
+              raw_string_size += value_size
+              total_string_bytes += value_size
+            end
+            unless raw_string_size == 0
+              frame_size = checked_string_frame_size(raw_string_size, "JSON typed String")
+              raise ArgumentError.new("JSON typed String data stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - string_data_bytes
+              string_data_bytes += frame_size
+            end
+            start_row += rows
+          end
+        else
+          width = WidePart.numeric_payload_width(path.type_name).to_i64
+          data_bytes = 0_i64
+          start_row = 0
+          while start_row < path.values.size
+            rows = {rows_per_mark, path.values.size - start_row}.min
+            raw_size = rows.to_i64 * width
+            raise ArgumentError.new("JSON typed numeric granule exceeds decompressed frame limit") if raw_size > MAX_FRAME_RAW_BYTES.to_i64
+            frame_size = checked_string_frame_size(raw_size, "JSON typed numeric")
+            raise ArgumentError.new("JSON typed numeric stream exceeds reader limit") if frame_size > MAX_DATA_FILE_BYTES - data_bytes
+            data_bytes += frame_size
+            start_row += rows
+          end
+        end
+      end
+
+      substreams_size = json_typed_paths_substreams_metadata(key_name, value_name, paths.sort_by(&.name)).bytesize
+      raise ArgumentError.new("JSON typed-path substream metadata exceeds reader limit") if substreams_size > WidePart::MAX_METADATA_FILE_BYTES
+      nil
+    end
+
+    private def self.json_typed_value_type_name(value : JSONTypedPathValue) : String
+      case value
+      when String  then "String"
+      when Int8    then "Int8"
+      when Int16   then "Int16"
+      when Int32   then "Int32"
+      when Int64   then "Int64"
+      when UInt8   then "UInt8"
+      when UInt16  then "UInt16"
+      when UInt32  then "UInt32"
+      when UInt64  then "UInt64"
+      when Float32 then "Float32"
+      when Float64 then "Float64"
+      else              raise ArgumentError.new("unsupported JSON typed-path value")
+      end
+    end
+
     private def self.validate_low_cardinality_string_inputs(
       destination : String,
       key_name : String,
@@ -8603,6 +8812,54 @@ module CrystalClick
         ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64 * 8_u64, raw_hash.finish),
         ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false),
       ]
+    end
+
+    private def self.write_json_typed_path_stream(
+      stage : String,
+      value_name : String,
+      path : JSONTypedPathColumn,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      logical_name = "#{value_name}.#{path.name}"
+      if path.type_name == "String"
+        values = path.values.map(&.as(String))
+        return write_string_streams(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark)
+      end
+
+      case path.type_name
+      when "Int8"
+        values = path.values.map(&.as(Int8))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "Int16"
+        values = path.values.map(&.as(Int16))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "Int32"
+        values = path.values.map(&.as(Int32))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "Int64"
+        values = path.values.map(&.as(Int64))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "UInt8"
+        values = path.values.map(&.as(UInt8))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "UInt16"
+        values = path.values.map(&.as(UInt16))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "UInt32"
+        values = path.values.map(&.as(UInt32))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "UInt64"
+        values = path.values.map(&.as(UInt64))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "Float32"
+        values = path.values.map(&.as(Float32))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      when "Float64"
+        values = path.values.map(&.as(Float64))
+        write_typed_numeric_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, path.type_name)
+      else
+        raise ArgumentError.new("unsupported JSON typed-path type")
+      end
     end
 
     private def self.write_json_object_structure_stream(
@@ -14889,6 +15146,187 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_json_typed_paths_part(
+      stage : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      paths : Array(JSONTypedPathColumn),
+      rows_per_mark : Int32,
+    ) : Nil
+      sorted_paths = paths.sort_by(&.name)
+      logical_streams = [key_name, "#{value_name}.object_structure"]
+      sorted_paths.each do |path|
+        typed_name = "#{value_name}.#{path.name}"
+        logical_streams << "#{typed_name}.size" if path.type_name == "String"
+        logical_streams << typed_name
+      end
+      logical_streams.concat([
+        "#{value_name}.object_shared_data.0.size0",
+        "#{value_name}.object_shared_data.0%2Epaths",
+        "#{value_name}.object_shared_data.0%2Evalues",
+      ])
+
+      expected_checksums = [] of String
+      logical_streams.each do |logical_name|
+        base_name = StreamName.hash(logical_name)
+        expected_checksums << "#{base_name}.bin"
+        expected_checksums << "#{base_name}.mrk2"
+      end
+      expected_checksums.concat(["primary.idx", "count.txt", "serialization.json"])
+      checksums = PartChecksums.open(stage)
+      unless expected_checksums.uniq.size == expected_checksums.size &&
+             checksums.entries.keys.sort == expected_checksums.sort
+        raise CorruptPartError.new("staged JSON checksum entries do not match the expected stream inventory")
+      end
+
+      expected_files = expected_checksums + [
+        "checksums.txt",
+        "columns.txt",
+        "columns_substreams.txt",
+        "default_compression_codec.txt",
+        "metadata_version.txt",
+      ]
+      unless Dir.children(stage).sort == expected_files.sort
+        raise CorruptPartError.new("staged JSON file inventory differs from the expected part layout")
+      end
+      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+
+      raise CorruptPartError.new("staged JSON columns metadata differs") unless File.read(File.join(stage, "columns.txt")) == json_typed_paths_columns_metadata(key_name, value_name, paths)
+      raise CorruptPartError.new("staged JSON substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == json_typed_paths_substreams_metadata(key_name, value_name, sorted_paths)
+      raise CorruptPartError.new("staged JSON serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == json_typed_serialization_metadata(key_name, keys)
+      raise CorruptPartError.new("staged JSON row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
+      raise CorruptPartError.new("staged JSON compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged JSON metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      expected_index = Array(UInt64).new(mark_count + 1)
+      row = 0
+      while row < keys.size
+        expected_index << keys[row]
+        row += rows_per_mark
+      end
+      expected_index << keys.last
+      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
+      raise CorruptPartError.new("staged JSON primary index differs from input") unless index.keys == expected_index
+
+      validate_staged_json_typed_paths_raw_stream(stage, key_name, keys.size, rows_per_mark) do |start_row, rows|
+        raw = Bytes.new(rows * 8)
+        rows.times { |offset| write_uint64_le(raw, offset * 8, keys[start_row + offset]) }
+        raw
+      end
+      validate_staged_json_object_structure(stage, value_name, keys.size, rows_per_mark)
+      sorted_paths.each do |path|
+        typed_name = "#{value_name}.#{path.name}"
+        if path.type_name == "String"
+          validate_staged_json_typed_paths_raw_stream(stage, "#{typed_name}.size", keys.size, rows_per_mark) do |start_row, rows|
+            raw = Bytes.new(rows * 8)
+            rows.times do |offset|
+              size = path.values[start_row + offset].as(String).bytesize.to_u64
+              write_uint64_le(raw, offset * 8, size)
+            end
+            raw
+          end
+          validate_staged_json_typed_paths_raw_stream(stage, typed_name, keys.size, rows_per_mark) do |start_row, rows|
+            size = 0
+            rows.times { |offset| size += path.values[start_row + offset].as(String).bytesize }
+            raw = Bytes.new(size)
+            cursor = 0
+            rows.times do |offset|
+              value = path.values[start_row + offset].as(String)
+              value.to_slice.copy_to(raw[cursor, value.bytesize]) unless value.empty?
+              cursor += value.bytesize
+            end
+            raw
+          end
+        else
+          validate_staged_json_typed_paths_raw_stream(stage, typed_name, keys.size, rows_per_mark) do |start_row, rows|
+            json_typed_numeric_raw_mark(path, start_row, rows)
+          end
+        end
+      end
+      validate_staged_json_typed_paths_raw_stream(stage, "#{value_name}.object_shared_data.0.size0", keys.size, rows_per_mark) do |_start_row, rows|
+        Bytes.new(rows * 8, 0_u8)
+      end
+      validate_staged_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Epaths", keys.size, rows_per_mark)
+      validate_staged_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Evalues", keys.size, rows_per_mark)
+      nil
+    end
+
+    private def self.validate_staged_json_typed_paths_raw_stream(
+      stage : String,
+      logical_name : String,
+      row_count : Int,
+      rows_per_mark : Int32,
+      &expected_raw : Int32, Int32 -> Bytes
+    ) : Nil
+      base_name = StreamName.hash(logical_name)
+      data_file = File.open(File.join(stage, "#{base_name}.bin"), "r")
+      marks_file = File.open(File.join(stage, "#{base_name}.mrk2"), "r")
+      expected_mark_count = checked_mark_count(row_count, rows_per_mark)
+      expected_mark_file_size = (expected_mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      unless marks_file.size == expected_mark_file_size
+        data_file.close
+        marks_file.close
+        raise CorruptPartError.new("staged JSON mark file size differs for #{logical_name}")
+      end
+
+      compressed_offset = 0_u64
+      start_row = 0
+      begin
+        while start_row < row_count
+          rows = {rows_per_mark, row_count - start_row}.min
+          expected = expected_raw.call(start_row, rows)
+          mark = Bytes.new(WidePart::MARK_SIZE)
+          marks_file.read_fully(mark)
+          unless read_uint64_le(mark, 0) == compressed_offset &&
+                 read_uint64_le(mark, 8) == 0_u64 &&
+                 read_uint64_le(mark, 16) == rows.to_u64
+            raise CorruptPartError.new("staged JSON mark differs for #{logical_name}")
+          end
+          compressed_offset = validate_staged_json_frame(data_file, logical_name, compressed_offset, expected) unless expected.empty?
+          start_row += rows
+        end
+
+        sentinel = Bytes.new(WidePart::MARK_SIZE)
+        marks_file.read_fully(sentinel)
+        unless read_uint64_le(sentinel, 0) == compressed_offset &&
+               read_uint64_le(sentinel, 8) == 0_u64 &&
+               read_uint64_le(sentinel, 16) == 0_u64
+          raise CorruptPartError.new("staged JSON sentinel differs for #{logical_name}")
+        end
+        raise CorruptPartError.new("staged JSON marks have trailing bytes for #{logical_name}") unless marks_file.gets_to_end.empty?
+        raise CorruptPartError.new("staged JSON data has trailing bytes for #{logical_name}") unless data_file.size == compressed_offset
+      ensure
+        data_file.close unless data_file.closed?
+        marks_file.close unless marks_file.closed?
+      end
+      nil
+    end
+
+    private def self.json_typed_numeric_raw_mark(path : JSONTypedPathColumn, start_row : Int, rows : Int) : Bytes
+      width = WidePart.numeric_payload_width(path.type_name)
+      raw = Bytes.new(rows * width)
+      rows.times do |offset|
+        value = path.values[start_row + offset]
+        target_offset = offset * width
+        case path.type_name
+        when "Int8"    then write_typed_numeric_le(raw, target_offset, value.as(Int8))
+        when "Int16"   then write_typed_numeric_le(raw, target_offset, value.as(Int16))
+        when "Int32"   then write_typed_numeric_le(raw, target_offset, value.as(Int32))
+        when "Int64"   then write_typed_numeric_le(raw, target_offset, value.as(Int64))
+        when "UInt8"   then write_typed_numeric_le(raw, target_offset, value.as(UInt8))
+        when "UInt16"  then write_typed_numeric_le(raw, target_offset, value.as(UInt16))
+        when "UInt32"  then write_typed_numeric_le(raw, target_offset, value.as(UInt32))
+        when "UInt64"  then write_typed_numeric_le(raw, target_offset, value.as(UInt64))
+        when "Float32" then write_typed_numeric_le(raw, target_offset, value.as(Float32))
+        when "Float64" then write_typed_numeric_le(raw, target_offset, value.as(Float64))
+        else                raise CorruptPartError.new("unsupported staged JSON typed-path numeric type")
+        end
+      end
+      raw
+    end
+
     private def self.validate_staged_json_data_stream(
       stage : String,
       logical_name : String,
@@ -18924,6 +19362,15 @@ module CrystalClick
       "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` JSON(a UInt64, b String)\n"
     end
 
+    private def self.json_typed_paths_columns_metadata(
+      key_name : String,
+      value_name : String,
+      paths : Array(JSONTypedPathColumn),
+    ) : String
+      declaration = paths.sort_by(&.name).map { |path| "#{path.name} #{path.type_name}" }.join(", ")
+      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` JSON(#{declaration})\n"
+    end
+
     private def self.json_object_structure_bytes : Bytes
       Bytes[0x04_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 1_u8, 1_u8, 1_u8, 0_u8]
     end
@@ -18982,6 +19429,29 @@ module CrystalClick
         "\t#{value_name}.object_shared_data.0.size0\n" +
         "\t#{value_name}.object_shared_data.0%2Epaths\n" +
         "\t#{value_name}.object_shared_data.0%2Evalues\n"
+    end
+
+    private def self.json_typed_paths_substreams_metadata(
+      key_name : String,
+      value_name : String,
+      sorted_paths : Array(JSONTypedPathColumn),
+    ) : String
+      streams = ["#{value_name}.object_structure"]
+      sorted_paths.each do |path|
+        typed_name = "#{value_name}.#{path.name}"
+        streams << "#{typed_name}.size" if path.type_name == "String"
+        streams << typed_name
+      end
+      streams.concat([
+        "#{value_name}.object_shared_data.0.size0",
+        "#{value_name}.object_shared_data.0%2Epaths",
+        "#{value_name}.object_shared_data.0%2Evalues",
+      ])
+      payload = IO::Memory.new
+      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
+      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
+      streams.each { |stream| payload << "\t#{stream}\n" }
+      payload.to_s
     end
 
     private def self.low_cardinality_string_substreams_metadata(key_name : String, value_name : String) : String

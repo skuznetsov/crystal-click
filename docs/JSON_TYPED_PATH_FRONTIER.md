@@ -1,13 +1,121 @@
 # JSON Typed-Path Projection Frontier
 
-Document status: bounded typed-path reading and one exact writer shape verified
-against pinned ClickHouse 26.7.1.1315, the public reader fixture, and the
-W24 524-example debug/release suites. General JSON document reading and
-writing are not claimed.
+Document status: bounded typed-path reading and writing verified against
+pinned ClickHouse 26.7.1.1315. W24's exact two-path writer remains supported;
+W72 adds arbitrary nonempty lists of the reader's simple scalar typed paths.
+General JSON document reading and writing are not claimed.
 
 Current frontier: expose only explicitly declared, scalar typed paths of a
 top-level ClickHouse `JSON` column as virtual columns in the existing offline
 Wide-part scanner. This is a projection, not a JSON document reader.
+
+## W72 design seal: declared scalar typed-path writer parity
+
+Status: implemented and verified within the bounded W72 scope below. The reader already
+accepts simple top-level identifier paths with `String` or one of the ten
+primitive fixed-width numeric types. W72 admits a writer for an arbitrary
+nonempty, bounded list of those declared paths, supplied as homogeneous
+per-path columns in any order, with row count matching a sorted
+`UInt64` key. The writer must preserve each path's name-to-type-to-values
+association while canonicalizing both `columns.txt` declarations and physical
+typed streams by path name as ClickHouse does. It must emit independent
+streams and marks and retain the W24 empty-dynamic
+Object V3 structure and shared-data streams. Missing values are supplied as
+already-normalized scalar defaults; this is not a presence-preserving API.
+
+Guard-only: untyped/dynamic paths, nonempty shared data, whole-document input,
+arbitrary document reconstruction, nested/dotted paths, `Nullable`, recursive
+path types, Compact parts, alternate Object serializers, and any claim that
+all JSON types are supported. W24's exact entry point remains supported. The
+likeliest failure is metadata/stream ordering or numeric-width mismatch that
+passes a partial Crystal self-read yet stock ClickHouse misinterprets. Risk is
+CAUTION; rollback is one isolated W72 feature commit, with no server data root
+as a write target.
+
+Falsifier first: a mixed-width three-path declaration such as
+`JSON(a Int16, b Float32, c String)` must be RED through a new public writer
+API, then tested with multiple marks, empty and binary String values, and
+pre-publication rejection of mismatched rows, duplicate/invalid names, wrong
+declared types, oversized granules, and destination collisions. Independently
+produce that schema with pinned ClickHouse 26.7.1.1315 to establish its
+`object_structure`, substream order, and defaults; reverse-test a
+Crystal-produced part using `ATTACH PART`, exact typed-path and whole-object
+reads, and `CHECK TABLE`. The DoD is focused specs, full debug/release specs,
+all pinned writer oracles, the new stock reverse oracle, formatter, and
+`git diff --check`. A stock failure narrows the admitted family instead of
+inventing compatibility. Evidence expires on ClickHouse producer version,
+Object serialization settings, codec/mark format, or relevant code changes.
+
+Execution plan (one W72 feature commit):
+
+1. `spec/wide_part_writer_json_typed_general_spec.cr`: establish RED for the
+   missing public API, exact mixed-width bytes/marks, and rejected input with
+   no published destination. The expected RED signal is an undefined writer
+   method, not a green test that never exercised the new format.
+2. `src/crystal_click/wide_part_writer.cr`: add descriptor-driven validation,
+   stream emission, metadata, and independent staged checks. The existing W24
+   method and its consumers remain unchanged. Inventory:
+   `rg -n 'write_uint64_json_typed|json_typed_(columns|substreams|serialization)|json_typed_paths|object_structure|object_shared_data' src spec scripts`.
+   It finds the public W24 writer and specs, reader parser/stream resolver,
+   JSON fixture generator, and the W24 reverse oracle; none may silently
+   change their existing admitted behavior.
+3. `scripts/check_json_typed_general_writer_oracle.sh`: inspect a stock
+   three-path producer part and reverse-attach a Crystal-produced part to
+   pinned ClickHouse, checking typed-path and whole-object values plus
+   `CHECK TABLE`. Existing `scripts/check_json_typed_writer_oracle.sh` remains
+   a regression guard for W24.
+4. Run the focused, full debug/release, and all pinned writer-oracle checks;
+   then conduct a hostile review of path ordering, all stream marks and
+   checksums, frame limits, declaration/value mismatches, default semantics,
+   and staged publication. A self-read is not a substitute for step 3.
+
+Pre-implementation stock probe on pinned ClickHouse 26.7.1.1315: a Wide
+`JSON(z String, a Int16, m Float32)` part with five rows and granularity two
+canonicalizes `columns.txt` to `JSON(a Int16, m Float32, z String)` and lists
+physical typed streams `a,m,z.size,z`, after
+`object_structure` and before the three shared-data streams. Its decoded
+`object_structure` is the same 13 bytes as W24
+(`04000000000000000001010100`); this count belongs to dynamic paths, not
+declared typed paths. The `Int16` and `Float32` streams have two- and
+four-byte values, and `String` uses UInt64 lengths with zero bytes for empty
+values and preserves an embedded NUL. This probe does not verify a
+Crystal-produced part. Pinned source
+`src/DataTypes/Serializations/SerializationObject.cpp:163-179,317-331`
+separately supports sorted typed-path traversal and the dynamic-path count.
+
+Observed W72 evidence on 2026-09-28: the focused spec first failed for the
+missing public descriptor/API, then passed 5 examples. The full debug and
+release suites each passed 931 examples, 0 failures/errors/pending. The new
+reverse oracle, `scripts/check_json_typed_general_writer_oracle.sh`, attached
+a Crystal-written `JSON(z String, a Int16, m Float32)` Wide part to pinned
+ClickHouse 26.7.1.1315, verified exact full and key-range typed-path
+RowBinary, normalized whole-object JSONEachRow, canonical sorted metadata,
+Object V3 bytes and marks, exact checksum/file inventory, and `CHECK TABLE`.
+It also rejected malformed names, duplicate paths, mismatched rows/types, and
+unsorted keys without publication. The prior W24 JSON oracle passed; all 63
+other pinned `check_*_oracle.sh` scripts also passed. `crystal tool format
+--check` on the changed Crystal files, `bash -n` on the new oracle, and
+`git diff --check` passed. The focused spec additionally checks a >64 MiB
+String granule, reserved structure stream collision, key/JSON name collision,
+canonical declaration order independent of input order, and bit preservation
+for Float32 `-0`, non-finite, and NaN payload values. These local bit checks
+do not by themselves certify whole-object JSON rendering of non-finite values
+on other ClickHouse versions. The stock reverse oracle directly exercises
+Int16, Float32, and String together; the remaining numeric widths share the
+existing fixed-width serializer but are not individually covered by that
+durable oracle. This is not dynamic-path JSON, arbitrary document input, or
+MV/projection support. Refresh on producer version, Object serializer
+settings, codec/mark layout, or relevant reader/writer changes.
+
+The first hostile pass found a real one-byte length undercount for a
+multi-path `columns.txt` declaration at the reader's 64 KiB line limit.
+A new boundary spec reproduced writer publication of a reader-rejected line
+before the fix. The guard now counts per-path spaces, inter-path separators,
+and the terminating LF exactly; the over-limit case rejects before staging,
+while an exact-limit line publishes and opens in the Crystal reader. The
+focused spec, both JSON reverse oracles, full debug/release suites, and all
+other pinned oracles were rerun after the fix. This establishes the bounded
+reader limit, not stock ClickHouse acceptance of a 64 KiB path name.
 
 ## W24 verified bounded writer: one typed-path Object V3 shape
 
