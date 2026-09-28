@@ -115,12 +115,11 @@ private def w68_reader_rewrite_first_frame(path : String, stream : String, & : B
 end
 
 describe CrystalClick::WidePart do
-  it "admits only the exact W68 nullable UInt64 Array Map shape" do
+  it "admits the exact W68 nullable UInt64 Array Map without unrelated shapes" do
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(Nullable(UInt64)))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(UInt64))").should be_true
     {
       "Map(String, Array(Nullable(UInt32)))",
-      "Map(UInt64, Array(Nullable(UInt64)))",
       "Map(String, Array(Nullable(Int64)))",
       "Map(String, Array(Array(Nullable(UInt64))))",
       "Map(String, Nullable(Array(UInt64)))",

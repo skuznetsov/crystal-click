@@ -50,7 +50,7 @@ module CrystalClick
       end
     end
 
-    # A correctness-only shadow of the known W51/W55/W59/W61/W63 physical
+    # A correctness-only shadow of the known W51/W55/W59/W61/W63/W69 physical
     # shapes. This deliberately does not participate in codec admission.
     struct WidePhysicalPlanShadow
       enum AxisKind
@@ -168,18 +168,20 @@ module CrystalClick
              TYPE_ARRAY_ARRAY_NULLABLE_STRING
           !WideTypePlan.admitted(type).nil?
         when "Map(String, Array(UInt64))"
-          exact_map_shape?(root, false)
+          exact_map_shape?(root, "String", false)
         when "Map(String, Array(Nullable(UInt64)))"
-          exact_map_shape?(root, true)
+          exact_map_shape?(root, "String", true)
+        when "Map(UInt64, Array(Nullable(UInt64)))"
+          exact_map_shape?(root, "UInt64", true)
         else
           false
         end
       end
 
-      private def self.exact_map_shape?(root : Node, nullable_value : Bool) : Bool
+      private def self.exact_map_shape?(root : Node, key_type : String, nullable_value : Bool) : Bool
         return false unless root.name == "Map" && root.children.size == 2
         key = root.child(0)
-        return false unless key.name == "String" && key.children.empty?
+        return false unless key.name == key_type && key.children.empty?
         values = root.child(1)
         return false unless values.name == "Array" && values.children.size == 1
 

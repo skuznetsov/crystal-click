@@ -4166,6 +4166,75 @@ mark-layout or version change, a shared reader/writer/table/catalog dispatch
 change, or a platform change; refresh the focused/full tests and pinned
 bidirectional oracle before reusing the interoperability claim.
 
+## W69 design-sealed: numeric keys with nullable UInt64 Array values
+
+The next exact payload is `Map(UInt64, Array(Nullable(UInt64)))` beside one
+sorted `UInt64` primary key in a Wide/LZ4/plain-`.mrk2` part. This composes
+the existing numeric-key Map and W68 nullable Array value paths without
+admitting generic recursive Maps. The local ClickHouse source models Map as
+an Array of a named key/value Tuple. The pinned ClickHouse 26.7.1.1315
+producer generated exactly five payload streams in this order:
+`payload.size0`, `payload%2Ekeys`, `payload%2Evalues.size1`,
+`payload%2Evalues.null`, and `payload%2Evalues`. The seven-row Wide/LZ4
+part has five marks with row counts `[2, 2, 2, 1, 0]` on every stream.
+Decompressed mark offsets are `[0, 16, 32, 48, 56]` for `pk` and
+`payload.size0`, `[0, 16, 40, 64, 72]` for `keys` and `values.size1`,
+`[0, 16, 32, 64, 72]` for `values`, and `[0, 2, 4, 8, 9]` for
+`values.null`. All compressed offsets
+in this one-block vector are zero. This producer evidence is a format
+anchor, not yet proof that Crystal consumes or emits the type. Stock
+`serialization.json` has no column entries but does carry global `string: 1`
+and nested-version propagation even without a String column; admission must
+follow the existing metadata policy rather than infer a String payload.
+
+Admit only an exact typed reader, table/batch/catalog surface, and immutable
+writer for this declaration. Preserve entry order and duplicate numeric keys;
+do not coerce a Map to a hash. `size0` counts entries per row; the key stream
+has one UInt64 per entry; `values.size1` counts Array elements per entry;
+the null map and child data each have one slot per Array element, including
+NULL. Every `.mrk2` row count remains in table-row coordinates. The reader
+must reject inconsistent counts, byte extents, null codes, or shifted marks
+before yielding the affected mark; earlier valid marks may have yielded.
+The writer must validate before exclusive publication and emit deterministic
+hidden bytes for NULL values.
+
+Risk is CAUTION: a plausible, shifted nested stream can self-read but fail
+stock `ATTACH PART` or return a value under the wrong key. Rollback is the
+isolated W69 diff or its one local commit; existing parts and remote history
+remain untouched. DoD is RED-to-green exact reader/writer/table/catalog
+tests; stock producer evidence for names, serialization, all mark row counts
+and offsets; selected later-mark and checksum-valid corruption guards; a
+bidirectional pinned stock/Crystal oracle with `ATTACH PART`, `CHECK TABLE`,
+and exact full/keyed RowBinary; focused prior-type controls; full debug and
+release suites; and hostile review. The oracle vector must distinguish
+duplicate keys, empty Map and Arrays, NULL versus zero, an all-NULL mark
+followed by a non-NULL tail, key/value extrema, and a short terminal mark.
+The claim excludes other Map declarations, Compact parts, other codecs,
+running-server lifecycle, MV/projections, and performance. Evidence decays
+on a serializer, mark layout, ClickHouse version, or shared type-dispatch
+change; then refresh the producer probe and both oracle directions.
+
+W69 implementation evidence: the exact reader, writer, table/batch accessor,
+catalog materializer, and physical-plan shadow now admit this declaration
+only. The focused tests establish ordered duplicate-key and NULL-slot
+roundtrips, selected later/all-NULL/tail marks, nested byte/cardinality
+guards, deep-owned catalog values, and no callback for a corrupt selected
+mark. The pinned ClickHouse 26.7.1.1315 bidirectional oracle passed: stock
+part metadata and all stream marks matched the producer probe; Crystal read
+the stock part; a checksum-valid mutation of a hidden UInt64 slot under a
+NULL at a later mark preserved NULL and the tail in both readers; and the
+Crystal-written part passed stock `ATTACH PART`, `CHECK TABLE`, and exact
+full/keyed RowBinary comparisons. The complete debug and release suites each
+passed with 897 examples, 0 failures, 0 errors, and 0 pending. The stock
+oracle command was
+`bash scripts/check_map_uint64_array_nullable_uint64_oracle.sh`; the suite
+commands were `crystal spec --link-flags='-fuse-ld=ld'` and
+`crystal spec --release --link-flags='-fuse-ld=ld'` with isolated Crystal
+caches. These observations do not widen the stated exclusions or establish
+speed/allocation parity. Hostile review returned ROBUST within this exact
+pinned type/part scope after checking the corrected stock value offsets,
+NULL-hidden-slot mutation, per-mark preflight, and writer publication path.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,

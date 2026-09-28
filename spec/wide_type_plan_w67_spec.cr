@@ -125,7 +125,6 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
       "Map(String, Array(Nullable(UInt64)), UInt64)",
       "Map(String, Array(Nullable(UInt64))) trailing",
       "Map(String, Array(Array(Nullable(UInt64))))",
-      "Map(UInt64, Array(Nullable(UInt64)))",
     }.each do |unbounded|
       CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(unbounded).should be_nil
     end
