@@ -37,11 +37,10 @@ private def w26_write_u64(bytes : Bytes, offset : Int, value : UInt64) : Nil
 end
 
 describe CrystalClick::WidePart do
-  it "recognizes only the exact Map(UInt64, UInt64) spelling" do
+  it "recognizes the exact W26 declaration and rejects unsupported or malformed variants" do
     CrystalClick::WidePart.supports_typed_type?("Map(UInt64, UInt64)").should be_true
     [
       "Map(UInt32, UInt64)",
-      "Map(UInt64, UInt32)",
       "Nullable(Map(UInt64, UInt64))",
       "Map( UInt64, UInt64)",
       "Map(UInt64,UInt64)",

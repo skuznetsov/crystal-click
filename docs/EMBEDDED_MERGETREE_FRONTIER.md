@@ -1,6 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W75 is admitted only for mixed standalone
+Document status: active design. W76 is admitted only for the bounded
+scalar-numeric `Map(UInt64, T)` and `Map(String, T)` profile below. W75 is
+admitted only for mixed standalone
 `Dynamic(String, UInt64, NULL)` on the pinned Wide/LZ4/plain-mark profile;
 W74 remains admitted only for its String-only profile. W1, W2, and bounded
 W3 are verified on this macOS host against the pinned ClickHouse build.
@@ -4695,6 +4697,69 @@ profile. The offline catalog's existing PK-candidate API remains
 UInt64-projection-only; typed full scans and low-level selected-mark scans
 cover W75, but a catalog-level keyed Dynamic query is not claimed. General
 `Dynamic`, MV/projections, and memory or speed parity remain unverified.
+
+## W76 admitted: scalar-numeric Map values
+
+W76 admits only `Map(UInt64, T)` and `Map(String, T)` for exact primitive
+`T` in `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Int8`, `Int16`, `Int32`,
+`Int64`, `Float32`, and `Float64`, in the existing sorted-`UInt64`-key,
+two-column Wide/LZ4/plain-`.mrk2` profile. The two `UInt64` value
+declarations already work and are regression controls; the other 18 are
+new reader/writer parity targets. Rows preserve ordered Map entries,
+including duplicate keys, rather than collapsing them into a dictionary.
+No recursive Map grammar or nullable numeric values are admitted by this
+step. `Float32` and `Float64` retain their exact bit patterns, including
+signed zero and NaN payloads, where stock ClickHouse preserves them.
+
+Risk is CAUTION: a wrong nested value width can appear correct in a full
+scan while shifting later-mark boundaries or mischarging materialization.
+Rollback is the isolated local W76 feature commit; existing parts and remote
+history are untouched. The first falsifier is a RED typed reader/writer test
+for one missing narrow numeric value on each key shape. Before a physical
+codec change, the pinned ClickHouse 26.7.1.1315 producer must confirm the
+exact stream inventory, nested width, metadata, marks, empty Maps, duplicate
+keys, and multi-mark tails for representative widths and key shapes.
+If the producer shows a distinct physical profile, narrow this admission
+before implementing it. The consumer must validate each selected child's
+mark rows, flattened cardinality, byte extent, and aggregate materialization
+charge before exposing affected rows. Earlier valid marks may already have
+yielded. Reader, typed table/batch, offline catalog, and immutable writer
+must agree on type identity and ordered values.
+
+DoD: RED-to-green focused reader/writer/table/catalog specs; pinned
+stock-to-Crystal selected and full reads across all ten numeric leaves and
+both key shapes; Crystal-to-stock `ATTACH PART`, `CHECK TABLE`, exact full
+and primary-key-range RowBinary for representative width/float/key cases;
+adjacent Map regression controls; all pinned oracles; full debug and
+release suites; format/diff checks; and hostile review of both directions,
+later-mark integrity, and publication safety. A stock disagreement rejects
+or narrows W76, not the oracle. Evidence decays on a ClickHouse nested-Map
+serializer, codec/mark layout, or shared dispatch change. Additional
+`Dynamic`, general JSON, MV/projections, and memory/performance parity
+remain guard-only.
+
+W76 evidence on 2026-09-28: the pinned ClickHouse 26.7.1.1315 oracle passed
+stock-to-Crystal for all 20 declarations, checking exact physical stream
+inventory, marks, metadata, checksums, full rows, and selected later marks.
+Five representative Crystal-to-stock cases passed `ATTACH PART`,
+`CHECK TABLE`, and exact full/key-range RowBinary. The Crystal writer's
+`serialization.json` uses an accepted metadata variant rather than the
+stock producer's byte-identical record; interoperability, not metadata
+identity, is the reverse-direction claim. Physical writer-backed typed-table
+and offline-catalog specs cover all 20 declarations, ordered duplicates,
+empty rows, and floating-point bit retention. A RED-to-green empty-row
+regression raised W76's logical charge to 64 bytes per retained Map row,
+including both pre-existing `UInt64` value controls, without changing older
+Array(Tuple)/Map charge contracts. This is not an exact heap/RSS bound.
+The final debug and release suites each passed 988 examples with zero
+failures, errors, or pending tests using the host-compatible
+`-fuse-ld=ld` override. All 69 pinned oracle scripts passed in one sweep;
+Crystal formatting, shell syntax, and diff checks passed. A read-only
+hostile review found the empty-row undercharge and later the String/UInt64
+dispatch mismatch; both were corrected, and it found no remaining concrete
+W76 blocker in the final source. Stock interoperability for arbitrary NaN
+payloads, multi-column stock parts, other layouts/builds, remaining type
+families, MV/projections, and memory/performance parity is not established.
 
 ## Rejected and guard-only surfaces
 

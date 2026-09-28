@@ -99,11 +99,10 @@ private def w52_create_catalog_fixture(root : String) : Nil
 end
 
 describe "W52 ordered String-key Map reader" do
-  it "admits only the two exact top-level String-key Map declarations" do
+  it "admits the W52 declarations while rejecting unsupported or malformed String-key Maps" do
     CrystalClick::WidePart.supports_typed_type?("Map(String, UInt64)").should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(String, String)").should be_true
     [
-      "Map(String, UInt32)",
       "Map(String, LowCardinality(String))",
       "Map(Nullable(String), UInt64)",
       "Map(Nullable(String), String)",
