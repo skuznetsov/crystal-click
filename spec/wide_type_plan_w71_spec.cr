@@ -56,7 +56,7 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
     CrystalClick::WideTypePlan.admitted(candidate).should be_nil
 
     {
-      "Map(UInt64, Array(String))",
+      "Map(UInt64, Array(Int64))",
       "Map(Int64, Array(Nullable(String)))",
       "Map(UInt64, Array(Array(Nullable(String))))",
       "Map(UInt64, Nullable(Array(Nullable(String))))",

@@ -6,7 +6,7 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?(candidate).should be_true
 
     {
-      "Map(UInt64, Array(String))",
+      "Map(UInt64, Array(Int64))",
       "Map(Int64, Array(Nullable(String)))",
       "Map(UInt64, Array(Array(Nullable(String))))",
       "Map(UInt64, Nullable(Array(Nullable(String))))",

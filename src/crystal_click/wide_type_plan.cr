@@ -177,6 +177,12 @@ module CrystalClick
           exact_map_shape?(root, "UInt64", true)
         when "Map(UInt64, Array(Nullable(String)))"
           exact_map_shape?(root, "UInt64", true, "String")
+        when "Map(UInt64, Array(UInt64))"
+          exact_map_shape?(root, "UInt64", false)
+        when "Map(String, Array(String))"
+          exact_map_shape?(root, "String", false, "String")
+        when "Map(UInt64, Array(String))"
+          exact_map_shape?(root, "UInt64", false, "String")
         else
           false
         end

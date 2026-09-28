@@ -64,7 +64,7 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
       .for_type("Map(String, Array(Nullable(UInt64)))").should_not be_nil
 
     {
-      "Map(String, Array(String))",
+      "Map(String, Array(Int64))",
       "Map(String, Array(Nullable(Int64)))",
       "Map(String, Array(Array(Nullable(String))))",
       "Map(String, Nullable(Array(Nullable(String))))",

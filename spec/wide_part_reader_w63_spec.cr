@@ -98,11 +98,11 @@ private def w63_reader_rewrite_first_size1(path : String, value : UInt64) : Nil
 end
 
 describe CrystalClick::WidePart do
-  it "admits only the W63 Map of UInt64 Arrays shape" do
+  it "admits the W63 Map of UInt64 Arrays shape without nearby unsupported spellings" do
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(UInt64))").should be_true
     {
-      "Map(UInt64, Array(UInt64))",
-      "Map(String, Array(String))",
+      "Map(UInt32, Array(UInt64))",
+      "Map(String, Array(Int64))",
       "Map(String, Array(Array(UInt64)))",
       "Map(String, Array(UInt64)) trailing",
     }.each do |type|

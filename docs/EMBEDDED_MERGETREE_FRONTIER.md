@@ -64,6 +64,9 @@ declarations and physical streams are canonicalized by path name. The pinned
 reverse oracle accepts a mixed-width three-path Crystal part; dynamic paths,
 arbitrary documents, and general JSON remain outside scope. See
 `JSON_TYPED_PATH_FRONTIER.md` for the evidence and limits.
+W73 admits the three previously missing non-null cells of the core
+`Map(K, Array(V))` matrix where `K` and `V` are each `UInt64` or `String`,
+within the bidirectionally checked Wide/LZ4/plain-mark scope below.
 W25 admits one exact top-level `Map(UInt64, String)` payload beside a
 `UInt64` key. Its reader and writer use ordered entry arrays, not a hash,
 to preserve duplicate keys and entry order. See
@@ -4462,6 +4465,83 @@ green afterward, while an exact-limit line still opens in Crystal. All
 gates above were rerun on the corrected source. The adversary verdict is
 ROBUST within the pinned mixed-path/reader-limit scope, not arbitrary JSON
 or acceptance of 64 KiB path names by stock ClickHouse.
+
+## W73 design seal: complete the non-null core Map/Array matrix
+
+The current paired surface includes `Map(String, Array(UInt64))` and several
+nullable-leaf relatives, but not `Map(UInt64, Array(UInt64))`,
+`Map(String, Array(String))`, or `Map(UInt64, Array(String))`. W73 targets all
+three missing non-null cells as one coherent matrix over the existing key and
+leaf codecs. A shared internal physical-plan/axis path may replace duplicated
+exact-shape machinery, but public type admission stays limited to the four
+matrix declarations. Merely accepting their type strings without reader,
+table/catalog, writer, and stock compatibility is not admission.
+
+Risk is CAUTION: Map entries, nested Array elements, and String bytes have
+independent cardinalities while every stream mark reports table rows. An
+apparently plausible part can silently associate values with the wrong key.
+Rollback is one isolated W73 feature commit; existing data roots and remote
+history remain untouched. Before implementation, the falsifier is a focused
+RED test proving each absent declaration is refused by the current reader or
+writer. A pinned ClickHouse 26.7.1.1315 producer must then establish the
+ordered stream inventory, mark rows and offsets, and serializer metadata for
+all three cells, using vectors with row, entry, element, and byte counts that
+differ. Include duplicate keys, empty Maps and Arrays, a short final mark,
+numeric extrema, and empty/binary String values followed by nonempty tails.
+
+The DoD is exact typed reader, table/batch/catalog, and immutable writer
+coverage for all three cells; selected later-mark offset corruption and
+compressed-frame-checksum-valid cardinality corruption rejection before
+yielding the affected mark;
+Crystal reads of stock parts; stock `ATTACH PART`, full/keyed RowBinary, and
+`CHECK TABLE` for Crystal parts; focused specs, full debug/release suites,
+all pinned regression oracles, format/diff checks, and a hostile review.
+Stock disagreement narrows or rejects the proposed matrix instead of
+assuming that adjacent nullable codecs prove it. Other Map key/value types,
+arbitrary recursive nesting and table schemas, Compact parts, other codecs,
+MV/projections, and memory/performance claims remain guard-only. Evidence
+expires on a ClickHouse serializer, mark-layout/version, or shared
+reader/writer/table/catalog dispatch change. Dynamic/shared JSON remains the
+next separately probed type frontier after this matrix.
+
+Pre-implementation producer evidence on pinned ClickHouse 26.7.1.1315:
+`bash scripts/check_map_array_core_w73_oracle.sh` passed its stock-only phase
+for all three declarations before the writer was added. The probe inserts
+five rows through RowBinary with duplicate keys, empty Maps/Arrays, numeric
+extrema, and empty/binary Strings; it checks full/keyed RowBinary, `CHECK
+TABLE`, exact substream inventory, raw bytes, checksums, and three plain
+`.mrk2` data marks with row counts `[2, 2, 1]` plus a terminal mark. It
+sets `compress_marks=0`, LZ4, and bounded compression blocks explicitly;
+this is not evidence for compressed marks or other codec settings. Observed
+substreams are `size0, keys, values.size1, values` for UInt64/UInt64,
+`size0, keys.size, keys, values.size1, values.size, values` for
+String/String, and `size0, keys, values.size1, values.size, values` for
+UInt64/String. Each uses a distinct row, entry, element, and (where present)
+String-byte axis. All three stock parts have the same Default `pk`
+serialization entry with `num_defaults: 1` and `num_rows: 5`. This
+producer-only phase did not itself certify a Crystal reader or writer.
+
+The completed bidirectional W73 oracle now does: Crystal reads the stock
+parts across full and final-mark ranges, and pinned ClickHouse accepts the
+Crystal-written parts via `ATTACH PART`, full/keyed RowBinary readback, and
+`CHECK TABLE`. The oracle also checks stock parts where every Map is empty or
+every nested Array is empty. In those cases child `.bin` streams have zero
+length, child mark offsets remain zero through the terminal mark, and stock
+`serialization.json` reports `num_defaults: 0` for the tested primary keys
+`[1, 2, 3]`; the main fixture above reports one default with a primary key
+zero. W73 admits the bounded `Default` count for only its three exact shapes,
+not an arbitrary Map serializer. Reader specs reject shifted later marks on
+each child stream and changed per-mark row counts even when their aggregate is
+unchanged. The latter is caught by the existing open-time full mark-row-vector
+comparison, not by a new W73 guard. Batch/catalog specs check typed accessors,
+ownership, materialization limits, and withholding a corrupted later mark
+before yield.
+Both full `crystal spec` and `crystal spec --release` passed with 948 examples,
+zero failures, errors, or pending tests. All 66 pinned `check_*_oracle.sh`
+scripts passed with no exclusions or source drift during that batch. This is
+compatibility evidence only for pinned Wide/LZ4/plain `.mrk2` parts with the
+declared two-column schema;
+it is not a performance claim and does not extend to MV or projections.
 
 ## Rejected and guard-only surfaces
 
