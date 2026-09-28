@@ -1,6 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W76 is admitted only for the bounded
+Document status: active design. W77 is admitted only for the bounded
+primitive-numeric `Map(UInt64, Nullable(T))` and
+`Map(String, Nullable(T))` profile below. W76 is admitted only for the bounded
 scalar-numeric `Map(UInt64, T)` and `Map(String, T)` profile below. W75 is
 admitted only for mixed standalone
 `Dynamic(String, UInt64, NULL)` on the pinned Wide/LZ4/plain-mark profile;
@@ -4760,6 +4762,61 @@ dispatch mismatch; both were corrected, and it found no remaining concrete
 W76 blocker in the final source. Stock interoperability for arbitrary NaN
 payloads, multi-column stock parts, other layouts/builds, remaining type
 families, MV/projections, and memory/performance parity is not established.
+
+## W77 admitted: nullable primitive-numeric Map values
+
+W77 admits paired reader/writer support for
+`Map(UInt64, Nullable(T))` and `Map(String, Nullable(T))`, where `T` is one
+of W76's ten primitive numeric leaves. W53's `Nullable(UInt64)` declarations
+are existing controls; the other 18 declarations are newly checked. This is
+still the sorted-`UInt64`-key, two-column
+Wide/LZ4/plain-`.mrk2` profile, not a recursive Map grammar. Ordered entries,
+duplicate keys, NULL versus non-NULL zero, empty Maps, and exact non-NULL
+floating-point bits are observable parts of the admitted contract.
+
+Risk is CAUTION: an independently plausible null bitmap or numeric width can
+misalign later marks, and an incorrect charge can admit oversized row
+materialization. Rollback is one isolated W77 feature commit, without
+modifying existing stock parts or remote history. The first RED falsifier was
+the previous exact type gate rejecting `Map(UInt64, Nullable(UInt8))` and
+`Map(String, Nullable(Float64))`. Before admission, the pinned stock producer
+established `size0`, key, null, and numeric-value stream inventory; each
+child's row count, flattened cardinality, byte extent, empty-mark behavior,
+terminal mark, and accepted metadata. The reader
+must validate these before returning selected rows, and the immutable writer
+must validate its staged part before publication. Reader, typed table/batch,
+offline catalog, and writer must agree on exact type identity and ordered
+values. A stock discrepancy narrows the design rather than the oracle.
+
+DoD: RED-to-green focused reader/writer/table/catalog specs including null,
+empty, duplicate, later-mark, malformed child-mark, and logical-charge cases;
+pinned stock-to-Crystal exact stream and RowBinary checks for all 20 profiles;
+Crystal-to-stock `ATTACH PART`, `CHECK TABLE`, and keyed/full
+RowBinary checks; all pinned oracles; debug and release suites; format/diff
+checks; and hostile review of both interoperability directions and publication
+safety. Evidence will decay if the pinned ClickHouse nested-Nullable serializer, codec/mark layout,
+or shared dispatch changes. General JSON/Dynamic, further recursive types,
+MV/projections, and memory/performance tuning remain outside this slice.
+
+W77 evidence on 2026-09-28: the pinned ClickHouse 26.7.1.1315 oracle passed
+stock-to-Crystal and Crystal-to-stock for all 18 new declarations, checking
+exact null/value/key stream inventory, checksums, metadata, marks, full and
+selected RowBinary, `ATTACH PART`, and `CHECK TABLE`. The existing W53 oracle
+passed for both `Nullable(UInt64)` controls. Each W77 stock case includes
+duplicate keys, NULL versus non-NULL zero, an empty middle mark, a later
+nonempty mark, and a final all-empty mark at nonzero child-stream EOF; direct
+reader and typed-table specs also check that final mark for both key shapes.
+Writer-backed table and catalog specs cover all 20 declarations and bitwise
+floating-point values. A read-only hostile review identified the previously
+untested nonzero-EOF empty suffix; adding that falsifier exposed no production
+defect, and the updated oracle passed in both directions. The final debug and
+release suites each passed 1002 examples with zero failures, errors, or pending
+tests using the host-compatible `-fuse-ld=ld` override. All 69 prior pinned
+oracle scripts passed; Crystal format, shell syntax, and diff checks passed.
+This does not establish arbitrary Map recursion, all ClickHouse physical
+layouts/builds, MV/projection semantics, or memory/performance parity. Memory
+and performance work remains deferred until the remaining type coverage and
+MV/projection support are implemented.
 
 ## Rejected and guard-only surfaces
 

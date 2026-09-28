@@ -159,9 +159,10 @@ describe "W53 Nullable-value Map reader" do
     CrystalClick::WidePart.supports_typed_type?("Map(String, Nullable(UInt64))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(UInt64, Nullable(String))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(String, Nullable(String))").should be_true
+    # W77 admits this separate primitive-numeric nullable Map shape.
+    CrystalClick::WidePart.supports_typed_type?("Map(UInt64, Nullable(UInt32))").should be_true
     [
       "Map(UInt32, Nullable(UInt64))",
-      "Map(UInt64, Nullable(UInt32))",
       "Map(Nullable(UInt64), UInt64)",
       "Nullable(Map(UInt64, Nullable(UInt64)))",
       "Map(UInt64, Map(String, Nullable(UInt64)))",

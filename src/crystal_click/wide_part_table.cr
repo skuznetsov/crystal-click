@@ -141,6 +141,65 @@ module CrystalClick
     end
   end
 
+  # W77 keeps NULL as a typed value while charging both the fixed-width
+  # placeholder stream and its separate one-byte null bitmap.
+  class WidePartNullableNumericMapRows(K, T) < WidePartNumericMapRowsBase
+    getter values : Array(Array(Tuple(K, T?)))
+
+    def initialize(@values : Array(Array(Tuple(K, T?))))
+    end
+
+    def row_count : UInt64
+      @values.size.to_u64
+    end
+
+    def entry_count : UInt64
+      entries = 0_u64
+      @values.each do |row|
+        row_entries = row.size.to_u64
+        if row_entries > WidePart::MAX_ARRAY_MARK_ELEMENTS - entries
+          raise CorruptPartError.new("selected nullable Map mark entry count exceeds materialization limit")
+        end
+        entries += row_entries
+      end
+      entries
+    end
+
+    def payload_bytes : UInt64
+      entries = entry_count
+      value_width = WidePart.numeric_payload_width(WidePart.numeric_type_name(T)).to_u64 + 1_u64
+      if entries > UInt64::MAX // value_width
+        raise CorruptPartError.new("selected nullable Map value payload overflows")
+      end
+      value_bytes = entries * value_width
+      key_bytes = 0_u64
+      {% if K == String %}
+        @values.each do |row|
+          row.each do |key, _value|
+            bytes = key.bytesize.to_u64
+            if bytes > UInt64::MAX - key_bytes
+              raise CorruptPartError.new("selected nullable Map key/value payload overflows")
+            end
+            key_bytes += bytes
+          end
+        end
+      {% else %}
+        if entries > UInt64::MAX // 8_u64
+          raise CorruptPartError.new("selected nullable Map key payload overflows")
+        end
+        key_bytes = entries * 8_u64
+      {% end %}
+      if value_bytes > UInt64::MAX - key_bytes
+        raise CorruptPartError.new("selected nullable Map key/value payload overflows")
+      end
+      key_bytes + value_bytes
+    end
+
+    def slice_rows(offset : Int, size : Int) : WidePartNumericMapSliceBase
+      WidePartNumericMapSlice(K, T?).new(@values.to_unsafe.to_slice(@values.size)[offset, size], @values)
+    end
+  end
+
   # A callback view over aligned selected columns from one bounded table batch.
   # Column slices alias per-mark arrays and are valid only until the callback
   # returns; callers that need to retain values must copy them.
@@ -1364,6 +1423,40 @@ module CrystalClick
       {% end %}
     end
 
+    def map_uint64_nullable_numeric_values_for(column : String, type : T.class) : Slice(Array(Tuple(UInt64, T?))) forall T
+      index = column_index(column)
+      declared_value_type = WidePart.map_uint64_nullable_numeric_value_type(@column_types[index])
+      unless declared_value_type == WidePart.numeric_type_name(type)
+        raise UnsupportedFormatError.new("Map(UInt64, Nullable(T)) accessor does not match the exact declared value type")
+      end
+      {% if T == UInt64 %}
+        values = @map_uint64_nullable_uint64_values[column]? ||
+                 raise(UnsupportedFormatError.new("Map(UInt64, Nullable(UInt64)) column was not materialized in this batch"))
+        values.as(Slice(Array(Tuple(UInt64, T?))))
+      {% else %}
+        values = @map_uint64_numeric_values[column]? ||
+                 raise(UnsupportedFormatError.new("Map(UInt64, Nullable(T)) column was not materialized in this batch"))
+        values.as(WidePartNumericMapSlice(UInt64, T?)).values
+      {% end %}
+    end
+
+    def map_string_nullable_numeric_values_for(column : String, type : T.class) : Slice(Array(Tuple(String, T?))) forall T
+      index = column_index(column)
+      declared_value_type = WidePart.map_string_nullable_numeric_value_type(@column_types[index])
+      unless declared_value_type == WidePart.numeric_type_name(type)
+        raise UnsupportedFormatError.new("Map(String, Nullable(T)) accessor does not match the exact declared value type")
+      end
+      {% if T == UInt64 %}
+        values = @map_string_nullable_uint64_values[column]? ||
+                 raise(UnsupportedFormatError.new("Map(String, Nullable(UInt64)) column was not materialized in this batch"))
+        values.as(Slice(Array(Tuple(String, T?))))
+      {% else %}
+        values = @map_string_numeric_values[column]? ||
+                 raise(UnsupportedFormatError.new("Map(String, Nullable(T)) column was not materialized in this batch"))
+        values.as(WidePartNumericMapSlice(String, T?)).values
+      {% end %}
+    end
+
     def map_string_array_uint64s_for(column : String) : Slice(Array(Tuple(String, Array(UInt64))))
       index = column_index(column)
       raise UnsupportedFormatError.new("Map accessor requires an exact Map(String, Array(UInt64)) column") unless WidePart.supports_map_string_array_uint64_type?(@column_types[index])
@@ -2070,6 +2163,10 @@ module CrystalClick
                 preflight_map_uint64_nullable_uint64_payload_bytes[selected.name] = payload_bytes
                 preflight_map_uint64_nullable_uint64_charge_bytes[selected.name] = charge_bytes
                 bytes = charge_bytes
+              elsif value_type = WidePart.map_uint64_nullable_numeric_value_type(selected.column_type)
+                payload_bytes, charge_bytes = nullable_numeric_map_preflight(selected, mark_index, value_type, false)
+                preflight_numeric_map_payload_charge[selected.name] = {payload_bytes, charge_bytes}
+                bytes = charge_bytes
               elsif WidePart.supports_map_uint64_array_nullable_uint64_type?(selected.column_type)
                 payload_bytes, charge_bytes = selected.reader.map_uint64_array_nullable_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
                 preflight_map_uint64_array_nullable_uint64_payload_bytes[selected.name] = payload_bytes
@@ -2131,6 +2228,10 @@ module CrystalClick
                 payload_bytes, charge_bytes = selected.reader.map_string_nullable_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
                 preflight_map_string_nullable_uint64_payload_bytes[selected.name] = payload_bytes
                 preflight_map_string_nullable_uint64_charge_bytes[selected.name] = charge_bytes
+                bytes = charge_bytes
+              elsif value_type = WidePart.map_string_nullable_numeric_value_type(selected.column_type)
+                payload_bytes, charge_bytes = nullable_numeric_map_preflight(selected, mark_index, value_type, true)
+                preflight_numeric_map_payload_charge[selected.name] = {payload_bytes, charge_bytes}
                 bytes = charge_bytes
               elsif WidePart.supports_map_uint64_nullable_string_type?(selected.column_type)
                 payload_bytes, charge_bytes = selected.reader.map_uint64_nullable_string_mark_range_materialization_preflight(selected.name, mark_index, 1)
@@ -2933,7 +3034,13 @@ module CrystalClick
                    "Map(UInt64, Float32)", "Map(UInt64, Float64)",
                    "Map(String, UInt8)", "Map(String, UInt16)", "Map(String, UInt32)",
                    "Map(String, Int8)", "Map(String, Int16)", "Map(String, Int32)", "Map(String, Int64)",
-                   "Map(String, Float32)", "Map(String, Float64)"
+                   "Map(String, Float32)", "Map(String, Float64)",
+                   "Map(UInt64, Nullable(UInt8))", "Map(UInt64, Nullable(UInt16))", "Map(UInt64, Nullable(UInt32))",
+                   "Map(UInt64, Nullable(Int8))", "Map(UInt64, Nullable(Int16))", "Map(UInt64, Nullable(Int32))", "Map(UInt64, Nullable(Int64))",
+                   "Map(UInt64, Nullable(Float32))", "Map(UInt64, Nullable(Float64))",
+                   "Map(String, Nullable(UInt8))", "Map(String, Nullable(UInt16))", "Map(String, Nullable(UInt32))",
+                   "Map(String, Nullable(Int8))", "Map(String, Nullable(Int16))", "Map(String, Nullable(Int32))", "Map(String, Nullable(Int64))",
+                   "Map(String, Nullable(Float32))", "Map(String, Nullable(Float64))"
                 values = read_numeric_map_rows(selected, mark_index)
                 charge_bytes = verify_numeric_map_materialization(selected, values, mark_rows, preflight_numeric_map_payload_charge)
                 raise CorruptPartError.new("selected Map mark exceeds aggregate materialization limit") if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
@@ -3591,7 +3698,8 @@ module CrystalClick
                 elsif values = map_string_nullable_string_values[selected.name]?
                   map_string_nullable_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = numeric_map_values[selected.name]?
-                  if WidePart.map_uint64_numeric_value_type(selected.column_type)
+                  if WidePart.map_uint64_numeric_value_type(selected.column_type) ||
+                     WidePart.map_uint64_nullable_numeric_value_type(selected.column_type)
                     numeric_map_uint64_slices[selected.name] = values.slice_rows(mark_row_offset.to_i, size)
                   else
                     numeric_map_string_slices[selected.name] = values.slice_rows(mark_row_offset.to_i, size)
@@ -4221,29 +4329,34 @@ module CrystalClick
       mark_index : Int32,
       value_type : String,
       string_keys : Bool,
+      nullable : Bool = false,
     ) : {UInt64, UInt64}
       case value_type
       when "UInt8"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, UInt8)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, UInt8, nullable)
       when "UInt16"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, UInt16)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, UInt16, nullable)
       when "UInt32"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, UInt32)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, UInt32, nullable)
       when "Int8"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int8)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int8, nullable)
       when "Int16"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int16)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int16, nullable)
       when "Int32"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int32)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int32, nullable)
       when "Int64"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int64)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, Int64, nullable)
       when "Float32"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, Float32)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, Float32, nullable)
       when "Float64"
-        numeric_map_preflight_for_type(selected, mark_index, string_keys, Float64)
+        numeric_map_preflight_for_type(selected, mark_index, string_keys, Float64, nullable)
       else
-        raise UnsupportedFormatError.new("unsupported exact W76 Map numeric value type")
+        raise UnsupportedFormatError.new("unsupported exact Map numeric value type")
       end
+    end
+
+    private def nullable_numeric_map_preflight(selected : ColumnReader, mark_index : Int32, value_type : String, string_keys : Bool) : {UInt64, UInt64}
+      numeric_map_preflight(selected, mark_index, value_type, string_keys, true)
     end
 
     private def numeric_map_preflight_for_type(
@@ -4251,8 +4364,13 @@ module CrystalClick
       mark_index : Int32,
       string_keys : Bool,
       type : T.class,
+      nullable : Bool,
     ) : {UInt64, UInt64} forall T
-      if string_keys
+      if nullable && string_keys
+        selected.reader.map_string_nullable_numeric_mark_range_materialization_preflight(selected.name, mark_index, 1, type)
+      elsif nullable
+        selected.reader.map_uint64_nullable_numeric_mark_range_materialization_preflight(selected.name, mark_index, 1, type)
+      elsif string_keys
         selected.reader.map_string_numeric_mark_range_materialization_preflight(selected.name, mark_index, 1, type)
       else
         selected.reader.map_uint64_numeric_mark_range_materialization_preflight(selected.name, mark_index, 1, type)
@@ -4261,11 +4379,15 @@ module CrystalClick
 
     private def read_numeric_map_rows(selected : ColumnReader, mark_index : Int32) : WidePartNumericMapRowsBase
       if value_type = WidePart.map_uint64_numeric_value_type(selected.column_type)
-        read_numeric_map_rows_for_type(selected, mark_index, value_type, false)
+        read_numeric_map_rows_for_type(selected, mark_index, value_type, false, false)
       elsif value_type = WidePart.map_string_numeric_value_type(selected.column_type)
-        read_numeric_map_rows_for_type(selected, mark_index, value_type, true)
+        read_numeric_map_rows_for_type(selected, mark_index, value_type, true, false)
+      elsif value_type = WidePart.map_uint64_nullable_numeric_value_type(selected.column_type)
+        read_numeric_map_rows_for_type(selected, mark_index, value_type, false, true)
+      elsif value_type = WidePart.map_string_nullable_numeric_value_type(selected.column_type)
+        read_numeric_map_rows_for_type(selected, mark_index, value_type, true, true)
       else
-        raise UnsupportedFormatError.new("selected column is not an exact W76 numeric Map")
+        raise UnsupportedFormatError.new("selected column is not an exact numeric Map")
       end
     end
 
@@ -4274,28 +4396,29 @@ module CrystalClick
       mark_index : Int32,
       value_type : String,
       string_keys : Bool,
+      nullable : Bool,
     ) : WidePartNumericMapRowsBase
       case value_type
       when "UInt8"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, UInt8)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, UInt8, nullable)
       when "UInt16"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, UInt16)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, UInt16, nullable)
       when "UInt32"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, UInt32)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, UInt32, nullable)
       when "Int8"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int8)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int8, nullable)
       when "Int16"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int16)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int16, nullable)
       when "Int32"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int32)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int32, nullable)
       when "Int64"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int64)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Int64, nullable)
       when "Float32"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Float32)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Float32, nullable)
       when "Float64"
-        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Float64)
+        read_numeric_map_rows_for_primitive(selected, mark_index, string_keys, Float64, nullable)
       else
-        raise UnsupportedFormatError.new("unsupported exact W76 Map numeric value type")
+        raise UnsupportedFormatError.new("unsupported exact Map numeric value type")
       end
     end
 
@@ -4304,8 +4427,15 @@ module CrystalClick
       mark_index : Int32,
       string_keys : Bool,
       type : T.class,
+      nullable : Bool,
     ) : WidePartNumericMapRowsBase forall T
-      if string_keys
+      if nullable && string_keys
+        rows = selected.reader.read_map_string_nullable_numeric_mark_range(selected.name, mark_index, 1, type)
+        WidePartNullableNumericMapRows(String, T).new(rows)
+      elsif nullable
+        rows = selected.reader.read_map_uint64_nullable_numeric_mark_range(selected.name, mark_index, 1, type)
+        WidePartNullableNumericMapRows(UInt64, T).new(rows)
+      elsif string_keys
         rows = selected.reader.read_map_string_numeric_mark_range(selected.name, mark_index, 1, type)
         WidePartNumericMapRows(String, T).new(rows)
       else

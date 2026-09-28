@@ -38,6 +38,12 @@ module CrystalClick
                              Array(Tuple(String, Int8)) | Array(Tuple(String, Int16)) | Array(Tuple(String, Int32)) |
                              Array(Tuple(String, Int64)) | Array(Tuple(String, Float32)) | Array(Tuple(String, Float64)) |
                              Array(Tuple(UInt64, UInt64?)) | Array(Tuple(String, UInt64?)) |
+                             Array(Tuple(UInt64, UInt8?)) | Array(Tuple(UInt64, UInt16?)) | Array(Tuple(UInt64, UInt32?)) |
+                             Array(Tuple(UInt64, Int8?)) | Array(Tuple(UInt64, Int16?)) | Array(Tuple(UInt64, Int32?)) |
+                             Array(Tuple(UInt64, Int64?)) | Array(Tuple(UInt64, Float32?)) | Array(Tuple(UInt64, Float64?)) |
+                             Array(Tuple(String, UInt8?)) | Array(Tuple(String, UInt16?)) | Array(Tuple(String, UInt32?)) |
+                             Array(Tuple(String, Int8?)) | Array(Tuple(String, Int16?)) | Array(Tuple(String, Int32?)) |
+                             Array(Tuple(String, Int64?)) | Array(Tuple(String, Float32?)) | Array(Tuple(String, Float64?)) |
                              Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) | Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
@@ -729,6 +735,24 @@ module CrystalClick
         selected_values = batch.map_uint64_nullable_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_map_nullable_uint64_values(values, selected_values, array_elements[0])
+      when "Map(UInt64, Nullable(UInt8))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, UInt8, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(UInt16))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, UInt16, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(UInt32))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, UInt32, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(Int8))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, Int8, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(Int16))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, Int16, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(Int32))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, Int32, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(Int64))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, Int64, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(Float32))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, Float32, observed_rows, expected_rows, array_elements)
+      when "Map(UInt64, Nullable(Float64))"
+        observed_rows = append_materialized_uint64_nullable_numeric_map_batch(values, batch, column_name, Float64, observed_rows, expected_rows, array_elements)
       when "Map(String, UInt64)"
         selected_values = batch.map_string_uint64s_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -849,6 +873,24 @@ module CrystalClick
           string_bytes,
           max_string_bytes
         )
+      when "Map(String, Nullable(UInt8))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, UInt8, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(UInt16))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, UInt16, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(UInt32))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, UInt32, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(Int8))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, Int8, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(Int16))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, Int16, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(Int32))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, Int32, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(Int64))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, Int64, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(Float32))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, Float32, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
+      when "Map(String, Nullable(Float64))"
+        observed_rows, string_bytes = append_materialized_string_nullable_numeric_map_batch(values, batch, column_name, Float64, observed_rows, expected_rows, string_bytes, max_string_bytes, array_elements)
       when "Map(UInt64, Nullable(String))"
         selected_values = batch.map_uint64_nullable_strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
@@ -2129,6 +2171,21 @@ module CrystalClick
       next_rows
     end
 
+    private def append_materialized_uint64_nullable_numeric_map_batch(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      type : T.class,
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      array_elements : Array(UInt64),
+    ) : UInt64 forall T
+      selected_values = batch.map_uint64_nullable_numeric_values_for(column_name, type)
+      next_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+      array_elements[0] = append_materialized_uint64_key_numeric_values(values, selected_values, array_elements[0])
+      next_rows
+    end
+
     private def append_materialized_uint64_key_numeric_values(
       values : Array(OfflineColumnValue),
       selected_values : Slice(Array(Tuple(UInt64, T))),
@@ -2166,6 +2223,25 @@ module CrystalClick
         array_elements[0],
         observed_string_bytes,
         max_string_bytes
+      )
+      {next_rows, next_string_bytes}
+    end
+
+    private def append_materialized_string_nullable_numeric_map_batch(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      type : T.class,
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      observed_string_bytes : UInt64,
+      max_string_bytes : UInt64,
+      array_elements : Array(UInt64),
+    ) : {UInt64, UInt64} forall T
+      selected_values = batch.map_string_nullable_numeric_values_for(column_name, type)
+      next_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+      array_elements[0], next_string_bytes = append_materialized_string_key_numeric_values(
+        values, selected_values, array_elements[0], observed_string_bytes, max_string_bytes
       )
       {next_rows, next_string_bytes}
     end

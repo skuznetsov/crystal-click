@@ -57,7 +57,6 @@ describe "W76 scalar-numeric Map reader admission" do
   it "keeps scalar-numeric Map admission exact and bounded" do
     [
       "Map(UInt64, UInt128)",
-      "Map(UInt64, Nullable(UInt8))",
       "Map(String, Decimal32(2))",
       "Map(String, Float32) trailing",
       "Map(String,Float32)",
@@ -68,6 +67,8 @@ describe "W76 scalar-numeric Map reader admission" do
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
       CrystalClick::WidePart.supports_numeric_map_type?(type).should be_false
     end
+    # W77 admits this as a separate nullable Map path, not through W76's predicate.
+    CrystalClick::WidePart.supports_numeric_map_type?("Map(UInt64, Nullable(UInt8))").should be_false
   end
 
   it "reads narrow UInt8 rows including an empty middle mark and a later selected mark" do
