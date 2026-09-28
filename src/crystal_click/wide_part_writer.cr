@@ -227,6 +227,45 @@ module CrystalClick
       end
     end
 
+    # Write the bounded W75 Dynamic(String, UInt64) profile. Both concrete
+    # arms must occur in the part; nil rows use Dynamic's reserved NULL tag.
+    # The older String-only API above remains a separate W74 format path.
+    def self.write_uint64_dynamic_string_uint64_pair(
+      destination : String,
+      key_column : String,
+      keys : Slice(UInt64),
+      value_column : String,
+      values : Slice(VariantStringUInt64Value),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_dynamic_string_uint64_inputs(destination, key_column, keys, value_column, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_column, keys, rows_per_mark))
+        records.concat(write_dynamic_string_uint64_streams(stage, value_column, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_column, keys))
+        write_plain_metadata(stage, "columns.txt", dynamic_string_columns_metadata(key_column, value_column))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", dynamic_string_string_uint64_substreams_metadata(key_column, value_column))
+        write_checksums(stage, records)
+        validate_staged_dynamic_string_uint64_part(stage, key_column, keys, value_column, values, rows_per_mark)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write the exact Variant(String, UInt64) payload admitted by W56. The
     # discriminator is emitted in COMPACT mode; each child stream keeps one
     # plain mark per top-level granule even when that child has no values there.
@@ -7826,6 +7865,158 @@ module CrystalClick
       nil
     end
 
+    private def self.dynamic_string_uint64_tag(value : VariantStringUInt64Value) : UInt8
+      case value
+      when String
+        1_u8
+      when UInt64
+        2_u8
+      when Nil
+        255_u8
+      else
+        raise ArgumentError.new("Dynamic value is outside the admitted String/UInt64/NULL domain")
+      end
+    end
+
+    private def self.validate_dynamic_string_uint64_inputs(
+      destination : String,
+      key_column : String,
+      keys : Slice(UInt64),
+      value_column : String,
+      values : Slice(VariantStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_column)
+      validate_column_name(value_column)
+      raise ArgumentError.new("column names must be distinct") if key_column == value_column
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      logical_streams = [
+        key_column,
+        "#{value_column}.dynamic_structure",
+        "#{value_column}.variant_discr",
+        "#{value_column}.SharedVariant.size",
+        "#{value_column}.SharedVariant",
+        "#{value_column}.String.size",
+        "#{value_column}.String",
+        "#{value_column}.UInt64",
+      ]
+      logical_streams.each do |name|
+        raise ArgumentError.new("physical stream name exceeds reader limit") if name.bytesize > WidePart::MAX_METADATA_LINE_BYTES
+      end
+      stream_bases = logical_streams.map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      saw_string = false
+      saw_uint64 = false
+      key_data_bytes = 0_i64
+      discriminator_data_bytes = 0_i64
+      string_size_data_bytes = 0_i64
+      string_data_bytes = 0_i64
+      uint64_data_bytes = 0_i64
+      total_string_bytes = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        key_frame_size = checked_string_frame_size(rows.to_i64 * 8_i64, "UInt64 key")
+        if key_frame_size > MAX_DATA_FILE_BYTES - key_data_bytes
+          raise ArgumentError.new("UInt64 key stream exceeds reader limit")
+        end
+        key_data_bytes += key_frame_size
+
+        string_count = 0_i64
+        uint64_count = 0_i64
+        mark_string_bytes = 0_i64
+        first_tag : UInt8? = nil
+        uniform_tag = true
+        rows.times do |offset|
+          value = values[start_row + offset]
+          tag = dynamic_string_uint64_tag(value)
+          if first_tag.nil?
+            first_tag = tag
+          elsif first_tag != tag
+            uniform_tag = false
+          end
+
+          case value
+          when String
+            saw_string = true
+            value_bytes = value.bytesize.to_i64
+            if value_bytes > MAX_FRAME_RAW_BYTES.to_i64 - mark_string_bytes
+              raise ArgumentError.new("Dynamic String granule exceeds decompressed frame limit")
+            end
+            if value_bytes.to_u64 > MAX_DATA_FILE_BYTES.to_u64 - total_string_bytes
+              raise ArgumentError.new("Dynamic String payload exceeds reader limit")
+            end
+            mark_string_bytes += value_bytes
+            total_string_bytes += value_bytes.to_u64
+            string_count += 1_i64
+          when UInt64
+            saw_uint64 = true
+            uint64_count += 1_i64
+          when Nil
+          else
+            raise ArgumentError.new("Dynamic value is outside the admitted String/UInt64/NULL domain")
+          end
+        end
+
+        mode_prefix_size = start_row == 0 ? 8_i64 : 0_i64
+        tag_bytes = uniform_tag ? 1_i64 : rows.to_i64
+        discriminator_raw_size = mode_prefix_size + low_cardinality_var_uint_size(rows.to_u64) + 1_i64 + tag_bytes
+        discriminator_frame_size = checked_string_frame_size(discriminator_raw_size, "Dynamic discriminator")
+        if discriminator_frame_size > MAX_DATA_FILE_BYTES - discriminator_data_bytes
+          raise ArgumentError.new("Dynamic discriminator stream exceeds reader limit")
+        end
+        discriminator_data_bytes += discriminator_frame_size
+
+        string_size_raw_size = string_count * 8_i64
+        unless string_size_raw_size == 0
+          string_size_frame_size = checked_string_frame_size(string_size_raw_size, "Dynamic String size")
+          if string_size_frame_size > MAX_DATA_FILE_BYTES - string_size_data_bytes
+            raise ArgumentError.new("Dynamic String-size stream exceeds reader limit")
+          end
+          string_size_data_bytes += string_size_frame_size
+        end
+
+        unless mark_string_bytes == 0
+          string_frame_size = checked_string_frame_size(mark_string_bytes, "Dynamic String payload")
+          if string_frame_size > MAX_DATA_FILE_BYTES - string_data_bytes
+            raise ArgumentError.new("Dynamic String stream exceeds reader limit")
+          end
+          string_data_bytes += string_frame_size
+        end
+
+        uint64_raw_size = uint64_count * 8_i64
+        unless uint64_raw_size == 0
+          uint64_frame_size = checked_string_frame_size(uint64_raw_size, "Dynamic UInt64")
+          if uint64_frame_size > MAX_DATA_FILE_BYTES - uint64_data_bytes
+            raise ArgumentError.new("Dynamic UInt64 stream exceeds reader limit")
+          end
+          uint64_data_bytes += uint64_frame_size
+        end
+        start_row += rows
+      end
+
+      raise ArgumentError.new("W75 Dynamic requires both String and UInt64 values") unless saw_string && saw_uint64
+      nil
+    end
+
     private def self.validate_tuple_header_inputs(
       destination : String,
       key_name : String,
@@ -9492,6 +9683,159 @@ module CrystalClick
       records.concat(write_json_empty_stream(stage, "#{column}.SharedVariant", values.size, rows_per_mark))
       records.concat(write_string_streams(stage, "#{column}.String", values, rows_per_mark))
       records
+    end
+
+    private def self.write_dynamic_string_uint64_streams(
+      stage : String,
+      column : String,
+      values : Slice(VariantStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      records = [] of ChecksumRecord
+      records.concat(write_dynamic_string_uint64_structure_stream(stage, column, values, rows_per_mark))
+      records.concat(write_dynamic_string_uint64_discriminator_stream(stage, column, values, rows_per_mark))
+      records.concat(write_json_empty_stream(stage, "#{column}.SharedVariant.size", values.size, rows_per_mark))
+      records.concat(write_json_empty_stream(stage, "#{column}.SharedVariant", values.size, rows_per_mark))
+      records.concat(write_variant_sparse_uint64_stream(stage, "#{column}.String.size", values, rows_per_mark, VariantSparseUInt64Stream::StringSizes))
+      records.concat(write_variant_string_stream(stage, "#{column}.String", values, rows_per_mark))
+      records.concat(write_variant_sparse_uint64_stream(stage, "#{column}.UInt64", values, rows_per_mark, VariantSparseUInt64Stream::UInt64Values))
+      records
+    end
+
+    private def self.dynamic_string_uint64_structure_bytes(values : Slice(VariantStringUInt64Value)) : Bytes
+      string_rows = 0_u64
+      uint64_rows = 0_u64
+      values.each do |value|
+        case value
+        when String
+          string_rows += 1_u64
+        when UInt64
+          uint64_rows += 1_u64
+        when Nil
+        else
+          raise ArgumentError.new("Dynamic value is outside the admitted String/UInt64/NULL domain")
+        end
+      end
+
+      raw = IO::Memory.new
+      raw.write_byte(4_u8)
+      7.times { raw.write_byte(0_u8) }
+      write_var_uint(raw, 2_u64)       # canonical String and UInt64 arms
+      write_var_uint(raw, 0x15_u64)    # String binary type code
+      write_var_uint(raw, 0x04_u64)    # UInt64 binary type code
+      raw.write_byte(1_u8)             # prefix statistics are present
+      write_var_uint(raw, 0_u64)       # zero SharedVariant rows
+      write_var_uint(raw, string_rows) # String rows
+      write_var_uint(raw, uint64_rows) # UInt64 rows
+      write_var_uint(raw, 0_u64)       # no shared type statistics
+      raw.to_slice
+    end
+
+    private def self.write_dynamic_string_uint64_structure_stream(
+      stage : String,
+      column : String,
+      values : Slice(VariantStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash("#{column}.dynamic_structure")
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      raw = dynamic_string_uint64_structure_bytes(values)
+      frame = encode_lz4_frame(raw)
+      raise ArgumentError.new("Dynamic structure stream exceeds reader limit") if frame.size.to_i64 > MAX_DATA_FILE_BYTES
+
+      data_hash = CityHashV1::FileHasher.new
+      data_hash.update(frame)
+      raw_hash = CityHashV1::FileHasher.new
+      raw_hash.update(raw)
+      File.write(File.join(stage, data_name), frame)
+
+      mark_bytes = IO::Memory.new
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        write_uint64_le(mark_bytes, 0_u64)
+        write_uint64_le(mark_bytes, 11_u64)
+        write_uint64_le(mark_bytes, rows.to_u64)
+        start_row += rows
+      end
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, raw.size.to_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("Dynamic structure marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, frame.size.to_u64, data_hash.finish, true, raw.size.to_u64, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
+    end
+
+    private def self.write_dynamic_string_uint64_discriminator_stream(
+      stage : String,
+      column : String,
+      values : Slice(VariantStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      base_name = StreamName.hash("#{column}.variant_discr")
+      data_name = "#{base_name}.bin"
+      marks_name = "#{base_name}.mrk2"
+      data_hash = CityHashV1::FileHasher.new
+      raw_hash = CityHashV1::FileHasher.new
+      mark_bytes = IO::Memory.new
+      data_size = 0_u64
+      total_raw_size = 0_u64
+      start_row = 0
+
+      File.open(File.join(stage, data_name), "wb") do |data_file|
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          tags = Array(UInt8).new(rows)
+          rows.times { |offset| tags << dynamic_string_uint64_tag(values[start_row + offset]) }
+          first_tag = tags[0]
+          uniform_tag = tags.all? { |tag| tag == first_tag }
+
+          raw_memory = IO::Memory.new
+          write_uint64_le(raw_memory, 1_u64) if start_row == 0 # COMPACT mode prefix
+          write_var_uint(raw_memory, rows.to_u64)
+          if uniform_tag
+            raw_memory.write_byte(1_u8) # one uniform tag for this granule
+            raw_memory.write_byte(first_tag)
+          else
+            raw_memory.write_byte(0_u8) # one tag byte per row
+            tags.each { |tag| raw_memory.write_byte(tag) }
+          end
+          raw = raw_memory.to_slice
+          raise ArgumentError.new("Dynamic discriminator granule exceeds decompressed frame limit") if raw.size.to_i64 > MAX_FRAME_RAW_BYTES
+
+          write_uint64_le(mark_bytes, data_size)
+          write_uint64_le(mark_bytes, start_row == 0 ? 8_u64 : 0_u64)
+          write_uint64_le(mark_bytes, rows.to_u64)
+          frame = encode_lz4_frame(raw)
+          if frame.size.to_i64 > MAX_DATA_FILE_BYTES.to_i64 - data_size.to_i64
+            raise ArgumentError.new("Dynamic discriminator stream exceeds reader limit")
+          end
+          data_file.write(frame)
+          data_hash.update(frame)
+          raw_hash.update(raw)
+          data_size += frame.size.to_u64
+          total_raw_size += raw.size.to_u64
+          start_row += rows
+        end
+      end
+
+      write_uint64_le(mark_bytes, data_size)
+      write_uint64_le(mark_bytes, 0_u64)
+      write_uint64_le(mark_bytes, 0_u64)
+      marks = mark_bytes.to_slice
+      raise ArgumentError.new("Dynamic discriminator marks exceed reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
+      File.write(File.join(stage, marks_name), marks)
+
+      [
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, total_raw_size, raw_hash.finish),
+        ChecksumRecord.new(marks_name, marks.size.to_u64, CityHashV1.file_hash(marks), false),
+      ]
     end
 
     private def self.dynamic_structure_bytes(row_count : UInt64) : Bytes
@@ -15352,6 +15696,61 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_dynamic_string_uint64_part(
+      stage : String,
+      key_column : String,
+      keys : Slice(UInt64),
+      value_column : String,
+      values : Slice(VariantStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Nil
+      checksums = PartChecksums.open(stage)
+      checksums.entries.each_key do |name|
+        checksums.validate_selected_entries(stage, name)
+      end
+
+      unless File.read(File.join(stage, "columns.txt")) == dynamic_string_columns_metadata(key_column, value_column)
+        raise CorruptPartError.new("staged W75 Dynamic columns metadata differs")
+      end
+      unless File.read(File.join(stage, "columns_substreams.txt")) == dynamic_string_string_uint64_substreams_metadata(key_column, value_column)
+        raise CorruptPartError.new("staged W75 Dynamic substream metadata differs")
+      end
+      unless File.read(File.join(stage, "serialization.json")) == json_typed_serialization_metadata(key_column, keys)
+        raise CorruptPartError.new("staged W75 Dynamic serialization metadata differs")
+      end
+      raise CorruptPartError.new("staged W75 row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
+      raise CorruptPartError.new("staged W75 compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
+      raise CorruptPartError.new("staged W75 metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      key_part = WidePart.open(stage, key_column)
+      value_part = WidePart.open_typed(stage, value_column)
+      raise CorruptPartError.new("staged W75 key row count differs") unless key_part.row_count == keys.size.to_u64
+      raise CorruptPartError.new("staged W75 Dynamic row count differs") unless value_part.row_count == values.size.to_u64
+      raise CorruptPartError.new("staged W75 Dynamic column type differs") unless value_part.column_type == "Dynamic"
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        expected_mark_rows << rows.to_u64
+        mark_index = expected_mark_rows.size - 1
+        observed_keys = key_part.read_uint64_mark_range(key_column, mark_index, 1)
+        observed_values = value_part.read_dynamic_string_uint64_mark_range(value_column, mark_index, 1)
+        rows.times do |offset|
+          unless observed_keys[offset] == keys[start + offset] && observed_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged W75 Dynamic readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged W75 key marks differ") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged W75 Dynamic marks differ") unless value_part.mark_row_counts == expected_mark_rows
+
+      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
+      nil
+    end
+
     private def self.validate_staged_variant_string_uint64_part(
       stage : String,
       key_name : String,
@@ -20206,6 +20605,23 @@ module CrystalClick
         "#{value_name}.SharedVariant",
         "#{value_name}.String.size",
         "#{value_name}.String",
+      ]
+      payload = IO::Memory.new
+      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
+      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
+      value_streams.each { |stream| payload << "\t#{stream}\n" }
+      payload.to_s
+    end
+
+    private def self.dynamic_string_string_uint64_substreams_metadata(key_name : String, value_name : String) : String
+      value_streams = [
+        "#{value_name}.dynamic_structure",
+        "#{value_name}.variant_discr",
+        "#{value_name}.SharedVariant.size",
+        "#{value_name}.SharedVariant",
+        "#{value_name}.String.size",
+        "#{value_name}.String",
+        "#{value_name}.UInt64",
       ]
       payload = IO::Memory.new
       payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"

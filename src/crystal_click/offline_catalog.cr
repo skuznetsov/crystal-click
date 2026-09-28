@@ -828,9 +828,22 @@ module CrystalClick
           max_string_bytes
         )
       when "Dynamic"
-        selected_values = batch.dynamic_strings_for(column_name)
-        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
-        string_bytes = append_materialized_strings(values, selected_values, string_bytes, max_string_bytes)
+        if batch.dynamic_string_uint64_profile?(column_name)
+          selected_values = batch.dynamic_string_uint64_for(column_name)
+          observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+          selected_values.each do |value|
+            if string_value = value.as?(String)
+              string_bytes = checked_materialized_value_string_bytes(string_bytes, string_value.bytesize.to_u64, max_string_bytes)
+              values << String.new(string_value.to_slice)
+            else
+              values << value
+            end
+          end
+        else
+          selected_values = batch.dynamic_strings_for(column_name)
+          observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+          string_bytes = append_materialized_strings(values, selected_values, string_bytes, max_string_bytes)
+        end
       when "String"
         selected_values = batch.strings_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)

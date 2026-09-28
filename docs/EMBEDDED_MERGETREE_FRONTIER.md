@@ -1,8 +1,11 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W1, W2, and bounded W3 are verified on this
-macOS host against the pinned ClickHouse build. Bounded W4, W5, and W6 are
-verified on the local Darwin process-atomicity frontier. Bounded W7 is
+Document status: active design. W75 is admitted only for mixed standalone
+`Dynamic(String, UInt64, NULL)` on the pinned Wide/LZ4/plain-mark profile;
+W74 remains admitted only for its String-only profile. W1, W2, and bounded
+W3 are verified on this macOS host against the pinned ClickHouse build.
+Bounded W4, W5, and W6 are verified on the local Darwin process-atomicity
+frontier. Bounded W7 is
 verified on the same Crystal-owned table frontier; power-loss recovery
 remains future work. Bounded W8 recorded primary-index hash validation is
 verified for embedded candidate scans only. W9 covers the exact scalar and
@@ -4605,6 +4608,93 @@ extended W74 oracle passed separately afterward; the other 66 scripts and
 production source were unchanged. Formatting, shell syntax, and diff checks
 passed. This evidence covers the admitted profile, not arbitrary `Dynamic`,
 JSON dynamic paths, MV/projections, or performance parity.
+
+## W75 admitted: mixed standalone Dynamic values
+
+W75 targets a top-level `Dynamic` payload containing `String`, `UInt64`, and
+optional `NULL` rows beside a sorted `UInt64` key. Both concrete arms must
+occur at least once in a part; the writer rejects all-NULL, UInt64-only, and
+String-only input before staging. The W74 String-only writer remains the
+supported path for its one-arm profile. The public value type must preserve
+the row's concrete arm or absence, not coerce it to String. Reader, typed
+table/batch, offline catalog, and immutable writer must agree on exact values
+and row order. Preserve W74's existing String-only API. This step does not
+admit general `Dynamic`, even if the physical dictionary is extensible.
+
+Risk is CAUTION: a syntactically valid dictionary, statistic, or COMPACT tag
+could silently reinterpret a row or shift sparse child values across marks.
+Rollback is one isolated local feature commit; existing parts and remote
+history are untouched. The first falsifier is a focused RED test for the
+missing mixed-value reader/writer API. Before encoding any new structure,
+the pinned ClickHouse 26.7.1.1315 producer must establish exact type codes,
+dictionary order, statistics, discriminator modes/tags, substream order,
+mark offsets, and sparse child cardinalities for multiple marks. Include
+empty/binary Strings, UInt64 extrema, `NULL`, an arm absent from one granule,
+and a short final granule. Preserve the stock bytes as executable oracle
+assertions rather than inferring them from the W56 Variant codec. Exact stock
+mark offsets are an oracle for the stock-produced part, not a demand that the
+Crystal writer choose identical LZ4 frame boundaries. Writer marks instead
+must be internally sound and pass ClickHouse `ATTACH PART`/`CHECK TABLE` and
+exact row comparisons.
+
+The pinned producer probe uses explicit `CAST(..., 'Dynamic')` per arm before
+`UNION ALL`; a mixed `VALUES` expression was rejected as evidence because its
+common-type inference silently turned `NULL` into `UInt64(0)`. The first
+seven-row, three-rows-per-mark producer case reports concrete types
+`String, UInt64, None, String, String, None, UInt64`. Its structure is
+`04000000000000000215040100030200`: V4, two dictionary arms (`String=0x15`,
+`UInt64=0x04`), required statistics, zero shared rows, three String rows, and
+two UInt64 rows. Its discriminator is
+`010000000000000003000102ff03000101ff010102`: compact mode, mixed-mark
+format 0 and uniform-mark format 1, with tags 1/String, 2/UInt64, and
+255/NULL for this dictionary. Child streams are sparse; empty SharedVariant
+streams remain present. These tag values are fixture observations, not an
+assumption about dictionaries emitted in another arm order. A second pinned
+producer probe begins with `UInt64(42)` before any String and still emits
+the same canonical dictionary and tags; its discriminator is
+`010000000000000003000201ff03000201ff010101`. W75 nevertheless validates
+the actual dictionary rather than assuming encounter order is the format rule.
+
+Admitted after the pinned bidirectional oracle: exact mixed rows in the
+two-column Wide/LZ4/plain-`.mrk2` profile, with no SharedVariant payload.
+Guard-only:
+zero-arm and one-arm non-W74 Dynamic subsets, additional concrete Dynamic
+types, nonempty SharedVariant, nested Dynamic,
+JSON dynamic/shared paths, Compact or other codecs/marks, MV/projections,
+and memory/performance results. Malformed dictionaries, statistics, tags,
+child extents, and later-mark offsets must reject before exposing the
+affected mark; earlier valid marks may already have yielded. A nonempty
+SharedVariant or unsupported arm must fail closed.
+
+The physical substream inventory must match the dictionary arms at part-open
+time; a missing child is an unsupported shape, not a late hash lookup error.
+
+DoD: RED-to-green focused reader/writer/table/catalog specs; stock-to-Crystal
+typed reads; Crystal-to-stock `ATTACH PART`, `CHECK TABLE`, and exact full and
+key-range RowBinary with concrete-type identity; all pinned regression
+oracles; full debug and release suites; format/diff checks; and hostile
+review of both directions and publication safety. A stock disagreement
+narrows or rejects W75, not the oracle. Evidence decays on a ClickHouse
+Dynamic serializer/version, codec/mark layout, or shared dispatch change.
+Continue remaining type parity, then MV/projections, before memory or speed
+optimization.
+
+W75 evidence on 2026-09-28: the pinned ClickHouse 26.7.1.1315 oracle passed
+stock-to-Crystal and Crystal-to-stock for both String-first and UInt64-first
+parts, including exact stock structure/discriminator bytes, seven-stream
+inventory, stock marks, sparse children, checksums, stock ATTACH/CHECK, and
+full/key-range RowBinary with concrete `dynamicType` identity.
+Ten W75 reader and three W75 writer focused examples passed. The final full
+debug and release suites each passed 972 examples with zero failures, errors,
+or pending tests, using the host-compatible `-fuse-ld=ld` override. All 68
+pinned oracle scripts passed in one sweep; after the final malformed-inventory
+guard, the affected W74 and W75 oracles passed again. Crystal formatting,
+shell syntax, and diff checks passed. A hostile read-only review found and
+closed the missing-child-at-open defect and returned `ROBUST` for the admitted
+profile. The offline catalog's existing PK-candidate API remains
+UInt64-projection-only; typed full scans and low-level selected-mark scans
+cover W75, but a catalog-level keyed Dynamic query is not claimed. General
+`Dynamic`, MV/projections, and memory or speed parity remain unverified.
 
 ## Rejected and guard-only surfaces
 

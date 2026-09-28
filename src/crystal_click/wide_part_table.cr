@@ -666,7 +666,22 @@ module CrystalClick
     def dynamic_strings_for(column : String) : Slice(String)
       index = column_index(column)
       raise UnsupportedFormatError.new("Dynamic accessor requires an exact Dynamic column") unless @column_types[index] == "Dynamic"
+      if @variant_string_uint64_values.has_key?(column)
+        raise UnsupportedFormatError.new("String-only Dynamic accessor rejects mixed Dynamic batches")
+      end
       @string_values[column]? || raise(UnsupportedFormatError.new("Dynamic column was not materialized in this batch"))
+    end
+
+    def dynamic_string_uint64_for(column : String) : Slice(VariantStringUInt64Value)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("mixed Dynamic accessor requires an exact Dynamic column") unless @column_types[index] == "Dynamic"
+      @variant_string_uint64_values[column]? || raise(UnsupportedFormatError.new("mixed Dynamic column was not materialized in this batch"))
+    end
+
+    def dynamic_string_uint64_profile?(column : String) : Bool
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Dynamic profile query requires an exact Dynamic column") unless @column_types[index] == "Dynamic"
+      @variant_string_uint64_values.has_key?(column)
     end
 
     def low_cardinality_strings_for(column : String) : Slice(String)
@@ -1680,6 +1695,8 @@ module CrystalClick
             preflight_variant_bool_string_uint64_raw_bytes = Hash(String, UInt64).new
             preflight_variant_bool_string_uint64_charge_bytes = Hash(String, UInt64).new
             preflight_dynamic_string_raw_bytes = Hash(String, UInt64).new
+            preflight_dynamic_string_uint64_raw_bytes = Hash(String, UInt64).new
+            preflight_dynamic_string_uint64_charge_bytes = Hash(String, UInt64).new
             preflight_array_fixed_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_bool_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_bool_raw_bytes = Hash(String, UInt64).new
@@ -1713,8 +1730,15 @@ module CrystalClick
             preflight_map_string_nullable_string_charge_bytes = Hash(String, UInt64).new
             part.readers.each do |selected|
               if selected.column_type == "Dynamic"
-                bytes = selected.reader.dynamic_string_mark_range_materialization_preflight(selected.name, mark_index, 1)
-                preflight_dynamic_string_raw_bytes[selected.name] = bytes
+                if selected.reader.dynamic_string_uint64_profile?
+                  raw_bytes, charge_bytes = selected.reader.dynamic_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
+                  preflight_dynamic_string_uint64_raw_bytes[selected.name] = raw_bytes
+                  preflight_dynamic_string_uint64_charge_bytes[selected.name] = charge_bytes
+                  bytes = charge_bytes
+                else
+                  bytes = selected.reader.dynamic_string_mark_range_materialization_preflight(selected.name, mark_index, 1)
+                  preflight_dynamic_string_raw_bytes[selected.name] = bytes
+                end
               elsif selected.column_type == "Variant(String, UInt64)"
                 raw_bytes, charge_bytes = selected.reader.variant_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
                 preflight_variant_string_uint64_raw_bytes[selected.name] = raw_bytes
@@ -2364,14 +2388,38 @@ module CrystalClick
                 end
                 string_values[selected.name] = values
               when "Dynamic"
-                values = selected.reader.read_dynamic_string_mark_range(selected.name, mark_index, 1)
-                raise CorruptPartError.new("selected Dynamic mark row count changed") unless values.size.to_u64 == mark_rows
-                bytes = values.sum(&.bytesize).to_u64
-                preflight_bytes = preflight_dynamic_string_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Dynamic mark was not preflighted"))
-                raise CorruptPartError.new("selected Dynamic decoded bytes differ from preflight") unless bytes == preflight_bytes
-                raise CorruptPartError.new("selected Dynamic mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-                actual_string_bytes += bytes
-                string_values[selected.name] = values
+                if selected.reader.dynamic_string_uint64_profile?
+                  values = selected.reader.read_dynamic_string_uint64_mark_range(selected.name, mark_index, 1)
+                  raise CorruptPartError.new("selected Dynamic mark row count changed") unless values.size.to_u64 == mark_rows
+                  expected_raw = preflight_dynamic_string_uint64_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected mixed Dynamic mark was not preflighted"))
+                  expected_charge = preflight_dynamic_string_uint64_charge_bytes[selected.name]? || raise(CorruptPartError.new("selected mixed Dynamic charge was not preflighted"))
+                  decoded_raw = 0_u64
+                  values.each do |value|
+                    next unless string_value = value.as?(String)
+                    string_bytes = string_value.bytesize.to_u64
+                    if decoded_raw > expected_raw || string_bytes > expected_raw - decoded_raw
+                      raise CorruptPartError.new("selected mixed Dynamic String bytes changed after preflight")
+                    end
+                    decoded_raw += string_bytes
+                  end
+                  raise CorruptPartError.new("selected mixed Dynamic String bytes differ from preflight") unless decoded_raw == expected_raw
+                  row_charge = WidePart::VARIANT_STRING_UINT64_ROW_ACCOUNTING_BYTES
+                  unless mark_rows <= (UInt64::MAX - decoded_raw) // row_charge && decoded_raw + mark_rows * row_charge == expected_charge
+                    raise CorruptPartError.new("selected mixed Dynamic charge changed after preflight")
+                  end
+                  raise CorruptPartError.new("selected mixed Dynamic mark exceeds aggregate materialization limit") if expected_charge > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  actual_string_bytes += expected_charge
+                  variant_string_uint64_values[selected.name] = values
+                else
+                  values = selected.reader.read_dynamic_string_mark_range(selected.name, mark_index, 1)
+                  raise CorruptPartError.new("selected Dynamic mark row count changed") unless values.size.to_u64 == mark_rows
+                  bytes = values.sum(&.bytesize).to_u64
+                  preflight_bytes = preflight_dynamic_string_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Dynamic mark was not preflighted"))
+                  raise CorruptPartError.new("selected Dynamic decoded bytes differ from preflight") unless bytes == preflight_bytes
+                  raise CorruptPartError.new("selected Dynamic mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  actual_string_bytes += bytes
+                  string_values[selected.name] = values
+                end
               when "LowCardinality(String)"
                 values = selected.reader.read_low_cardinality_string_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected LowCardinality(String) mark row count changed") unless values.size.to_u64 == mark_rows
