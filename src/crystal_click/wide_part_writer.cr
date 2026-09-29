@@ -112,6 +112,23 @@ module CrystalClick
       end
     end
 
+    # W84 serializes Array(Map(K, Array(V))) through the plan's third count
+    # axis. The exact four admitted K/V combinations share this physical shape.
+    private struct ArrayMapArrayPhysicalPlan
+      getter shadow : WideTypePlan::WidePhysicalPlanShadow
+      getter streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream)
+      getter string_keys : Bool
+      getter string_values : Bool
+
+      def initialize(
+        @shadow : WideTypePlan::WidePhysicalPlanShadow,
+        @streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream),
+        @string_keys : Bool,
+        @string_values : Bool,
+      )
+      end
+    end
+
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values
@@ -2477,6 +2494,57 @@ module CrystalClick
     ) : String
       physical_plan = array_map_numeric_physical_plan(value_name, "String", "Bool", true)
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
+    end
+
+    # W84 stores each Map value as a nested Array. Ordered tuple arrays preserve
+    # duplicate keys and insertion order while the values.size2 stream records
+    # one child-array length per Map entry.
+    def self.write_uint64_array_map_uint64_array_uint64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(UInt64, Array(UInt64))))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_array_physical_plan(value_name, "UInt64", "UInt64")
+      write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
+    end
+
+    def self.write_uint64_array_map_uint64_array_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(UInt64, Array(String))))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_array_physical_plan(value_name, "UInt64", "String")
+      write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
+    end
+
+    def self.write_uint64_array_map_string_array_uint64_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(String, Array(UInt64))))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_array_physical_plan(value_name, "String", "UInt64")
+      write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
+    end
+
+    def self.write_uint64_array_map_string_array_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(String, Array(String))))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_array_physical_plan(value_name, "String", "String")
+      write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
     # Write an immutable sorted-key part with exact Map(String, Array(UInt64))
@@ -8106,6 +8174,141 @@ module CrystalClick
       ArrayMapNumericPhysicalPlan.new(shadow, streams, key_string, nullable_values)
     end
 
+    private def self.array_map_array_physical_plan(
+      value_name : String,
+      key_type : String,
+      value_type : String,
+    ) : ArrayMapArrayPhysicalPlan
+      string_keys = key_type == "String"
+      string_values = value_type == "String"
+      full_type = "Array(Map(#{key_type}, Array(#{value_type})))"
+      shadow = WideTypePlan::WidePhysicalPlanShadow.for_type(full_type, value_name) ||
+               raise UnsupportedFormatError.new("#{full_type} has no bounded physical plan")
+      streams = shadow.streams
+      expected_names = ["#{value_name}.size0", "#{value_name}.size1"]
+      if string_keys
+        expected_names << "#{value_name}%2Ekeys.size"
+      end
+      expected_names << "#{value_name}%2Ekeys" << "#{value_name}%2Evalues.size2"
+      expected_names << "#{value_name}%2Evalues.size" if string_values
+      expected_names << "#{value_name}%2Evalues"
+      unless streams.map(&.name) == expected_names
+        raise UnsupportedFormatError.new("#{full_type} physical plan has unexpected serializer order")
+      end
+
+      rows_axis = shadow.mark_row_axis
+      size0 = streams[0]
+      unless size0.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize0 &&
+             size0.semantic_type == full_type && size0.semantic_path.empty? && size0.element_width == 8 &&
+             size0.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
+             same_plan_axis?(size0.storage_axis, rows_axis) &&
+             size0.cardinality_parent_axis.try(&.id) == rows_axis.id &&
+             size0.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
+        raise UnsupportedFormatError.new("#{full_type} outer-size plan axes differ")
+      end
+      outer_axis = size0.cardinality_child_axis.not_nil!
+
+      size1 = streams[1]
+      map_type = "Map(#{key_type}, Array(#{value_type}))"
+      unless size1.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize1 &&
+             size1.semantic_type == map_type && size1.semantic_path.empty? && size1.element_width == 8 &&
+             size1.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
+             same_plan_axis?(size1.storage_axis, outer_axis) &&
+             size1.cardinality_parent_axis.try(&.id) == outer_axis.id &&
+             size1.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::MapEntries
+        raise UnsupportedFormatError.new("#{full_type} Map-size plan axes differ")
+      end
+      map_axis = size1.cardinality_child_axis.not_nil!
+
+      key_index = 2
+      if string_keys
+        key_sizes = streams[key_index]
+        unless key_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
+               key_sizes.semantic_type == "String" && key_sizes.semantic_path == ["keys"] &&
+               key_sizes.element_width == 8 &&
+               key_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
+               same_plan_axis?(key_sizes.storage_axis, map_axis) &&
+               key_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
+               key_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
+          raise UnsupportedFormatError.new("#{full_type} key-size plan axes differ")
+        end
+        key_bytes_axis = key_sizes.cardinality_child_axis.not_nil!
+        key_bytes = streams[key_index + 1]
+        unless key_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
+               key_bytes.semantic_type == "String" && key_bytes.semantic_path == ["keys"] &&
+               key_bytes.element_width == 1 &&
+               key_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
+               same_plan_axis?(key_bytes.storage_axis, key_bytes_axis) &&
+               key_bytes.cardinality_parent_axis.nil? && key_bytes.cardinality_child_axis.nil?
+          raise UnsupportedFormatError.new("#{full_type} key-byte plan axes differ")
+        end
+        key_index += 2
+      else
+        key_values = streams[key_index]
+        unless key_values.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
+               key_values.semantic_type == "UInt64" && key_values.semantic_path == ["keys"] &&
+               key_values.element_width == 8 &&
+               key_values.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
+               same_plan_axis?(key_values.storage_axis, map_axis) &&
+               key_values.cardinality_parent_axis.nil? && key_values.cardinality_child_axis.nil?
+          raise UnsupportedFormatError.new("#{full_type} UInt64-key plan axes differ")
+        end
+        key_index += 1
+      end
+
+      values_type = "Array(#{value_type})"
+      value_sizes = streams[key_index]
+      unless value_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize2 &&
+             value_sizes.semantic_type == values_type && value_sizes.semantic_path == ["values"] &&
+             value_sizes.element_width == 8 &&
+             value_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
+             same_plan_axis?(value_sizes.storage_axis, map_axis) &&
+             value_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
+             value_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
+        raise UnsupportedFormatError.new("#{full_type} values.size2 plan axes differ")
+      end
+      values_axis = value_sizes.cardinality_child_axis.not_nil!
+      key_index += 1
+
+      if string_values
+        value_string_sizes = streams[key_index]
+        unless value_string_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
+               value_string_sizes.semantic_type == "String" && value_string_sizes.semantic_path == ["values"] &&
+               value_string_sizes.element_width == 8 &&
+               value_string_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
+               same_plan_axis?(value_string_sizes.storage_axis, values_axis) &&
+               value_string_sizes.cardinality_parent_axis.try(&.id) == values_axis.id &&
+               value_string_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
+          raise UnsupportedFormatError.new("#{full_type} value-size plan axes differ")
+        end
+        value_bytes_axis = value_string_sizes.cardinality_child_axis.not_nil!
+        value_bytes = streams[key_index + 1]
+        unless value_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
+               value_bytes.semantic_type == "String" && value_bytes.semantic_path == ["values"] &&
+               value_bytes.element_width == 1 &&
+               value_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
+               same_plan_axis?(value_bytes.storage_axis, value_bytes_axis) &&
+               value_bytes.cardinality_parent_axis.nil? && value_bytes.cardinality_child_axis.nil?
+          raise UnsupportedFormatError.new("#{full_type} value-byte plan axes differ")
+        end
+      else
+        value_data = streams[key_index]
+        unless value_data.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
+               value_data.semantic_type == "UInt64" && value_data.semantic_path == ["values"] &&
+               value_data.element_width == 8 &&
+               value_data.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
+               same_plan_axis?(value_data.storage_axis, values_axis) &&
+               value_data.cardinality_parent_axis.nil? && value_data.cardinality_child_axis.nil?
+          raise UnsupportedFormatError.new("#{full_type} UInt64-value plan axes differ")
+        end
+      end
+
+      streams.each do |stream|
+        raise UnsupportedFormatError.new("#{full_type} stream mark axis differs") unless same_plan_axis?(stream.mark_row_axis, rows_axis)
+      end
+      ArrayMapArrayPhysicalPlan.new(shadow, streams, string_keys, string_values)
+    end
+
     private def self.same_plan_axis?(left : WideTypePlan::WidePhysicalPlanShadow::Axis, right : WideTypePlan::WidePhysicalPlanShadow::Axis) : Bool
       left.id == right.id && left.kind == right.kind
     end
@@ -8533,6 +8736,182 @@ module CrystalClick
       ensure
         FileUtils.rm_rf(stage) if Dir.exists?(stage)
       end
+    end
+
+    private def self.write_array_map_array_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(K, Array(V))))),
+      rows_per_mark : Int32,
+      physical_plan : ArrayMapArrayPhysicalPlan,
+    ) : String forall K, V
+      validate_array_map_array_inputs(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_array_map_array_streams(stage, value_name, values, rows_per_mark, physical_plan))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", array_map_array_serialization_metadata)
+        key_type = physical_plan.string_keys ? "String" : "UInt64"
+        value_type = physical_plan.string_values ? "String" : "UInt64"
+        full_type = "Array(Map(#{key_type}, Array(#{value_type})))"
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, full_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", array_map_array_substreams_metadata(key_name, value_name, physical_plan))
+        write_checksums(stage, records)
+        validate_staged_array_map_array_part(stage, key_name, value_name, keys, values, rows_per_mark, physical_plan)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.validate_array_map_array_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(K, Array(V))))),
+      rows_per_mark : Int32,
+      physical_plan : ArrayMapArrayPhysicalPlan,
+    ) : Nil forall K, V
+      {% unless K == UInt64 || K == String %}
+        raise UnsupportedFormatError.new("Array(Map(K, Array(V))) writer requires UInt64 or String keys")
+      {% end %}
+      {% unless V == UInt64 || V == String %}
+        raise UnsupportedFormatError.new("Array(Map(K, Array(V))) writer requires exact UInt64 or String leaves")
+      {% end %}
+      {% if K == String %}
+        raise UnsupportedFormatError.new("Array(Map) physical plan key kind differs") unless physical_plan.string_keys
+      {% else %}
+        raise UnsupportedFormatError.new("Array(Map) physical plan key kind differs") if physical_plan.string_keys
+      {% end %}
+      {% if V == String %}
+        raise UnsupportedFormatError.new("Array(Map) physical plan value kind differs") unless physical_plan.string_values
+      {% else %}
+        raise UnsupportedFormatError.new("Array(Map) physical plan value kind differs") if physical_plan.string_values
+      {% end %}
+
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, physical_plan.streams.map(&.name))
+
+      data_bytes = Array(Int64).new(physical_plan.streams.size, 0_i64)
+      total_maps = 0_u64
+      total_entries = 0_u64
+      total_values = 0_u64
+      total_key_bytes = 0_u64
+      total_value_bytes = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        maps_in_mark = 0_u64
+        entries_in_mark = 0_u64
+        values_in_mark = 0_u64
+        key_bytes_in_mark = 0_u64
+        value_bytes_in_mark = 0_u64
+        rows.times do |row_offset|
+          row_maps = values[start_row + row_offset]
+          if row_maps.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - maps_in_mark
+            raise ArgumentError.new("Array(Map) outer elements exceed per-mark limit")
+          end
+          maps_in_mark += row_maps.size.to_u64
+          row_maps.each do |map_entries|
+            if map_entries.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - entries_in_mark
+              raise ArgumentError.new("Array(Map) entries exceed per-mark limit")
+            end
+            entries_in_mark += map_entries.size.to_u64
+            map_entries.each do |entry|
+              nested_values = entry[1]
+              if nested_values.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - values_in_mark
+                raise ArgumentError.new("Array(Map) nested values exceed per-mark limit")
+              end
+              values_in_mark += nested_values.size.to_u64
+              {% if K == String %}
+                key_bytes = entry[0].bytesize.to_u64
+                if key_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - key_bytes_in_mark ||
+                   key_bytes > MAX_FRAME_RAW_BYTES.to_u64 - key_bytes_in_mark
+                  raise ArgumentError.new("Array(Map) String keys exceed per-mark byte limit")
+                end
+                key_bytes_in_mark += key_bytes
+              {% end %}
+              {% if V == String %}
+                nested_values.each do |leaf|
+                  leaf_bytes = leaf.bytesize.to_u64
+                  if leaf_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - value_bytes_in_mark ||
+                     leaf_bytes > MAX_FRAME_RAW_BYTES.to_u64 - value_bytes_in_mark
+                    raise ArgumentError.new("Array(Map) String values exceed per-mark byte limit")
+                  end
+                  value_bytes_in_mark += leaf_bytes
+                end
+              {% end %}
+            end
+          end
+        end
+
+        raw_sizes = [] of Int64
+        raw_sizes << checked_array_element_bytes(rows.to_u64, "Array(Map) size0")
+        raw_sizes << checked_array_element_bytes(maps_in_mark, "Array(Map) size1")
+        {% if K == String %}
+          raw_sizes << checked_array_element_bytes(entries_in_mark, "Array(Map) key sizes")
+          raw_sizes << key_bytes_in_mark.to_i64
+        {% else %}
+          raw_sizes << checked_array_element_bytes(entries_in_mark, "Array(Map) UInt64 keys")
+        {% end %}
+        raw_sizes << checked_array_element_bytes(entries_in_mark, "Array(Map) values.size2")
+        {% if V == String %}
+          raw_sizes << checked_array_element_bytes(values_in_mark, "Array(Map) value sizes")
+          raw_sizes << value_bytes_in_mark.to_i64
+        {% else %}
+          raw_sizes << checked_array_element_bytes(values_in_mark, "Array(Map) UInt64 values")
+        {% end %}
+        raw_sizes.each_with_index do |raw_size, stream_index|
+          if raw_size > WidePart::MAX_ARRAY_MARK_BYTES || raw_size > MAX_FRAME_RAW_BYTES
+            raise ArgumentError.new("Array(Map) W84 stream exceeds per-mark byte limit")
+          end
+          next if raw_size == 0 && stream_index > 0
+          frame_size = checked_array_frame_size(raw_size, physical_plan.streams[stream_index].name)
+          data_bytes[stream_index] = add_array_frame_size(data_bytes[stream_index], frame_size, physical_plan.streams[stream_index].name)
+        end
+
+        raise ArgumentError.new("Array(Map) count overflows") if maps_in_mark > UInt64::MAX - total_maps
+        total_maps += maps_in_mark
+        raise ArgumentError.new("Array(Map) entry count overflows") if entries_in_mark > UInt64::MAX - total_entries
+        total_entries += entries_in_mark
+        raise ArgumentError.new("Array(Map) nested value count overflows") if values_in_mark > UInt64::MAX - total_values
+        total_values += values_in_mark
+        {% if K == String %}
+          raise ArgumentError.new("Array(Map) String key byte count overflows") if key_bytes_in_mark > UInt64::MAX - total_key_bytes
+          total_key_bytes += key_bytes_in_mark
+        {% end %}
+        {% if V == String %}
+          raise ArgumentError.new("Array(Map) String value byte count overflows") if value_bytes_in_mark > UInt64::MAX - total_value_bytes
+          total_value_bytes += value_bytes_in_mark
+        {% end %}
+        start_row += rows
+      end
+
+      checked_array_element_checksum_size(values.size.to_u64, "Array rows")
+      checked_array_element_checksum_size(total_maps, "Array(Map) maps")
+      checked_array_element_checksum_size(total_entries, "Array(Map) entries")
+      checked_array_element_checksum_size(total_values, "Array(Map) nested values")
+      {% if K == String %}
+        raise ArgumentError.new("Array(Map) String key stream exceeds reader limit") if total_key_bytes > MAX_DATA_FILE_BYTES.to_u64
+      {% end %}
+      {% if V == String %}
+        raise ArgumentError.new("Array(Map) String value stream exceeds reader limit") if total_value_bytes > MAX_DATA_FILE_BYTES.to_u64
+      {% end %}
+      nil
     end
 
     private def self.validate_array_map_numeric_inputs(
@@ -16654,6 +17033,216 @@ module CrystalClick
       ]
     end
 
+    private def self.write_array_map_array_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(Array(Tuple(K, Array(V))))),
+      rows_per_mark : Int32,
+      physical_plan : ArrayMapArrayPhysicalPlan,
+    ) : Array(ChecksumRecord) forall K, V
+      streams = physical_plan.streams
+      data_names = streams.map { |stream| "#{StreamName.hash(stream.name)}.bin" }
+      mark_names = streams.map { |stream| "#{StreamName.hash(stream.name)}.mrk2" }
+      stream_count = streams.size
+      data_hashes = Array(CityHashV1::FileHasher).new(stream_count) { CityHashV1::FileHasher.new }
+      raw_hashes = Array(CityHashV1::FileHasher).new(stream_count) { CityHashV1::FileHasher.new }
+      mark_bytes = Array(IO::Memory).new(stream_count) { IO::Memory.new }
+      data_sizes = Array(UInt64).new(stream_count, 0_u64)
+      total_maps = 0_u64
+      total_entries = 0_u64
+      total_values = 0_u64
+      total_key_bytes = 0_u64
+      total_value_bytes = 0_u64
+      files = data_names.map { |name| File.open(File.join(stage, name), "wb") }
+      start_row = 0
+      begin
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          maps_in_mark = 0_u64
+          entries_in_mark = 0_u64
+          values_in_mark = 0_u64
+          key_bytes_in_mark = 0_u64
+          value_bytes_in_mark = 0_u64
+          rows.times do |row_offset|
+            row_maps = values[start_row + row_offset]
+            maps_in_mark += row_maps.size.to_u64
+            row_maps.each do |map_entries|
+              entries_in_mark += map_entries.size.to_u64
+              map_entries.each do |entry|
+                nested_values = entry[1]
+                values_in_mark += nested_values.size.to_u64
+                {% if K == String %}
+                  key_bytes_in_mark += entry[0].bytesize.to_u64
+                {% end %}
+                {% if V == String %}
+                  nested_values.each { |leaf| value_bytes_in_mark += leaf.bytesize.to_u64 }
+                {% end %}
+              end
+            end
+          end
+
+          size0_raw = Bytes.new(checked_array_element_bytes(rows.to_u64, "Array(Map) size0").to_i)
+          size1_raw = Bytes.new(checked_array_element_bytes(maps_in_mark, "Array(Map) size1").to_i)
+          {% if K == String %}
+            key_sizes_raw = Bytes.new(checked_array_element_bytes(entries_in_mark, "Array(Map) key sizes").to_i)
+            key_data_raw = Bytes.new(key_bytes_in_mark.to_i)
+          {% else %}
+            key_data_raw = Bytes.new(checked_array_element_bytes(entries_in_mark, "Array(Map) UInt64 keys").to_i)
+          {% end %}
+          size2_raw = Bytes.new(checked_array_element_bytes(entries_in_mark, "Array(Map) values.size2").to_i)
+          {% if V == String %}
+            value_sizes_raw = Bytes.new(checked_array_element_bytes(values_in_mark, "Array(Map) value sizes").to_i)
+            value_data_raw = Bytes.new(value_bytes_in_mark.to_i)
+          {% else %}
+            value_data_raw = Bytes.new(checked_array_element_bytes(values_in_mark, "Array(Map) UInt64 values").to_i)
+          {% end %}
+
+          map_index = 0
+          entry_index = 0
+          leaf_index = 0
+          key_byte_offset = 0
+          value_byte_offset = 0
+          rows.times do |row_offset|
+            row_maps = values[start_row + row_offset]
+            write_uint64_le(size0_raw, row_offset * 8, row_maps.size.to_u64)
+            row_maps.each do |map_entries|
+              write_uint64_le(size1_raw, map_index * 8, map_entries.size.to_u64)
+              map_entries.each do |entry|
+                {% if K == String %}
+                  key_slice = entry[0].to_slice
+                  write_uint64_le(key_sizes_raw, entry_index * 8, key_slice.size.to_u64)
+                  unless key_slice.empty?
+                    key_slice.copy_to(key_data_raw[key_byte_offset, key_slice.size])
+                  end
+                  key_byte_offset += key_slice.size
+                {% else %}
+                  write_uint64_le(key_data_raw, entry_index * 8, entry[0])
+                {% end %}
+                nested_values = entry[1]
+                write_uint64_le(size2_raw, entry_index * 8, nested_values.size.to_u64)
+                nested_values.each do |leaf|
+                  {% if V == String %}
+                    leaf_slice = leaf.to_slice
+                    write_uint64_le(value_sizes_raw, leaf_index * 8, leaf_slice.size.to_u64)
+                    unless leaf_slice.empty?
+                      leaf_slice.copy_to(value_data_raw[value_byte_offset, leaf_slice.size])
+                    end
+                    value_byte_offset += leaf_slice.size
+                  {% else %}
+                    write_uint64_le(value_data_raw, leaf_index * 8, leaf)
+                  {% end %}
+                  leaf_index += 1
+                end
+                entry_index += 1
+              end
+              map_index += 1
+            end
+          end
+          unless map_index.to_u64 == maps_in_mark && entry_index.to_u64 == entries_in_mark && leaf_index.to_u64 == values_in_mark
+            raise CorruptPartError.new("Array(Map) W84 cardinality changed after preflight")
+          end
+          {% if K == String %}
+            unless key_byte_offset.to_u64 == key_bytes_in_mark
+              raise CorruptPartError.new("Array(Map) W84 String key bytes changed after preflight")
+            end
+          {% end %}
+          {% if V == String %}
+            unless value_byte_offset.to_u64 == value_bytes_in_mark
+              raise CorruptPartError.new("Array(Map) W84 String value bytes changed after preflight")
+            end
+          {% end %}
+
+          raw_streams = [] of Bytes
+          raw_streams << size0_raw << size1_raw
+          {% if K == String %}
+            raw_streams << key_sizes_raw << key_data_raw
+          {% else %}
+            raw_streams << key_data_raw
+          {% end %}
+          raw_streams << size2_raw
+          {% if V == String %}
+            raw_streams << value_sizes_raw << value_data_raw
+          {% else %}
+            raw_streams << value_data_raw
+          {% end %}
+          unless raw_streams.size == stream_count
+            raise CorruptPartError.new("Array(Map) W84 emitted stream count differs from physical plan")
+          end
+          raw_streams.each_with_index do |raw, stream_index|
+            write_uint64_le(mark_bytes[stream_index], data_sizes[stream_index])
+            write_uint64_le(mark_bytes[stream_index], 0_u64)
+            write_uint64_le(mark_bytes[stream_index], rows.to_u64)
+            unless stream_index > 0 && raw.empty?
+              frame = encode_lz4_frame(raw)
+              if data_sizes[stream_index] > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+                raise ArgumentError.new("Array(Map) W84 stream exceeds reader limit")
+              end
+              files[stream_index].write(frame)
+              data_hashes[stream_index].update(frame)
+              data_sizes[stream_index] += frame.size.to_u64
+            end
+            raw_hashes[stream_index].update(raw)
+          end
+
+          raise ArgumentError.new("Array(Map) map count overflows") if maps_in_mark > UInt64::MAX - total_maps
+          total_maps += maps_in_mark
+          raise ArgumentError.new("Array(Map) entry count overflows") if entries_in_mark > UInt64::MAX - total_entries
+          total_entries += entries_in_mark
+          raise ArgumentError.new("Array(Map) nested value count overflows") if values_in_mark > UInt64::MAX - total_values
+          total_values += values_in_mark
+          {% if K == String %}
+            raise ArgumentError.new("Array(Map) String key byte count overflows") if key_bytes_in_mark > UInt64::MAX - total_key_bytes
+            total_key_bytes += key_bytes_in_mark
+          {% end %}
+          {% if V == String %}
+            raise ArgumentError.new("Array(Map) String value byte count overflows") if value_bytes_in_mark > UInt64::MAX - total_value_bytes
+            total_value_bytes += value_bytes_in_mark
+          {% end %}
+          start_row += rows
+        end
+      ensure
+        files.each { |file| file.close unless file.closed? }
+      end
+
+      mark_bytes.each_with_index do |bytes, stream_index|
+        write_uint64_le(bytes, data_sizes[stream_index])
+        write_uint64_le(bytes, 0_u64)
+        write_uint64_le(bytes, 0_u64)
+      end
+      marks = mark_bytes.map(&.to_slice)
+      marks.each do |bytes|
+        raise ArgumentError.new("mark stream exceeds reader limit") if bytes.size.to_i64 > MAX_MARK_FILE_BYTES
+      end
+      marks.each_with_index { |bytes, index| File.write(File.join(stage, mark_names[index]), bytes) }
+
+      uncompressed_sizes = [] of UInt64
+      uncompressed_sizes << checked_array_element_checksum_size(values.size.to_u64, "Array rows")
+      uncompressed_sizes << checked_array_element_checksum_size(total_maps, "Array(Map) maps")
+      if physical_plan.string_keys
+        uncompressed_sizes << checked_array_element_checksum_size(total_entries, "Array(Map) key sizes")
+        uncompressed_sizes << total_key_bytes
+      else
+        uncompressed_sizes << checked_array_element_checksum_size(total_entries, "Array(Map) UInt64 keys")
+      end
+      uncompressed_sizes << checked_array_element_checksum_size(total_entries, "Array(Map) values.size2")
+      if physical_plan.string_values
+        uncompressed_sizes << checked_array_element_checksum_size(total_values, "Array(Map) value sizes")
+        uncompressed_sizes << total_value_bytes
+      else
+        uncompressed_sizes << checked_array_element_checksum_size(total_values, "Array(Map) UInt64 values")
+      end
+      unless uncompressed_sizes.size == stream_count
+        raise CorruptPartError.new("Array(Map) W84 checksum widths differ from physical plan")
+      end
+
+      records = [] of ChecksumRecord
+      streams.each_with_index do |stream, index|
+        records << ChecksumRecord.new(data_names[index], data_sizes[index], data_hashes[index].finish, true, uncompressed_sizes[index], raw_hashes[index].finish)
+        records << ChecksumRecord.new(mark_names[index], marks[index].size.to_u64, CityHashV1.file_hash(marks[index]), false)
+      end
+      records
+    end
+
     private def self.write_array_map_numeric_streams(
       stage : String,
       column : String,
@@ -22290,6 +22879,64 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_array_map_array_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Array(Tuple(K, Array(V))))),
+      rows_per_mark : Int32,
+      physical_plan : ArrayMapArrayPhysicalPlan,
+    ) : Nil forall K, V
+      key_type = physical_plan.string_keys ? "String" : "UInt64"
+      value_type = physical_plan.string_values ? "String" : "UInt64"
+      full_type = "Array(Map(#{key_type}, Array(#{value_type})))"
+      logical_streams = [key_name] + physical_plan.streams.map(&.name)
+      key_part, value_part, mark_count = validate_staged_map_string_metadata(
+        stage,
+        key_name,
+        value_name,
+        keys,
+        rows_per_mark,
+        full_type,
+        array_map_array_substreams_metadata(key_name, value_name, physical_plan),
+        logical_streams,
+        array_map_array_serialization_metadata
+      )
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        actual_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        actual_values =
+          {% if K == UInt64 %}
+            {% if V == UInt64 %}
+              value_part.read_array_map_uint64_array_uint64_mark_range(value_name, mark_index, 1)
+            {% else %}
+              value_part.read_array_map_uint64_array_string_mark_range(value_name, mark_index, 1)
+            {% end %}
+          {% else %}
+            {% if V == UInt64 %}
+              value_part.read_array_map_string_array_uint64_mark_range(value_name, mark_index, 1)
+            {% else %}
+              value_part.read_array_map_string_array_string_mark_range(value_name, mark_index, 1)
+            {% end %}
+          {% end %}
+        rows.times do |offset|
+          unless actual_keys[offset] == keys[start + offset] && actual_values[offset] == values[start + offset]
+            raise CorruptPartError.new("staged Array(Map) nested-array readback differs from input")
+          end
+        end
+        start += rows
+      end
+      raise CorruptPartError.new("staged primary-key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
+      raise CorruptPartError.new("staged Array(Map) nested-array marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      nil
+    end
+
     # W83's Nullable(Bool) reader intentionally preserves NULL without
     # interpreting the hidden child byte. Verify both Bool streams directly
     # while the part is still staged so NULL must retain ClickHouse's zero
@@ -24395,6 +25042,23 @@ module CrystalClick
       payload << "#{streams.size} substreams for column `#{value_name}`:\n"
       streams.each { |stream| payload << "\t#{stream}\n" }
       payload.to_s
+    end
+
+    private def self.array_map_array_substreams_metadata(
+      key_name : String,
+      value_name : String,
+      physical_plan : ArrayMapArrayPhysicalPlan,
+    ) : String
+      streams = physical_plan.streams.map(&.name)
+      payload = IO::Memory.new
+      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
+      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
+      streams.each { |stream| payload << "\t#{stream}\n" }
+      payload.to_s
+    end
+
+    private def self.array_map_array_serialization_metadata : String
+      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":1},\"version\":1}"
     end
 
     private def self.map_string_array_uint64_substreams_metadata(key_name : String, value_name : String) : String

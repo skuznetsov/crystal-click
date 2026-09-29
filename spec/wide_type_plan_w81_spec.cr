@@ -40,7 +40,6 @@ describe "W81 bounded Array(Map) numeric family" do
 
     {
       "Array(Map(UInt32, UInt64))",
-      "Array(Map(String, Array(UInt64)))",
       "Array(Array(Map(String, UInt64)))",
       "Array(Map(String, UInt64)) trailing",
     }.each do |type|

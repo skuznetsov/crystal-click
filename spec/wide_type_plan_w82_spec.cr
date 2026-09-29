@@ -107,9 +107,8 @@ describe "W82 Array(Map(... String)) physical plan admission" do
     end
   end
 
-  it "keeps extra nesting and unsupported neighboring declarations rejected" do
+  it "keeps deeper nesting and unsupported neighboring declarations rejected" do
     {
-      "Array(Map(String, Array(String)))",
       "Array(Array(Map(String, String)))",
       "Array(Map(UInt32, String))",
       "Array(Map(Int64, String))",

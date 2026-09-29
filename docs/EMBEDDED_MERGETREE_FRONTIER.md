@@ -1,6 +1,9 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W83 is admitted only for four exact
+Document status: active design. W84 admits paired reader/writer, typed-table,
+and offline-catalog support for the four exact
+`Array(Map(UInt64|String, Array(UInt64|String)))` forms on the pinned
+Wide/LZ4/plain-mark profile below. W83 is admitted only for four exact
 `Array(Map(UInt64|String, Bool|Nullable(Bool)))` declarations on the pinned
 Wide/LZ4/plain-mark profile below. W82 is admitted only for four exact
 `Array(Map(UInt64|String, String|Nullable(String)))` declarations on the
@@ -5261,6 +5264,79 @@ CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse CLICKHOUSE_STORE="$oracle_roo
 The `--link-flags='-fuse-ld=ld'` option selects Apple ld for this host's
 Crystal/Xcode SDK combination; the oracle itself checks the pinned ClickHouse
 version.
+
+## W84 admitted frontier: arrays inside Array(Map) values
+
+W84 admits one closed paired reader/writer, typed-table, and offline-catalog
+family: `Array(Map(K, Array(V)))` with `K` and `V` independently either
+`UInt64` or `String`. Its ordered in-memory value is
+`Array(Array(Tuple(K, Array(V))))`; a `Hash` would discard duplicate Map keys
+and their physical order. This slice requires one `UInt64` sorting key and
+only W84-family payload columns; mixing legacy payload families in
+one part is guard-only. W80-W83 remain unchanged.
+
+The factual anchor is a fresh stock ClickHouse 26.7.1.1315 Wide/LZ4 part
+under `/private/tmp/crystal-click-w84-matrix.TrPW5I`, with five rows, four
+plain adaptive marks, empty outer arrays, an empty inner value array, and
+mixed nonempty rows. `CHECK TABLE` passed. The independently inspected
+`columns.txt` declares all four exact types; `columns_substreams.txt` lists
+the following stream order (column prefix omitted):
+
+| Key/value | Ordered substreams |
+| --- | --- |
+| UInt64/UInt64 | `size0`, `size1`, `keys`, `values.size2`, `values` |
+| UInt64/String | `size0`, `size1`, `keys`, `values.size2`, `values.size`, `values` |
+| String/UInt64 | `size0`, `size1`, `keys.size`, `keys`, `values.size2`, `values` |
+| String/String | `size0`, `size1`, `keys.size`, `keys`, `values.size2`, `values.size`, `values` |
+
+All 25 data-stream `.mrk2` files are 96 bytes: four 24-byte records with
+granule row counts `[2, 2, 1, 0]`. In this fixture the decompressed offsets
+for `size0`, `size1`, and `values.size2` are respectively `[0,16,32,40]`,
+`[0,8,24,24]`, and `[0,16,32,32]`. The three independent count axes are
+table rows, outer Array elements/Map instances, and Map entries/inner Arrays;
+String byte-length streams add separate leaf axes. Stock metadata contains
+`columns_substreams` v1, `metadata_version=0`, and serialization v1 with
+`string:1` propagation. The fixture anchors the physical shape; the paired
+implementation evidence below is required for the bounded compatibility claim.
+
+The change is CAUTION-level serialization work. Keep the existing exact
+Wide/LZ4/plain-mark profile and fail closed on malformed offsets, missing or
+extra streams, inconsistent sibling marks, bounds, and metadata before any
+user callback. Reject `Nullable` or Bool leaves, other keys, deeper arrays,
+aliases, other part layouts/codecs/mark formats, and any general Map/Array or
+MV/projection claim. The strongest anticipated failure is conflating the
+three count axes or accepting a self-consistent Crystal round trip whose
+streams differ from stock ClickHouse.
+
+Implementation order: add a failing exact physical-plan/reader test; extend
+the bounded plan and reader (`wide_type_plan.cr`, `wide_part.cr`); add paired
+writer (`wide_part_writer.cr`); propagate typed-table and catalog consumers
+(`wide_part_table.cr`, `offline_catalog.cr`); then run a fresh bidirectional
+stock oracle. The executable gates must cover all four variants, empty outer
+arrays, empty Maps, empty inner arrays, String byte streams, duplicate keys,
+selected and full reads, sibling preflight before callbacks, all-empty child
+streams, corrupt offsets/marks, `ATTACH PART`/`CHECK TABLE`, and W80-W83
+adjacency. Full debug and release suites and a scoped hostile review are
+required for admission. Roll back only the isolated W84 feature diff if these
+gates fail; no performance claim follows from admission.
+
+W84 paired implementation observation (2026-09-29): the full oracle passed
+with pinned ClickHouse 26.7.1.1315 for all four populated and four all-empty
+types. It compared stock raw substreams and exact mark coordinates, read
+stock parts through the direct reader and typed-table full/selected-mark
+paths, rejected a corrupted selected middle `values.size2` mark before any
+table callback, and checked Crystal output through `ATTACH PART`,
+`CHECK TABLE`, and full/keyed RowBinary. The writer's raw bytes, metadata, and
+per-mark frame coordinates matched the independently derived expectations;
+duplicate keys and empty/binary Strings remained distinct. Focused W84
+specs passed (14 examples), adjacent W80-W84 specs passed (58 examples),
+and the full debug and release suites each passed 1084 examples with no
+failures or errors. A scoped hostile review returned ROBUST for this exact
+profile; an in-range shifted-mark mutation is still a useful additional
+negative control, not a demonstrated false accept. Evidence decays when the
+pinned stock serialization, mark/codec layout, or reader/writer/consumer
+dispatch changes. This admits neither general recursive containers nor other
+ClickHouse versions, MV/projections, or a memory/performance result.
 
 ## Rejected and guard-only surfaces
 

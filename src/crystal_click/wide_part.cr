@@ -256,6 +256,71 @@ module CrystalClick
       end
     end
 
+    # W84 keeps the value Array's third count axis explicit. These descriptors
+    # are shared by all four exact key/value pairings; the type gate remains
+    # the four-declaration whitelist in WideTypePlan.
+    private struct ArrayMapArrayLeafStreams
+      getter outer_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter map_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter key_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream?
+      getter keys : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter value_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter value_string_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream?
+      getter values : WideTypePlan::WidePhysicalPlanShadow::Stream
+
+      def initialize(
+        @outer_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @map_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @key_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream?,
+        @keys : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @value_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @value_string_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream?,
+        @values : WideTypePlan::WidePhysicalPlanShadow::Stream,
+      )
+      end
+    end
+
+    private struct ArrayMapArrayLeafPreflight
+      getter streams : ArrayMapArrayLeafStreams
+      getter outer_sizes : Array(UInt64)
+      getter map_sizes : Array(UInt64)
+      getter value_sizes : Array(UInt64)
+      getter key_sizes : Array(UInt64)
+      getter value_string_sizes : Array(UInt64)
+      getter mark_maps : Array(UInt64)
+      getter mark_entries : Array(UInt64)
+      getter mark_values : Array(UInt64)
+      getter rows : UInt64
+      getter maps : UInt64
+      getter entries : UInt64
+      getter values_count : UInt64
+      getter key_bytes : UInt64
+      getter value_bytes : UInt64
+      getter payload_bytes : UInt64
+      getter charge_bytes : UInt64
+
+      def initialize(
+        @streams : ArrayMapArrayLeafStreams,
+        @outer_sizes : Array(UInt64),
+        @map_sizes : Array(UInt64),
+        @value_sizes : Array(UInt64),
+        @key_sizes : Array(UInt64),
+        @value_string_sizes : Array(UInt64),
+        @mark_maps : Array(UInt64),
+        @mark_entries : Array(UInt64),
+        @mark_values : Array(UInt64),
+        @rows : UInt64,
+        @maps : UInt64,
+        @entries : UInt64,
+        @values_count : UInt64,
+        @key_bytes : UInt64,
+        @value_bytes : UInt64,
+        @payload_bytes : UInt64,
+        @charge_bytes : UInt64,
+      )
+      end
+    end
+
     # Bounded Variant table accounting: one union slot per row.
     # This is conservative batch accounting, not an exact heap measurement.
     VARIANT_STRING_UINT64_ROW_ACCOUNTING_BYTES      = 64_u64
@@ -1194,9 +1259,20 @@ module CrystalClick
       !array_map_bool_leaf_shape(type).nil?
     end
 
+    # W84 pairs the Map entry axis with one bounded Array value axis. Only
+    # these four UInt64/String key and value combinations are admitted.
+    def self.array_map_array_leaf_shape(type : String) : {String, String}?
+      WideTypePlan.array_map_array_leaf_shape(type)
+    end
+
+    def self.supports_array_map_array_leaf_type?(type : String) : Bool
+      !array_map_array_leaf_shape(type).nil?
+    end
+
     def self.supports_array_map_type?(type : String) : Bool
       supports_array_map_string_uint64_type?(type) || supports_array_map_numeric_type?(type) ||
-        supports_array_map_string_leaf_type?(type) || supports_array_map_bool_leaf_type?(type)
+        supports_array_map_string_leaf_type?(type) || supports_array_map_bool_leaf_type?(type) ||
+        supports_array_map_array_leaf_type?(type)
     end
 
     private def self.array_map_numeric_value_type(type : String, key_type : String, nullable : Bool) : String?
@@ -1531,6 +1607,7 @@ module CrystalClick
         supports_nullable_numeric_map_type?(type) ||
         supports_map_string_uint64_type?(type) || supports_array_map_string_uint64_type?(type) || supports_array_map_numeric_type?(type) ||
         supports_array_map_string_leaf_type?(type) || supports_array_map_bool_leaf_type?(type) ||
+        supports_array_map_array_leaf_type?(type) ||
         supports_map_string_array_uint64_type?(type) ||
         supports_map_string_array_nullable_uint64_type?(type) || supports_map_string_array_nullable_string_type?(type) ||
         supports_map_string_string_type?(type) ||
@@ -8374,6 +8451,374 @@ module CrystalClick
       read_array_map_bool_leaf_nullable_rows(column, first_mark, mark_count, String)
     end
 
+    private def array_map_array_leaf_streams(
+      column : String,
+      string_keys : Bool,
+      string_values : Bool,
+    ) : ArrayMapArrayLeafStreams
+      plan = WideTypePlan::WidePhysicalPlanShadow.for_type(@column_type, column) ||
+             raise(UnsupportedFormatError.new("no physical plan for exact W84 Array(Map) Array leaf column"))
+      descriptors = plan.streams
+      expected_count = 5 + (string_keys ? 1 : 0) + (string_values ? 1 : 0)
+      raise UnsupportedFormatError.new("unexpected W84 Array(Map) Array leaf physical plan") unless descriptors.size == expected_count
+
+      outer_sizes = descriptors.find do |stream|
+        stream.name == "#{column}.size0" && stream.role.array_size0? && stream.semantic_path.empty?
+      end || raise(UnsupportedFormatError.new("W84 physical plan omits outer Array offsets"))
+      map_sizes = descriptors.find do |stream|
+        stream.name == "#{column}.size1" && stream.role.array_size1? && stream.semantic_path.empty?
+      end || raise(UnsupportedFormatError.new("W84 physical plan omits Map offsets"))
+      keys = descriptors.find do |stream|
+        stream.name == "#{column}%2Ekeys" && stream.role.value? && stream.semantic_path == ["keys"]
+      end || raise(UnsupportedFormatError.new("W84 physical plan omits Map keys"))
+      key_sizes = if string_keys
+                    descriptors.find do |stream|
+                      stream.name == "#{column}%2Ekeys.size" && stream.role.string_size? && stream.semantic_path == ["keys"]
+                    end || raise(UnsupportedFormatError.new("W84 physical plan omits String key sizes"))
+                  else
+                    nil
+                  end
+      value_sizes = descriptors.find do |stream|
+        stream.name == "#{column}%2Evalues.size2" && stream.role.array_size2? &&
+          stream.semantic_path == ["values"]
+      end || raise(UnsupportedFormatError.new("W84 physical plan omits the third value offsets"))
+      value_string_sizes = if string_values
+                             descriptors.find do |stream|
+                               stream.name == "#{column}%2Evalues.size" && stream.role.string_size? &&
+                                 stream.semantic_path == ["values"]
+                             end || raise(UnsupportedFormatError.new("W84 physical plan omits String value sizes"))
+                           else
+                             nil
+                           end
+      values = descriptors.find do |stream|
+        stream.name == "#{column}%2Evalues" && stream.role.value? && stream.semantic_path == ["values"]
+      end || raise(UnsupportedFormatError.new("W84 physical plan omits value data"))
+
+      outer_axis = outer_sizes.cardinality_child_axis || raise(UnsupportedFormatError.new("W84 outer Array omits its element axis"))
+      entries_axis = map_sizes.cardinality_child_axis || raise(UnsupportedFormatError.new("W84 Map omits its entry axis"))
+      value_axis = value_sizes.cardinality_child_axis || raise(UnsupportedFormatError.new("W84 values.size2 omits its child axis"))
+      unless outer_sizes.cardinality_parent_axis.try(&.id) == plan.mark_row_axis.id &&
+             outer_axis.kind.array_elements? &&
+             map_sizes.cardinality_parent_axis.try(&.id) == outer_axis.id &&
+             entries_axis.kind.map_entries? &&
+             value_sizes.cardinality_parent_axis.try(&.id) == entries_axis.id &&
+             value_axis.kind.array_elements? &&
+             value_sizes.semantic_type == "Array(#{string_values ? "String" : "UInt64"})" &&
+             value_sizes.storage_mode.counts?
+        raise UnsupportedFormatError.new("W84 physical offset axes are inconsistent")
+      end
+
+      if string_keys
+        key_bytes_axis = key_sizes.not_nil!.cardinality_child_axis ||
+                         raise(UnsupportedFormatError.new("W84 String key sizes omit their byte axis"))
+        unless key_sizes.not_nil!.cardinality_parent_axis.try(&.id) == entries_axis.id &&
+               key_sizes.not_nil!.storage_mode.counts? && key_bytes_axis.kind.string_bytes? &&
+               keys.storage_mode.variable_bytes? && keys.storage_axis.id == key_bytes_axis.id
+          raise UnsupportedFormatError.new("W84 String key axes are inconsistent")
+        end
+      else
+        unless keys.storage_mode.fixed_width_values? && keys.storage_axis.id == entries_axis.id && keys.element_width == 8
+          raise UnsupportedFormatError.new("W84 UInt64 key axis is inconsistent")
+        end
+      end
+
+      if string_values
+        value_bytes_axis = value_string_sizes.not_nil!.cardinality_child_axis ||
+                           raise(UnsupportedFormatError.new("W84 String value sizes omit their byte axis"))
+        unless value_string_sizes.not_nil!.cardinality_parent_axis.try(&.id) == value_axis.id &&
+               value_string_sizes.not_nil!.storage_mode.counts? && value_bytes_axis.kind.string_bytes? &&
+               values.storage_mode.variable_bytes? && values.storage_axis.id == value_bytes_axis.id
+          raise UnsupportedFormatError.new("W84 String value axes are inconsistent")
+        end
+      else
+        unless values.storage_mode.fixed_width_values? && values.storage_axis.id == value_axis.id && values.element_width == 8
+          raise UnsupportedFormatError.new("W84 UInt64 value axis is inconsistent")
+        end
+      end
+      unless descriptors.all? { |stream| stream.mark_row_axis.id == plan.mark_row_axis.id }
+        raise UnsupportedFormatError.new("W84 physical mark axes are inconsistent")
+      end
+
+      ArrayMapArrayLeafStreams.new(outer_sizes, map_sizes, key_sizes, keys, value_sizes, value_string_sizes, values)
+    end
+
+    private def validate_array_map_array_leaf_mark_rows(
+      streams : ArrayMapArrayLeafStreams,
+      first_mark : Int,
+      mark_count : Int,
+      rows : UInt64,
+    ) : Nil
+      descriptors = [streams.outer_sizes, streams.map_sizes, streams.keys, streams.value_sizes, streams.values]
+      descriptors << streams.key_sizes.not_nil! if streams.key_sizes
+      descriptors << streams.value_string_sizes.not_nil! if streams.value_string_sizes
+      outer_stream = @streams[streams.outer_sizes.name]
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |range_mark_index|
+        expected_mark_rows << outer_stream.marks[first_mark + range_mark_index].rows
+      end
+      descriptors.each do |descriptor|
+        stream = @streams[descriptor.name]
+        _, _, stream_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("W84 child mark rows differ") unless stream_rows == rows
+        mark_count.times do |range_mark_index|
+          unless stream.marks[first_mark + range_mark_index].rows == expected_mark_rows[range_mark_index]
+            raise CorruptPartError.new("W84 child mark rows differ")
+          end
+        end
+      end
+      # size0 is both the logical root row count and the source of each
+      # selected mark's outer-array cardinality. Validate it before trusting
+      # any descendant offsets.
+      validate_array_nested_stream_marks(outer_stream, first_mark, expected_mark_rows, 8)
+      nil
+    end
+
+    private def checked_array_map_array_leaf_charge(
+      payload_bytes : UInt64,
+      rows : UInt64,
+      maps : UInt64,
+      entries : UInt64,
+      values : UInt64,
+      string_keys : Bool,
+      string_values : Bool,
+    ) : UInt64
+      # Include retained nested Array objects, tuple slots, String object
+      # slots, and the decoded offset/length arrays in addition to stream
+      # payloads. This is a bounded admission charge, not exact heap sizing.
+      row_width = ARRAY_MAP_ROW_ACCOUNTING_BYTES + 8_u64
+      map_width = ARRAY_MAP_CONTAINER_ACCOUNTING_BYTES + 8_u64
+      entry_width = ARRAY_TUPLE_ENTRY_ACCOUNTING_BYTES + MAP_ARRAY_UINT64_CONTAINER_ACCOUNTING_BYTES + 8_u64
+      value_width = string_values ? ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES + 8_u64 : 0_u64
+      entry_width += ARRAY_NULLABLE_STRING_SLOT_ACCOUNTING_BYTES + 8_u64 if string_keys
+      if rows > UInt64::MAX // row_width || maps > UInt64::MAX // map_width ||
+         entries > UInt64::MAX // entry_width || (value_width > 0 && values > UInt64::MAX // value_width)
+        raise CorruptPartError.new("W84 materialization charge overflows")
+      end
+      row_bytes = rows * row_width
+      map_bytes = maps * map_width
+      entry_bytes = entries * entry_width
+      value_slot_bytes = values * value_width
+      if map_bytes > UInt64::MAX - row_bytes || entry_bytes > UInt64::MAX - row_bytes - map_bytes ||
+         value_slot_bytes > UInt64::MAX - row_bytes - map_bytes - entry_bytes ||
+         payload_bytes > UInt64::MAX - row_bytes - map_bytes - entry_bytes - value_slot_bytes
+        raise CorruptPartError.new("W84 materialization charge overflows")
+      end
+      charge_bytes = row_bytes + map_bytes + entry_bytes + value_slot_bytes + payload_bytes
+      raise CorruptPartError.new("W84 materialization charge exceeds per-range limit") if charge_bytes > MAX_ARRAY_MARK_BYTES.to_u64
+      charge_bytes
+    end
+
+    private def array_map_array_leaf_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      key_type : String,
+      value_type : String,
+    ) : ArrayMapArrayLeafPreflight
+      ensure_column(column)
+      expected_shape = {key_type, value_type}
+      unless WidePart.array_map_array_leaf_shape(@column_type) == expected_shape
+        raise UnsupportedFormatError.new("Array(Map) reader requires one exact W84 Array(Map(K, Array(V))) declaration")
+      end
+
+      string_keys = key_type == "String"
+      string_values = value_type == "String"
+      streams = array_map_array_leaf_streams(column, string_keys, string_values)
+      outer_sizes, maps, rows, mark_maps = read_array_outer_sizes(column, first_mark, mark_count, streams.outer_sizes.name)
+      validate_array_map_array_leaf_mark_rows(streams, first_mark, mark_count, rows)
+
+      map_sizes, entries, mark_entries = read_array_array_numeric_element_sizes(
+        column, first_mark, mark_count, maps, rows, mark_maps, 8, streams.map_sizes.name
+      )
+      raise CorruptPartError.new("W84 Map offsets do not match outer Array sizes") unless map_sizes.size.to_u64 == maps
+
+      element_width = string_values ? 1 : 8
+      value_sizes, values_count, mark_values = read_array_array_numeric_element_sizes(
+        column, first_mark, mark_count, entries, rows, mark_entries, element_width, streams.value_sizes.name
+      )
+      raise CorruptPartError.new("W84 values.size2 does not match Map entries") unless value_sizes.size.to_u64 == entries
+
+      key_sizes = [] of UInt64
+      key_bytes = 0_u64
+      key_mark_bytes = [] of UInt64
+      if string_keys
+        key_sizes, key_bytes, key_mark_bytes = read_map_string_child_sizes(
+          column, "%2Ekeys", "W84 key", first_mark, mark_count,
+          entries, rows, mark_entries, streams.key_sizes.not_nil!.name, streams.keys.name
+        )
+        raise CorruptPartError.new("W84 key sizes do not match Map offsets") unless key_sizes.size.to_u64 == entries
+      else
+        key_stream = @streams[streams.keys.name]
+        _, _, key_rows = checked_stream_mark_range(key_stream, first_mark, mark_count)
+        raise CorruptPartError.new("W84 key mark rows differ") unless key_rows == rows
+        validate_array_nested_stream_marks(key_stream, first_mark, mark_entries, 8)
+        key_bytes = checked_array_mark_byte_count(entries, 8).to_u64
+        key_mark_bytes = mark_entries.map { |count| checked_array_mark_byte_count(count, 8).to_u64 }
+      end
+
+      value_string_sizes = [] of UInt64
+      value_bytes = 0_u64
+      value_mark_bytes = [] of UInt64
+      if string_values
+        value_string_sizes, value_bytes, value_mark_bytes = read_map_string_child_sizes(
+          column, "%2Evalues", "W84 value", first_mark, mark_count,
+          values_count, rows, mark_values, streams.value_string_sizes.not_nil!.name, streams.values.name
+        )
+        raise CorruptPartError.new("W84 String sizes do not match values.size2") unless value_string_sizes.size.to_u64 == values_count
+      else
+        value_stream = @streams[streams.values.name]
+        _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+        raise CorruptPartError.new("W84 value mark rows differ") unless value_rows == rows
+        validate_array_nested_stream_marks(value_stream, first_mark, mark_values, 8)
+        value_bytes = checked_array_mark_byte_count(values_count, 8).to_u64
+        value_mark_bytes = mark_values.map { |count| checked_array_mark_byte_count(count, 8).to_u64 }
+      end
+
+      payload_bytes = checked_map_materialized_bytes(key_bytes, value_bytes, key_mark_bytes, value_mark_bytes)
+      charge_bytes = checked_array_map_array_leaf_charge(
+        payload_bytes, rows, maps, entries, values_count, string_keys, string_values
+      )
+      ArrayMapArrayLeafPreflight.new(
+        streams, outer_sizes, map_sizes, value_sizes, key_sizes, value_string_sizes,
+        mark_maps, mark_entries, mark_values, rows, maps, entries, values_count,
+        key_bytes, value_bytes, payload_bytes, charge_bytes
+      )
+    end
+
+    private def read_array_map_array_leaf_rows(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      key_type : K.class,
+      value_type : V.class,
+    ) : Array(Array(Array(Tuple(K, Array(V))))) forall K, V
+      expected_key_type = {% if K == String %} "String" {% else %} "UInt64" {% end %}
+      expected_value_type = {% if V == String %} "String" {% else %} "UInt64" {% end %}
+      preflight = array_map_array_leaf_preflight(
+        column, first_mark, mark_count, expected_key_type, expected_value_type
+      )
+      keys_stream = @streams[preflight.streams.keys.name]
+      keys_start, keys_end, _ = checked_stream_mark_range(keys_stream, first_mark, mark_count)
+      key_width = expected_key_type == "String" ? 1 : 8
+      key_bytes = read_mark_range_bytes(keys_stream, keys_start, keys_end, preflight.key_bytes.to_i, key_width)
+      values_stream = @streams[preflight.streams.values.name]
+      values_start, values_end, _ = checked_stream_mark_range(values_stream, first_mark, mark_count)
+      value_width = expected_value_type == "String" ? 1 : 8
+      value_bytes = read_mark_range_bytes(values_stream, values_start, values_end, preflight.value_bytes.to_i, value_width)
+
+      result = Array(Array(Array(Tuple(K, Array(V))))).new(preflight.rows.to_i)
+      map_offset = 0
+      entry_offset = 0
+      leaf_offset = 0
+      key_offset = 0
+      value_offset = 0
+      preflight.outer_sizes.each do |map_count|
+        row = Array(Array(Tuple(K, Array(V)))).new(map_count.to_i)
+        map_count.to_i.times do
+          raise CorruptPartError.new("W84 outer sizes exceed selected Map offsets") if map_offset >= preflight.map_sizes.size
+          entry_count = preflight.map_sizes[map_offset].to_i
+          map = Array(Tuple(K, Array(V))).new(entry_count)
+          entry_count.times do
+            key = uninitialized K
+            {% if K == String %}
+              raise CorruptPartError.new("W84 offsets exceed selected key sizes") if entry_offset >= preflight.key_sizes.size
+              key_length = preflight.key_sizes[entry_offset].to_i
+              if key_offset > key_bytes.size || key_length > key_bytes.size - key_offset
+                raise CorruptPartError.new("W84 key sizes exceed selected raw bytes")
+              end
+              key = String.new(key_bytes[key_offset, key_length])
+              key_offset += key_length
+            {% else %}
+              if entry_offset >= key_bytes.size // 8
+                raise CorruptPartError.new("W84 keys exceed selected UInt64 bytes")
+              end
+              key = u64(key_bytes, entry_offset * 8)
+            {% end %}
+
+            raise CorruptPartError.new("W84 Map offsets exceed selected values.size2") if entry_offset >= preflight.value_sizes.size
+            value_count = preflight.value_sizes[entry_offset].to_i
+            value_array = Array(V).new(value_count)
+            value_count.times do
+              value = uninitialized V
+              {% if V == String %}
+                raise CorruptPartError.new("W84 values.size2 exceeds selected String sizes") if leaf_offset >= preflight.value_string_sizes.size
+                value_length = preflight.value_string_sizes[leaf_offset].to_i
+                if value_offset > value_bytes.size || value_length > value_bytes.size - value_offset
+                  raise CorruptPartError.new("W84 String sizes exceed selected raw bytes")
+                end
+                value = String.new(value_bytes[value_offset, value_length])
+                value_offset += value_length
+              {% else %}
+                if leaf_offset >= value_bytes.size // 8
+                  raise CorruptPartError.new("W84 values.size2 exceeds selected UInt64 bytes")
+                end
+                value = u64(value_bytes, leaf_offset * 8)
+              {% end %}
+              value_array << value
+              leaf_offset += 1
+            end
+            map << {key, value_array}
+            entry_offset += 1
+          end
+          row << map
+          map_offset += 1
+        end
+        result << row
+      end
+      unless map_offset == preflight.map_sizes.size && entry_offset.to_u64 == preflight.entries &&
+             leaf_offset.to_u64 == preflight.values_count
+        raise CorruptPartError.new("W84 offsets do not consume selected nested values")
+      end
+      raise CorruptPartError.new("W84 key sizes do not consume selected raw bytes") if expected_key_type == "String" && key_offset != key_bytes.size
+      raise CorruptPartError.new("W84 key sizes do not consume selected UInt64 bytes") if expected_key_type == "UInt64" && entry_offset * 8 != key_bytes.size
+      raise CorruptPartError.new("W84 String sizes do not consume selected raw bytes") if expected_value_type == "String" && value_offset != value_bytes.size
+      raise CorruptPartError.new("W84 sizes do not consume selected UInt64 bytes") if expected_value_type == "UInt64" && leaf_offset * 8 != value_bytes.size
+      result
+    end
+
+    def array_map_array_leaf_mark_range_materialization_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {payload_bytes: UInt64, charge_bytes: UInt64}
+      key_type, value_type = WidePart.array_map_array_leaf_shape(@column_type) ||
+                             raise(UnsupportedFormatError.new("selected column is not an exact W84 Array(Map) Array leaf"))
+      preflight = array_map_array_leaf_preflight(column, first_mark, mark_count, key_type, value_type)
+      {payload_bytes: preflight.payload_bytes, charge_bytes: preflight.charge_bytes}
+    end
+
+    def read_array_map_uint64_array_uint64_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : Array(Array(Array(Tuple(UInt64, Array(UInt64)))))
+      read_array_map_array_leaf_rows(column, first_mark, mark_count, UInt64, UInt64)
+    end
+
+    def read_array_map_uint64_array_string_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : Array(Array(Array(Tuple(UInt64, Array(String)))))
+      read_array_map_array_leaf_rows(column, first_mark, mark_count, UInt64, String)
+    end
+
+    def read_array_map_string_array_uint64_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : Array(Array(Array(Tuple(String, Array(UInt64)))))
+      read_array_map_array_leaf_rows(column, first_mark, mark_count, String, UInt64)
+    end
+
+    def read_array_map_string_array_string_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : Array(Array(Array(Tuple(String, Array(String)))))
+      read_array_map_array_leaf_rows(column, first_mark, mark_count, String, String)
+    end
+
     # W81 shares the W80 offset topology while selecting the exact leaf codec
     # from the declaration. Every selected mark is preflighted before any
     # nested Array or Map object is created.
@@ -10837,6 +11282,8 @@ module CrystalClick
         validate_json_typed_path_serialization(source_column_name, json_paths)
       elsif column_type == "LowCardinality(String)"
         validate_low_cardinality_string_serialization(columns, selected, row_count)
+      elsif WidePart.supports_array_map_array_leaf_type?(column_type)
+        validate_array_map_array_leaf_serialization(columns, selected, column_type)
       elsif WidePart.supports_array_map_string_uint64_type?(column_type)
         validate_array_map_string_uint64_serialization(columns, selected)
       elsif WidePart.supports_array_map_string_leaf_type?(column_type)
@@ -11162,6 +11609,47 @@ module CrystalClick
       else
         [column]
       end
+    end
+
+    private def validate_array_map_array_leaf_serialization(
+      columns : Array({String, String}),
+      selected_column : String,
+      selected_type : String,
+    ) : Nil
+      payload_columns = columns.reject { |_, type| type == "UInt64" }
+      unless WidePart.supports_array_map_array_leaf_type?(selected_type) &&
+             columns.any? { |name, type| name == selected_column && type == selected_type } &&
+             columns.size >= 2 && columns.count { |_, type| type == "UInt64" } == 1 &&
+             !payload_columns.empty? && payload_columns.all? { |_, type| WidePart.supports_array_map_array_leaf_type?(type) }
+        raise UnsupportedFormatError.new("#{selected_type} requires one UInt64 sorting key and exact W84 payload columns")
+      end
+
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for this type") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      expected_fields = Set{"version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types"}
+      raise UnsupportedFormatError.new("unsupported W84 serialization.json fields") unless info.keys.to_set == expected_fields
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("W84 nested serialization versions are unsupported") unless propagated == true
+
+      versions = info["types_serialization_versions"]?.try(&.as_h) ||
+                 raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      valid_versions = versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+      raise UnsupportedFormatError.new("W84 requires nested String serialization version 1") unless valid_versions
+      serializers = info["columns"]?.try(&.as_a) ||
+                    raise(CorruptPartError.new("serialization column serializers are missing or malformed"))
+      raise UnsupportedFormatError.new("W84 per-column serializers are unsupported") unless serializers.empty?
+      nil
+    rescue ex : JSON::ParseException | TypeCastError | OverflowError
+      raise CorruptPartError.new("serialization.json is malformed")
     end
 
     private def validate_array_map_string_uint64_serialization(

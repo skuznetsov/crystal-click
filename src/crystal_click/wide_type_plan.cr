@@ -65,6 +65,7 @@ module CrystalClick
         MapSize0
         ArraySize0
         ArraySize1
+        ArraySize2
         StringSize
         NullMap
         Value
@@ -165,6 +166,7 @@ module CrystalClick
         return true if exact_array_map_string_shape?(type, root)
         return true if exact_array_map_bool_shape?(type, root)
         return true if exact_array_map_string_uint64_shape?(type, root)
+        return true if exact_array_map_array_leaf_shape?(type, root)
         return true if exact_numeric_map_array_shape?(type, root)
         return true if exact_nullable_numeric_map_array_shape?(type, root)
 
@@ -200,6 +202,23 @@ module CrystalClick
         key = map.child(0)
         value = map.child(1)
         key.name == "String" && key.children.empty? && value.name == "UInt64" && value.children.empty?
+      end
+
+      # W84 admits one exact Array(Map(K, Array(V))) family. The declaration
+      # recognizer is intentionally separate from the recursive shadow
+      # Builder so adding a reusable third-offset axis does not admit adjacent
+      # key/value or nesting types.
+      private def self.exact_array_map_array_leaf_shape?(type : String, root : Node) : Bool
+        key_type, value_type = WideTypePlan.array_map_array_leaf_shape(type) || return false
+        return false unless root.name == "Array" && root.children.size == 1
+        map = root.child(0)
+        return false unless map.name == "Map" && map.children.size == 2
+        key = map.child(0)
+        return false unless key.name == key_type && key.children.empty?
+        values = map.child(1)
+        return false unless values.name == "Array" && values.children.size == 1
+        value = values.child(0)
+        value.name == value_type && value.children.empty?
       end
 
       # W82 adds only String leaves to the already bounded Array(Map) tree.
@@ -426,12 +445,18 @@ module CrystalClick
           array_depth : Int32,
         ) : Nil
           raise UnsupportedFormatError.new("shadow Array node has invalid arity") unless node.children.size == 1
-          raise UnsupportedFormatError.new("shadow Array nesting exceeds its bound") if array_depth > 1
+          raise UnsupportedFormatError.new("shadow Array nesting exceeds its bound") if array_depth > 2
 
           child_axis = add_axis(
             axis_id(semantic_path, "array#{array_depth}_elements"), AxisKind::ArrayElements
           )
-          role = array_depth == 0 ? StreamRole::ArraySize0 : StreamRole::ArraySize1
+          role = case array_depth
+                 when 0 then StreamRole::ArraySize0
+                 when 1 then StreamRole::ArraySize1
+                 when 2 then StreamRole::ArraySize2
+                 else
+                   raise UnsupportedFormatError.new("shadow Array nesting exceeds its bound")
+                 end
           append_stream(
             "#{stream_path}.size#{array_depth}", render_type(node), semantic_path,
             role, 8, StorageMode::Counts, parent_axis, parent_axis, child_axis
@@ -556,6 +581,20 @@ module CrystalClick
     def self.parse(type : String) : Node?
       return nil if type.empty? || type.bytesize > 4_096
       Parser.new(type).parse
+    end
+
+    # W84 is an exact family, not general recursive-type admission. Keep its
+    # only legal key/value combinations explicit even though the shadow plan
+    # below is capable of describing the third offset axis.
+    def self.array_map_array_leaf_shape(type : String) : {String, String}?
+      case type
+      when "Array(Map(UInt64, Array(UInt64)))" then {"UInt64", "UInt64"}
+      when "Array(Map(UInt64, Array(String)))" then {"UInt64", "String"}
+      when "Array(Map(String, Array(UInt64)))" then {"String", "UInt64"}
+      when "Array(Map(String, Array(String)))" then {"String", "String"}
+      else
+        nil
+      end
     end
 
     # Keep physical admission intentionally sealed to the exact declarations

@@ -10,7 +10,6 @@ describe "W82 Array(Map) String-leaf reader admission" do
     ]
     rejected = [
       "Array(Map(UInt8, String))",
-      "Array(Map(String, Array(String)))",
       "Array(Array(Map(String, String)))",
       "Array(Map(UInt64, Nullable(String))) ",
     ]

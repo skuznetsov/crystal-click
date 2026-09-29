@@ -60,6 +60,10 @@ module CrystalClick
                              Array(Tuple(UInt64, Array(Float32))) | Array(Tuple(UInt64, Array(Float64))) |
                              Array(Tuple(String, Array(String))) |
                              Array(Tuple(UInt64, Array(String))) |
+                             Array(Array(Tuple(UInt64, Array(UInt64)))) |
+                             Array(Array(Tuple(UInt64, Array(String)))) |
+                             Array(Array(Tuple(String, Array(UInt64)))) |
+                             Array(Array(Tuple(String, Array(String)))) |
                              Array(Tuple(String, Array(String?))) |
                              Array(Tuple(String, Array(UInt8?))) | Array(Tuple(String, Array(UInt16?))) | Array(Tuple(String, Array(UInt32?))) |
                              Array(Tuple(String, Array(Int8?))) | Array(Tuple(String, Array(Int16?))) | Array(Tuple(String, Array(Int32?))) | Array(Tuple(String, Array(Int64?))) |
@@ -219,6 +223,21 @@ module CrystalClick
       expected_rows : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if shape = WidePart.array_map_array_leaf_shape(selected_type)
+        observed_rows, array_elements[0], string_bytes = append_materialized_array_map_array_leaf_for_shape(
+          values,
+          batch,
+          column_name,
+          shape,
+          observed_rows,
+          expected_rows,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+        return {observed_rows, string_bytes}
+      end
+
       if WidePart.supports_ipv4_type?(selected_type)
         observed_rows = append_materialized_values(values, batch.ipv4s_for(column_name), observed_rows, expected_rows)
         return {observed_rows, string_bytes}
@@ -2470,6 +2489,90 @@ module CrystalClick
         values << owned_row
       end
       {next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_map_array_leaf_for_shape(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      shape : {String, String},
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64, UInt64}
+      case shape
+      when {"UInt64", "UInt64"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, UInt64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "String"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, String, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "UInt64"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, UInt64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "String"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, String, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      else
+        raise UnsupportedFormatError.new("selected Array(Map) Array leaf is not an admitted UInt64/String combination")
+      end
+    end
+
+    private def append_materialized_array_map_array_leaf_batch(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      key_type : K.class,
+      leaf_type : V.class,
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64, UInt64} forall K, V
+      selected_values = batch.array_map_array_leaf_values_for(column_name, key_type, leaf_type)
+      next_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+
+      # Check the complete mark batch before allocating catalog-owned copies.
+      # Each nested Array contributes its element slots, including the Map-entry
+      # axis and the third-level Array value axis.
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |map|
+          next_elements = checked_materialized_value_array_elements(next_elements, map.size.to_u64)
+          map.each do |key, nested_values|
+            next_elements = checked_materialized_value_array_elements(next_elements, nested_values.size.to_u64)
+            {% if K == String %}
+              next_bytes = checked_materialized_value_string_bytes(next_bytes, key.bytesize.to_u64, max_string_bytes)
+            {% end %}
+            {% if V == String %}
+              nested_values.each do |value|
+                next_bytes = checked_materialized_value_string_bytes(next_bytes, value.bytesize.to_u64, max_string_bytes)
+              end
+            {% end %}
+          end
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Array(Tuple(K, Array(V)))).new(row.size)
+        row.each do |map|
+          owned_map = Array(Tuple(K, Array(V))).new(map.size)
+          map.each do |key, nested_values|
+            owned_values = Array(V).new(nested_values.size)
+            nested_values.each do |value|
+              owned_values << {% if V == String %} String.new(value.to_slice) {% else %} value {% end %}
+            end
+            owned_map << {
+              {% if K == String %} String.new(key.to_slice) {% else %} key {% end %},
+              owned_values,
+            }
+          end
+          owned_row << owned_map
+        end
+        values << owned_row
+      end
+      {next_rows, next_elements, next_bytes}
     end
 
     private def append_materialized_array_map_string_leaf_values(
