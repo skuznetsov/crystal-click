@@ -72,7 +72,6 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
   it "keeps nearby W73 spellings out of the shadow plan" do
     {
       "Map(Int64, Array(UInt64))",
-      "Map(UInt64, Array(Int64))",
       "Map(UInt64, Array(Nullable(Int64)))",
       "Map(UInt64, Array(Array(String)))",
       "Map(UInt64, Nullable(Array(String)))",

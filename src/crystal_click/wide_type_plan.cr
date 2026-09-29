@@ -160,6 +160,8 @@ module CrystalClick
       end
 
       private def self.shadow_shape?(type : String, root : Node) : Bool
+        return true if exact_numeric_map_array_shape?(type, root)
+
         case type
         when TYPE_ARRAY_TUPLE_UINT64_STRING,
              TYPE_ARRAY_TUPLE_NULLABLE_UINT64_STRING,
@@ -167,8 +169,6 @@ module CrystalClick
              TYPE_ARRAY_ARRAY_STRING,
              TYPE_ARRAY_ARRAY_NULLABLE_STRING
           !WideTypePlan.admitted(type).nil?
-        when "Map(String, Array(UInt64))"
-          exact_map_shape?(root, "String", false)
         when "Map(String, Array(Nullable(UInt64)))"
           exact_map_shape?(root, "String", true)
         when "Map(String, Array(Nullable(String)))"
@@ -177,12 +177,33 @@ module CrystalClick
           exact_map_shape?(root, "UInt64", true)
         when "Map(UInt64, Array(Nullable(String)))"
           exact_map_shape?(root, "UInt64", true, "String")
-        when "Map(UInt64, Array(UInt64))"
-          exact_map_shape?(root, "UInt64", false)
         when "Map(String, Array(String))"
           exact_map_shape?(root, "String", false, "String")
         when "Map(UInt64, Array(String))"
           exact_map_shape?(root, "UInt64", false, "String")
+        else
+          false
+        end
+      end
+
+      private def self.exact_numeric_map_array_shape?(type : String, root : Node) : Bool
+        return false unless root.name == "Map" && root.children.size == 2
+        key = root.child(0)
+        return false unless key.children.empty? && (key.name == "UInt64" || key.name == "String")
+        values = root.child(1)
+        return false unless values.name == "Array" && values.children.size == 1
+        element = values.child(0)
+        return false unless element.children.empty?
+        return false unless numeric_map_array_leaf?(element.name)
+
+        type == "Map(#{key.name}, Array(#{element.name}))" &&
+          exact_map_shape?(root, key.name, false, element.name)
+      end
+
+      private def self.numeric_map_array_leaf?(type : String) : Bool
+        case type
+        when "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"
+          true
         else
           false
         end
@@ -264,16 +285,31 @@ module CrystalClick
               stream_path, leaf_type, semantic_path,
               StreamRole::Value, 1, StorageMode::VariableBytes, bytes_axis
             )
-          when "UInt64"
+          when "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"
             leaf_type = logical_leaf_type || render_type(node)
             append_stream(
               stream_path, leaf_type, semantic_path,
-              StreamRole::Value, 8, StorageMode::FixedWidthValues, storage_axis
+              StreamRole::Value, numeric_leaf_width(node.name), StorageMode::FixedWidthValues, storage_axis
             )
           else
             raise UnsupportedFormatError.new("unsupported node in bounded shadow plan")
           end
           nil
+        end
+
+        private def numeric_leaf_width(type : String) : Int32
+          case type
+          when "UInt8", "Int8"
+            1
+          when "UInt16", "Int16"
+            2
+          when "UInt32", "Int32", "Float32"
+            4
+          when "UInt64", "Int64", "Float64"
+            8
+          else
+            raise UnsupportedFormatError.new("unsupported numeric shadow leaf width")
+          end
         end
 
         private def append_array(

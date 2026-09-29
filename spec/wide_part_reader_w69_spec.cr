@@ -1,13 +1,12 @@
 require "./w69_helpers"
 
 describe CrystalClick::WidePart do
-  it "admits only the exact UInt64-key nullable UInt64 Array Map shape" do
+  it "retains the exact UInt64-key nullable UInt64 Array Map shape" do
     candidate = "Map(UInt64, Array(Nullable(UInt64)))"
     CrystalClick::WidePart.supports_typed_type?(candidate).should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(Nullable(UInt64)))").should be_true
 
     {
-      "Map(UInt64, Array(UInt32))",
       "Map(Int64, Array(Nullable(UInt64)))",
       "Map(UInt64, Array(Nullable(UInt32)))",
       "Map(UInt64, Array(Array(Nullable(UInt64))))",

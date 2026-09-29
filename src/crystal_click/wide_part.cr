@@ -1076,6 +1076,21 @@ module CrystalClick
       !map_uint64_numeric_value_type(type).nil? || !map_string_numeric_value_type(type).nil?
     end
 
+    # Admit exactly one Array layer over the W76 primitive numeric leaves for
+    # the two supported Map key shapes. No whitespace normalization or
+    # recursive composite parsing is performed.
+    def self.map_uint64_array_numeric_value_type(type : String) : String?
+      numeric_map_array_value_type(type, "Map(UInt64, Array(")
+    end
+
+    def self.map_string_array_numeric_value_type(type : String) : String?
+      numeric_map_array_value_type(type, "Map(String, Array(")
+    end
+
+    def self.supports_numeric_map_array_type?(type : String) : Bool
+      !map_uint64_array_numeric_value_type(type).nil? || !map_string_array_numeric_value_type(type).nil?
+    end
+
     # Return the primitive numeric value type only for an exact W77 Map with
     # one Nullable wrapper around the value leaf. Keep the grammar closed and
     # share the leaf family with the W76 non-nullable Map readers.
@@ -1096,6 +1111,14 @@ module CrystalClick
       value_type = type.byte_slice(prefix.bytesize, type.bytesize - prefix.bytesize - 1)
       return nil unless supports_numeric_type?(value_type)
       type == "#{prefix}#{value_type})" ? value_type : nil
+    end
+
+    private def self.numeric_map_array_value_type(type : String, prefix : String) : String?
+      return nil unless type.starts_with?(prefix) && type.ends_with?(")")
+      return nil if type.bytesize < prefix.bytesize + 3
+      value_type = type.byte_slice(prefix.bytesize, type.bytesize - prefix.bytesize - 2)
+      return nil unless supports_numeric_type?(value_type)
+      type == "#{prefix}#{value_type}))" ? value_type : nil
     end
 
     private def self.nullable_numeric_map_value_type(type : String, prefix : String) : String?
@@ -1191,6 +1214,7 @@ module CrystalClick
         supports_ipv6_type?(type) || supports_nullable_ipv6_type?(type) ||
         !fixed_string_width(type).nil? || !nullable_fixed_string_width(type).nil? || supports_array_type?(type) ||
         supports_map_uint64_string_type?(type) || supports_map_uint64_uint64_type?(type) || supports_numeric_map_type?(type) ||
+        supports_numeric_map_array_type?(type) ||
         supports_nullable_numeric_map_type?(type) ||
         supports_map_string_uint64_type?(type) || supports_map_string_array_uint64_type?(type) ||
         supports_map_string_array_nullable_uint64_type?(type) || supports_map_string_array_nullable_string_type?(type) ||
@@ -3633,6 +3657,284 @@ module CrystalClick
       raise CorruptPartError.new("Map sizes do not consume selected key lengths") unless flat_offset == preflight.key_sizes.size
       raise CorruptPartError.new("Map key lengths do not consume selected raw bytes") unless raw_offset == key_bytes.size
       raise CorruptPartError.new("Map sizes do not consume selected numeric values") unless value_offset == value_bytes.size
+      result
+    end
+
+    # Return physical payload and bounded materialization charge for one
+    # exact Map(K, Array(T)) selection. The W73 accounting contract charges
+    # visible keys plus numeric leaves, row/entry slots, and one Array header
+    # per Map entry; size streams are validation metadata, not payload.
+    private def numeric_array_map_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      string_keys : Bool,
+      expected_type : String?,
+    ) : NumericArrayMapPreflight
+      ensure_column(column)
+      declared_type = if string_keys
+                        WidePart.map_string_array_numeric_value_type(@column_type)
+                      else
+                        WidePart.map_uint64_array_numeric_value_type(@column_type)
+                      end
+      unless declared_type
+        key_shape = string_keys ? "String" : "UInt64"
+        raise UnsupportedFormatError.new("Map accessor requires an exact Map(#{key_shape}, Array(T)) column")
+      end
+      unless expected_type.nil? || declared_type == expected_type
+        raise UnsupportedFormatError.new("numeric Map Array accessor type does not match its exact declared T")
+      end
+
+      outer_sizes, entries, rows, mark_entries = read_array_outer_sizes(column, first_mark, mark_count)
+      validate_map_array_uint64_size0_marks(column, first_mark, mark_count, rows)
+      validate_numeric_array_map_child_rows(column, first_mark, mark_count, string_keys)
+
+      key_sizes = [] of UInt64
+      key_payload_bytes = 0_u64
+      key_mark_bytes = [] of UInt64
+      if string_keys
+        key_sizes, key_payload_bytes, key_mark_bytes = read_map_string_child_sizes(
+          column, "%2Ekeys", "Map key", first_mark, mark_count, entries, rows, mark_entries
+        )
+        raise CorruptPartError.new("Map key size count differs from size0") unless key_sizes.size.to_u64 == entries
+      else
+        key_stream = @streams["#{column}%2Ekeys"]
+        validate_array_nested_stream_marks(key_stream, first_mark, mark_entries, 8)
+        key_payload_bytes = checked_array_mark_byte_count(entries, 8).to_u64
+        key_mark_bytes = mark_entries.map { |mark_entries| checked_array_mark_byte_count(mark_entries, 8).to_u64 }
+      end
+
+      value_type = declared_type.not_nil!
+      width = WidePart.numeric_payload_width(value_type)
+      value_sizes, leaves, mark_leaf_counts = read_map_array_numeric_value_sizes(
+        column, first_mark, mark_count, entries, rows, mark_entries, width
+      )
+      value_payload_bytes = checked_array_mark_byte_count(leaves, width).to_u64
+      value_mark_bytes = mark_leaf_counts.map { |mark_leaves| checked_array_mark_byte_count(mark_leaves, width).to_u64 }
+      payload_bytes = checked_map_materialized_bytes(key_payload_bytes, value_payload_bytes, key_mark_bytes, value_mark_bytes)
+      charge_bytes = checked_map_string_array_charge(payload_bytes, entries, rows, @column_type)
+      NumericArrayMapPreflight.new(
+        outer_sizes,
+        key_sizes,
+        value_sizes,
+        entries,
+        leaves,
+        rows,
+        key_payload_bytes,
+        value_payload_bytes,
+        payload_bytes,
+        charge_bytes
+      )
+    end
+
+    # Decode W78's per-entry values.size1 counts and preflight each numeric
+    # leaf mark at its declared physical width before any row materialization.
+    private def read_map_array_numeric_value_sizes(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      entries : UInt64,
+      outer_rows : UInt64,
+      mark_entries : Array(UInt64),
+      width : Int32,
+    ) : {Array(UInt64), UInt64, Array(UInt64)}
+      size_stream = @streams["#{column}%2Evalues.size1"]
+      size_start, size_end, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Map value-size substream mark rows differ") unless size_rows == outer_rows
+      validate_array_nested_stream_marks(size_stream, first_mark, mark_entries, 8)
+      encoded_sizes = read_mark_range_bytes(
+        size_stream, size_start, size_end, checked_array_mark_byte_count(entries, 8), 8
+      )
+
+      value_sizes = Array(UInt64).new(entries.to_i)
+      mark_leaf_counts = Array(UInt64).new(mark_count)
+      total_leaves = 0_u64
+      size_offset = 0
+      mark_entries.each do |mark_entry_count|
+        mark_leaf_count = 0_u64
+        mark_entry_count.to_i.times do
+          raise CorruptPartError.new("Map value-size count exceeds selected bytes") if size_offset > encoded_sizes.size - 8
+          leaf_count = u64(encoded_sizes, size_offset)
+          if leaf_count > MAX_ARRAY_MARK_ELEMENTS - mark_leaf_count || leaf_count > MAX_ARRAY_MARK_ELEMENTS - total_leaves
+            raise CorruptPartError.new("Map nested numeric Array count exceeds per-range limit")
+          end
+          mark_leaf_count += leaf_count
+          total_leaves += leaf_count
+          value_sizes << leaf_count
+          size_offset += 8
+        end
+        checked_array_mark_byte_count(mark_leaf_count, width)
+        mark_leaf_counts << mark_leaf_count
+      end
+      raise CorruptPartError.new("Map value-size stream has trailing bytes") unless size_offset == encoded_sizes.size
+      raise CorruptPartError.new("Map value-size count does not match size0") unless value_sizes.size.to_u64 == entries
+      checked_array_mark_byte_count(total_leaves, width)
+
+      values_stream = @streams["#{column}%2Evalues"]
+      _, _, value_rows = checked_stream_mark_range(values_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Map value substream mark rows differ") unless value_rows == outer_rows
+      validate_array_nested_stream_marks(values_stream, first_mark, mark_leaf_counts, width)
+      {value_sizes, total_leaves, mark_leaf_counts}
+    end
+
+    # Every child retains the root size0 table-row coordinate at each selected
+    # mark, including empty marks and the terminal all-empty boundary.
+    private def validate_numeric_array_map_child_rows(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      string_keys : Bool,
+    ) : Nil
+      size0_stream = @streams["#{column}.size0"]
+      child_names = if string_keys
+                      ["#{column}%2Ekeys.size", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues"]
+                    else
+                      ["#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues"]
+                    end
+      child_names.each do |name|
+        child = @streams[name]
+        _, _, rows = checked_stream_mark_range(child, first_mark, mark_count)
+        raise CorruptPartError.new("Map child substream mark rows differ") unless rows == rows_in_range(first_mark, mark_count)
+        mark_count.times do |range_mark_index|
+          mark_index = first_mark + range_mark_index
+          unless child.marks[mark_index].rows == size0_stream.marks[mark_index].rows
+            raise CorruptPartError.new("Map child substream mark rows differ")
+          end
+        end
+      end
+      nil
+    end
+
+    # Return physical key and numeric leaf bytes for an exact W78
+    # Map(UInt64, Array(T)) range without materializing ordered rows.
+    def map_uint64_array_numeric_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      numeric_array_map_preflight(column, first_mark, mark_count, false, nil).payload_bytes
+    end
+
+    # Return physical key and numeric leaf bytes for an exact W78
+    # Map(String, Array(T)) range without materializing ordered rows.
+    def map_string_array_numeric_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      numeric_array_map_preflight(column, first_mark, mark_count, true, nil).payload_bytes
+    end
+
+    # Validate a selected W78 Map(UInt64, Array(T)) range and return its raw
+    # payload plus the W73 row/entry/nested-Array materialization charge.
+    def map_uint64_array_numeric_mark_range_materialization_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : {UInt64, UInt64} forall T
+      expected_type = WidePart.numeric_type_name(type)
+      preflight = numeric_array_map_preflight(column, first_mark, mark_count, false, expected_type)
+      {preflight.payload_bytes, preflight.charge_bytes}
+    end
+
+    # Validate a selected W78 Map(String, Array(T)) range and return its raw
+    # payload plus the W73 row/entry/nested-Array materialization charge.
+    def map_string_array_numeric_mark_range_materialization_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : {UInt64, UInt64} forall T
+      expected_type = WidePart.numeric_type_name(type)
+      preflight = numeric_array_map_preflight(column, first_mark, mark_count, true, expected_type)
+      {preflight.payload_bytes, preflight.charge_bytes}
+    end
+
+    # Decode ordered UInt64-key W78 Map entries. Duplicate keys and empty
+    # nested Arrays are retained; numeric leaves use W76 bit-preserving decode.
+    def read_map_uint64_array_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(Array(Tuple(UInt64, Array(T)))) forall T
+      expected_type = WidePart.numeric_type_name(type)
+      preflight = numeric_array_map_preflight(column, first_mark, mark_count, false, expected_type)
+      key_stream = @streams["#{column}%2Ekeys"]
+      key_start, key_end, _ = checked_stream_mark_range(key_stream, first_mark, mark_count)
+      key_bytes = read_mark_range_bytes(
+        key_stream, key_start, key_end, checked_array_mark_byte_count(preflight.entries, 8), 8
+      )
+      value_stream = @streams["#{column}%2Evalues"]
+      value_start, value_end, _ = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      width = WidePart.numeric_payload_width(expected_type)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, preflight.value_payload_bytes.to_i, width)
+
+      result = Array(Array(Tuple(UInt64, Array(T)))).new(preflight.rows.to_i)
+      entry_offset = 0
+      value_offset = 0
+      preflight.outer_sizes.each do |entry_count|
+        row = Array(Tuple(UInt64, Array(T))).new(entry_count.to_i)
+        entry_count.to_i.times do
+          raise CorruptPartError.new("Map outer sizes exceed selected numeric Array entries") if entry_offset >= preflight.entries
+          value_count = preflight.value_sizes[entry_offset]
+          remaining_values = value_offset > value_bytes.size ? 0 : ((value_bytes.size - value_offset) // width).to_u64
+          raise CorruptPartError.new("Map nested sizes exceed selected numeric Array values") if value_count > remaining_values
+          nested_values = Array(T).new(value_count.to_i)
+          value_count.to_i.times do
+            nested_values << decode_numeric_value(value_bytes, value_offset, type)
+            value_offset += width
+          end
+          row << {u64(key_bytes, entry_offset * 8), nested_values}
+          entry_offset += 1
+        end
+        result << row
+      end
+      raise CorruptPartError.new("Map sizes do not consume selected numeric Array entries") unless entry_offset.to_u64 == preflight.entries
+      raise CorruptPartError.new("Map nested sizes do not consume selected numeric Array values") unless value_offset == value_bytes.size
+      result
+    end
+
+    # Decode ordered String-key W78 Map entries. Binary and empty keys,
+    # duplicate keys, empty nested Arrays, and floating payload bits survive.
+    def read_map_string_array_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(Array(Tuple(String, Array(T)))) forall T
+      expected_type = WidePart.numeric_type_name(type)
+      preflight = numeric_array_map_preflight(column, first_mark, mark_count, true, expected_type)
+      key_stream = @streams["#{column}%2Ekeys"]
+      key_start, key_end, _ = checked_stream_mark_range(key_stream, first_mark, mark_count)
+      key_bytes = read_mark_range_bytes(key_stream, key_start, key_end, preflight.key_payload_bytes.to_i, 1)
+      value_stream = @streams["#{column}%2Evalues"]
+      value_start, value_end, _ = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      width = WidePart.numeric_payload_width(expected_type)
+      value_bytes = read_mark_range_bytes(value_stream, value_start, value_end, preflight.value_payload_bytes.to_i, width)
+
+      result = Array(Array(Tuple(String, Array(T)))).new(preflight.rows.to_i)
+      entry_offset = 0
+      key_offset = 0
+      value_offset = 0
+      preflight.outer_sizes.each do |entry_count|
+        row = Array(Tuple(String, Array(T))).new(entry_count.to_i)
+        entry_count.to_i.times do
+          raise CorruptPartError.new("Map outer sizes exceed selected numeric Array keys") if entry_offset >= preflight.entries
+          key_size = preflight.key_sizes[entry_offset].to_i
+          if key_offset > key_bytes.size || key_size > key_bytes.size - key_offset
+            raise CorruptPartError.new("Map key sizes exceed selected raw bytes")
+          end
+          value_count = preflight.value_sizes[entry_offset]
+          remaining_values = value_offset > value_bytes.size ? 0 : ((value_bytes.size - value_offset) // width).to_u64
+          raise CorruptPartError.new("Map nested sizes exceed selected numeric Array values") if value_count > remaining_values
+          nested_values = Array(T).new(value_count.to_i)
+          value_count.to_i.times do
+            nested_values << decode_numeric_value(value_bytes, value_offset, type)
+            value_offset += width
+          end
+          row << {String.new(key_bytes[key_offset, key_size]), nested_values}
+          key_offset += key_size
+          entry_offset += 1
+        end
+        result << row
+      end
+      raise CorruptPartError.new("Map sizes do not consume selected numeric Array entries") unless entry_offset.to_u64 == preflight.entries
+      raise CorruptPartError.new("Map key lengths do not consume selected raw bytes") unless key_offset == key_bytes.size
+      raise CorruptPartError.new("Map nested sizes do not consume selected numeric Array values") unless value_offset == value_bytes.size
       result
     end
 
@@ -8441,6 +8743,33 @@ module CrystalClick
       end
     end
 
+    private struct NumericArrayMapPreflight
+      getter outer_sizes : Array(UInt64)
+      getter key_sizes : Array(UInt64)
+      getter value_sizes : Array(UInt64)
+      getter entries : UInt64
+      getter leaves : UInt64
+      getter rows : UInt64
+      getter key_payload_bytes : UInt64
+      getter value_payload_bytes : UInt64
+      getter payload_bytes : UInt64
+      getter charge_bytes : UInt64
+
+      def initialize(
+        @outer_sizes : Array(UInt64),
+        @key_sizes : Array(UInt64),
+        @value_sizes : Array(UInt64),
+        @entries : UInt64,
+        @leaves : UInt64,
+        @rows : UInt64,
+        @key_payload_bytes : UInt64,
+        @value_payload_bytes : UInt64,
+        @payload_bytes : UInt64,
+        @charge_bytes : UInt64,
+      )
+      end
+    end
+
     # Shared, mark-preflighted counts for the exact W59
     # Array(Array(String)) shape. `inner_sizes` contains one String count per
     # flattened inner Array; `string_sizes` contains one byte length per leaf.
@@ -8581,6 +8910,12 @@ module CrystalClick
                                  elsif WidePart.supports_map_string_array_uint64_type?(@column_type)
                                    stream_name == "#{@column}%2Ekeys.size" || stream_name == "#{@column}%2Ekeys" ||
                                      stream_name == "#{@column}%2Evalues.size1" || stream_name == "#{@column}%2Evalues"
+                                 elsif WidePart.map_string_array_numeric_value_type(@column_type)
+                                   stream_name == "#{@column}%2Ekeys.size" || stream_name == "#{@column}%2Ekeys" ||
+                                     stream_name == "#{@column}%2Evalues.size1" || stream_name == "#{@column}%2Evalues"
+                                 elsif WidePart.map_uint64_array_numeric_value_type(@column_type)
+                                   stream_name == "#{@column}%2Ekeys" || stream_name == "#{@column}%2Evalues.size1" ||
+                                     stream_name == "#{@column}%2Evalues"
                                  elsif WidePart.supports_map_string_string_type?(@column_type)
                                    stream_name == "#{@column}%2Ekeys.size" || stream_name == "#{@column}%2Ekeys" ||
                                      stream_name == "#{@column}%2Evalues.size" || stream_name == "#{@column}%2Evalues"
@@ -8702,6 +9037,8 @@ module CrystalClick
       elsif WidePart.supports_map_uint64_string_type?(column_type)
         validate_map_serialization(columns, selected, row_count, column_type)
       elsif WidePart.supports_map_uint64_uint64_type?(column_type)
+        validate_map_serialization(columns, selected, row_count, column_type)
+      elsif WidePart.supports_numeric_map_array_type?(column_type)
         validate_map_serialization(columns, selected, row_count, column_type)
       elsif WidePart.supports_numeric_map_type?(column_type)
         validate_map_serialization(columns, selected, row_count, column_type)
@@ -8883,6 +9220,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("Variant key column must have one plain UInt64 stream") unless streams == [column]
         elsif WidePart.supports_map_uint64_string_type?(selected_type) || WidePart.supports_map_uint64_uint64_type?(selected_type) ||
               WidePart.supports_numeric_map_type?(selected_type) || WidePart.supports_nullable_numeric_map_type?(selected_type) ||
+              WidePart.supports_numeric_map_array_type?(selected_type) ||
               WidePart.supports_map_string_uint64_type?(selected_type) || WidePart.supports_map_string_array_uint64_type?(selected_type) ||
               WidePart.supports_map_string_array_nullable_uint64_type?(selected_type) ||
               WidePart.supports_map_string_array_nullable_string_type?(selected_type) ||
@@ -8943,6 +9281,8 @@ module CrystalClick
         end
       elsif WidePart.supports_map_uint64_nullable_uint64_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.null", "#{column}%2Evalues"]
+      elsif !WidePart.map_uint64_array_numeric_value_type(type).nil?
+        ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues"]
       elsif WidePart.supports_map_uint64_array_nullable_uint64_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues.null", "#{column}%2Evalues"]
       elsif WidePart.supports_map_uint64_array_uint64_type?(type)
@@ -8955,6 +9295,8 @@ module CrystalClick
         ["#{column}.size0", "#{column}%2Ekeys.size", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues.size", "#{column}%2Evalues"]
       elsif WidePart.supports_map_string_uint64_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys.size", "#{column}%2Ekeys", "#{column}%2Evalues"]
+      elsif !WidePart.map_string_array_numeric_value_type(type).nil?
+        ["#{column}.size0", "#{column}%2Ekeys.size", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues"]
       elsif WidePart.supports_map_string_array_uint64_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys.size", "#{column}%2Ekeys", "#{column}%2Evalues.size1", "#{column}%2Evalues"]
       elsif WidePart.supports_map_string_array_nullable_uint64_type?(type)
@@ -9369,6 +9711,7 @@ module CrystalClick
       uint64_key_map = WidePart.supports_map_uint64_string_type?(map_type) || WidePart.supports_map_uint64_uint64_type?(map_type) ||
                        !WidePart.map_uint64_numeric_value_type(map_type).nil? ||
                        !WidePart.map_uint64_nullable_numeric_value_type(map_type).nil? ||
+                       !WidePart.map_uint64_array_numeric_value_type(map_type).nil? ||
                        WidePart.supports_map_uint64_nullable_uint64_type?(map_type) ||
                        WidePart.supports_map_uint64_array_nullable_uint64_type?(map_type) ||
                        WidePart.supports_map_uint64_array_nullable_string_type?(map_type) ||
@@ -9378,6 +9721,7 @@ module CrystalClick
       string_key_map = WidePart.supports_map_string_uint64_type?(map_type) ||
                        !WidePart.map_string_numeric_value_type(map_type).nil? ||
                        !WidePart.map_string_nullable_numeric_value_type(map_type).nil? ||
+                       !WidePart.map_string_array_numeric_value_type(map_type).nil? ||
                        WidePart.supports_map_string_array_uint64_type?(map_type) ||
                        WidePart.supports_map_string_array_nullable_uint64_type?(map_type) ||
                        WidePart.supports_map_string_array_nullable_string_type?(map_type) ||
@@ -9419,7 +9763,8 @@ module CrystalClick
       w71_map = WidePart.supports_map_uint64_array_nullable_string_type?(map_type)
       w73_map = WidePart.supports_map_uint64_array_uint64_type?(map_type) ||
                 WidePart.supports_map_string_array_string_type?(map_type) ||
-                WidePart.supports_map_uint64_array_string_type?(map_type)
+                WidePart.supports_map_uint64_array_string_type?(map_type) ||
+                WidePart.supports_numeric_map_array_type?(map_type)
       numeric_map = WidePart.supports_numeric_map_type?(map_type) || WidePart.supports_nullable_numeric_map_type?(map_type)
       unless serializers.empty? || (uint64_key_map || w70_map || w73_map || numeric_map) && serializers.size == 1
         raise UnsupportedFormatError.new("Map serialization has unsupported child serializers")
@@ -10359,6 +10704,7 @@ module CrystalClick
       if WidePart.supports_map_uint64_string_type?(@column_type) || WidePart.supports_map_uint64_uint64_type?(@column_type) ||
          WidePart.supports_numeric_map_type?(@column_type) ||
          WidePart.supports_nullable_numeric_map_type?(@column_type) ||
+         WidePart.supports_numeric_map_array_type?(@column_type) ||
          WidePart.supports_map_string_uint64_type?(@column_type) || WidePart.supports_map_string_array_uint64_type?(@column_type) ||
          WidePart.supports_map_string_array_nullable_uint64_type?(@column_type) ||
          WidePart.supports_map_string_array_nullable_string_type?(@column_type) ||
@@ -10381,6 +10727,20 @@ module CrystalClick
     private def stream_element_width(stream_name : String) : Int32
       if @column_type == "Dynamic"
         stream_name == "#{@column}.String.size" || stream_name == "#{@column}.UInt64" ? 8 : 1
+      elsif value_type = WidePart.map_uint64_array_numeric_value_type(@column_type)
+        if stream_name == "#{@column}%2Evalues"
+          WidePart.numeric_payload_width(value_type)
+        else
+          8
+        end
+      elsif value_type = WidePart.map_string_array_numeric_value_type(@column_type)
+        if stream_name == "#{@column}%2Ekeys"
+          1
+        elsif stream_name == "#{@column}%2Evalues"
+          WidePart.numeric_payload_width(value_type)
+        else
+          8
+        end
       elsif plan = WidePart.variant_type_plan(@column_type)
         plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported Variant substream"))
       elsif @column_type == "LowCardinality(String)"
@@ -11886,6 +12246,12 @@ module CrystalClick
                                stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues"
                              elsif WidePart.supports_map_uint64_nullable_uint64_type?(@column_type)
                                stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues.null" || stream.name == "#{@column}%2Evalues"
+                             elsif WidePart.map_string_array_numeric_value_type(@column_type)
+                               stream.name == "#{@column}%2Ekeys.size" || stream.name == "#{@column}%2Ekeys" ||
+                                 stream.name == "#{@column}%2Evalues.size1" || stream.name == "#{@column}%2Evalues"
+                             elsif WidePart.map_uint64_array_numeric_value_type(@column_type)
+                               stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues.size1" ||
+                                 stream.name == "#{@column}%2Evalues"
                              elsif WidePart.supports_map_uint64_array_nullable_uint64_type?(@column_type)
                                stream.name == "#{@column}%2Ekeys" || stream.name == "#{@column}%2Evalues.size1" ||
                                  stream.name == "#{@column}%2Evalues.null" || stream.name == "#{@column}%2Evalues"

@@ -4818,6 +4818,87 @@ layouts/builds, MV/projection semantics, or memory/performance parity. Memory
 and performance work remains deferred until the remaining type coverage and
 MV/projection support are implemented.
 
+## W78 design seal: numeric leaves in Map values that are Arrays
+
+W78 targets paired reading and writing of `Map(UInt64, Array(T))` and
+`Map(String, Array(T))` for the ten primitive numeric leaves in W76. The two
+`Array(UInt64)` declarations are existing W73 controls; the other 18 are new
+targets. Admission is conditional on a pinned ClickHouse producer probe of
+the exact physical streams and marks, not on similarity to scalar Map or
+top-level Array codecs. This remains the sorted-`UInt64`-key, two-column
+Wide/LZ4/plain-`.mrk2` profile. Entries remain ordered and may have duplicate
+keys. Empty Maps, empty inner Arrays, signed extrema, and preserved floating
+bits are part of the proposed observable contract. Nullable leaves, other
+Map keys, additional nesting, and general recursive type parsing are not.
+
+Risk is CAUTION: table rows, Map entries, and Array elements have independent
+cardinalities; a numeric leaf-width error can leave a full scan looking
+plausible while shifting a later mark or undercharging materialization.
+Rollback is one isolated W78 feature commit, without changing existing parts
+or remote history. The first falsifier is a RED exact-type reader/writer test
+for a narrow signed leaf and a floating leaf on opposite key shapes. Before
+production changes, the pinned ClickHouse 26.7.1.1315 producer must establish
+the stream inventory, width, mark coordinates, terminal empty marks, metadata,
+and RowBinary behavior for representative leaves. The final stock oracle must
+cover every admitted spelling and both interoperability directions. A stock
+disagreement narrows or rejects the candidate instead of changing the oracle.
+
+The reader must validate each selected child's mark rows, flattened
+cardinality, byte extent, and aggregate logical charge before yielding the
+affected mark. Earlier valid marks may already have yielded. The writer must
+validate the staged part before publication. The physical shadow, direct
+reader, typed table/batch, offline catalog, and writer must agree on exact
+type identity and ordered values. A malformed later child mark, empty middle
+mark, and final all-empty mark at nonzero child-stream EOF are guard cases.
+
+DoD: RED-to-green focused reader/writer/table/catalog and physical-shadow
+specs; exact pinned stock-to-Crystal streams, marks, and full/selected
+RowBinary for all 20 declarations; Crystal-to-stock `ATTACH PART`, `CHECK
+TABLE`, and full/keyed RowBinary; adjacent Map/Array regression controls;
+all pinned oracles; full debug and release suites; format/diff checks; and a
+hostile review of both directions, later-mark integrity, charge, and
+publication safety. The evidence decays on a ClickHouse nested-Map/Array
+serializer, codec/mark layout, or shared dispatch change. Remaining type
+families and MV/projections precede memory/performance work.
+
+Pre-implementation stock evidence on pinned ClickHouse 26.7.1.1315: one
+five-column producer part carried `Map(UInt64, Array(Int8))`,
+`Map(UInt64, Array(Float64))`, `Map(String, Array(Int8))`, and
+`Map(String, Array(Float64))` beside a sorted UInt64 key. Each UInt64-key
+payload had `size0`, `keys`, `values.size1`, and `values` streams; String
+keys added `keys.size`. Every stream's five plain marks reported table-row
+counts `[2, 2, 2, 2, 0]`. The Int8 value-stream decompressed offsets were
+`[0, 0, 4, 6, 6]`, and the Float64 offsets were `[0, 0, 24, 40, 40]`;
+the final data mark was all-empty at nonzero child EOF. All child terminal
+marks used the exact raw-stream byte length and zero rows. Stock `CHECK
+TABLE` and same-schema stock-to-stock `ATTACH PART` succeeded, and stock
+RowBinary showed entry counts, key encodings, nested-array counts, and
+width-correct numeric leaf bytes. This is producer and stock consumer
+evidence for four representative shapes, not yet Crystal reader/writer
+evidence or all-20-declaration coverage. A two-column stock oracle remains
+required by W78's DoD.
+
+W78 implementation evidence on 2026-09-28: the pinned ClickHouse 26.7.1.1315
+two-column oracle passed 20/20 stock-to-Crystal reader cases and 20/20
+Crystal-to-stock writer cases. For each exact declaration it checked physical
+stream inventory, metadata, checksums, marks, full and later-selected values;
+the reverse direction also passed stock `ATTACH PART`, `CHECK TABLE`, and
+full/keyed RowBinary. Stock-produced wide children supplied two selected
+greater-than-4096-byte compressed-frame-crossing witnesses. Crystal's writer
+intentionally emits one frame per mark, so its reverse cases assert equivalent
+payload and mark semantics, not identical frame splitting. The full debug
+and release suites each passed 1017 examples with no failures, errors, or
+pending tests using the host-compatible `-fuse-ld=ld` override. All 70
+prior pinned oracle scripts passed on unchanged source and oracle hashes.
+The W78-specific exclusive-publication failure test confirmed that a failed
+publish removes the private stage and leaves no destination. A read-only
+adversary review found no confirmed product defect and judged the bounded
+surface ROBUST; an injected mid-stage I/O failure remains untested, although
+the new direct writer helper has an `ensure` cleanup. This evidence does not
+admit arbitrary recursive Map types, other ClickHouse layouts or builds,
+MV/projection semantics, or a memory/performance claim. Finish type coverage
+and MV/projections before performance work.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,

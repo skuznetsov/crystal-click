@@ -1,7 +1,7 @@
 require "./wide_part_reader_w73_helpers"
 
 describe CrystalClick::WidePart do
-  it "admits only the three exact missing W73 non-null Map Array cells" do
+  it "retains the exact W73 non-null Map Array cells and rejects unsupported neighbors" do
     {
       "Map(UInt64, Array(UInt64))",
       "Map(String, Array(String))",
@@ -12,7 +12,6 @@ describe CrystalClick::WidePart do
 
     {
       "Map(Int64, Array(UInt64))",
-      "Map(UInt64, Array(Int64))",
       "Map(String, Array(Nullable(Int64)))",
       "Map(UInt64, Array(Nullable(Int64)))",
       "Map(UInt64, Array(Array(UInt64)))",

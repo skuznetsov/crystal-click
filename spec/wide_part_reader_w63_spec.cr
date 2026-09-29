@@ -102,7 +102,6 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(UInt64))").should be_true
     {
       "Map(UInt32, Array(UInt64))",
-      "Map(String, Array(Int64))",
       "Map(String, Array(Array(UInt64)))",
       "Map(String, Array(UInt64)) trailing",
     }.each do |type|

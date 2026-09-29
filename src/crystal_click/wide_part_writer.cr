@@ -2249,6 +2249,58 @@ module CrystalClick
         ->(stage : String) { validate_staged_map_uint64_array_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark) })
     end
 
+    # Write an immutable sorted-key part with exact Map(UInt64, Array(T))
+    # values for the closed W78 primitive numeric family. Ordered tuple arrays
+    # preserve duplicate keys and insertion order; the Map key stream remains
+    # UInt64-width while the flattened Array payload uses T's exact width.
+    def self.write_uint64_map_uint64_array_numeric_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(UInt64, Array(T)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      type_name = map_array_numeric_leaf_type_name(values)
+      value_width = numeric_width(type_name)
+      stream_names = [
+        "#{value_name}.size0",
+        "#{value_name}%2Ekeys",
+        "#{value_name}%2Evalues.size1",
+        "#{value_name}%2Evalues",
+      ]
+      validate_map_array_core_inputs(destination, key_name, keys, value_name, values, rows_per_mark,
+        stream_names, false, false, value_width)
+
+      write_map_array_numeric_core_pair(destination, key_name, keys, value_name, values, rows_per_mark, type_name, value_width)
+    end
+
+    # Write an immutable sorted-key part with exact Map(String, Array(T))
+    # values for the closed W78 primitive numeric family. Key and leaf byte
+    # streams remain independent even when the flattened child arrays are empty.
+    def self.write_uint64_map_string_array_numeric_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(String, Array(T)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      type_name = map_array_numeric_leaf_type_name(values)
+      value_width = numeric_width(type_name)
+      stream_names = [
+        "#{value_name}.size0",
+        "#{value_name}%2Ekeys.size",
+        "#{value_name}%2Ekeys",
+        "#{value_name}%2Evalues.size1",
+        "#{value_name}%2Evalues",
+      ]
+      validate_map_array_core_inputs(destination, key_name, keys, value_name, values, rows_per_mark,
+        stream_names, true, false, value_width)
+
+      write_map_array_numeric_core_pair(destination, key_name, keys, value_name, values, rows_per_mark, type_name, value_width)
+    end
+
     # Write an immutable sorted-key part with exact Map(String, Array(String))
     # values. Ordered tuples retain duplicate and binary map keys.
     def self.write_uint64_map_string_array_string_pair(
@@ -3341,6 +3393,42 @@ module CrystalClick
       {value.bytesize.to_u64, 8_u64}
     end
 
+    private def self.map_array_component_stream_lengths(value : T) : Tuple(UInt64, UInt64) forall T
+      {% unless T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+        raise UnsupportedFormatError.new("Map Array writer requires an exact primitive numeric leaf")
+      {% end %}
+      {sizeof(T).to_u64, 0_u64}
+    end
+
+    private def self.map_array_numeric_leaf_type_name(values : Slice(Array(Tuple(K, Array(T))))) : String forall K, T
+      {% unless K == UInt64 || K == String %}
+        raise UnsupportedFormatError.new("Map Array writer requires UInt64 or String Map keys")
+      {% end %}
+      {% if T == UInt8 %}
+        "UInt8"
+      {% elsif T == UInt16 %}
+        "UInt16"
+      {% elsif T == UInt32 %}
+        "UInt32"
+      {% elsif T == UInt64 %}
+        "UInt64"
+      {% elsif T == Int8 %}
+        "Int8"
+      {% elsif T == Int16 %}
+        "Int16"
+      {% elsif T == Int32 %}
+        "Int32"
+      {% elsif T == Int64 %}
+        "Int64"
+      {% elsif T == Float32 %}
+        "Float32"
+      {% elsif T == Float64 %}
+        "Float64"
+      {% else %}
+        raise UnsupportedFormatError.new("Map Array writer requires an exact primitive numeric leaf")
+      {% end %}
+    end
+
     private def self.map_array_core_raw_sizes(
       rows : Int32,
       entries : UInt64,
@@ -3349,6 +3437,7 @@ module CrystalClick
       value_bytes : UInt64,
       string_keys : Bool,
       string_values : Bool,
+      numeric_value_width : Int32 = 8,
     ) : Array(Int64)
       sizes = [rows.to_i64 * 8_i64]
       if string_keys
@@ -3362,7 +3451,7 @@ module CrystalClick
         sizes << checked_array_element_bytes(leaves, "Map String Array value sizes")
         sizes << value_bytes.to_i64
       else
-        sizes << checked_array_element_bytes(leaves, "Map UInt64 Array values")
+        sizes << checked_array_numeric_bytes(leaves, numeric_value_width, "Map Array numeric values")
       end
       sizes
     end
@@ -3377,6 +3466,7 @@ module CrystalClick
       stream_names : Array(String),
       string_keys : Bool,
       string_values : Bool,
+      numeric_value_width : Int32 = 8,
     ) : Nil forall K, V
       raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
       validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, stream_names)
@@ -3441,7 +3531,7 @@ module CrystalClick
         total_value_bytes += mark_value_bytes
 
         raw_sizes = map_array_core_raw_sizes(rows, mark_entries, mark_key_bytes, mark_leaves, mark_value_bytes,
-          string_keys, string_values)
+          string_keys, string_values, numeric_value_width)
         raise ArgumentError.new("Map stream inventory differs from its value type") unless raw_sizes.size == stream_names.size
         raw_sizes.each_with_index do |raw_size, stream_index|
           next if raw_size == 0
@@ -3451,6 +3541,59 @@ module CrystalClick
         start_row += rows
       end
       nil
+    end
+
+    # Generic W78 entry point. Keep this path direct: passing the generic
+    # values slice through a Proc closure triggers an LLVM unsized-closure
+    # verifier failure in Crystal 1.21 for these nested generic types.
+    private def self.write_map_array_numeric_core_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(K, Array(T)))),
+      rows_per_mark : Int32,
+      type_name : String,
+      value_width : Int32,
+    ) : String forall K, T
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_map_array_core_streams(
+          stage,
+          value_name,
+          values,
+          rows_per_mark,
+          {% if K == String %}true{% else %}false{% end %},
+          false,
+          value_width
+        ))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
+        map_type = {% if K == String %}"Map(String, Array(#{type_name}))"{% else %}"Map(UInt64, Array(#{type_name}))"{% end %}
+        substreams = {% if K == String %}
+                       map_string_array_uint64_substreams_metadata(key_name, value_name)
+                     {% else %}
+                       map_uint64_array_uint64_substreams_metadata(key_name, value_name)
+                     {% end %}
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, map_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", substreams)
+        write_checksums(stage, records)
+        validate_staged_map_numeric_array_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
     end
 
     private def self.write_map_array_core_pair(
@@ -14312,23 +14455,18 @@ module CrystalClick
       sizes : Bytes,
       index : Int32,
       offset : Int32,
-      leaf : UInt64,
-    ) : Int32
-      write_uint64_le(raw, index * 8, leaf)
-      offset + 8
-    end
-
-    private def self.write_map_array_core_leaf(
-      raw : Bytes,
-      sizes : Bytes,
-      index : Int32,
-      offset : Int32,
-      leaf : String,
-    ) : Int32
-      bytes = leaf.to_slice
-      write_uint64_le(sizes, index * 8, bytes.size.to_u64)
-      bytes.copy_to(raw[offset, bytes.size]) unless bytes.empty?
-      offset + bytes.size
+      leaf : T,
+      numeric_value_width : Int32,
+    ) : Int32 forall T
+      {% if T == String %}
+        bytes = leaf.to_slice
+        write_uint64_le(sizes, index * 8, bytes.size.to_u64)
+        bytes.copy_to(raw[offset, bytes.size]) unless bytes.empty?
+        offset + bytes.size
+      {% else %}
+        write_typed_numeric_le(raw, offset, leaf)
+        offset + numeric_value_width
+      {% end %}
     end
 
     private def self.write_map_array_core_streams(
@@ -14338,6 +14476,7 @@ module CrystalClick
       rows_per_mark : Int32,
       string_keys : Bool,
       string_values : Bool,
+      numeric_value_width : Int32 = 8,
     ) : Array(ChecksumRecord) forall K, V
       suffixes = ["#{column}.size0"]
       suffixes << "#{column}%2Ekeys.size" if string_keys
@@ -14396,12 +14535,17 @@ module CrystalClick
 
           size0_raw = Bytes.new(rows * 8)
           entry_bytes = checked_array_element_bytes(mark_entries, "Map entries")
-          leaf_bytes = checked_array_element_bytes(mark_leaves, "Map Array leaves")
+          leaf_count_bytes = checked_array_element_bytes(mark_leaves, "Map Array leaves")
           key_raw = Bytes.new((string_keys ? mark_key_bytes.to_i64 : entry_bytes).to_i)
           key_sizes = Bytes.new(string_keys ? entry_bytes.to_i : 0)
           value_sizes1 = Bytes.new(entry_bytes.to_i)
-          value_sizes = Bytes.new(string_values ? leaf_bytes.to_i : 0)
-          leaf_raw = Bytes.new((string_values ? mark_value_bytes.to_i64 : leaf_bytes).to_i)
+          value_sizes = Bytes.new(string_values ? leaf_count_bytes.to_i : 0)
+          leaf_raw_size = if string_values
+                            mark_value_bytes.to_i64
+                          else
+                            checked_array_numeric_bytes(mark_leaves, numeric_value_width, "Map Array numeric values")
+                          end
+          leaf_raw = Bytes.new(leaf_raw_size.to_i)
 
           entry_index = 0
           leaf_index = 0
@@ -14414,7 +14558,7 @@ module CrystalClick
               key_offset = write_map_array_core_key(key_raw, key_sizes, entry_index, key_offset, entry[0])
               write_uint64_le(value_sizes1, entry_index * 8, entry[1].size.to_u64)
               entry[1].each do |leaf|
-                value_offset = write_map_array_core_leaf(leaf_raw, value_sizes, leaf_index, value_offset, leaf)
+                value_offset = write_map_array_core_leaf(leaf_raw, value_sizes, leaf_index, value_offset, leaf, numeric_value_width)
                 leaf_index += 1
               end
               entry_index += 1
@@ -20607,6 +20751,81 @@ module CrystalClick
       end
       unless mark_index == mark_count && key_part.mark_row_counts == expected_mark_rows && value_part.mark_row_counts == expected_mark_rows
         raise CorruptPartError.new("staged numeric Map marks differ from input")
+      end
+      nil
+    end
+
+    private def self.validate_staged_map_numeric_array_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Tuple(K, Array(T)))),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Nil forall K, T
+      {% unless K == String || K == UInt64 %}
+        raise UnsupportedFormatError.new("Map Array writer requires UInt64 or String Map keys")
+      {% end %}
+      map_type = {% if K == String %}"Map(String, Array(#{type_name}))"{% else %}"Map(UInt64, Array(#{type_name}))"{% end %}
+      logical_streams = {% if K == String %}
+                          [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size1", "#{value_name}%2Evalues"]
+                        {% else %}
+                          [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size1", "#{value_name}%2Evalues"]
+                        {% end %}
+      substreams = {% if K == String %}
+                     map_string_array_uint64_substreams_metadata(key_name, value_name)
+                   {% else %}
+                     map_uint64_array_uint64_substreams_metadata(key_name, value_name)
+                   {% end %}
+
+      key_part, value_part, mark_count = validate_staged_map_string_metadata(
+        stage,
+        key_name,
+        value_name,
+        keys,
+        rows_per_mark,
+        map_type,
+        substreams,
+        logical_streams,
+        json_typed_serialization_metadata(key_name, keys)
+      )
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        mark_index = expected_mark_rows.size
+        expected_mark_rows << rows.to_u64
+        actual_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        unless actual_keys == keys[start, rows].to_a
+          raise CorruptPartError.new("staged Map Array primary-key readback differs from input")
+        end
+
+        actual_maps = {% if K == String %}
+                        value_part.read_map_string_array_numeric_mark_range(value_name, mark_index, 1, T)
+                      {% else %}
+                        value_part.read_map_uint64_array_numeric_mark_range(value_name, mark_index, 1, T)
+                      {% end %}
+        unless actual_maps.size == rows
+          raise CorruptPartError.new("staged numeric Map Array row count differs from input")
+        end
+        rows.times do |row|
+          expected_row = values[start + row]
+          actual_row = actual_maps[row]
+          unless actual_row.size == expected_row.size
+            raise CorruptPartError.new("staged numeric Map Array entry count differs from input")
+          end
+          expected_row.each_with_index do |expected_entry, entry|
+            actual_entry = actual_row[entry]
+            unless actual_entry[0] == expected_entry[0] && numeric_array_rows_identical?(expected_entry[1], actual_entry[1])
+              raise CorruptPartError.new("staged numeric Map Array readback differs from input")
+            end
+          end
+        end
+        start += rows
+      end
+      unless expected_mark_rows.size == mark_count && key_part.mark_row_counts == expected_mark_rows && value_part.mark_row_counts == expected_mark_rows
+        raise CorruptPartError.new("staged numeric Map Array marks differ from input")
       end
       nil
     end
