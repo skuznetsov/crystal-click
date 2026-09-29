@@ -2398,6 +2398,13 @@ module CrystalClick
       new(parts, columns, false, true)
     end
 
+    # Read a named physical projection from each caller-selected parent part.
+    # Scan batches retain the parent identity while their readers and row
+    # offsets use the projection's independent physical row and mark layout.
+    def self.open_selected_projection_typed(parent_parts : Array(String), projection_name : String, columns : Array(String)) : WidePartTable
+      new(parent_parts, columns, false, true, projection_name)
+    end
+
     def columns : Array(String)
       @columns.dup
     end
@@ -6144,11 +6151,18 @@ module CrystalClick
       end
     end
 
-    private def initialize(parts : Array(String), columns : Array(String), @numeric_mode : Bool, @typed_mode : Bool)
+    private def initialize(
+      parts : Array(String),
+      columns : Array(String),
+      @numeric_mode : Bool,
+      @typed_mode : Bool,
+      projection_name : String? = nil,
+    )
       raise BoundsError.new("no parts selected") if parts.empty?
       raise BoundsError.new("part count exceeds limit") if parts.size > MAX_PARTS
       raise BoundsError.new("no columns selected") if columns.empty?
       raise BoundsError.new("column count exceeds limit") if columns.size > MAX_COLUMNS
+      validate_projection_name(projection_name) if projection_name
 
       @columns = Array(String).new(columns.size)
       seen_columns = Set(String).new
@@ -6170,6 +6184,20 @@ module CrystalClick
       end
       reject_overlapping_parts(selected_parts)
 
+      # Validate the complete physical child set before opening any child
+      # checksums or readers. A projection may be materialized in only some
+      # parent parts, so absence is a hard error rather than an empty segment.
+      selected_read_paths = Array(String).new(parts.size)
+      if projection_name
+        selected_parts.each do |selected_part|
+          selected_read_paths << validate_selected_projection_child(selected_part[0], projection_name)
+        end
+      else
+        selected_parts.each do |selected_part|
+          selected_read_paths << selected_part[0]
+        end
+      end
+
       total_rows = 0_u64
       total_marks = 0_u64
       expected_column_types = nil.as(Array(String)?)
@@ -6177,9 +6205,10 @@ module CrystalClick
 
       # selected_parts remains in caller order. The parsed identities above
       # are used only for the overlap guard; they do not imply Active status.
-      selected_parts.each do |selected_part|
-        path = selected_part[0]
+      selected_parts.each_with_index do |selected_part, part_index|
+        parent_path = selected_part[0]
         name = selected_part[1]
+        path = selected_read_paths[part_index]
         readers = Array(ColumnReader).new(@columns.size)
         expected_mark_rows = nil.as(Array(UInt64)?)
         expected_row_count = nil.as(UInt64?)
@@ -6236,7 +6265,7 @@ module CrystalClick
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, path, row_count, mark_row_counts, readers, current_column_types, current_column_sources)
+        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32
@@ -6508,6 +6537,26 @@ module CrystalClick
       {path, name, info}
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read selected part")
+    end
+
+    private def validate_projection_name(projection_name : String) : Nil
+      if projection_name.bytesize > MAX_PART_NAME_BYTES - ".proj".bytesize
+        raise BoundsError.new("projection child name exceeds limit")
+      end
+      unless /\A[A-Za-z0-9_]+\z/.matches?(projection_name)
+        raise InvalidPartError.new("invalid projection name")
+      end
+    end
+
+    private def validate_selected_projection_child(parent_path : String, projection_name : String) : String
+      child_path = File.join(parent_path, "#{projection_name}.proj")
+      raise BoundsError.new("projection child path exceeds limit") if child_path.bytesize > MAX_PART_PATH_BYTES
+      name = File.basename(child_path)
+      raise InvalidPartError.new("projection child is a symbolic link: #{name}") if File.symlink?(child_path)
+      raise InvalidPartError.new("projection child is not a directory: #{name}") unless Dir.exists?(child_path)
+      child_path
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot read selected projection child")
     end
 
     private def reject_overlapping_parts(parts : Array({String, String, MergeTreePartInfo})) : Nil

@@ -1447,6 +1447,49 @@ module CrystalClick
       end
     end
 
+    # Scan the physical child parts for one explicitly declared projection.
+    # This does not execute its SELECT or choose an optimizer plan. Every
+    # resolved parent must have a present child with preflighted selected
+    # metadata and stream sizes before the first callback; selected columns
+    # are interpreted from each child's physical schema during the scan.
+    def scan_projection_typed(
+      projection_name : String,
+      columns : Array(String),
+      batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+      &block : WidePartTableBatch -> Nil
+    ) : Nil
+      reject_materialized_view_data_access!
+      raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
+      if projection_name.bytesize > WidePartTable::MAX_PART_NAME_BYTES - ".proj".bytesize
+        raise BoundsError.new("projection child name exceeds limit")
+      end
+      unless /\A[A-Za-z0-9_]+\z/.matches?(projection_name)
+        raise InvalidPartError.new("invalid projection name: #{projection_name}")
+      end
+      unless @projections.any? { |projection| projection.name == projection_name }
+        raise UnsupportedFormatError.new("selected projection is not declared by table DDL")
+      end
+      raise BoundsError.new("no columns selected") if columns.empty?
+      raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
+      raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > WidePartTable::MAX_BATCH_ROWS
+
+      selected = Set(String).new
+      columns.each do |column_name|
+        raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
+        raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
+        selected << column_name
+      end
+
+      candidates = resolved_scan_parts
+      return nil if candidates.empty?
+
+      # The projection factory preflights child coverage and the selected
+      # physical schemas/checksums across the complete resolved parent set.
+      # Deliberately do not compare its column types with the base-table DDL.
+      reader = WidePartTable.open_selected_projection_typed(candidates.map(&.path), projection_name, columns)
+      reader.scan_typed(batch_rows: batch_rows, &block)
+    end
+
     # Read a bounded physical-row window from a MergeTree table. Batches borrow
     # their column buffers only for the duration of each callback.
     def scan_typed_window(

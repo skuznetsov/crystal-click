@@ -1,7 +1,9 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W85 admits paired reader/writer, typed-table,
-and offline-catalog support for the twenty exact
+Document status: active design. W86 exposes bounded offline MV and projection
+declaration metadata. W87 admits explicit reads of fully covered physical
+Wide projection subparts, not projection writes or MV execution. W85 admits
+paired reader/writer, typed-table, and offline-catalog support for the twenty exact
 `Array(Map(UInt64|String, Array(N)))` forms with ten primitive numeric leaves
 on the pinned Wide/LZ4/plain-mark profile below. W84 admits paired
 reader/writer, typed-table, and offline-catalog support for the four exact
@@ -5481,6 +5483,80 @@ the final scoped hostile verdict was ROBUST. This is catalog metadata only:
 the oracle did not scan projection subparts or execute MV logic, and this
 evidence does not admit arbitrary metadata SQL, other ClickHouse versions,
 full type parity, or a memory/performance claim.
+
+## W87 admitted frontier: strict physical projection subpart reads
+
+The W86 stock fixture has two resolved parent parts but only the second has
+`by_tag.proj`. A direct `WidePart.open_typed` probe against that child read its
+`tag String` value, while `WidePartTable.open_selected_typed` rejected the
+child's `by_tag.proj` basename as a MergeTree part name. A projection DDL
+declaration alone therefore cannot authorize a table-wide scan: opening only
+the present children would silently omit rows from uncovered parent parts.
+
+Admitted for W87: an explicit typed, read-only projection scan over a caller's
+selected parent part set and, separately, over an offline table's resolved
+parent scan set. The requested projection must be a declared simple safe
+filesystem name in the catalog API. Each parent path retains its normal
+MergeTree identity and overlap validation; its corresponding immutable
+`<name>.proj` child must exist as a real directory (not a symlink) before any
+callback. Reuse the existing typed Wide reader for child layouts it already
+supports, selected-stream checksum-size checks (not hash verification),
+same-schema-across-parts checks, and bounded batch scan. A child's
+row count is its own physical count; it need not equal the parent row count
+for aggregating projections. Batch row offsets are child-local and do not
+identify base-table row ordinals. An empty parent set produces no rows, not an
+inferred projection materialization. Expose no server `Active` assertion.
+
+Rejected for W87: executing projection SELECT, choosing an optimizer plan,
+partial-coverage fallback to ordinary parent rows, automatically rebuilding
+old parts after `ALTER ADD PROJECTION`, aggregating or merging projection
+states, writing projections, and treating unsupported child column types as
+supported. Raw projection DDL stays opaque. Full MV execution and type parity
+remain separate frontiers.
+
+This is CAUTION-level API and physical-format work. The first falsifier is
+the pinned ClickHouse 26.7.1.1315 `[absent, present]` fixture: a table-level
+projection scan must reject before the first callback. A complete two-part
+stock fixture must yield both physical child values in parent order, with
+selected checksum entries size-checked. A symlinked child, duplicate or
+overlapping parent identity, missing child, divergent child schema, and a
+selected stream with a wrong checksum-recorded size must reject during
+construction before callbacks. A later decode error can follow earlier
+callbacks, and same-length valid payload mutation is not detected by the
+current size-only check. Strongest likely failure: silently treating physical
+projection coverage as table-wide coverage; the guard is full per-parent
+coverage preflight before callbacks. DoD: failing focused
+tests before implementation, pinned stock oracle, focused and full debug and
+release specs, and scoped hostile review. Rollback is the isolated W87 diff.
+Evidence decays if the pinned ClickHouse projection subpart layout, metadata
+grammar, or the parent-resolution/typed-reader contracts change.
+
+W87 implementation plan: first add red focused specs for the strict physical
+factory in `spec/wide_part_table_projection_w87_spec.cr` and the catalog API in
+`spec/offline_catalog_projection_w87_spec.cr`. Then add the isolated factory
+to `src/crystal_click/wide_part_table.cr` and the declared-name catalog scan
+to `src/crystal_click/offline_catalog.cr`; existing ordinary-part entry points
+must remain unchanged. A pinned fresh-store oracle in
+`scripts/check_projection_w87_oracle.{cr,sh}` must exercise both complete and
+partial coverage. Run those two focused specs, the oracle, full `crystal spec`
+and `crystal spec --release`, formatting and `git diff --check`, then attack
+coverage, symlink/path, schema, and checksum assumptions before one atomic
+local commit. No remote push. If a stock layout or oracle mismatch appears,
+retain the red case and narrow this frontier rather than asserting support.
+
+W87 implementation observation (2026-09-29): the focused projection and
+adjacent W86 specs passed 24 examples. Both full debug and release suites
+passed 1114 examples with zero failures, errors, or pending cases. The pinned
+ClickHouse 26.7.1.1315 oracle created two complete
+parent parts and observed `CHECK TABLE` result 1 for each, matching four
+physical child rows against the offline catalog's parent-order scan. It also
+created a mixed `[absent, present]` coverage case that rejected without any
+callback. The low-level factory independently read both complete children
+with selected-stream checksum status `SizeChecked`. Format, shell syntax, and
+diff checks passed. The scoped hostile review returned ROBUST after the
+claim was narrowed: selected checksums currently verify recorded sizes, not
+same-length content mutations, and late decode failures can occur after
+earlier callbacks.
 
 ## Rejected and guard-only surfaces
 
