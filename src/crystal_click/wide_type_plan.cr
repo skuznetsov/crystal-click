@@ -51,7 +51,7 @@ module CrystalClick
       end
     end
 
-    # A correctness-only shadow of the known W51/W55/W59/W61/W63/W69/W70/W71 physical
+    # A correctness-only shadow of the known W51/W55/W59/W61/W63/W69/W70/W71/W83 physical
     # shapes. This deliberately does not participate in codec admission.
     struct WidePhysicalPlanShadow
       enum AxisKind
@@ -163,6 +163,7 @@ module CrystalClick
       private def self.shadow_shape?(type : String, root : Node) : Bool
         return true if exact_array_map_numeric_shape?(type, root)
         return true if exact_array_map_string_shape?(type, root)
+        return true if exact_array_map_bool_shape?(type, root)
         return true if exact_array_map_string_uint64_shape?(type, root)
         return true if exact_numeric_map_array_shape?(type, root)
         return true if exact_nullable_numeric_map_array_shape?(type, root)
@@ -221,6 +222,27 @@ module CrystalClick
         else
           value.name == "String" && value.children.empty? &&
             type == "Array(Map(#{key.name}, String))"
+        end
+      end
+
+      # W83 adds only exact Bool leaves (plain or nullable) to the existing
+      # one-Array/one-Map profile. Bool is semantic, not a UInt8 alias.
+      private def self.exact_array_map_bool_shape?(type : String, root : Node) : Bool
+        return false unless root.name == "Array" && root.children.size == 1
+        map = root.child(0)
+        return false unless map.name == "Map" && map.children.size == 2
+
+        key = map.child(0)
+        return false unless key.children.empty? && (key.name == "UInt64" || key.name == "String")
+        value = map.child(1)
+        if value.name == "Nullable"
+          return false unless value.children.size == 1
+          leaf = value.child(0)
+          leaf.name == "Bool" && leaf.children.empty? &&
+            type == "Array(Map(#{key.name}, Nullable(Bool)))"
+        else
+          value.name == "Bool" && value.children.empty? &&
+            type == "Array(Map(#{key.name}, Bool))"
         end
       end
 
@@ -362,6 +384,12 @@ module CrystalClick
             append_stream(
               stream_path, leaf_type, semantic_path,
               StreamRole::Value, 1, StorageMode::VariableBytes, bytes_axis
+            )
+          when "Bool"
+            leaf_type = logical_leaf_type || render_type(node)
+            append_stream(
+              stream_path, leaf_type, semantic_path,
+              StreamRole::Value, 1, StorageMode::FixedWidthValues, storage_axis
             )
           when "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"
             leaf_type = logical_leaf_type || render_type(node)

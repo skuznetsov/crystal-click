@@ -2428,6 +2428,57 @@ module CrystalClick
       write_array_map_string_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
+    # W83 admits only exact Bool leaves (plain or BASIC Nullable(Bool)). The
+    # W81 fixed-width emitter is reused for its one-byte payload, but public
+    # admission remains limited to these four exact method signatures.
+    def self.write_uint64_array_map_uint64_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(UInt64, Bool)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_numeric_physical_plan(value_name, "UInt64", "Bool", false)
+      write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
+    end
+
+    def self.write_uint64_array_map_string_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(String, Bool)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_numeric_physical_plan(value_name, "String", "Bool", false)
+      write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
+    end
+
+    def self.write_uint64_array_map_uint64_nullable_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(UInt64, Bool?)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_numeric_physical_plan(value_name, "UInt64", "Bool", true)
+      write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
+    end
+
+    def self.write_uint64_array_map_string_nullable_bool_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Array(Tuple(String, Bool?)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      physical_plan = array_map_numeric_physical_plan(value_name, "String", "Bool", true)
+      write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
+    end
+
     # Write an immutable sorted-key part with exact Map(String, Array(UInt64))
     # values. Ordered tuple arrays preserve duplicate keys and insertion order;
     # size0 counts Map entries while values.size1 counts each entry's Array.
@@ -8497,13 +8548,16 @@ module CrystalClick
       {% unless K == UInt64 || K == String %}
         raise UnsupportedFormatError.new("Array(Map) writer requires UInt64 or String map keys")
       {% end %}
-      {% unless V == UInt8 || V == UInt16 || V == UInt32 || V == UInt64 || V == Int8 || V == Int16 || V == Int32 || V == Int64 || V == Float32 || V == Float64 || (V.union_types.size == 2 && V.union_types.includes?(Nil)) %}
-        raise UnsupportedFormatError.new("Array(Map) writer requires an exact primitive numeric leaf, optionally Nullable")
+      {% unless V == Bool || V == UInt8 || V == UInt16 || V == UInt32 || V == UInt64 || V == Int8 || V == Int16 || V == Int32 || V == Int64 || V == Float32 || V == Float64 || (V.union_types.size == 2 && V.union_types.includes?(Nil)) %}
+        raise UnsupportedFormatError.new("Array(Map) writer requires an exact fixed-width numeric or Bool leaf, optionally Nullable")
       {% end %}
       {% if V.union_types.size == 2 && V.union_types.includes?(Nil) %}
         {% unless (V.union_types - [Nil]).size == 1 %}
-          raise UnsupportedFormatError.new("Array(Map) writer requires an exact Nullable numeric leaf")
+          raise UnsupportedFormatError.new("Array(Map) writer requires an exact Nullable fixed-width leaf")
         {% end %}
+      {% end %}
+      {% if V == Bool || V == Bool? %}
+        raise UnsupportedFormatError.new("Array(Map) Bool values require exact Bool physical semantics") unless type_name == "Bool"
       {% end %}
       {% if K == String %}
         raise UnsupportedFormatError.new("Array(Map) physical plan key kind differs") unless physical_plan.string_keys
@@ -16671,7 +16725,14 @@ module CrystalClick
                 {% else %}
                   write_uint64_le(keys_raw, entry_index * 8, entry[0])
                 {% end %}
-                {% if V.union_types.size == 2 && V.union_types.includes?(Nil) %}
+                {% if V == Bool? %}
+                  if entry[1].nil?
+                    nulls_raw[entry_index] = 1_u8
+                  else
+                    nulls_raw[entry_index] = 0_u8
+                    write_typed_numeric_le(values_raw, entry_index * width, entry[1].not_nil!)
+                  end
+                {% elsif V.union_types.size == 2 && V.union_types.includes?(Nil) %}
                   if leaf = entry[1]
                     nulls_raw[entry_index] = 0_u8
                     write_typed_numeric_le(values_raw, entry_index * width, leaf)
@@ -22159,6 +22220,9 @@ module CrystalClick
         array_map_numeric_substreams_metadata(key_name, value_name, physical_plan),
         logical_streams
       )
+      {% if T == Bool %}
+        validate_staged_array_map_bool_leaf_streams(stage, values, rows_per_mark, physical_plan)
+      {% end %}
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22168,13 +22232,21 @@ module CrystalClick
         expected_mark_rows << rows.to_u64
         actual_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
         actual_rows = {% if K == String %}
-                        {% if V.union_types.size == 2 && V.union_types.includes?(Nil) %}
+                        {% if V == Bool? %}
+                          value_part.read_array_map_string_nullable_bool_mark_range(value_name, mark_index, 1)
+                        {% elsif V == Bool %}
+                          value_part.read_array_map_string_bool_mark_range(value_name, mark_index, 1)
+                        {% elsif V.union_types.size == 2 && V.union_types.includes?(Nil) %}
                           value_part.read_array_map_string_nullable_numeric_mark_range(value_name, mark_index, 1, type_class)
                         {% else %}
                           value_part.read_array_map_string_numeric_mark_range(value_name, mark_index, 1, type_class)
                         {% end %}
                       {% else %}
-                        {% if V.union_types.size == 2 && V.union_types.includes?(Nil) %}
+                        {% if V == Bool? %}
+                          value_part.read_array_map_uint64_nullable_bool_mark_range(value_name, mark_index, 1)
+                        {% elsif V == Bool %}
+                          value_part.read_array_map_uint64_bool_mark_range(value_name, mark_index, 1)
+                        {% elsif V.union_types.size == 2 && V.union_types.includes?(Nil) %}
                           value_part.read_array_map_uint64_nullable_numeric_mark_range(value_name, mark_index, 1, type_class)
                         {% else %}
                           value_part.read_array_map_uint64_numeric_mark_range(value_name, mark_index, 1, type_class)
@@ -22215,6 +22287,115 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged primary-key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged Array(Map) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      nil
+    end
+
+    # W83's Nullable(Bool) reader intentionally preserves NULL without
+    # interpreting the hidden child byte. Verify both Bool streams directly
+    # while the part is still staged so NULL must retain ClickHouse's zero
+    # child placeholder and every non-NULL byte has its canonical encoding.
+    private def self.validate_staged_array_map_bool_leaf_streams(
+      stage : String,
+      values : Slice(Array(Array(Tuple(K, V)))),
+      rows_per_mark : Int32,
+      physical_plan : ArrayMapNumericPhysicalPlan,
+    ) : Nil forall K, V
+      {% unless K == UInt64 || K == String %}
+        raise UnsupportedFormatError.new("Array(Map) Bool staged check requires UInt64 or String keys")
+      {% end %}
+      {% unless V == Bool || V == Bool? %}
+        raise UnsupportedFormatError.new("Array(Map) Bool staged check requires exact Bool or Nullable(Bool)")
+      {% end %}
+
+      streams = physical_plan.streams
+      values_name = streams.last.name
+      values_base = StreamName.hash(values_name)
+      values_data = File.open(File.join(stage, "#{values_base}.bin"), "rb")
+      values_marks = File.open(File.join(stage, "#{values_base}.mrk2"), "rb")
+      nullable = physical_plan.nullable_values
+      nulls_data : File? = nil
+      nulls_marks : File? = nil
+      nulls_name = ""
+      if nullable
+        nulls_name = streams[streams.size - 2].name
+        nulls_base = StreamName.hash(nulls_name)
+        nulls_data = File.open(File.join(stage, "#{nulls_base}.bin"), "rb")
+        nulls_marks = File.open(File.join(stage, "#{nulls_base}.mrk2"), "rb")
+      end
+
+      values_offset = 0_u64
+      nulls_offset = 0_u64
+      start_row = 0
+      begin
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          entries_in_mark = 0_u64
+          rows.times do |row_offset|
+            values[start_row + row_offset].each do |map_entries|
+              entries_in_mark += map_entries.size.to_u64
+            end
+          end
+
+          bool_raw = Bytes.new(entries_in_mark.to_i)
+          null_raw = nullable ? Bytes.new(entries_in_mark.to_i) : Bytes.empty
+          entry_index = 0
+          rows.times do |row_offset|
+            values[start_row + row_offset].each do |map_entries|
+              map_entries.each do |entry|
+                {% if V == Bool? %}
+                  if entry[1].nil?
+                    null_raw[entry_index] = 1_u8
+                    bool_raw[entry_index] = 0_u8
+                  else
+                    null_raw[entry_index] = 0_u8
+                    bool_raw[entry_index] = entry[1].not_nil! ? 1_u8 : 0_u8
+                  end
+                {% else %}
+                  bool_raw[entry_index] = entry[1] ? 1_u8 : 0_u8
+                {% end %}
+                entry_index += 1
+              end
+            end
+          end
+          raise CorruptPartError.new("Array(Map) Bool entry count changed after preflight") unless entry_index.to_u64 == entries_in_mark
+
+          values_offset = validate_staged_tuple_mark(
+            values_data,
+            values_marks,
+            values_name,
+            values_offset,
+            rows.to_u64,
+            bool_raw,
+            omit_empty_frame: true
+          )
+          if nullable
+            nulls_offset = validate_staged_tuple_mark(
+              nulls_data.not_nil!,
+              nulls_marks.not_nil!,
+              nulls_name,
+              nulls_offset,
+              rows.to_u64,
+              null_raw,
+              omit_empty_frame: true
+            )
+          end
+          start_row += rows
+        end
+
+        validate_staged_tuple_sentinel(values_data, values_marks, values_name, values_offset)
+        if nullable
+          validate_staged_tuple_sentinel(nulls_data.not_nil!, nulls_marks.not_nil!, nulls_name, nulls_offset)
+        end
+      ensure
+        values_data.close unless values_data.closed?
+        values_marks.close unless values_marks.closed?
+        if file = nulls_data
+          file.close unless file.closed?
+        end
+        if file = nulls_marks
+          file.close unless file.closed?
+        end
+      end
       nil
     end
 

@@ -1,6 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W82 is admitted only for four exact
+Document status: active design. W83 is admitted only for four exact
+`Array(Map(UInt64|String, Bool|Nullable(Bool)))` declarations on the pinned
+Wide/LZ4/plain-mark profile below. W82 is admitted only for four exact
 `Array(Map(UInt64|String, String|Nullable(String)))` declarations on the
 pinned Wide/LZ4/plain-mark profile below. W81 is admitted only for the closed
 `Array(Map(UInt64|String, T|Nullable(T)))` primitive-numeric family on the
@@ -5159,6 +5161,106 @@ mixed W82 and legacy columns; representative oracle cases do not prove every
 layout or other ClickHouse versions. Evidence decays when pinned stock
 serialization, mark/codec layout, or shared dispatch changes. MV, projections,
 remaining types, and performance remain open.
+
+## W83 admitted frontier: Bool leaves inside bounded Array(Map)
+
+W83 admits paired reader/writer, typed-table, and offline-catalog paths for
+the pinned Wide/LZ4/plain-mark profile. Its exact scope is
+`Array(Map(UInt64, Bool))`,
+`Array(Map(String, Bool))`, `Array(Map(UInt64, Nullable(Bool)))`, and
+`Array(Map(String, Nullable(Bool)))`. Other Map keys or value types, aliases,
+additional container layers, and other part profiles remain rejected. In
+particular, `Array(Map(Int64, Bool))`, `Array(Map(UInt64, UInt8))`,
+`Array(Map(String, Nullable(UInt8)))`,
+`Array(Array(Map(String, Bool)))`, and
+`Array(Map(String, Array(Bool)))` are outside this slice. W80-W82 descriptors
+and behavior must remain unchanged.
+
+The factual anchor is the pinned ClickHouse 26.7.1.1315 stock-only probe with
+five rows, two rows per mark, and a terminal mark. Its fixture includes empty
+outer Arrays and Maps, duplicate keys, false and true values, NULL values,
+and empty/binary String keys. It produced this stream order: `size0`,
+`size1`, optional String `keys.size`, `keys`, optional nullable `values.null`,
+then `values`. The stream axes are table rows for `size0`, outer Map instances
+for `size1`, Map entries for key/value streams, and String bytes only for
+String key payloads. Bool uses one byte per entry (`0` false, `1` true).
+`Nullable(Bool)` stores a null-map byte and a Bool payload byte for every
+entry; NULL is `{null=1, value=0}`. Its observed
+`serialization.json` is `{"columns":[],"propagate_types_serialization_versions_to_nested_types":true,"types_serialization_versions":{"string":1},"version":1}`.
+The four stock fixtures matched expected full and keyed RowBinary, exact raw
+streams, and mark records with rows `[2,2,1,0]`. In all-empty fixtures,
+zero-byte child `.bin` streams retain four marks at compressed/decompressed
+origin. These observations seal the intended physical layout; they do not
+admit a Crystal reader or writer.
+
+The highest-risk bridge is Bool/Nullable(Bool) leaf serialization composed
+with the two nested offset levels. A false/null inversion or incorrect
+placeholder handling can self-round-trip while disagreeing with ClickHouse.
+The stock physical inventory, bytes, mark coordinates, full/keyed RowBinary,
+and empty-child sentinels are the primary discriminator. Any mismatch rejects
+this formulation and keeps W82 as the frontier. The first implementation
+falsifier must also show exact-type admission for only these four declarations
+and rejection of the neighboring shapes above; selected later-mark corruption
+must fail before yielding a row.
+
+Risk is CAUTION because this changes physical serialization and public table
+visibility. Rollback is the isolated W82 commit. DoD requires a pinned
+bidirectional oracle for all four declarations, exact stock/writer stream
+bytes and marks, stock-to-Crystal and Crystal-to-stock full/keyed RowBinary,
+`ATTACH PART` and `CHECK TABLE`, empty-only child streams, negative admission,
+and later-mark corruption before callbacks; focused/debug/release suites,
+unchanged adjacent W80-W82 behavior, and scoped hostile review must pass before
+W83 is marked admitted. Representative oracle rows do not prove other Bool
+layouts or ClickHouse versions. Evidence decays if the pinned stock
+serialization, mark/codec layout, or shared dispatch changes. MV/projections,
+other nested shapes, and performance remain open.
+
+W83 stock-only observation (2026-09-29): all four stock fixtures passed
+full/keyed RowBinary and exact raw-stream checks against the fixture. The
+nullable sample stored `values=00 00 01 00 00 01` alongside
+`values.null=01 00 00 01 00 00`; NULL therefore contributes a physical zero
+payload byte. Populated marks use the expected row boundaries and terminal
+sentinel; all-empty key/value child streams have zero raw bytes and all mark
+coordinates at origin. This anchors the physical layout, not implementation
+admission.
+
+W83 paired implementation observation (2026-09-29): full oracle mode passed
+all four populated stock fixtures and all four all-empty fixtures. It checked
+stock-to-Crystal direct mark reads and typed-table full/keyed RowBinary,
+Crystal-to-stock stream bytes and part metadata followed by `ATTACH PART`,
+`CHECK TABLE`, and full/keyed RowBinary, and the all-empty child sentinel.
+It checked stock mark coordinates exactly and writer coordinates against
+decoded compressed-frame boundaries. Reader mode also rejected a malformed
+later `size1` mark in direct access and typed-table scanning before any
+callback row. Exact admission and neighboring-type rejection, focused
+W34/W82/W83 tests (79 examples), and both full debug and release suites
+(1070 examples each, no failures or errors) passed. Adjacent W80-W82 tests
+(34 examples), the pinned W80-W82 full-mode oracles, and the scoped hostile
+review found no blocker; its verdict is ROBUST for this exact profile. The
+W83 full and reader-only oracles and both complete suites were also rerun
+independently by the primary agent. This is not admission for
+other Bool compositions, other ClickHouse versions or part formats, or
+MV/projection semantics.
+
+Reproduction on this host (each mode uses its own fresh temporary root):
+
+```sh
+oracle_root=$(mktemp -d /private/tmp/crystal-click-array-map-bool-w83.XXXXXX)
+mkdir -p "$oracle_root/store"
+CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse CLICKHOUSE_STORE="$oracle_root/store" ORACLE_ROOT="$oracle_root" CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w83-oracle-cache W83_ORACLE_MODE=stock crystal run --link-flags='-fuse-ld=ld' scripts/check_array_map_bool_values_w83_oracle.cr
+
+oracle_root=$(mktemp -d /private/tmp/crystal-click-array-map-bool-w83.XXXXXX)
+mkdir -p "$oracle_root/store"
+CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse CLICKHOUSE_STORE="$oracle_root/store" ORACLE_ROOT="$oracle_root" CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w83-oracle-cache W83_ORACLE_MODE=full crystal run -D w83_reader -D w83_writer --link-flags='-fuse-ld=ld' scripts/check_array_map_bool_values_w83_oracle.cr
+
+oracle_root=$(mktemp -d /private/tmp/crystal-click-array-map-bool-w83.XXXXXX)
+mkdir -p "$oracle_root/store"
+CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse CLICKHOUSE_STORE="$oracle_root/store" ORACLE_ROOT="$oracle_root" CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w83-oracle-cache W83_ORACLE_MODE=reader crystal run -D w83_reader --link-flags='-fuse-ld=ld' scripts/check_array_map_bool_values_w83_oracle.cr
+```
+
+The `--link-flags='-fuse-ld=ld'` option selects Apple ld for this host's
+Crystal/Xcode SDK combination; the oracle itself checks the pinned ClickHouse
+version.
 
 ## Rejected and guard-only surfaces
 
