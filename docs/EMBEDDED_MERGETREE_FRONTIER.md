@@ -4971,6 +4971,71 @@ and judged this exact surface ROBUST. These checks do not admit arbitrary
 recursive Maps, other ClickHouse versions or layouts, MV/projection
 semantics, or any memory/performance claim.
 
+## W80 design frontier: Array of String-to-UInt64 Maps
+
+W80 tests the first `Array(Map(...))` composition, initially the exact
+`Array(Map(String, UInt64))` declaration beside a sorted `UInt64` key. This
+is a type-compatibility step, not a memory or performance optimization. A
+successful syntax parse or physical shadow plan does not admit a reader or
+writer. Other key/value types, nullable containers, further nesting, and
+alternate ClickHouse physical layouts remain rejected until separately
+verified. Existing exact Map/Array admissions must remain unchanged.
+
+The factual anchor is a stock ClickHouse 26.7.1.1315 Wide/LZ4/plain-`.mrk2`
+part that passed `CHECK TABLE`. Its payload stream order is
+`payload.size0`, `payload.size1`, `payload%2Ekeys.size`,
+`payload%2Ekeys`, `payload%2Evalues`. The current shadow builder hardcodes
+Map's `.size0`, so nesting it below Array would collide with the outer
+Array `.size0`; the nested offset depth must be carried through Map lowering.
+The reader and writer currently dispatch by exact shapes, so the plan alone
+cannot establish operational support.
+
+Risk is CAUTION: a plausible but wrong inner offset or key-size mark can
+shift later rows while leaving stream checksums valid, and a Crystal
+self-read does not establish stock-server compatibility. The first falsifier
+is a RED plan test for distinct `.size0` and `.size1` streams with their
+table-row, outer-element, map-entry, and key-byte axes. Then a stock-written
+part must fail typed admission before implementation. The bounded build will
+use the depth-aware physical plan for stream naming/cardinality while keeping
+codec admission explicit; reader and writer must agree on exact rows and
+ordered Map entries, including empty Arrays, empty Maps, duplicate keys,
+empty and binary String keys, zero UInt64 values, selected later marks, and
+terminal marks. Fail before yielding an affected mark on malformed nested
+offset, key-size, or physical extent.
+
+DoD: the RED probes turn green; a pinned bidirectional oracle checks stock
+stream inventory, all `.mrk2` coordinates and terminal sentinel, metadata,
+stock-to-Crystal full/keyed RowBinary, and Crystal-to-stock `ATTACH PART`,
+`CHECK TABLE`, and full/keyed RowBinary; focused corruption tests exercise
+later-mark cardinality failure; adjacent exact type oracles and full debug
+and release suites pass; a hostile review finds no unresolved in-scope
+falsifier. Rollback is the isolated W80 commit. Evidence decays if pinned
+ClickHouse nested serialization, codec/mark layout, or shared type dispatch
+changes. This slice does not prove arbitrary recursive types, MV/projection
+semantics, or a speed target. Complete type coverage and MV/projections
+before beginning optimization.
+
+W80 observed evidence: the pinned ClickHouse 26.7.1.1315 bidirectional oracle
+passed exact stream/mark/metadata checks, stock-to-Crystal full and keyed
+RowBinary, and Crystal-to-stock `ATTACH PART`, `CHECK TABLE`, and full and
+keyed RowBinary. It covered duplicate and binary String keys, empty inner
+Maps and outer Arrays, a middle empty mark, and a terminal empty mark at
+nonzero child-stream EOF. Focused tests rejected a shifted later inner-offset
+mark before any row callback and preserved `UnsupportedFormatError` for a
+checksum-valid non-LZ4 frame header. Adjacent W73, W78, and W79 pinned
+oracles passed. The full debug and release suites each passed 1041 examples
+with zero failures, errors, or pending tests using `-fuse-ld=ld`; Crystal
+formatting, shell syntax, and `git diff --check` also passed.
+
+The bounded hostile review found no overflow or out-of-bounds path in the
+new frame-checksum discriminator but identified a P2 error-classification
+limit: an adversarial frame-like byte sequence inside an existing frame could
+make a corrupt interior mark appear to have an unsupported codec. The reader
+still rejects it before returning rows. W80 therefore establishes exact
+read/write compatibility and fail-closed behavior for the tested physical
+layout, not perfect classification of arbitrary corrupt offsets, other
+ClickHouse versions, or general recursive Array/Map support.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,

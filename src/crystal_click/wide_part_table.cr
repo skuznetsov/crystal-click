@@ -377,6 +377,7 @@ module CrystalClick
     @map_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64))))
     @map_string_uint64_values : Hash(String, Slice(Array(Tuple(String, UInt64))))
     @map_string_array_uint64_values : Hash(String, Slice(Array(Tuple(String, Array(UInt64)))))
+    @array_map_string_uint64_values : Hash(String, Slice(Array(Array(Tuple(String, UInt64)))))
     @map_string_array_nullable_uint64_values : Hash(String, Slice(Array(Tuple(String, Array(UInt64?)))))
     @map_string_array_nullable_string_values : Hash(String, Slice(Array(Tuple(String, Array(String?)))))
     @map_uint64_array_nullable_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, Array(UInt64?)))))
@@ -435,6 +436,7 @@ module CrystalClick
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
       @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
       @map_string_array_uint64_values = Hash(String, Slice(Array(Tuple(String, Array(UInt64))))).new
+      @array_map_string_uint64_values = Hash(String, Slice(Array(Array(Tuple(String, UInt64))))).new
       @map_string_array_nullable_uint64_values = Hash(String, Slice(Array(Tuple(String, Array(UInt64?))))).new
       @map_string_array_nullable_string_values = Hash(String, Slice(Array(Tuple(String, Array(String?))))).new
       @map_uint64_array_nullable_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, Array(UInt64?))))).new
@@ -495,6 +497,7 @@ module CrystalClick
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
       @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
       @map_string_array_uint64_values = Hash(String, Slice(Array(Tuple(String, Array(UInt64))))).new
+      @array_map_string_uint64_values = Hash(String, Slice(Array(Array(Tuple(String, UInt64))))).new
       @map_string_array_nullable_uint64_values = Hash(String, Slice(Array(Tuple(String, Array(UInt64?))))).new
       @map_string_array_nullable_string_values = Hash(String, Slice(Array(Tuple(String, Array(String?))))).new
       @map_uint64_array_nullable_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, Array(UInt64?))))).new
@@ -555,6 +558,7 @@ module CrystalClick
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
       @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
       @map_string_array_uint64_values = Hash(String, Slice(Array(Tuple(String, Array(UInt64))))).new
+      @array_map_string_uint64_values = Hash(String, Slice(Array(Array(Tuple(String, UInt64))))).new
       @map_string_array_nullable_uint64_values = Hash(String, Slice(Array(Tuple(String, Array(UInt64?))))).new
       @map_string_array_nullable_string_values = Hash(String, Slice(Array(Tuple(String, Array(String?))))).new
       @map_uint64_array_nullable_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, Array(UInt64?))))).new
@@ -625,6 +629,7 @@ module CrystalClick
       @map_uint64_array_string_values : Hash(String, Slice(Array(Tuple(UInt64, Array(String))))) = Hash(String, Slice(Array(Tuple(UInt64, Array(String))))).new,
       map_uint64_numeric_values : Hash(String, WidePartNumericMapSliceBase) = Hash(String, WidePartNumericMapSliceBase).new,
       map_string_numeric_values : Hash(String, WidePartNumericMapSliceBase) = Hash(String, WidePartNumericMapSliceBase).new,
+      array_map_string_uint64_values : Hash(String, Slice(Array(Array(Tuple(String, UInt64))))) = Hash(String, Slice(Array(Array(Tuple(String, UInt64))))).new,
     )
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
@@ -641,6 +646,7 @@ module CrystalClick
       @array_nullable_string_values = array_nullable_string_values
       @map_string_uint64_values = map_string_uint64_values
       @map_string_array_uint64_values = map_string_array_uint64_values
+      @array_map_string_uint64_values = array_map_string_uint64_values
       @map_string_array_nullable_uint64_values = map_string_array_nullable_uint64_values
       @map_uint64_array_nullable_uint64_values = map_uint64_array_nullable_uint64_values
       @map_string_string_values = map_string_string_values
@@ -1595,6 +1601,12 @@ module CrystalClick
       @map_string_array_uint64_values[column]? || raise(UnsupportedFormatError.new("Map column was not materialized in this batch"))
     end
 
+    def array_map_string_uint64s_for(column : String) : Slice(Array(Array(Tuple(String, UInt64))))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Map) accessor requires an exact Array(Map(String, UInt64)) column") unless @column_types[index] == "Array(Map(String, UInt64))"
+      @array_map_string_uint64_values[column]? || raise(UnsupportedFormatError.new("Array(Map) column was not materialized in this batch"))
+    end
+
     def map_string_array_nullable_uint64s_for(column : String) : Slice(Array(Tuple(String, Array(UInt64?))))
       index = column_index(column)
       raise UnsupportedFormatError.new("Map accessor requires an exact Map(String, Array(Nullable(UInt64))) column") unless WidePart.supports_map_string_array_nullable_uint64_type?(@column_types[index])
@@ -2120,6 +2132,8 @@ module CrystalClick
             preflight_map_string_uint64_charge_bytes = Hash(String, UInt64).new
             preflight_map_string_array_uint64_payload_bytes = Hash(String, UInt64).new
             preflight_map_string_array_uint64_charge_bytes = Hash(String, UInt64).new
+            preflight_array_map_string_uint64_payload_bytes = Hash(String, UInt64).new
+            preflight_array_map_string_uint64_charge_bytes = Hash(String, UInt64).new
             preflight_map_string_array_nullable_uint64_payload_bytes = Hash(String, UInt64).new
             preflight_map_string_array_nullable_uint64_charge_bytes = Hash(String, UInt64).new
             preflight_map_string_array_nullable_string_payload_bytes = Hash(String, UInt64).new
@@ -2165,6 +2179,13 @@ module CrystalClick
                 raw_bytes, charge_bytes = selected.reader.variant_bool_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
                 preflight_variant_bool_string_uint64_raw_bytes[selected.name] = raw_bytes
                 preflight_variant_bool_string_uint64_charge_bytes[selected.name] = charge_bytes
+                bytes = charge_bytes
+              elsif selected.column_type == "Array(Map(String, UInt64))"
+                preflight = selected.reader.array_map_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
+                payload_bytes = preflight[:payload_bytes]
+                charge_bytes = preflight[:charge_bytes]
+                preflight_array_map_string_uint64_payload_bytes[selected.name] = payload_bytes
+                preflight_array_map_string_uint64_charge_bytes[selected.name] = charge_bytes
                 bytes = charge_bytes
               elsif plan = WideTypePlan.admitted(selected.column_type)
                 bytes = case plan.shape
@@ -2498,6 +2519,7 @@ module CrystalClick
             map_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
             map_string_uint64_values = Hash(String, Array(Array(Tuple(String, UInt64)))).new
             map_string_array_uint64_values = Hash(String, Array(Array(Tuple(String, Array(UInt64))))).new
+            array_map_string_uint64_values = Hash(String, Array(Array(Array(Tuple(String, UInt64))))).new
             map_string_array_nullable_uint64_values = Hash(String, Array(Array(Tuple(String, Array(UInt64?))))).new
             map_string_array_nullable_string_values = Hash(String, Array(Array(Tuple(String, Array(String?))))).new
             map_uint64_array_nullable_uint64_values = Hash(String, Array(Array(Tuple(UInt64, Array(UInt64?))))).new
@@ -3316,6 +3338,51 @@ module CrystalClick
                 raise CorruptPartError.new("selected Map mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 map_string_uint64_values[selected.name] = values
+              when "Array(Map(String, UInt64))"
+                values = selected.reader.read_array_map_string_uint64_mark_range(selected.name, mark_index, 1)
+                raise CorruptPartError.new("selected Array(Map) mark row count changed") unless values.size.to_u64 == mark_rows
+                maps = 0_u64
+                entries = 0_u64
+                key_bytes = 0_u64
+                values.each do |row|
+                  raise CorruptPartError.new("selected Array(Map) map count exceeds materialization limit") if row.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - maps
+                  maps += row.size.to_u64
+                  row.each do |map|
+                    raise CorruptPartError.new("selected Array(Map) entry count exceeds materialization limit") if map.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - entries
+                    entries += map.size.to_u64
+                    map.each do |key, _value|
+                      bytes = key.bytesize.to_u64
+                      raise CorruptPartError.new("selected Array(Map) key bytes exceed materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - key_bytes
+                      key_bytes += bytes
+                    end
+                  end
+                end
+                raise CorruptPartError.new("selected Array(Map) value bytes overflow") if entries > UInt64::MAX // 8_u64
+                value_bytes = entries * 8_u64
+                raise CorruptPartError.new("selected Array(Map) value bytes exceed materialization limit") if value_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64
+                raise CorruptPartError.new("selected Array(Map) payload bytes overflow") if value_bytes > UInt64::MAX - key_bytes
+                payload_bytes = key_bytes + value_bytes
+                expected_payload_bytes = preflight_array_map_string_uint64_payload_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Map) payload was not preflighted"))
+                raise CorruptPartError.new("selected Array(Map) payload differs from preflight") unless payload_bytes == expected_payload_bytes
+                charge_bytes = preflight_array_map_string_uint64_charge_bytes[selected.name]? || raise(CorruptPartError.new("selected Array(Map) charge was not preflighted"))
+                row_width = WidePart::ARRAY_MAP_ROW_ACCOUNTING_BYTES
+                map_width = WidePart::ARRAY_MAP_CONTAINER_ACCOUNTING_BYTES
+                entry_width = WidePart::ARRAY_TUPLE_ENTRY_ACCOUNTING_BYTES
+                if mark_rows > UInt64::MAX // row_width || maps > UInt64::MAX // map_width || entries > UInt64::MAX // entry_width
+                  raise CorruptPartError.new("selected Array(Map) materialization charge overflows")
+                end
+                row_bytes = mark_rows * row_width
+                map_bytes = maps * map_width
+                entry_bytes = entries * entry_width
+                if map_bytes > UInt64::MAX - row_bytes || entry_bytes > UInt64::MAX - row_bytes - map_bytes ||
+                   payload_bytes > UInt64::MAX - row_bytes - map_bytes - entry_bytes
+                  raise CorruptPartError.new("selected Array(Map) materialization charge overflows")
+                end
+                actual_charge_bytes = row_bytes + map_bytes + entry_bytes + payload_bytes
+                raise CorruptPartError.new("selected Array(Map) charge differs from preflight") unless actual_charge_bytes == charge_bytes
+                raise CorruptPartError.new("selected Array(Map) mark exceeds aggregate materialization limit") if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += charge_bytes
+                array_map_string_uint64_values[selected.name] = values
               when "Map(String, Array(UInt64))"
                 values = selected.reader.read_map_string_array_uint64_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Map mark row count changed") unless values.size.to_u64 == mark_rows
@@ -3828,6 +3895,7 @@ module CrystalClick
               map_uint64_uint64_slices = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
               map_string_uint64_slices = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
               map_string_array_uint64_slices = Hash(String, Slice(Array(Tuple(String, Array(UInt64))))).new
+              array_map_string_uint64_slices = Hash(String, Slice(Array(Array(Tuple(String, UInt64))))).new
               map_string_array_nullable_uint64_slices = Hash(String, Slice(Array(Tuple(String, Array(UInt64?))))).new
               map_string_array_nullable_string_slices = Hash(String, Slice(Array(Tuple(String, Array(String?))))).new
               map_uint64_array_nullable_uint64_slices = Hash(String, Slice(Array(Tuple(UInt64, Array(UInt64?))))).new
@@ -3915,6 +3983,8 @@ module CrystalClick
                   map_string_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = map_string_array_uint64_values[selected.name]?
                   map_string_array_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = array_map_string_uint64_values[selected.name]?
+                  array_map_string_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = map_string_array_nullable_uint64_values[selected.name]?
                   map_string_array_nullable_uint64_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = map_string_array_nullable_string_values[selected.name]?
@@ -4005,7 +4075,8 @@ module CrystalClick
                 map_string_array_string_values: map_string_array_string_slices,
                 map_uint64_array_string_values: map_uint64_array_string_slices,
                 map_uint64_numeric_values: numeric_map_uint64_slices,
-                map_string_numeric_values: numeric_map_string_slices
+                map_string_numeric_values: numeric_map_string_slices,
+                array_map_string_uint64_values: array_map_string_uint64_slices
               )
               yield batch
               mark_row_offset &+= size.to_u64

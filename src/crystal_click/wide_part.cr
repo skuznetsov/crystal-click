@@ -45,6 +45,58 @@ module CrystalClick
     # Array header for every Map entry, including entries whose Array is empty.
     MAP_ARRAY_UINT64_CONTAINER_ACCOUNTING_BYTES = 24_u64
 
+    # W80 nested Array(Map) accounting: one outer array per table row, one
+    # Map-entry array per inner map (including empty maps), and one tuple per
+    # entry. This is a conservative batch charge, not a heap-size estimate.
+    ARRAY_MAP_ROW_ACCOUNTING_BYTES       = NUMERIC_MAP_ROW_ACCOUNTING_BYTES
+    ARRAY_MAP_CONTAINER_ACCOUNTING_BYTES = 24_u64
+
+    private struct ArrayMapStringUInt64Streams
+      getter outer_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter map_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter key_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter keys : WideTypePlan::WidePhysicalPlanShadow::Stream
+      getter values : WideTypePlan::WidePhysicalPlanShadow::Stream
+
+      def initialize(
+        @outer_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @map_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @key_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @keys : WideTypePlan::WidePhysicalPlanShadow::Stream,
+        @values : WideTypePlan::WidePhysicalPlanShadow::Stream,
+      )
+      end
+    end
+
+    private struct ArrayMapStringUInt64Preflight
+      getter streams : ArrayMapStringUInt64Streams
+      getter outer_sizes : Array(UInt64)
+      getter map_sizes : Array(UInt64)
+      getter key_sizes : Array(UInt64)
+      getter rows : UInt64
+      getter maps : UInt64
+      getter entries : UInt64
+      getter key_bytes : UInt64
+      getter value_bytes : UInt64
+      getter payload_bytes : UInt64
+      getter charge_bytes : UInt64
+
+      def initialize(
+        @streams : ArrayMapStringUInt64Streams,
+        @outer_sizes : Array(UInt64),
+        @map_sizes : Array(UInt64),
+        @key_sizes : Array(UInt64),
+        @rows : UInt64,
+        @maps : UInt64,
+        @entries : UInt64,
+        @key_bytes : UInt64,
+        @value_bytes : UInt64,
+        @payload_bytes : UInt64,
+        @charge_bytes : UInt64,
+      )
+      end
+    end
+
     # Bounded Variant table accounting: one union slot per row.
     # This is conservative batch accounting, not an exact heap measurement.
     VARIANT_STRING_UINT64_ROW_ACCOUNTING_BYTES      = 64_u64
@@ -919,6 +971,10 @@ module CrystalClick
       !array_element_stream_names("payload", type).nil?
     end
 
+    def self.supports_array_map_string_uint64_type?(type : String) : Bool
+      type == WideTypePlan::TYPE_ARRAY_MAP_STRING_UINT64
+    end
+
     # Return child-level physical streams for the intentionally small Array
     # grammar. Array itself contributes size0; callers compose it with these
     # streams instead of inferring arbitrary nested type syntax.
@@ -1240,7 +1296,8 @@ module CrystalClick
         supports_numeric_map_array_type?(type) ||
         supports_nullable_numeric_map_array_type?(type) ||
         supports_nullable_numeric_map_type?(type) ||
-        supports_map_string_uint64_type?(type) || supports_map_string_array_uint64_type?(type) ||
+        supports_map_string_uint64_type?(type) || supports_array_map_string_uint64_type?(type) ||
+        supports_map_string_array_uint64_type?(type) ||
         supports_map_string_array_nullable_uint64_type?(type) || supports_map_string_array_nullable_string_type?(type) ||
         supports_map_string_string_type?(type) ||
         supports_map_uint64_array_nullable_uint64_type?(type) || supports_map_uint64_array_nullable_string_type?(type) ||
@@ -6973,8 +7030,10 @@ module CrystalClick
       flat_elements : UInt64,
       outer_rows : UInt64,
       mark_flat_elements : Array(UInt64),
+      size_stream_name : String? = nil,
+      raw_stream_name : String? = nil,
     ) : {Array(UInt64), UInt64, Array(UInt64)}
-      size_stream = @streams["#{column}#{child_path}.size"]
+      size_stream = @streams[size_stream_name || "#{column}#{child_path}.size"]
       size_start, size_end, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
       size_rows_error = child_label == "Map nested" ? "Map value-size substream mark rows differ" : "#{child_label} size substream mark rows differ"
       raise CorruptPartError.new(size_rows_error) unless size_rows == outer_rows
@@ -6990,7 +7049,7 @@ module CrystalClick
       mark_totals = Array(UInt64).new(mark_count)
       total_bytes = 0_u64
       offset = 0
-      raw_stream = @streams["#{column}#{child_path}"]
+      raw_stream = @streams[raw_stream_name || "#{column}#{child_path}"]
       _, _, raw_rows = checked_stream_mark_range(raw_stream, first_mark, mark_count)
       raw_rows_error = child_label == "Map nested" ? "Map value substream mark rows differ" : "#{child_label} raw substream mark rows differ"
       raise CorruptPartError.new(raw_rows_error) unless raw_rows == outer_rows
@@ -7194,6 +7253,220 @@ module CrystalClick
         raise CorruptPartError.new("Map materialization charge exceeds per-range limit")
       end
       charge_bytes
+    end
+
+    # W80's physical plan supplies the exact child stream names and axes.
+    # Keep this bridge exact: it is not a generic nested Map dispatcher.
+    private def array_map_string_uint64_streams(column : String) : ArrayMapStringUInt64Streams
+      plan = WideTypePlan::WidePhysicalPlanShadow.for_type(@column_type, column) ||
+             raise UnsupportedFormatError.new("no physical plan for exact Array(Map(String, UInt64)) column")
+      descriptors = plan.streams
+      raise UnsupportedFormatError.new("unexpected Array(Map(String, UInt64)) physical plan") unless descriptors.size == 5
+
+      outer_sizes = descriptors.find do |stream|
+        stream.role.array_size0? && stream.semantic_path.empty?
+      end || raise UnsupportedFormatError.new("physical plan omits the outer Array offsets")
+      map_sizes = descriptors.find do |stream|
+        stream.role.array_size1? && stream.semantic_path.empty?
+      end || raise UnsupportedFormatError.new("physical plan omits the Map offsets")
+      key_sizes = descriptors.find do |stream|
+        stream.role.string_size? && stream.semantic_path == ["keys"]
+      end || raise UnsupportedFormatError.new("physical plan omits String key sizes")
+      keys = descriptors.find do |stream|
+        stream.role.value? && stream.semantic_path == ["keys"]
+      end || raise UnsupportedFormatError.new("physical plan omits String key data")
+      values = descriptors.find do |stream|
+        stream.role.value? && stream.semantic_path == ["values"]
+      end || raise UnsupportedFormatError.new("physical plan omits UInt64 values")
+
+      unless outer_sizes.cardinality_parent_axis.try(&.id) == plan.mark_row_axis.id &&
+             outer_sizes.cardinality_child_axis.try(&.kind).try(&.array_elements?) &&
+             map_sizes.cardinality_parent_axis.try(&.id) == outer_sizes.cardinality_child_axis.try(&.id) &&
+             map_sizes.cardinality_child_axis.try(&.kind).try(&.map_entries?) &&
+             key_sizes.cardinality_parent_axis.try(&.id) == map_sizes.cardinality_child_axis.try(&.id) &&
+             key_sizes.cardinality_child_axis.try(&.kind).try(&.string_bytes?) &&
+             keys.storage_axis.id == key_sizes.cardinality_child_axis.try(&.id) &&
+             values.storage_axis.id == map_sizes.cardinality_child_axis.try(&.id)
+        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) physical axes are inconsistent")
+      end
+      unless descriptors.all? { |stream| stream.mark_row_axis.id == plan.mark_row_axis.id }
+        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) physical mark axis is inconsistent")
+      end
+
+      ArrayMapStringUInt64Streams.new(outer_sizes, map_sizes, key_sizes, keys, values)
+    end
+
+    private def array_map_string_uint64_stream_may_be_empty?(column : String, stream_name : String) : Bool
+      plan = WideTypePlan::WidePhysicalPlanShadow.for_type(@column_type, column) || return false
+      descriptor = plan.streams.find(&.name.==(stream_name)) || return false
+      descriptor.storage_axis.kind != WideTypePlan::WidePhysicalPlanShadow::AxisKind::TableRows
+    end
+
+    private def validate_array_map_string_uint64_mark_rows(
+      streams : ArrayMapStringUInt64Streams,
+      first_mark : Int,
+      mark_count : Int,
+      rows : UInt64,
+    ) : Nil
+      [streams.outer_sizes, streams.map_sizes, streams.key_sizes, streams.keys, streams.values].each do |descriptor|
+        stream = @streams[descriptor.name]
+        _, _, stream_rows = checked_stream_mark_range(stream, first_mark, mark_count)
+        raise CorruptPartError.new("Array(Map(String, UInt64)) child mark rows differ") unless stream_rows == rows
+        mark_count.times do |range_mark_index|
+          mark_index = first_mark + range_mark_index
+          expected_rows = @streams[streams.outer_sizes.name].marks[mark_index].rows
+          unless stream.marks[mark_index].rows == expected_rows
+            raise CorruptPartError.new("Array(Map(String, UInt64)) child mark rows differ")
+          end
+        end
+      end
+      nil
+    end
+
+    private def checked_array_map_string_uint64_charge(
+      payload_bytes : UInt64,
+      maps : UInt64,
+      entries : UInt64,
+      rows : UInt64,
+    ) : UInt64
+      row_width = ARRAY_MAP_ROW_ACCOUNTING_BYTES
+      map_width = ARRAY_MAP_CONTAINER_ACCOUNTING_BYTES
+      entry_width = ARRAY_TUPLE_ENTRY_ACCOUNTING_BYTES
+      if rows > UInt64::MAX // row_width || maps > UInt64::MAX // map_width || entries > UInt64::MAX // entry_width
+        raise CorruptPartError.new("Array(Map(String, UInt64)) materialization charge overflows")
+      end
+      row_bytes = rows * row_width
+      map_bytes = maps * map_width
+      entry_bytes = entries * entry_width
+      if map_bytes > UInt64::MAX - row_bytes || entry_bytes > UInt64::MAX - row_bytes - map_bytes ||
+         payload_bytes > UInt64::MAX - row_bytes - map_bytes - entry_bytes
+        raise CorruptPartError.new("Array(Map(String, UInt64)) materialization charge overflows")
+      end
+      charge_bytes = row_bytes + map_bytes + entry_bytes + payload_bytes
+      if charge_bytes > MAX_ARRAY_MARK_BYTES.to_u64
+        raise CorruptPartError.new("Array(Map(String, UInt64)) materialization charge exceeds per-range limit")
+      end
+      charge_bytes
+    end
+
+    private def array_map_string_uint64_preflight(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : ArrayMapStringUInt64Preflight
+      ensure_column(column)
+      unless WidePart.supports_array_map_string_uint64_type?(@column_type)
+        raise UnsupportedFormatError.new("Array(Map) accessor requires the exact Array(Map(String, UInt64)) declaration")
+      end
+
+      streams = array_map_string_uint64_streams(column)
+      outer_sizes, maps, rows, mark_maps = read_array_outer_sizes(
+        column, first_mark, mark_count, streams.outer_sizes.name
+      )
+      validate_array_map_string_uint64_mark_rows(streams, first_mark, mark_count, rows)
+
+      map_sizes, entries, mark_entries = read_array_array_numeric_element_sizes(
+        column, first_mark, mark_count, maps, rows, mark_maps, 8, streams.map_sizes.name
+      )
+      unless map_sizes.size.to_u64 == maps
+        raise CorruptPartError.new("Array(Map(String, UInt64)) map offsets do not match outer Array size")
+      end
+
+      key_sizes, key_bytes, key_mark_bytes = read_map_string_child_sizes(
+        column,
+        "%2Ekeys",
+        "Array(Map) key",
+        first_mark,
+        mark_count,
+        entries,
+        rows,
+        mark_entries,
+        streams.key_sizes.name,
+        streams.keys.name
+      )
+      unless key_sizes.size.to_u64 == entries
+        raise CorruptPartError.new("Array(Map(String, UInt64)) key sizes do not match Map offsets")
+      end
+
+      values_stream = @streams[streams.values.name]
+      _, _, values_rows = checked_stream_mark_range(values_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Array(Map(String, UInt64)) values mark rows differ") unless values_rows == rows
+      validate_array_nested_stream_marks(values_stream, first_mark, mark_entries, 8)
+      value_bytes = checked_array_mark_byte_count(entries, 8).to_u64
+      value_mark_bytes = mark_entries.map { |mark_count| checked_array_mark_byte_count(mark_count, 8).to_u64 }
+      payload_bytes = checked_map_materialized_bytes(key_bytes, value_bytes, key_mark_bytes, value_mark_bytes)
+      charge_bytes = checked_array_map_string_uint64_charge(payload_bytes, maps, entries, rows)
+
+      ArrayMapStringUInt64Preflight.new(
+        streams, outer_sizes, map_sizes, key_sizes, rows, maps, entries,
+        key_bytes, value_bytes, payload_bytes, charge_bytes
+      )
+    end
+
+    # Report just retained key/value payload and a conservative object charge;
+    # offset and String-size streams are validated but excluded from payload_bytes.
+    def array_map_string_uint64_mark_range_materialization_preflight(
+      column : String,
+      start_mark : Int,
+      mark_count : Int,
+    ) : {payload_bytes: UInt64, charge_bytes: UInt64}
+      preflight = array_map_string_uint64_preflight(column, start_mark, mark_count)
+      {payload_bytes: preflight.payload_bytes, charge_bytes: preflight.charge_bytes}
+    end
+
+    # Read rows of Arrays of ordered Maps while preserving duplicate keys and
+    # arbitrary String key bytes. Full selected-range validation and charge
+    # checks complete before any returned object graph is constructed.
+    def read_array_map_string_uint64_mark_range(
+      column : String,
+      start_mark : Int,
+      mark_count : Int,
+    ) : Array(Array(Array(Tuple(String, UInt64))))
+      preflight = array_map_string_uint64_preflight(column, start_mark, mark_count)
+
+      keys_stream = @streams[preflight.streams.keys.name]
+      keys_start, keys_end, _ = checked_stream_mark_range(keys_stream, start_mark, mark_count)
+      key_bytes = read_mark_range_bytes(keys_stream, keys_start, keys_end, preflight.key_bytes.to_i, 1)
+      values_stream = @streams[preflight.streams.values.name]
+      values_start, values_end, _ = checked_stream_mark_range(values_stream, start_mark, mark_count)
+      value_bytes = read_mark_range_bytes(values_stream, values_start, values_end, preflight.value_bytes.to_i, 8)
+
+      result = Array(Array(Array(Tuple(String, UInt64)))).new(preflight.rows.to_i)
+      map_offset = 0
+      entry_offset = 0
+      key_offset = 0
+      value_offset = 0
+      preflight.outer_sizes.each do |map_count|
+        row = Array(Array(Tuple(String, UInt64))).new(map_count.to_i)
+        map_count.to_i.times do
+          raise CorruptPartError.new("Array(Map) outer sizes exceed selected Map offsets") if map_offset >= preflight.map_sizes.size
+          entry_count = preflight.map_sizes[map_offset].to_i
+          map = Array(Tuple(String, UInt64)).new(entry_count)
+          entry_count.times do
+            raise CorruptPartError.new("Array(Map) offsets exceed selected key sizes") if entry_offset >= preflight.key_sizes.size
+            key_length = preflight.key_sizes[entry_offset].to_i
+            if key_offset > key_bytes.size || key_length > key_bytes.size - key_offset
+              raise CorruptPartError.new("Array(Map) key sizes exceed selected raw bytes")
+            end
+            if value_offset > value_bytes.size - 8
+              raise CorruptPartError.new("Array(Map) values exceed selected payload bytes")
+            end
+            map << {String.new(key_bytes[key_offset, key_length]), u64(value_bytes, value_offset)}
+            key_offset += key_length
+            value_offset += 8
+            entry_offset += 1
+          end
+          row << map
+          map_offset += 1
+        end
+        result << row
+      end
+      unless map_offset == preflight.map_sizes.size && entry_offset.to_u64 == preflight.entries
+        raise CorruptPartError.new("Array(Map) offsets do not consume selected Map entries")
+      end
+      raise CorruptPartError.new("Array(Map) key lengths do not consume selected raw bytes") unless key_offset == key_bytes.size
+      raise CorruptPartError.new("Array(Map) sizes do not consume selected value bytes") unless value_offset == value_bytes.size
+      result
     end
 
     private def numeric_map_preflight(
@@ -9033,6 +9306,9 @@ module CrystalClick
         if (variant_plan || dynamic_string) && compressed_marks
           raise UnsupportedFormatError.new("Variant and Dynamic require plain .mrk2 marks")
         end
+        if WidePart.supports_array_map_string_uint64_type?(@column_type) && compressed_marks
+          raise UnsupportedFormatError.new("Array(Map(String, UInt64)) requires plain .mrk2 marks")
+        end
         data_size = File.size(data_path)
         raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
         if dynamic_string && (stream_name == "#{@column}.SharedVariant.size" || stream_name == "#{@column}.SharedVariant") && data_size != 0
@@ -9050,6 +9326,8 @@ module CrystalClick
                                  elsif WidePart.supports_array_type?(@column_type)
                                    stream_name != "#{@column}.size0" &&
                                      WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream_name)
+                                 elsif WidePart.supports_array_map_string_uint64_type?(@column_type)
+                                   array_map_string_uint64_stream_may_be_empty?(@column, stream_name)
                                  elsif WidePart.map_string_numeric_value_type(@column_type)
                                    stream_name == "#{@column}%2Ekeys.size" || stream_name == "#{@column}%2Ekeys" ||
                                      stream_name == "#{@column}%2Evalues"
@@ -9214,8 +9492,10 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if (WidePart.supports_variant_type?(column_type) || column_type == "Dynamic") && codec != "CODEC(LZ4)"
-        raise UnsupportedFormatError.new("Variant and Dynamic require CODEC(LZ4)")
+      if (WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" ||
+         WidePart.supports_array_map_string_uint64_type?(column_type)) && codec != "CODEC(LZ4)"
+        message = WidePart.supports_array_map_string_uint64_type?(column_type) ? "Array(Map(String, UInt64)) requires CODEC(LZ4)" : "Variant and Dynamic require CODEC(LZ4)"
+        raise UnsupportedFormatError.new(message)
       end
       row_count = parse_count_file("count.txt")
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
@@ -9226,6 +9506,8 @@ module CrystalClick
         validate_json_typed_path_serialization(source_column_name, json_paths)
       elsif column_type == "LowCardinality(String)"
         validate_low_cardinality_string_serialization(columns, selected, row_count)
+      elsif WidePart.supports_array_map_string_uint64_type?(column_type)
+        validate_array_map_string_uint64_serialization(columns, selected)
       elsif WidePart.supports_array_type?(column_type)
         validate_array_type_serialization_version(column_type, columns, selected, row_count)
       elsif WidePart.supports_map_uint64_string_type?(column_type)
@@ -9458,6 +9740,10 @@ module CrystalClick
         ["#{column}.dict", column]
       elsif WidePart.supports_tuple_uint64_string_type?(type)
         ["#{column}%2Ea", "#{column}%2Eb.size", "#{column}%2Eb"]
+      elsif WidePart.supports_array_map_string_uint64_type?(type)
+        plan = WideTypePlan::WidePhysicalPlanShadow.for_type(type, column) ||
+               raise UnsupportedFormatError.new("no physical plan for exact Array(Map(String, UInt64)) column")
+        plan.streams.map(&.name)
       elsif element_streams = WidePart.array_element_stream_names(column, type)
         ["#{column}.size0"] + element_streams
       elsif WidePart.supports_map_uint64_string_type?(type)
@@ -9539,6 +9825,48 @@ module CrystalClick
       else
         [column]
       end
+    end
+
+    private def validate_array_map_string_uint64_serialization(
+      columns : Array({String, String}),
+      selected_column : String,
+    ) : Nil
+      selected_type = columns.find { |name, _| name == selected_column }.try(&.[1])
+      key_columns = columns.select { |name, type| name != selected_column && type == "UInt64" }
+      unless columns.size == 2 && selected_type == "Array(Map(String, UInt64))" && key_columns.size == 1 &&
+             columns.count { |_, type| type == "UInt64" } == 1
+        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) requires one UInt64 key column")
+      end
+
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for this type") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      info = JSON.parse(text).as_h
+      expected_fields = Set{"version", "columns", "types_serialization_versions", "propagate_types_serialization_versions_to_nested_types"}
+      unless info.keys.to_set == expected_fields
+        raise UnsupportedFormatError.new("unsupported Array(Map) serialization.json fields")
+      end
+      version = info["version"]?.try(&.as_i) || raise(CorruptPartError.new("serialization.json version is missing or malformed"))
+      raise UnsupportedFormatError.new("only serialization.json version 1 is supported") unless version == 1
+      propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
+      raise UnsupportedFormatError.new("Array(Map) nested serialization versions are unsupported") unless propagated == true
+
+      versions = info["types_serialization_versions"]?.try(&.as_h) ||
+                 raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+        raise UnsupportedFormatError.new("only nested String serialization version 1 is supported for Array(Map)")
+      end
+      serializers = info["columns"]?.try(&.as_a) ||
+                    raise(CorruptPartError.new("Array(Map) column serializers are missing or malformed"))
+      raise UnsupportedFormatError.new("Array(Map) per-column serializers are unsupported") unless serializers.empty?
+      nil
+    rescue ex : JSON::ParseException | TypeCastError | OverflowError
+      raise CorruptPartError.new("serialization.json is malformed")
     end
 
     private def valid_dynamic_substream_inventory?(column : String, streams : Array(String)) : Bool
@@ -10899,6 +11227,15 @@ module CrystalClick
         raise CorruptPartError.new("selected Tuple UInt64 child stream is missing") unless stream_names.includes?(stream)
         return stream
       end
+      if WidePart.supports_array_map_string_uint64_type?(@column_type)
+        plan = WideTypePlan::WidePhysicalPlanShadow.for_type(@column_type, @column).not_nil!
+        stream = plan.streams.find do |candidate|
+          candidate.role.array_size0? && candidate.semantic_path.empty?
+        end.try(&.name)
+        raise CorruptPartError.new("selected Array(Map) size0 stream is missing from its plan") unless stream
+        raise CorruptPartError.new("selected Array(Map) size0 stream is missing") unless stream_names.includes?(stream)
+        return stream
+      end
       if WidePart.array_array_numeric_element_type(@column_type) || WidePart.array_array_decimal_payload_width(@column_type)
         stream = "#{@column}.size0"
         raise CorruptPartError.new("selected nested numeric Array size0 stream is missing") unless stream_names.includes?(stream)
@@ -10931,6 +11268,10 @@ module CrystalClick
     private def stream_element_width(stream_name : String) : Int32
       if @column_type == "Dynamic"
         stream_name == "#{@column}.String.size" || stream_name == "#{@column}.UInt64" ? 8 : 1
+      elsif WidePart.supports_array_map_string_uint64_type?(@column_type)
+        plan = WideTypePlan::WidePhysicalPlanShadow.for_type(@column_type, @column).not_nil!
+        plan.streams.find(&.name.==(stream_name)).try(&.element_width) ||
+          raise UnsupportedFormatError.new("unsupported exact Array(Map) substream")
       elsif value_type = WidePart.map_uint64_array_numeric_value_type(@column_type)
         if stream_name == "#{@column}%2Evalues"
           WidePart.numeric_payload_width(value_type)
@@ -11808,8 +12149,9 @@ module CrystalClick
       outer_rows : UInt64,
       mark_inner_arrays : Array(UInt64),
       element_width : Int32,
+      size_stream_name : String? = nil,
     ) : {Array(UInt64), UInt64, Array(UInt64)}
-      size_stream = @streams["#{column}.size1"]
+      size_stream = @streams[size_stream_name || "#{column}.size1"]
       size_start, size_end, size_rows = checked_stream_mark_range(size_stream, first_mark, mark_count)
       raise CorruptPartError.new("Array(Array(T)) size1 mark rows differ") unless size_rows == outer_rows
       validate_array_nested_stream_marks(size_stream, first_mark, mark_inner_arrays, 8)
@@ -12449,6 +12791,8 @@ module CrystalClick
                                  stream.name == "#{@column}.UInt64"
                              elsif WidePart.supports_array_type?(@column_type)
                                WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream.name)
+                             elsif WidePart.supports_array_map_string_uint64_type?(@column_type)
+                               array_map_string_uint64_stream_may_be_empty?(@column, stream.name)
                              elsif WidePart.map_string_numeric_value_type(@column_type)
                                stream.name == "#{@column}%2Ekeys.size" || stream.name == "#{@column}%2Ekeys" ||
                                  stream.name == "#{@column}%2Evalues"
@@ -12543,10 +12887,21 @@ module CrystalClick
         started = false
         workspace = CompressedBlock::DecodeWorkspace.new
         loop do
-          if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic"
+          if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic" ||
+             WidePart.supports_array_map_string_uint64_type?(@column_type)
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
-              message = @column_type == "Dynamic" ? "Dynamic requires LZ4 compressed streams" : "Variant requires LZ4 compressed streams"
+              if WidePart.supports_array_map_string_uint64_type?(@column_type) &&
+                 !valid_compressed_frame_checksum?(data, frame_offset)
+                raise CorruptPartError.new("mark does not start at a valid compressed frame")
+              end
+              message = if @column_type == "Dynamic"
+                          "Dynamic requires LZ4 compressed streams"
+                        elsif WidePart.supports_array_map_string_uint64_type?(@column_type)
+                          "Array(Map(String, UInt64)) requires LZ4 compressed streams"
+                        else
+                          "Variant requires LZ4 compressed streams"
+                        end
               raise UnsupportedFormatError.new(message)
             end
           end
@@ -12582,6 +12937,22 @@ module CrystalClick
         end
         raise CorruptPartError.new("mark range byte count mismatch") if exact_bytes && selected_bytes != expected_bytes
       end
+    end
+
+    private def valid_compressed_frame_checksum?(data : Bytes, frame_offset : Int64) : Bool
+      return false if frame_offset < 0 || frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE
+
+      header_offset = frame_offset.to_i
+      compressed_size = u32(data, header_offset + CompressedBlock::CHECKSUM_SIZE + 1).to_i64
+      decompressed_size = u32(data, header_offset + CompressedBlock::CHECKSUM_SIZE + 5).to_i64
+      return false if compressed_size < CompressedBlock::HEADER_SIZE || compressed_size > MAX_FRAME_COMPRESSED_BYTES
+      return false if decompressed_size <= 0 || decompressed_size > MAX_FRAME_DECOMPRESSED_BYTES
+
+      frame_size = CompressedBlock::CHECKSUM_SIZE.to_i64 + compressed_size
+      return false if frame_size > data.size.to_i64 - frame_offset
+
+      actual_checksum = CityHashV1.hash128(data[header_offset + CompressedBlock::CHECKSUM_SIZE, compressed_size.to_i])
+      actual_checksum == {u64(data, header_offset), u64(data, header_offset + 8)}
     end
 
     private def u64(bytes : Bytes, offset : Int) : UInt64

@@ -7,6 +7,7 @@ module CrystalClick
     TYPE_ARRAY_TUPLE_UINT64_UINT64          = "Array(Tuple(a UInt64, b UInt64))"
     TYPE_ARRAY_ARRAY_STRING                 = "Array(Array(String))"
     TYPE_ARRAY_ARRAY_NULLABLE_STRING        = "Array(Array(Nullable(String)))"
+    TYPE_ARRAY_MAP_STRING_UINT64            = "Array(Map(String, UInt64))"
 
     enum Shape
       ArrayTupleUInt64String
@@ -160,6 +161,7 @@ module CrystalClick
       end
 
       private def self.shadow_shape?(type : String, root : Node) : Bool
+        return true if exact_array_map_string_uint64_shape?(type, root)
         return true if exact_numeric_map_array_shape?(type, root)
         return true if exact_nullable_numeric_map_array_shape?(type, root)
 
@@ -185,6 +187,16 @@ module CrystalClick
         else
           false
         end
+      end
+
+      private def self.exact_array_map_string_uint64_shape?(type : String, root : Node) : Bool
+        return false unless type == TYPE_ARRAY_MAP_STRING_UINT64
+        return false unless root.name == "Array" && root.children.size == 1
+        map = root.child(0)
+        return false unless map.name == "Map" && map.children.size == 2
+        key = map.child(0)
+        value = map.child(1)
+        key.name == "String" && key.children.empty? && value.name == "UInt64" && value.children.empty?
       end
 
       private def self.exact_numeric_map_array_shape?(type : String, root : Node) : Bool
@@ -278,7 +290,7 @@ module CrystalClick
               append_node(child, "#{stream_path}%2E#{field}", child_path, storage_axis, 0)
             end
           when "Map"
-            append_map(node, stream_path, semantic_path, storage_axis)
+            append_map(node, stream_path, semantic_path, storage_axis, array_depth)
           when "Nullable"
             nullable_type = render_type(node)
             append_stream(
@@ -357,12 +369,15 @@ module CrystalClick
           stream_path : String,
           semantic_path : Array(String),
           parent_axis : Axis,
+          array_depth : Int32,
         ) : Nil
           raise UnsupportedFormatError.new("shadow Map node has invalid arity") unless node.children.size == 2
+          raise UnsupportedFormatError.new("shadow Map nesting exceeds its offset-depth bound") if array_depth > 1
           entries_axis = add_axis(axis_id(semantic_path, "map_entries"), AxisKind::MapEntries)
+          role = array_depth == 0 ? StreamRole::MapSize0 : StreamRole::ArraySize1
           append_stream(
-            "#{stream_path}.size0", render_type(node), semantic_path,
-            StreamRole::MapSize0, 8, StorageMode::Counts, parent_axis,
+            "#{stream_path}.size#{array_depth}", render_type(node), semantic_path,
+            role, 8, StorageMode::Counts, parent_axis,
             parent_axis, entries_axis
           )
 
@@ -372,7 +387,7 @@ module CrystalClick
 
           value_path = semantic_path.dup
           value_path << "values"
-          append_node(node.child(1), "#{stream_path}%2Evalues", value_path, entries_axis, 1)
+          append_node(node.child(1), "#{stream_path}%2Evalues", value_path, entries_axis, array_depth + 1)
           nil
         end
 
