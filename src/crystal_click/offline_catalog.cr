@@ -117,6 +117,30 @@ module CrystalClick
     end
   end
 
+  # Opaque declaration for a named MergeTree projection. This records DDL
+  # metadata only; it does not claim that projection data exists in any part.
+  struct OfflineProjection
+    @name : String
+    @definition : String
+
+    def initialize(name : String, definition : String)
+      @name = name.dup
+      @definition = definition.dup
+    end
+
+    def name : String
+      @name.dup
+    end
+
+    def definition : String
+      @definition.dup
+    end
+
+    def copy : OfflineProjection
+      OfflineProjection.new(@name, @definition)
+    end
+  end
+
   # A physical on-disk part directory. This identity does not imply that the
   # ClickHouse server considers the part active or otherwise authoritative.
   struct OfflinePartCandidate
@@ -138,11 +162,14 @@ module CrystalClick
     getter name : String
     getter engine : String
     getter primary_key_column : String?
+    getter kind : Symbol
 
     @columns : Array(OfflineColumn)
     @part_candidates : Array(OfflinePartCandidate)?
     @uuid : String?
     @part_candidates_catalog : OfflineCatalog?
+    @metadata_ddl : String?
+    @projections : Array(OfflineProjection)
 
     def initialize(
       @name : String,
@@ -152,7 +179,12 @@ module CrystalClick
       @part_candidates : Array(OfflinePartCandidate)?,
       @primary_key_column : String? = nil,
       @part_candidates_catalog : OfflineCatalog? = nil,
+      @kind : Symbol = :table,
+      metadata_ddl : String? = nil,
+      projections : Array(OfflineProjection) = [] of OfflineProjection,
     )
+      @metadata_ddl = metadata_ddl.try(&.dup)
+      @projections = projections.map(&.copy)
     end
 
     def uuid : String
@@ -163,6 +195,18 @@ module CrystalClick
 
     def columns : Array(OfflineColumn)
       @columns.dup
+    end
+
+    # Returns the exact bounded local metadata text when this object came from
+    # an on-disk DDL file. The copy prevents callers from mutating catalog state.
+    def metadata_ddl : String?
+      @metadata_ddl.try(&.dup)
+    end
+
+    # Projection declarations are copied on both the collection and element
+    # boundaries; their definitions remain opaque and are never executed.
+    def projections : Array(OfflineProjection)
+      @projections.map(&.copy)
     end
 
     def [](column_name : String) : OfflineColumnSelection
@@ -182,6 +226,7 @@ module CrystalClick
       if catalog = @part_candidates_catalog
         return catalog.part_candidates_values(column_name, max_rows, max_string_bytes)
       end
+      reject_materialized_view_data_access!
 
       source_name, _source_type, selected_type, _json_path = resolve_typed_ddl_selection(column_name)
       source_column = @columns.find { |entry| entry.name == source_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
@@ -1204,15 +1249,23 @@ module CrystalClick
     end
 
     def part_candidates : Array(OfflinePartCandidate)
+      reject_materialized_view_data_access!
       candidates = @part_candidates
       raise UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only") unless candidates
       candidates.dup
+    end
+
+    private def reject_materialized_view_data_access! : Nil
+      if @kind == :materialized_view
+        raise UnsupportedFormatError.new("materialized view is metadata-only; direct part inventory and row scans are unsupported")
+      end
     end
 
     # Resolve the physical inventory to a deterministic, unambiguous set of
     # maximal covering parts for an offline scan. This is an inferred scan
     # set, not ClickHouse server Active state.
     def resolved_scan_parts : Array(OfflinePartCandidate)
+      reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       candidates = @part_candidates || raise(UnsupportedFormatError.new("offline part inventory supports exact MergeTree engine only"))
       reject_transaction_metadata!(candidates)
@@ -1263,6 +1316,7 @@ module CrystalClick
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
       &block : WidePartTableBatch -> Nil
     ) : Nil
+      reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
       raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
@@ -1296,6 +1350,7 @@ module CrystalClick
       upper_bound : UInt64? = nil,
       &block : WidePartTableBatch -> Nil
     ) : Nil
+      reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("at least one primary-key bound is required") unless lower_bound || upper_bound
       if lower = lower_bound
@@ -1349,6 +1404,7 @@ module CrystalClick
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
       &block : WidePartTableBatch -> Nil
     ) : Nil
+      reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
       raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
@@ -1407,6 +1463,7 @@ module CrystalClick
     end
 
     private def open_typed_reader(columns : Array(String), row_limit : Int, row_limit_label : String) : WidePartTable?
+      reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
       raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
@@ -3954,16 +4011,16 @@ module CrystalClick
 
       ddl_path = File.join(location.metadata_path, "#{encode_identifier(name)}.sql")
       ddl = read_bounded_file(ddl_path, MAX_METADATA_BYTES, "table DDL")
-      uuid, columns, engine, primary_key_column = parse_table_ddl(ddl)
+      uuid, columns, engine, primary_key_column, kind, projections = parse_table_ddl(ddl)
 
-      part_candidates = if engine == "MergeTree"
+      part_candidates = if kind == :table && engine == "MergeTree"
                           table_path = validate_store_directory(uuid)
                           discover_part_candidates(table_path, projected_candidate_offset)
                         else
                           nil
                         end
 
-      OfflineTable.new(name, uuid, engine, columns, part_candidates, primary_key_column)
+      OfflineTable.new(name, uuid, engine, columns, part_candidates, primary_key_column, nil, kind, ddl, projections)
     end
 
     private def validate_database_identity!(database : OfflineDatabase, location : DatabaseLocation) : Nil
@@ -4027,7 +4084,11 @@ module CrystalClick
       normalize_uuid(match[1])
     end
 
-    private def parse_table_ddl(ddl : String) : {String, Array(OfflineColumn), String, String?}
+    private def parse_table_ddl(ddl : String) : {String, Array(OfflineColumn), String, String?, Symbol, Array(OfflineProjection)}
+      if materialized_view_header = /\A\s*ATTACH\s+MATERIALIZED\s+VIEW\s+_\s+UUID\s+'([^']+)'/i.match(ddl)
+        return parse_materialized_view_ddl(ddl, materialized_view_header)
+      end
+
       header = /\A\s*ATTACH\s+TABLE\s+_\s+UUID\s+'([^']+)'\s*\(/i.match(ddl)
       raise UnsupportedFormatError.new("unsupported table DDL header") unless header
       uuid = normalize_uuid(header[1])
@@ -4044,15 +4105,234 @@ module CrystalClick
         raise UnsupportedFormatError.new("unsupported table DDL suffix")
       end
 
-      columns = parse_columns(columns_text)
+      columns, projections = parse_column_declarations(columns_text)
       primary_key_column = engine.compare("MergeTree", case_insensitive: true) == 0 ? parse_simple_order_key(trailing, columns) : nil
-      {uuid, columns, engine, primary_key_column}
+      {uuid, columns, engine, primary_key_column, :table, projections}
+    end
+
+    private def parse_materialized_view_ddl(
+      ddl : String,
+      header : Regex::MatchData,
+    ) : {String, Array(OfflineColumn), String, String?, Symbol, Array(OfflineProjection)}
+      uuid = normalize_uuid(header[1])
+      tail_offset = header.end(0)
+      tail = ddl.byte_slice(tail_offset, ddl.bytesize - tail_offset)
+      has_target = false
+
+      if target = consume_materialized_view_target(tail)
+        has_target = true
+        tail_offset += target[0]
+        tail = target[1]
+      end
+
+      tail = tail.lstrip
+      tail_offset = ddl.bytesize - tail.bytesize
+      columns = [] of OfflineColumn
+      projections = [] of OfflineProjection
+
+      if tail.starts_with?("(")
+        opening = tail_offset
+        closing = matching_parenthesis(ddl, opening)
+        declarations = ddl.byte_slice(opening + 1, closing - opening - 1)
+        columns, projections = parse_column_declarations(declarations)
+        tail_offset = closing + 1
+        tail = ddl.byte_slice(tail_offset, ddl.bytesize - tail_offset).lstrip
+        tail_offset = ddl.bytesize - tail.bytesize
+      end
+
+      if target = consume_materialized_view_target(tail)
+        raise UnsupportedFormatError.new("duplicate MATERIALIZED VIEW TO clause") if has_target
+        has_target = true
+        tail_offset += target[0]
+        tail = target[1].lstrip
+        tail_offset = ddl.bytesize - tail.bytesize
+      end
+
+      engine_match = /\AENGINE\s*=\s*([A-Za-z][A-Za-z0-9_]*)\b/i.match(tail)
+      if engine_match
+        # The storage ENGINE belongs to the MV's inner target; expose the
+        # logical kind instead and never use the view UUID as a data path.
+        suffix = tail.byte_slice(engine_match.end(0), tail.bytesize - engine_match.end(0))
+        before_select, query = split_materialized_view_select(suffix)
+        unless before_select.empty? || supported_materialized_view_storage_tail?(before_select)
+          raise UnsupportedFormatError.new("unsupported MATERIALIZED VIEW storage clause")
+        end
+      else
+        raise UnsupportedFormatError.new("MATERIALIZED VIEW requires an inner ENGINE or TO clause") unless has_target
+        before_select, query = split_materialized_view_select(tail)
+        raise UnsupportedFormatError.new("unsupported MATERIALIZED VIEW suffix") unless before_select.empty?
+      end
+
+      {uuid, columns, "MaterializedView", nil, :materialized_view, projections}
+    end
+
+    # Recognize the serialized inner-UUID target and ordinary table targets,
+    # but deliberately do not resolve or validate target state.
+    private def consume_materialized_view_target(text : String) : {Int32, String}?
+      source = text.lstrip
+      leading_bytes = text.bytesize - source.bytesize
+      inner = /\ATO\s+INNER\s+UUID\s+'([^']+)'/i.match(source)
+      if inner
+        normalize_uuid(inner[1])
+        consumed = leading_bytes + inner.end(0)
+        return {consumed, text.byte_slice(consumed, text.bytesize - consumed)}
+      end
+
+      target = /\ATO\s+((?:`(?:\\.|[^`])+`|[A-Za-z_][A-Za-z0-9_]*)(?:\.(?:`(?:\\.|[^`])+`|[A-Za-z_][A-Za-z0-9_]*))?)(?=\s|\z)/i.match(source)
+      if target
+        consumed = leading_bytes + target.end(0)
+        return {consumed, text.byte_slice(consumed, text.bytesize - consumed)}
+      end
+
+      nil
+    end
+
+    private def split_materialized_view_select(text : String) : {String, String}
+      delimiter = find_materialized_view_select(text)
+      raise UnsupportedFormatError.new("MATERIALIZED VIEW is missing AS SELECT") unless delimiter
+      prefix = text.byte_slice(0, delimiter[0]).strip
+      query = text.byte_slice(delimiter[1], text.bytesize - delimiter[1]).strip
+      raise UnsupportedFormatError.new("MATERIALIZED VIEW SELECT definition is empty") if query.empty?
+      if contains_unsafe_sql_control?(query)
+        raise UnsupportedFormatError.new("MATERIALIZED VIEW SELECT has an unsupported statement or comment control")
+      end
+      {prefix, query}
+    end
+
+    # Locate AS SELECT only at top-level and outside quoted storage metadata.
+    # This keeps an identifier or setting value containing those words from
+    # manufacturing the DDL boundary.
+    private def find_materialized_view_select(text : String) : {Int32, Int32}?
+      bytes = text.to_slice
+      depth = 0
+      quote = 0_u8
+      escaped = false
+      index = 0
+
+      while index < bytes.size
+        byte = bytes[index]
+        if quote != 0
+          if escaped
+            escaped = false
+          elsif byte == '\\'.ord
+            escaped = true
+          elsif byte == quote && index + 1 < bytes.size && bytes[index + 1] == quote
+            index += 1
+          elsif byte == quote
+            quote = 0_u8
+          end
+        elsif byte == '\''.ord || byte == '"'.ord || byte == '`'.ord
+          quote = byte
+        elsif byte == '('.ord
+          depth += 1
+        elsif byte == ')'.ord
+          depth -= 1
+          raise UnsupportedFormatError.new("unbalanced MATERIALIZED VIEW storage suffix") if depth < 0
+        elsif depth == 0
+          if select_end = materialized_view_as_select_end(bytes, index)
+            return {index, select_end}
+          end
+        end
+        index += 1
+      end
+
+      raise UnsupportedFormatError.new("unbalanced MATERIALIZED VIEW storage suffix") unless depth == 0 && quote == 0 && !escaped
+      nil
+    end
+
+    private def materialized_view_as_select_end(bytes : Bytes, index : Int32) : Int32?
+      return nil if index > 0 && identifier_byte?(bytes[index - 1])
+      return nil if index + 2 > bytes.size
+      return nil unless String.new(bytes[index, 2]).compare("AS", case_insensitive: true) == 0
+
+      cursor = index + 2
+      return nil if cursor >= bytes.size || !whitespace?(bytes[cursor])
+      while cursor < bytes.size && whitespace?(bytes[cursor])
+        cursor += 1
+      end
+      return nil if cursor + 6 > bytes.size
+      return nil unless String.new(bytes[cursor, 6]).compare("SELECT", case_insensitive: true) == 0
+      return nil if cursor + 6 < bytes.size && identifier_byte?(bytes[cursor + 6])
+
+      cursor + 6
+    end
+
+    private def contains_unsafe_sql_control?(text : String) : Bool
+      bytes = text.to_slice
+      depth = 0
+      quote = 0_u8
+      escaped = false
+      index = 0
+      while index < bytes.size
+        byte = bytes[index]
+        if quote != 0
+          if escaped
+            escaped = false
+          elsif byte == '\\'.ord
+            escaped = true
+          elsif byte == quote && index + 1 < bytes.size && bytes[index + 1] == quote
+            index += 1
+          elsif byte == quote
+            quote = 0_u8
+          end
+        elsif byte == '\''.ord || byte == '"'.ord || byte == '`'.ord
+          quote = byte
+        elsif byte == '('.ord
+          depth += 1
+        elsif byte == ')'.ord
+          depth -= 1
+          return true if depth < 0
+        elsif byte == ';'.ord || byte == '#'.ord ||
+              (byte == '-'.ord && index + 1 < bytes.size && bytes[index + 1] == '-'.ord) ||
+              (byte == '/'.ord && index + 1 < bytes.size && bytes[index + 1] == '*'.ord) ||
+              (byte == '*'.ord && index + 1 < bytes.size && bytes[index + 1] == '/'.ord)
+          return true
+        end
+        index += 1
+      end
+      depth != 0 || quote != 0 || escaped
     end
 
     private def supported_table_tail?(trailing : String) : Bool
       return false unless /\A(?:ORDER\s+BY|PRIMARY\s+KEY|PARTITION\s+BY|SAMPLE\s+BY|TTL|SETTINGS|COMMENT)\b/i.matches?(trailing)
 
       !contains_unsupported_table_tail_control?(trailing)
+    end
+
+    # MATERIALIZED VIEW parsing needs a stronger boundary than ordinary table
+    # inventory: a missing storage-clause operand immediately before `AS
+    # SELECT` must not be mistaken for a valid query delimiter. Keep this
+    # validator bounded to the existing stock-shaped clause subset.
+    private def supported_materialized_view_storage_tail?(trailing : String) : Bool
+      return true if trailing.empty?
+      return false unless supported_table_tail?(trailing)
+
+      clauses = split_table_tail_clauses(trailing)
+      return false unless clauses
+
+      previous_rank = -1
+      clauses.not_nil!.each do |keyword, content|
+        rank = case keyword
+               when "PARTITION BY"            then 0
+               when "PRIMARY KEY", "ORDER BY" then 1
+               when "SAMPLE BY"               then 2
+               when "TTL"                     then 3
+               when "SETTINGS"                then 4
+               when "COMMENT"                 then 5
+               else                                return false
+               end
+        return false if rank < previous_rank || (rank == previous_rank && rank != 1)
+
+        clause_supported = if keyword == "TTL"
+                             !content.strip.empty? && !contains_unsafe_sql_control?(content)
+                           else
+                             supported_pk_suffix_clause?(keyword, content)
+                           end
+        return false unless clause_supported
+        previous_rank = rank
+      end
+
+      true
     end
 
     # Extract only an exact one-column ascending ORDER BY key and optional
@@ -4130,7 +4410,7 @@ module CrystalClick
 
     private def supported_simple_settings?(content : String) : Bool
       setting = "[A-Za-z_][A-Za-z0-9_]*"
-      value = "(?:'[^']*'|\"[^\"]*\"|[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\\.[0-9]+)?)"
+      value = "(?:'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\\.[0-9]+)?)"
       Regex.new("\\A#{setting}\\s*=\\s*#{value}(?:\\s*,\\s*#{setting}\\s*=\\s*#{value})*\\z").matches?(content.strip)
     end
 
@@ -4265,20 +4545,82 @@ module CrystalClick
         byte == '_'.ord
     end
 
-    private def parse_columns(text : String) : Array(OfflineColumn)
+    private def parse_column_declarations(text : String) : {Array(OfflineColumn), Array(OfflineProjection)}
       definitions = split_top_level(text, "column list")
       raise UnsupportedFormatError.new("table DDL has no columns") if definitions.empty?
       raise BoundsError.new("table column count exceeds limit") if definitions.size > 4_096
 
       columns = Array(OfflineColumn).new(definitions.size)
-      seen = Set(String).new
+      projections = Array(OfflineProjection).new
+      seen_columns = Set(String).new
+      seen_projections = Set(String).new
       definitions.each do |definition|
-        name, type, alias_column, key_candidate_column = parse_column_definition(definition)
-        raise UnsupportedFormatError.new("duplicate table column name: #{name}") if seen.includes?(name)
-        seen << name
-        columns << OfflineColumn.new(name, type, alias_column, key_candidate_column)
+        if /\APROJECTION\b/i.matches?(definition.strip)
+          projection = parse_projection_definition(definition)
+          raise UnsupportedFormatError.new("duplicate projection name: #{projection.name}") if seen_projections.includes?(projection.name)
+          seen_projections << projection.name
+          projections << projection
+        else
+          name, type, alias_column, key_candidate_column = parse_column_definition(definition)
+          raise UnsupportedFormatError.new("duplicate table column name: #{name}") if seen_columns.includes?(name)
+          seen_columns << name
+          columns << OfflineColumn.new(name, type, alias_column, key_candidate_column)
+        end
       end
-      columns
+      raise UnsupportedFormatError.new("table DDL has no columns") if columns.empty?
+      {columns, projections}
+    end
+
+    private def parse_projection_definition(definition : String) : OfflineProjection
+      source = definition.strip
+      header = /\APROJECTION\s+(`(?:\\.|[^`])+`|[A-Za-z_][A-Za-z0-9_]*)\s*\(/i.match(source)
+      raise UnsupportedFormatError.new("unsupported projection declaration") unless header
+      name = parse_projection_name(header[1])
+      opening = header.end(0) - 1
+      closing = matching_parenthesis(source, opening)
+      unless source.byte_slice(closing + 1, source.bytesize - closing - 1).strip.empty?
+        raise UnsupportedFormatError.new("unsupported projection declaration suffix")
+      end
+
+      body = source.byte_slice(opening + 1, closing - opening - 1).strip
+      select_match = /\ASELECT\b/i.match(body)
+      raise UnsupportedFormatError.new("projection definition must be a SELECT") unless select_match
+      raise UnsupportedFormatError.new("projection SELECT definition is empty") if body.byte_slice(select_match.end(0), body.bytesize - select_match.end(0)).strip.empty?
+      if contains_unsafe_sql_control?(body)
+        raise UnsupportedFormatError.new("projection definition contains an unsupported statement or comment control")
+      end
+      OfflineProjection.new(name, body)
+    end
+
+    private def parse_projection_name(token : String) : String
+      if token.starts_with?("`")
+        bytes = token.to_slice
+        index = 1
+        closed = false
+        name = String.build do |io|
+          while index < bytes.size
+            byte = bytes[index]
+            if byte == '\\'.ord
+              index += 1
+              raise UnsupportedFormatError.new("unterminated escaped projection name") if index >= bytes.size
+              io.write_byte(bytes[index])
+            elsif byte == '`'.ord
+              closed = true
+              index += 1
+              break
+            else
+              io.write_byte(byte)
+            end
+            index += 1
+          end
+        end
+        raise UnsupportedFormatError.new("unterminated projection name") unless closed && index == bytes.size
+        validate_identifier(name, "projection name")
+        name
+      else
+        validate_identifier(token, "projection name")
+        token
+      end
     end
 
     private def parse_column_definition(definition : String) : {String, String, Bool, Bool}

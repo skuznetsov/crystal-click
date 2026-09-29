@@ -70,7 +70,8 @@ These examples read local files under a ClickHouse data root (`metadata/` and
 `store/`). They do not connect to a server, execute SQL, or provide a
 server-consistent snapshot. Use an immutable, quiescent local copy.
 
-List databases, tables, DDL columns, and physical part candidates:
+List databases, tables, materialized views, DDL columns, named projection
+declarations, and physical part candidates:
 
 ```sh
 crystal run examples/list_atomic_catalog.cr -- /var/lib/clickhouse
@@ -83,6 +84,14 @@ enumeration validates its full level and fails if any sibling DDL is malformed;
 use `catalog.database(name)` or `database.table(name)` for targeted access.
 Targeted bracket aliases also work: `catalog["lab"]["events"]` returns an
 `OfflineTable`.
+
+`OfflineTable#kind` distinguishes `:table` from `:materialized_view`;
+`#metadata_ddl` returns the bounded persisted ATTACH text, and `#projections`
+returns named, opaque projection definitions. These are metadata only: the
+catalog does not execute a materialized view or scan projection subparts.
+An MV's `engine` is `MaterializedView`, even when its DDL declares an inner
+`MergeTree` target; its direct part and row scans are rejected. If the MV has
+no explicit column list, `#columns` is empty rather than inferred from SELECT.
 
 Read all `rows` values from the synthetic offline `system.part_candidates` projection:
 

@@ -5415,6 +5415,73 @@ ROBUST for this exact profile after the final oracle and release gates. This
 does not admit general recursive containers, other ClickHouse versions,
 MV/projections, or a memory/performance result.
 
+## W86 admitted frontier: offline MV and projection declaration metadata
+
+The pre-W86 catalog treats every Atomic database metadata `.sql` as an
+`ATTACH TABLE` whose parenthesized declarations are all columns. This fails
+for a stock `ATTACH MATERIALIZED VIEW` entry and for a stock `PROJECTION`
+declaration inside a MergeTree table's declaration list. In the former case,
+`database.tables` and the synthetic `system.part_candidates` materialization
+fail even when the caller only needs unrelated physical tables. In the latter,
+opening an otherwise readable table fails before part inventory. Both forms
+were found in ClickHouse 26.7.1.1315 persisted Atomic metadata; the projection
+probe also showed that a projection can exist for only some parent parts after
+`ALTER TABLE ... ADD PROJECTION`. Its presence is not table-wide coverage.
+
+Admitted for W86: bounded, read-only catalog parsing of stock-shaped Atomic
+`ATTACH MATERIALIZED VIEW` metadata and named `PROJECTION name (SELECT ...)`
+declarations in `ATTACH TABLE`, with an explicit logical table kind and
+opaque, bounded definition text for inspection. An MV's logical engine is
+`MaterializedView`; any `ENGINE = MergeTree` clause in its DDL describes its
+inner target and must not cause a lookup under the view UUID. A projection
+declaration is metadata on its owning table, not another column. Existing
+ordinary-table column and part APIs retain their meaning. The catalog can
+enumerate these definitions while `system.part_candidates` inventories only
+physical MergeTree tables; an MV part or row scan fails as metadata-only.
+
+Rejected for W86: parsing or executing MV `SELECT`, INSERT-trigger
+propagation, freshness or server-active assertions, resolving an MV target's
+parts through the view UUID, physical projection reads or table-wide
+projection scans, and any writer support for MV or projection metadata.
+`TO`-target correctness and arbitrary SQL grammar remain guard-only. The
+later physical projection feature must require per-parent coverage evidence:
+the stock two-parent-part probe had a `.proj` only under the later part.
+
+This is CAUTION-level metadata/API work. The cheapest falsifiers are: a
+stock-shaped MV in an Atomic database whose view UUID has no data directory,
+and a stock-shaped MergeTree table whose column list includes a projection.
+Before implementation, tests must show both currently fail in `table` and
+catalog-wide enumeration; malformed declarations must still fail closed.
+The strongest failure mode is accidentally interpreting the MV's inner
+`MergeTree` clause as the logical view engine and attributing the hidden
+target's parts to the view, or silently treating a projection declaration
+as a column. The guard is to assert no view-UUID store lookup, no duplicate
+part attribution, unchanged ordinary-table scans, and a declaration-only
+projection API without a coverage claim. DoD: a pinned 26.7.1.1315 metadata
+oracle, focused catalog specs, full debug and release specs, and a scoped
+hostile review. Rollback is only the isolated W86 diff. Evidence decays if
+the pinned ClickHouse DDL serialization grammar, catalog parser, or its
+consumers change.
+
+W86 implementation observation (2026-09-29): the offline catalog now exposes
+the logical `:materialized_view` kind, the bounded exact persisted ATTACH DDL,
+and named opaque projection declarations. A view with an inner `MergeTree`
+storage clause is never scanned through its own UUID; ordinary parent parts
+remain attributable only to physical MergeTree tables. Focused W86 specs
+passed 9 examples, and the full debug and release suites each passed 1099
+examples with no failures or errors. The pinned ClickHouse 26.7.1.1315 oracle
+passed both normally and with a relative caller `TMPDIR`: it observed a
+distinct hidden target UUID, no view-UUID store directory, and two parent
+parts with projection artifacts `[absent, present]`. The relative-`TMPDIR`
+regression also checked exact oracle-temp cleanup and no repository-relative
+temp path. A first hostile pass found that an empty `ORDER BY` could be
+misread as a valid MV `AS SELECT` boundary; a second found the oracle
+wrapper's relative-temp path hazard. Both were corrected and retested, and
+the final scoped hostile verdict was ROBUST. This is catalog metadata only:
+the oracle did not scan projection subparts or execute MV logic, and this
+evidence does not admit arbitrary metadata SQL, other ClickHouse versions,
+full type parity, or a memory/performance claim.
+
 ## Rejected and guard-only surfaces
 
 Rejected for W1: mutation of existing parts, table-level `INSERT`, merges,

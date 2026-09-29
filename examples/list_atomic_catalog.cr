@@ -16,12 +16,18 @@ module ListAtomicCatalogExample
       puts "DATABASE #{database.name}"
 
       database.tables.each do |table|
-        puts "  TABLE #{table.name} (engine: #{table.engine})"
+        label = table.kind == :materialized_view ? "MATERIALIZED VIEW" : "TABLE"
+        puts "  #{label} #{table.name} (engine: #{table.engine})"
         table.columns.each do |column|
           puts "    COLUMN #{column.name}: #{column.type}"
         end
+        table.projections.each do |projection|
+          puts "    PROJECTION #{projection.name}"
+        end
 
-        if table.engine == "MergeTree"
+        if table.kind == :materialized_view
+          puts "    PHYSICAL PART CANDIDATES: unavailable for a metadata-only view"
+        elsif table.engine == "MergeTree"
           puts "    PHYSICAL PART CANDIDATES (server Active state is unknown):"
           candidates = table.part_candidates
           if candidates.empty?
