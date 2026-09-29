@@ -1,6 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W81 is admitted only for the closed
+Document status: active design. W82 is admitted only for four exact
+`Array(Map(UInt64|String, String|Nullable(String)))` declarations on the
+pinned Wide/LZ4/plain-mark profile below. W81 is admitted only for the closed
 `Array(Map(UInt64|String, T|Nullable(T)))` primitive-numeric family on the
 pinned Wide/LZ4/plain-mark profile below. W80 is admitted only for the exact
 `Array(Map(String, UInt64))` Wide/LZ4/plain-mark profile below. W79 is
@@ -5095,6 +5097,68 @@ scoped hostile review found no concrete blocker. The external stock oracle
 is representative, not a proof of stock compatibility for every one of the
 40 declarations or other ClickHouse versions. No MV/projection or
 performance claim follows from this evidence.
+
+## W82 admitted frontier: String leaves inside bounded Array(Map)
+
+Paired reading and writing are admitted for exactly
+`Array(Map(UInt64, String))`, `Array(Map(String, String))`,
+`Array(Map(UInt64, Nullable(String)))`, and
+`Array(Map(String, Nullable(String)))`. The reader, writer, table batch, and
+catalog agree on these four declarations. Other keys, value types, aliases,
+whitespace variants, and
+additional container layers remain rejected. No memory or performance work is
+in scope; complete type compatibility, then MV/projections, before tuning.
+
+The factual anchor is W81's stock-verified outer Array/inner Map offsets and
+the existing String/Nullable leaf codecs. The highest-risk bridge is nested
+axis and byte-length accounting: a self-round-trip could pass while ClickHouse
+reads later marks, empty strings, or null values differently. First, capture
+the exact physical streams/marks with the pinned ClickHouse 26.7.1.1315
+binary. Then add a RED exact-admission/stream-axis test, including rejection
+of `Array(Map(String, Array(String)))` and
+`Array(Array(Map(String, String)))`. The implementation may share recursive
+physical-plan and leaf-codec logic, but must preserve every W80/W81 descriptor
+and reject all unadmitted neighboring shapes. If a shared compiler needs
+shape-specific axis surgery, changes an existing descriptor, or cannot model
+Map-entry versus String-byte axes unambiguously, do not promote that route.
+
+Risk is CAUTION: the change affects serialized data, checksums, and public
+table visibility. Rollback is one isolated W82 commit. DoD requires a pinned
+bidirectional stock oracle (physical streams, marks, sentinels, stock-to-Crystal
+full/keyed RowBinary, and Crystal-to-stock ATTACH/CHECK), targeted empty/null
+and later-mark corruption-before-callback checks, exact negative admission,
+unchanged W80/W81 descriptors, debug/release suites, and hostile review.
+Representative oracle cases cannot prove other layouts or all ClickHouse
+versions. Evidence decays if the pinned stock serialization or shared stream
+dispatch changes. MV/projections and the eventual at-most-10%-slower performance
+gate remain outside W82.
+
+W82 stock-only observation (2026-09-29): the pinned ClickHouse 26.7.1.1315
+binary produced all four exact Wide-part stream inventories and four 24-byte
+mark records per stream for the five-row fixture, with row counts `[2,2,1,0]`
+including the terminal mark. Exact raw streams and full/keyed RowBinary
+matched the fixture, including invalid-byte Strings and all-empty child
+streams. In `Nullable(String)`, NULL contributes null-map `1`, an eight-byte
+zero String length, and no value bytes; a non-null empty String has null-map
+`0` with the same zero-length child. This is stock-layout evidence only, not
+reader or writer admission.
+
+W82 observed implementation evidence (2026-09-29): the pinned bidirectional
+oracle passed for all four declarations with populated/binary values and
+all-empty child streams (eight cases). It compares raw streams, marks, and
+sentinels, stock-to-Crystal full/keyed RowBinary, and Crystal-to-stock
+`ATTACH PART`, `CHECK TABLE`, and full/keyed RowBinary. Focused tests passed
+15 examples and the full debug and release suites each passed 1060 examples
+with no failures or errors. The adjacent W80 and W81 full bidirectional
+oracles passed on the same tree. Selected later-mark corruption rejects before
+callbacks. An aggregate
+preflight also rejects over-limit materialization across multiple selected W82
+columns before callbacks. A scoped hostile review found no concrete W82
+blocker. This preflight does not establish whole-scan callback atomicity for
+mixed W82 and legacy columns; representative oracle cases do not prove every
+layout or other ClickHouse versions. Evidence decays when pinned stock
+serialization, mark/codec layout, or shared dispatch changes. MV, projections,
+remaining types, and performance remain open.
 
 ## Rejected and guard-only surfaces
 

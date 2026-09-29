@@ -51,7 +51,6 @@ describe "W80 Array(Map(String, UInt64)) physical plan and admission" do
     end
 
     {
-      "Array(Map(String, String))",
       "Array(Array(Map(String, UInt64)))",
       "Array(Map(String, UInt64)) trailing",
     }.each do |type|

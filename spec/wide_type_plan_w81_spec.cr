@@ -39,8 +39,6 @@ describe "W81 bounded Array(Map) numeric family" do
     end
 
     {
-      "Array(Map(String, String))",
-      "Array(Map(UInt64, String))",
       "Array(Map(UInt32, UInt64))",
       "Array(Map(String, Array(UInt64)))",
       "Array(Array(Map(String, UInt64)))",

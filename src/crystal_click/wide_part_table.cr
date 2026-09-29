@@ -219,6 +219,86 @@ module CrystalClick
     end
   end
 
+  # W82 uses the same Array(Map) containers as W81, with variable String
+  # leaves on one side or both. The byte accounting intentionally includes
+  # raw String bytes and the Nullable null-map byte per entry, not size-stream
+  # bytes which are validation metadata rather than materialized values.
+  class WidePartArrayMapStringLeafRows(K, V) < WidePartArrayMapNumericRowsBase
+    getter values : Array(Array(Array(Tuple(K, V))))
+
+    def initialize(@values : Array(Array(Array(Tuple(K, V)))))
+    end
+
+    def row_count : UInt64
+      @values.size.to_u64
+    end
+
+    def map_count : UInt64
+      total = 0_u64
+      @values.each do |row|
+        count = row.size.to_u64
+        raise CorruptPartError.new("selected Array(Map) map count exceeds materialization limit") if count > WidePart::MAX_ARRAY_MARK_ELEMENTS - total
+        total += count
+      end
+      total
+    end
+
+    def entry_count : UInt64
+      total = 0_u64
+      @values.each do |row|
+        row.each do |map|
+          count = map.size.to_u64
+          raise CorruptPartError.new("selected Array(Map) entry count exceeds materialization limit") if count > WidePart::MAX_ARRAY_MARK_ELEMENTS - total
+          total += count
+        end
+      end
+      total
+    end
+
+    def payload_bytes : UInt64
+      entries = entry_count
+      key_bytes = 0_u64
+      value_bytes = 0_u64
+      {% if K == String %}
+        @values.each do |row|
+          row.each do |map|
+            map.each do |key, _value|
+              bytes = key.bytesize.to_u64
+              raise CorruptPartError.new("selected Array(Map) key bytes overflow") if bytes > UInt64::MAX - key_bytes
+              key_bytes += bytes
+            end
+          end
+        end
+      {% else %}
+        raise CorruptPartError.new("selected Array(Map) key bytes overflow") if entries > UInt64::MAX // 8_u64
+        key_bytes = entries * 8_u64
+      {% end %}
+      @values.each do |row|
+        row.each do |map|
+          map.each do |_key, value|
+            if value
+              bytes = value.bytesize.to_u64
+              raise CorruptPartError.new("selected Array(Map) value bytes overflow") if bytes > UInt64::MAX - value_bytes
+              value_bytes += bytes
+            end
+          end
+        end
+      end
+      payload_bytes = key_bytes
+      raise CorruptPartError.new("selected Array(Map) payload bytes overflow") if value_bytes > UInt64::MAX - payload_bytes
+      payload_bytes += value_bytes
+      {% if V == String? %}
+        raise CorruptPartError.new("selected Array(Map) payload bytes overflow") if entries > UInt64::MAX - payload_bytes
+        payload_bytes += entries
+      {% end %}
+      payload_bytes
+    end
+
+    def slice_rows(offset : Int, size : Int) : WidePartArrayMapNumericSliceBase
+      WidePartArrayMapNumericSlice(K, V).new(@values.to_unsafe.to_slice(@values.size)[offset, size], @values)
+    end
+  end
+
   abstract class WidePartNumericMapRowsBase
     abstract def row_count : UInt64
     abstract def entry_count : UInt64
@@ -1754,6 +1834,34 @@ module CrystalClick
       @array_map_string_uint64_values[column]? || raise(UnsupportedFormatError.new("Array(Map) column was not materialized in this batch"))
     end
 
+    def array_map_uint64_strings_for(column : String) : Slice(Array(Array(Tuple(UInt64, String))))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Map) accessor requires an exact Array(Map(UInt64, String)) column") unless @column_types[index] == "Array(Map(UInt64, String))"
+      values = @array_map_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Map) String leaf column was not materialized in this batch"))
+      values.as(WidePartArrayMapNumericSlice(UInt64, String)).values
+    end
+
+    def array_map_string_strings_for(column : String) : Slice(Array(Array(Tuple(String, String))))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Map) accessor requires an exact Array(Map(String, String)) column") unless @column_types[index] == "Array(Map(String, String))"
+      values = @array_map_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Map) String leaf column was not materialized in this batch"))
+      values.as(WidePartArrayMapNumericSlice(String, String)).values
+    end
+
+    def array_map_uint64_nullable_strings_for(column : String) : Slice(Array(Array(Tuple(UInt64, String?))))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Map) accessor requires an exact Array(Map(UInt64, Nullable(String))) column") unless @column_types[index] == "Array(Map(UInt64, Nullable(String)))"
+      values = @array_map_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Map) Nullable(String) leaf column was not materialized in this batch"))
+      values.as(WidePartArrayMapNumericSlice(UInt64, String?)).values
+    end
+
+    def array_map_string_nullable_strings_for(column : String) : Slice(Array(Array(Tuple(String, String?))))
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Array(Map) accessor requires an exact Array(Map(String, Nullable(String))) column") unless @column_types[index] == "Array(Map(String, Nullable(String)))"
+      values = @array_map_numeric_values[column]? || raise(UnsupportedFormatError.new("Array(Map) Nullable(String) leaf column was not materialized in this batch"))
+      values.as(WidePartArrayMapNumericSlice(String, String?)).values
+    end
+
     def array_map_uint64_numeric_values_for(column : String, type : T.class) : Slice(Array(Array(Tuple(UInt64, T)))) forall T
       index = column_index(column)
       declared_value_type = WidePart.array_map_uint64_numeric_value_type(@column_types[index])
@@ -2263,6 +2371,11 @@ module CrystalClick
       window_rows : {UInt64, UInt64}? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
+      # A W82 scan can span multiple callback batches. Validate every selected
+      # String-leaf mark first so corruption in a later selected mark cannot
+      # be discovered only after an earlier callback has escaped.
+      preflight_array_map_string_leaf_selected_marks(candidate_marks, window_rows)
+
       source_row_offset = 0_u64
       @entries.each_with_index do |part, part_index|
         begin
@@ -2394,6 +2507,10 @@ module CrystalClick
                 bytes = charge_bytes
               elsif value_type = WidePart.array_map_string_nullable_numeric_value_type(selected.column_type)
                 payload_bytes, charge_bytes = array_map_numeric_preflight(selected, mark_index, value_type, true, true)
+                preflight_array_map_numeric_payload_charge[selected.name] = {payload_bytes, charge_bytes}
+                bytes = charge_bytes
+              elsif WidePart.supports_array_map_string_leaf_type?(selected.column_type)
+                payload_bytes, charge_bytes = array_map_string_leaf_preflight(selected, mark_index)
                 preflight_array_map_numeric_payload_charge[selected.name] = {payload_bytes, charge_bytes}
                 bytes = charge_bytes
               elsif plan = WideTypePlan.admitted(selected.column_type)
@@ -3593,6 +3710,15 @@ module CrystalClick
                 raise CorruptPartError.new("selected Array(Map) mark exceeds aggregate materialization limit") if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += charge_bytes
                 array_map_string_uint64_values[selected.name] = values
+              when "Array(Map(UInt64, String))", "Array(Map(String, String))",
+                   "Array(Map(UInt64, Nullable(String)))", "Array(Map(String, Nullable(String)))"
+                values = read_array_map_string_leaf_rows(selected, mark_index)
+                charge_bytes = verify_array_map_numeric_materialization(
+                  selected, values, mark_rows, preflight_array_map_numeric_payload_charge
+                )
+                raise CorruptPartError.new("selected Array(Map) mark exceeds aggregate materialization limit") if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += charge_bytes
+                array_map_numeric_values[selected.name] = values
               when .starts_with?("Array(Map(")
                 raise UnsupportedFormatError.new("unsupported exact Array(Map) numeric type") unless WidePart.supports_array_map_numeric_type?(selected.column_type)
                 values = read_array_map_numeric_rows(selected, mark_index)
@@ -4320,6 +4446,52 @@ module CrystalClick
       nil
     end
 
+    private def preflight_array_map_string_leaf_selected_marks(
+      candidate_marks : Array(Array(Int32))?,
+      window_rows : {UInt64, UInt64}?,
+    ) : Nil
+      source_row_offset = 0_u64
+      @entries.each_with_index do |part, part_index|
+        part_row_offset = 0_u64
+        selected_marks = candidate_marks ? candidate_marks[part_index] : nil
+        selected_index = 0
+        part.mark_row_counts.each_with_index do |mark_rows, mark_index|
+          mark_start = part_row_offset
+          part_row_offset &+= mark_rows
+          selected = true
+          if marks = selected_marks
+            selected = selected_index < marks.size && marks[selected_index] == mark_index
+            selected_index += 1 if selected
+          end
+          next unless selected
+
+          if window = window_rows
+            start_row, end_row = window
+            source_mark_start = source_row_offset &+ mark_start
+            source_mark_end = source_mark_start &+ mark_rows
+            next if mark_rows == 0_u64 || start_row >= source_mark_end || end_row <= source_mark_start
+          end
+
+          aggregate_w82_charge = 0_u64
+          part.readers.each do |selected_reader|
+            next unless WidePart.supports_array_map_string_leaf_type?(selected_reader.column_type)
+            preflight = selected_reader.reader.array_map_string_leaf_mark_range_materialization_preflight(
+              selected_reader.name, mark_index, 1
+            )
+            charge = preflight[:charge_bytes]
+            if charge > MAX_MARK_MATERIALIZED_BYTES.to_u64 - aggregate_w82_charge
+              raise CorruptPartError.new("selected W82 Array(Map) columns exceed aggregate materialization limit")
+            end
+            aggregate_w82_charge += charge
+          end
+        end
+        raise CorruptPartError.new("part row count changed during W82 preflight") unless part_row_offset == part.row_count
+        source_row_offset &+= part.row_count
+      end
+      raise CorruptPartError.new("source row count mismatch during W82 preflight") unless source_row_offset == @total_row_count
+      nil
+    end
+
     private def scan_rows(batch_rows : Int, & : WidePartTableBatch -> Nil) : Nil
       source_row_offset = 0_u64
       @entries.each_with_index do |part, part_index|
@@ -5015,6 +5187,36 @@ module CrystalClick
       charge_bytes = checked_map_string_array_uint64_materialization_charge(mark_rows, values.entry_count, payload_bytes)
       raise CorruptPartError.new("selected Map Array materialization charge differs from preflight") unless charge_bytes == expected_charge
       charge_bytes
+    end
+
+    private def array_map_string_leaf_preflight(
+      selected : ColumnReader,
+      mark_index : Int32,
+    ) : {UInt64, UInt64}
+      preflight = selected.reader.array_map_string_leaf_mark_range_materialization_preflight(selected.name, mark_index, 1)
+      {preflight[:payload_bytes], preflight[:charge_bytes]}
+    end
+
+    private def read_array_map_string_leaf_rows(
+      selected : ColumnReader,
+      mark_index : Int32,
+    ) : WidePartArrayMapNumericRowsBase
+      case selected.column_type
+      when "Array(Map(UInt64, String))"
+        rows = selected.reader.read_array_map_uint64_string_mark_range(selected.name, mark_index, 1)
+        WidePartArrayMapStringLeafRows(UInt64, String).new(rows)
+      when "Array(Map(String, String))"
+        rows = selected.reader.read_array_map_string_string_mark_range(selected.name, mark_index, 1)
+        WidePartArrayMapStringLeafRows(String, String).new(rows)
+      when "Array(Map(UInt64, Nullable(String)))"
+        rows = selected.reader.read_array_map_uint64_nullable_string_mark_range(selected.name, mark_index, 1)
+        WidePartArrayMapStringLeafRows(UInt64, String?).new(rows)
+      when "Array(Map(String, Nullable(String)))"
+        rows = selected.reader.read_array_map_string_nullable_string_mark_range(selected.name, mark_index, 1)
+        WidePartArrayMapStringLeafRows(String, String?).new(rows)
+      else
+        raise UnsupportedFormatError.new("selected column is not an exact W82 Array(Map) String leaf")
+      end
     end
 
     private def array_map_numeric_preflight(

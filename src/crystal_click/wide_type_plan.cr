@@ -162,6 +162,7 @@ module CrystalClick
 
       private def self.shadow_shape?(type : String, root : Node) : Bool
         return true if exact_array_map_numeric_shape?(type, root)
+        return true if exact_array_map_string_shape?(type, root)
         return true if exact_array_map_string_uint64_shape?(type, root)
         return true if exact_numeric_map_array_shape?(type, root)
         return true if exact_nullable_numeric_map_array_shape?(type, root)
@@ -198,6 +199,29 @@ module CrystalClick
         key = map.child(0)
         value = map.child(1)
         key.name == "String" && key.children.empty? && value.name == "UInt64" && value.children.empty?
+      end
+
+      # W82 adds only String leaves to the already bounded Array(Map) tree.
+      # Keep exact declaration spelling as part of admission; the shared
+      # recursive Builder supplies stream order and child-axis descriptors.
+      private def self.exact_array_map_string_shape?(type : String, root : Node) : Bool
+        return false unless root.name == "Array" && root.children.size == 1
+        map = root.child(0)
+        return false unless map.name == "Map" && map.children.size == 2
+
+        key = map.child(0)
+        return false unless key.children.empty? && (key.name == "UInt64" || key.name == "String")
+        value = map.child(1)
+
+        if value.name == "Nullable"
+          return false unless value.children.size == 1
+          leaf = value.child(0)
+          leaf.name == "String" && leaf.children.empty? &&
+            type == "Array(Map(#{key.name}, Nullable(String)))"
+        else
+          value.name == "String" && value.children.empty? &&
+            type == "Array(Map(#{key.name}, String))"
+        end
       end
 
       # W81's admitted shape is intentionally only Array(Map(K, V)): one

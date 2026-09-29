@@ -45,6 +45,8 @@ module CrystalClick
                              Array(Tuple(UInt64, String)) | Array(Tuple(UInt64?, String)) | Array(Tuple(UInt64, UInt64)) |
                              Array(Tuple(String, UInt64)) | Array(Tuple(String, String)) |
                              Array(Array(Tuple(String, UInt64))) |
+                             Array(Array(Tuple(UInt64, String))) | Array(Array(Tuple(String, String))) |
+                             Array(Array(Tuple(UInt64, String?))) | Array(Array(Tuple(String, String?))) |
                              Array(Tuple(String, Array(UInt64))) |
                              Array(Tuple(String, Array(UInt8))) | Array(Tuple(String, Array(UInt16))) | Array(Tuple(String, Array(UInt32))) |
                              Array(Tuple(String, Array(Int8))) | Array(Tuple(String, Array(Int16))) | Array(Tuple(String, Array(Int32))) | Array(Tuple(String, Array(Int64))) |
@@ -827,6 +829,30 @@ module CrystalClick
           array_elements[0],
           string_bytes,
           max_string_bytes
+        )
+      when "Array(Map(UInt64, String))"
+        selected_values = batch.array_map_uint64_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_map_string_leaf_values(
+          values, selected_values, array_elements[0], string_bytes, max_string_bytes
+        )
+      when "Array(Map(String, String))"
+        selected_values = batch.array_map_string_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_map_string_leaf_values(
+          values, selected_values, array_elements[0], string_bytes, max_string_bytes
+        )
+      when "Array(Map(UInt64, Nullable(String)))"
+        selected_values = batch.array_map_uint64_nullable_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_map_string_leaf_values(
+          values, selected_values, array_elements[0], string_bytes, max_string_bytes
+        )
+      when "Array(Map(String, Nullable(String)))"
+        selected_values = batch.array_map_string_nullable_strings_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0], string_bytes = append_materialized_array_map_string_leaf_values(
+          values, selected_values, array_elements[0], string_bytes, max_string_bytes
         )
       when .starts_with?("Array(Map(")
         leaf_type = WidePart.array_map_uint64_numeric_value_type(selected_type) ||
@@ -2413,6 +2439,51 @@ module CrystalClick
         row.each do |map|
           owned_map = Array(Tuple(String, UInt64)).new(map.size)
           map.each { |key, value| owned_map << {String.new(key.to_slice), value} }
+          owned_row << owned_map
+        end
+        values << owned_row
+      end
+      {next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_map_string_leaf_values(
+      values : Array(OfflineColumnValue),
+      selected_values : Slice(Array(Array(Tuple(K, V)))),
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64} forall K, V
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |map|
+          next_elements = checked_materialized_value_array_elements(next_elements, map.size.to_u64)
+          map.each do |key, value|
+            {% if K == String %}
+              next_bytes = checked_materialized_value_string_bytes(next_bytes, key.bytesize.to_u64, max_string_bytes)
+            {% end %}
+            if value
+              next_bytes = checked_materialized_value_string_bytes(next_bytes, value.bytesize.to_u64, max_string_bytes)
+            end
+          end
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Array(Tuple(K, V))).new(row.size)
+        row.each do |map|
+          owned_map = Array(Tuple(K, V)).new(map.size)
+          map.each do |key, value|
+            owned_map << {
+              {% if K == String %} String.new(key.to_slice) {% else %} key {% end %},
+              {% if V == String %}
+                String.new(value.to_slice)
+              {% else %}
+                value.try { |string_value| String.new(string_value.to_slice) }
+              {% end %},
+            }
+          end
           owned_row << owned_map
         end
         values << owned_row
