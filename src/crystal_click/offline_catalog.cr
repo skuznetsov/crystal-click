@@ -1,4 +1,25 @@
 module CrystalClick
+  alias OfflineArrayMapUInt64NumericValue = Array(Array(Tuple(UInt64, UInt8))) | Array(Array(Tuple(UInt64, UInt16))) |
+                                            Array(Array(Tuple(UInt64, UInt32))) | Array(Array(Tuple(UInt64, UInt64))) |
+                                            Array(Array(Tuple(UInt64, Int8))) | Array(Array(Tuple(UInt64, Int16))) |
+                                            Array(Array(Tuple(UInt64, Int32))) | Array(Array(Tuple(UInt64, Int64))) |
+                                            Array(Array(Tuple(UInt64, Float32))) | Array(Array(Tuple(UInt64, Float64)))
+  alias OfflineArrayMapStringNumericValue = Array(Array(Tuple(String, UInt8))) | Array(Array(Tuple(String, UInt16))) |
+                                            Array(Array(Tuple(String, UInt32))) | Array(Array(Tuple(String, UInt64))) |
+                                            Array(Array(Tuple(String, Int8))) | Array(Array(Tuple(String, Int16))) |
+                                            Array(Array(Tuple(String, Int32))) | Array(Array(Tuple(String, Int64))) |
+                                            Array(Array(Tuple(String, Float32))) | Array(Array(Tuple(String, Float64)))
+  alias OfflineArrayMapUInt64NullableNumericValue = Array(Array(Tuple(UInt64, UInt8?))) | Array(Array(Tuple(UInt64, UInt16?))) |
+                                                    Array(Array(Tuple(UInt64, UInt32?))) | Array(Array(Tuple(UInt64, UInt64?))) |
+                                                    Array(Array(Tuple(UInt64, Int8?))) | Array(Array(Tuple(UInt64, Int16?))) |
+                                                    Array(Array(Tuple(UInt64, Int32?))) | Array(Array(Tuple(UInt64, Int64?))) |
+                                                    Array(Array(Tuple(UInt64, Float32?))) | Array(Array(Tuple(UInt64, Float64?)))
+  alias OfflineArrayMapStringNullableNumericValue = Array(Array(Tuple(String, UInt8?))) | Array(Array(Tuple(String, UInt16?))) |
+                                                    Array(Array(Tuple(String, UInt32?))) | Array(Array(Tuple(String, UInt64?))) |
+                                                    Array(Array(Tuple(String, Int8?))) | Array(Array(Tuple(String, Int16?))) |
+                                                    Array(Array(Tuple(String, Int32?))) | Array(Array(Tuple(String, Int64?))) |
+                                                    Array(Array(Tuple(String, Float32?))) | Array(Array(Tuple(String, Float64?)))
+
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 | UInt128 |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value |
@@ -57,7 +78,10 @@ module CrystalClick
                              Array(Tuple(String, UInt8?)) | Array(Tuple(String, UInt16?)) | Array(Tuple(String, UInt32?)) |
                              Array(Tuple(String, Int8?)) | Array(Tuple(String, Int16?)) | Array(Tuple(String, Int32?)) |
                              Array(Tuple(String, Int64?)) | Array(Tuple(String, Float32?)) | Array(Tuple(String, Float64?)) |
-                             Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) | Tuple(UInt64, String) | Nil
+                             Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) |
+                             OfflineArrayMapUInt64NumericValue | OfflineArrayMapStringNumericValue |
+                             OfflineArrayMapUInt64NullableNumericValue | OfflineArrayMapStringNullableNumericValue |
+                             Tuple(UInt64, String) | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -800,6 +824,29 @@ module CrystalClick
         array_elements[0], string_bytes = append_materialized_array_map_string_uint64_values(
           values,
           selected_values,
+          array_elements[0],
+          string_bytes,
+          max_string_bytes
+        )
+      when .starts_with?("Array(Map(")
+        leaf_type = WidePart.array_map_uint64_numeric_value_type(selected_type) ||
+                    WidePart.array_map_string_numeric_value_type(selected_type) ||
+                    WidePart.array_map_uint64_nullable_numeric_value_type(selected_type) ||
+                    WidePart.array_map_string_nullable_numeric_value_type(selected_type) ||
+                    raise(UnsupportedFormatError.new("selected Array(Map) leaf is not an admitted primitive numeric type"))
+        string_keys = !WidePart.array_map_string_numeric_value_type(selected_type).nil? ||
+                      !WidePart.array_map_string_nullable_numeric_value_type(selected_type).nil?
+        nullable_values = !WidePart.array_map_uint64_nullable_numeric_value_type(selected_type).nil? ||
+                          !WidePart.array_map_string_nullable_numeric_value_type(selected_type).nil?
+        observed_rows, array_elements[0], string_bytes = append_materialized_array_map_numeric_for_type(
+          values,
+          batch,
+          column_name,
+          leaf_type,
+          string_keys,
+          nullable_values,
+          observed_rows,
+          expected_rows,
           array_elements[0],
           string_bytes,
           max_string_bytes
@@ -2371,6 +2418,161 @@ module CrystalClick
         values << owned_row
       end
       {next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_map_numeric_for_type(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      leaf_type : String,
+      string_keys : Bool,
+      nullable_values : Bool,
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64, UInt64}
+      case leaf_type
+      when "UInt8"   then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, UInt8, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "UInt16"  then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, UInt16, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "UInt32"  then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, UInt32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "UInt64"  then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, UInt64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "Int8"    then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, Int8, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "Int16"   then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, Int16, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "Int32"   then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, Int32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "Int64"   then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, Int64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "Float32" then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, Float32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when "Float64" then append_materialized_array_map_numeric_for_key(values, batch, column_name, string_keys, nullable_values, Float64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      else
+        raise UnsupportedFormatError.new("unsupported exact Array(Map) numeric leaf type")
+      end
+    end
+
+    private def append_materialized_array_map_numeric_for_key(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      string_keys : Bool,
+      nullable_values : Bool,
+      type : T.class,
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64, UInt64} forall T
+      if nullable_values
+        if string_keys
+          append_materialized_array_map_nullable_numeric_batch(values, batch, column_name, String, type, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+        else
+          append_materialized_array_map_nullable_numeric_batch(values, batch, column_name, UInt64, type, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+        end
+      elsif string_keys
+        append_materialized_array_map_numeric_batch(values, batch, column_name, String, type, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      else
+        append_materialized_array_map_numeric_batch(values, batch, column_name, UInt64, type, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      end
+    end
+
+    private def append_materialized_array_map_numeric_batch(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      key_type : K.class,
+      value_type : T.class,
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64, UInt64} forall K, T
+      selected_values = {% if K == String %}
+                          batch.array_map_string_numeric_values_for(column_name, value_type)
+                        {% else %}
+                          batch.array_map_uint64_numeric_values_for(column_name, value_type)
+                        {% end %}
+      next_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |map|
+          next_elements = checked_materialized_value_array_elements(next_elements, map.size.to_u64)
+          {% if K == String %}
+            map.each do |key, _value|
+              next_bytes = checked_materialized_value_string_bytes(next_bytes, key.bytesize.to_u64, max_string_bytes)
+            end
+          {% end %}
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Array(Tuple(K, T))).new(row.size)
+        row.each do |map|
+          owned_map = Array(Tuple(K, T)).new(map.size)
+          map.each do |key, value|
+            {% if K == String %}
+              owned_map << {String.new(key.to_slice), value}
+            {% else %}
+              owned_map << {key, value}
+            {% end %}
+          end
+          owned_row << owned_map
+        end
+        values << owned_row
+      end
+      {next_rows, next_elements, next_bytes}
+    end
+
+    private def append_materialized_array_map_nullable_numeric_batch(
+      values : Array(OfflineColumnValue),
+      batch : WidePartTableBatch,
+      column_name : String,
+      key_type : K.class,
+      value_type : T.class,
+      observed_rows : UInt64,
+      expected_rows : UInt64,
+      observed_elements : UInt64,
+      observed_bytes : UInt64,
+      max_string_bytes : UInt64,
+    ) : {UInt64, UInt64, UInt64} forall K, T
+      selected_values = {% if K == String %}
+                          batch.array_map_string_nullable_numeric_values_for(column_name, value_type)
+                        {% else %}
+                          batch.array_map_uint64_nullable_numeric_values_for(column_name, value_type)
+                        {% end %}
+      next_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+      next_elements = observed_elements
+      next_bytes = observed_bytes
+      selected_values.each do |row|
+        next_elements = checked_materialized_value_array_elements(next_elements, row.size.to_u64)
+        row.each do |map|
+          next_elements = checked_materialized_value_array_elements(next_elements, map.size.to_u64)
+          {% if K == String %}
+            map.each do |key, _value|
+              next_bytes = checked_materialized_value_string_bytes(next_bytes, key.bytesize.to_u64, max_string_bytes)
+            end
+          {% end %}
+        end
+      end
+
+      selected_values.each do |row|
+        owned_row = Array(Array(Tuple(K, T?))).new(row.size)
+        row.each do |map|
+          owned_map = Array(Tuple(K, T?)).new(map.size)
+          map.each do |key, value|
+            {% if K == String %}
+              owned_map << {String.new(key.to_slice), value}
+            {% else %}
+              owned_map << {key, value}
+            {% end %}
+          end
+          owned_row << owned_map
+        end
+        values << owned_row
+      end
+      {next_rows, next_elements, next_bytes}
     end
 
     private def append_materialized_numeric_map_array_for_type(

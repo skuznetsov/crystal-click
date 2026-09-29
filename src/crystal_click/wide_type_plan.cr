@@ -161,6 +161,7 @@ module CrystalClick
       end
 
       private def self.shadow_shape?(type : String, root : Node) : Bool
+        return true if exact_array_map_numeric_shape?(type, root)
         return true if exact_array_map_string_uint64_shape?(type, root)
         return true if exact_numeric_map_array_shape?(type, root)
         return true if exact_nullable_numeric_map_array_shape?(type, root)
@@ -197,6 +198,31 @@ module CrystalClick
         key = map.child(0)
         value = map.child(1)
         key.name == "String" && key.children.empty? && value.name == "UInt64" && value.children.empty?
+      end
+
+      # W81's admitted shape is intentionally only Array(Map(K, V)): one
+      # outer Array, one Map, a UInt64 or String key, and one primitive
+      # numeric value optionally wrapped once in Nullable. Match the original
+      # declaration spelling as well as the parsed tree so this shadow never
+      # normalizes unsupported aliases or whitespace variants into admission.
+      private def self.exact_array_map_numeric_shape?(type : String, root : Node) : Bool
+        return false unless root.name == "Array" && root.children.size == 1
+        map = root.child(0)
+        return false unless map.name == "Map" && map.children.size == 2
+
+        key = map.child(0)
+        return false unless key.children.empty? && (key.name == "UInt64" || key.name == "String")
+        value = map.child(1)
+
+        if value.name == "Nullable"
+          return false unless value.children.size == 1
+          leaf = value.child(0)
+          return false unless leaf.children.empty? && numeric_map_array_leaf?(leaf.name)
+          type == "Array(Map(#{key.name}, Nullable(#{leaf.name})))"
+        else
+          return false unless value.children.empty? && numeric_map_array_leaf?(value.name)
+          type == "Array(Map(#{key.name}, #{value.name}))"
+        end
       end
 
       private def self.exact_numeric_map_array_shape?(type : String, root : Node) : Bool

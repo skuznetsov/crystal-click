@@ -39,13 +39,19 @@ describe "W80 Array(Map(String, UInt64)) physical plan and admission" do
     streams.each { |stream| stream.mark_row_axis.id.should eq("table_rows") }
   end
 
-  it "admits the exact W80 type without widening to nearby declarations" do
+  it "keeps exact W80 admission while leaving W81 shapes to their bounded grammar" do
     CrystalClick::WidePart.supports_typed_type?("Array(Map(String, UInt64))").should be_true
 
     {
       "Array(Map(UInt64, UInt64))",
-      "Array(Map(String, String))",
       "Array(Map(String, Nullable(UInt64)))",
+    }.each do |type|
+      CrystalClick::WidePart.supports_typed_type?(type).should be_true
+      CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(type).should_not be_nil
+    end
+
+    {
+      "Array(Map(String, String))",
       "Array(Array(Map(String, UInt64)))",
       "Array(Map(String, UInt64)) trailing",
     }.each do |type|

@@ -1,6 +1,10 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W79 is admitted only for the bounded
+Document status: active design. W81 is admitted only for the closed
+`Array(Map(UInt64|String, T|Nullable(T)))` primitive-numeric family on the
+pinned Wide/LZ4/plain-mark profile below. W80 is admitted only for the exact
+`Array(Map(String, UInt64))` Wide/LZ4/plain-mark profile below. W79 is
+admitted only for the bounded
 `Map(UInt64|String, Array(Nullable(T)))` primitive-numeric profile below on
 the pinned Wide/LZ4/plain-mark frontier. W77 is admitted only for the bounded
 primitive-numeric `Map(UInt64, Nullable(T))` and
@@ -5035,6 +5039,62 @@ still rejects it before returning rows. W80 therefore establishes exact
 read/write compatibility and fail-closed behavior for the tested physical
 layout, not perfect classification of arbitrary corrupt offsets, other
 ClickHouse versions, or general recursive Array/Map support.
+
+## W81 admitted frontier: bounded Array of primitive-numeric Maps
+
+W81 extends W80's one-spelling special case with paired reading and
+writing for the closed family `Array(Map(K, V))`: `K` is `UInt64` or `String`,
+and `V` is one of `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Int8`, `Int16`,
+`Int32`, `Int64`, `Float32`, `Float64`, or `Nullable` of one of those ten
+leaves. Admission must be exact after parsing; `Array(Map(...))` with other
+keys, values, or another container layer remains rejected. This is a type
+compatibility change, not a memory/performance change. Existing exact W80
+behavior and all standalone Map/Array behavior must remain stable.
+
+The factual anchor is W80's stock-verified outer Array/inner Map offset
+topology and the existing paired numeric/nullable Map leaf codecs. The
+bridge tested here was whether those codecs compose under a second offset
+depth for both key shapes. The likeliest failure was a later-mark offset or
+null-map shift that self-round-trips but changes ClickHouse's interpretation.
+Before admission, a RED test exercised the new key/value stream names and
+axes, and stock-written parts were rejected by the old typed dispatcher.
+The bounded build generalizes plan, reader, writer, table batch, and
+catalog dispatch together, retaining pre-materialization validation and
+explicit per-mark accounting. It must preserve duplicate Map keys, String
+key bytes, float bits, and NULL versus zero, and fail before yielding any row
+of a malformed selected mark.
+
+Risk is CAUTION because physical serialization, checksum inventories, and
+table-visible data change. Rollback is one isolated W81 commit. DoD is a
+pinned ClickHouse 26.7.1.1315 bidirectional oracle for both key shapes and
+nullable/non-nullable numeric representatives, including full/keyed RowBinary,
+mark topology/sentinel checks, Crystal-to-stock `ATTACH PART` and `CHECK
+TABLE`, plus later-mark corruption and negative-admission tests; debug and
+release suites, adjacent W78-W80 oracles, formatting, and a hostile review
+must pass. Passing representatives does not alone prove every admitted leaf:
+the complete closed declaration matrix needs a programmatic codec-width and
+round-trip check before claiming family parity. Evidence decays when pinned
+ClickHouse serialization, mark/codec layout, or shared type dispatch changes.
+MV and projection support, other type families, and performance remain outside
+this slice; optimization starts only after type and MV/projection completion.
+
+W81 observed evidence (2026-09-29): the pinned ClickHouse 26.7.1.1315
+bidirectional oracle passed for both key shapes and nullable/non-nullable
+numeric representatives. It compares physical streams, marks, and sentinels,
+then checks stock-to-Crystal reads and Crystal-to-stock `ATTACH PART`, `CHECK
+TABLE`, and full/keyed RowBinary. The all-empty String-key nullable case
+also passed with zero-byte child streams and zero child mark offsets while
+the structural map-size stream advanced. Local writer/reader tests cover all
+40 admitted declarations, including physical widths, signed leaves, float
+bits, and NULL versus zero. Selected later-mark corruption of `size1` and
+the nullable value stream rejects before callbacks; negative admission and
+catalog-owned String-key values are covered. The complete debug and release
+suites each passed 1050 examples with no failures or errors; adjacent W78,
+W79, and W80 full oracles, format, shell syntax, and diff checks passed. A
+scoped hostile review found no concrete blocker. The external stock oracle
+is representative, not a proof of stock compatibility for every one of the
+40 declarations or other ClickHouse versions. No MV/projection or
+performance claim follows from this evidence.
 
 ## Rejected and guard-only surfaces
 
