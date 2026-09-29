@@ -449,8 +449,9 @@ module CrystalClick
           end
         end
       {% else %}
-        raise CorruptPartError.new("selected W84 value bytes overflow") if leaves > UInt64::MAX // 8_u64
-        value_bytes = leaves * 8_u64
+        value_width = WidePart.numeric_payload_width(WidePart.numeric_type_name(V)).to_u64
+        raise CorruptPartError.new("selected W85 numeric value bytes overflow") if leaves > UInt64::MAX // value_width
+        value_bytes = leaves * value_width
       {% end %}
       raise CorruptPartError.new("selected W84 payload bytes overflow") if value_bytes > UInt64::MAX - key_bytes
       key_bytes + value_bytes
@@ -3950,14 +3951,24 @@ module CrystalClick
                 actual_string_bytes += charge_bytes
                 array_map_numeric_values[selected.name] = values
               when .starts_with?("Array(Map(")
-                raise UnsupportedFormatError.new("unsupported exact Array(Map) numeric type") unless WidePart.supports_array_map_numeric_type?(selected.column_type)
-                values = read_array_map_numeric_rows(selected, mark_index)
-                charge_bytes = verify_array_map_numeric_materialization(
-                  selected, values, mark_rows, preflight_array_map_numeric_payload_charge
-                )
-                raise CorruptPartError.new("selected Array(Map) mark exceeds aggregate materialization limit") if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
-                actual_string_bytes += charge_bytes
-                array_map_numeric_values[selected.name] = values
+                if WidePart.supports_array_map_array_leaf_type?(selected.column_type)
+                  values = read_array_map_array_leaf_rows(selected, mark_index)
+                  charge_bytes = verify_array_map_array_leaf_materialization(
+                    selected, values, mark_rows, preflight_array_map_numeric_payload_charge
+                  )
+                  raise CorruptPartError.new("selected Array(Map) mark exceeds aggregate materialization limit") if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  actual_string_bytes += charge_bytes
+                  array_map_numeric_values[selected.name] = values
+                else
+                  raise UnsupportedFormatError.new("unsupported exact Array(Map) numeric type") unless WidePart.supports_array_map_numeric_type?(selected.column_type)
+                  values = read_array_map_numeric_rows(selected, mark_index)
+                  charge_bytes = verify_array_map_numeric_materialization(
+                    selected, values, mark_rows, preflight_array_map_numeric_payload_charge
+                  )
+                  raise CorruptPartError.new("selected Array(Map) mark exceeds aggregate materialization limit") if charge_bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  actual_string_bytes += charge_bytes
+                  array_map_numeric_values[selected.name] = values
+                end
               when "Map(String, Array(UInt64))"
                 values = selected.reader.read_map_string_array_uint64_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Map mark row count changed") unless values.size.to_u64 == mark_rows
@@ -5545,22 +5556,77 @@ module CrystalClick
       selected : ColumnReader,
       mark_index : Int32,
     ) : WidePartArrayMapArrayLeafRowsBase
-      case WidePart.array_map_array_leaf_shape(selected.column_type) ||
-        raise(UnsupportedFormatError.new("selected column is not an exact W84 Array(Map) Array leaf"))
+      shape = WidePart.array_map_array_leaf_shape(selected.column_type) ||
+              raise(UnsupportedFormatError.new("selected column is not an exact W84/W85 Array(Map) Array leaf"))
+      case shape
+      when {"UInt64", "UInt8"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, UInt8)
+        WidePartArrayMapArrayLeafRows(UInt64, UInt8).new(rows)
+      when {"UInt64", "UInt16"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, UInt16)
+        WidePartArrayMapArrayLeafRows(UInt64, UInt16).new(rows)
+      when {"UInt64", "UInt32"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, UInt32)
+        WidePartArrayMapArrayLeafRows(UInt64, UInt32).new(rows)
       when {"UInt64", "UInt64"}
-        rows = selected.reader.read_array_map_uint64_array_uint64_mark_range(selected.name, mark_index, 1)
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, UInt64)
         WidePartArrayMapArrayLeafRows(UInt64, UInt64).new(rows)
+      when {"UInt64", "Int8"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, Int8)
+        WidePartArrayMapArrayLeafRows(UInt64, Int8).new(rows)
+      when {"UInt64", "Int16"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, Int16)
+        WidePartArrayMapArrayLeafRows(UInt64, Int16).new(rows)
+      when {"UInt64", "Int32"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, Int32)
+        WidePartArrayMapArrayLeafRows(UInt64, Int32).new(rows)
+      when {"UInt64", "Int64"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, Int64)
+        WidePartArrayMapArrayLeafRows(UInt64, Int64).new(rows)
+      when {"UInt64", "Float32"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, Float32)
+        WidePartArrayMapArrayLeafRows(UInt64, Float32).new(rows)
+      when {"UInt64", "Float64"}
+        rows = selected.reader.read_array_map_uint64_array_numeric_mark_range(selected.name, mark_index, 1, Float64)
+        WidePartArrayMapArrayLeafRows(UInt64, Float64).new(rows)
+      when {"String", "UInt8"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, UInt8)
+        WidePartArrayMapArrayLeafRows(String, UInt8).new(rows)
+      when {"String", "UInt16"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, UInt16)
+        WidePartArrayMapArrayLeafRows(String, UInt16).new(rows)
+      when {"String", "UInt32"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, UInt32)
+        WidePartArrayMapArrayLeafRows(String, UInt32).new(rows)
+      when {"String", "UInt64"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, UInt64)
+        WidePartArrayMapArrayLeafRows(String, UInt64).new(rows)
+      when {"String", "Int8"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, Int8)
+        WidePartArrayMapArrayLeafRows(String, Int8).new(rows)
+      when {"String", "Int16"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, Int16)
+        WidePartArrayMapArrayLeafRows(String, Int16).new(rows)
+      when {"String", "Int32"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, Int32)
+        WidePartArrayMapArrayLeafRows(String, Int32).new(rows)
+      when {"String", "Int64"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, Int64)
+        WidePartArrayMapArrayLeafRows(String, Int64).new(rows)
+      when {"String", "Float32"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, Float32)
+        WidePartArrayMapArrayLeafRows(String, Float32).new(rows)
+      when {"String", "Float64"}
+        rows = selected.reader.read_array_map_string_array_numeric_mark_range(selected.name, mark_index, 1, Float64)
+        WidePartArrayMapArrayLeafRows(String, Float64).new(rows)
       when {"UInt64", "String"}
         rows = selected.reader.read_array_map_uint64_array_string_mark_range(selected.name, mark_index, 1)
         WidePartArrayMapArrayLeafRows(UInt64, String).new(rows)
-      when {"String", "UInt64"}
-        rows = selected.reader.read_array_map_string_array_uint64_mark_range(selected.name, mark_index, 1)
-        WidePartArrayMapArrayLeafRows(String, UInt64).new(rows)
       when {"String", "String"}
         rows = selected.reader.read_array_map_string_array_string_mark_range(selected.name, mark_index, 1)
         WidePartArrayMapArrayLeafRows(String, String).new(rows)
       else
-        raise UnsupportedFormatError.new("selected column is not an exact W84 Array(Map) Array leaf")
+        raise UnsupportedFormatError.new("selected column is not an exact W84/W85 Array(Map) Array leaf")
       end
     end
 

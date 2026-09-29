@@ -1,7 +1,10 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W84 admits paired reader/writer, typed-table,
-and offline-catalog support for the four exact
+Document status: active design. W85 admits paired reader/writer, typed-table,
+and offline-catalog support for the twenty exact
+`Array(Map(UInt64|String, Array(N)))` forms with ten primitive numeric leaves
+on the pinned Wide/LZ4/plain-mark profile below. W84 admits paired
+reader/writer, typed-table, and offline-catalog support for the four exact
 `Array(Map(UInt64|String, Array(UInt64|String)))` forms on the pinned
 Wide/LZ4/plain-mark profile below. W83 is admitted only for four exact
 `Array(Map(UInt64|String, Bool|Nullable(Bool)))` declarations on the pinned
@@ -5337,6 +5340,80 @@ negative control, not a demonstrated false accept. Evidence decays when the
 pinned stock serialization, mark/codec layout, or reader/writer/consumer
 dispatch changes. This admits neither general recursive containers nor other
 ClickHouse versions, MV/projections, or a memory/performance result.
+
+## W85 admitted frontier: primitive numeric Arrays inside Array(Map) values
+
+W85 extends W84's third offset axis to exactly
+`Array(Map(K, Array(N)))`, where `K` is `UInt64` or `String` and `N` is one
+of `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Int8`, `Int16`, `Int32`, `Int64`,
+`Float32`, or `Float64`. These are twenty exact declarations, including the
+two UInt64-leaf forms already admitted by W84. W84's two String-leaf forms
+remain admitted separately. The ordered value remains
+`Array(Array(Tuple(K, Array(N))))`, retaining duplicate Map keys. The
+physical profile stays one UInt64 sorting key, exact-family payload columns,
+Wide parts, LZ4, plain adaptive `.mrk2` marks, and the pinned ClickHouse
+26.7.1.1315 build. This admission is limited to that exact profile.
+
+The pre-W85 source anchor is W84's independently checked stock stream order
+and three cardinality axes above. The bounded physical-plan builder already
+described numeric leaf widths of 1, 2, 4, or 8 bytes, but W84's reader,
+writer, table, and catalog admitted only String-or-UInt64 leaves. A
+fresh stock fixture must confirm that the numeric declarations retain W84's
+`size0`, `size1`, `keys`, `values.size2`, `values` topology (plus
+`keys.size` for String keys), width-specific value payloads, and one
+plain-mark record per selected granule. If this differs, stop and revise the
+design before broadening admission. The isolated 26.7.1.1315 stock fixture
+at `/private/tmp/crystal-click-w85-numeric-probe.9lpa6q` confirmed all
+twenty column declarations and their 5/6-stream order, W84's
+`serialization.json` (`string:1` with propagation), `metadata_version=0`,
+LZ4, and four 24-byte `.mrk2` records per stream for 2/2/1 rows plus the
+sentinel. Direct stock Float32/Float64 leaf readback included negative zero
+as `00000080`/`0000000000000080`; one attempted Int16 raw-width probe was
+inconclusive and is not a width certificate. The bidirectional oracle below
+must establish exact widths and boundaries for all numeric leaves.
+
+Admitted after the evidence below: exact canonical type spellings and paired
+reader/writer/table/catalog support across all twenty forms, including
+width-correct selected-mark preflight before callbacks. Rejected: other key
+types, Nullable, Bool, String as a *new* numeric alias, Decimal, wider
+numeric types, additional Array depth, generic recursive Map/Array, Compact
+parts, other codecs or mark formats, and any MV/projection or performance
+claim. Noncanonical aliases or whitespace variants must fail closed.
+
+This is CAUTION-level serialization work. The likeliest failure is carrying
+W84's eight-byte UInt64 assumption into a narrower, signed, or floating
+leaf, producing a self-consistent Crystal round trip that stock ClickHouse
+cannot read, or trusting a shifted selected mark and invoking a callback.
+First add a failing exact-shape and width-specific physical test. Then
+extend the bounded planner and reader, writer, typed-table, and catalog in
+that order without bypassing shared consumers. The DoD is a pinned
+bidirectional stock oracle for all twenty declarations, raw stream and
+exact mark-coordinate comparison, empty and edge-value cases, full and
+selected-mark reads, `ATTACH PART`/`CHECK TABLE` and full/keyed RowBinary,
+plus corrupt-offset and in-range shifted-mark rejection before callbacks.
+Run focused and W80-W84 adjacency specs, full debug and release suites, and
+a scoped hostile review. Rollback is the isolated W85 diff; W84 and earlier
+admissions must remain unchanged. Evidence decays when the pinned stock
+serializer or part layout, the reader/writer/consumer dispatch, or the
+test fixture changes.
+
+W85 paired implementation observation (2026-09-29):
+the pinned bidirectional oracle passed for all twenty exact declarations.
+Stock parts were read through the direct reader and typed-table full and
+selected-mark paths; Crystal parts passed stock `ATTACH PART`, `CHECK TABLE`,
+and full/keyed RowBinary reads. The oracle compared raw streams and exact
+per-origin mark coordinates (stock one-frame/raw offsets; Crystal per-mark
+frames), including 1/2/4/8-byte leaves, signed extrema, floating negative
+zero, binary String keys, duplicate keys, and empty nesting. A selected
+middle `.values.size2` mark shifted by eight bytes and every leaf `.values`
+mark shifted by its leaf width remained in range and passed part/table open,
+but was rejected during scan preflight with zero callbacks. The full debug
+and release suites each passed 1090 examples with no failures or errors;
+Crystal formatting, shell syntax, and diff checks also passed. A scoped
+hostile review found no substantive implementation defect and returned
+ROBUST for this exact profile after the final oracle and release gates. This
+does not admit general recursive containers, other ClickHouse versions,
+MV/projections, or a memory/performance result.
 
 ## Rejected and guard-only surfaces
 

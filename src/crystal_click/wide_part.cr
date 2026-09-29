@@ -1259,10 +1259,10 @@ module CrystalClick
       !array_map_bool_leaf_shape(type).nil?
     end
 
-    # W84 pairs the Map entry axis with one bounded Array value axis. Only
-    # these four UInt64/String key and value combinations are admitted.
+    # W85 adds fixed-width primitive numeric leaves under the existing Array
+    # shape. W84's String leaves remain admitted through its exact helper.
     def self.array_map_array_leaf_shape(type : String) : {String, String}?
-      WideTypePlan.array_map_array_leaf_shape(type)
+      WideTypePlan.array_map_array_numeric_leaf_shape(type) || WideTypePlan.array_map_array_leaf_shape(type)
     end
 
     def self.supports_array_map_array_leaf_type?(type : String) : Bool
@@ -8454,11 +8454,16 @@ module CrystalClick
     private def array_map_array_leaf_streams(
       column : String,
       string_keys : Bool,
-      string_values : Bool,
+      value_type : String,
     ) : ArrayMapArrayLeafStreams
       plan = WideTypePlan::WidePhysicalPlanShadow.for_type(@column_type, column) ||
              raise(UnsupportedFormatError.new("no physical plan for exact W84 Array(Map) Array leaf column"))
       descriptors = plan.streams
+      string_values = value_type == "String"
+      numeric_values = WidePart.supports_numeric_type?(value_type)
+      unless string_values || numeric_values
+        raise UnsupportedFormatError.new("Array(Map) Array leaf is not an exact supported numeric type")
+      end
       expected_count = 5 + (string_keys ? 1 : 0) + (string_values ? 1 : 0)
       raise UnsupportedFormatError.new("unexpected W84 Array(Map) Array leaf physical plan") unless descriptors.size == expected_count
 
@@ -8503,7 +8508,7 @@ module CrystalClick
              entries_axis.kind.map_entries? &&
              value_sizes.cardinality_parent_axis.try(&.id) == entries_axis.id &&
              value_axis.kind.array_elements? &&
-             value_sizes.semantic_type == "Array(#{string_values ? "String" : "UInt64"})" &&
+             value_sizes.semantic_type == "Array(#{value_type})" &&
              value_sizes.storage_mode.counts?
         raise UnsupportedFormatError.new("W84 physical offset axes are inconsistent")
       end
@@ -8531,8 +8536,10 @@ module CrystalClick
           raise UnsupportedFormatError.new("W84 String value axes are inconsistent")
         end
       else
-        unless values.storage_mode.fixed_width_values? && values.storage_axis.id == value_axis.id && values.element_width == 8
-          raise UnsupportedFormatError.new("W84 UInt64 value axis is inconsistent")
+        unless numeric_values && values.storage_mode.fixed_width_values? &&
+               values.storage_axis.id == value_axis.id &&
+               values.element_width == WidePart.numeric_payload_width(value_type)
+          raise UnsupportedFormatError.new("Array(Map) numeric value axis is inconsistent")
         end
       end
       unless descriptors.all? { |stream| stream.mark_row_axis.id == plan.mark_row_axis.id }
@@ -8618,12 +8625,12 @@ module CrystalClick
       ensure_column(column)
       expected_shape = {key_type, value_type}
       unless WidePart.array_map_array_leaf_shape(@column_type) == expected_shape
-        raise UnsupportedFormatError.new("Array(Map) reader requires one exact W84 Array(Map(K, Array(V))) declaration")
+        raise UnsupportedFormatError.new("Array(Map) reader requires an exact W84 String or W85 numeric Array(Map(K, Array(V))) declaration")
       end
 
       string_keys = key_type == "String"
       string_values = value_type == "String"
-      streams = array_map_array_leaf_streams(column, string_keys, string_values)
+      streams = array_map_array_leaf_streams(column, string_keys, value_type)
       outer_sizes, maps, rows, mark_maps = read_array_outer_sizes(column, first_mark, mark_count, streams.outer_sizes.name)
       validate_array_map_array_leaf_mark_rows(streams, first_mark, mark_count, rows)
 
@@ -8632,7 +8639,7 @@ module CrystalClick
       )
       raise CorruptPartError.new("W84 Map offsets do not match outer Array sizes") unless map_sizes.size.to_u64 == maps
 
-      element_width = string_values ? 1 : 8
+      element_width = string_values ? 1 : WidePart.numeric_payload_width(value_type)
       value_sizes, values_count, mark_values = read_array_array_numeric_element_sizes(
         column, first_mark, mark_count, entries, rows, mark_entries, element_width, streams.value_sizes.name
       )
@@ -8669,9 +8676,10 @@ module CrystalClick
         value_stream = @streams[streams.values.name]
         _, _, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
         raise CorruptPartError.new("W84 value mark rows differ") unless value_rows == rows
-        validate_array_nested_stream_marks(value_stream, first_mark, mark_values, 8)
-        value_bytes = checked_array_mark_byte_count(values_count, 8).to_u64
-        value_mark_bytes = mark_values.map { |count| checked_array_mark_byte_count(count, 8).to_u64 }
+        value_width = WidePart.numeric_payload_width(value_type)
+        validate_array_nested_stream_marks(value_stream, first_mark, mark_values, value_width)
+        value_bytes = checked_array_mark_byte_count(values_count, value_width).to_u64
+        value_mark_bytes = mark_values.map { |count| checked_array_mark_byte_count(count, value_width).to_u64 }
       end
 
       payload_bytes = checked_map_materialized_bytes(key_bytes, value_bytes, key_mark_bytes, value_mark_bytes)
@@ -8693,7 +8701,7 @@ module CrystalClick
       value_type : V.class,
     ) : Array(Array(Array(Tuple(K, Array(V))))) forall K, V
       expected_key_type = {% if K == String %} "String" {% else %} "UInt64" {% end %}
-      expected_value_type = {% if V == String %} "String" {% else %} "UInt64" {% end %}
+      expected_value_type = {% if V == String %} "String" {% else %} WidePart.numeric_type_name(V) {% end %}
       preflight = array_map_array_leaf_preflight(
         column, first_mark, mark_count, expected_key_type, expected_value_type
       )
@@ -8703,7 +8711,7 @@ module CrystalClick
       key_bytes = read_mark_range_bytes(keys_stream, keys_start, keys_end, preflight.key_bytes.to_i, key_width)
       values_stream = @streams[preflight.streams.values.name]
       values_start, values_end, _ = checked_stream_mark_range(values_stream, first_mark, mark_count)
-      value_width = expected_value_type == "String" ? 1 : 8
+      value_width = expected_value_type == "String" ? 1 : WidePart.numeric_payload_width(expected_value_type)
       value_bytes = read_mark_range_bytes(values_stream, values_start, values_end, preflight.value_bytes.to_i, value_width)
 
       result = Array(Array(Array(Tuple(K, Array(V))))).new(preflight.rows.to_i)
@@ -8749,10 +8757,10 @@ module CrystalClick
                 value = String.new(value_bytes[value_offset, value_length])
                 value_offset += value_length
               {% else %}
-                if leaf_offset >= value_bytes.size // 8
-                  raise CorruptPartError.new("W84 values.size2 exceeds selected UInt64 bytes")
+                if leaf_offset >= value_bytes.size // value_width
+                  raise CorruptPartError.new("Array(Map) values.size2 exceeds selected numeric bytes")
                 end
-                value = u64(value_bytes, leaf_offset * 8)
+                value = decode_numeric_value(value_bytes, leaf_offset * value_width, V)
               {% end %}
               value_array << value
               leaf_offset += 1
@@ -8772,7 +8780,7 @@ module CrystalClick
       raise CorruptPartError.new("W84 key sizes do not consume selected raw bytes") if expected_key_type == "String" && key_offset != key_bytes.size
       raise CorruptPartError.new("W84 key sizes do not consume selected UInt64 bytes") if expected_key_type == "UInt64" && entry_offset * 8 != key_bytes.size
       raise CorruptPartError.new("W84 String sizes do not consume selected raw bytes") if expected_value_type == "String" && value_offset != value_bytes.size
-      raise CorruptPartError.new("W84 sizes do not consume selected UInt64 bytes") if expected_value_type == "UInt64" && leaf_offset * 8 != value_bytes.size
+      raise CorruptPartError.new("Array(Map) sizes do not consume selected numeric bytes") if expected_value_type != "String" && leaf_offset * value_width != value_bytes.size
       result
     end
 
@@ -8817,6 +8825,24 @@ module CrystalClick
       mark_count : Int,
     ) : Array(Array(Array(Tuple(String, Array(String)))))
       read_array_map_array_leaf_rows(column, first_mark, mark_count, String, String)
+    end
+
+    def read_array_map_uint64_array_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(Array(Array(Tuple(UInt64, Array(T))))) forall T
+      read_array_map_array_leaf_rows(column, first_mark, mark_count, UInt64, type)
+    end
+
+    def read_array_map_string_array_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(Array(Array(Tuple(String, Array(T))))) forall T
+      read_array_map_array_leaf_rows(column, first_mark, mark_count, String, type)
     end
 
     # W81 shares the W80 offset topology while selecting the exact leaf codec

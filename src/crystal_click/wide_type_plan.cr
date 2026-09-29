@@ -163,6 +163,7 @@ module CrystalClick
 
       private def self.shadow_shape?(type : String, root : Node) : Bool
         return true if exact_array_map_numeric_shape?(type, root)
+        return true if exact_array_map_numeric_array_shape?(type, root)
         return true if exact_array_map_string_shape?(type, root)
         return true if exact_array_map_bool_shape?(type, root)
         return true if exact_array_map_string_uint64_shape?(type, root)
@@ -210,6 +211,22 @@ module CrystalClick
       # key/value or nesting types.
       private def self.exact_array_map_array_leaf_shape?(type : String, root : Node) : Bool
         key_type, value_type = WideTypePlan.array_map_array_leaf_shape(type) || return false
+        return false unless root.name == "Array" && root.children.size == 1
+        map = root.child(0)
+        return false unless map.name == "Map" && map.children.size == 2
+        key = map.child(0)
+        return false unless key.name == key_type && key.children.empty?
+        values = map.child(1)
+        return false unless values.name == "Array" && values.children.size == 1
+        value = values.child(0)
+        value.name == value_type && value.children.empty?
+      end
+
+      # W85 extends only the nested Array leaf to the ten primitive numeric
+      # types. The exact recognizer stays separate from the recursive Builder
+      # so adjacent keys, nullable leaves, and deeper arrays remain rejected.
+      private def self.exact_array_map_numeric_array_shape?(type : String, root : Node) : Bool
+        key_type, value_type = WideTypePlan.array_map_array_numeric_leaf_shape(type) || return false
         return false unless root.name == "Array" && root.children.size == 1
         map = root.child(0)
         return false unless map.name == "Map" && map.children.size == 2
@@ -594,6 +611,34 @@ module CrystalClick
       when "Array(Map(String, Array(String)))" then {"String", "String"}
       else
         nil
+      end
+    end
+
+    # W85 admits one exact Array(Map(K, Array(N))) declaration matrix. This
+    # helper is shared with the part admission dispatcher, but it remains
+    # distinct from W84's UInt64/String leaf matrix.
+    def self.array_map_array_numeric_leaf_shape(type : String) : {String, String}?
+      root = parse(type) || return nil
+      return nil unless root.name == "Array" && root.children.size == 1
+      map = root.child(0)
+      return nil unless map.name == "Map" && map.children.size == 2
+      key = map.child(0)
+      return nil unless key.children.empty? && (key.name == "UInt64" || key.name == "String")
+      values = map.child(1)
+      return nil unless values.name == "Array" && values.children.size == 1
+      value = values.child(0)
+      return nil unless value.children.empty? && primitive_array_map_numeric_leaf?(value.name)
+      return nil unless type == "Array(Map(#{key.name}, Array(#{value.name})))"
+
+      {key.name, value.name}
+    end
+
+    private def self.primitive_array_map_numeric_leaf?(type : String) : Bool
+      case type
+      when "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64"
+        true
+      else
+        false
       end
     end
 

@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 describe "W84 Array(Map(K, Array(V))) physical plan" do
-  it "admits only the exact paired UInt64/String key and value declarations" do
+  it "retains the four W84 declarations and rejects still-unsupported neighbors" do
     exact = [
       "Array(Map(UInt64, Array(UInt64)))",
       "Array(Map(UInt64, Array(String)))",
@@ -17,7 +17,7 @@ describe "W84 Array(Map(K, Array(V))) physical plan" do
 
     rejected = [
       "Array(Map(UInt8, Array(UInt64)))",
-      "Array(Map(UInt64, Array(UInt32)))",
+      "Array(Map(UInt64, Array(Bool)))",
       "Array(Map(UInt64, Array(Nullable(UInt64))))",
       "Array(Map(UInt64, Array(Array(UInt64))))",
       "Array(Array(Map(UInt64, Array(UInt64))))",

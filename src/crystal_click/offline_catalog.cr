@@ -19,6 +19,16 @@ module CrystalClick
                                                     Array(Array(Tuple(String, Int8?))) | Array(Array(Tuple(String, Int16?))) |
                                                     Array(Array(Tuple(String, Int32?))) | Array(Array(Tuple(String, Int64?))) |
                                                     Array(Array(Tuple(String, Float32?))) | Array(Array(Tuple(String, Float64?)))
+  alias OfflineArrayMapUInt64ArrayNumericValue = Array(Array(Tuple(UInt64, Array(UInt8)))) | Array(Array(Tuple(UInt64, Array(UInt16)))) |
+                                                 Array(Array(Tuple(UInt64, Array(UInt32)))) | Array(Array(Tuple(UInt64, Array(UInt64)))) |
+                                                 Array(Array(Tuple(UInt64, Array(Int8)))) | Array(Array(Tuple(UInt64, Array(Int16)))) |
+                                                 Array(Array(Tuple(UInt64, Array(Int32)))) | Array(Array(Tuple(UInt64, Array(Int64)))) |
+                                                 Array(Array(Tuple(UInt64, Array(Float32)))) | Array(Array(Tuple(UInt64, Array(Float64))))
+  alias OfflineArrayMapStringArrayNumericValue = Array(Array(Tuple(String, Array(UInt8)))) | Array(Array(Tuple(String, Array(UInt16)))) |
+                                                 Array(Array(Tuple(String, Array(UInt32)))) | Array(Array(Tuple(String, Array(UInt64)))) |
+                                                 Array(Array(Tuple(String, Array(Int8)))) | Array(Array(Tuple(String, Array(Int16)))) |
+                                                 Array(Array(Tuple(String, Array(Int32)))) | Array(Array(Tuple(String, Array(Int64)))) |
+                                                 Array(Array(Tuple(String, Array(Float32)))) | Array(Array(Tuple(String, Array(Float64))))
 
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 | UInt128 |
@@ -60,9 +70,9 @@ module CrystalClick
                              Array(Tuple(UInt64, Array(Float32))) | Array(Tuple(UInt64, Array(Float64))) |
                              Array(Tuple(String, Array(String))) |
                              Array(Tuple(UInt64, Array(String))) |
-                             Array(Array(Tuple(UInt64, Array(UInt64)))) |
+                             OfflineArrayMapUInt64ArrayNumericValue |
+                             OfflineArrayMapStringArrayNumericValue |
                              Array(Array(Tuple(UInt64, Array(String)))) |
-                             Array(Array(Tuple(String, Array(UInt64)))) |
                              Array(Array(Tuple(String, Array(String)))) |
                              Array(Tuple(String, Array(String?))) |
                              Array(Tuple(String, Array(UInt8?))) | Array(Tuple(String, Array(UInt16?))) | Array(Tuple(String, Array(UInt32?))) |
@@ -2505,6 +2515,42 @@ module CrystalClick
       case shape
       when {"UInt64", "UInt64"}
         append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, UInt64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "UInt8"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, UInt8, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "UInt16"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, UInt16, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "UInt32"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, UInt32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "Int8"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, Int8, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "Int16"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, Int16, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "Int32"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, Int32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "Int64"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, Int64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "Float32"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, Float32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"UInt64", "Float64"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, Float64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "UInt8"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, UInt8, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "UInt16"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, UInt16, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "UInt32"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, UInt32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "Int8"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, Int8, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "Int16"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, Int16, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "Int32"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, Int32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "Int64"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, Int64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "Float32"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, Float32, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
+      when {"String", "Float64"}
+        append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, Float64, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
       when {"UInt64", "String"}
         append_materialized_array_map_array_leaf_batch(values, batch, column_name, UInt64, String, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
       when {"String", "UInt64"}
@@ -2512,7 +2558,7 @@ module CrystalClick
       when {"String", "String"}
         append_materialized_array_map_array_leaf_batch(values, batch, column_name, String, String, observed_rows, expected_rows, observed_elements, observed_bytes, max_string_bytes)
       else
-        raise UnsupportedFormatError.new("selected Array(Map) Array leaf is not an admitted UInt64/String combination")
+        raise UnsupportedFormatError.new("selected Array(Map) Array leaf is not an admitted W84 String or W85 numeric combination")
       end
     end
 
