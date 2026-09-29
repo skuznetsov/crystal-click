@@ -3987,6 +3987,111 @@ module CrystalClick
       table(location, name)
     end
 
+    # Recompute one deliberately narrow persisted MATERIALIZED VIEW projection
+    # from one resolved source part and publish it only below a detached/ path.
+    # This is an offline artifact, not the server's current MV target state.
+    # The caller must exclusively own the destination hierarchy during this
+    # call: path-based checks do not prevent concurrent renames or symlink swaps.
+    # A normal failure before atomic publish leaves no output; process death
+    # after publish can leave a complete detached part that must be reconciled.
+    def materialize_view_part(
+      database : String,
+      view_name : String,
+      source_part_name : String,
+      destination : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      if rows_per_mark <= 0 || rows_per_mark > WidePartWriter::MAX_ROWS_PER_MARK
+        raise BoundsError.new("rows_per_mark is out of range")
+      end
+
+      view = table(database, view_name)
+      unless view.kind == :materialized_view && view.engine == "MaterializedView"
+        raise UnsupportedFormatError.new("selected view is not a persisted MATERIALIZED VIEW")
+      end
+
+      target_database, target_name, source_database, source_name =
+        parse_w88_materialized_view_identity(view.metadata_ddl || raise(UnsupportedFormatError.new("MATERIALIZED VIEW metadata is unavailable")))
+      unless target_database == database && source_database == database
+        raise UnsupportedFormatError.new("W88 MATERIALIZED VIEW source and explicit TO target must use the selected database")
+      end
+      raise UnsupportedFormatError.new("W88 MATERIALIZED VIEW source and target must be distinct tables") if source_name == target_name
+      unless view.columns.empty? || w88_exact_view_columns?(view.columns)
+        raise UnsupportedFormatError.new("W88 MATERIALIZED VIEW columns must be exactly k UInt64, v String")
+      end
+
+      target = table(database, target_name)
+      source = table(database, source_name)
+      w88_validate_table_shape!(target, "target")
+      w88_validate_table_shape!(source, "source")
+      w88_validate_unpartitioned_layout!(target, "target")
+      w88_validate_unpartitioned_layout!(source, "source")
+      unless rows_per_mark == 8192
+        raise UnsupportedFormatError.new("W88 rows_per_mark must match the supported target index_granularity of 8192")
+      end
+
+      output_path, output_info = w88_validate_detached_destination!(destination, target)
+      target.part_candidates.each do |candidate|
+        if candidate.info.overlaps?(output_info)
+          raise InvalidPartError.new("W88 output part identity overlaps a target part candidate: #{candidate.name}")
+        end
+      end
+
+      max_rows = OfflineTable::MAX_MATERIALIZED_VALUES_ROWS
+      max_string_bytes = OfflineTable::MAX_MATERIALIZED_VALUES_STRING_BYTES
+      source_candidates = source.resolved_scan_parts
+      selected = source_candidates.select { |candidate| candidate.name == source_part_name }
+      unless selected.size == 1
+        raise InvalidPartError.new("selected source part is absent or ambiguous in the resolved candidate set")
+      end
+      source_part = selected.first
+      raise BoundsError.new("selected source part exceeds W88 row limit") if source_part.row_count > max_rows
+
+      reader = WidePartTable.open_selected_typed([source_part.path], ["k", "v"])
+      unless reader.columns == ["k", "v"] && reader.column_types == [{"k", "UInt64"}, {"v", "String"}]
+        raise UnsupportedFormatError.new("selected source part physical types differ from exact W88 schema")
+      end
+
+      keys = Array(UInt64).new(source_part.row_count.to_i)
+      values = Array(String).new(source_part.row_count.to_i)
+      string_bytes = 0_u64
+      previous_key : UInt64? = nil
+      reader.scan_typed do |batch|
+        batch_keys = batch.values_for("k")
+        batch_values = batch.strings_for("v")
+        unless batch_keys.size == batch_values.size
+          raise CorruptPartError.new("selected W88 batch columns are not row-aligned")
+        end
+        batch_keys.each_with_index do |key, index|
+          if previous = previous_key
+            raise InvalidPartError.new("selected W88 source keys are not nondecreasing") if key < previous
+          end
+          value = batch_values[index]
+          byte_count = value.bytesize.to_u64
+          if string_bytes > max_string_bytes || byte_count > max_string_bytes - string_bytes
+            raise BoundsError.new("selected W88 source String payload exceeds limit")
+          end
+          string_bytes += byte_count
+          keys << key
+          values << String.new(value.to_slice)
+          previous_key = key
+        end
+      end
+
+      unless keys.size.to_u64 == source_part.row_count && values.size == keys.size
+        raise CorruptPartError.new("selected W88 source row count changed during scan")
+      end
+
+      WidePartWriter.write_uint64_typed_pair(
+        output_path,
+        "k",
+        keys.to_unsafe.to_slice(keys.size),
+        "v",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark
+      )
+    end
+
     private def part_candidates_table : OfflineTable
       columns = [
         OfflineColumn.new("database", "String", false, false),
@@ -4064,6 +4169,147 @@ module CrystalClick
                         end
 
       OfflineTable.new(name, uuid, engine, columns, part_candidates, primary_key_column, nil, kind, ddl, projections)
+    end
+
+    private def w88_validate_table_shape!(table : OfflineTable, role : String) : Nil
+      unless table.kind == :table && table.engine == "MergeTree"
+        raise UnsupportedFormatError.new("W88 #{role} must be an ordinary MergeTree table")
+      end
+      columns = table.columns
+      unless columns.size == 2 &&
+             columns[0].name == "k" && columns[0].type == "UInt64" && !columns[0].alias_column && columns[0].key_candidate_column &&
+             columns[1].name == "v" && columns[1].type == "String" && !columns[1].alias_column && columns[1].key_candidate_column
+        raise UnsupportedFormatError.new("W88 #{role} schema must be exactly k UInt64, v String")
+      end
+    end
+
+    private def w88_validate_unpartitioned_layout!(table : OfflineTable, role : String) : Nil
+      ddl = table.metadata_ddl || raise(UnsupportedFormatError.new("W88 #{role} DDL is unavailable"))
+      header = /\A\s*ATTACH\s+TABLE\s+_\s+UUID\s+'[^']+'\s*\(/i.match(ddl)
+      raise UnsupportedFormatError.new("W88 #{role} table DDL is not an exact persisted TABLE shape") unless header
+      opening = header.end(0) - 1
+      closing = matching_parenthesis(ddl, opening)
+      suffix = ddl.byte_slice(closing + 1, ddl.bytesize - closing - 1)
+      engine = /\A\s*ENGINE\s*=\s*MergeTree\b/i.match(suffix)
+      raise UnsupportedFormatError.new("W88 #{role} must use exact MergeTree engine") unless engine
+      trailing = suffix.byte_slice(engine.end(0), suffix.bytesize - engine.end(0)).strip
+      clauses = split_table_tail_clauses(trailing)
+      raise UnsupportedFormatError.new("W88 #{role} MergeTree layout suffix is not fully recognized") unless clauses
+
+      order_clauses = clauses.not_nil!.select { |keyword, _content| keyword == "ORDER BY" }
+      unless order_clauses.size == 1 && parse_simple_ascending_key_expression(order_clauses[0][1]) == "k"
+        raise UnsupportedFormatError.new("W88 #{role} must have simple ORDER BY k")
+      end
+      unless clauses.not_nil!.all? { |keyword, _content| keyword == "ORDER BY" || keyword == "SETTINGS" }
+        raise UnsupportedFormatError.new("W88 #{role} partitioning or extra MergeTree layout clauses are unsupported")
+      end
+      if setting = clauses.not_nil!.find { |keyword, _content| keyword == "SETTINGS" }
+        unless w88_supported_settings?(setting[1])
+          raise UnsupportedFormatError.new("W88 #{role} SETTINGS are outside the supported MergeTree subset")
+        end
+      end
+    end
+
+    private def w88_supported_settings?(content : String) : Bool
+      settings = Hash(String, String).new
+      content.split(',').each do |entry|
+        match = /\A\s*(min_rows_for_wide_part|min_bytes_for_wide_part|index_granularity)\s*=\s*([0-9]+)\s*\z/i.match(entry)
+        return false unless match
+        name = match[1].downcase
+        return false if settings.has_key?(name)
+        settings[name] = match[2]
+      end
+
+      return false if settings.empty?
+      return false if settings.has_key?("index_granularity") && settings["index_granularity"] != "8192"
+      has_min_rows = settings.has_key?("min_rows_for_wide_part")
+      has_min_bytes = settings.has_key?("min_bytes_for_wide_part")
+      return false if has_min_rows != has_min_bytes
+      return false if has_min_rows && (settings["min_rows_for_wide_part"] != "0" || settings["min_bytes_for_wide_part"] != "0")
+
+      true
+    end
+
+    private def w88_validate_detached_destination!(destination : String, target : OfflineTable) : {String, MergeTreePartInfo}
+      expanded_path = File.expand_path(destination)
+      expanded_parent = File.dirname(expanded_path)
+      unless File.basename(expanded_parent) == "detached"
+        raise InvalidPartError.new("W88 output parent must be a detached directory")
+      end
+      raise InvalidPartError.new("W88 detached output parent is a symbolic link") if File.symlink?(expanded_parent)
+      raise InvalidPartError.new("W88 detached output parent is not a directory") unless Dir.exists?(expanded_parent)
+      # Resolve aliases in ancestors (for example macOS /var -> /private/var),
+      # but reject a detached directory that is itself a symlink. Use only the
+      # canonical path from this point onward so active-store checks cannot be
+      # bypassed by an alias.
+      output_parent = File.realpath(expanded_parent)
+      output_path = File.join(output_parent, File.basename(expanded_path))
+      if File.exists?(output_path) || File.symlink?(output_path)
+        raise InvalidPartError.new("W88 output path is already occupied")
+      end
+
+      target_path = validate_store_directory(target.uuid)
+      target_detached = File.join(target_path, "detached")
+      store_root = File.join(@root, "store")
+      if output_parent == target_path || output_parent.starts_with?(store_root + "/") && output_parent != target_detached
+        raise InvalidPartError.new("W88 output must not publish into an active catalog table path")
+      end
+
+      name = File.basename(output_path)
+      unless /\Aall_(?:0|[1-9][0-9]*)_(?:0|[1-9][0-9]*)_(?:0|[1-9][0-9]*)(?:_(?:0|[1-9][0-9]*))?\z/.matches?(name)
+        raise InvalidPartError.new("W88 output basename must be a canonical unpartitioned all_* part identity")
+      end
+      info = MergeTreePartInfo.parse(name)
+      unless info && info.partition_id == "all" && info.name == name
+        raise InvalidPartError.new("W88 output basename is not a canonical unpartitioned all_* part identity")
+      end
+      {output_path, info}
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot validate W88 detached output path")
+    end
+
+    private def parse_w88_materialized_view_identity(ddl : String) : {String, String, String, String}
+      header = /\A\s*ATTACH\s+MATERIALIZED\s+VIEW\s+_\s+UUID\s+'[^']+'/i.match(ddl)
+      raise UnsupportedFormatError.new("W88 view metadata must be a persisted MATERIALIZED VIEW") unless header
+      tail = ddl.byte_slice(header.end(0), ddl.bytesize - header.end(0))
+      identifier = "(?:`[A-Za-z_][A-Za-z0-9_]*`|[A-Za-z_][A-Za-z0-9_]*)"
+      target_pattern = Regex.new("\\A\\s+TO\\s+(#{identifier})\\s*\\.\\s*(#{identifier})(?=\\s|\\z)", Regex::Options::IGNORE_CASE)
+      target_match = target_pattern.match(tail)
+      raise UnsupportedFormatError.new("W88 requires an explicit named MATERIALIZED VIEW TO target") unless target_match
+      target_database = w88_identifier_value(target_match[1])
+      target_name = w88_identifier_value(target_match[2])
+      tail = tail.byte_slice(target_match.end(0), tail.bytesize - target_match.end(0)).lstrip
+
+      if tail.starts_with?("(")
+        closing = matching_parenthesis(tail, 0)
+        tail = tail.byte_slice(closing + 1, tail.bytesize - closing - 1).lstrip
+      end
+      before_select, query = split_materialized_view_select(tail)
+      raise UnsupportedFormatError.new("W88 MATERIALIZED VIEW storage clauses are unsupported") unless before_select.empty?
+      query_match = /\A(`k`|k)\s*,\s*(`v`|v)\s+FROM\s+((?:`[A-Za-z_][A-Za-z0-9_]*`|[A-Za-z_][A-Za-z0-9_]*))\s*\.\s*((?:`[A-Za-z_][A-Za-z0-9_]*`|[A-Za-z_][A-Za-z0-9_]*))\z/i.match(query)
+      raise UnsupportedFormatError.new("W88 MATERIALIZED VIEW SELECT must be the exact k, v identity projection") unless query_match
+      unless w88_identifier_value(query_match[1]) == "k" && w88_identifier_value(query_match[2]) == "v"
+        raise UnsupportedFormatError.new("W88 MATERIALIZED VIEW SELECT columns must be exactly k, v")
+      end
+      source_database = w88_identifier_value(query_match[3])
+      source_name = w88_identifier_value(query_match[4])
+      {target_database, target_name, source_database, source_name}
+    end
+
+    private def w88_identifier_value(token : String) : String
+      if match = /\A`([A-Za-z_][A-Za-z0-9_]*)`\z/.match(token)
+        match[1]
+      elsif /\A[A-Za-z_][A-Za-z0-9_]*\z/.matches?(token)
+        token
+      else
+        raise UnsupportedFormatError.new("W88 identifier is outside the supported simple-name subset")
+      end
+    end
+
+    private def w88_exact_view_columns?(columns : Array(OfflineColumn)) : Bool
+      columns.size == 2 &&
+        columns[0].name == "k" && columns[0].type == "UInt64" && !columns[0].alias_column && columns[0].key_candidate_column &&
+        columns[1].name == "v" && columns[1].type == "String" && !columns[1].alias_column && columns[1].key_candidate_column
     end
 
     private def validate_database_identity!(database : OfflineDatabase, location : DatabaseLocation) : Nil

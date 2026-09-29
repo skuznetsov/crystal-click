@@ -1,9 +1,13 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W86 exposes bounded offline MV and projection
-declaration metadata. W87 admits explicit reads of fully covered physical
-Wide projection subparts, not projection writes or MV execution. W85 admits
-paired reader/writer, typed-table, and offline-catalog support for the twenty exact
+Document status: active design. W88 implements the design-sealed explicit-TO
+identity MV recomputation into a detached part; final-source debug and release
+suites and the stock ClickHouse oracle passed within the bounded profile below.
+W86 exposes
+bounded offline MV and projection declaration metadata. W87 admits explicit
+reads of fully covered physical Wide projection subparts, not projection
+writes or MV execution. W85 admits paired reader/writer, typed-table, and
+offline-catalog support for the twenty exact
 `Array(Map(UInt64|String, Array(N)))` forms with ten primitive numeric leaves
 on the pinned Wide/LZ4/plain-mark profile below. W84 admits paired
 reader/writer, typed-table, and offline-catalog support for the four exact
@@ -5557,6 +5561,82 @@ diff checks passed. The scoped hostile review returned ROBUST after the
 claim was narrowed: selected checksums currently verify recorded sizes, not
 same-length content mutations, and late decode failures can occur after
 earlier callbacks.
+
+## W88 design frontier: detached identity-MV part materialization
+
+The W86 catalog keeps MV DDL opaque and discards both its `TO` target and
+`AS SELECT` source. A pinned ClickHouse 26.7.1.1315 probe of an explicit
+`TO db.target` view found three distinct UUIDs for source, target, and view;
+the view UUID had no data store. Two inserted source blocks produced two
+corresponding target Wide parts. Resolving storage by view UUID, or writing
+an unannounced part into a live target directory, would therefore be wrong.
+
+Design-sealed W88 surface: for the exact same-database persisted shape
+`ATTACH MATERIALIZED VIEW ... TO db.target ... AS SELECT k, v FROM db.source`,
+resolve source and target by their catalog identities and require both to be
+ordinary unpartitioned MergeTree tables with exactly `k UInt64, v String`
+and simple `ORDER BY k`. The only admitted table settings are the exact
+`index_granularity = 8192` default and the paired
+`min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0` Wide-selection
+settings. The materializer's `rows_per_mark` must equal this admitted
+granularity; arbitrary mark-size overrides are not covered. The MV query
+must be an identity projection with
+those exact column names and no expression, alias, filter, join, aggregate,
+or trailing clause. The caller selects one part from the source's resolved
+offline candidate set and an absent output path directly inside a pre-existing,
+non-symlink `detached` directory. Read its two columns in a
+single borrowed-batch pass, copy at most 100,000 rows and 64 MiB of String
+payload, verify nondecreasing keys, and use the existing staged, exclusive
+Wide writer to produce one ClickHouse-compatible detached part. It is an
+offline recomputation artifact, not the current server MV state. An empty
+or ambiguous source selection, unsupported metadata, non-`all` output part
+identity, or a failure before the writer's atomic publish must leave no
+published output. Interruption after publish can leave the detached part
+present, even if the caller did not receive success.
+
+This path check assumes an offline, exclusively controlled destination
+directory. It rejects a symlinked `detached` parent at validation time but
+does not defend against another process replacing that directory during
+the writer call; the writer currently uses path-based staging rather than
+directory-handle-relative, no-follow operations. W88 must not be presented
+as safe against concurrent filesystem mutation or as a live-server writer.
+
+Rejected for W88: automatic source-INSERT triggers, claiming view freshness
+or server `Active` state, mutating a live target's active-part set, target
+backfill, exactly-once replay, cross-table atomicity, implicit `TO INNER UUID`
+resolution, arbitrary SELECT evaluation, partitioned targets, and general
+type support. These remain future MV frontiers rather than inferred from a
+valid detached part. A target-side `ATTACH PART` is the independent stock
+compatibility check, not an action the library performs automatically.
+
+This is CAUTION-level API, parser, and serialization work. First falsifiers:
+the current metadata-only MV fixture cannot produce the requested part; a
+stock explicit-`TO` fixture with one selected source part must yield the
+exact expected rows after ClickHouse `ATTACH PART` and pass `CHECK TABLE`.
+Wrong target or source name, inner UUID target, different schema/key or
+partitioning, unsupported SELECT syntax, unresolved or overlapping part
+identity, mark-size mismatch, row/payload limit, unsorted key, occupied
+output, and injected pre-publication write failure must reject without a
+published output. The strongest risk is
+mistaking offline recomputation for the server's historically accumulated
+target; the API name, detached-only output contract, and stock comparison
+guard that distinction. DoD: red focused tests, pinned stock oracle, full
+debug/release suites, format/diff checks, and scoped hostile review. Rollback
+is the isolated W88 diff. Evidence decays when ClickHouse's persisted MV DDL,
+reader batch ownership, part writer, or target attach behavior changes.
+
+W88 implementation observation (2026-09-29): focused
+`spec/offline_mv_materialization_w88_spec.cr` checks passed 10 examples after
+the final 8192 mark-size guard. A fresh-store differential oracle separately
+confirmed stock MV trigger behavior and that ClickHouse 26.7.1.1315 accepts
+the Crystal-produced detached target part via `ATTACH PART` and `CHECK TABLE`,
+with exact target rows. The scoped hostile re-review found the source/target
+identity, 8192 guard, borrowed String copy, and pre/post-publication contract
+robust within an offline, exclusively controlled destination hierarchy.
+W88-specific injected pre-publication crash coverage remains absent; the
+claim inherits the shared writer's staged/exclusive-publish behavior and its
+existing crash-window spec. The final-source full debug and release suites
+each passed 1124 examples with no failures or errors. No remote push.
 
 ## Rejected and guard-only surfaces
 
