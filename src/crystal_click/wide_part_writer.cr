@@ -2113,6 +2113,38 @@ module CrystalClick
       end
     end
 
+    # Write Map(UInt64, Array(Nullable(T))) for the exact primitive numeric
+    # family. Ordered tuple arrays preserve duplicate map keys and input order.
+    def self.write_uint64_map_uint64_array_nullable_numeric_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(UInt64, Array(T?)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      type_name = map_array_nullable_numeric_value_type_name(values)
+      write_map_array_nullable_numeric_pair(
+        destination, key_name, keys, value_name, values, rows_per_mark, type_name
+      )
+    end
+
+    # Write Map(String, Array(Nullable(T))) for the exact primitive numeric
+    # family. Ordered tuple arrays preserve duplicate and binary map keys.
+    def self.write_uint64_map_string_array_nullable_numeric_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(String, Array(T?)))),
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      type_name = map_array_nullable_numeric_value_type_name(values)
+      write_map_array_nullable_numeric_pair(
+        destination, key_name, keys, value_name, values, rows_per_mark, type_name
+      )
+    end
+
     # Write an immutable sorted-key part with exact Map(UInt64,
     # Nullable(String)) values. Ordered tuple arrays preserve duplicate keys
     # and insertion order; NULL and empty strings retain distinct null flags.
@@ -3429,6 +3461,35 @@ module CrystalClick
       {% end %}
     end
 
+    private def self.map_array_nullable_numeric_value_type_name(values : Slice(Array(Tuple(K, Array(T?))))) : String forall K, T
+      {% unless K == UInt64 || K == String %}
+        raise UnsupportedFormatError.new("Map Array writer requires UInt64 or String Map keys")
+      {% end %}
+      {% if T == UInt8 %}
+        "UInt8"
+      {% elsif T == UInt16 %}
+        "UInt16"
+      {% elsif T == UInt32 %}
+        "UInt32"
+      {% elsif T == UInt64 %}
+        "UInt64"
+      {% elsif T == Int8 %}
+        "Int8"
+      {% elsif T == Int16 %}
+        "Int16"
+      {% elsif T == Int32 %}
+        "Int32"
+      {% elsif T == Int64 %}
+        "Int64"
+      {% elsif T == Float32 %}
+        "Float32"
+      {% elsif T == Float64 %}
+        "Float64"
+      {% else %}
+        raise UnsupportedFormatError.new("Map Array writer requires an exact nullable primitive numeric leaf")
+      {% end %}
+    end
+
     private def self.map_array_core_raw_sizes(
       rows : Int32,
       entries : UInt64,
@@ -3589,6 +3650,45 @@ module CrystalClick
         write_plain_metadata(stage, "columns_substreams.txt", substreams)
         write_checksums(stage, records)
         validate_staged_map_numeric_array_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
+    private def self.write_map_array_nullable_numeric_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(K, Array(T?)))),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : String forall K, T
+      validate_map_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      string_keys = {% if K == String %}true{% else %}false{% end %}
+      map_type = {% if K == String %}"Map(String, Array(Nullable(#{type_name})))"{% else %}"Map(UInt64, Array(Nullable(#{type_name})))"{% end %}
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(write_map_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, map_type))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", map_array_nullable_numeric_substreams_metadata(key_name, value_name, string_keys))
+        write_checksums(stage, records)
+        validate_staged_map_array_nullable_numeric_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
         publish_exclusively(stage, target)
         target
       ensure
@@ -7060,6 +7160,135 @@ module CrystalClick
 
       checked_array_element_checksum_size(total_entries, "Map UInt64 keys and Array sizes")
       checked_array_element_checksum_size(total_leaf_elements, "Map nullable UInt64 Array values")
+      nil
+    end
+
+    private def self.validate_map_array_nullable_numeric_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(Array(Tuple(K, Array(T?)))),
+      type_name : String,
+      rows_per_mark : Int32,
+    ) : Nil forall K, T
+      {% unless K == UInt64 || K == String %}
+        raise UnsupportedFormatError.new("Map Array writer requires UInt64 or String Map keys")
+      {% end %}
+      {% unless T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+        raise UnsupportedFormatError.new("Map Array writer requires an exact nullable primitive numeric leaf")
+      {% end %}
+
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.size != values.size
+      string_keys = {% if K == String %}true{% else %}false{% end %}
+      streams = if string_keys
+                  ["#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys",
+                   "#{value_name}%2Evalues.size1", "#{value_name}%2Evalues.null", "#{value_name}%2Evalues"]
+                else
+                  ["#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size1",
+                   "#{value_name}%2Evalues.null", "#{value_name}%2Evalues"]
+                end
+      validate_array_common_inputs(destination, key_name, keys, value_name, rows_per_mark, streams)
+
+      width = numeric_width(type_name)
+      data_sizes = Array(Int64).new(streams.size, 0_i64)
+      total_entries = 0_u64
+      total_leaves = 0_u64
+      total_string_key_bytes = 0_u64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        fixed_raw_size = rows.to_i64 * 8_i64
+        fixed_frame_size = checked_array_frame_size(fixed_raw_size, "Map size0")
+        data_sizes[0] = add_array_frame_size(data_sizes[0], fixed_frame_size, "Map size0")
+
+        mark_entries = 0_u64
+        mark_leaves = 0_u64
+        mark_key_bytes = 0_u64
+        rows.times do |offset|
+          row_entries = values[start_row + offset]
+          if row_entries.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_entries
+            raise ArgumentError.new("Map entry count exceeds per-mark limit")
+          end
+          mark_entries += row_entries.size.to_u64
+          row_entries.each do |entry|
+            if entry[1].size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_leaves
+              raise ArgumentError.new("Map nullable numeric Array leaf count exceeds per-mark limit")
+            end
+            mark_leaves += entry[1].size.to_u64
+            {% if K == String %}
+              key_bytes = entry[0].bytesize.to_u64
+              if key_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - mark_key_bytes ||
+                 key_bytes > MAX_FRAME_RAW_BYTES.to_u64 - mark_key_bytes
+                raise ArgumentError.new("Map String key bytes exceed per-mark limit")
+              end
+              mark_key_bytes += key_bytes
+            {% end %}
+          end
+        end
+
+        entry_raw_size = checked_array_element_bytes(mark_entries, "Map keys and Array sizes")
+        if entry_raw_size > WidePart::MAX_ARRAY_MARK_BYTES || entry_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Map keys and Array sizes exceed per-mark limit")
+        end
+        stream_index = 1
+        if string_keys
+          unless entry_raw_size == 0
+            frame_size = checked_array_frame_size(entry_raw_size, "Map String key sizes")
+            data_sizes[stream_index] = add_array_frame_size(data_sizes[stream_index], frame_size, "Map String key sizes")
+          end
+          stream_index += 1
+          unless mark_key_bytes == 0
+            frame_size = checked_array_frame_size(mark_key_bytes.to_i64, "Map String keys")
+            data_sizes[stream_index] = add_array_frame_size(data_sizes[stream_index], frame_size, "Map String keys")
+          end
+          if mark_key_bytes > UInt64::MAX - total_string_key_bytes
+            raise ArgumentError.new("Map String key byte count overflows")
+          end
+          total_string_key_bytes += mark_key_bytes
+          stream_index += 1
+        else
+          unless entry_raw_size == 0
+            frame_size = checked_array_frame_size(entry_raw_size, "Map UInt64 keys")
+            data_sizes[stream_index] = add_array_frame_size(data_sizes[stream_index], frame_size, "Map UInt64 keys")
+          end
+          stream_index += 1
+        end
+        unless entry_raw_size == 0
+          frame_size = checked_array_frame_size(entry_raw_size, "Map Array sizes")
+          data_sizes[stream_index] = add_array_frame_size(data_sizes[stream_index], frame_size, "Map Array sizes")
+        end
+        stream_index += 1
+
+        null_raw_size = mark_leaves.to_i64
+        if null_raw_size > WidePart::MAX_ARRAY_MARK_BYTES || null_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Map nullable numeric Array null map exceeds per-mark limit")
+        end
+        unless null_raw_size == 0
+          frame_size = checked_array_frame_size(null_raw_size, "Map nullable numeric Array null map")
+          data_sizes[stream_index] = add_array_frame_size(data_sizes[stream_index], frame_size, "Map nullable numeric Array null map")
+        end
+        stream_index += 1
+
+        leaf_raw_size = checked_array_numeric_bytes(mark_leaves, width, "Map nullable numeric Array values")
+        if leaf_raw_size > WidePart::MAX_ARRAY_MARK_BYTES || leaf_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+          raise ArgumentError.new("Map nullable numeric Array values exceed per-mark byte limit")
+        end
+        unless leaf_raw_size == 0
+          frame_size = checked_array_frame_size(leaf_raw_size, "Map nullable numeric Array values")
+          data_sizes[stream_index] = add_array_frame_size(data_sizes[stream_index], frame_size, "Map nullable numeric Array values")
+        end
+
+        if mark_entries > UInt64::MAX - total_entries || mark_leaves > UInt64::MAX - total_leaves
+          raise ArgumentError.new("Map entry or nullable leaf count overflows")
+        end
+        total_entries += mark_entries
+        total_leaves += mark_leaves
+        checked_array_element_checksum_size(total_entries, "Map entries")
+        checked_array_element_checksum_size(total_leaves, "Map nullable numeric Array null map")
+        checked_array_numeric_checksum_size(total_leaves, width, "Map nullable numeric Array values")
+        start_row += rows
+      end
       nil
     end
 
@@ -14627,6 +14856,175 @@ module CrystalClick
       records
     end
 
+    private def self.write_map_array_nullable_numeric_streams(
+      stage : String,
+      column : String,
+      values : Slice(Array(Tuple(K, Array(T?)))),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord) forall K, T
+      width = numeric_width(type_name)
+      string_keys = {% if K == String %}true{% else %}false{% end %}
+      suffixes = ["#{column}.size0"]
+      suffixes << "#{column}%2Ekeys.size" if string_keys
+      suffixes << "#{column}%2Ekeys"
+      suffixes << "#{column}%2Evalues.size1"
+      suffixes << "#{column}%2Evalues.null"
+      suffixes << "#{column}%2Evalues"
+      data_names = suffixes.map { |suffix| "#{StreamName.hash(suffix)}.bin" }
+      mark_names = suffixes.map { |suffix| "#{StreamName.hash(suffix)}.mrk2" }
+      stream_count = suffixes.size
+      data_hashes = Array(CityHashV1::FileHasher).new(stream_count) { CityHashV1::FileHasher.new }
+      raw_hashes = Array(CityHashV1::FileHasher).new(stream_count) { CityHashV1::FileHasher.new }
+      mark_bytes = Array(IO::Memory).new(stream_count) { IO::Memory.new }
+      data_sizes = Array(UInt64).new(stream_count, 0_u64)
+      raw_totals = Array(UInt64).new(stream_count, 0_u64)
+      total_entries = 0_u64
+      total_leaves = 0_u64
+      files = data_names.map { |name| File.open(File.join(stage, name), "wb") }
+      start_row = 0
+      begin
+        while start_row < values.size
+          rows = {rows_per_mark, values.size - start_row}.min
+          mark_entries = 0_u64
+          mark_leaves = 0_u64
+          mark_key_bytes = 0_u64
+          rows.times do |row_offset|
+            entries = values[start_row + row_offset]
+            if entries.size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_entries
+              raise ArgumentError.new("Map entry count exceeds per-mark limit")
+            end
+            mark_entries += entries.size.to_u64
+            entries.each do |entry|
+              if entry[1].size.to_u64 > WidePart::MAX_ARRAY_MARK_ELEMENTS - mark_leaves
+                raise ArgumentError.new("Map nullable numeric Array leaf count exceeds per-mark limit")
+              end
+              mark_leaves += entry[1].size.to_u64
+              {% if K == String %}
+                key_bytes = entry[0].bytesize.to_u64
+                if key_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - mark_key_bytes ||
+                   key_bytes > MAX_FRAME_RAW_BYTES.to_u64 - mark_key_bytes
+                  raise ArgumentError.new("Map String key bytes exceed per-mark limit")
+                end
+                mark_key_bytes += key_bytes
+              {% end %}
+            end
+          end
+
+          size0_raw = Bytes.new(rows * 8, 0_u8)
+          entry_bytes = checked_array_element_bytes(mark_entries, "Map keys and Array sizes")
+          if entry_bytes > WidePart::MAX_ARRAY_MARK_BYTES || entry_bytes > MAX_FRAME_RAW_BYTES.to_i64
+            raise ArgumentError.new("Map keys and Array sizes exceed per-mark limit")
+          end
+          key_raw_size = if string_keys
+                           mark_key_bytes.to_i64
+                         else
+                           entry_bytes
+                         end
+          if key_raw_size > WidePart::MAX_ARRAY_MARK_BYTES || key_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+            raise ArgumentError.new("Map keys exceed per-mark limit")
+          end
+          key_raw = Bytes.new(key_raw_size.to_i, 0_u8)
+          key_sizes_raw = Bytes.new(string_keys ? entry_bytes.to_i : 0, 0_u8)
+          value_sizes1_raw = Bytes.new(entry_bytes.to_i, 0_u8)
+          null_raw_size = checked_array_numeric_bytes(mark_leaves, 1, "Map nullable numeric Array null map")
+          if null_raw_size > WidePart::MAX_ARRAY_MARK_BYTES || null_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+            raise ArgumentError.new("Map nullable numeric Array null map exceeds per-mark limit")
+          end
+          null_raw = Bytes.new(null_raw_size.to_i, 0_u8)
+          value_raw_size = checked_array_numeric_bytes(mark_leaves, width, "Map nullable numeric Array values")
+          if value_raw_size > WidePart::MAX_ARRAY_MARK_BYTES || value_raw_size > MAX_FRAME_RAW_BYTES.to_i64
+            raise ArgumentError.new("Map nullable numeric Array values exceed per-mark byte limit")
+          end
+          value_raw = Bytes.new(value_raw_size.to_i, 0_u8)
+
+          entry_index = 0
+          leaf_index = 0
+          key_offset = 0
+          value_offset = 0
+          rows.times do |row_offset|
+            entries = values[start_row + row_offset]
+            write_uint64_le(size0_raw, row_offset * 8, entries.size.to_u64)
+            entries.each do |entry|
+              key_offset = write_map_array_core_key(key_raw, key_sizes_raw, entry_index, key_offset, entry[0])
+              write_uint64_le(value_sizes1_raw, entry_index * 8, entry[1].size.to_u64)
+              entry[1].each do |value|
+                if value.nil?
+                  null_raw[leaf_index] = 1_u8
+                else
+                  null_raw[leaf_index] = 0_u8
+                  write_typed_numeric_le(value_raw, value_offset, value.not_nil!)
+                end
+                leaf_index += 1
+                value_offset += width
+              end
+              entry_index += 1
+            end
+          end
+          unless entry_index == mark_entries.to_i && leaf_index == mark_leaves &&
+                 key_offset == key_raw.size && value_offset == value_raw.size
+            raise CorruptPartError.new("Map Array(Nullable(T)) writer cardinality changed")
+          end
+
+          raw_streams = [size0_raw]
+          raw_streams << key_sizes_raw if string_keys
+          raw_streams << key_raw
+          raw_streams << value_sizes1_raw
+          raw_streams << null_raw
+          raw_streams << value_raw
+          raw_streams.each_with_index do |raw, stream_index|
+            write_uint64_le(mark_bytes[stream_index], data_sizes[stream_index])
+            write_uint64_le(mark_bytes[stream_index], 0_u64)
+            write_uint64_le(mark_bytes[stream_index], rows.to_u64)
+            unless stream_index > 0 && raw.empty?
+              frame = encode_lz4_frame(raw)
+              if data_sizes[stream_index] > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+                raise ArgumentError.new("Map data stream exceeds reader limit")
+              end
+              files[stream_index].write(frame)
+              data_hashes[stream_index].update(frame)
+              data_sizes[stream_index] += frame.size.to_u64
+            end
+            raw_hashes[stream_index].update(raw)
+            if raw.size.to_u64 > UInt64::MAX - raw_totals[stream_index]
+              raise ArgumentError.new("Map raw stream size overflows")
+            end
+            raw_totals[stream_index] += raw.size.to_u64
+          end
+
+          if mark_entries > UInt64::MAX - total_entries || mark_leaves > UInt64::MAX - total_leaves
+            raise ArgumentError.new("Map entry or nullable leaf count overflows")
+          end
+          total_entries += mark_entries
+          total_leaves += mark_leaves
+          checked_array_element_checksum_size(total_entries, "Map entries")
+          checked_array_element_checksum_size(total_leaves, "Map nullable numeric Array null map")
+          checked_array_numeric_checksum_size(total_leaves, width, "Map nullable numeric Array values")
+          start_row += rows
+        end
+      ensure
+        files.each { |file| file.close unless file.closed? }
+      end
+
+      mark_bytes.each_with_index do |bytes, stream_index|
+        write_uint64_le(bytes, data_sizes[stream_index])
+        write_uint64_le(bytes, 0_u64)
+        write_uint64_le(bytes, 0_u64)
+      end
+      marks = mark_bytes.map(&.to_slice)
+      marks.each do |bytes|
+        raise ArgumentError.new("mark stream exceeds reader limit") if bytes.size.to_i64 > MAX_MARK_FILE_BYTES
+      end
+      marks.each_with_index { |bytes, index| File.write(File.join(stage, mark_names[index]), bytes) }
+
+      records = [] of ChecksumRecord
+      data_names.each_with_index do |data_name, index|
+        records << ChecksumRecord.new(data_name, data_sizes[index], data_hashes[index].finish, true, raw_totals[index], raw_hashes[index].finish)
+        records << ChecksumRecord.new(mark_names[index], marks[index].size.to_u64, CityHashV1.file_hash(marks[index]), false)
+      end
+      records
+    end
+
     private def self.write_map_uint64_array_nullable_uint64_streams(
       stage : String,
       column : String,
@@ -20303,6 +20701,81 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_staged_map_array_nullable_numeric_part(
+      stage : String,
+      key_name : String,
+      value_name : String,
+      keys : Slice(UInt64),
+      values : Slice(Array(Tuple(K, Array(T?)))),
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Nil forall K, T
+      string_keys = {% if K == String %}true{% else %}false{% end %}
+      map_type = {% if K == String %}"Map(String, Array(Nullable(#{type_name})))"{% else %}"Map(UInt64, Array(Nullable(#{type_name})))"{% end %}
+      logical_streams = {% if K == String %}
+                          [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys",
+                           "#{value_name}%2Evalues.size1", "#{value_name}%2Evalues.null", "#{value_name}%2Evalues"]
+                        {% else %}
+                          [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size1",
+                           "#{value_name}%2Evalues.null", "#{value_name}%2Evalues"]
+                        {% end %}
+      key_part, value_part, mark_count = validate_staged_map_string_metadata(
+        stage,
+        key_name,
+        value_name,
+        keys,
+        rows_per_mark,
+        map_type,
+        map_array_nullable_numeric_substreams_metadata(key_name, value_name, string_keys),
+        logical_streams,
+        serialization_metadata
+      )
+
+      expected_mark_rows = Array(UInt64).new(mark_count)
+      start = 0
+      mark_index = 0
+      while start < keys.size
+        rows = {rows_per_mark, keys.size - start}.min
+        expected_mark_rows << rows.to_u64
+        actual_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
+        unless actual_keys == keys[start, rows].to_a
+          raise CorruptPartError.new("staged nullable numeric Map Array primary keys differ from input")
+        end
+        actual_maps = {% if K == String %}
+                        value_part.read_map_string_array_nullable_numeric_mark_range(value_name, mark_index, 1, T)
+                      {% else %}
+                        value_part.read_map_uint64_array_nullable_numeric_mark_range(value_name, mark_index, 1, T)
+                      {% end %}
+        unless actual_maps.size == rows
+          raise CorruptPartError.new("staged nullable numeric Map Array row count differs from input")
+        end
+        rows.times do |row|
+          expected_row = values[start + row]
+          actual_row = actual_maps[row]
+          unless actual_row.size == expected_row.size
+            raise CorruptPartError.new("staged nullable numeric Map Array entry count differs from input")
+          end
+          expected_row.each_with_index do |expected_entry, entry|
+            actual_entry = actual_row[entry]
+            unless actual_entry[0] == expected_entry[0] && actual_entry[1].size == expected_entry[1].size
+              raise CorruptPartError.new("staged nullable numeric Map Array shape differs from input")
+            end
+            expected_entry[1].each_with_index do |expected_value, leaf|
+              unless typed_nullable_numeric_value_equal?(expected_value, actual_entry[1][leaf])
+                raise CorruptPartError.new("staged nullable numeric Map Array leaf differs from input")
+              end
+            end
+          end
+        end
+        start += rows
+        mark_index += 1
+      end
+      unless expected_mark_rows.size == mark_count && key_part.mark_row_counts == expected_mark_rows && value_part.mark_row_counts == expected_mark_rows
+        raise CorruptPartError.new("staged nullable numeric Map Array marks differ from input")
+      end
+      nil
+    end
+
     private def self.validate_staged_map_uint64_array_nullable_uint64_part(
       stage : String,
       key_name : String,
@@ -21920,6 +22393,21 @@ module CrystalClick
         "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
         "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size1\n" +
         "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
+    end
+
+    private def self.map_array_nullable_numeric_substreams_metadata(key_name : String, value_name : String, string_keys : Bool) : String
+      if string_keys
+        "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
+          "6 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
+          "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
+          "\t#{value_name}%2Evalues.size1\n\t#{value_name}%2Evalues.null\n" +
+          "\t#{value_name}%2Evalues\n"
+      else
+        "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
+          "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
+          "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size1\n" +
+          "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
+      end
     end
 
     private def self.map_uint64_array_uint64_substreams_metadata(key_name : String, value_name : String) : String

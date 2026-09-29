@@ -63,11 +63,15 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
     CrystalClick::WideTypePlan::WidePhysicalPlanShadow
       .for_type("Map(String, Array(Nullable(UInt64)))").should_not be_nil
 
+    w79_type = "Map(String, Array(Nullable(Int64)))"
+    CrystalClick::WidePart.supports_typed_type?(w79_type).should be_true
+    CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(w79_type).should_not be_nil
+
     {
-      "Map(String, Array(Nullable(Int64)))",
       "Map(String, Array(Array(Nullable(String))))",
       "Map(String, Nullable(Array(Nullable(String))))",
       "Map(String, Array(Nullable(String))) trailing",
+      "Map(String, Array(Nullable(Int128)))",
     }.each do |type|
       CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(type).should be_nil
     end

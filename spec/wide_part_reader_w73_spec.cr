@@ -6,17 +6,18 @@ describe CrystalClick::WidePart do
       "Map(UInt64, Array(UInt64))",
       "Map(String, Array(String))",
       "Map(UInt64, Array(String))",
+      "Map(String, Array(Nullable(Int64)))",
+      "Map(UInt64, Array(Nullable(Int64)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
     end
 
     {
       "Map(Int64, Array(UInt64))",
-      "Map(String, Array(Nullable(Int64)))",
-      "Map(UInt64, Array(Nullable(Int64)))",
       "Map(UInt64, Array(Array(UInt64)))",
       "Map(UInt64, Nullable(Array(UInt64)))",
       "Map(UInt64, Array(String)) trailing",
+      "Map(UInt64, Array(Nullable(UInt128)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end

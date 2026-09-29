@@ -161,6 +161,7 @@ module CrystalClick
 
       private def self.shadow_shape?(type : String, root : Node) : Bool
         return true if exact_numeric_map_array_shape?(type, root)
+        return true if exact_nullable_numeric_map_array_shape?(type, root)
 
         case type
         when TYPE_ARRAY_TUPLE_UINT64_STRING,
@@ -198,6 +199,21 @@ module CrystalClick
 
         type == "Map(#{key.name}, Array(#{element.name}))" &&
           exact_map_shape?(root, key.name, false, element.name)
+      end
+
+      private def self.exact_nullable_numeric_map_array_shape?(type : String, root : Node) : Bool
+        return false unless root.name == "Map" && root.children.size == 2
+        key = root.child(0)
+        return false unless key.children.empty? && (key.name == "UInt64" || key.name == "String")
+        values = root.child(1)
+        return false unless values.name == "Array" && values.children.size == 1
+        element = values.child(0)
+        return false unless element.name == "Nullable" && element.children.size == 1
+        leaf = element.child(0)
+        return false unless leaf.children.empty? && numeric_map_array_leaf?(leaf.name)
+
+        type == "Map(#{key.name}, Array(Nullable(#{leaf.name})))" &&
+          exact_map_shape?(root, key.name, true, leaf.name)
       end
 
       private def self.numeric_map_array_leaf?(type : String) : Bool

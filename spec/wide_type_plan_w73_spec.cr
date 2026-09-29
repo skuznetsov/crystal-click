@@ -70,12 +70,16 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
   end
 
   it "keeps nearby W73 spellings out of the shadow plan" do
+    w79_type = "Map(UInt64, Array(Nullable(Int64)))"
+    CrystalClick::WidePart.supports_typed_type?(w79_type).should be_true
+    CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(w79_type).should_not be_nil
+
     {
       "Map(Int64, Array(UInt64))",
-      "Map(UInt64, Array(Nullable(Int64)))",
       "Map(UInt64, Array(Array(String)))",
       "Map(UInt64, Nullable(Array(String)))",
       "Map(UInt64, Array(String)) trailing",
+      "Map(UInt64, Array(Nullable(UInt128)))",
     }.each do |type|
       CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(type).should be_nil
     end

@@ -5,13 +5,17 @@ describe CrystalClick::WidePart do
     candidate = "Map(UInt64, Array(Nullable(UInt64)))"
     CrystalClick::WidePart.supports_typed_type?(candidate).should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(Nullable(UInt64)))").should be_true
+    generic_w79 = "Map(UInt64, Array(Nullable(UInt32)))"
+    CrystalClick::WidePart.supports_map_uint64_array_nullable_uint64_type?(generic_w79).should be_false
+    CrystalClick::WidePart.map_uint64_array_nullable_numeric_value_type(generic_w79).should eq("UInt32")
+    CrystalClick::WidePart.supports_typed_type?(generic_w79).should be_true
 
     {
       "Map(Int64, Array(Nullable(UInt64)))",
-      "Map(UInt64, Array(Nullable(UInt32)))",
       "Map(UInt64, Array(Array(Nullable(UInt64))))",
       "Map(UInt64, Nullable(Array(Nullable(UInt64))))",
       "Map(UInt64, Array(Nullable(UInt64))) trailing",
+      "Map(UInt64, Array(Nullable(UInt128)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end

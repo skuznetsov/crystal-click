@@ -200,16 +200,21 @@ describe "W78 exact numeric Map Array reader admission" do
   end
 
   it "rejects near-miss declarations outside the W78 exact grammar" do
+    w79_type = "Map(UInt64, Array(Nullable(Int8)))"
+    CrystalClick::WidePart.map_uint64_array_numeric_value_type(w79_type).should be_nil
+    CrystalClick::WidePart.map_uint64_array_nullable_numeric_value_type(w79_type).should eq("Int8")
+    CrystalClick::WidePart.supports_typed_type?(w79_type).should be_true
+
     {
       "Map(Int64, Array(UInt64))",
       "Map(UInt32, Array(Int8))",
-      "Map(UInt64, Array(Nullable(Int8)))",
       "Map(UInt64, Array(Array(Int8)))",
       "Map(UInt64, Nullable(Array(Int8)))",
       "Map(UInt64, Array(BFloat16))",
       "Map(UInt64, Array(Int128))",
       "Map(UInt64,Array(Int8))",
       "Map(UInt64, Array(Int8)) trailing",
+      "Map(UInt64, Array(Nullable(Int128)))",
     }.each do |type|
       CrystalClick::WidePart.map_uint64_array_numeric_value_type(type).should be_nil
       CrystalClick::WidePart.map_string_array_numeric_value_type(type).should be_nil

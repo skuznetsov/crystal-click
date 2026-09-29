@@ -134,15 +134,19 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
   end
 
   it "keeps nearby non-W78 declarations out of the exact shadow and admission" do
+    w79_type = "Map(UInt64, Array(Nullable(Int8)))"
+    CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(w79_type).should_not be_nil
+    CrystalClick::WidePart.supports_typed_type?(w79_type).should be_true
+
     {
       "Map(Int64, Array(UInt64))",
       "Map(UInt32, Array(Int8))",
-      "Map(UInt64, Array(Nullable(Int8)))",
       "Map(UInt64, Array(Array(Int8)))",
       "Map(UInt64, Nullable(Array(Int8)))",
       "Map(UInt64, Array(BFloat16))",
       "Map(UInt64, Array(Int128))",
       "Map(UInt64, Array(Int8)) trailing",
+      "Map(UInt64, Array(Nullable(Int128)))",
     }.each do |type|
       CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(type).should be_nil
       CrystalClick::WidePart.supports_typed_type?(type).should be_false

@@ -51,12 +51,17 @@ describe CrystalClick::WideTypePlan::WidePhysicalPlanShadow do
     CrystalClick::WideTypePlan.parse(candidate).should_not be_nil
     CrystalClick::WideTypePlan.admitted(candidate).should be_nil
 
+    w79_type = "Map(UInt64, Array(Nullable(UInt32)))"
+    CrystalClick::WideTypePlan.parse(w79_type).should_not be_nil
+    CrystalClick::WideTypePlan.admitted(w79_type).should be_nil
+    CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(w79_type).should_not be_nil
+
     {
       "Map(Int64, Array(Nullable(UInt64)))",
-      "Map(UInt64, Array(Nullable(UInt32)))",
       "Map(UInt64, Array(Array(Nullable(UInt64))))",
       "Map(UInt64, Nullable(Array(Nullable(UInt64))))",
       "Map(UInt64, Array(Nullable(UInt64))) trailing",
+      "Map(UInt64, Array(Nullable(UInt128)))",
     }.each do |type|
       CrystalClick::WideTypePlan::WidePhysicalPlanShadow.for_type(type).should be_nil
     end

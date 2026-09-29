@@ -118,11 +118,19 @@ describe CrystalClick::WidePart do
   it "admits the exact W68 nullable UInt64 Array Map without unrelated shapes" do
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(Nullable(UInt64)))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Map(String, Array(UInt64))").should be_true
+
+    {"UInt32", "Int64"}.each do |leaf_type|
+      type = "Map(String, Array(Nullable(#{leaf_type})))"
+      CrystalClick::WidePart.supports_map_string_array_nullable_uint64_type?(type).should be_false
+      CrystalClick::WidePart.map_string_array_nullable_numeric_value_type(type).should eq(leaf_type)
+      CrystalClick::WidePart.supports_typed_type?(type).should be_true
+    end
+
     {
-      "Map(String, Array(Nullable(UInt32)))",
-      "Map(String, Array(Nullable(Int64)))",
       "Map(String, Array(Array(Nullable(UInt64))))",
       "Map(String, Nullable(Array(UInt64)))",
+      "Map(String, Array(Nullable(BFloat16)))",
+      "Map(String, Array(Nullable(UInt128)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end

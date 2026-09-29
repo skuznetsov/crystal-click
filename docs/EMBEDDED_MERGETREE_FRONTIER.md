@@ -1,6 +1,8 @@
 # Embedded MergeTree Storage Frontier SDD
 
-Document status: active design. W77 is admitted only for the bounded
+Document status: active design. W79 is admitted only for the bounded
+`Map(UInt64|String, Array(Nullable(T)))` primitive-numeric profile below on
+the pinned Wide/LZ4/plain-mark frontier. W77 is admitted only for the bounded
 primitive-numeric `Map(UInt64, Nullable(T))` and
 `Map(String, Nullable(T))` profile below. W76 is admitted only for the bounded
 scalar-numeric `Map(UInt64, T)` and `Map(String, T)` profile below. W75 is
@@ -4898,6 +4900,76 @@ the new direct writer helper has an `ensure` cleanup. This evidence does not
 admit arbitrary recursive Map types, other ClickHouse layouts or builds,
 MV/projection semantics, or a memory/performance claim. Finish type coverage
 and MV/projections before performance work.
+
+## W79 admitted frontier: nullable primitive-numeric leaves in Map Arrays
+
+W79 targets paired reading and writing of `Map(UInt64, Array(Nullable(T)))`
+and `Map(String, Array(Nullable(T)))` for the ten primitive numeric leaves
+already covered by W76-W78. The two `Nullable(UInt64)` declarations are
+existing W68/W69 controls; the other 18 are new. Admission is exact, on the
+pinned ClickHouse 26.7.1.1315 Wide/LZ4/plain-`.mrk2` profile beside a sorted
+`UInt64` key. A parsed type expression alone must not admit other Map keys,
+leaf types, nullable containers, or additional Array depth. Preserve ordered
+Map entries, duplicate keys, empty Maps and inner Arrays, NULL versus zero,
+signed extrema, and floating-point payload bits.
+
+Before implementation, stock ClickHouse produced and checked representative
+`Map(UInt64, Array(Nullable(Int8)))` and
+`Map(String, Array(Nullable(Float64)))` parts. The former has five payload
+streams: `payload.size0`, `payload%2Ekeys`,
+`payload%2Evalues.size1`, `payload%2Evalues.null`, and
+`payload%2Evalues`. String keys add `payload%2Ekeys.size` before the raw
+key stream. `serialization.json` reported the pinned Default serializer and
+the nested String version. These initial probes established stream inventory
+and stock `CHECK TABLE` only, not the final per-mark, Crystal-reader, or
+Crystal-writer contract. The broader fixture reported below supplied the
+required mark-coordinate, terminal-sentinel, physical-extent, and full/keyed
+RowBinary checks.
+
+Risk is CAUTION: rows, Map entries, Array leaves, nullable flags, and
+fixed-width value bytes have different cardinalities. A shifted null stream
+could return plausible rows while assigning a later value to the wrong key;
+a self-reading writer could still fail stock attach. The reader must validate
+every selected child's mark rows, per-mark cardinality, physical extent,
+null bytes, and aggregate materialization charge before yielding the affected
+mark. Earlier valid marks may have yielded. The writer must emit deterministic
+hidden bytes for NULLs, validate its private stage, and publish exclusively.
+Rollback is one isolated W79 commit; existing data roots and remote history
+stay unchanged.
+
+The first falsifier was exact W79 reader/writer admission for `Int8` under
+`UInt64` keys and `Float64` under String keys: the W78 source failed new
+admission while existing `Nullable(UInt64)` controls remained green. DoD was
+RED-to-green focused type-plan/reader/writer/table/catalog and corruption
+tests; a pinned stock producer probe for all exact declarations with streams,
+marks, metadata, and selected later marks; a bidirectional stock oracle for
+all 20 declarations including stock `ATTACH PART`, `CHECK TABLE`, and
+full/keyed RowBinary; adjacent W68-W71/W77/W78 controls; full debug and
+release suites; format/diff checks; and hostile review. The oracle included a
+positive-row empty middle mark, a later nonempty mark, a terminal
+all-empty mark at nonzero child-stream EOF, and NULL versus visible zero.
+Evidence decays on a ClickHouse nested Map/Array/Nullable serializer, codec
+or mark layout, pinned version, or shared dispatch change. Other type
+families and MV/projections remain ahead of memory/performance work.
+
+W79 implementation evidence on 2026-09-28: the pinned ClickHouse 26.7.1.1315
+oracle passed 20/20 stock-to-Crystal reader cases and 20/20 Crystal-to-stock
+writer cases, including the two existing UInt64-leaf controls. For every
+exact declaration it checked physical stream inventory, metadata, checksums,
+all mark coordinates and the terminal sentinel, full and later-selected
+reads, plus stock `ATTACH PART`, `CHECK TABLE`, and full/keyed RowBinary for
+Crystal-written parts. Fixtures included an empty middle mark, a later
+nonempty mark, an all-empty terminal mark at nonzero child-stream EOF, NULL
+versus visible zero, duplicate keys, and floating-point payload-bit probes.
+Focused corruption tests rejected checksum-valid invalid null bytes and a
+shifted later null mark before the affected mark yielded rows. The six
+adjacent pinned oracles passed. The full debug and release suites each passed
+1026 examples with zero failures, errors, or pending tests using
+`-fuse-ld=ld`; Crystal formatting, shell syntax, and `git diff --check` also
+passed. A bounded read-only adversary review found no actionable falsifier
+and judged this exact surface ROBUST. These checks do not admit arbitrary
+recursive Maps, other ClickHouse versions or layouts, MV/projection
+semantics, or any memory/performance claim.
 
 ## Rejected and guard-only surfaces
 
