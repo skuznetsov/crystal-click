@@ -27,6 +27,31 @@ module CrystalClick
       @values.size
     end
 
+    # Read one scalar without copying the backing column. String values are
+    # copied at this leaf boundary so callers never receive an alias into the
+    # owned payload buffer.
+    def value_at(index : Int32) : UInt64 | String
+      values = @values
+      raise BoundsError.new("Tuple leaf row index is out of bounds") if index < 0 || index >= values.size
+      if values.is_a?(Array(UInt64))
+        values[index]
+      else
+        String.new(values.as(Array(String))[index].to_slice)
+      end
+    end
+
+    # Return String payload accounting for one row without exposing or copying
+    # its bytes.
+    def string_bytesize_at(index : Int32) : UInt64
+      values = @values
+      raise BoundsError.new("Tuple leaf row index is out of bounds") if index < 0 || index >= values.size
+      if values.is_a?(Array(String))
+        values[index].bytesize.to_u64
+      else
+        raise UnsupportedFormatError.new("Tuple leaf is not String")
+      end
+    end
+
     def uint64_values : Array(UInt64)
       values = @values
       return values.dup if values.is_a?(Array(UInt64))

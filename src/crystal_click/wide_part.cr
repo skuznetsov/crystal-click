@@ -9482,6 +9482,23 @@ module CrystalClick
       nil
     end
 
+    # Compute the existing Tuple reader's checked per-range materialization
+    # charge without allocating decoded leaf arrays.
+    def tuple_mark_range_materialization_charge(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = WideTupleTypePlan::MAX_MATERIALIZED_BYTES,
+    ) : UInt64
+      plan = ensure_compositional_tuple_column(column)
+      checked_first_mark, checked_mark_count = tuple_reader_checked_range(plan, column, first_mark, mark_count)
+      tuple_reader(plan, column).materialization_charge(
+        checked_first_mark,
+        checked_mark_count,
+        max_materialized_bytes
+      )
+    end
+
     # Read a bounded mark range from an exact String column. At most 64 MiB of
     # raw bytes are materialized per call (the whole range, not each mark).
     # Empty values are zero-length; embedded NUL bytes are preserved.

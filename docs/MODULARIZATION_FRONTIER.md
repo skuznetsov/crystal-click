@@ -3,6 +3,9 @@
 Document status: W89 implemented and verified on the combined W88+W89 source;
 W90 Array(Map) plan owners, W91 payload owners and W94 bounded Tuple owners
 are verified below. The larger reader/writer modularization remains future work.
+W95 high-level Tuple consumers are verified within their bounded profile in
+`COMPOSITIONAL_TUPLE_FRONTIER.md`; their three new concrete owners remain
+separate from the large existing facades.
 
 ## Problem and boundary
 
@@ -237,3 +240,28 @@ ownership/lifetime policy, evidence decay and the next high-level value-mapping
 boundary are recorded in [the W94 seal and result](COMPOSITIONAL_TUPLE_FRONTIER.md).
 No new type, metadata profile, public generic Tuple API, arbitrary-table writer
 or performance claim is admitted by this extraction.
+
+## W95 high-level Tuple consumer owners
+
+The high-level integration adds three concrete owners, one file each:
+`WideTupleRow` retains an owned columnar mark and checked row index;
+private `WidePartTable::TupleColumnAdapter` owns mark charge and row conversion;
+private `OfflineTable::TupleValuesMaterializer` owns row accumulation and
+all-leaf cell/String accounting. The facades contain dispatch and delegate
+calls, not another copy of the Tuple codec or one native union per arity.
+
+The initial selected-schedule adapter pass was removed after its premise was
+refuted: the existing typed-open owner already compares every physical
+stream's complete mark-row schedule. Preserve that eager metadata boundary
+and the separate lazy per-mark payload contract. This is a bounded API
+expansion, not completion of the one-class-per-file architecture for the
+older reader, writer, table batch or catalog definitions. Verification,
+refutations, ownership limits and evidence decay are recorded in
+[the W95 seal and results](COMPOSITIONAL_TUPLE_FRONTIER.md).
+
+Observed gates: 53 focused DEBUG and RELEASE examples each, 1,196 full DEBUG
+examples, both pinned Tuple oracles (including high-level scans and catalog
+values for seven stock/library profiles), example no-codegen, format, shell
+syntax and diff checks all passed. Full RELEASE was not run for this slice.
+The scoped hostile verdict is ROBUST for the new owners and bounded consumer
+contract, not for full type support, all monolith extraction or performance.

@@ -99,7 +99,7 @@ module CrystalClick
                              Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) |
                              OfflineArrayMapUInt64NumericValue | OfflineArrayMapStringNumericValue |
                              OfflineArrayMapUInt64NullableNumericValue | OfflineArrayMapStringNullableNumericValue |
-                             Tuple(UInt64, String) | Nil
+                             Tuple(UInt64, String) | WideTupleRow | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -158,6 +158,7 @@ module CrystalClick
     MAX_MATERIALIZED_VALUES_ROWS           = 100_000_u64
     MAX_MATERIALIZED_VALUES_STRING_BYTES   = 64_u64 * 1024 * 1024
     MAX_MATERIALIZED_VALUES_ARRAY_ELEMENTS = 1_000_000_u64
+    MAX_MATERIALIZED_VALUES_TUPLE_CELLS    = 1_000_000_u64
 
     getter name : String
     getter engine : String
@@ -219,9 +220,11 @@ module CrystalClick
       column_name : String,
       max_rows : UInt64 = MAX_MATERIALIZED_VALUES_ROWS,
       max_string_bytes : UInt64 = MAX_MATERIALIZED_VALUES_STRING_BYTES,
+      max_tuple_cells : UInt64 = MAX_MATERIALIZED_VALUES_TUPLE_CELLS,
     ) : Array(OfflineColumnValue)
       raise BoundsError.new("selected column row limit exceeds hard limit") if max_rows > MAX_MATERIALIZED_VALUES_ROWS
       raise BoundsError.new("selected column String payload limit exceeds hard limit") if max_string_bytes > MAX_MATERIALIZED_VALUES_STRING_BYTES
+      raise BoundsError.new("selected column Tuple cell limit exceeds hard limit") if max_tuple_cells > MAX_MATERIALIZED_VALUES_TUPLE_CELLS
 
       if catalog = @part_candidates_catalog
         return catalog.part_candidates_values(column_name, max_rows, max_string_bytes)
@@ -231,6 +234,7 @@ module CrystalClick
       source_name, _source_type, selected_type, _json_path = resolve_typed_ddl_selection(column_name)
       source_column = @columns.find { |entry| entry.name == source_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
       raise UnsupportedFormatError.new("ALIAS columns cannot be materialized") if source_column.alias_column
+      tuple_plan = WideTupleTypePlan.for_type(selected_type)
 
       expected_rows = 0_u64
       candidates = resolved_scan_parts
@@ -241,6 +245,9 @@ module CrystalClick
         expected_rows += candidate.row_count
       end
 
+      if plan = tuple_plan
+        TupleValuesMaterializer.checked_expected_cells(expected_rows, plan.fields.size, max_tuple_cells)
+      end
       values = Array(OfflineColumnValue).new(expected_rows.to_i)
       observed_rows = 0_u64
       string_bytes = 0_u64
@@ -278,6 +285,24 @@ module CrystalClick
       expected_rows : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if tuple_plan = WideTupleTypePlan.for_type(selected_type)
+        # Keep the long-standing exact pair value shape and accessor path;
+        # other admitted W94 profiles use owned row handles without arity
+        # proliferation in OfflineColumnValue.
+        unless WidePart.supports_tuple_uint64_string_type?(selected_type)
+          return TupleValuesMaterializer.append_rows(
+            values,
+            batch,
+            column_name,
+            observed_rows,
+            expected_rows,
+            string_bytes,
+            max_string_bytes,
+            tuple_plan.fields.size
+          )
+        end
+      end
+
       if shape = WidePart.array_map_array_leaf_shape(selected_type)
         observed_rows, array_elements[0], string_bytes = append_materialized_array_map_array_leaf_for_shape(
           values,
@@ -3670,8 +3695,9 @@ module CrystalClick
     def values(
       max_rows : UInt64 = OfflineTable::MAX_MATERIALIZED_VALUES_ROWS,
       max_string_bytes : UInt64 = OfflineTable::MAX_MATERIALIZED_VALUES_STRING_BYTES,
+      max_tuple_cells : UInt64 = OfflineTable::MAX_MATERIALIZED_VALUES_TUPLE_CELLS,
     ) : Array(OfflineColumnValue)
-      @table.materialize_selected_values(@name, max_rows, max_string_bytes)
+      @table.materialize_selected_values(@name, max_rows, max_string_bytes, max_tuple_cells)
     end
   end
 

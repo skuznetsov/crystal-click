@@ -222,13 +222,14 @@ describe "W94 compositional named Tuple reader" do
           end
           callbacks = 0
           table = CrystalClick::WidePartTable.open_selected_typed([part], ["payload"])
-          expect_raises(CrystalClick::UnsupportedFormatError) do
-            table.scan_typed do |_batch|
-              callbacks += 1
-              nil
-            end
+          table.scan_typed do |batch|
+            callbacks += 1
+            rows = batch.tuple_rows_for("payload")
+            rows.size.should eq([2, 2, 1][batch.mark_index])
+            rows[0]["middle"].should eq(columns[1].string_values[batch.source_row_offset.to_i])
+            nil
           end
-          callbacks.should eq(0)
+          callbacks.should be > 0
         end
       end
     ensure

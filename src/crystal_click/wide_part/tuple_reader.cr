@@ -54,6 +54,22 @@ module CrystalClick
         nil
       end
 
+      # Reuse the normal size-stream preflight and plan charge calculation
+      # without constructing the owned leaf arrays.
+      def materialization_charge(
+        first_mark : Int32,
+        mark_count : Int32,
+        max_materialized_bytes : UInt64,
+      ) : UInt64
+        validate_budget(max_materialized_bytes)
+        _rows, _string_payload_bytes, charge = preflight_range(
+          first_mark,
+          mark_count,
+          max_materialized_bytes
+        )
+        charge
+      end
+
       private def validate_budget(max_materialized_bytes : UInt64) : Nil
         if max_materialized_bytes > WideTupleTypePlan::MAX_MATERIALIZED_BYTES
           raise ArgumentError.new("Tuple materialization budget cannot exceed 64 MiB")
@@ -98,7 +114,7 @@ module CrystalClick
         first_mark : Int32,
         mark_count : Int32,
         max_materialized_bytes : UInt64,
-      ) : {UInt64, UInt64}
+      ) : {UInt64, UInt64, UInt64}
         rows = validate_selected_schedule(first_mark, mark_count)
         minimum_charge = @plan.materialization_charge(rows, 0_u64) ||
                          raise(CorruptPartError.new("Tuple materialization charge overflows"))
@@ -136,7 +152,7 @@ module CrystalClick
         if charge > max_materialized_bytes
           raise CorruptPartError.new("Tuple materialization charge exceeds per-range limit")
         end
-        {rows, string_payload_bytes}
+        {rows, string_payload_bytes, charge}
       end
 
       private def string_payload_byte_count(encoded_sizes : Bytes) : UInt64
@@ -162,7 +178,7 @@ module CrystalClick
         mark_count : Int32,
         max_materialized_bytes : UInt64 = WideTupleTypePlan::MAX_MATERIALIZED_BYTES,
       ) : WideTupleColumnData
-        rows, _string_payload_bytes = preflight_range(first_mark, mark_count, max_materialized_bytes)
+        rows, _string_payload_bytes, _charge = preflight_range(first_mark, mark_count, max_materialized_bytes)
 
         columns = Array(WideTupleLeafColumn).new(@plan.fields.size)
         @plan.fields.each do |field|

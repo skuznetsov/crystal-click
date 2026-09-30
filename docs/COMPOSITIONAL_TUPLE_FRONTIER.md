@@ -1,11 +1,12 @@
 # Compositional Tuple Frontier
 
-Status: W94 named scalar-leaf Tuple is VERIFIED within the bounded Wide-part
-profile below. W91 neutral payload ownership, W92 exact-Tuple empty-EOF repair
-and W93 exact-Tuple Default metadata profiles retain their separately scoped
-evidence below. W94 supersedes the W93 next-action capsule without extending
-its old evidence to additional types. General recursive Tuple admission and
-generic table/catalog value mapping remain open.
+Status: W94 named scalar-leaf Tuple and W95 typed table/catalog integration are
+VERIFIED within the bounded Wide-part profile below. W91 neutral payload
+ownership, W92 exact-Tuple empty-EOF repair and W93 exact-Tuple Default metadata
+profiles retain their separately scoped evidence below. W95 supersedes W94's
+next-action capsule without extending its old evidence to additional types.
+General recursive Tuple admission, broader leaf types and arbitrary-table
+writing remain open.
 Continuation anchor: `3f09429`, with W90 debug/release and W80-W85 oracle
 verification recorded in `MODULARIZATION_FRONTIER.md`.
 
@@ -14,7 +15,9 @@ verification recorded in `MODULARIZATION_FRONTIER.md`.
 Before W94, the reader, table accessor, and writer supported the exact
 `Tuple(a UInt64, b String)` profile. `WidePart.supports_tuple_uint64_string_type?`
 and `WidePartTable#tuples_for` are exact-shape APIs; retain their behavior.
-`OfflineColumnValue` also has only the exact `Tuple(UInt64, String)` variant.
+Before W95, `OfflineColumnValue` also retained only the exact
+`Tuple(UInt64, String)` variant; W95 adds one nominal row type for the W94
+compositional profiles, not one native union variant per arity.
 
 The reader's scalar numeric/String methods validate the root column type,
 so they cannot directly decode a child of a Tuple. The existing exact Tuple
@@ -399,6 +402,309 @@ monoliths. Do not mistake file splitting, parser acceptance or safe rejection
 for completed storage compatibility. Local reversible implementation/tests and
 coherent local commits remain authorized; push, new binary installation and
 external data mutation still require separate authority.
+
+## W95 high-level Tuple integration frontier
+
+Status: VERIFIED within the W95 observed result below, anchored at clean
+`ffc7cc8` plus this atomic integration slice. The following seal preceded
+implementation. The full type/MV/projection and matched-performance goal
+remains unchanged. W94's persisted profile is the low-level anchor; W95's
+executed gates establish its own bounded table/catalog integration evidence.
+
+Problem at `ffc7cc8`: `WidePartTable` and `OfflineColumnValue` still modeled the
+exact `Tuple(a UInt64, b String)` row. The new W94 shapes could not yet be
+consumed through typed table scans or `catalog[database][table][column].values`.
+Increasing the closed union with every field-order/arity combination would
+recreate the exact-type proliferation that W94 removed.
+
+Proposed admission: every named UInt64/String-leaf Tuple already admitted by
+W94, with the same Wide-part, metadata, name, stream and two-column physical
+profile. Preserve the legacy exact-pair accessor/value representation. Route
+the additional shapes through one nominal row representation and a cohesive
+table adapter, one concrete owner per file. Do not add new low-level leaf
+types, recursive compositions, Compact/Sparse or newer-master metadata here.
+
+Proposed ownership: a row handle retains immutable owned columnar mark
+backing plus a checked row index. Named value access must return a UInt64 or an
+explicit copy of String bytes in O(1) leaf/row access; never clone an entire
+column for each row. Retaining one row may retain the complete decoded mark;
+this must be documented rather than called detached ownership or zero-copy
+materialization. The batch slice remains callback-scoped. Catalog `.values`
+returns its own row array and must not retain a borrowed slice.
+
+Risk: CAUTION (public value union, callback and materialization boundaries).
+Rollback is one atomic W95 commit, or only this slice's owned edits before
+commit. Strongest failure: dispatch admits the schema but discovers a malformed
+later field/schedule after callbacks, or omits String leaf/row-handle charges.
+All selected parts/schema/leaf schedules must be checked before callbacks;
+typed open already compares the complete schedules, including marks outside
+a later window/candidate set.
+Payloads remain per mark, so later payload corruption may follow earlier
+callbacks. Table aggregate materialization limits and catalog row/String
+limits must include all admitted leaves. Logical accounting is not peak RSS.
+
+First falsifier: a String-first three-field library-written part, read through
+typed batches and catalog column `.values`, with binary/empty Strings,
+several marks and a short final mark. Before production changes, execute an
+actual missing-API or behavioral RED. Negative controls: incompatible later
+schema, equal-total mismatched leaf schedules, unsupported nested/nullable
+leaves, returned-value mutation, callback exceptions, String budget across
+all leaves, and unchanged exact-pair behavior. Full and selected key-range
+results must match independently expected rows.
+
+Guard-only execution plan: finish the bounded table/catalog consumer inventory,
+seal the exact row and adapter APIs, write and run the RED specs, implement
+through W94 owners without copied codecs, then run focused DEBUG/RELEASE and
+full suites, pinned stock Tuple integration oracles, format/shell/diff checks,
+and scoped hostile review. Root runs heavy gates serially with the shared
+resource coordinator; workers may only inspect/edit their explicitly owned
+paths. Source/profile, ownership, budgets or dispatch changes invalidate this
+proposal and require an updated seal before implementation.
+
+### W95 API, ownership and verification seal
+
+The initial inventory incorrectly claimed that table-open logical mark counts
+do not validate every Tuple child schedule. The integrated falsifier and source
+anchor at `WidePart#initialize` refuted this: each physical stream's complete
+`mark_rows` is compared with `expected_mark_rows` before typed open returns.
+Keep that stronger eager schedule boundary, including unselected marks; do
+not add a redundant table-selected schedule pass or read future payloads.
+
+- `WideTupleRow` is an immutable struct in `wide_tuple_row.cr`, retaining owned
+  `WideTupleColumnData` and a checked Int32 row index. Both its constructor and
+  `WideTupleColumnData#row(index : Int)` reject negative/out-of-range indices
+  before narrowing. `fields`, `type_name`, and named `[] : UInt64 | String`
+  preserve declaration order and copy exposed metadata/String bytes. Internal
+  cached field indices and scalar leaf access must avoid whole-column copies.
+  `field_count` and `string_bytesize` expose no-copy accounting, not payload
+  references. One retained row can retain its entire bounded decoded mark.
+- Narrow `WidePart#tuple_mark_range_materialization_charge` accepts the
+  existing checked public mark-range arguments and reuses `TupleReader`
+  validation and charge calculation. It does not copy codecs or widen
+  physical admission.
+- Private `WidePartTable::TupleColumnAdapter`, one file under
+  `wide_part_table/`, handles non-exact W94 shapes only. The existing typed-open
+  owner validates complete schedules before any callback; no second
+  table-selected schedule pass is needed.
+  Its per-mark charge is W94's checked column charge plus a checked 64-byte
+  row-array overhead and `rows * sizeof(WideTupleRow)`. Combine this with the
+  existing selected-column aggregate before allocation/callback, and recheck
+  observed charge before exposure. `WidePartTableBatch#tuple_rows_for` returns
+  a borrowed callback slice; copying a row struct retains owned backing.
+  Keep exact `tuples_for` and native pair values unchanged.
+- Private `OfflineTable::TupleValuesMaterializer`, one separate file under
+  `offline_table/`, handles non-exact Tuple values and all-leaf accounting.
+  Add only `WideTupleRow` to `OfflineColumnValue`; do not enumerate arities.
+  `.values(max_tuple_cells: ...)` and `materialize_selected_values` gain an
+  optional tightening-only limit, default/hard cap 1,000,000 scalar Tuple
+  cells. Check `expected_rows * field_count` before allocating the result;
+  count empty String and numeric cells too. Existing 100,000 row and 64 MiB
+  cumulative String-payload limits still apply across all Tuple String leaves.
+  Validate all hard-limit options even for synthetic catalog selections.
+  A tighter catalog String limit bounds accumulated returned payload, not
+  transient memory: the current mark is decoded before catalog accumulation.
+
+Ownership: row/model, TupleReader delegates and row specs belong to the model
+worker; table facade/adapter and table specs to the table worker; catalog facade,
+materializer and catalog spec to the catalog worker. Root owns aggregate imports,
+frontier/evidence documents, heavy gates and integration. Workers are not alone
+in the shared tree; no worker may build, stage, commit or overwrite others.
+After model implementation, its worker may own the high-level oracle extension
+in the existing compositional Tuple script, without changing its low-level
+inventory or stock/library byte controls.
+
+DoD is focused row/table/catalog plus W94 regression specs in DEBUG and RELEASE,
+the full DEBUG suite, the pinned stock compositional Tuple oracle extended
+through high-level full/window/candidate table and catalog APIs, format, shell
+syntax and diff checks, plus scoped hostile source/counterexample review.
+Commands use the existing macOS 26.5 SDK and `--link-flags='-fuse-ld=ld'`.
+This integration slice declares no full RELEASE gate: W94's full RELEASE
+evidence is not transferred, and focused RELEASE must be executed anew.
+Root runs each gate only after actual resource release and a fresh >=55%
+free-memory admission check; the running gate's safety floor is 50%.
+The focused/oracle gates use polled free memory and have no watchdog/RSS
+certificate. The larger full DEBUG gate additionally uses the inspected
+host `cogni-ml/scripts/run_safe.sh` wrapper: 1,800-second watchdog, 32,768 MiB
+process-tree RSS cap and `COGNI_RUN_SAFE_MIN_FREE_PCT=50`. These are kill guards,
+not measured peak-memory results; the watchdog excludes deliberate daemonization.
+
+The first catalog spec deliberately uses only existing APIs, so a missing new
+row constant cannot mask its behavioral RED. The separate row API spec then
+records a missing-API RED. Production remains frozen until those actual
+outcomes are observed. Strong guards are later child schedule mismatch rejected
+at typed open with zero callbacks, lazy later payload corruption with earlier
+valid callbacks,
+combined materialization charge, retained-row ownership, aggregate empty-cell
+and String budgets, multi-part schema mismatch, exact-pair compatibility, and
+independently expected full/window/sparse candidate rows. Callback exceptions
+must propagate without extra callbacks. No benchmark or complete-type claim
+is admitted by these gates.
+
+Run the frozen gates serially after fresh resource admission; every GREEN
+command must exit zero with no failed/error/pending examples or oracle
+exception. These execution times are not matched benchmarks.
+
+```sh
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+export TMPDIR=/private/tmp
+export CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w95-cache
+crystal spec spec/wide_tuple_row_w95_spec.cr \
+  spec/wide_part_table_w95_tuple_spec.cr \
+  spec/offline_catalog_w95_tuple_values_spec.cr \
+  spec/wide_tuple_type_plan_spec.cr \
+  spec/wide_tuple_column_data_ownership_spec.cr \
+  spec/wide_part_reader_compositional_tuple_spec.cr \
+  spec/wide_part_writer_compositional_tuple_spec.cr \
+  spec/wide_part_reader_tuple_empty_eof_spec.cr \
+  spec/wide_part_reader_tuple_metadata_spec.cr \
+  spec/wide_part_writer_tuple_spec.cr --link-flags='-fuse-ld=ld'
+# Run the same focused paths again with --release.
+CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w88-cache \
+COGNI_RUN_SAFE_MIN_FREE_PCT=50 \
+  bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /opt/homebrew/bin/crystal 1800 32768 spec --link-flags='-fuse-ld=ld'
+crystal build --no-codegen examples/read_offline_column_values.cr \
+  --link-flags='-fuse-ld=ld'
+CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse \
+  bash scripts/check_compositional_tuple_oracle.sh
+CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse \
+  bash scripts/check_tuple_oracle.sh
+bash -n scripts/check_compositional_tuple_oracle.sh scripts/check_tuple_oracle.sh
+# crystal tool format --check: all W95-owned Crystal paths, including imports.
+git diff --check
+```
+
+### W95 pre-production observations
+
+With production frozen at `ffc7cc8`, root executed the existing-API catalog
+falsifier using the sealed SDK/linker and isolated W95 RED cache. The low-level
+control passed: seven rows, four marks `[2, 2, 2, 1]`, and exact binary/empty
+leaf values. The catalog call then raised `UnsupportedFormatError` with
+`unsupported numeric column type` through `WidePartTable#read_numeric_values`.
+The process exited 1: one example, zero assertion failures, one error,
+25.34 ms execution. This is a measured missing-dispatch behavioral RED.
+
+Root separately executed the row API spec in the same environment. It exited
+1 at line 22 on undefined `CrystalClick::WideTupleRow`; no row runtime behavior
+was exercised. Both processes are terminal. These signals authorize the sealed
+integration implementation, not high-level compatibility or closure.
+
+The first integrated DEBUG attempt exited 1 during test compilation on an
+undefined local `type_name` in the new catalog spec; no runtime was exercised.
+After the spec-only correction, a separate whitespace falsifier established
+a second behavioral RED: matching DDL/physical `Tuple( a UInt64, b String )`
+passed the low-level three-row control, but catalog `.values` raised
+`selected table column type is unsupported` in its value dispatch. The plan
+canonicalized the type while the legacy accessor required the exact raw
+literal. Root observed one example, zero assertion failures, one error,
+zero pending, exit 1 (21.37 ms). The correction must keep the raw canonical
+literal on the legacy path and route other admitted spellings consistently
+through the row API; this does not widen physical admission.
+
+The first integrated runtime gate exited 1 (53 examples, two failures, one
+error, zero pending). Two guards were invalid fixtures: overlapping part names
+masked the schema mismatch, and a first-row expectation was repeated across
+later callbacks. The schedule fixture also refuted the initial inventory:
+typed open already rejected the later non-reference child mismatch at
+`selected substreams have different mark row counts`, before scanning. The
+smallest pivot removes the redundant new schedule delegate/adapter/table pass
+and tests the existing eager rejection rather than relaxing it to admit an
+unaffected window. Payload laziness remains a separate per-mark contract.
+
+### W95 observed result (2026-09-30 UTC)
+
+State: VERIFIED for high-level consumption of the existing W94 named
+UInt64/String-leaf Tuple profile. Lineage is `ffc7cc8` plus the atomic W95
+commit containing these owners, consumers, specs and oracle extension; that
+commit is the rollback boundary. Physical admission and writer bytes are not
+widened by this slice.
+
+Three new concrete owners each have one file: public immutable `WideTupleRow`,
+private `WidePartTable::TupleColumnAdapter`, and private
+`OfflineTable::TupleValuesMaterializer`. Named scalar access uses cached field
+indices and copies only the requested String bytes, not a whole leaf column.
+Typed full, partial-row window and sparse candidate-mark scans expose row
+handles. Catalog column `.values` retains its own array of those handles.
+The exact raw `Tuple(a UInt64, b String)` keeps its native pair API; other
+admitted spellings/shapes use the nominal row API consistently. The whitespace
+fixture is a library dispatch guard, not a newly stock-persisted version claim.
+
+Root observed the final frozen production/spec state pass all declared gates:
+
+- Ten focused spec paths: 53 examples each in DEBUG and RELEASE, zero failures,
+  errors or pending examples (test execution 435.69 ms and 321.92 ms).
+- Full DEBUG: 1,196 examples, zero failures, errors or pending examples; test
+  execution 33.84 seconds. The inspected external watchdog completed with
+  `[EXIT: 0]` after approximately 128 seconds including compilation. Fresh
+  admission was 76% free memory; the 1,800-second, 32,768 MiB process-tree RSS
+  and 50% free-memory kill guards did not fire. No peak-RSS result is inferred.
+  Full RELEASE was not declared or run for W95.
+- Both pinned ClickHouse 26.7.1.1315 Tuple oracles exited zero. The composition
+  oracle retains the seven W94 stock/library profiles, independent expected
+  RowBinary, stream/schema/mark inventories and stock ATTACH/CHECK controls.
+  It now also checks high-level full/window/sparse scans and catalog payload
+  values on both stock-created and library-written attached parts. The
+  unchanged pair oracle retains Default/AlwaysDefault, binary/empty/EOF and
+  Sparse rejection controls.
+- The column-values example passed `crystal build --no-codegen`. All 16 owned
+  Crystal paths passed format checks; both shell scripts passed syntax checks;
+  `git diff --check` passed. Production/specs stayed frozen between these gates.
+
+The commands above use Crystal 1.21.0 / LLVM 22.1.8 on aarch64 Darwin, the
+macOS 26.5 SDK and the explicit linker. Focused gates use the isolated W95
+cache, full DEBUG the existing W88 cache, and oracles their temporary caches.
+None of these execution times is a matched ClickHouse performance benchmark.
+
+Scoped hostile verdict: ROBUST for this bounded high-level integration.
+Root's actual whitespace RED, corrected runtime falsifiers, final source/diff
+review and executed suites/oracles supplement correlated same-lineage static
+reviews. Counterexamples cover oversized indices before narrowing, returned
+String/metadata mutation, later child schedule mismatch with zero callbacks,
+lazy later payload failure after an earlier valid callback, callback exception
+termination, later-part schema mismatch, checked row/column charge overflow,
+all-leaf String accumulation and empty/numeric Tuple cell limits. The removed
+schedule pass is not needed: typed open already validates every complete
+physical leaf schedule, including marks outside later selections.
+
+Residual limits: a retained row can retain its entire owned decoded mark; a
+tighter catalog String budget is checked after the current mark is decoded.
+The limits bound modeled materialization/returned logical payload, not
+transient allocation or RSS. The physical profile remains exactly one UInt64
+key plus one Tuple payload in the admitted Wide Default/AlwaysDefault layout.
+Nested/unnamed/empty Tuples, other leaves, Compact/Sparse and newer-master
+metadata are not admitted. The large existing reader/writer/table/catalog
+facades are not fully modularized. No complete-type or <=10% slowdown claim
+follows from these results.
+
+Evidence decays on changes to admitted plans or raw/canonical dispatch,
+ownership/lifetime, row/cell/String/aggregate accounting, typed-open schedule
+checks, mark/frame policy, require order, fixtures, compiler semantics or the
+pinned executable/profile. Refresh affected focused, full DEBUG and persisted
+oracles before extending this certificate. The evidence-packet skill's
+template/validator is unavailable; this curated frontier is the fallback,
+not a validator-backed packet.
+
+### W95 continuation capsule
+
+Active goal: complete compatible read/write types and MV/projections before
+memory/performance optimization; the matched ClickHouse slowdown <=10% target
+remains unproved. Confirmed return pointer: the W95 observed result above and
+`examples/read_offline_column_values.cr`. The previous high-level three-field
+Tuple falsifier is closed within W94's physical profile.
+
+Next proposed boundary: extend a shared Tuple leaf contract to an additional
+already supported scalar type for both reader and writer, rather than add
+more exact whole-type branches. First discriminator: a stock-created and
+library-written mixed Tuple with a non-UInt64 numeric leaf, multiple marks,
+binary/empty String siblings and full/window/catalog equality; retain strict
+rejection of unsupported recursive and physical neighbors. Inventory and
+seal that leaf's codec/serialization/admission responsibility before editing.
+This is a proposal, not an admitted new type or an authorized master binary
+installation. Full JSON, wider compositions, current-master metadata/layout
+probes, broader MV/projection support and remaining cohesive owner extraction
+are still open. Local reversible implementation/tests and coherent local
+commits remain authorized; push and external data mutation require separate
+authority. Resource scheduling grants expire with their reported batch release.
 
 ## W91 behavior-neutral execution seal
 

@@ -10,5 +10,10 @@ values = catalog[ARGV[1]][ARGV[2]][ARGV[3]].values
 
 puts "#{ARGV[1]}.#{ARGV[2]}.#{ARGV[3]}: #{values.size} values"
 values.first(5).each_with_index do |value, index|
-  puts "#{index}: #{value.inspect}"
+  if value.is_a?(CrystalClick::WideTupleRow)
+    fields = value.fields.map { |field| "#{field.name}=#{value[field.name].inspect}" }
+    puts "#{index}: {#{fields.join(", ")}}"
+  else
+    puts "#{index}: #{value.inspect}"
+  end
 end

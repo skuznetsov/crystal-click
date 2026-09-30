@@ -134,6 +134,30 @@ the hard ceilings are rejected.
 Values follow the offline resolved-part and mark order, not SQL `ORDER BY`.
 Whole JSON objects and computed `ALIAS` columns are not materialized.
 
+Named nonempty `Tuple` columns with exact `UInt64`/`String` leaves also use
+this example. Additional field orders/arities return `WideTupleRow` values:
+
+```crystal
+row = catalog["lab"]["events"]["payload"].values.first.as(CrystalClick::WideTupleRow)
+row.fields.each { |field| puts "#{field.name}: #{row[field.name].inspect}" }
+```
+
+The exact legacy spelling `Tuple(a UInt64, b String)` still returns native Crystal
+`Tuple(UInt64, String)` values. Other admitted shapes use the nominal row,
+not a union of every possible Crystal Tuple arity. `max_tuple_cells:` can
+tighten the 1,000,000-cell hard ceiling; numeric and empty String cells count,
+and the cumulative String budget includes every String leaf. Named row access
+copies only the requested String bytes. Retaining one row can retain its
+entire owned decoded mark; it is not a detached row allocation or an RSS bound.
+A tighter catalog String limit is checked while accumulating returned rows,
+after the current mark has been decoded; it is not a transient-memory ceiling.
+Typed streaming uses `batch.tuple_rows_for("payload")` for these non-exact
+profiles. Its slice is callback-scoped, but a copied row handle safely retains
+owned backing. Use an immutable source: all selected Tuple child schedules
+are checked before callbacks, while payload checks remain lazy per mark.
+Nested, unnamed, Nullable/other-leaf Tuples and Compact/Sparse/newer metadata
+profiles are not admitted by this API.
+
 Read a bounded physical-row window from two `UInt64` columns without
 materializing the complete table:
 

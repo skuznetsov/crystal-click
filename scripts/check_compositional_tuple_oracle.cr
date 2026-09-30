@@ -138,6 +138,91 @@ def w94_expected_rowbinary(keys : Array(UInt64), fields : Array(W94OracleField),
   output.to_slice
 end
 
+def w94_expected_payload_rowbinary(fields : Array(W94OracleField), row_indexes : Array(Int32)) : Bytes
+  output = IO::Memory.new
+  row_indexes.each do |row_index|
+    fields.each do |field|
+      if field.type_name == "UInt64"
+        w94_append_u64(output, field.values.as(Array(UInt64))[row_index])
+      elsif field.type_name == "String"
+        value = field.values.as(Array(String))[row_index]
+        w94_append_varuint(output, value.bytesize.to_u64)
+        output.write(value.to_slice)
+      else
+        raise "oracle has no Tuple payload encoder for #{field.type_name}"
+      end
+    end
+  end
+  output.to_slice
+end
+
+def w94_append_tuple_row(output : IO::Memory, profile : W94OracleCase, row : CrystalClick::WideTupleRow) : Nil
+  raise "#{profile.label} row Tuple type changed: #{row.type_name}" unless row.type_name == profile.type_name
+  fields = row.fields
+  expected_fields = profile.fields.map { |field| {field.name, field.type_name} }
+  observed_fields = fields.map { |field| {field.name, field.type_name} }
+  raise "#{profile.label} row field order/type changed: #{observed_fields.inspect}" unless observed_fields == expected_fields
+
+  fields.each do |field|
+    value = row[field.name]
+    if field.type_name == "UInt64"
+      raise "#{profile.label} row field #{field.name} is not UInt64" unless value.is_a?(UInt64)
+      w94_append_u64(output, value.as(UInt64))
+    elsif field.type_name == "String"
+      raise "#{profile.label} row field #{field.name} is not String" unless value.is_a?(String)
+      string_value = value.as(String)
+      w94_append_varuint(output, string_value.bytesize.to_u64)
+      output.write(string_value.to_slice)
+    else
+      raise "oracle has no Tuple row encoder for #{field.type_name}"
+    end
+  end
+end
+
+def w94_batch_rowbinary(batch : CrystalClick::WidePartTableBatch, profile : W94OracleCase) : Bytes
+  raise "#{profile.label} batch Tuple type changed" unless batch.column_type_for("payload") == profile.type_name
+  keys = batch.values_for("pk")
+  output = IO::Memory.new
+
+  if profile.type_name == "Tuple(a UInt64, b String)"
+    tuples = batch.tuples_for("payload")
+    raise "#{profile.label} native Tuple and key rows differ" unless tuples.size == keys.size
+    keys.each_with_index do |key, index|
+      number, value = tuples[index]
+      w94_append_u64(output, key)
+      w94_append_u64(output, number)
+      w94_append_varuint(output, value.bytesize.to_u64)
+      output.write(value.to_slice)
+    end
+  else
+    rows = batch.tuple_rows_for("payload")
+    raise "#{profile.label} Tuple row handles and key rows differ" unless rows.size == keys.size
+    keys.each_with_index do |key, index|
+      w94_append_u64(output, key)
+      w94_append_tuple_row(output, profile, rows[index])
+    end
+  end
+
+  output.to_slice
+end
+
+def w94_values_payload_rowbinary(values : Array(CrystalClick::OfflineColumnValue), profile : W94OracleCase) : Bytes
+  output = IO::Memory.new
+  if profile.type_name == "Tuple(a UInt64, b String)"
+    values.each do |value|
+      number, string_value = value.as(Tuple(UInt64, String))
+      w94_append_u64(output, number)
+      w94_append_varuint(output, string_value.bytesize.to_u64)
+      output.write(string_value.to_slice)
+    end
+  else
+    values.each do |value|
+      w94_append_tuple_row(output, profile, value.as(CrystalClick::WideTupleRow))
+    end
+  end
+  output.to_slice
+end
+
 def w94_read_rowbinary(keys : Array(UInt64), profile : W94OracleCase, data : CrystalClick::WideTupleColumnData) : Bytes
   columns = data.columns
   expected_names = profile.fields.map(&.name)
@@ -372,6 +457,51 @@ def w94_selected_indexes(ranged : Bool) : Array(Int32)
   selected.to_a
 end
 
+def w94_check_high_level_consumers(store : String, part_path : String, table_name : String, profile : W94OracleCase) : Nil
+  reader = CrystalClick::WidePartTable.open_selected_typed([part_path], ["pk", "payload"])
+  expected_full = w94_expected_rowbinary(W94_KEYS, profile.fields, w94_selected_indexes(false))
+
+  full = IO::Memory.new
+  reader.scan_typed do |batch|
+    full.write(w94_batch_rowbinary(batch, profile))
+  end
+  w94_assert_bytes(full.to_slice, expected_full, "#{profile.label} high-level full scan")
+
+  window = IO::Memory.new
+  reader.scan_typed_window(1_u64, 4) do |batch|
+    window.write(w94_batch_rowbinary(batch, profile))
+  end
+  window_indexes = [1, 2, 3, 4] of Int32
+  w94_assert_bytes(
+    window.to_slice,
+    w94_expected_rowbinary(W94_KEYS, profile.fields, window_indexes),
+    "#{profile.label} high-level partial-row window"
+  )
+
+  sparse = IO::Memory.new
+  reader.scan_typed_candidate_marks([[1, 3]] of Array(Int32)) do |batch|
+    sparse.write(w94_batch_rowbinary(batch, profile))
+  end
+  sparse_indexes = [2, 3, 6] of Int32
+  w94_assert_bytes(
+    sparse.to_slice,
+    w94_expected_rowbinary(W94_KEYS, profile.fields, sparse_indexes),
+    "#{profile.label} high-level sparse key+Tuple candidate marks"
+  )
+
+  catalog_table = CrystalClick::OfflineCatalog.open(store).table("default", table_name)
+  candidates = catalog_table.resolved_scan_parts
+  unless candidates.size == 1 && File.realpath(candidates[0].path) == File.realpath(part_path)
+    raise "#{profile.label} catalog did not resolve the expected stock part: #{candidates.map(&.path).inspect}"
+  end
+  values = catalog_table["payload"].values
+  w94_assert_bytes(
+    w94_values_payload_rowbinary(values, profile),
+    w94_expected_payload_rowbinary(profile.fields, w94_selected_indexes(false)),
+    "#{profile.label} catalog payload values"
+  )
+end
+
 def w94_assert_table_bytes(binary : String, store : String, table : String, profile : W94OracleCase) : Nil
   full = w94_run_clickhouse(binary, store, w94_select_query(table, profile, false))
   full_indexes = w94_selected_indexes(false)
@@ -441,6 +571,7 @@ def w94_check_writer(binary : String, store : String, profile : W94OracleCase) :
   w94_assert_physical_profile(attached_path, profile, "writer #{profile.label}")
   w94_assert_table_bytes(binary, store, "tuple_writer_#{profile.label}", profile)
   w94_assert_stock_table(binary, store, "tuple_writer_#{profile.label}", attached_path, profile)
+  w94_check_high_level_consumers(store, attached_path, "tuple_writer_#{profile.label}", profile)
 
   reader = CrystalClick::WidePart.open_typed(attached_path, "payload")
   actual = reader.read_tuple_mark_range("payload", 0, reader.mark_count)
@@ -473,8 +604,9 @@ cases.each do |profile|
   w94_assert_stock_table(binary, store, table, path, profile)
   w94_assert_table_bytes(binary, store, table, profile)
   w94_check_stock_reader(path, profile)
+  w94_check_high_level_consumers(store, path, table, profile)
 
   w94_check_writer(binary, store, profile)
 end
 
-puts "PASS W94 Tuple oracle: pinned stock -> Crystal and Crystal -> stock ATTACH/CHECK, full/key-range RowBinary, exact schema/stream/mark inventories for 1/2/3/9-field, String-first, all-String, UInt64-only, mixed and all-empty profiles"
+puts "PASS W94/W95 Tuple oracle: pinned stock -> Crystal and Crystal -> stock ATTACH/CHECK, physical and high-level full/window/candidate scans, catalog payload values, full/ranged RowBinary, exact schema/stream/mark inventories for 1/2/3/9-field, String-first, all-String, UInt64-only, mixed and all-empty profiles"
