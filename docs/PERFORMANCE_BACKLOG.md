@@ -87,6 +87,44 @@ timings. No GC or RSS conclusion is carried into this backlog.
 P0 is a measurement gate, not an acceleration candidate. P1–P4 are proposed
 experiments only; this backlog does not authorize implementing them.
 
+## Deferred Tuple ownership findings from W96
+
+These are source observations, not measured bottlenecks or W96 regressions.
+Both paths already exist at the W95 anchor `e42367a`; numeric-leaf admission
+does not establish their allocation or RSS cost. Optimization remains deferred
+until compatible types and MV/projection work closes.
+
+- `WidePartWriter::TuplePartWriter.validate_staged_part` reads a complete owned
+  Tuple result, then calls `decoded.columns`, which clones every leaf buffer
+  and String payload. The legacy UInt64/String accessors copy the selected
+  buffers again. Writer snapshots, the decoded result and these copies can be
+  live together. See
+  [tuple_part_writer.cr](../src/crystal_click/wide_part_writer/tuple_part_writer.cr#L508)
+  and [wide_tuple_column_data.cr](../src/crystal_click/wide_tuple_column_data.cr).
+  A later probe should measure allocations/RSS by stage and compare a
+  read-only retained-column or scalar comparison path while preserving owned
+  public accessors, exact nominal types, raw numeric bits and corruption
+  rejection. The existing 64 MiB charge is a logical result/input budget,
+  not a limit on simultaneous allocations or peak RSS.
+- Writer preflight charges field streams, rows, marks and aggregate logical
+  materialization before taking snapshots, but metadata/checksum-file budget
+  validation occurs after those snapshots and before staging. An invalid
+  metadata profile can therefore perform bounded copies before rejection.
+  See [tuple_part_writer.cr](../src/crystal_click/wide_part_writer/tuple_part_writer.cr#L145).
+  A later ordering experiment must retain canonical metadata/default counts
+  and prove zero stage creation on rejection; reducing copies is not grounds
+  for weakening the existing limits.
+
+Caller mutation is a separate correctness boundary: synchronous writer input
+must remain stable during the call. Keys are checked for sortedness before
+their snapshot; concurrent mutation is not a supported thread-safe contract.
+If that contract is proposed later, recheck the copied keys and add a
+discriminating concurrent-input test rather than treating a performance edit
+as implicit authorization to widen it.
+
+Refresh these observations when Tuple ownership/accessors, staged validation,
+preflight ordering or the writer's caller-mutation contract changes.
+
 ## Stop and rollback conditions
 
 - Stop immediately if values, positional sequence, aggregate parity, mark

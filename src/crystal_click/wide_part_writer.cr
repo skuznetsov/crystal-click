@@ -371,8 +371,8 @@ module CrystalClick
       end
     end
 
-    # Write a UInt64 key and a declaration-ordered Tuple of exact UInt64 or
-    # String leaves. Each leaf remains an independent physical stream.
+    # Write a UInt64 key and a declaration-ordered Tuple of supported numeric
+    # or String leaves. Each leaf remains an independent physical stream.
     def self.write_uint64_tuple_pair(
       destination : String,
       key_name : String,
@@ -410,6 +410,9 @@ module CrystalClick
         ->(stage : String, column : String, values : Slice(String), mark_size : Int32) {
           write_string_streams(stage, column, values, mark_size)
         },
+        ->(stage : String, column : String, values : WideTupleNumericType::Buffer, mark_size : Int32, leaf_type_name : String) {
+          write_tuple_numeric_stream(stage, column, values, mark_size, leaf_type_name)
+        },
         ->(stage : String, values : Slice(UInt64), mark_size : Int32) {
           write_primary_index(stage, values, mark_size)
         },
@@ -425,6 +428,24 @@ module CrystalClick
       TuplePartWriter.write(
         destination, key_name, keys, value_name, type_name, columns, rows_per_mark, infrastructure
       )
+    end
+
+    private def self.write_tuple_numeric_stream(
+      stage : String,
+      column : String,
+      values : WideTupleNumericType::Buffer,
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord)
+      {% for scalar_type in [UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Int128, UInt128, Int256Value, UInt256Value, Float32, Float64, BFloat16Value] %}
+        if values.is_a?(Array({{scalar_type}}))
+          typed_values = values.as(Array({{scalar_type}}))
+          return write_typed_numeric_stream(
+            stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+          )
+        end
+      {% end %}
+      raise UnsupportedFormatError.new("Tuple numeric leaf buffer is unsupported")
     end
 
     # Write one sorted UInt64 key and the exact JSON(a UInt64, b String)

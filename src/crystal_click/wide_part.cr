@@ -12351,7 +12351,7 @@ module CrystalClick
       keys = columns.select { |name, type| name != selected_column && type == "UInt64" }
       unless columns.size == 2 && keys.size == 1 && tuple_plan &&
              columns.any? { |name, type| name == selected_column && type == selected_type && WidePart.supports_named_scalar_tuple_type?(type) }
-        raise UnsupportedFormatError.new("named UInt64/String Tuple requires one UInt64 key column")
+        raise UnsupportedFormatError.new("named numeric/String Tuple requires one UInt64 key column")
       end
 
       file = File.join(@path, "serialization.json")
@@ -14613,7 +14613,7 @@ module CrystalClick
     private def ensure_compositional_tuple_column(column : String) : WideTupleTypePlan
       ensure_column(column)
       WideTupleTypePlan.for_type(@column_type) ||
-        raise UnsupportedFormatError.new("compositional Tuple accessor requires named UInt64/String leaves")
+        raise UnsupportedFormatError.new("compositional Tuple accessor requires named numeric/String leaves")
     end
 
     private def tuple_reader(plan : WideTupleTypePlan, column : String) : TupleReader
@@ -14634,8 +14634,56 @@ module CrystalClick
         },
         ->(bytes : Bytes, offset : Int32) {
           decode_numeric_value(bytes, offset, UInt64)
+        },
+        ->(name : String, type_name : String, bytes : Bytes, rows : UInt64, width : Int32) {
+          decode_tuple_numeric_leaf(name, type_name, bytes, rows, width)
         }
       )
+    end
+
+    private def decode_tuple_numeric_leaf(
+      name : String,
+      type_name : String,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+    ) : WideTupleLeafColumn
+      expected_width = WideTupleNumericType.width(type_name) ||
+                       raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))
+      raise CorruptPartError.new("Tuple numeric stream width does not match schema") unless width == expected_width
+
+      case type_name
+      when "Int8"     then decode_tuple_numeric_leaf(name, bytes, rows, width, Int8)
+      when "UInt8"    then decode_tuple_numeric_leaf(name, bytes, rows, width, UInt8)
+      when "Int16"    then decode_tuple_numeric_leaf(name, bytes, rows, width, Int16)
+      when "UInt16"   then decode_tuple_numeric_leaf(name, bytes, rows, width, UInt16)
+      when "Int32"    then decode_tuple_numeric_leaf(name, bytes, rows, width, Int32)
+      when "UInt32"   then decode_tuple_numeric_leaf(name, bytes, rows, width, UInt32)
+      when "Int64"    then decode_tuple_numeric_leaf(name, bytes, rows, width, Int64)
+      when "UInt64"   then decode_tuple_numeric_leaf(name, bytes, rows, width, UInt64)
+      when "Int128"   then decode_tuple_numeric_leaf(name, bytes, rows, width, Int128)
+      when "UInt128"  then decode_tuple_numeric_leaf(name, bytes, rows, width, UInt128)
+      when "Int256"   then decode_tuple_numeric_leaf(name, bytes, rows, width, Int256Value)
+      when "UInt256"  then decode_tuple_numeric_leaf(name, bytes, rows, width, UInt256Value)
+      when "Float32"  then decode_tuple_numeric_leaf(name, bytes, rows, width, Float32)
+      when "Float64"  then decode_tuple_numeric_leaf(name, bytes, rows, width, Float64)
+      when "BFloat16" then decode_tuple_numeric_leaf(name, bytes, rows, width, BFloat16Value)
+      else
+        raise UnsupportedFormatError.new("unsupported numeric Tuple leaf type")
+      end
+    end
+
+    private def decode_tuple_numeric_leaf(
+      name : String,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+      type : T.class,
+    ) : WideTupleLeafColumn forall T
+      values = Array(T).new(rows.to_i) do |index|
+        decode_array_numeric_value(bytes, index * width, type)
+      end
+      WideTupleLeafColumn.new(name, values)
     end
 
     private def tuple_reader_checked_range(

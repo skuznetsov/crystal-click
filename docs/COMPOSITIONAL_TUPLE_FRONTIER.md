@@ -5,8 +5,10 @@ VERIFIED within the bounded Wide-part profile below. W91 neutral payload
 ownership, W92 exact-Tuple empty-EOF repair and W93 exact-Tuple Default metadata
 profiles retain their separately scoped evidence below. W95 supersedes W94's
 next-action capsule without extending its old evidence to additional types.
-General recursive Tuple admission, broader leaf types and arbitrary-table
-writing remain open.
+W96's separate numeric-leaf extension and its current gates are recorded in
+`NUMERIC_TUPLE_FRONTIER.md`; older W94/W95 results do not themselves certify
+those additional identities. General recursive Tuple admission, semantic
+leaf types and arbitrary-table writing remain open.
 Continuation anchor: `3f09429`, with W90 debug/release and W80-W85 oracle
 verification recorded in `MODULARIZATION_FRONTIER.md`.
 

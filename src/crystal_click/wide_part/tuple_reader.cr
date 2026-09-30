@@ -1,13 +1,14 @@
 module CrystalClick
   class WidePart
     # Owns compositional Tuple range orchestration. WidePart supplies only the
-    # selected physical stream/frame operations and its existing UInt64 codec.
+    # selected physical stream/frame operations and its existing scalar codecs.
     private class TupleReader
       alias RangeRows = Proc(String, Int32, Int32, UInt64)
       alias MarkRows = Proc(String, Int32, UInt64)
       alias ReadRange = Proc(String, Int32, Int32, Int32, Int32, UInt64, Bytes)
       alias ValidateRange = Proc(String, Int32, Int32, Int32, Int32, UInt64, Nil)
       alias DecodeUInt64 = Proc(Bytes, Int32, UInt64)
+      alias DecodeNumericLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
 
       @plan : WideTupleTypePlan
       @column : String
@@ -16,6 +17,7 @@ module CrystalClick
       @read_range : ReadRange
       @validate_range : ValidateRange
       @decode_uint64 : DecodeUInt64
+      @decode_numeric_leaf : DecodeNumericLeaf
 
       def initialize(
         @plan : WideTupleTypePlan,
@@ -25,6 +27,7 @@ module CrystalClick
         @read_range : ReadRange,
         @validate_range : ValidateRange,
         @decode_uint64 : DecodeUInt64,
+        @decode_numeric_leaf : DecodeNumericLeaf,
       )
       end
 
@@ -125,10 +128,7 @@ module CrystalClick
         string_payload_bytes = 0_u64
         @plan.fields.each do |field|
           leaf_stream = "#{@column}%2E#{field.name}"
-          if field.type_name == "UInt64"
-            expected_bytes = checked_byte_count(rows, 8)
-            @validate_range.call(leaf_stream, first_mark, mark_count, expected_bytes, 8, rows)
-          else
+          if field.type_name == "String"
             size_stream = "#{leaf_stream}.size"
             encoded_sizes = @read_range.call(
               size_stream,
@@ -144,6 +144,11 @@ module CrystalClick
             end
             string_payload_bytes += field_payload_bytes
             @validate_range.call(leaf_stream, first_mark, mark_count, field_payload_bytes.to_i32, 1, rows)
+          else
+            width = @plan.stream_width(@column, leaf_stream) ||
+                    raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))
+            expected_bytes = checked_byte_count(rows, width)
+            @validate_range.call(leaf_stream, first_mark, mark_count, expected_bytes, width, rows)
           end
         end
 
@@ -183,20 +188,7 @@ module CrystalClick
         columns = Array(WideTupleLeafColumn).new(@plan.fields.size)
         @plan.fields.each do |field|
           leaf_stream = "#{@column}%2E#{field.name}"
-          if field.type_name == "UInt64"
-            encoded = @read_range.call(
-              leaf_stream,
-              first_mark,
-              mark_count,
-              checked_byte_count(rows, 8),
-              8,
-              rows
-            )
-            values = Array(UInt64).new(rows.to_i) do |index|
-              @decode_uint64.call(encoded, index * 8)
-            end
-            columns << WideTupleLeafColumn.new(field.name, values)
-          else
+          if field.type_name == "String"
             size_stream = "#{leaf_stream}.size"
             encoded_sizes = @read_range.call(
               size_stream,
@@ -215,6 +207,18 @@ module CrystalClick
               nil
             end
             columns << WideTupleLeafColumn.new(field.name, values)
+          else
+            width = @plan.stream_width(@column, leaf_stream) ||
+                    raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))
+            encoded = @read_range.call(
+              leaf_stream,
+              first_mark,
+              mark_count,
+              checked_byte_count(rows, width),
+              width,
+              rows
+            )
+            columns << @decode_numeric_leaf.call(field.name, field.type_name, encoded, rows, width)
           end
         end
         WideTupleColumnData.new(@plan, columns)

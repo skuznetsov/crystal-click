@@ -1,6 +1,6 @@
 module CrystalClick
   module WidePartWriter
-    private alias TupleLeafBuffers = Array(UInt64) | Array(String)
+    private alias TupleLeafBuffers = WideTupleLeafColumn::Buffer
 
     # Immutable snapshot of validated writer inputs and their canonical
     # metadata/budget schedule. The owner creates this only after preflight.

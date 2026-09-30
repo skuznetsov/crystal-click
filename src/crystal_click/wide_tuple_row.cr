@@ -35,8 +35,14 @@ module CrystalClick
       @data.string_bytesize_at(@index)
     end
 
-    def [](field_name : String) : UInt64 | String
+    def [](field_name : String) : WideTupleLeafColumn::Value
       @data.value_at(field_name, @index)
+    end
+
+    # Exact nominal scalar access; mismatched requested types are rejected
+    # rather than widened or numerically converted.
+    def value_as(field_name : String, type : T.class) : T forall T
+      @data.value_as(field_name, @index, type)
     end
   end
 end

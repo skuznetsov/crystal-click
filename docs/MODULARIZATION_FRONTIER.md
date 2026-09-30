@@ -6,6 +6,33 @@ are verified below. The larger reader/writer modularization remains future work.
 W95 high-level Tuple consumers are verified within their bounded profile in
 `COMPOSITIONAL_TUPLE_FRONTIER.md`; their three new concrete owners remain
 separate from the large existing facades.
+W96 adds one closed numeric identity/width owner and extends the existing
+Tuple owners; its compatibility certificate is separate in
+`NUMERIC_TUPLE_FRONTIER.md`. It does not close the larger facade refactor.
+
+## W96 ownership boundary
+
+`src/crystal_click/wide_tuple_numeric_type.cr` owns the exact primitive numeric
+identity set, widths, raw-bit equality and bounded default predicate in one
+module/file. It is not a second byte codec. `WideTupleTypePlan` consumes that
+contract, `WideTupleLeafColumn` owns concrete typed buffers, and the existing
+`TupleReader`/`TuplePartWriter` owners orchestrate them through narrow private
+delegates to existing scalar payload codecs. `WideTupleRow` remains one nominal
+row representation for table and catalog consumers rather than an arity/type
+Cartesian union.
+
+The root require graph loads the numeric owner after the primitive wrapper
+types and before Tuple plan/value owners. Legacy UInt64/String overloads and
+exact-pair APIs remain guarded. Source ownership and shared payload dispatch
+are architectural facts; only W96's executed tests/oracles establish its
+bounded behavioral compatibility. Same-lineage static reviews are correlated.
+
+The final W96 reader and writer facades still have 15,200 and 25,122 lines;
+table and catalog have 6,638 and 5,309. These counts expose the remaining
+navigation burden, not a performance metric or proof of coupling. Continue
+with owner-by-contract slices and one concrete type per source file; do not
+replace them with a mechanical multi-class file split or mix deferred memory
+optimization into compatible-type admission.
 
 ## Problem and boundary
 

@@ -34,6 +34,10 @@ module CrystalClick
               records.concat(infrastructure.write_string_streams(
                 stage, logical_name, values.to_unsafe.to_slice(values.size), input.rows_per_mark
               ))
+            else
+              records.concat(infrastructure.write_numeric_stream(
+                stage, logical_name, values.as(WideTupleNumericType::Buffer), input.rows_per_mark, field.type_name
+              ))
             end
           end
 
@@ -117,7 +121,7 @@ module CrystalClick
         # Bound every fixed stream and every String raw stream before retaining
         # leaf snapshots. String size leaves are fixed-width UInt64 streams.
         compressed_sizes, raw_sizes, string_bytes_by_mark, total_string_bytes = preflight_stream_budgets(
-          keys.size, rows_per_mark, mark_count, columns, fields, logical_streams, infrastructure
+          keys.size, rows_per_mark, mark_count, value_name, type_plan, columns, fields, logical_streams, infrastructure
         )
         # The shared plan accounts for the materialized Tuple result; the
         # writer also owns a separate UInt64 key snapshot across the range.
@@ -138,15 +142,18 @@ module CrystalClick
         raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
         raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
 
-        # Only take the owned writer snapshots after every byte, row, stream,
-        # mark and aggregate materialization bound has passed.
+        # Take owned snapshots after the field-stream, row, mark and aggregate
+        # logical bounds pass. Metadata/checksum-file bounds below still run
+        # before staging; this logical charge is not a peak-memory limit.
         keys_copy = Array(UInt64).new(keys.size) { |index| keys[index] }
         leaf_buffers = [] of TupleLeafBuffers
         columns.each do |column|
           if column.type_name == "UInt64"
             leaf_buffers << column.uint64_values
-          else
+          elsif column.type_name == "String"
             leaf_buffers << infrastructure.copy_string_values(column)
+          else
+            leaf_buffers << column.values
           end
         end
 
@@ -170,6 +177,8 @@ module CrystalClick
         row_count : Int32,
         rows_per_mark : Int32,
         mark_count : Int32,
+        value_name : String,
+        type_plan : WideTupleTypePlan,
         columns : Array(WideTupleLeafColumn),
         fields : Array(WideTupleField),
         logical_streams : Array(String),
@@ -180,20 +189,14 @@ module CrystalClick
         string_bytes_by_mark = Array(UInt64).new(mark_count, 0_u64)
         total_string_bytes = 0_u64
 
-        fixed_stream_budget(compressed_sizes, raw_sizes, 0, row_count, rows_per_mark, mark_count, "Tuple UInt64 key", infrastructure)
+        fixed_stream_budget(compressed_sizes, raw_sizes, 0, row_count, rows_per_mark, mark_count, 8, "Tuple UInt64 key", infrastructure)
         stream_index = 1
         fields.each_with_index do |field, field_index|
           column = columns[field_index]
-          if field.type_name == "UInt64"
+          if field.type_name == "String"
             fixed_stream_budget(
               compressed_sizes, raw_sizes, stream_index, row_count, rows_per_mark, mark_count,
-              "Tuple UInt64 leaf #{field.name}", infrastructure
-            )
-            stream_index += 1
-          else
-            fixed_stream_budget(
-              compressed_sizes, raw_sizes, stream_index, row_count, rows_per_mark, mark_count,
-              "Tuple String size leaf #{field.name}", infrastructure
+              8, "Tuple String size leaf #{field.name}", infrastructure
             )
             stream_index += 1
 
@@ -231,6 +234,15 @@ module CrystalClick
             raise ArgumentError.new("Tuple String mark schedule differs") unless mark_index == mark_count
             raw_sizes[stream_index] = raw_stream_size
             stream_index += 1
+          else
+            stream_name = logical_streams[stream_index]
+            width = type_plan.stream_width(value_name, stream_name) ||
+                    raise ArgumentError.new("Tuple numeric stream width is unavailable")
+            fixed_stream_budget(
+              compressed_sizes, raw_sizes, stream_index, row_count, rows_per_mark, mark_count,
+              width, "Tuple #{field.type_name} leaf #{field.name}", infrastructure
+            )
+            stream_index += 1
           end
         end
 
@@ -245,17 +257,19 @@ module CrystalClick
         row_count : Int32,
         rows_per_mark : Int32,
         mark_count : Int32,
+        width : Int32,
         label : String,
         infrastructure : TuplePartInfrastructure,
       ) : Nil
-        raw_size = rows_per_mark.to_i64 * 8_i64
+        raise ArgumentError.new("#{label} width must be positive") if width <= 0
+        raw_size = rows_per_mark.to_i64 * width.to_i64
         remaining = row_count
         compressed_total = 0_i64
         raw_total = 0_u64
         mark_index = 0
         while remaining > 0
           rows = {rows_per_mark, remaining}.min
-          bytes = rows.to_i64 * 8_i64
+          bytes = rows.to_i64 * width.to_i64
           frame_size = infrastructure.checked_string_frame_size(bytes, label)
           if frame_size > MAX_DATA_FILE_BYTES - compressed_total
             raise ArgumentError.new("#{label} stream exceeds reader limit")
@@ -333,17 +347,17 @@ module CrystalClick
         leaf_buffers.each do |buffer|
           defaults = 0
           case buffer
-          when Array(UInt64)
+          when Array(String)
             buffer.each_with_index do |value, row|
-              if value.zero?
+              if value.empty?
                 defaults += 1
               else
                 all_payload_defaults[row] = false
               end
             end
-          when Array(String)
+          else
             buffer.each_with_index do |value, row|
-              if value.empty?
+              if WideTupleNumericType.is_default?(value)
                 defaults += 1
               else
                 all_payload_defaults[row] = false
@@ -506,9 +520,29 @@ module CrystalClick
             unless actual.type_name == "String" && actual.string_values == expected
               raise CorruptPartError.new("staged Tuple String leaf readback differs")
             end
+          else
+            expected_numeric = expected.as(WideTupleNumericType::Buffer)
+            unless numeric_values_match?(expected_numeric, actual, input.type_plan.fields[index].type_name)
+              raise CorruptPartError.new("staged Tuple numeric leaf readback differs")
+            end
           end
         end
         nil
+      end
+
+      private def self.numeric_values_match?(
+        expected : WideTupleNumericType::Buffer,
+        actual : WideTupleLeafColumn,
+        expected_type_name : String,
+      ) : Bool
+        return false unless actual.type_name == expected_type_name && actual.size == expected.size
+        expected.size.times do |row|
+          expected_value = expected[row]
+          actual_value = actual.value_at(row)
+          return false if actual_value.is_a?(String)
+          return false unless WideTupleNumericType.same_bits?(expected_value, actual_value)
+        end
+        true
       end
     end
   end

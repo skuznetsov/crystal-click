@@ -10,6 +10,7 @@ module CrystalClick
         @checked_mark_count : Proc(Int32, Int32, Int32),
         @write_uint64_stream : Proc(String, String, Slice(UInt64), Int32, Array(ChecksumRecord)),
         @write_string_streams : Proc(String, String, Slice(String), Int32, Array(ChecksumRecord)),
+        @write_numeric_stream : Proc(String, String, WideTupleNumericType::Buffer, Int32, String, Array(ChecksumRecord)),
         @write_primary_index : Proc(String, Slice(UInt64), Int32, ChecksumRecord),
         @write_checksummed_file : Proc(String, String, String, ChecksumRecord),
         @write_plain_metadata : Proc(String, String, String, Nil),
@@ -38,6 +39,16 @@ module CrystalClick
 
       def write_string_streams(stage : String, column : String, values : Slice(String), rows_per_mark : Int32) : Array(ChecksumRecord)
         @write_string_streams.call(stage, column, values, rows_per_mark)
+      end
+
+      def write_numeric_stream(
+        stage : String,
+        column : String,
+        values : WideTupleNumericType::Buffer,
+        rows_per_mark : Int32,
+        type_name : String,
+      ) : Array(ChecksumRecord)
+        @write_numeric_stream.call(stage, column, values, rows_per_mark, type_name)
       end
 
       def write_primary_index(stage : String, keys : Slice(UInt64), rows_per_mark : Int32) : ChecksumRecord

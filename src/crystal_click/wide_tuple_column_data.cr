@@ -61,16 +61,23 @@ module CrystalClick
 
     # Scalar named access is O(1) in the field count and copies only the
     # requested String value. It never clones the backing leaf column.
-    def value_at(field_name : String, index : Int) : UInt64 | String
+    def value_at(field_name : String, index : Int) : WideTupleLeafColumn::Value
       row_index = checked_row_index(index)
       value_at_field_index(field_index(field_name), row_index)
+    end
+
+    # Exact nominal access for consumers that require a concrete scalar type.
+    # No same-width conversion is performed.
+    def value_as(field_name : String, index : Int, type : T.class) : T forall T
+      row_index = checked_row_index(index)
+      @columns[field_index(field_name)].value_at(row_index, type)
     end
 
     private def field_index(field_name : String) : Int32
       @field_indices[field_name]? || raise(KeyError.new("Tuple field not found: #{field_name}"))
     end
 
-    private def value_at_field_index(field_index : Int32, index : Int32) : UInt64 | String
+    private def value_at_field_index(field_index : Int32, index : Int32) : WideTupleLeafColumn::Value
       raise BoundsError.new("Tuple row index is out of bounds") if index < 0 || index >= @row_count
       raise BoundsError.new("Tuple field index is out of bounds") if field_index < 0 || field_index >= @columns.size
       @columns[field_index].value_at(index)
