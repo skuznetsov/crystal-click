@@ -38,6 +38,10 @@ module CrystalClick
               records.concat(infrastructure.write_bool_stream(
                 stage, logical_name, values.to_unsafe.to_slice(values.size), input.rows_per_mark
               ))
+            when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
+              records.concat(infrastructure.write_identifier_stream(
+                stage, logical_name, values.as(WideTupleIdentifierType::Buffer), input.rows_per_mark, field.type_name
+              ))
             else
               records.concat(infrastructure.write_numeric_stream(
                 stage, logical_name, values.as(WideTupleNumericType::Buffer), input.rows_per_mark, field.type_name
@@ -367,6 +371,8 @@ module CrystalClick
                 defaults += 1
               end
             end
+          when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
+            defaults = identifier_default_count(buffer.as(WideTupleIdentifierType::Buffer), all_payload_defaults)
           else
             buffer.each_with_index do |value, row|
               if WideTupleNumericType.is_default?(value)
@@ -392,6 +398,21 @@ module CrystalClick
           json << "],\"propagate_types_serialization_versions_to_nested_types\":true,"
           json << "\"types_serialization_versions\":{\"string\":1},\"version\":1}"
         end
+      end
+
+      private def self.identifier_default_count(
+        buffer : WideTupleIdentifierType::Buffer,
+        all_payload_defaults : Array(Bool),
+      ) : Int32
+        defaults = 0
+        buffer.each_with_index do |value, row|
+          if WideTupleIdentifierType.is_default?(value)
+            defaults += 1
+          else
+            all_payload_defaults[row] = false
+          end
+        end
+        defaults
       end
 
       private def self.validate_metadata_limits(columns : String, substreams : String, serialization : String) : Nil
@@ -543,6 +564,11 @@ module CrystalClick
             infrastructure.validate_bool_stream(
               stage, "#{input.value_name}%2E#{input.type_plan.fields[index].name}", expected, input.rows_per_mark
             )
+          when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
+            expected_identifier = expected.as(WideTupleIdentifierType::Buffer)
+            unless identifier_values_match?(expected_identifier, actual, input.type_plan.fields[index].type_name)
+              raise CorruptPartError.new("staged Tuple identifier leaf readback differs")
+            end
           else
             expected_numeric = expected.as(WideTupleNumericType::Buffer)
             unless numeric_values_match?(expected_numeric, actual, input.type_plan.fields[index].type_name)
@@ -551,6 +577,22 @@ module CrystalClick
           end
         end
         nil
+      end
+
+      private def self.identifier_values_match?(
+        expected : WideTupleIdentifierType::Buffer,
+        actual : WideTupleLeafColumn,
+        expected_type_name : String,
+      ) : Bool
+        return false unless actual.type_name == expected_type_name && actual.size == expected.size
+        expected.size.times do |row|
+          actual_value = actual.value_at(row)
+          unless actual_value.is_a?(UUIDValue) || actual_value.is_a?(IPv4Value) || actual_value.is_a?(IPv6Value)
+            return false
+          end
+          return false unless WideTupleIdentifierType.same_bits?(expected[row], actual_value)
+        end
+        true
       end
 
       private def self.numeric_values_match?(
@@ -562,8 +604,13 @@ module CrystalClick
         expected.size.times do |row|
           expected_value = expected[row]
           actual_value = actual.value_at(row)
-          return false if actual_value.is_a?(String) || actual_value.is_a?(Bool)
-          return false unless WideTupleNumericType.same_bits?(expected_value, actual_value)
+          case actual_value
+          when Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
+               Int128, UInt128, Int256Value, UInt256Value, Float32, Float64, BFloat16Value
+            return false unless WideTupleNumericType.same_bits?(expected_value, actual_value)
+          else
+            return false
+          end
         end
         true
       end

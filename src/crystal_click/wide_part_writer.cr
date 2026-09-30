@@ -429,6 +429,9 @@ module CrystalClick
         ->(stage : String, column : String, values : WideTupleNumericType::Buffer, mark_size : Int32, leaf_type_name : String) {
           write_tuple_numeric_stream(stage, column, values, mark_size, leaf_type_name)
         },
+        ->(stage : String, column : String, values : WideTupleIdentifierType::Buffer, mark_size : Int32, leaf_type_name : String) {
+          write_tuple_identifier_stream(stage, column, values, mark_size, leaf_type_name)
+        },
         ->(stage : String, values : Slice(UInt64), mark_size : Int32) {
           write_primary_index(stage, values, mark_size)
         },
@@ -468,6 +471,34 @@ module CrystalClick
         end
       {% end %}
       raise UnsupportedFormatError.new("Tuple numeric leaf buffer is unsupported")
+    end
+
+    private def self.write_tuple_identifier_stream(
+      stage : String,
+      column : String,
+      values : WideTupleIdentifierType::Buffer,
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord)
+      unless WideTupleIdentifierType.type_name_for_buffer(values) == type_name
+        raise UnsupportedFormatError.new("Tuple identifier leaf buffer does not match its exact type")
+      end
+      if values.is_a?(Array(UUIDValue))
+        typed_values = values.as(Array(UUIDValue))
+        return write_typed_numeric_stream(
+          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+        )
+      elsif values.is_a?(Array(IPv4Value))
+        typed_values = values.as(Array(IPv4Value))
+        return write_typed_numeric_stream(
+          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+        )
+      else
+        typed_values = values.as(Array(IPv6Value))
+        write_typed_numeric_stream(
+          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+        )
+      end
     end
 
     # Write one sorted UInt64 key and the exact JSON(a UInt64, b String)

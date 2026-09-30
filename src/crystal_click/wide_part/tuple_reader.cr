@@ -10,6 +10,7 @@ module CrystalClick
       alias DecodeUInt64 = Proc(Bytes, Int32, UInt64)
       alias DecodeNumericLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeBoolLeaf = Proc(String, Bytes, UInt64, Int32, WideTupleLeafColumn)
+      alias DecodeIdentifierLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
 
       @plan : WideTupleTypePlan
       @column : String
@@ -20,6 +21,7 @@ module CrystalClick
       @decode_uint64 : DecodeUInt64
       @decode_numeric_leaf : DecodeNumericLeaf
       @decode_bool_leaf : DecodeBoolLeaf
+      @decode_identifier_leaf : DecodeIdentifierLeaf
 
       def initialize(
         @plan : WideTupleTypePlan,
@@ -31,6 +33,7 @@ module CrystalClick
         @decode_uint64 : DecodeUInt64,
         @decode_numeric_leaf : DecodeNumericLeaf,
         @decode_bool_leaf : DecodeBoolLeaf,
+        @decode_identifier_leaf : DecodeIdentifierLeaf,
       )
       end
 
@@ -222,6 +225,18 @@ module CrystalClick
               rows
             )
             columns << @decode_bool_leaf.call(field.name, encoded, rows, width)
+          elsif WideTupleIdentifierType.width(field.type_name)
+            width = @plan.stream_width(@column, leaf_stream) ||
+                    raise(CorruptPartError.new("Tuple identifier stream has no fixed width"))
+            encoded = @read_range.call(
+              leaf_stream,
+              first_mark,
+              mark_count,
+              checked_byte_count(rows, width),
+              width,
+              rows
+            )
+            columns << @decode_identifier_leaf.call(field.name, field.type_name, encoded, rows, width)
           else
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))

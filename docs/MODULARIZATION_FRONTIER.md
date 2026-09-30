@@ -17,6 +17,38 @@ W98 reconciles the existing Bool value-domain policies under one shared owner;
 its qualified RED and executed bounded compatibility certificate are recorded in
 `BOOL_SEMANTICS_FRONTIER.md`. This is not completion of the facade refactor.
 
+W99 extends named flat Tuple leaves to UUID/IPv4/IPv6 through one nominal
+identifier owner/file and the existing Tuple reader/writer/model owners.
+Focused DEBUG/RELEASE (162 examples each), full DEBUG (1,279 examples), the
+new bidirectional stock oracle and seven unchanged regression oracles passed.
+Root's scoped adversarial verdict and residual limits are recorded in
+`IDENTIFIER_TUPLE_FRONTIER.md`; the larger facade refactor remains open.
+
+## W99 ownership boundary
+
+`src/crystal_click/wide_tuple_identifier_type.cr` owns the closed UUID/IPv4/
+IPv6 identity set, exact widths, raw-bit equality and zero-default predicate.
+The nominal wrappers do not enter `WideTupleNumericType`. The root require
+graph loads their shared owner after scalar wrappers and before Tuple plan/
+value owners. Leaf buffers retain exact wrapper arrays; the existing plan
+owns streams/charges and the existing reader/writer orchestrators keep their
+separate identifier callbacks. Scalar payload encoding and LE/BE primitives
+remain the original physical owners, not duplicated Tuple serializers.
+
+`WideTupleColumnData` and the single `WideTupleRow` already consume the owned
+leaf contract. Table/catalog need no parallel identifier dispatch, new
+per-arity class, Cartesian combination union or production edits. This is a
+bounded owner-contract extension, not general recursive type admission.
+
+At the frozen W99 production source, reader/writer facades contain 15,244 and
+25,326 lines; table/catalog remain at 6,638 and 5,309. The facades grew through
+narrow adapters and are not decomposed by this slice. Navigation counts do
+not prove performance or lower coupling. Physical-stream lifetime/validation,
+cohesive leaf-codec ownership and table/catalog orchestration remain open,
+with one concrete owner per file and behavioral gates for each extraction.
+The older Array(Map) intermediate-file-open cleanup concern and bounded
+Tuple readback allocation are unchanged.
+
 ## W98 ownership boundary
 
 `src/crystal_click/bool_value_codec.cr` owns UInt8-to-Bool semantic decoding,

@@ -2,8 +2,8 @@ module CrystalClick
   # One owned named leaf buffer. Sibling row alignment is intentionally a
   # writer preflight concern, so independently prepared columns can differ.
   class WideTupleLeafColumn
-    alias Value = WideTupleNumericType::Value | Bool | String
-    alias Buffer = WideTupleNumericType::Buffer | Array(Bool) | Array(String)
+    alias Value = WideTupleNumericType::Value | WideTupleIdentifierType::Value | Bool | String
+    alias Buffer = WideTupleNumericType::Buffer | WideTupleIdentifierType::Buffer | Array(Bool) | Array(String)
 
     @name : String
     @values : Buffer
@@ -44,6 +44,8 @@ module CrystalClick
         String.new("String".to_slice)
       elsif values.is_a?(Array(Bool))
         String.new("Bool".to_slice)
+      elsif identifier_buffer?(values)
+        WideTupleIdentifierType.type_name_for_buffer(values.as(WideTupleIdentifierType::Buffer))
       else
         WideTupleNumericType.type_name_for_buffer(values.as(WideTupleNumericType::Buffer))
       end
@@ -83,6 +85,12 @@ module CrystalClick
       {% elsif T == Bool %}
         values = @values
         raise UnsupportedFormatError.new("Tuple leaf is not Bool") unless values.is_a?(Array(Bool))
+        values[index]
+      {% elsif T == UUIDValue || T == IPv4Value || T == IPv6Value %}
+        values = @values
+        unless values.is_a?(Array(T))
+          raise UnsupportedFormatError.new("Tuple leaf does not match requested exact type")
+        end
         values[index]
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
@@ -131,6 +139,12 @@ module CrystalClick
         values = @values
         raise UnsupportedFormatError.new("Tuple leaf is not Bool") unless values.is_a?(Array(Bool))
         values.dup
+      {% elsif T == UUIDValue || T == IPv4Value || T == IPv6Value %}
+        values = @values
+        unless values.is_a?(Array(T))
+          raise UnsupportedFormatError.new("Tuple leaf does not match requested exact type")
+        end
+        values.dup
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
                  T == Int128 || T == UInt128 || T == Int256Value || T == UInt256Value ||
@@ -170,6 +184,8 @@ module CrystalClick
         values.map { |value| String.new(value.to_slice) }
       elsif values.is_a?(Array(Bool))
         values.dup
+      elsif values.is_a?(Array(UUIDValue)) || values.is_a?(Array(IPv4Value)) || values.is_a?(Array(IPv6Value))
+        values.dup
       else
         copy_numeric_values(values.as(WideTupleNumericType::Buffer))
       end
@@ -180,6 +196,8 @@ module CrystalClick
         values.map { |value| String.new(value.to_slice) }
       {% elsif T == Bool %}
         values.dup
+      {% elsif T == UUIDValue || T == IPv4Value || T == IPv6Value %}
+        values.dup
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
                  T == Int128 || T == UInt128 || T == Int256Value || T == UInt256Value ||
@@ -188,6 +206,10 @@ module CrystalClick
       {% else %}
         raise UnsupportedFormatError.new("unsupported numeric Tuple leaf buffer")
       {% end %}
+    end
+
+    private def identifier_buffer?(values : Buffer) : Bool
+      values.is_a?(Array(UUIDValue)) || values.is_a?(Array(IPv4Value)) || values.is_a?(Array(IPv6Value))
     end
 
     private def copy_numeric_values(values : WideTupleNumericType::Buffer) : WideTupleNumericType::Buffer

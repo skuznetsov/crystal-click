@@ -1,5 +1,13 @@
 # Embedded MergeTree Storage Frontier SDD
 
+The later W94-W99 compositional Tuple frontier is tracked separately in
+`COMPOSITIONAL_TUPLE_FRONTIER.md`, `NUMERIC_TUPLE_FRONTIER.md`,
+`BOOL_TUPLE_FRONTIER.md`, `BOOL_SEMANTICS_FRONTIER.md` and
+`IDENTIFIER_TUPLE_FRONTIER.md`. These bounded reader/writer/table/catalog
+extensions do not widen the MV/projection, arbitrary-table-write or
+memory/performance boundaries below. Owner-by-contract refactoring is tracked
+in `MODULARIZATION_FRONTIER.md`.
+
 Document status: active design. W88 implements the design-sealed explicit-TO
 identity MV recomputation into a detached part; final-source debug and release
 suites and the stock ClickHouse oracle passed within the bounded profile below.

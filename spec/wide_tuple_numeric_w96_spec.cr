@@ -103,8 +103,6 @@ describe "W96 named numeric Tuple plan red" do
       "Tuple(value Date)",
       "Tuple(value DateTime64(3))",
       "Tuple(value Decimal(9, 2))",
-      "Tuple(value UUID)",
-      "Tuple(value IPv4)",
       "Tuple(value Nullable(Int8))",
       "Tuple(value Array(Int8))",
       "Tuple(value Tuple(inner Int8))",

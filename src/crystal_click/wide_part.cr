@@ -9429,8 +9429,8 @@ module CrystalClick
     end
 
     # Read an owned, declaration-ordered range from a named Tuple whose leaves
-    # are exact numeric, Bool, or String columns. This compositional API does
-    # not widen the legacy positional Tuple accessor above.
+    # are exact numeric, identifier/address, Bool, or String columns. This
+    # compositional API does not widen the legacy positional Tuple accessor.
     def read_tuple_mark_range(
       column : String,
       first_mark : Int,
@@ -14588,7 +14588,7 @@ module CrystalClick
     private def ensure_compositional_tuple_column(column : String) : WideTupleTypePlan
       ensure_column(column)
       WideTupleTypePlan.for_type(@column_type) ||
-        raise UnsupportedFormatError.new("compositional Tuple accessor requires named numeric/Bool/String leaves")
+        raise UnsupportedFormatError.new("compositional Tuple accessor requires named numeric/identifier/Bool/String leaves")
     end
 
     private def tuple_reader(plan : WideTupleTypePlan, column : String) : TupleReader
@@ -14615,6 +14615,9 @@ module CrystalClick
         },
         ->(name : String, bytes : Bytes, rows : UInt64, width : Int32) {
           decode_tuple_bool_leaf(name, bytes, rows, width)
+        },
+        ->(name : String, type_name : String, bytes : Bytes, rows : UInt64, width : Int32) {
+          decode_tuple_identifier_leaf(name, type_name, bytes, rows, width)
         }
       )
     end
@@ -14633,6 +14636,52 @@ module CrystalClick
       end
 
       values = BoolValueCodec.decode_values(bytes)
+      WideTupleLeafColumn.new(name, values)
+    end
+
+    private def decode_tuple_identifier_leaf(
+      name : String,
+      type_name : String,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+    ) : WideTupleLeafColumn
+      expected_width = WideTupleIdentifierType.width(type_name) ||
+                       raise(CorruptPartError.new("Tuple identifier stream has no fixed width"))
+      raise CorruptPartError.new("Tuple identifier stream width does not match schema") unless width == expected_width
+
+      case type_name
+      when "UUID" then decode_tuple_identifier_leaf(name, bytes, rows, width, UUIDValue)
+      when "IPv4" then decode_tuple_identifier_leaf(name, bytes, rows, width, IPv4Value)
+      when "IPv6" then decode_tuple_identifier_leaf(name, bytes, rows, width, IPv6Value)
+      else
+        raise UnsupportedFormatError.new("unsupported identifier Tuple leaf type")
+      end
+    end
+
+    private def decode_tuple_identifier_leaf(
+      name : String,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+      type : T.class,
+    ) : WideTupleLeafColumn forall T
+      if rows > Int32::MAX.to_u64 || rows * width.to_u64 != bytes.size.to_u64
+        raise CorruptPartError.new("Tuple identifier stream byte count does not match rows")
+      end
+
+      values = Array(T).new(rows.to_i) do |index|
+        offset = index * width
+        {% if T == UUIDValue %}
+          UUIDValue.new(u64(bytes, offset), u64(bytes, offset + 8))
+        {% elsif T == IPv4Value %}
+          IPv4Value.new(u32(bytes, offset))
+        {% elsif T == IPv6Value %}
+          IPv6Value.new(network_order_u64(bytes, offset), network_order_u64(bytes, offset + 8))
+        {% else %}
+          raise UnsupportedFormatError.new("unsupported identifier Tuple leaf type")
+        {% end %}
+      end
       WideTupleLeafColumn.new(name, values)
     end
 
