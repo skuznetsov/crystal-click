@@ -1,7 +1,7 @@
 # CrystalClick Modularization Frontier
 
 Document status: W89 implemented and verified on the combined W88+W89 source;
-W90 Array(Map) plan owners are implemented and verified below. The larger
+W90 Array(Map) plan owners and W91 payload owners are verified below. The larger
 reader/writer modularization remains future work.
 
 ## Problem and boundary
@@ -190,3 +190,23 @@ Crystal format, shell syntax, and `git diff --check` passed. These checks do
 not admit new types, prove compatibility with September master, establish
 matched ClickHouse performance, or close the larger class-architecture task.
 Evidence decays under the W90 source/profile changes listed above.
+
+## W91 payload-owner result
+
+The next neutral slice extracted four private concrete owners, one file each:
+reader `WidePart::StringPayloadDecoder`, writer `WidePartWriter::LeafStreamWriter`
+and `::StreamEncoding`, and the existing `::ChecksumRecord` struct. String
+assembly is shared by the exact Tuple and scalar reader; actual UInt64/String
+payload method bodies moved out of the writer, whose old entrypoints delegate.
+Schema/physical admission, range policy, budgets and stage lifecycle remain
+in place. The writer is still 25,045 lines and reader 14,982; this is a small
+ownership improvement, not closure of the larger architecture task.
+
+The frozen source passed 72 focused and 1,145 full debug/release examples, with
+zero failures/errors, plus the pinned Tuple, typed and basic writer oracles.
+Scoped hostile review returned ROBUST at the aggregate import boundary; root
+also checked mechanical body parity and executed the runtime checks. Exact
+commands, source/profile lineage, residual Tuple metadata/EOF gaps and evidence
+decay are recorded in [the W91 seal and result](COMPOSITIONAL_TUPLE_FRONTIER.md).
+No new type, metadata profile, public generic Tuple API, arbitrary-table writer
+or performance claim is admitted by this extraction.

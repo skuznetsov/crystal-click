@@ -33,25 +33,6 @@ module CrystalClick
     MAX_PRIMARY_INDEX_BYTES                = PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
     RENAME_EXCL                            = 0x0000_0004_u32
 
-    private struct ChecksumRecord
-      getter name : String
-      getter physical_size : UInt64
-      getter file_hash : {UInt64, UInt64}
-      getter compressed : Bool
-      getter uncompressed_size : UInt64?
-      getter uncompressed_hash : {UInt64, UInt64}?
-
-      def initialize(
-        @name : String,
-        @physical_size : UInt64,
-        @file_hash : {UInt64, UInt64},
-        @compressed : Bool,
-        @uncompressed_size : UInt64? = nil,
-        @uncompressed_hash : {UInt64, UInt64}? = nil,
-      )
-      end
-    end
-
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values
@@ -11380,51 +11361,7 @@ module CrystalClick
       values : Slice(UInt64),
       rows_per_mark : Int32,
     ) : Array(ChecksumRecord)
-      base_name = StreamName.hash(column)
-      data_name = "#{base_name}.bin"
-      marks_name = "#{base_name}.mrk2"
-      data_path = File.join(stage, data_name)
-      mark_path = File.join(stage, marks_name)
-      data_hash = CityHashV1::FileHasher.new
-      raw_hash = CityHashV1::FileHasher.new
-      mark_bytes = IO::Memory.new
-      data_size = 0_u64
-      start_row = 0
-
-      File.open(data_path, "wb") do |data_file|
-        while start_row < values.size
-          rows = {rows_per_mark, values.size - start_row}.min
-          raw = Bytes.new(rows * 8)
-          rows.times do |row|
-            write_uint64_le(raw, row * 8, values[start_row + row])
-          end
-
-          write_uint64_le(mark_bytes, data_size)
-          write_uint64_le(mark_bytes, 0_u64)
-          write_uint64_le(mark_bytes, rows.to_u64)
-
-          frame = encode_lz4_frame(raw)
-          raise ArgumentError.new("data stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
-          data_file.write(frame)
-          data_hash.update(frame)
-          raw_hash.update(raw)
-          data_size += frame.size.to_u64
-          start_row += rows
-        end
-      end
-
-      write_uint64_le(mark_bytes, data_size)
-      write_uint64_le(mark_bytes, 0_u64)
-      write_uint64_le(mark_bytes, 0_u64)
-      marks = mark_bytes.to_slice
-      raise ArgumentError.new("mark stream exceeds reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
-      File.write(mark_path, marks)
-      mark_hash = CityHashV1.file_hash(marks)
-
-      [
-        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64 * 8_u64, raw_hash.finish),
-        ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false),
-      ]
+      LeafStreamWriter.write_uint64_stream(stage, column, values, rows_per_mark)
     end
 
     private def self.write_json_typed_path_stream(
@@ -11692,101 +11629,7 @@ module CrystalClick
       values : Slice(T),
       rows_per_mark : Int32,
     ) : Array(ChecksumRecord) forall T
-      size_base = StreamName.hash("#{column}.size")
-      value_base = StreamName.hash(column)
-      size_data_name = "#{size_base}.bin"
-      size_marks_name = "#{size_base}.mrk2"
-      value_data_name = "#{value_base}.bin"
-      value_marks_name = "#{value_base}.mrk2"
-      size_data_path = File.join(stage, size_data_name)
-      size_mark_path = File.join(stage, size_marks_name)
-      value_data_path = File.join(stage, value_data_name)
-      value_mark_path = File.join(stage, value_marks_name)
-      size_data_hash = CityHashV1::FileHasher.new
-      size_raw_hash = CityHashV1::FileHasher.new
-      value_data_hash = CityHashV1::FileHasher.new
-      value_raw_hash = CityHashV1::FileHasher.new
-      size_mark_bytes = IO::Memory.new
-      value_mark_bytes = IO::Memory.new
-      size_data_size = 0_u64
-      value_data_size = 0_u64
-      total_raw_size = 0_u64
-      start_row = 0
-
-      File.open(size_data_path, "wb") do |size_data_file|
-        File.open(value_data_path, "wb") do |value_data_file|
-          while start_row < values.size
-            rows = {rows_per_mark, values.size - start_row}.min
-            sizes_raw = Bytes.new(rows * 8)
-            string_raw_size = 0_i64
-            rows.times do |row|
-              value_size = typed_string_value(values[start_row + row]).bytesize.to_i64
-              if value_size > MAX_FRAME_RAW_BYTES.to_i64 - string_raw_size
-                raise ArgumentError.new("String payload granule exceeds decompressed frame limit")
-              end
-              string_raw_size += value_size
-              write_uint64_le(sizes_raw, row * 8, value_size.to_u64)
-            end
-            raise ArgumentError.new("String payload exceeds reader limit") if string_raw_size.to_u64 > MAX_DATA_FILE_BYTES.to_u64 - total_raw_size
-
-            string_raw = Bytes.new(string_raw_size.to_i)
-            string_offset = 0
-            rows.times do |row|
-              value = typed_string_value(values[start_row + row])
-              value_bytes = value.to_slice
-              if value_bytes.size > 0
-                value_bytes.copy_to(string_raw[string_offset, value_bytes.size])
-                string_offset += value_bytes.size
-              end
-            end
-
-            write_uint64_le(size_mark_bytes, size_data_size)
-            write_uint64_le(size_mark_bytes, 0_u64)
-            write_uint64_le(size_mark_bytes, rows.to_u64)
-            write_uint64_le(value_mark_bytes, value_data_size)
-            write_uint64_le(value_mark_bytes, 0_u64)
-            write_uint64_le(value_mark_bytes, rows.to_u64)
-
-            size_frame = encode_lz4_frame(sizes_raw)
-            raise ArgumentError.new("String size stream exceeds reader limit") if size_data_size > MAX_DATA_FILE_BYTES.to_u64 - size_frame.size.to_u64
-            size_data_file.write(size_frame)
-            size_data_hash.update(size_frame)
-            size_raw_hash.update(sizes_raw)
-            size_data_size += size_frame.size.to_u64
-
-            unless string_raw.empty?
-              string_frame = encode_lz4_frame(string_raw)
-              raise ArgumentError.new("String data stream exceeds reader limit") if value_data_size > MAX_DATA_FILE_BYTES.to_u64 - string_frame.size.to_u64
-              value_data_file.write(string_frame)
-              value_data_hash.update(string_frame)
-              value_data_size += string_frame.size.to_u64
-            end
-            value_raw_hash.update(string_raw)
-            total_raw_size += string_raw.size.to_u64
-            start_row += rows
-          end
-        end
-      end
-
-      write_uint64_le(size_mark_bytes, size_data_size)
-      write_uint64_le(size_mark_bytes, 0_u64)
-      write_uint64_le(size_mark_bytes, 0_u64)
-      write_uint64_le(value_mark_bytes, value_data_size)
-      write_uint64_le(value_mark_bytes, 0_u64)
-      write_uint64_le(value_mark_bytes, 0_u64)
-      size_marks = size_mark_bytes.to_slice
-      value_marks = value_mark_bytes.to_slice
-      raise ArgumentError.new("mark stream exceeds reader limit") if size_marks.size.to_i64 > MAX_MARK_FILE_BYTES
-      raise ArgumentError.new("mark stream exceeds reader limit") if value_marks.size.to_i64 > MAX_MARK_FILE_BYTES
-      File.write(size_mark_path, size_marks)
-      File.write(value_mark_path, value_marks)
-
-      [
-        ChecksumRecord.new(size_data_name, size_data_size, size_data_hash.finish, true, values.size.to_u64 * 8_u64, size_raw_hash.finish),
-        ChecksumRecord.new(size_marks_name, size_marks.size.to_u64, CityHashV1.file_hash(size_marks), false),
-        ChecksumRecord.new(value_data_name, value_data_size, value_data_hash.finish, true, total_raw_size, value_raw_hash.finish),
-        ChecksumRecord.new(value_marks_name, value_marks.size.to_u64, CityHashV1.file_hash(value_marks), false),
-      ]
+      LeafStreamWriter.write_string_streams(stage, column, values, rows_per_mark)
     end
 
     private def self.write_dynamic_string_streams(
@@ -18761,13 +18604,7 @@ module CrystalClick
     end
 
     private def self.typed_string_value(value : T) : String forall T
-      {% if T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
-        value || ""
-      {% elsif T == String %}
-        value
-      {% else %}
-        raise UnsupportedFormatError.new("String stream requires String or Nullable(String) values")
-      {% end %}
+      LeafStreamWriter.typed_string_value(value)
     end
 
     private def self.write_nullable_string_streams(
@@ -25157,38 +24994,7 @@ module CrystalClick
     end
 
     private def self.encode_lz4_frame(raw : Bytes) : Bytes
-      raise ArgumentError.new("empty LZ4 blocks are unsupported") if raw.empty?
-      extension_size = raw.size < 15 ? 0 : ((raw.size - 15) // 255) + 1
-      payload_size = 1 + extension_size + raw.size
-      compressed_size = CompressedBlock::HEADER_SIZE + payload_size
-      raise ArgumentError.new("compressed frame exceeds reader limit") if compressed_size > MAX_FRAME_COMPRESSED
-
-      frame = Bytes.new(CompressedBlock::FRAME_HEADER_SIZE + payload_size, 0_u8)
-      header = CompressedBlock::CHECKSUM_SIZE
-      frame[header] = CompressedBlock::METHOD_LZ4
-      write_uint32_le(frame, header + 1, compressed_size.to_u32)
-      write_uint32_le(frame, header + 5, raw.size.to_u32)
-
-      cursor = CompressedBlock::FRAME_HEADER_SIZE
-      if raw.size < 15
-        frame[cursor] = (raw.size << 4).to_u8
-        cursor += 1
-      else
-        frame[cursor] = 0xf0_u8
-        cursor += 1
-        remaining = raw.size - 15
-        while remaining >= 255
-          frame[cursor] = 255_u8
-          cursor += 1
-          remaining -= 255
-        end
-        frame[cursor] = remaining.to_u8
-        cursor += 1
-      end
-      raw.copy_to(frame[cursor, raw.size])
-      checksum = CityHashV1.hash128(frame[CompressedBlock::CHECKSUM_SIZE, compressed_size])
-      write_hash128_le(frame, checksum)
-      frame
+      StreamEncoding.encode_lz4_frame(raw)
     end
 
     private def self.write_var_uint(io : IO, value : UInt64) : Nil
@@ -25201,21 +25007,19 @@ module CrystalClick
     end
 
     private def self.write_hash128_le(io : IO, hash : {UInt64, UInt64}) : Nil
-      write_uint64_le(io, hash[0])
-      write_uint64_le(io, hash[1])
+      StreamEncoding.write_hash128_le(io, hash)
     end
 
     private def self.write_hash128_le(bytes : Bytes, hash : {UInt64, UInt64}) : Nil
-      write_uint64_le(bytes, 0, hash[0])
-      write_uint64_le(bytes, 8, hash[1])
+      StreamEncoding.write_hash128_le(bytes, hash)
     end
 
     private def self.write_uint64_le(io : IO, value : UInt64) : Nil
-      8.times { |index| io.write_byte(((value >> (index * 8)) & 0xff_u64).to_u8) }
+      StreamEncoding.write_uint64_le(io, value)
     end
 
     private def self.write_uint64_le(bytes : Bytes, offset : Int, value : UInt64) : Nil
-      8.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u64).to_u8 }
+      StreamEncoding.write_uint64_le(bytes, offset, value)
     end
 
     private def self.read_uint64_le(bytes : Bytes, offset : Int) : UInt64
@@ -25229,7 +25033,7 @@ module CrystalClick
     end
 
     private def self.write_uint32_le(bytes : Bytes, offset : Int, value : UInt32) : Nil
-      4.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u32).to_u8 }
+      StreamEncoding.write_uint32_le(bytes, offset, value)
     end
 
     private def self.read_uint32_le(bytes : Bytes, offset : Int) : UInt32

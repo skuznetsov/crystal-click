@@ -9438,14 +9438,10 @@ module CrystalClick
       raw_bytes = read_mark_range_bytes(raw_stream, raw_start, raw_end, total_bytes.to_i, 1)
 
       values = Array(Tuple(UInt64, String)).new(value_rows.to_i)
-      raw_offset = 0
-      sizes.each_with_index do |length, index|
-        byte_length = length.to_i
-        raise CorruptPartError.new("Tuple(String) sizes exceed selected raw bytes") if byte_length > raw_bytes.size - raw_offset
-        values << {u64(encoded_values, index * 8), String.new(raw_bytes[raw_offset, byte_length])}
-        raw_offset += byte_length
+      StringPayloadDecoder.each(sizes, raw_bytes, "Tuple(String)") do |string_value, index|
+        values << {decode_numeric_value(encoded_values, index * 8, UInt64), string_value}
+        nil
       end
-      raise CorruptPartError.new("Tuple(String) sizes do not consume selected raw bytes") unless raw_offset == raw_bytes.size
       values
     end
 
@@ -9461,13 +9457,10 @@ module CrystalClick
       raise CorruptPartError.new("selected String substream marks changed") unless raw_rows == sizes.size.to_u64
       raw_bytes = read_mark_range_bytes(string_stream, raw_start, raw_end, total_bytes.to_i, 1)
       values = Array(String).new(sizes.size)
-      offset = 0
-      sizes.each do |size|
-        length = size.to_i
-        values << String.new(raw_bytes[offset, length])
-        offset += length
+      StringPayloadDecoder.each(sizes, raw_bytes, "String") do |string_value, _index|
+        values << string_value
+        nil
       end
-      raise CorruptPartError.new("String sizes do not consume selected raw bytes") unless offset == raw_bytes.size
       values
     end
 

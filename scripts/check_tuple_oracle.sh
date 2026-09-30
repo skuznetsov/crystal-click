@@ -124,6 +124,65 @@ def check_tuple_rows(binary : String, store : String, table : String, keys : Arr
   raise "#{table} CHECK TABLE failed: #{integrity.inspect}" unless integrity == "all_1_1_0\t1"
 end
 
+# This direction must not use a Crystal-written part: generate the physical
+# streams with the pinned stock binary and read them through the public API.
+def create_stock_tuple_part(binary : String, store : String, table : String, keys : Array(UInt64), values : Array(Tuple(UInt64, String)), key_name : String, sparse_ratio : String) : String
+  stock_sql = tuple_table_sql(table)
+    .sub("pk UInt64", "#{key_name} UInt64")
+    .sub("ORDER BY pk", "ORDER BY #{key_name}")
+    .sub("ratio_of_defaults_for_sparse_serialization = 1.0", "ratio_of_defaults_for_sparse_serialization = #{sparse_ratio}")
+  run_clickhouse(binary, store, stock_sql)
+  rows = keys.map_with_index do |key, index|
+    value = values[index]
+    "(#{key}, tuple(toUInt64(#{value[0]}), unhex('#{value[1].to_slice.hexstring}')))"
+  end.join(", ")
+  run_clickhouse(binary, store, "INSERT INTO default.#{table} VALUES #{rows}")
+  paths = run_clickhouse(binary, store, "SELECT path FROM system.parts WHERE database = 'default' AND table = '#{table}' AND active FORMAT TSVRaw").lines.map(&.strip).reject(&.empty?)
+  raise "#{table} must have exactly one stock-created active part" unless paths.size == 1
+  paths[0]
+end
+
+def check_stock_tuple_reader(binary : String, store : String, table : String, keys : Array(UInt64), values : Array(Tuple(UInt64, String))) : Nil
+  # The admitted profile has explicit Default serializer records in the same
+  # order as columns.txt. The stock key name `id` satisfies that narrow guard.
+  path = create_stock_tuple_part(binary, store, table, keys, values, "id", "0.9375")
+  key_reader = CrystalClick::WidePart.open_typed(path, "id")
+  tuple_reader = CrystalClick::WidePart.open_typed(path, "payload")
+  expected_mark_rows = keys.each_slice(2).map { |mark| mark.size.to_u64 }.to_a
+  raise "#{table} key mark rows differ" unless key_reader.mark_row_counts == expected_mark_rows
+  raise "#{table} Tuple mark rows differ" unless tuple_reader.mark_row_counts == expected_mark_rows
+  actual_keys = key_reader.read_uint64_mark_range("id", 0, key_reader.mark_count)
+  actual_values = tuple_reader.read_tuple_uint64_string_mark_range("payload", 0, tuple_reader.mark_count)
+  assert_tuple_bytes(String.new(tuple_rowbinary(actual_keys, actual_values)), tuple_rowbinary(keys, values), "#{table} stock -> Crystal full")
+
+  first_mark = 1
+  count = tuple_reader.mark_count - first_mark
+  range_keys = key_reader.read_uint64_mark_range("id", first_mark, count)
+  range_values = tuple_reader.read_tuple_uint64_string_mark_range("payload", first_mark, count)
+  assert_tuple_bytes(String.new(tuple_rowbinary(range_keys, range_values)), tuple_rowbinary(keys[2, keys.size - 2], values[2, values.size - 2]), "#{table} stock -> Crystal mark range")
+
+  begin
+    tuple_reader.read_string_mark_range("payload", 0, 1)
+    raise "#{table} Tuple root was admitted by scalar String reader"
+  rescue CrystalClick::UnsupportedFormatError
+  end
+  begin
+    tuple_reader.read_uint64_mark_range("payload", 0, 1)
+    raise "#{table} Tuple root was admitted by scalar UInt64 reader"
+  rescue CrystalClick::UnsupportedFormatError
+  end
+end
+
+def check_stock_tuple_profile_rejection(binary : String, store : String, table : String, keys : Array(UInt64), values : Array(Tuple(UInt64, String)), key_name : String, sparse_ratio : String, expected_error : String) : Nil
+  path = create_stock_tuple_part(binary, store, table, keys, values, key_name, sparse_ratio)
+  begin
+    CrystalClick::WidePart.open_typed(path, "payload")
+    raise "#{table} unexpectedly admitted an unsealed Tuple metadata profile"
+  rescue error : CrystalClick::UnsupportedFormatError
+    raise "#{table} rejected for an unexpected reason: #{error.message}" unless error.message.try(&.includes?(expected_error))
+  end
+end
+
 binary = ENV.fetch("CLICKHOUSE_BIN")
 store = ENV.fetch("CLICKHOUSE_STORE")
 
@@ -139,6 +198,9 @@ values = [
   {12_u64, "last"},
   {13_u64, "z"},
 ]
+check_stock_tuple_reader(binary, store, "tuple_stock", keys, values)
+check_stock_tuple_profile_rejection(binary, store, "tuple_stock_reordered_records", keys, values, "pk", "0.9375", "Tuple serializer order does not match columns.txt")
+check_stock_tuple_profile_rejection(binary, store, "tuple_stock_omitted_records", keys, values, "id", "1.0", "Tuple serialization requires exact key and payload entries")
 CrystalClick::WidePartWriter.write_uint64_tuple_string_pair(
   ENV.fetch("TUPLE_PART"),
   "pk",
@@ -175,6 +237,7 @@ end
 # independent marks repeat byte offset zero for every data granule and sentinel.
 empty_keys = [1_u64, 3_u64, 5_u64, 7_u64, 9_u64]
 empty_values = [{1_u64, ""}, {2_u64, ""}, {3_u64, ""}, {4_u64, ""}, {5_u64, ""}]
+check_stock_tuple_profile_rejection(binary, store, "tuple_stock_all_empty_sparse", empty_keys, empty_values, "id", "0.9375", "only Default Tuple child serializers are supported")
 CrystalClick::WidePartWriter.write_uint64_tuple_string_pair(
   ENV.fetch("EMPTY_TUPLE_PART"),
   "pk",
@@ -214,7 +277,7 @@ rescue error : ArgumentError
   raise "malformed Tuple writer left staged artifacts" unless Dir.children(ENV.fetch("INVALID_PARENT")).empty?
 end
 
-puts "PASS Tuple writer: exact attached RowBinary/full+range, binary and empty strings, independent [2,2,2,1] marks, zero-byte all-empty stream, CHECK TABLE, and malformed-input no-publication"
+puts "PASS Tuple reader/writer: admitted stock-created -> Crystal full/mark-range RowBinary, strict scalar roots and rejected reordered/omitted/sparse metadata profiles; Crystal-written -> stock attached full/key-range RowBinary, binary and empty strings, independent [2,2,2,1] marks, zero-byte all-empty stream, CHECK TABLE, and malformed-input no-publication"
 CRYSTAL
 
-printf 'PASS Tuple writer oracle on ClickHouse %s\n' "$ACTUAL_VERSION"
+printf 'PASS Tuple reader/writer oracle on ClickHouse %s\n' "$ACTUAL_VERSION"
