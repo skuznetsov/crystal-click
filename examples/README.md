@@ -61,8 +61,11 @@ root. The writer does not insert into a table or attach the part to a server.
 metadata uses ClickHouse's canonical `Decimal(9, 2)` spelling. The paired W15
 writer also has named Bool and Enum8/16 entry points, each with a BASIC
 Nullable form. Enum entry points require an explicit label/code declaration;
-ordinary signed-integer writes do not infer an Enum or Decimal type. JSON
-typed-path reading still has no matching writer.
+ordinary signed-integer writes do not infer an Enum or Decimal type. The
+separate `write_uint64_json_typed_paths` API now writes explicitly declared
+scalar String/numeric JSON paths with caller-normalized defaults. It does not
+preserve path presence or accept dynamic/shared JSON data; see the
+[JSON typed-path frontier](../docs/JSON_TYPED_PATH_FRONTIER.md).
 
 ## Read-only ClickHouse data-root examples
 
@@ -87,8 +90,14 @@ Targeted bracket aliases also work: `catalog["lab"]["events"]` returns an
 
 `OfflineTable#kind` distinguishes `:table` from `:materialized_view`;
 `#metadata_ddl` returns the bounded persisted ATTACH text, and `#projections`
-returns named, opaque projection definitions. These are metadata only: the
-catalog does not execute a materialized view or scan projection subparts.
+returns named, opaque projection definitions. These accessors return metadata,
+not executed SELECT results. The explicit `scan_projection_typed` API can read
+physical projection subparts only when every resolved parent has a validated
+child; it does not choose projections automatically or fall back to base rows.
+The separate `materialize_view_part` API writes a detached part for the exact
+same-database `TO ... SELECT k, v FROM ...` identity-MV profile with `k UInt64`
+and `v String`. It provides no INSERT trigger or view-freshness guarantee. See
+the [W87/W88 boundaries](../docs/EMBEDDED_MERGETREE_FRONTIER.md).
 An MV's `engine` is `MaterializedView`, even when its DDL declares an inner
 `MergeTree` target; its direct part and row scans are rejected. If the MV has
 no explicit column list, `#columns` is empty rather than inferred from SELECT.

@@ -23,6 +23,27 @@ returned no changes. The older checkout at
 `/Users/sergey/SrcArchives/clickhouse` was not changed. Its previously inspected
 June snapshot must not be described as current master.
 
+## Observed registration delta
+
+Comparing literal registration names under `src/DataTypes` at the old
+`4576ba3bfaca2c2b6bba3fc43dd7142f581db082` and current reference commits
+produced 67 and 68 distinct names, respectively. The only added name is
+`MultiPoint`; none were removed in this comparison. The current
+`DataTypeCustomGeo.cpp` registers it as a custom type backed by `Array(Point)`
+and also adds it to the `Geometry` variant.
+
+The extraction must include `registerSimpleDataTypeCustom`, not only
+`registerDataType` and `registerSimpleDataType`. For each checkout, run:
+
+```sh
+rg --files src/DataTypes -g '*.cpp' | xargs perl -0777 -ne 'while(/register(?:Simple)?DataType(?:Custom)?\s*\(\s*"([^"]+)"/sg){print "$1\n"}' | sort -u
+```
+
+This is a literal-registration comparison, not a complete alias inventory,
+persisted-column support matrix, or serializer compatibility proof. A narrower
+initial extraction missed the custom registration and was rejected after this
+check. `MultiPoint` is not admitted by the Crystal reader or writer yet.
+
 ## Executable compatibility evidence
 
 Existing physical-format oracles remain pinned to
