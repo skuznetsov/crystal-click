@@ -15,6 +15,9 @@ module CrystalClick
         @write_numeric_stream : Proc(String, String, WideTupleNumericType::Buffer, Int32, String, Array(ChecksumRecord)),
         @write_identifier_stream : Proc(String, String, WideTupleIdentifierType::Buffer, Int32, String, Array(ChecksumRecord)),
         @write_temporal_stream : Proc(String, String, WideTupleTemporalType::Buffer, Int32, String, Array(ChecksumRecord)),
+        @write_fixed_string_stream : Proc(String, String, WideTupleFixedStringType::Buffer, WideTupleFixedStringType, Int32, Array(ChecksumRecord)),
+        @write_enum_stream : Proc(String, String, WideTupleEnumType::Buffer, WideTupleEnumType, Int32, Array(ChecksumRecord)),
+        @write_decimal_stream : Proc(String, String, WideTupleDecimalType::Buffer, WideTupleDecimalType, Int32, Array(ChecksumRecord)),
         @write_primary_index : Proc(String, Slice(UInt64), Int32, ChecksumRecord),
         @write_checksummed_file : Proc(String, String, String, ChecksumRecord),
         @write_plain_metadata : Proc(String, String, String, Nil),
@@ -81,6 +84,36 @@ module CrystalClick
         type_name : String,
       ) : Array(ChecksumRecord)
         @write_temporal_stream.call(stage, column, values, rows_per_mark, type_name)
+      end
+
+      def write_fixed_string_stream(
+        stage : String,
+        column : String,
+        values : WideTupleFixedStringType::Buffer,
+        exact_type : WideTupleFixedStringType,
+        rows_per_mark : Int32,
+      ) : Array(ChecksumRecord)
+        @write_fixed_string_stream.call(stage, column, values, exact_type, rows_per_mark)
+      end
+
+      def write_enum_stream(
+        stage : String,
+        column : String,
+        values : WideTupleEnumType::Buffer,
+        exact_type : WideTupleEnumType,
+        rows_per_mark : Int32,
+      ) : Array(ChecksumRecord)
+        @write_enum_stream.call(stage, column, values, exact_type, rows_per_mark)
+      end
+
+      def write_decimal_stream(
+        stage : String,
+        column : String,
+        values : WideTupleDecimalType::Buffer,
+        exact_type : WideTupleDecimalType,
+        rows_per_mark : Int32,
+      ) : Array(ChecksumRecord)
+        @write_decimal_stream.call(stage, column, values, exact_type, rows_per_mark)
       end
 
       def write_primary_index(stage : String, keys : Slice(UInt64), rows_per_mark : Int32) : ChecksumRecord

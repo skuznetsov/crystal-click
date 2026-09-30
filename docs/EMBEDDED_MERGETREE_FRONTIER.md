@@ -1,9 +1,10 @@
 # Embedded MergeTree Storage Frontier SDD
 
-The later W94-W100 compositional Tuple frontier is tracked separately in
+The later W94-W101 compositional Tuple frontier is tracked separately in
 `COMPOSITIONAL_TUPLE_FRONTIER.md`, `NUMERIC_TUPLE_FRONTIER.md`,
 `BOOL_TUPLE_FRONTIER.md`, `BOOL_SEMANTICS_FRONTIER.md`,
-`IDENTIFIER_TUPLE_FRONTIER.md` and `TEMPORAL_TUPLE_FRONTIER.md`.
+`IDENTIFIER_TUPLE_FRONTIER.md`, `TEMPORAL_TUPLE_FRONTIER.md` and
+`PARAMETERIZED_TUPLE_FRONTIER.md`.
 These bounded reader/writer/table/catalog extensions do not widen the
 MV/projection, arbitrary-table-write or
 memory/performance boundaries below. Owner-by-contract refactoring is tracked

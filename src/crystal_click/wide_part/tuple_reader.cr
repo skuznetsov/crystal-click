@@ -12,6 +12,7 @@ module CrystalClick
       alias DecodeBoolLeaf = Proc(String, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeIdentifierLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeTemporalLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
+      alias DecodeParameterizedLeaf = Proc(String, WideTupleParameterizedType, Bytes, UInt64, Int32, WideTupleLeafColumn)
 
       @plan : WideTupleTypePlan
       @column : String
@@ -24,6 +25,7 @@ module CrystalClick
       @decode_bool_leaf : DecodeBoolLeaf
       @decode_identifier_leaf : DecodeIdentifierLeaf
       @decode_temporal_leaf : DecodeTemporalLeaf
+      @decode_parameterized_leaf : DecodeParameterizedLeaf
 
       def initialize(
         @plan : WideTupleTypePlan,
@@ -37,6 +39,7 @@ module CrystalClick
         @decode_bool_leaf : DecodeBoolLeaf,
         @decode_identifier_leaf : DecodeIdentifierLeaf,
         @decode_temporal_leaf : DecodeTemporalLeaf,
+        @decode_parameterized_leaf : DecodeParameterizedLeaf,
       )
       end
 
@@ -135,6 +138,7 @@ module CrystalClick
         end
 
         string_payload_bytes = 0_u64
+        validation_requests = [] of Tuple(String, Int32, Int32)
         @plan.fields.each do |field|
           leaf_stream = "#{@column}%2E#{field.name}"
           if field.type_name == "String"
@@ -152,12 +156,21 @@ module CrystalClick
               raise CorruptPartError.new("Tuple materialization charge exceeds per-range limit")
             end
             string_payload_bytes += field_payload_bytes
-            @validate_range.call(leaf_stream, first_mark, mark_count, field_payload_bytes.to_i32, 1, rows)
+            validation_requests << {leaf_stream, field_payload_bytes.to_i32, 1}
           else
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple leaf stream has no fixed width"))
             expected_bytes = checked_byte_count(rows, width)
-            @validate_range.call(leaf_stream, first_mark, mark_count, expected_bytes, width, rows)
+            if parameterized_type = field.parameterized_type
+              if parameterized_type.is_a?(WideTupleFixedStringType)
+                field_payload_bytes = expected_bytes.to_u64
+                if field_payload_bytes > WidePart::MAX_ARRAY_MARK_BYTES.to_u64 - string_payload_bytes
+                  raise CorruptPartError.new("Tuple materialization charge exceeds per-range limit")
+                end
+                string_payload_bytes += field_payload_bytes
+              end
+            end
+            validation_requests << {leaf_stream, expected_bytes, width}
           end
         end
 
@@ -165,6 +178,13 @@ module CrystalClick
                  raise(CorruptPartError.new("Tuple materialization charge overflows"))
         if charge > max_materialized_bytes
           raise CorruptPartError.new("Tuple materialization charge exceeds per-range limit")
+        end
+
+        # Physical frame validation decompresses payload frames. Keep it after
+        # aggregate budget acceptance so an over-budget range is rejected
+        # before any selected payload is decoded.
+        validation_requests.each do |stream_name, expected_bytes, width|
+          @validate_range.call(stream_name, first_mark, mark_count, expected_bytes, width, rows)
         end
         {rows, string_payload_bytes, charge}
       end
@@ -216,6 +236,18 @@ module CrystalClick
               nil
             end
             columns << WideTupleLeafColumn.new(field.name, values)
+          elsif exact_type = field.parameterized_type
+            width = @plan.stream_width(@column, leaf_stream) ||
+                    raise(CorruptPartError.new("Tuple parameterized stream has no fixed width"))
+            encoded = @read_range.call(
+              leaf_stream,
+              first_mark,
+              mark_count,
+              checked_byte_count(rows, width),
+              width,
+              rows
+            )
+            columns << @decode_parameterized_leaf.call(field.name, exact_type, encoded, rows, width)
           elsif field.type_name == "Bool"
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple Bool stream has no fixed width"))

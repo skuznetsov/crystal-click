@@ -1,7 +1,7 @@
 module CrystalClick
-  # A syntax-only, bounded storage plan for named Tuples with exact primitive
-  # numeric, identifier/address, temporal, Bool, or String leaves. This plan does not by
-  # itself admit a persisted part profile.
+  # Closed storage plan for bounded named, nonempty, flat Tuple schemas.
+  # Parsing and admission stay Tuple-local; the shared expression AST and its
+  # other physical profiles are intentionally unchanged.
   class WideTupleTypePlan
     MAX_FIELD_NAME_BYTES   = 128
     MAX_MATERIALIZED_BYTES = 64_u64 * 1024_u64 * 1024_u64
@@ -21,60 +21,10 @@ module CrystalClick
     end
 
     def self.for_type(type : String) : WideTupleTypePlan?
-      # Bound source before any lexical regular-expression checks below.
-      return nil if type.bytesize > 4_096
-
-      # The shared syntax tree does not retain whether a scalar child was
-      # written as a bare name or with empty arguments. This profile admits
-      # only bare scalar spellings, so reject empty-argument aliases locally.
-      return nil if /\b(?:String|Bool|UUID|IPv4|IPv6|Date|Date32|DateTime|DateTime64|Time|Time64|Int8|UInt8|Int16|UInt16|Int32|UInt32|Int64|UInt64|Int128|UInt128|Int256|UInt256|Float32|Float64|BFloat16)\s*\(\s*\)/.matches?(type)
-      # AST nodes erase source whitespace. Temporal parameters are admitted
-      # only in their exact canonical lexical form, e.g. DateTime64(3).
-      return nil if /\b(?:DateTime64|Time64)(?:\s+\(|\(\s+|\([0-9]\s+\))/.matches?(type)
-      node = WideTypeExpression.parse(type) || return nil
-      return nil unless node.name == "Tuple" && node.children.size > 0
-
-      names = node.field_names
-      return nil unless names.size == node.children.size
-
-      fields = Array(WideTupleField).new(names.size)
-      seen = Set(String).new
-      node.children.each_with_index do |child, index|
-        name = names[index]
-        return nil unless valid_field_name?(name)
-        return nil unless seen.add?(name)
-        numeric_width = WideTupleNumericType.width(child.name)
-        identifier_width = WideTupleIdentifierType.width(child.name)
-        temporal_type = WideTupleTemporalType.canonical_type(child)
-        leaf_type = temporal_type || child.name
-        return nil unless temporal_type || (child.children.empty? &&
-                          (child.name == "String" || child.name == "Bool" ||
-                          !numeric_width.nil? || !identifier_width.nil?))
-        fields << WideTupleField.new(name, leaf_type)
-      end
-
+      return nil if type.bytesize > WideTupleSchemaParser::MAX_SOURCE_BYTES
+      fields = WideTupleSchemaParser.parse(type) || return nil
       canonical = "Tuple(#{fields.map { |field| "#{field.name} #{field.type_name}" }.join(", ")})"
       new(canonical, fields)
-    end
-
-    private def self.valid_field_name?(name : String) : Bool
-      return false if name.empty? || name.bytesize > MAX_FIELD_NAME_BYTES || name == "null"
-      bytes = name.to_slice
-      return false unless identifier_start?(bytes[0])
-      bytes[1, bytes.size - 1].each do |byte|
-        return false unless identifier_continue?(byte)
-      end
-      true
-    end
-
-    private def self.identifier_start?(byte : UInt8) : Bool
-      byte == '_'.ord.to_u8 ||
-        (byte >= 'A'.ord.to_u8 && byte <= 'Z'.ord.to_u8) ||
-        (byte >= 'a'.ord.to_u8 && byte <= 'z'.ord.to_u8)
-    end
-
-    private def self.identifier_continue?(byte : UInt8) : Bool
-      identifier_start?(byte) || (byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8)
     end
 
     def type_name : String
@@ -82,16 +32,16 @@ module CrystalClick
     end
 
     def fields : Array(WideTupleField)
-      @fields.map { |field| WideTupleField.new(field.name, field.type_name) }
+      @fields.map do |field|
+        WideTupleField.new(field.name, field.type_name, field.parameterized_type)
+      end
     end
 
     def physical_streams(column : String) : Array(String)
       streams = Array(String).new
       @fields.each do |field|
         leaf_stream = leaf_stream_name(column, field)
-        if field.type_name == "String"
-          streams << "#{leaf_stream}.size"
-        end
+        streams << "#{leaf_stream}.size" if field.type_name == "String"
         streams << leaf_stream
       end
       streams
@@ -111,20 +61,28 @@ module CrystalClick
           return 1 if stream_name == leaf_stream
         elsif field.type_name == "Bool"
           return 1 if stream_name == leaf_stream
+        elsif parameterized_type = field.parameterized_type
+          width = case parameterized_type
+                  when WideTupleFixedStringType then parameterized_type.width
+                  when WideTupleEnumType        then parameterized_type.width
+                  when WideTupleDecimalType     then parameterized_type.storage_width
+                  end
+          return width if stream_name == leaf_stream
         elsif identifier_width = WideTupleIdentifierType.width(field.type_name)
           return identifier_width if stream_name == leaf_stream
         elsif temporal_width = WideTupleTemporalType.width(field.type_name)
           return temporal_width if stream_name == leaf_stream
-        elsif stream_name == leaf_stream
-          return WideTupleNumericType.width(field.type_name)
+        elsif numeric_width = WideTupleNumericType.width(field.type_name)
+          return numeric_width if stream_name == leaf_stream
         end
       end
       nil
     end
 
-    # Conservative logical charge shared by W94 readers and writers. It is
-    # deliberately not an RSS estimate; nil means checked UInt64 arithmetic
-    # overflowed before a caller can allocate, expose, or stage buffers.
+    # Conservative logical charge for the retained plan plus materialized
+    # rows. Descriptor storage is included once per field, wrapper slots use
+    # actual inline sizes, and caller-supplied variable/padded payload is
+    # included once. This is not a peak-RSS or GC estimate.
     def materialization_charge(rows : UInt64, string_payload_bytes : UInt64) : UInt64?
       fixed_bytes = RESULT_CONTAINER_ACCOUNTING_BYTES
       field_bytes = @fields.size.to_u64 * FIELD_CONTAINER_ACCOUNTING_BYTES
@@ -133,23 +91,49 @@ module CrystalClick
 
       row_bytes = RESULT_ROW_ACCOUNTING_BYTES
       @fields.each do |field|
-        slot_bytes = if field.type_name == "String"
-                       STRING_SLOT_ACCOUNTING_BYTES
-                     elsif field.type_name == "Bool"
-                       1_u64
-                     elsif temporal_width = WideTupleTemporalType.owned_width(field.type_name)
-                       temporal_width.to_u64
-                     else
-                       (WideTupleIdentifierType.width(field.type_name) ||
-                         WideTupleNumericType.width(field.type_name).not_nil!).to_u64
-                     end
+        if parameterized_type = field.parameterized_type
+          descriptor_charge = parameterized_type.logical_charge
+          return nil if descriptor_charge > UInt64::MAX - fixed_bytes
+          fixed_bytes += descriptor_charge
+        end
+
+        slot_bytes = row_slot_bytes(field)
         return nil if slot_bytes > UInt64::MAX - row_bytes
         row_bytes += slot_bytes
       end
+
       return nil if rows > (UInt64::MAX - fixed_bytes) // row_bytes
       fixed_bytes += rows * row_bytes
       return nil if string_payload_bytes > UInt64::MAX - fixed_bytes
       fixed_bytes + string_payload_bytes
+    end
+
+    private def row_slot_bytes(field : WideTupleField) : UInt64
+      if parameterized_type = field.parameterized_type
+        case parameterized_type
+        when WideTupleFixedStringType
+          sizeof(FixedStringValue).to_u64
+        when WideTupleEnumType
+          parameterized_type.definition.kind == :enum8 ? sizeof(Enum8Value).to_u64 : sizeof(Enum16Value).to_u64
+        when WideTupleDecimalType
+          case parameterized_type.storage_width
+          when  4 then sizeof(Decimal32Value).to_u64
+          when  8 then sizeof(Decimal64Value).to_u64
+          when 16 then sizeof(Decimal128Value).to_u64
+          else         sizeof(Decimal256TupleValue).to_u64
+          end
+        else
+          raise UnsupportedFormatError.new("unsupported parameterized Tuple descriptor")
+        end
+      elsif field.type_name == "String"
+        STRING_SLOT_ACCOUNTING_BYTES
+      elsif field.type_name == "Bool"
+        1_u64
+      elsif temporal_width = WideTupleTemporalType.owned_width(field.type_name)
+        temporal_width.to_u64
+      else
+        (WideTupleIdentifierType.width(field.type_name) || WideTupleNumericType.width(field.type_name).not_nil!).to_u64
+      end
     end
 
     private def leaf_stream_name(column : String, field : WideTupleField) : String

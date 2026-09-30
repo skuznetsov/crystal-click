@@ -14621,6 +14621,9 @@ module CrystalClick
         },
         ->(name : String, type_name : String, bytes : Bytes, rows : UInt64, width : Int32) {
           decode_tuple_temporal_leaf(name, type_name, bytes, rows, width)
+        },
+        ->(name : String, exact_type : WideTupleParameterizedType, bytes : Bytes, rows : UInt64, width : Int32) {
+          decode_tuple_parameterized_leaf(name, exact_type, bytes, rows, width)
         }
       )
     end
@@ -14740,6 +14743,87 @@ module CrystalClick
                  raise UnsupportedFormatError.new("unsupported temporal Tuple leaf type")
                end
       WideTupleLeafColumn.new(name, type_name, values)
+    end
+
+    # FixedString, Enum and Decimal share one raw leaf stream but retain their
+    # exact semantic descriptor in the owned nominal wrappers, including when
+    # the row range is empty.
+    private def decode_tuple_parameterized_leaf(
+      name : String,
+      exact_type : WideTupleParameterizedType,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+    ) : WideTupleLeafColumn
+      expected_width = case exact_type
+                       when WideTupleFixedStringType then exact_type.width
+                       when WideTupleEnumType        then exact_type.width
+                       when WideTupleDecimalType     then exact_type.storage_width
+                       else
+                         raise UnsupportedFormatError.new("unsupported parameterized Tuple descriptor")
+                       end
+      raise CorruptPartError.new("Tuple parameterized stream width does not match schema") unless width == expected_width
+      if width <= 0 || rows > Int32::MAX.to_u64 // width.to_u64 || bytes.size.to_u64 != rows * width.to_u64
+        raise CorruptPartError.new("Tuple parameterized stream byte count does not match rows")
+      end
+
+      case exact_type
+      when WideTupleFixedStringType
+        values = Array(FixedStringValue).new(rows.to_i) do |index|
+          FixedStringValue.from_raw(width, bytes[index * width, width])
+        end
+        WideTupleLeafColumn.new(name, exact_type, values)
+      when WideTupleEnumType
+        if exact_type.definition.kind == :enum8
+          values = Array(Enum8Value).new(rows.to_i) do |index|
+            code = decode_numeric_value(bytes, index * width, Int8)
+            unless exact_type.definition.declared?(code)
+              raise CorruptPartError.new("Tuple Enum stream contains an undeclared code")
+            end
+            Enum8Value.new(exact_type.definition, code)
+          end
+          WideTupleLeafColumn.new(name, exact_type, values)
+        else
+          values = Array(Enum16Value).new(rows.to_i) do |index|
+            code = decode_numeric_value(bytes, index * width, Int16)
+            unless exact_type.definition.declared?(code)
+              raise CorruptPartError.new("Tuple Enum stream contains an undeclared code")
+            end
+            Enum16Value.new(exact_type.definition, code)
+          end
+          WideTupleLeafColumn.new(name, exact_type, values)
+        end
+      when WideTupleDecimalType
+        precision = exact_type.precision
+        scale = exact_type.scale
+        values = case width
+                 when 4
+                   Array(Decimal32Value).new(rows.to_i) do |index|
+                     raw = decode_array_decimal_value(bytes, index * width, Int32)
+                     Decimal32Value.new(raw, precision, scale)
+                   end
+                 when 8
+                   Array(Decimal64Value).new(rows.to_i) do |index|
+                     raw = decode_array_decimal_value(bytes, index * width, Int64)
+                     Decimal64Value.new(raw, precision, scale)
+                   end
+                 when 16
+                   Array(Decimal128Value).new(rows.to_i) do |index|
+                     raw = decode_array_decimal_value(bytes, index * width, Int128)
+                     Decimal128Value.new(raw, precision, scale)
+                   end
+                 when 32
+                   Array(Decimal256TupleValue).new(rows.to_i) do |index|
+                     raw = decode_array_decimal_value(bytes, index * width, Decimal256Value)
+                     Decimal256TupleValue.new(raw, precision, scale)
+                   end
+                 else
+                   raise CorruptPartError.new("Tuple Decimal width is unsupported")
+                 end
+        WideTupleLeafColumn.new(name, exact_type, values)
+      else
+        raise UnsupportedFormatError.new("unsupported parameterized Tuple descriptor")
+      end
     end
 
     private def decode_tuple_numeric_leaf(

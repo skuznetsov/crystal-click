@@ -413,3 +413,36 @@ values for seven stock/library profiles), example no-codegen, format, shell
 syntax and diff checks all passed. Full RELEASE was not run for this slice.
 The scoped hostile verdict is ROBUST for the new owners and bounded consumer
 contract, not for full type support, all monolith extraction or performance.
+
+## W101 parameterized Tuple owner boundaries
+
+The named-flat Tuple extension adds twelve concrete owners, one file each:
+`FixedStringValue`, `Enum8Value`, `Enum16Value`, `Decimal32Value`,
+`Decimal64Value`, `Decimal128Value`, `Decimal256TupleValue`,
+`WideTupleEnumDefinition`, `WideTupleFixedStringType`, `WideTupleEnumType`,
+`WideTupleDecimalType` and `WideTupleSchemaParser`. The separate
+`wide_tuple_parameterized_type.cr` file contains their closed descriptor alias,
+not another concrete class. Existing Tuple field, leaf, column, row and
+consumer owners retain their responsibilities; exact schema identity does not
+belong to the primitive numeric owner or one union per Tuple arity.
+
+The parser owns bounded named-flat source extraction and quoted Enum syntax.
+Type owners retain exact N, map or P/S metadata. Nominal structs own detached
+values, and the immutable Enum definition is shared once per leaf. Reader
+orchestration aggregates descriptor/slot/FixedString-payload charges before
+fixed-width range validation can decompress data. The writer shares the
+existing fixed-width stream framing through a typed block, not a new per-row
+callback object. These are bounded new capability owners, not a wholesale
+behavior-neutral facade extraction or a memory/performance claim.
+
+The reader remains 15,385 lines, writer 25,516, table 6,638 and catalog 5,309.
+The old facade decomposition, recursive/nullable composition and broader
+physical profiles remain open. Exact tests, source/binary lineage, hostile
+review scope and evidence decay are recorded in
+[the W101 frontier and result](PARAMETERIZED_TUPLE_FRONTIER.md).
+
+Observed W101 gates: 222 focused DEBUG and RELEASE examples each, 1,384 full
+DEBUG examples and fourteen pinned oracle launchers passed, with final
+format/syntax/diff checks. Scoped hostile review is ROBUST for the new owners
+and admitted profile. Full RELEASE, current-master runtime and the larger
+facade architecture are not established by these results.

@@ -96,15 +96,17 @@ describe "W96 named numeric Tuple plan red" do
   end
 
   it "rejects neighboring semantic, recursive, unnamed, and empty-argument types" do
+    # Flat Decimal(P, S) and Enum8 leaves are admitted by W101; only malformed
+    # precision or unsupported nullable/nested placements remain negative.
     rejected = [
       "Tuple()",
       "Tuple(Int8)",
       "Tuple(value Nullable(Bool))",
-      "Tuple(value Decimal(9, 2))",
+      "Tuple(value Decimal(0, 2))",
       "Tuple(value Nullable(Int8))",
       "Tuple(value Array(Int8))",
       "Tuple(value Tuple(inner Int8))",
-      "Tuple(value Enum8('a' = 1))",
+      "Tuple(value Nullable(Enum8('a' = 1)))",
       "Tuple(value String())",
       "Tuple(value UInt8())",
       "Tuple(value UInt16())",

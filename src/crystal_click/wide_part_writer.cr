@@ -435,6 +435,15 @@ module CrystalClick
         ->(stage : String, column : String, values : WideTupleTemporalType::Buffer, mark_size : Int32, leaf_type_name : String) {
           write_tuple_temporal_stream(stage, column, values, mark_size, leaf_type_name)
         },
+        ->(stage : String, column : String, values : WideTupleFixedStringType::Buffer, exact_type : WideTupleFixedStringType, mark_size : Int32) {
+          write_tuple_fixed_string_stream(stage, column, values, exact_type, mark_size)
+        },
+        ->(stage : String, column : String, values : WideTupleEnumType::Buffer, exact_type : WideTupleEnumType, mark_size : Int32) {
+          write_tuple_enum_stream(stage, column, values, exact_type, mark_size)
+        },
+        ->(stage : String, column : String, values : WideTupleDecimalType::Buffer, exact_type : WideTupleDecimalType, mark_size : Int32) {
+          write_tuple_decimal_stream(stage, column, values, exact_type, mark_size)
+        },
         ->(stage : String, values : Slice(UInt64), mark_size : Int32) {
           write_primary_index(stage, values, mark_size)
         },
@@ -526,6 +535,129 @@ module CrystalClick
         end
       {% end %}
       raise UnsupportedFormatError.new("Tuple temporal leaf buffer is unsupported")
+    end
+
+    private def self.write_tuple_fixed_string_stream(
+      stage : String,
+      column : String,
+      values : WideTupleFixedStringType::Buffer,
+      exact_type : WideTupleFixedStringType,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      width = exact_type.width
+      raise UnsupportedFormatError.new("Tuple FixedString width must be positive") if width <= 0
+      unless values.is_a?(Array(FixedStringValue))
+        raise UnsupportedFormatError.new("Tuple FixedString buffer does not match its exact type")
+      end
+
+      typed_values = values.as(Array(FixedStringValue))
+      typed_values.each do |value|
+        unless value.width == width
+          raise UnsupportedFormatError.new("Tuple FixedString value width does not match its exact type")
+        end
+      end
+
+      write_fixed_width_stream(stage, column, typed_values.size, width, rows_per_mark) do |raw, source_row, output_row|
+        row_bytes = typed_values[source_row].raw_bytes
+        unless row_bytes.size == width
+          raise UnsupportedFormatError.new("Tuple FixedString value bytes do not match its exact width")
+        end
+        width.times do |byte_index|
+          raw[output_row * width + byte_index] = row_bytes[byte_index]
+        end
+        nil
+      end
+    end
+
+    private def self.write_tuple_enum_stream(
+      stage : String,
+      column : String,
+      values : WideTupleEnumType::Buffer,
+      exact_type : WideTupleEnumType,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      case values
+      when Array(Enum8Value)
+        unless exact_type.width == 1 && exact_type.definition.kind == :enum8
+          raise UnsupportedFormatError.new("Tuple Enum8 buffer does not match its exact type")
+        end
+        values.each do |value|
+          unless value.definition == exact_type.definition
+            raise UnsupportedFormatError.new("Tuple Enum8 row definition does not match its exact type")
+          end
+        end
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.width)
+      when Array(Enum16Value)
+        unless exact_type.width == 2 && exact_type.definition.kind == :enum16
+          raise UnsupportedFormatError.new("Tuple Enum16 buffer does not match its exact type")
+        end
+        values.each do |value|
+          unless value.definition == exact_type.definition
+            raise UnsupportedFormatError.new("Tuple Enum16 row definition does not match its exact type")
+          end
+        end
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.width)
+      else
+        raise UnsupportedFormatError.new("Tuple Enum leaf buffer is unsupported")
+      end
+    end
+
+    private def self.write_tuple_decimal_stream(
+      stage : String,
+      column : String,
+      values : WideTupleDecimalType::Buffer,
+      exact_type : WideTupleDecimalType,
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      case values
+      when Array(Decimal32Value)
+        unless exact_type.storage_width == 4
+          raise UnsupportedFormatError.new("Tuple Decimal32 buffer does not match its exact type")
+        end
+        validate_tuple_decimal_rows!(values, exact_type)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+      when Array(Decimal64Value)
+        unless exact_type.storage_width == 8
+          raise UnsupportedFormatError.new("Tuple Decimal64 buffer does not match its exact type")
+        end
+        validate_tuple_decimal_rows!(values, exact_type)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+      when Array(Decimal128Value)
+        unless exact_type.storage_width == 16
+          raise UnsupportedFormatError.new("Tuple Decimal128 buffer does not match its exact type")
+        end
+        validate_tuple_decimal_rows!(values, exact_type)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+      when Array(Decimal256TupleValue)
+        unless exact_type.storage_width == 32
+          raise UnsupportedFormatError.new("Tuple Decimal256 buffer does not match its exact type")
+        end
+        validate_tuple_decimal_rows!(values, exact_type)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+      else
+        raise UnsupportedFormatError.new("Tuple Decimal leaf buffer is unsupported")
+      end
+    end
+
+    private def self.validate_tuple_decimal_rows!(values : Array(T), exact_type : WideTupleDecimalType) : Nil forall T
+      values.each do |value|
+        unless value.precision == exact_type.precision && value.scale == exact_type.scale
+          raise UnsupportedFormatError.new("Tuple Decimal row parameters do not match its exact type")
+        end
+      end
+      nil
+    end
+
+    private def self.write_tuple_parameterized_numeric_stream(
+      stage : String,
+      column : String,
+      values : Array(T),
+      rows_per_mark : Int32,
+      width : Int32,
+    ) : Array(ChecksumRecord) forall T
+      write_fixed_width_stream(stage, column, values.size, width, rows_per_mark) do |raw, source_row, output_row|
+        write_typed_numeric_le(raw, output_row * width, values[source_row])
+      end
     end
 
     # Write one sorted UInt64 key and the exact JSON(a UInt64, b String)
@@ -11294,6 +11426,23 @@ module CrystalClick
       type_name : String,
     ) : Array(ChecksumRecord) forall T
       width = numeric_width(type_name)
+      write_fixed_width_stream(stage, column, values.size, width, rows_per_mark) do |raw, source_row, output_row|
+        write_typed_numeric_le(raw, output_row * width, values[source_row])
+      end
+    end
+
+    # Shared fixed-width stream owner for primitive and nominal Tuple values.
+    # The callback writes one already-validated row into the granule buffer;
+    # framing, hashes, marks and exact raw-byte accounting remain centralized.
+    private def self.write_fixed_width_stream(
+      stage : String,
+      column : String,
+      row_count : Int32,
+      width : Int32,
+      rows_per_mark : Int32,
+      &encode_row : Bytes, Int32, Int32 -> Nil
+    ) : Array(ChecksumRecord)
+      raise ArgumentError.new("fixed-width stream width must be positive") if width <= 0
       base_name = StreamName.hash(column)
       data_name = "#{base_name}.bin"
       marks_name = "#{base_name}.mrk2"
@@ -11306,11 +11455,11 @@ module CrystalClick
       start_row = 0
 
       File.open(data_path, "wb") do |data_file|
-        while start_row < values.size
-          rows = {rows_per_mark, values.size - start_row}.min
+        while start_row < row_count
+          rows = {rows_per_mark, row_count - start_row}.min
           raw = Bytes.new(rows * width)
           rows.times do |row|
-            write_typed_numeric_le(raw, row * width, values[start_row + row])
+            yield raw, start_row + row, row
           end
 
           write_uint64_le(mark_bytes, data_size)
@@ -11336,7 +11485,7 @@ module CrystalClick
       mark_hash = CityHashV1.file_hash(marks)
 
       [
-        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64 * width.to_u64, raw_hash.finish),
+        ChecksumRecord.new(data_name, data_size, data_hash.finish, true, row_count.to_u64 * width.to_u64, raw_hash.finish),
         ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false),
       ]
     end
@@ -11442,6 +11591,14 @@ module CrystalClick
         # Temporal Tuple wrappers keep nominal identity and exact scale at the
         # API boundary; their raw carrier reuses the existing LE primitive
         # encoder rather than duplicating endian logic.
+        write_typed_numeric_le(bytes, offset, value.raw)
+      {% elsif T == Enum8Value || T == Enum16Value %}
+        # Enum values keep their complete declaration at the public boundary;
+        # only the signed code crosses into the existing little-endian codec.
+        write_typed_numeric_le(bytes, offset, value.code)
+      {% elsif T == Decimal32Value || T == Decimal64Value || T == Decimal128Value || T == Decimal256TupleValue %}
+        # Decimal P/S are checked by the exact leaf owner before this raw-only
+        # adapter reaches the common primitive codec.
         write_typed_numeric_le(bytes, offset, value.raw)
       {% elsif T == UInt8 %}
         bytes[offset] = value

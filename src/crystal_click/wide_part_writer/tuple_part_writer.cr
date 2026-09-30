@@ -47,6 +47,24 @@ module CrystalClick
               records.concat(infrastructure.write_temporal_stream(
                 stage, logical_name, values.as(WideTupleTemporalType::Buffer), input.rows_per_mark, field.type_name
               ))
+            when Array(FixedStringValue)
+              exact_type = field.parameterized_type.as?(WideTupleFixedStringType) ||
+                           raise UnsupportedFormatError.new("Tuple FixedString field has no exact owner")
+              records.concat(infrastructure.write_fixed_string_stream(
+                stage, logical_name, values.as(WideTupleFixedStringType::Buffer), exact_type, input.rows_per_mark
+              ))
+            when Array(Enum8Value), Array(Enum16Value)
+              exact_type = field.parameterized_type.as?(WideTupleEnumType) ||
+                           raise UnsupportedFormatError.new("Tuple Enum field has no exact owner")
+              records.concat(infrastructure.write_enum_stream(
+                stage, logical_name, values.as(WideTupleEnumType::Buffer), exact_type, input.rows_per_mark
+              ))
+            when Array(Decimal32Value), Array(Decimal64Value), Array(Decimal128Value), Array(Decimal256TupleValue)
+              exact_type = field.parameterized_type.as?(WideTupleDecimalType) ||
+                           raise UnsupportedFormatError.new("Tuple Decimal field has no exact owner")
+              records.concat(infrastructure.write_decimal_stream(
+                stage, logical_name, values.as(WideTupleDecimalType::Buffer), exact_type, input.rows_per_mark
+              ))
             else
               records.concat(infrastructure.write_numeric_stream(
                 stage, logical_name, values.as(WideTupleNumericType::Buffer), input.rows_per_mark, field.type_name
@@ -102,6 +120,7 @@ module CrystalClick
             raise ArgumentError.new("Tuple leaf buffers do not match schema order")
           end
           raise ArgumentError.new("Tuple leaf buffers must match key row count") unless column.size == keys.size
+          validate_parameterized_column!(column, field)
         end
 
         previous = keys[0]
@@ -133,7 +152,7 @@ module CrystalClick
 
         # Bound every fixed stream and every String raw stream before retaining
         # leaf snapshots. String size leaves are fixed-width UInt64 streams.
-        compressed_sizes, raw_sizes, string_bytes_by_mark, total_string_bytes = preflight_stream_budgets(
+        compressed_sizes, raw_sizes, payload_bytes_by_mark, total_payload_bytes = preflight_stream_budgets(
           keys.size, rows_per_mark, mark_count, value_name, type_plan, columns, fields, logical_streams, infrastructure
         )
         # The shared plan accounts for the materialized Tuple result; the
@@ -141,13 +160,13 @@ module CrystalClick
         validate_combined_materialization_charge(
           type_plan,
           keys.size,
-          total_string_bytes,
+          total_payload_bytes,
           keys.size.to_u64 * WideTupleTypePlan::UINT64_SLOT_ACCOUNTING_BYTES
         )
-        string_bytes_by_mark.each_with_index do |mark_string_bytes, mark_index|
+        payload_bytes_by_mark.each_with_index do |mark_payload_bytes, mark_index|
           rows = rows_for_mark(keys.size, rows_per_mark, mark_index)
           key_charge = rows.to_u64 * WideTupleTypePlan::UINT64_SLOT_ACCOUNTING_BYTES
-          validate_combined_materialization_charge(type_plan, rows, mark_string_bytes, key_charge)
+          validate_combined_materialization_charge(type_plan, rows, mark_payload_bytes, key_charge)
         end
 
         target = File.expand_path(destination)
@@ -161,7 +180,9 @@ module CrystalClick
         keys_copy = Array(UInt64).new(keys.size) { |index| keys[index] }
         leaf_buffers = [] of TupleLeafBuffers
         columns.each_with_index do |column, index|
-          if column.type_name == "UInt64"
+          if exact_type = fields[index].parameterized_type
+            leaf_buffers << column.owned_copy_for(exact_type).values
+          elsif column.type_name == "UInt64"
             leaf_buffers << column.uint64_values
           elsif column.type_name == "String"
             leaf_buffers << infrastructure.copy_string_values(column)
@@ -191,6 +212,18 @@ module CrystalClick
         )
       end
 
+      private def self.validate_parameterized_column!(column : WideTupleLeafColumn, field : WideTupleField) : Nil
+        unless column.parameterized_type == field.parameterized_type
+          raise ArgumentError.new("Tuple leaf parameterized type does not match schema")
+        end
+        # WideTupleLeafColumn's exact constructor validates every immutable
+        # nominal row against its descriptor and owns the backing array. Do not
+        # call the defensive `values` getter here: preflight must not allocate a
+        # full duplicate before the materialization bound is checked. The exact
+        # owner comparison above validates empty leaves as well.
+        nil
+      end
+
       private def self.preflight_stream_budgets(
         row_count : Int32,
         rows_per_mark : Int32,
@@ -204,8 +237,8 @@ module CrystalClick
       ) : {Array(Int64), Array(UInt64), Array(UInt64), UInt64}
         compressed_sizes = Array(Int64).new(logical_streams.size, 0_i64)
         raw_sizes = Array(UInt64).new(logical_streams.size, 0_u64)
-        string_bytes_by_mark = Array(UInt64).new(mark_count, 0_u64)
-        total_string_bytes = 0_u64
+        payload_bytes_by_mark = Array(UInt64).new(mark_count, 0_u64)
+        total_payload_bytes = 0_u64
 
         fixed_stream_budget(compressed_sizes, raw_sizes, 0, row_count, rows_per_mark, mark_count, 8, "Tuple UInt64 key", infrastructure)
         stream_index = 1
@@ -226,9 +259,9 @@ module CrystalClick
             column.each_string_bytesize do |byte_count|
               bytes = byte_count.to_u64
               mark_raw_size = checked_add(mark_raw_size, bytes, "Tuple String mark bytes")
-              total_string_bytes = checked_add(total_string_bytes, bytes, "Tuple String bytes")
-              string_bytes_by_mark[mark_index] = checked_add(
-                string_bytes_by_mark[mark_index], bytes, "Tuple combined String mark bytes"
+              total_payload_bytes = checked_add(total_payload_bytes, bytes, "Tuple String bytes")
+              payload_bytes_by_mark[mark_index] = checked_add(
+                payload_bytes_by_mark[mark_index], bytes, "Tuple combined materialized payload mark bytes"
               )
               rows_in_mark += 1
               values_seen += 1
@@ -260,12 +293,28 @@ module CrystalClick
               compressed_sizes, raw_sizes, stream_index, row_count, rows_per_mark, mark_count,
               width, "Tuple #{field.type_name} leaf #{field.name}", infrastructure
             )
+            if fixed_type = field.parameterized_type.as?(WideTupleFixedStringType)
+              unless fixed_type.width == width
+                raise ArgumentError.new("Tuple FixedString stream width differs from its exact owner")
+              end
+              total_payload_bytes = checked_add(
+                total_payload_bytes, row_count.to_u64 * width.to_u64, "Tuple FixedString payload bytes"
+              )
+              mark_count.times do |mark_index|
+                rows = rows_for_mark(row_count, rows_per_mark, mark_index)
+                mark_payload_bytes = rows.to_u64 * width.to_u64
+                payload_bytes_by_mark[mark_index] = checked_add(
+                  payload_bytes_by_mark[mark_index], mark_payload_bytes,
+                  "Tuple combined materialized payload mark bytes"
+                )
+              end
+            end
             stream_index += 1
           end
         end
 
         raise ArgumentError.new("Tuple physical stream plan is inconsistent") unless stream_index == logical_streams.size
-        {compressed_sizes, raw_sizes, string_bytes_by_mark, total_string_bytes}
+        {compressed_sizes, raw_sizes, payload_bytes_by_mark, total_payload_bytes}
       end
 
       private def self.fixed_stream_budget(
@@ -395,6 +444,12 @@ module CrystalClick
             end
           when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
             defaults = identifier_default_count(buffer.as(WideTupleIdentifierType::Buffer), all_payload_defaults)
+          when Array(FixedStringValue)
+            defaults = fixed_string_default_count(buffer.as(WideTupleFixedStringType::Buffer), all_payload_defaults)
+          when Array(Enum8Value), Array(Enum16Value)
+            defaults = enum_default_count(buffer.as(WideTupleEnumType::Buffer), all_payload_defaults)
+          when Array(Decimal32Value), Array(Decimal64Value), Array(Decimal128Value), Array(Decimal256TupleValue)
+            defaults = decimal_default_count(buffer.as(WideTupleDecimalType::Buffer), all_payload_defaults)
           else
             buffer.each_with_index do |value, row|
               if WideTupleNumericType.is_default?(value)
@@ -450,6 +505,71 @@ module CrystalClick
           end
         end
         defaults
+      end
+
+      private def self.fixed_string_default_count(
+        buffer : WideTupleFixedStringType::Buffer,
+        all_payload_defaults : Array(Bool),
+      ) : Int32
+        defaults = 0
+        buffer.each_with_index do |value, row|
+          all_zero = true
+          value.raw_bytes.each { |byte| all_zero = false unless byte.zero? }
+          if all_zero
+            defaults += 1
+          else
+            all_payload_defaults[row] = false
+          end
+        end
+        defaults
+      end
+
+      private def self.enum_default_count(
+        buffer : WideTupleEnumType::Buffer,
+        all_payload_defaults : Array(Bool),
+      ) : Int32
+        defaults = 0
+        buffer.each_with_index do |value, row|
+          # SerializationInfo statistics use the raw-zero storage predicate.
+          # This is distinct from Enum's SQL/nested-NULL default (smallest code).
+          if value.code == 0
+            defaults += 1
+          else
+            all_payload_defaults[row] = false
+          end
+        end
+        defaults
+      end
+
+      private def self.decimal_default_count(
+        buffer : WideTupleDecimalType::Buffer,
+        all_payload_defaults : Array(Bool),
+      ) : Int32
+        defaults = 0
+        buffer.each_with_index do |value, row|
+          if decimal_storage_default?(value)
+            defaults += 1
+          else
+            all_payload_defaults[row] = false
+          end
+        end
+        defaults
+      end
+
+      private def self.decimal_storage_default?(value : Decimal32Value) : Bool
+        value.raw == 0
+      end
+
+      private def self.decimal_storage_default?(value : Decimal64Value) : Bool
+        value.raw == 0
+      end
+
+      private def self.decimal_storage_default?(value : Decimal128Value) : Bool
+        value.raw == 0
+      end
+
+      private def self.decimal_storage_default?(value : Decimal256TupleValue) : Bool
+        value.raw.low == 0_u128 && value.raw.high == 0_u128
       end
 
       private def self.validate_metadata_limits(columns : String, substreams : String, serialization : String) : Nil
@@ -612,6 +732,21 @@ module CrystalClick
             unless temporal_values_match?(expected_temporal, actual, input.type_plan.fields[index].type_name)
               raise CorruptPartError.new("staged Tuple temporal leaf readback differs")
             end
+          when Array(FixedStringValue)
+            exact_type = input.type_plan.fields[index].parameterized_type.as?(WideTupleFixedStringType)
+            unless exact_type && fixed_string_values_match?(expected, actual, exact_type)
+              raise CorruptPartError.new("staged Tuple FixedString leaf readback differs")
+            end
+          when Array(Enum8Value), Array(Enum16Value)
+            exact_type = input.type_plan.fields[index].parameterized_type.as?(WideTupleEnumType)
+            unless exact_type && enum_values_match?(expected.as(WideTupleEnumType::Buffer), actual, exact_type)
+              raise CorruptPartError.new("staged Tuple Enum leaf readback differs")
+            end
+          when Array(Decimal32Value), Array(Decimal64Value), Array(Decimal128Value), Array(Decimal256TupleValue)
+            exact_type = input.type_plan.fields[index].parameterized_type.as?(WideTupleDecimalType)
+            unless exact_type && decimal_values_match?(expected.as(WideTupleDecimalType::Buffer), actual, exact_type)
+              raise CorruptPartError.new("staged Tuple Decimal leaf readback differs")
+            end
           else
             expected_numeric = expected.as(WideTupleNumericType::Buffer)
             unless numeric_values_match?(expected_numeric, actual, input.type_plan.fields[index].type_name)
@@ -672,6 +807,81 @@ module CrystalClick
                            return false
                          end
           return false unless WideTupleTemporalType.same_bits?(expected[row], actual_value)
+        end
+        true
+      end
+
+      private def self.fixed_string_values_match?(
+        expected : WideTupleFixedStringType::Buffer,
+        actual : WideTupleLeafColumn,
+        expected_type : WideTupleFixedStringType,
+      ) : Bool
+        return false unless expected.size == actual.size
+        return false unless actual.type_name == expected_type.type_name
+        return false unless actual.parameterized_type == expected_type
+        expected.each_with_index do |expected_value, row|
+          actual_value = actual.value_at(row)
+          return false unless actual_value.is_a?(FixedStringValue) && actual_value == expected_value
+        end
+        true
+      end
+
+      private def self.enum_values_match?(
+        expected : WideTupleEnumType::Buffer,
+        actual : WideTupleLeafColumn,
+        expected_type : WideTupleEnumType,
+      ) : Bool
+        return false unless expected.size == actual.size
+        return false unless actual.type_name == expected_type.type_name
+        return false unless actual.parameterized_type == expected_type
+        case expected
+        when Array(Enum8Value)
+          expected.each_with_index do |expected_value, row|
+            actual_value = actual.value_at(row)
+            return false unless actual_value.is_a?(Enum8Value) && actual_value == expected_value
+          end
+        when Array(Enum16Value)
+          expected.each_with_index do |expected_value, row|
+            actual_value = actual.value_at(row)
+            return false unless actual_value.is_a?(Enum16Value) && actual_value == expected_value
+          end
+        else
+          return false
+        end
+        true
+      end
+
+      private def self.decimal_values_match?(
+        expected : WideTupleDecimalType::Buffer,
+        actual : WideTupleLeafColumn,
+        expected_type : WideTupleDecimalType,
+      ) : Bool
+        return false unless expected.size == actual.size
+        return false unless actual.type_name == expected_type.type_name
+        return false unless actual.parameterized_type == expected_type
+        case expected
+        when Array(Decimal32Value)
+          expected.each_with_index do |expected_value, row|
+            actual_value = actual.value_at(row)
+            return false unless actual_value.is_a?(Decimal32Value) && actual_value == expected_value
+          end
+        when Array(Decimal64Value)
+          expected.each_with_index do |expected_value, row|
+            actual_value = actual.value_at(row)
+            return false unless actual_value.is_a?(Decimal64Value) && actual_value == expected_value
+          end
+        when Array(Decimal128Value)
+          expected.each_with_index do |expected_value, row|
+            actual_value = actual.value_at(row)
+            return false unless actual_value.is_a?(Decimal128Value) && actual_value == expected_value
+          end
+        when Array(Decimal256TupleValue)
+          expected.each_with_index do |expected_value, row|
+            actual_value = actual.value_at(row)
+            return false unless actual_value.is_a?(Decimal256TupleValue) && actual_value == expected_value
+          end
+        else
+          return false
         end
         true
       end

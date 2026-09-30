@@ -18,16 +18,35 @@ module CrystalClick
         unless column.name == field.name && column.type_name == field.type_name
           raise ArgumentError.new("Tuple result leaf does not match schema order")
         end
+        if exact_type = field.parameterized_type
+          leaf_type = column.parameterized_type ||
+                      raise(ArgumentError.new("Tuple result leaf is missing exact parameterized metadata"))
+          unless same_parameterized_type?(leaf_type, exact_type)
+            raise ArgumentError.new("Tuple result leaf parameterized metadata does not match schema")
+          end
+        elsif column.parameterized_type
+          raise ArgumentError.new("Tuple result leaf has unexpected parameterized metadata")
+        end
         raise ArgumentError.new("Tuple result leaves are not row-aligned") unless column.size == row_count
       end
 
-      @columns = columns.dup
+      # Snapshot caller buffers and rebind equal Enum maps to the plan's one
+      # immutable descriptor, so retained leaves do not keep duplicate maps.
+      @columns = Array(WideTupleLeafColumn).new(columns.size) do |index|
+        column = columns[index]
+        if exact_type = fields[index].parameterized_type
+          column.owned_copy_for(exact_type)
+        else
+          column.owned_copy
+        end
+      end
       @row_count = row_count
       @field_indices = {} of String => Int32
       @string_field_indices = [] of Int32
       fields.each_with_index do |field, index|
         @field_indices[String.new(field.name.to_slice)] = index.to_i32
-        @string_field_indices << index.to_i32 if field.type_name == "String"
+        @string_field_indices << index.to_i32 if field.type_name == "String" ||
+                                                 field.parameterized_type.is_a?(WideTupleFixedStringType)
       end
     end
 
@@ -81,6 +100,21 @@ module CrystalClick
       raise BoundsError.new("Tuple row index is out of bounds") if index < 0 || index >= @row_count
       raise BoundsError.new("Tuple field index is out of bounds") if field_index < 0 || field_index >= @columns.size
       @columns[field_index].value_at(index)
+    end
+
+    private def same_parameterized_type?(
+      left : WideTupleParameterizedType,
+      right : WideTupleParameterizedType,
+    ) : Bool
+      if left.is_a?(WideTupleFixedStringType) && right.is_a?(WideTupleFixedStringType)
+        left == right
+      elsif left.is_a?(WideTupleEnumType) && right.is_a?(WideTupleEnumType)
+        left == right
+      elsif left.is_a?(WideTupleDecimalType) && right.is_a?(WideTupleDecimalType)
+        left == right
+      else
+        false
+      end
     end
 
     # Sum String payload lengths for one row without copying any String bytes.
