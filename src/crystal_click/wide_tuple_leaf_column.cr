@@ -2,8 +2,8 @@ module CrystalClick
   # One owned named leaf buffer. Sibling row alignment is intentionally a
   # writer preflight concern, so independently prepared columns can differ.
   class WideTupleLeafColumn
-    alias Value = WideTupleNumericType::Value | String
-    alias Buffer = WideTupleNumericType::Buffer | Array(String)
+    alias Value = WideTupleNumericType::Value | Bool | String
+    alias Buffer = WideTupleNumericType::Buffer | Array(Bool) | Array(String)
 
     @name : String
     @values : Buffer
@@ -27,7 +27,7 @@ module CrystalClick
       @values = copy_values(values)
     end
 
-    # Generic construction is closed to String and the exact admitted
+    # Generic construction is closed to String, Bool, and the exact admitted
     # native/wrapper numeric identities. Unsupported element types fail closed.
     def initialize(name : String, values : Array(T)) forall T
       @name = String.new(name.to_slice)
@@ -42,6 +42,8 @@ module CrystalClick
       values = @values
       if values.is_a?(Array(String))
         String.new("String".to_slice)
+      elsif values.is_a?(Array(Bool))
+        String.new("Bool".to_slice)
       else
         WideTupleNumericType.type_name_for_buffer(values.as(WideTupleNumericType::Buffer))
       end
@@ -78,6 +80,10 @@ module CrystalClick
         values = @values
         raise UnsupportedFormatError.new("Tuple leaf is not String") unless values.is_a?(Array(String))
         String.new(values[index].to_slice)
+      {% elsif T == Bool %}
+        values = @values
+        raise UnsupportedFormatError.new("Tuple leaf is not Bool") unless values.is_a?(Array(Bool))
+        values[index]
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
                  T == Int128 || T == UInt128 || T == Int256Value || T == UInt256Value ||
@@ -121,6 +127,10 @@ module CrystalClick
         values = @values
         raise UnsupportedFormatError.new("Tuple leaf is not String") unless values.is_a?(Array(String))
         values.map { |value| String.new(value.to_slice) }
+      {% elsif T == Bool %}
+        values = @values
+        raise UnsupportedFormatError.new("Tuple leaf is not Bool") unless values.is_a?(Array(Bool))
+        values.dup
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
                  T == Int128 || T == UInt128 || T == Int256Value || T == UInt256Value ||
@@ -158,6 +168,8 @@ module CrystalClick
     private def copy_values(values : Buffer) : Buffer
       if values.is_a?(Array(String))
         values.map { |value| String.new(value.to_slice) }
+      elsif values.is_a?(Array(Bool))
+        values.dup
       else
         copy_numeric_values(values.as(WideTupleNumericType::Buffer))
       end
@@ -166,6 +178,8 @@ module CrystalClick
     private def copy_allowed_array(values : Array(T)) : Buffer forall T
       {% if T == String %}
         values.map { |value| String.new(value.to_slice) }
+      {% elsif T == Bool %}
+        values.dup
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
                  T == Int128 || T == UInt128 || T == Int256Value || T == UInt256Value ||

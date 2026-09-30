@@ -101,9 +101,9 @@ describe "W96 numeric Tuple model" do
     string_leaf.type_name.should eq("String")
   end
 
-  it "rejects Bool buffers through the generic constructor without widening Buffer" do
+  it "rejects nullable Bool buffers through the generic constructor" do
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::WideTupleLeafColumn.new("flag", [true, false])
+      CrystalClick::WideTupleLeafColumn.new("flag", [true, nil])
     end
 
     numeric_leaf = CrystalClick::WideTupleLeafColumn.new("count", [1_i8])

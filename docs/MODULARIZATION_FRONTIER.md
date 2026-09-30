@@ -9,6 +9,27 @@ separate from the large existing facades.
 W96 adds one closed numeric identity/width owner and extends the existing
 Tuple owners; its compatibility certificate is separate in
 `NUMERIC_TUPLE_FRONTIER.md`. It does not close the larger facade refactor.
+W97's Bool extension uses those same Tuple owners with separate semantic Bool
+dispatch; its bounded compatibility certificate is in `BOOL_TUPLE_FRONTIER.md`.
+Bool is not added to the numeric identity owner or a per-combination Tuple class.
+
+## W97 ownership boundary
+
+`WideTupleLeafColumn` owns native Bool buffers alongside, but nominally separate
+from, numeric and String buffers. `WideTupleTypePlan` owns one-byte Bool stream
+planning and logical charges. `TupleReader` and `TuplePartWriter` orchestrate
+their existing bounded stream infrastructure, while narrow private facade
+delegates provide nonzero-aware reading and the existing canonical Bool codec.
+`WideTupleRow` remains the single table/catalog row representation. No new
+production class or import-order change is needed for this extension.
+
+The current reader/writer facades still contain 15,223 and 25,134 lines; table
+and catalog remain at 6,638 and 5,309. W97 does not claim to have decomposed
+these facades. A next compatibility slice should reconcile root/Array/container
+Bool's strict 0/1 read policy with the stock-supported nonzero domain, then
+give the shared Bool leaf policy a cohesive owner with its own file. Broader
+leaf-codec, physical-stream-context, metadata and table orchestration ownership
+remains open. File counts and shorter files alone do not prove lower coupling.
 
 ## W96 ownership boundary
 

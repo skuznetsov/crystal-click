@@ -1,7 +1,7 @@
 module CrystalClick
   # A syntax-only, bounded storage plan for named Tuples with exact primitive
-  # numeric or String leaves. This plan does not by itself admit a persisted
-  # part profile.
+  # numeric, Bool, or String leaves. This plan does not by itself admit a
+  # persisted part profile.
   class WideTupleTypePlan
     MAX_FIELD_NAME_BYTES   = 128
     MAX_MATERIALIZED_BYTES = 64_u64 * 1024_u64 * 1024_u64
@@ -24,7 +24,7 @@ module CrystalClick
       # The shared syntax tree does not retain whether a scalar child was
       # written as a bare name or with empty arguments. This profile admits
       # only bare scalar spellings, so reject empty-argument aliases locally.
-      return nil if /\b(?:String|Int8|UInt8|Int16|UInt16|Int32|UInt32|Int64|UInt64|Int128|UInt128|Int256|UInt256|Float32|Float64|BFloat16)\s*\(\s*\)/.matches?(type)
+      return nil if /\b(?:String|Bool|Int8|UInt8|Int16|UInt16|Int32|UInt32|Int64|UInt64|Int128|UInt128|Int256|UInt256|Float32|Float64|BFloat16)\s*\(\s*\)/.matches?(type)
       node = WideTypeExpression.parse(type) || return nil
       return nil unless node.name == "Tuple" && node.children.size > 0
 
@@ -38,7 +38,7 @@ module CrystalClick
         return nil unless valid_field_name?(name)
         return nil unless seen.add?(name)
         numeric_width = WideTupleNumericType.width(child.name)
-        return nil unless child.children.empty? && (child.name == "String" || !numeric_width.nil?)
+        return nil unless child.children.empty? && (child.name == "String" || child.name == "Bool" || !numeric_width.nil?)
         fields << WideTupleField.new(name, child.name)
       end
 
@@ -98,6 +98,8 @@ module CrystalClick
         if field.type_name == "String"
           return 8 if stream_name == "#{leaf_stream}.size"
           return 1 if stream_name == leaf_stream
+        elsif field.type_name == "Bool"
+          return 1 if stream_name == leaf_stream
         elsif stream_name == leaf_stream
           return WideTupleNumericType.width(field.type_name)
         end
@@ -118,6 +120,8 @@ module CrystalClick
       @fields.each do |field|
         slot_bytes = if field.type_name == "String"
                        STRING_SLOT_ACCOUNTING_BYTES
+                     elsif field.type_name == "Bool"
+                       1_u64
                      else
                        WideTupleNumericType.width(field.type_name).not_nil!.to_u64
                      end

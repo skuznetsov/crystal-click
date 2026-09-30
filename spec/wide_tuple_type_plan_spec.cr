@@ -57,7 +57,7 @@ describe "W94 named scalar-leaf Tuple type plan" do
       "Tuple(#{"a" * 129} String)",
       "Tuple(1field UInt64)",
       "Tuple(a Nullable(UInt64))",
-      "Tuple(a Bool)",
+      "Tuple(a Bool())",
       "Tuple(a Array(String))",
       "Tuple(a Tuple(x UInt64))",
       "Tuple(a UInt64, b String) trailing",

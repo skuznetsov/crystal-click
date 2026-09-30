@@ -99,7 +99,7 @@ describe "W96 named numeric Tuple plan red" do
     rejected = [
       "Tuple()",
       "Tuple(Int8)",
-      "Tuple(value Bool)",
+      "Tuple(value Nullable(Bool))",
       "Tuple(value Date)",
       "Tuple(value DateTime64(3))",
       "Tuple(value Decimal(9, 2))",

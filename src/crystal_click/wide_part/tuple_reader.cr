@@ -9,6 +9,7 @@ module CrystalClick
       alias ValidateRange = Proc(String, Int32, Int32, Int32, Int32, UInt64, Nil)
       alias DecodeUInt64 = Proc(Bytes, Int32, UInt64)
       alias DecodeNumericLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
+      alias DecodeBoolLeaf = Proc(String, Bytes, UInt64, Int32, WideTupleLeafColumn)
 
       @plan : WideTupleTypePlan
       @column : String
@@ -18,6 +19,7 @@ module CrystalClick
       @validate_range : ValidateRange
       @decode_uint64 : DecodeUInt64
       @decode_numeric_leaf : DecodeNumericLeaf
+      @decode_bool_leaf : DecodeBoolLeaf
 
       def initialize(
         @plan : WideTupleTypePlan,
@@ -28,6 +30,7 @@ module CrystalClick
         @validate_range : ValidateRange,
         @decode_uint64 : DecodeUInt64,
         @decode_numeric_leaf : DecodeNumericLeaf,
+        @decode_bool_leaf : DecodeBoolLeaf,
       )
       end
 
@@ -146,7 +149,7 @@ module CrystalClick
             @validate_range.call(leaf_stream, first_mark, mark_count, field_payload_bytes.to_i32, 1, rows)
           else
             width = @plan.stream_width(@column, leaf_stream) ||
-                    raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))
+                    raise(CorruptPartError.new("Tuple leaf stream has no fixed width"))
             expected_bytes = checked_byte_count(rows, width)
             @validate_range.call(leaf_stream, first_mark, mark_count, expected_bytes, width, rows)
           end
@@ -207,6 +210,18 @@ module CrystalClick
               nil
             end
             columns << WideTupleLeafColumn.new(field.name, values)
+          elsif field.type_name == "Bool"
+            width = @plan.stream_width(@column, leaf_stream) ||
+                    raise(CorruptPartError.new("Tuple Bool stream has no fixed width"))
+            encoded = @read_range.call(
+              leaf_stream,
+              first_mark,
+              mark_count,
+              checked_byte_count(rows, width),
+              width,
+              rows
+            )
+            columns << @decode_bool_leaf.call(field.name, encoded, rows, width)
           else
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))

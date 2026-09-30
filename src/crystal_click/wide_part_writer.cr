@@ -371,8 +371,8 @@ module CrystalClick
       end
     end
 
-    # Write a UInt64 key and a declaration-ordered Tuple of supported numeric
-    # or String leaves. Each leaf remains an independent physical stream.
+    # Write a UInt64 key and a declaration-ordered Tuple of supported numeric,
+    # Bool or String leaves. Each leaf remains an independent physical stream.
     def self.write_uint64_tuple_pair(
       destination : String,
       key_name : String,
@@ -410,6 +410,9 @@ module CrystalClick
         ->(stage : String, column : String, values : Slice(String), mark_size : Int32) {
           write_string_streams(stage, column, values, mark_size)
         },
+        ->(stage : String, column : String, values : Slice(Bool), mark_size : Int32) {
+          write_tuple_bool_stream(stage, column, values, mark_size)
+        },
         ->(stage : String, column : String, values : WideTupleNumericType::Buffer, mark_size : Int32, leaf_type_name : String) {
           write_tuple_numeric_stream(stage, column, values, mark_size, leaf_type_name)
         },
@@ -428,6 +431,15 @@ module CrystalClick
       TuplePartWriter.write(
         destination, key_name, keys, value_name, type_name, columns, rows_per_mark, infrastructure
       )
+    end
+
+    private def self.write_tuple_bool_stream(
+      stage : String,
+      column : String,
+      values : Slice(Bool),
+      rows_per_mark : Int32,
+    ) : Array(ChecksumRecord)
+      write_typed_numeric_stream(stage, column, values, rows_per_mark, "Bool")
     end
 
     private def self.write_tuple_numeric_stream(

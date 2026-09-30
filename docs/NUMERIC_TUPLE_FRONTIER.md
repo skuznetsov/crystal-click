@@ -8,6 +8,9 @@ W96 extends W94/W95's UInt64/String named leaves to the 15 numeric identities
 below; it is not a certificate for every ClickHouse Tuple composition.
 The full compatible-type/MV/projection goal and eventual matched
 ClickHouse slowdown <=10% target remain unchanged.
+W97 separately extends the shared Tuple owners to native Bool leaves; see
+`BOOL_TUPLE_FRONTIER.md`. It does not add Bool to the numeric identity set or
+extend this older certificate to Bool's nonzero semantic domain.
 
 ## Problem and source anchor
 
@@ -244,6 +247,10 @@ validator are absent in this checkout; this living source-linked frontier is
 the fallback record, not a claimed validator pass.
 
 ## Remaining frontier and continuation
+
+Historical W96 handoff below: W97's separately measured Bool slice supersedes
+the Bool next-action/rejection entries, not the other open obligations. Use
+`BOOL_TUPLE_FRONTIER.md` for the current continuation and evidence boundary.
 
 Active goal: complete compatible read/write types and MV/projections before
 memory/performance optimization; the eventual matched ClickHouse slowdown

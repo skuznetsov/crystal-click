@@ -9450,8 +9450,8 @@ module CrystalClick
     end
 
     # Read an owned, declaration-ordered range from a named Tuple whose leaves
-    # are exact UInt64 or String columns. This compositional API does not widen
-    # the legacy positional Tuple accessor above.
+    # are exact numeric, Bool, or String columns. This compositional API does
+    # not widen the legacy positional Tuple accessor above.
     def read_tuple_mark_range(
       column : String,
       first_mark : Int,
@@ -12351,7 +12351,7 @@ module CrystalClick
       keys = columns.select { |name, type| name != selected_column && type == "UInt64" }
       unless columns.size == 2 && keys.size == 1 && tuple_plan &&
              columns.any? { |name, type| name == selected_column && type == selected_type && WidePart.supports_named_scalar_tuple_type?(type) }
-        raise UnsupportedFormatError.new("named numeric/String Tuple requires one UInt64 key column")
+        raise UnsupportedFormatError.new("named numeric/Bool/String Tuple requires one UInt64 key column")
       end
 
       file = File.join(@path, "serialization.json")
@@ -14613,7 +14613,7 @@ module CrystalClick
     private def ensure_compositional_tuple_column(column : String) : WideTupleTypePlan
       ensure_column(column)
       WideTupleTypePlan.for_type(@column_type) ||
-        raise UnsupportedFormatError.new("compositional Tuple accessor requires named numeric/String leaves")
+        raise UnsupportedFormatError.new("compositional Tuple accessor requires named numeric/Bool/String leaves")
     end
 
     private def tuple_reader(plan : WideTupleTypePlan, column : String) : TupleReader
@@ -14637,8 +14637,31 @@ module CrystalClick
         },
         ->(name : String, type_name : String, bytes : Bytes, rows : UInt64, width : Int32) {
           decode_tuple_numeric_leaf(name, type_name, bytes, rows, width)
+        },
+        ->(name : String, bytes : Bytes, rows : UInt64, width : Int32) {
+          decode_tuple_bool_leaf(name, bytes, rows, width)
         }
       )
+    end
+
+    # Named Tuple Bool is semantic rather than raw-byte preserving: any
+    # nonzero source byte becomes true, while the writer emits canonical 1.
+    # Root-column Bool accessors retain their separate strict 0/1 policy.
+    private def decode_tuple_bool_leaf(
+      name : String,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+    ) : WideTupleLeafColumn
+      raise CorruptPartError.new("Tuple Bool stream width does not match schema") unless width == 1
+      if rows > Int32::MAX.to_u64 || bytes.size != rows.to_i
+        raise CorruptPartError.new("Tuple Bool stream byte count does not match rows")
+      end
+
+      values = Array(Bool).new(rows.to_i) do |index|
+        bytes[index] != 0_u8
+      end
+      WideTupleLeafColumn.new(name, values)
     end
 
     private def decode_tuple_numeric_leaf(

@@ -34,6 +34,10 @@ module CrystalClick
               records.concat(infrastructure.write_string_streams(
                 stage, logical_name, values.to_unsafe.to_slice(values.size), input.rows_per_mark
               ))
+            when Array(Bool)
+              records.concat(infrastructure.write_bool_stream(
+                stage, logical_name, values.to_unsafe.to_slice(values.size), input.rows_per_mark
+              ))
             else
               records.concat(infrastructure.write_numeric_stream(
                 stage, logical_name, values.as(WideTupleNumericType::Buffer), input.rows_per_mark, field.type_name
@@ -355,6 +359,14 @@ module CrystalClick
                 all_payload_defaults[row] = false
               end
             end
+          when Array(Bool)
+            buffer.each_with_index do |value, row|
+              if value
+                all_payload_defaults[row] = false
+              else
+                defaults += 1
+              end
+            end
           else
             buffer.each_with_index do |value, row|
               if WideTupleNumericType.is_default?(value)
@@ -520,6 +532,10 @@ module CrystalClick
             unless actual.type_name == "String" && actual.string_values == expected
               raise CorruptPartError.new("staged Tuple String leaf readback differs")
             end
+          when Array(Bool)
+            unless actual.type_name == "Bool" && actual.values_as(Bool) == expected
+              raise CorruptPartError.new("staged Tuple Bool leaf readback differs")
+            end
           else
             expected_numeric = expected.as(WideTupleNumericType::Buffer)
             unless numeric_values_match?(expected_numeric, actual, input.type_plan.fields[index].type_name)
@@ -539,7 +555,7 @@ module CrystalClick
         expected.size.times do |row|
           expected_value = expected[row]
           actual_value = actual.value_at(row)
-          return false if actual_value.is_a?(String)
+          return false if actual_value.is_a?(String) || actual_value.is_a?(Bool)
           return false unless WideTupleNumericType.same_bits?(expected_value, actual_value)
         end
         true

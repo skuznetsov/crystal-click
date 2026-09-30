@@ -9,6 +9,10 @@ W96's separate numeric-leaf extension and its current gates are recorded in
 `NUMERIC_TUPLE_FRONTIER.md`; older W94/W95 results do not themselves certify
 those additional identities. General recursive Tuple admission, semantic
 leaf types and arbitrary-table writing remain open.
+W97's separate Bool leaf frontier is in `BOOL_TUPLE_FRONTIER.md`; it preserves
+one nominal row owner, decodes zero/nonzero truth, and writes canonical 0/1.
+Root/Array/container Bool policy parity and other semantic Tuple leaves remain
+open rather than inheriting W94-W96 evidence.
 Continuation anchor: `3f09429`, with W90 debug/release and W80-W85 oracle
 verification recorded in `MODULARIZATION_FRONTIER.md`.
 
