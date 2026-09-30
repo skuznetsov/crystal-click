@@ -61,6 +61,13 @@ The source-level comparison also identified these persisted-layout changes:
   opt-in; the normal setting remains `advanced`, and zero-level parts have
   their own default. This shared-data version is distinct from the outer JSON
   serialization version. Crystal's bounded JSON profile does not admit it.
+- `SerializationInfo.cpp` can now emit `exact_num_defaults: true` in
+  `serialization.json`; the older checkout has no such field. Without exact
+  tracking, `num_defaults` can be a sampled estimate, not a recount of the
+  physical values. Crystal's pinned Tuple profile accepts bounded counts but
+  rejects the new field under its exact metadata-key guard. A current-master
+  metadata profile needs a separate admission test; unchanged leaf bytes do
+  not establish that compatibility.
 
 The discriminating runtime probes are an old-alternative Geometry part read
 across versions, plus Wide and Compact JSON parts with forced shared paths and

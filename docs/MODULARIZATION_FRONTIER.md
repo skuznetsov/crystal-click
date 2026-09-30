@@ -1,8 +1,8 @@
 # CrystalClick Modularization Frontier
 
 Document status: W89 implemented and verified on the combined W88+W89 source;
-W90 Array(Map) plan owners and W91 payload owners are verified below. The larger
-reader/writer modularization remains future work.
+W90 Array(Map) plan owners, W91 payload owners and W94 bounded Tuple owners
+are verified below. The larger reader/writer modularization remains future work.
 
 ## Problem and boundary
 
@@ -208,5 +208,32 @@ Scoped hostile review returned ROBUST at the aggregate import boundary; root
 also checked mechanical body parity and executed the runtime checks. Exact
 commands, source/profile lineage, residual Tuple metadata/EOF gaps and evidence
 decay are recorded in [the W91 seal and result](COMPOSITIONAL_TUPLE_FRONTIER.md).
+
+## W94 bounded Tuple owners
+
+The new named UInt64/String-leaf Tuple path has eight concrete owners, one
+file each: `WideTupleField`, `WideTupleTypePlan`, `WideTupleLeafColumn`,
+`WideTupleColumnData`, private `WidePart::TupleReader`, and private
+`WidePartWriter::TuplePartWriter`, `::TuplePartWriteInput` and
+`::TuplePartInfrastructure`. Schema metadata and owned columnar buffers are
+separate from reader orchestration, write preflight/staging and narrow adapters
+to existing infrastructure. The existing facades retain root physical-policy
+checks and old public APIs; the new path delegates actual orchestration rather
+than reopening the facade with another large method body.
+
+This is a new bounded admission slice, not a behavior-neutral extraction or
+closure of the modularization task. The reader is still 15,135 lines, writer
+25,101, table 6,583 and catalog 5,283. Existing type-specific serializers,
+physical-stream policy and table/catalog adapters need later cohesive owner
+boundaries; moving their text alone would not reduce coupling.
+
+Root executed 37 focused examples in debug and release and 1,180 full examples
+in each mode, all with zero failures/errors/pending. The unchanged pair and new
+composition oracles passed against ClickHouse 26.7.1.1315, including stock reads
+and stock ATTACH/CHECK of library-written parts. Scoped ownership, aggregate
+budget and lazy-frame adversary checks are ROBUST within this profile, not for
+all types or current master. Exact APIs, paths, commands, measured refutations,
+ownership/lifetime policy, evidence decay and the next high-level value-mapping
+boundary are recorded in [the W94 seal and result](COMPOSITIONAL_TUPLE_FRONTIER.md).
 No new type, metadata profile, public generic Tuple API, arbitrary-table writer
 or performance claim is admitted by this extraction.

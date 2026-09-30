@@ -371,6 +371,62 @@ module CrystalClick
       end
     end
 
+    # Write a UInt64 key and a declaration-ordered Tuple of exact UInt64 or
+    # String leaves. Each leaf remains an independent physical stream.
+    def self.write_uint64_tuple_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      columns : Array(WideTupleLeafColumn),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_uint64_tuple_pair_with_stage_factory(
+        destination, key_name, keys, value_name, type_name, columns, rows_per_mark,
+        ->(parent : String) { create_stage(parent) },
+        ->(column : WideTupleLeafColumn) { column.string_values }
+      )
+    end
+
+    private def self.write_uint64_tuple_pair_with_stage_factory(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      columns : Array(WideTupleLeafColumn),
+      rows_per_mark : Int32,
+      stage_factory : Proc(String, String),
+      copy_string_values : Proc(WideTupleLeafColumn, Array(String)),
+    ) : String
+      infrastructure = TuplePartInfrastructure.new(
+        stage_factory,
+        ->(name : String) { validate_column_name(name) },
+        ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
+        ->(stage : String, column : String, values : Slice(UInt64), mark_size : Int32) {
+          write_uint64_stream(stage, column, values, mark_size)
+        },
+        ->(stage : String, column : String, values : Slice(String), mark_size : Int32) {
+          write_string_streams(stage, column, values, mark_size)
+        },
+        ->(stage : String, values : Slice(UInt64), mark_size : Int32) {
+          write_primary_index(stage, values, mark_size)
+        },
+        ->(stage : String, name : String, content : String) {
+          write_checksummed_file(stage, name, content)
+        },
+        ->(stage : String, name : String, content : String) { write_plain_metadata(stage, name, content) },
+        ->(stage : String, records : Array(ChecksumRecord)) { write_checksums(stage, records) },
+        ->(stage : String, target : String) { publish_exclusively(stage, target) },
+        ->(raw_size : Int64, label : String) { checked_string_frame_size(raw_size, label) },
+        copy_string_values
+      )
+      TuplePartWriter.write(
+        destination, key_name, keys, value_name, type_name, columns, rows_per_mark, infrastructure
+      )
+    end
+
     # Write one sorted UInt64 key and the exact JSON(a UInt64, b String)
     # Object V3 shape. Values are positional declared-path pairs; absent
     # paths must already be normalized to their ClickHouse scalar defaults.

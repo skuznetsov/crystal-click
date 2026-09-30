@@ -1,17 +1,17 @@
 # Compositional Tuple Frontier
 
-Status: W91 neutral payload ownership is VERIFIED below; compositional Tuple
-admission remains PROPOSED. No new Tuple shape is admitted by this document.
-W92 exact-Tuple empty-EOF repair is VERIFIED within its separate boundary
-below. W93 exact-Tuple Default metadata profiles are VERIFIED within the
-pinned boundary below; generic Tuple remains PROPOSED. W93's current seal
-supersedes the historical W92 continuation capsule.
+Status: W94 named scalar-leaf Tuple is VERIFIED within the bounded Wide-part
+profile below. W91 neutral payload ownership, W92 exact-Tuple empty-EOF repair
+and W93 exact-Tuple Default metadata profiles retain their separately scoped
+evidence below. W94 supersedes the W93 next-action capsule without extending
+its old evidence to additional types. General recursive Tuple admission and
+generic table/catalog value mapping remain open.
 Continuation anchor: `3f09429`, with W90 debug/release and W80-W85 oracle
 verification recorded in `MODULARIZATION_FRONTIER.md`.
 
 ## Confirmed problem
 
-The current reader, table accessor, and writer support the exact
+Before W94, the reader, table accessor, and writer supported the exact
 `Tuple(a UInt64, b String)` profile. `WidePart.supports_tuple_uint64_string_type?`
 and `WidePartTable#tuples_for` are exact-shape APIs; retain their behavior.
 `OfflineColumnValue` also has only the exact `Tuple(UInt64, String)` variant.
@@ -31,7 +31,10 @@ The factory accepts an empty Tuple. The pinned 26.7.1.1315 binary also accepted
 zero- and one-field type-expression probes; persisted empty-Tuple behavior
 has not been tested.
 
-## Proposed boundary and architecture
+## Original proposed boundary and architecture
+
+The following design preceded W91-W94; their observed results below determine
+the currently admitted behavior.
 
 First extract shared UInt64/String payload responsibilities without changing
 admission or bytes. Writer leaf owners accept a logical physical prefix. The
@@ -94,6 +97,308 @@ In-scope local implementation and tests remain authorized; push, a new binary
 installation, and external data mutation are not authorized by this capsule.
 Refresh this proposal if leaf consumers, admission, lifetime contracts, the
 source reference, or the pinned executable/profile changes.
+
+## W94 named scalar-leaf Tuple execution seal
+
+Anchor: clean `bd6f32a1094b96e88c2de07719d3bbfbdc7cb035`. Source comparison
+remains `a9581941254d6113f3740a8ec125ee7519cb1bda`; executable evidence will
+remain pinned to ClickHouse 26.7.1.1315. This is CAUTION serialization/API work,
+with one atomic W94 commit as rollback. No performance claim is intended.
+
+Admit after verification: a nonempty root Tuple of named, unique, bounded ASCII
+identifiers (`[A-Za-z_][A-Za-z0-9_]*`, at most 128 bytes, not `null`), each with
+an exact scalar UInt64 or String leaf. Preserve declaration order, even for
+repeated leaf types. Existing 4096-byte expression / 512-node parser limits,
+metadata/stream/row/frame limits and one aggregate materialization limit govern
+arity; do not introduce a small fixed field-count cap. Empty, unnamed, nested,
+Nullable and other leaf types, Sparse serialization, Compact parts, and newer
+master-only metadata stay rejected. These are library limits, not claims that
+ClickHouse rejects those types.
+
+Public contracts, with one concrete type per source file:
+
+- `WideTupleField` and `WideTupleTypePlan`: immutable ordered schema metadata,
+  parsed through the syntax-only `WideTypeExpression`, explicit exact leaf
+  admission, and plan-derived physical names/roles. Schema parsing alone never
+  establishes persisted profile compatibility.
+- `WideTupleLeafColumn`: a named owned UInt64 or String buffer, cloning input
+  arrays and String bytes. Buffer type is inferred, not caller-tagged. Accessors
+  return copies so caller mutations cannot change a prepared writer input or
+  retained reader result. This independent leaf input need not be row-aligned
+  with its siblings; the writer must check that before stage creation.
+- `WideTupleColumnData`: ordered schema plus aligned owned leaf columns, named
+  lookup and row count; no Cartesian union of Crystal Tuple instantiations.
+- `WidePart#read_tuple_mark_range(column, first_mark, mark_count,
+  max_materialized_bytes: ...)`: owned range result after range-wide preflight.
+  `each_tuple_mark_range` yields one owned result and mark index after that
+  mark's all-field payload/charge validation. The budget may lower, never raise,
+  the established 64 MiB limit. It is conservative logical accounting, not RSS.
+- `WidePartWriter.write_uint64_tuple_pair(destination, key_name, keys,
+  value_name, type_name, columns, rows_per_mark: ...)`: one UInt64 key plus one
+  Tuple payload. Match every ordered declared field to its buffer name/type and
+  validate all rows, keys, names, hashes, frame/stream/metadata budgets before
+  invoking the private injected stage factory. Generate canonical schema from
+  the validated plan, never from an unchecked second source of truth.
+  The shared logical charge includes modeled row overhead; writer snapshots
+  additionally charge eight bytes per UInt64 key, both range-wide and per mark.
+  This stricter writer guard is not a claim about peak allocator memory or RSS.
+
+Reader ownership: schema/value classes in separate `src/crystal_click/` files;
+the private `WidePart::TupleReader` in `wide_part/tuple_reader.cr` owns actual
+orchestration, with thin public delegates and narrow closure adapters for
+existing private checks. Reopening the giant facade with all new orchestration
+would not meet the requested owner-by-class boundary. Root/context policy remains
+in `wide_part.cr`, whose exact pair metadata/stream dispatch becomes plan-driven
+without relaxing root versions, Default records, physical inventory or EOF
+guards. Empty EOF applies only to plan-identified String raw leaves, never to
+size/UInt64 streams. Preserve exact pair accessors and table facades unchanged.
+Before any iterator callback, check selected schema/profile and all selected
+leaf mark schedules/row alignment. Payload checks are per mark: later payload
+corruption may follow earlier callbacks. Aggregate read additionally checks
+the entire selected range's rows and charge before allocating result buffers.
+For this Tuple profile, an exclusive end mark at offset zero in the next
+compressed frame must not decode that unselected frame: stop only when the
+previous decoded frame's end proves the exact boundary. Do not apply this
+change to other type families, interior-frame offsets, or non-EOF sentinels;
+retain their existing boundary/trailing-byte guards. Check that an end mark
+inside a compressed frame still rejects. Frame checks do not imply CRC
+verification; the existing explicit checksum policy remains unchanged.
+Bound String-size scratch before allocation or scan it without retaining one
+size vector per field. Charge all numeric slots, empty String slots, modeled
+container overhead and raw payload with checked sums, not N independent caps.
+
+Writer ownership: separate cohesive `wide_part_writer/tuple_part_writer.cr`
+responsibility, reusing W91 leaf stream encoders and existing publication,
+checksum and key-index helpers; add only required monolith dispatch/plumbing.
+Keep the original exact writer and staged-validator bytes unchanged. Private
+factory injection is a test seam, not a new public allocator capability.
+Root owns aggregate requires, this document and integration evidence. Reader
+and writer own disjoint production/spec paths. Oracle owner owns new
+`scripts/check_compositional_tuple_oracle.sh` and `.cr`; existing W93 oracle
+remains an unchanged regression control. `WidePartTable` borrowed batches and
+`OfflineColumnValue` generic row mapping remain a separately named follow-up,
+not silently claimed by W94.
+
+First falsifier before production: compile/run the new focused specs against
+the missing public plan/buffer/read/write APIs, record the actual failure,
+then implement. Guards include 1/2/3/9 fields, same-type field ordering,
+String-first/all-String/UInt64-only shapes, independent marks, short final mark,
+binary and all-empty Strings, input/result ownership, exact pair/scalar-root
+guards, malformed/unsupported later fields, mark misalignment, per-mark callback
+atomicity, checked aggregate slot/payload budget (including empty Strings), and
+an injected stage-factory counter staying zero for invalid inputs.
+
+DoD: focused plan/reader/writer specs in debug and release, full debug and
+release suites, all with `--link-flags='-fuse-ld=ld'`; format checks,
+`git diff --check`, shell syntax checks; unchanged pinned Tuple oracle plus new
+persisted composition oracle. New oracle must measure stock -> Crystal and
+Crystal -> stock ATTACH/CHECK, full/ranged RowBinary equality and exact physical
+inventory for 1/2/3/9-field profiles. Exercise real Default and AlwaysDefault
+metadata and inspect UInt64-only version maps rather than inferring them from
+String-containing parts. Require scoped hostile review before admission.
+
+Strongest failure mode: generalized dispatch accepts an incompatible physical
+role or uncharged empty-String buffers. Guards above must prove rejection at
+the intended boundary, not merely checksum failure or an empty destination.
+Refresh this seal if API ownership, source/oracle version, stream policy or
+admission changes. Full types/MV/projections and matched <=10% slowdown remain
+the active goal; push, binary installation and external mutation are not
+authorized by W94.
+
+### W94 pre-production discriminator
+
+At the anchor above, the plan-only focused spec was written before production.
+Root executed `crystal spec spec/wide_tuple_type_plan_spec.cr
+--link-flags='-fuse-ld=ld'` with the macOS 26.5 SDK and isolated W94 cache. It
+exited 1 at spec line 16: undefined constant `CrystalClick::WideTupleTypePlan`.
+This is a missing-API architecture red, not evidence of a defect in the exact
+pair reader. No generic reader/writer runtime behavior was exercised by it.
+The model/reader owner may now implement against that contract.
+
+After the four model files and their aggregate imports existed, root executed
+`crystal spec spec/wide_part_writer_compositional_tuple_spec.cr
+--link-flags='-fuse-ld=ld'` in the same environment. It exited 1 at spec line
+95: undefined `WidePartWriter.write_uint64_tuple_pair`. This is the actual
+missing-writer-API red, not a runtime serialization failure. The writer owner
+may now implement; reader/writer green gates and persisted-profile evidence
+remain pending.
+
+Root also created a fresh pinned-stock three-row Wide part with
+`Tuple(n0 UInt64, n1 UInt64)` and required a successful `CHECK TABLE`.
+Its actual metadata was version 1, propagation true and exactly
+`types_serialization_versions: {"string": 1}`, despite having no String
+leaf. The top-level records were `[payload, pk]`, with two positional Default
+Tuple children. This refutes the inferred need to admit an absent or empty
+type-version map for that UInt64-only profile; retain the strict map until an
+actual persisted counterexample establishes a separate frontier.
+
+The first hostile ownership review was refuted by root's installed Crystal
+1.21.0 source: `String#dup` and `#clone` return `self`. Root then ran
+`spec/wide_tuple_column_data_ownership_spec.cr` against the initial model
+implementation: four examples failed, zero errors. Unsafe mutation of
+test-owned String bytes changed retained payload, field metadata and canonical
+plan metadata. This is a behavioral RED, not a missing-API signal. Replace
+aliasing `dup` with explicit byte copies and retain these probes before any
+ownership claim. `String#to_slice` is read-only, so a probe that writes through
+that slice would only test `ReadOnlyError`; the discriminator intentionally
+uses `to_unsafe` on fixture-owned bytes.
+
+After explicit String byte copies replaced those aliases, root reran the
+plan and ownership specs together: seven examples, zero failures/errors.
+This closes the measured initial model alias bug only; generic reader/writer,
+additional guards, full suites and stock interoperability remain pending.
+
+The first combined runtime gate executed 36 examples and exposed an exact-pair
+diagnostic regression plus an invalid corruption probe: flipping checksum bytes
+does not exercise the default decoder's structural corruption checks. Preserve
+the old exact-pair diagnostic and replace that probe with a zero decompressed
+size in the second frame's header, without adding implicit CRC verification.
+The corrected probe then executed 36 examples with zero failures and one error:
+even a range selecting only mark zero decoded the corrupt, unselected end frame
+one. This is the measured RED for the Tuple-scoped exclusive-boundary repair
+above; moving the corrupt frame or weakening the callback assertion would not
+close it. Debug/release focused and full suites plus both pinned oracles remain
+required after this shared-kernel change.
+
+### W94 observed result (2026-09-30 UTC)
+
+State: VERIFIED for the seal's named UInt64/String-leaf Tuple profile in Wide
+parts with exactly one UInt64 key and one Tuple payload. Lineage is clean
+`bd6f32a1094b96e88c2de07719d3bbfbdc7cb035` plus this atomic W94 slice;
+that commit is the rollback boundary. This does not admit arbitrary N-column
+writing, recursive types, Sparse/Compact serialization, or generic table and
+catalog value mapping.
+
+The frozen implementation has four public schema/buffer owners, a private
+Tuple reader owner, and three private writer/input/infrastructure owners,
+each in its own source file. The existing facades delegate orchestration;
+the larger reader, writer, table and catalog classes are not fully split.
+Input and returned String bytes are explicitly copied rather than aliased by
+`String#dup`. Writer preflight scans byte lengths without copying payloads,
+then takes snapshots only after aggregate payload/slot/key charges pass.
+
+Root executed the seven-spec focused gate in debug and release: each passed
+37 examples, zero failures, errors or pending examples. It includes unsafe
+fixture-byte ownership probes, exact-pair metadata/empty-EOF controls, and a
+two-field 32 MiB-per-field writer case that passes individual frame limits but
+exceeds the combined materialization charge: zero String snapshot calls and
+zero stage-factory calls. The corrected lazy-frame probe reads mark zero
+successfully, then yields only callback zero before rejecting selected corrupt
+frame one. A separate interior-frame end-mark probe rejects. These checks do
+not certify the unselected suffix's integrity or enable implicit CRC checks.
+
+The full debug and release suites each passed 1,180 examples, zero failures,
+errors or pending examples (test runtimes 34.6 s and 16.2 s, respectively;
+these exclude compilation and are not ClickHouse performance comparisons).
+All gates use Crystal 1.21.0 / LLVM 22.1.8 on aarch64, macOS 26.5 SDK,
+`TMPDIR=/private/tmp`, an isolated W94 Crystal cache, and
+`--link-flags='-fuse-ld=ld'`.
+
+Both pinned `26.7.1.1315` Tuple oracles passed on this production/spec state:
+
+- The unchanged exact-pair oracle verifies stock-created Default and
+  AlwaysDefault full/ranged reads, retained Sparse rejection controls,
+  library-written ATTACH/CHECK and full/key-range RowBinary equality, binary
+  and empty Strings, independent marks and zero-byte all-empty raw streams.
+- The new composition oracle verifies stock -> Crystal and Crystal -> stock
+  ATTACH/CHECK, full/key-range RowBinary equality, and exact schema, stream and
+  mark inventories. Its seven profiles exercise one String field, the exact
+  pair control, three String-first mixed fields, nine alternating fields,
+  three all-String fields, two UInt64-only fields, and three all-empty String
+  fields under AlwaysDefault metadata. Stock physical mark row counts are
+  `[2, 2, 2, 1, 0]`; public data-mark counts exclude the terminal sentinel.
+  The UInt64-only profile independently retained the exact `{"string": 1}`
+  type-version map rather than relying on an inference from String leaves.
+
+The new oracle's first invocation failed before runtime because its selected
+index helper returned a lazy `compact_map` iterator where `Array(Int32)` was
+declared. The script-only repair materializes it with `.to_a`; the retry
+passed. No production or spec changes occurred between the full-suite gates
+and these oracle runs. This was an oracle compilation error, not a persisted
+Tuple serialization failure.
+
+Reproduction commands (the oracle scripts create their own isolated caches):
+
+```sh
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+export CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w94-tuple-cache
+export CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse
+export TMPDIR=/private/tmp
+crystal spec spec/wide_tuple_type_plan_spec.cr \
+  spec/wide_tuple_column_data_ownership_spec.cr \
+  spec/wide_part_reader_compositional_tuple_spec.cr \
+  spec/wide_part_writer_compositional_tuple_spec.cr \
+  spec/wide_part_writer_tuple_spec.cr \
+  spec/wide_part_reader_tuple_empty_eof_spec.cr \
+  spec/wide_part_reader_tuple_metadata_spec.cr \
+  --link-flags='-fuse-ld=ld'
+crystal spec spec/wide_tuple_type_plan_spec.cr \
+  spec/wide_tuple_column_data_ownership_spec.cr \
+  spec/wide_part_reader_compositional_tuple_spec.cr \
+  spec/wide_part_writer_compositional_tuple_spec.cr \
+  spec/wide_part_writer_tuple_spec.cr \
+  spec/wide_part_reader_tuple_empty_eof_spec.cr \
+  spec/wide_part_reader_tuple_metadata_spec.cr \
+  --release --link-flags='-fuse-ld=ld'
+crystal spec --link-flags='-fuse-ld=ld'
+crystal spec --release --link-flags='-fuse-ld=ld'
+bash scripts/check_tuple_oracle.sh
+bash scripts/check_compositional_tuple_oracle.sh
+crystal tool format --check src/crystal_click.cr \
+  src/crystal_click/wide_part.cr src/crystal_click/wide_part_writer.cr \
+  src/crystal_click/wide_tuple_field.cr \
+  src/crystal_click/wide_tuple_type_plan.cr \
+  src/crystal_click/wide_tuple_leaf_column.cr \
+  src/crystal_click/wide_tuple_column_data.cr \
+  src/crystal_click/wide_part/tuple_reader.cr \
+  src/crystal_click/wide_part_writer/tuple_part_infrastructure.cr \
+  src/crystal_click/wide_part_writer/tuple_part_write_input.cr \
+  src/crystal_click/wide_part_writer/tuple_part_writer.cr \
+  spec/wide_tuple_type_plan_spec.cr \
+  spec/wide_tuple_column_data_ownership_spec.cr \
+  spec/wide_part_reader_compositional_tuple_spec.cr \
+  spec/wide_part_writer_compositional_tuple_spec.cr \
+  scripts/check_compositional_tuple_oracle.cr
+bash -n scripts/check_tuple_oracle.sh scripts/check_compositional_tuple_oracle.sh
+git diff --check
+```
+
+Touched-file format, shell syntax and diff whitespace checks passed. Scoped
+hostile review is ROBUST for this bounded profile: independent root ownership,
+budget and lazy-frame falsifiers, both full suites and persisted pinned-stock
+oracles support the result in addition to correlated same-lineage static
+review. The exclusive-boundary guard requires an admitted Tuple plan, a
+non-sentinel end mark, local offset zero and the exact decoded prior-frame end.
+It neither verifies an unselected suffix nor enables implicit CRC checks.
+The source snapshot is not an executable master oracle. New master's
+`exact_num_defaults` metadata, full JSON and arbitrary recursive compositions
+remain rejected or outside this certificate.
+
+Evidence decays when admitted leaves/names, ownership, aggregate accounting,
+metadata/stream/mark/frame policy, require order, fixtures, Crystal semantics,
+or the pinned executable/profile changes. Refresh affected focused, full and
+persisted-oracle gates before extending this result. The evidence-packet
+template/validator remains unavailable; this source-linked frontier is the
+curated fallback, not a validator-backed packet.
+
+### W94 continuation capsule
+
+Active goal: compatible read/write types and MV/projections before memory and
+performance optimization; the matched ClickHouse slowdown <=10% target is
+still unproved. Confirmed return pointer: W94's bounded low-level Tuple API
+and its observed result above. Next falsifier: a three-field String-first
+Tuple accessed through table/catalog column values and ranged scans, without
+a Cartesian Crystal Tuple union, while unsupported schema/metadata is rejected
+before the first callback. This requires an explicit new high-level value
+mapping boundary; W94 does not silently provide it.
+
+Further frontiers: additional scalar and recursive leaf profiles, full JSON,
+new-master persisted metadata/layout probes, broader MV/projection support,
+and cohesive owner extraction from the remaining reader/writer/table/catalog
+monoliths. Do not mistake file splitting, parser acceptance or safe rejection
+for completed storage compatibility. Local reversible implementation/tests and
+coherent local commits remain authorized; push, new binary installation and
+external data mutation still require separate authority.
 
 ## W91 behavior-neutral execution seal
 

@@ -1573,6 +1573,10 @@ module CrystalClick
       type == "Tuple(a UInt64, b String)"
     end
 
+    def self.supports_named_scalar_tuple_type?(type : String) : Bool
+      !WideTupleTypePlan.for_type(type).nil?
+    end
+
     def self.supports_variant_string_uint64_type?(type : String) : Bool
       WideVariantStringUInt64TypePlan.admitted?(type)
     end
@@ -1616,7 +1620,7 @@ module CrystalClick
         supports_map_uint64_array_string_type?(type) ||
         supports_map_uint64_nullable_uint64_type?(type) || supports_map_string_nullable_uint64_type?(type) ||
         supports_map_uint64_nullable_string_type?(type) || supports_map_string_nullable_string_type?(type) ||
-        supports_tuple_uint64_string_type?(type) || supports_variant_type?(type) || type == "Dynamic"
+        supports_named_scalar_tuple_type?(type) || supports_variant_type?(type) || type == "Dynamic"
     end
 
     def self.json_type?(type : String) : Bool
@@ -9445,6 +9449,39 @@ module CrystalClick
       values
     end
 
+    # Read an owned, declaration-ordered range from a named Tuple whose leaves
+    # are exact UInt64 or String columns. This compositional API does not widen
+    # the legacy positional Tuple accessor above.
+    def read_tuple_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = WideTupleTypePlan::MAX_MATERIALIZED_BYTES,
+    ) : WideTupleColumnData
+      plan = ensure_compositional_tuple_column(column)
+      checked_first_mark, checked_mark_count = tuple_reader_checked_range(plan, column, first_mark, mark_count)
+      tuple_reader(plan, column).read(checked_first_mark, checked_mark_count, max_materialized_bytes)
+    end
+
+    # Yield one owned Tuple mark at a time. Schema and every selected stream's
+    # mark schedule are checked before the first callback; payload validation
+    # and charging remain lazy per materialized mark.
+    def each_tuple_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = WideTupleTypePlan::MAX_MATERIALIZED_BYTES,
+      & : WideTupleColumnData, Int32 -> Nil
+    ) : Nil
+      plan = ensure_compositional_tuple_column(column)
+      checked_first_mark, checked_mark_count = tuple_reader_checked_range(plan, column, first_mark, mark_count)
+      tuple_reader(plan, column).each(checked_first_mark, checked_mark_count, max_materialized_bytes) do |data, mark_index|
+        yield data, mark_index
+        nil
+      end
+      nil
+    end
+
     # Read a bounded mark range from an exact String column. At most 64 MiB of
     # raw bytes are materialized per call (the whole range, not each mark).
     # Empty values are zero-length; embedded NUL bytes are preserved.
@@ -11196,8 +11233,8 @@ module CrystalClick
                                    stream_name == "#{@column}%2Ekeys.size" || stream_name == "#{@column}%2Ekeys" ||
                                      stream_name == "#{@column}%2Evalues.null" || stream_name == "#{@column}%2Evalues.size" ||
                                      stream_name == "#{@column}%2Evalues"
-                                 elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
-                                   stream_name == "#{@column}%2Eb"
+                                 elsif tuple_plan = WideTupleTypePlan.for_type(@column_type)
+                                   tuple_plan.raw_string_stream?(@column, stream_name)
                                  else
                                    (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type)) && stream_name == @column
                                  end
@@ -11341,8 +11378,8 @@ module CrystalClick
         validate_variant_serialization(columns, selected, row_count)
       elsif column_type == "Dynamic"
         validate_dynamic_string_serialization(columns, selected, row_count)
-      elsif WidePart.supports_tuple_uint64_string_type?(column_type)
-        validate_tuple_uint64_string_serialization(columns, selected, row_count)
+      elsif WidePart.supports_named_scalar_tuple_type?(column_type)
+        validate_tuple_uint64_string_serialization(columns, selected, column_type, row_count)
       elsif column_type == "Int128" || column_type == "UInt128" || column_type == "Int256" || column_type == "UInt256"
         validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
@@ -11495,7 +11532,7 @@ module CrystalClick
           sibling_type = columns[index][1]
           expected_streams = expected_physical_streams(column, sibling_type)
           raise UnsupportedFormatError.new("W51 sibling physical substreams do not match exact serialization shape") unless streams == expected_streams
-        elsif WidePart.supports_tuple_uint64_string_type?(selected_type)
+        elsif WidePart.supports_named_scalar_tuple_type?(selected_type)
           raise UnsupportedFormatError.new("Tuple key column must have one plain UInt64 stream") unless streams == [column]
         elsif WidePart.supports_variant_type?(selected_type)
           raise UnsupportedFormatError.new("Variant key column must have one plain UInt64 stream") unless streams == [column]
@@ -11541,8 +11578,8 @@ module CrystalClick
         variant_plan.physical_streams(column)
       elsif type == "LowCardinality(String)"
         ["#{column}.dict", column]
-      elsif WidePart.supports_tuple_uint64_string_type?(type)
-        ["#{column}%2Ea", "#{column}%2Eb.size", "#{column}%2Eb"]
+      elsif tuple_plan = WideTupleTypePlan.for_type(type)
+        tuple_plan.physical_streams(column)
       elsif WidePart.supports_array_map_type?(type)
         plan = WideTypePlan::WidePhysicalPlanShadow.for_type(type, column) ||
                raise UnsupportedFormatError.new("no physical plan for exact Array(Map) column")
@@ -12290,10 +12327,13 @@ module CrystalClick
     private def validate_tuple_uint64_string_serialization(
       columns : Array({String, String}),
       selected_column : String,
+      selected_type : String,
       row_count : UInt64,
     ) : Nil
+      tuple_plan = WideTupleTypePlan.for_type(selected_type)
       keys = columns.select { |name, type| name != selected_column && type == "UInt64" }
-      unless columns.size == 2 && keys.size == 1 && columns.any? { |name, type| name == selected_column && WidePart.supports_tuple_uint64_string_type?(type) }
+      unless columns.size == 2 && keys.size == 1 && tuple_plan &&
+             columns.any? { |name, type| name == selected_column && type == selected_type && WidePart.supports_named_scalar_tuple_type?(type) }
         raise UnsupportedFormatError.new("named UInt64/String Tuple requires one UInt64 key column")
       end
 
@@ -12333,7 +12373,8 @@ module CrystalClick
       unless serializers_by_name.keys.to_set == expected_names
         raise UnsupportedFormatError.new("Tuple serialization requires exact key and payload entries")
       end
-      columns.each do |column_name, _column_type|
+      ordered_columns = [keys[0][0], selected_column]
+      ordered_columns.each do |column_name|
         entry = serializers_by_name[column_name]
         defaults = entry["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple serializer default count is missing or malformed"))
         rows = entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple serializer row count is missing or malformed"))
@@ -12347,7 +12388,14 @@ module CrystalClick
             raise UnsupportedFormatError.new("unsupported named Tuple serializer fields")
           end
           subcolumns = entry["subcolumns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Tuple child serializer metadata is required"))
-          raise UnsupportedFormatError.new("exactly two Tuple child serializers are required") unless subcolumns.size == 2
+          unless subcolumns.size == tuple_plan.not_nil!.fields.size
+            message = if WidePart.supports_tuple_uint64_string_type?(selected_type)
+                        "exactly two Tuple child serializers are required"
+                      else
+                        "Tuple child serializer count does not match schema"
+                      end
+            raise UnsupportedFormatError.new(message)
+          end
           subcolumns.each do |child|
             child_entry = child.as_h
             unless child_entry.keys.to_set == Set{"kind", "num_defaults", "num_rows"}
@@ -13199,9 +13247,9 @@ module CrystalClick
         raise CorruptPartError.new("selected Array(Tuple) size0 stream is missing") unless stream_names.includes?(stream)
         return stream
       end
-      if WidePart.supports_tuple_uint64_string_type?(@column_type)
-        stream = "#{@column}%2Ea"
-        raise CorruptPartError.new("selected Tuple UInt64 child stream is missing") unless stream_names.includes?(stream)
+      if tuple_plan = WideTupleTypePlan.for_type(@column_type)
+        stream = tuple_plan.physical_streams(@column).first
+        raise CorruptPartError.new("selected Tuple child stream is missing") unless stream_names.includes?(stream)
         return stream
       end
       if WidePart.supports_array_map_type?(@column_type)
@@ -13406,8 +13454,8 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("unsupported exact Array(Decimal256) substream")
         end
-      elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
-        stream_name == "#{@column}%2Eb" ? 1 : 8
+      elsif tuple_plan = WideTupleTypePlan.for_type(@column_type)
+        tuple_plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported named Tuple substream"))
       elsif WidePart.supports_map_uint64_string_type?(@column_type)
         stream_name == "#{@column}%2Evalues" ? 1 : 8
       elsif WidePart.supports_map_uint64_uint64_type?(@column_type)
@@ -14545,6 +14593,93 @@ module CrystalClick
       raise UnsupportedFormatError.new("column is not present") unless column == @column
     end
 
+    private def ensure_compositional_tuple_column(column : String) : WideTupleTypePlan
+      ensure_column(column)
+      WideTupleTypePlan.for_type(@column_type) ||
+        raise UnsupportedFormatError.new("compositional Tuple accessor requires named UInt64/String leaves")
+    end
+
+    private def tuple_reader(plan : WideTupleTypePlan, column : String) : TupleReader
+      TupleReader.new(
+        plan,
+        column,
+        ->(stream_name : String, first_mark : Int32, mark_count : Int32) {
+          tuple_reader_range_rows(stream_name, first_mark, mark_count)
+        },
+        ->(stream_name : String, mark_index : Int32) {
+          tuple_reader_mark_rows(stream_name, mark_index)
+        },
+        ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
+          tuple_reader_read_range(stream_name, first_mark, mark_count, expected_bytes, element_width, expected_rows)
+        },
+        ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
+          tuple_reader_validate_range(stream_name, first_mark, mark_count, expected_bytes, element_width, expected_rows)
+        },
+        ->(bytes : Bytes, offset : Int32) {
+          decode_numeric_value(bytes, offset, UInt64)
+        }
+      )
+    end
+
+    private def tuple_reader_checked_range(
+      plan : WideTupleTypePlan,
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {Int32, Int32}
+      reference_stream = plan.physical_streams(column).first? ||
+                         raise(CorruptPartError.new("Tuple has no physical leaf streams"))
+      # Validate caller-sized Int values against the real stream before the
+      # private reader narrows indices to Int32 for its Proc interfaces.
+      checked_stream_mark_range(@streams[reference_stream], first_mark, mark_count)
+      {first_mark.to_i32, mark_count.to_i32}
+    end
+
+    private def tuple_reader_range_rows(stream_name : String, first_mark : Int32, mark_count : Int32) : UInt64
+      _start_mark, _end_mark, rows = checked_stream_mark_range(@streams[stream_name], first_mark, mark_count)
+      rows
+    end
+
+    private def tuple_reader_mark_rows(stream_name : String, mark_index : Int32) : UInt64
+      tuple_reader_range_rows(stream_name, mark_index, 1)
+    end
+
+    private def tuple_reader_read_range(
+      stream_name : String,
+      first_mark : Int32,
+      mark_count : Int32,
+      expected_bytes : Int32,
+      element_width : Int32,
+      expected_rows : UInt64,
+    ) : Bytes
+      stream = @streams[stream_name]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      raise tuple_reader_row_mismatch(stream_name) unless rows == expected_rows
+      read_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, element_width)
+    end
+
+    private def tuple_reader_validate_range(
+      stream_name : String,
+      first_mark : Int32,
+      mark_count : Int32,
+      expected_bytes : Int32,
+      element_width : Int32,
+      expected_rows : UInt64,
+    ) : Nil
+      stream = @streams[stream_name]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      raise tuple_reader_row_mismatch(stream_name) unless rows == expected_rows
+      validate_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, element_width)
+    end
+
+    private def tuple_reader_row_mismatch(stream_name : String) : CorruptPartError
+      if WideTupleTypePlan.for_type(@column_type).try(&.raw_string_stream?(@column, stream_name))
+        CorruptPartError.new("Tuple(String) substream mark rows differ")
+      else
+        CorruptPartError.new("Tuple substream mark rows differ")
+      end
+    end
+
     private def ensure_uint64_column(column : String)
       ensure_column(column)
       raise UnsupportedFormatError.new("UInt64 accessor requires an exact UInt64 column") unless @column_type == "UInt64"
@@ -14758,6 +14893,7 @@ module CrystalClick
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
       start_offset = start_mark.compressed_offset
       end_offset = end_mark.compressed_offset
+      tuple_profile = false
       empty_payload_stream = if plan = WidePart.variant_type_plan(@column_type)
                                stream.name != plan.discriminator_stream(@column)
                              elsif @column_type == "Dynamic"
@@ -14843,8 +14979,9 @@ module CrystalClick
                                stream.name == "#{@column}%2Ekeys.size" || stream.name == "#{@column}%2Ekeys" ||
                                  stream.name == "#{@column}%2Evalues.null" || stream.name == "#{@column}%2Evalues.size" ||
                                  stream.name == "#{@column}%2Evalues"
-                             elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
-                               stream.name == "#{@column}%2Eb"
+                             elsif tuple_plan = WideTupleTypePlan.for_type(@column_type)
+                               tuple_profile = true
+                               tuple_plan.raw_string_stream?(@column, stream.name)
                              else
                                stream.name == @column && (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type))
                              end
@@ -14912,6 +15049,10 @@ module CrystalClick
           next_offset = frame.end_offset
           break if eof_boundary && next_offset == data_size
           raise CorruptPartError.new("mark frame offset was not found") if next_offset <= frame_offset || next_offset > data_size
+          if tuple_profile && end_mark != stream.sentinel && end_mark.decompressed_offset == 0 &&
+             next_offset.to_u64 == end_offset
+            break
+          end
           frame_offset = next_offset
         end
         raise CorruptPartError.new("mark range byte count mismatch") if exact_bytes && selected_bytes != expected_bytes
