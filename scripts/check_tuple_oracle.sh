@@ -24,8 +24,9 @@ export CLICKHOUSE_STORE="$TMP_ROOT/clickhouse-store"
 export TUPLE_PART="$TMP_ROOT/writer-part"
 export EMPTY_TUPLE_PART="$TMP_ROOT/all-empty-writer-part"
 export INVALID_PARENT="$TMP_ROOT/invalid"
+export SPARSE_TUPLE_COPY="$TMP_ROOT/sparse-tuple-copy"
 export CRYSTAL_CACHE_DIR="$TMP_ROOT/crystal-cache"
-mkdir -p "$CRYSTAL_CACHE_DIR" "$INVALID_PARENT"
+mkdir -p "$CRYSTAL_CACHE_DIR" "$INVALID_PARENT" "$SPARSE_TUPLE_COPY"
 
 crystal run --link-flags='-fuse-ld=ld' --stdin-filename "$ROOT/scripts/check_tuple_oracle.cr" <<'CRYSTAL'
 require "../src/crystal_click"
@@ -53,6 +54,94 @@ def append_tuple_var_uint(io : IO::Memory, value : UInt64) : Nil
     remaining >>= 7
   end
   io.write_byte(remaining.to_u8)
+end
+
+def w93_write_u64(bytes : Bytes, offset : Int, value : UInt64) : Nil
+  8.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u64).to_u8 }
+end
+
+def w93_write_u32(bytes : Bytes, offset : Int, value : UInt32) : Nil
+  4.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u32).to_u8 }
+end
+
+def w93_write_varuint(io : IO, value : UInt64) : Nil
+  remaining = value
+  while remaining >= 0x80_u64
+    io.write_byte(((remaining & 0x7f_u64) | 0x80_u64).to_u8)
+    remaining >>= 7
+  end
+  io.write_byte(remaining.to_u8)
+end
+
+def w93_write_hash(io : IO, hash : {UInt64, UInt64}) : Nil
+  8.times { |index| io.write_byte(((hash[0] >> (index * 8)) & 0xff_u64).to_u8) }
+  8.times { |index| io.write_byte(((hash[1] >> (index * 8)) & 0xff_u64).to_u8) }
+end
+
+def w93_encode_lz4_frame(raw : Bytes) : Bytes
+  raise "W93 checksum frame payload cannot be empty" if raw.empty?
+  extension_size = raw.size < 15 ? 0 : ((raw.size - 15) // 255) + 1
+  payload_size = 1 + extension_size + raw.size
+  compressed_size = CrystalClick::CompressedBlock::HEADER_SIZE + payload_size
+  frame = Bytes.new(CrystalClick::CompressedBlock::FRAME_HEADER_SIZE + payload_size, 0_u8)
+  header = CrystalClick::CompressedBlock::CHECKSUM_SIZE
+  frame[header] = CrystalClick::CompressedBlock::METHOD_LZ4
+  w93_write_u32(frame, header + 1, compressed_size.to_u32)
+  w93_write_u32(frame, header + 5, raw.size.to_u32)
+  cursor = CrystalClick::CompressedBlock::FRAME_HEADER_SIZE
+  if raw.size < 15
+    frame[cursor] = (raw.size << 4).to_u8
+    cursor += 1
+  else
+    frame[cursor] = 0xf0_u8
+    cursor += 1
+    remaining = raw.size - 15
+    while remaining >= 255
+      frame[cursor] = 255_u8
+      cursor += 1
+      remaining -= 255
+    end
+    frame[cursor] = remaining.to_u8
+    cursor += 1
+  end
+  raw.copy_to(frame[cursor, raw.size])
+  checksum = CrystalClick::CityHashV1.hash128(frame[header, compressed_size])
+  w93_write_u64(frame, 0, checksum[0])
+  w93_write_u64(frame, 8, checksum[1])
+  frame
+end
+
+def w93_refresh_part_checksums(part_path : String) : Nil
+  checksums = CrystalClick::PartChecksums.open(part_path)
+  payload = IO::Memory.new
+  names = checksums.entries.keys.sort
+  w93_write_varuint(payload, names.size.to_u64)
+  names.each do |name|
+    file_bytes = File.read(File.join(part_path, name)).to_slice
+    entry = checksums.entries[name]
+    w93_write_varuint(payload, name.bytesize.to_u64)
+    payload.write(name.to_slice)
+    w93_write_varuint(payload, file_bytes.size.to_u64)
+    w93_write_hash(payload, CrystalClick::CityHashV1.file_hash(file_bytes))
+    if entry.compressed
+      raw = if file_bytes.empty?
+              raise "W93 empty compressed checksum entry must declare zero raw bytes" unless entry.uncompressed_size == 0_u64
+              file_bytes
+            else
+              CrystalClick::CompressedBlock.decode_all(file_bytes)
+            end
+      payload.write_byte(1_u8)
+      w93_write_varuint(payload, raw.size.to_u64)
+      w93_write_hash(payload, CrystalClick::CityHashV1.file_hash(raw))
+    else
+      payload.write_byte(0_u8)
+    end
+  end
+  frame = w93_encode_lz4_frame(payload.to_slice)
+  File.open(File.join(part_path, "checksums.txt"), "wb") do |io|
+    io << CrystalClick::PartChecksums::CHECKSUMS_HEADER
+    io.write(frame)
+  end
 end
 
 def tuple_rowbinary(keys : Array(UInt64), values : Array(Tuple(UInt64, String))) : Bytes
@@ -142,22 +231,77 @@ def create_stock_tuple_part(binary : String, store : String, table : String, key
   paths[0]
 end
 
-def check_stock_tuple_reader(binary : String, store : String, table : String, keys : Array(UInt64), values : Array(Tuple(UInt64, String))) : Nil
-  # The admitted profile has explicit Default serializer records in the same
-  # order as columns.txt. The stock key name `id` satisfies that narrow guard.
-  path = create_stock_tuple_part(binary, store, table, keys, values, "id", "0.9375")
-  key_reader = CrystalClick::WidePart.open_typed(path, "id")
+def assert_stock_tuple_profile(
+  path : String,
+  key_name : String,
+  row_count : Int,
+  expected_names : Array(String),
+  expected_payload_child_kinds : Array(String),
+) : Nil
+  column_lines = File.read(File.join(path, "columns.txt")).lines.map(&.strip)
+  expected_column_lines = [
+    "columns format version: 1",
+    "2 columns:",
+    "`#{key_name}` UInt64",
+    "`payload` Tuple(a UInt64, b String)",
+  ]
+  raise "stock columns.txt order differs: #{column_lines.inspect}" unless column_lines == expected_column_lines
+
+  info = JSON.parse(File.read(File.join(path, "serialization.json"))).as_h
+  serializers = info["columns"]?.try(&.as_a) || raise "stock Tuple serializers are missing"
+  names = serializers.map { |entry| entry.as_h["name"].as_s }
+  raise "stock serializer profile differs: expected #{expected_names.inspect}, got #{names.inspect}" unless names == expected_names
+
+  serializers.each do |serializer|
+    entry = serializer.as_h
+    raise "stock Tuple root serializer is not Default" unless entry["kind"]?.try(&.as_s) == "Default"
+    rows = entry["num_rows"]?.try(&.as_i) || raise "stock Tuple serializer row count is missing"
+    defaults = entry["num_defaults"]?.try(&.as_i) || raise "stock Tuple serializer default count is missing"
+    raise "stock Tuple serializer row count differs" unless rows == row_count
+    raise "stock Tuple serializer default count is invalid" unless defaults >= 0 && defaults <= rows
+    next unless entry["name"]?.try(&.as_s) == "payload"
+
+    children = entry["subcolumns"]?.try(&.as_a) || raise "stock Tuple child serializers are missing"
+    child_kinds = children.map do |child|
+      child_entry = child.as_h
+      child_rows = child_entry["num_rows"]?.try(&.as_i) || raise "stock Tuple child row count is missing"
+      child_defaults = child_entry["num_defaults"]?.try(&.as_i) || raise "stock Tuple child default count is missing"
+      raise "stock Tuple child row count differs" unless child_rows == row_count
+      raise "stock Tuple child default count is invalid" unless child_defaults >= 0 && child_defaults <= child_rows
+      child_entry["kind"]?.try(&.as_s) || raise "stock Tuple child kind is missing"
+    end
+    unless child_kinds == expected_payload_child_kinds
+      raise "stock Tuple child profile differs: expected #{expected_payload_child_kinds.inspect}, got #{child_kinds.inspect}"
+    end
+  end
+  raise "stock Tuple payload child profile was not checked" unless expected_payload_child_kinds.empty? || expected_names.includes?("payload")
+end
+
+def check_stock_tuple_reader(
+  binary : String,
+  store : String,
+  table : String,
+  keys : Array(UInt64),
+  values : Array(Tuple(UInt64, String)),
+  key_name : String,
+  sparse_ratio : String,
+  expected_names : Array(String),
+  expected_payload_child_kinds : Array(String),
+) : Nil
+  path = create_stock_tuple_part(binary, store, table, keys, values, key_name, sparse_ratio)
+  assert_stock_tuple_profile(path, key_name, keys.size, expected_names, expected_payload_child_kinds)
+  key_reader = CrystalClick::WidePart.open_typed(path, key_name)
   tuple_reader = CrystalClick::WidePart.open_typed(path, "payload")
   expected_mark_rows = keys.each_slice(2).map { |mark| mark.size.to_u64 }.to_a
   raise "#{table} key mark rows differ" unless key_reader.mark_row_counts == expected_mark_rows
   raise "#{table} Tuple mark rows differ" unless tuple_reader.mark_row_counts == expected_mark_rows
-  actual_keys = key_reader.read_uint64_mark_range("id", 0, key_reader.mark_count)
+  actual_keys = key_reader.read_uint64_mark_range(key_name, 0, key_reader.mark_count)
   actual_values = tuple_reader.read_tuple_uint64_string_mark_range("payload", 0, tuple_reader.mark_count)
   assert_tuple_bytes(String.new(tuple_rowbinary(actual_keys, actual_values)), tuple_rowbinary(keys, values), "#{table} stock -> Crystal full")
 
   first_mark = 1
   count = tuple_reader.mark_count - first_mark
-  range_keys = key_reader.read_uint64_mark_range("id", first_mark, count)
+  range_keys = key_reader.read_uint64_mark_range(key_name, first_mark, count)
   range_values = tuple_reader.read_tuple_uint64_string_mark_range("payload", first_mark, count)
   assert_tuple_bytes(String.new(tuple_rowbinary(range_keys, range_values)), tuple_rowbinary(keys[2, keys.size - 2], values[2, values.size - 2]), "#{table} stock -> Crystal mark range")
 
@@ -171,15 +315,49 @@ def check_stock_tuple_reader(binary : String, store : String, table : String, ke
     raise "#{table} Tuple root was admitted by scalar UInt64 reader"
   rescue CrystalClick::UnsupportedFormatError
   end
+
+  part_name = File.basename(path.chomp("/"))
+  integrity = run_clickhouse(binary, store, "CHECK TABLE default.#{table} FORMAT TabSeparated").strip
+  raise "#{table} stock CHECK TABLE failed: #{integrity.inspect}" unless integrity == "#{part_name}\t1"
 end
 
-def check_stock_tuple_profile_rejection(binary : String, store : String, table : String, keys : Array(UInt64), values : Array(Tuple(UInt64, String)), key_name : String, sparse_ratio : String, expected_error : String) : Nil
-  path = create_stock_tuple_part(binary, store, table, keys, values, key_name, sparse_ratio)
+def check_stock_sparse_tuple_rejection(binary : String, store : String, table : String, keys : Array(UInt64), values : Array(Tuple(UInt64, String))) : Nil
+  path = create_stock_tuple_part(binary, store, table, keys, values, "id", "0.9375")
+  assert_stock_tuple_profile(path, "id", keys.size, ["id", "payload"], ["Default", "Sparse"])
   begin
     CrystalClick::WidePart.open_typed(path, "payload")
-    raise "#{table} unexpectedly admitted an unsealed Tuple metadata profile"
+    raise "#{table} unexpectedly admitted Sparse Tuple child serializers"
   rescue error : CrystalClick::UnsupportedFormatError
-    raise "#{table} rejected for an unexpected reason: #{error.message}" unless error.message.try(&.includes?(expected_error))
+    unless error.message.try(&.includes?("only Default Tuple child serializers are supported"))
+      raise "#{table} rejected for an unexpected Sparse reason: #{error.message}"
+    end
+  end
+
+  stripped = File.join(ENV.fetch("SPARSE_TUPLE_COPY"), "#{table}_without_serializer_records")
+  FileUtils.cp_r(path, stripped)
+  serialization_path = File.join(stripped, "serialization.json")
+  info = JSON.parse(File.read(serialization_path)).as_h
+  info["columns"] = JSON::Any.new([] of JSON::Any)
+  File.write(serialization_path, info.to_json)
+  w93_refresh_part_checksums(stripped)
+
+  stripped_json = JSON.parse(File.read(serialization_path)).as_h
+  raise "#{table} Sparse serializer records were not erased" unless stripped_json["columns"]?.try(&.as_a).try(&.empty?)
+  checksums = CrystalClick::PartChecksums.open(stripped)
+  metadata = File.read(serialization_path).to_slice
+  checksum_entry = checksums.entries["serialization.json"]
+  unless checksum_entry.physical_size == metadata.size && checksum_entry.file_hash == CrystalClick::CityHashV1.file_hash(metadata)
+    raise "#{table} stripped Sparse checksum metadata is not refreshed"
+  end
+
+  begin
+    CrystalClick::WidePart.open_typed(stripped, "payload")
+    raise "#{table} Sparse part passed after serializer records were erased"
+  rescue error : CrystalClick::UnsupportedFormatError
+    expected_error = "selected physical substreams do not match exact serialization shape"
+    unless error.message.try(&.includes?(expected_error))
+      raise "#{table} Sparse part rejected before the physical inventory guard: #{error.message}"
+    end
   end
 end
 
@@ -198,9 +376,9 @@ values = [
   {12_u64, "last"},
   {13_u64, "z"},
 ]
-check_stock_tuple_reader(binary, store, "tuple_stock", keys, values)
-check_stock_tuple_profile_rejection(binary, store, "tuple_stock_reordered_records", keys, values, "pk", "0.9375", "Tuple serializer order does not match columns.txt")
-check_stock_tuple_profile_rejection(binary, store, "tuple_stock_omitted_records", keys, values, "id", "1.0", "Tuple serialization requires exact key and payload entries")
+check_stock_tuple_reader(binary, store, "tuple_stock", keys, values, "id", "0.9375", ["id", "payload"], ["Default", "Default"])
+check_stock_tuple_reader(binary, store, "tuple_stock_reordered_records", keys, values, "pk", "0.9375", ["payload", "pk"], ["Default", "Default"])
+check_stock_tuple_reader(binary, store, "tuple_stock_always_default", keys, values, "id", "1.0", [] of String, [] of String)
 CrystalClick::WidePartWriter.write_uint64_tuple_string_pair(
   ENV.fetch("TUPLE_PART"),
   "pk",
@@ -237,7 +415,8 @@ end
 # independent marks repeat byte offset zero for every data granule and sentinel.
 empty_keys = [1_u64, 3_u64, 5_u64, 7_u64, 9_u64]
 empty_values = [{1_u64, ""}, {2_u64, ""}, {3_u64, ""}, {4_u64, ""}, {5_u64, ""}]
-check_stock_tuple_profile_rejection(binary, store, "tuple_stock_all_empty_sparse", empty_keys, empty_values, "id", "0.9375", "only Default Tuple child serializers are supported")
+check_stock_tuple_reader(binary, store, "tuple_stock_all_empty_default", empty_keys, empty_values, "id", "1.0", [] of String, [] of String)
+check_stock_sparse_tuple_rejection(binary, store, "tuple_stock_all_empty_sparse", empty_keys, empty_values)
 CrystalClick::WidePartWriter.write_uint64_tuple_string_pair(
   ENV.fetch("EMPTY_TUPLE_PART"),
   "pk",
@@ -289,7 +468,7 @@ rescue error : ArgumentError
   raise "malformed Tuple writer left staged artifacts" unless Dir.children(ENV.fetch("INVALID_PARENT")).empty?
 end
 
-puts "PASS Tuple reader/writer: admitted stock-created -> Crystal full/mark-range RowBinary, strict scalar roots and rejected reordered/omitted/sparse metadata profiles; Crystal-written -> stock attached full/key-range RowBinary, binary and empty strings, independent [2,2,2,1] marks, zero-byte all-empty stream read full/ranged by Crystal after ATTACH, CHECK TABLE, and malformed-input no-publication"
+puts "PASS Tuple reader/writer: stock Default profiles in declared/reordered order and AlwaysDefault metadata read full/ranged with CHECK TABLE; declared Sparse and erased-record Sparse inventories reject; Crystal-written -> stock attached full/key-range RowBinary, binary and empty strings, independent [2,2,2,1] marks, zero-byte all-empty stream read full/ranged by Crystal after ATTACH, CHECK TABLE, and malformed-input no-publication"
 CRYSTAL
 
 printf 'PASS Tuple reader/writer oracle on ClickHouse %s\n' "$ACTUAL_VERSION"

@@ -12320,11 +12320,21 @@ module CrystalClick
       end
 
       serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Tuple column serializers are required"))
+      return if serializers.empty?
       raise UnsupportedFormatError.new("Tuple serialization requires exact key and payload entries") unless serializers.size == 2
-      columns.each_with_index do |(column_name, _column_type), index|
-        entry = serializers[index].as_h
+      serializers_by_name = Hash(String, Hash(String, JSON::Any)).new
+      serializers.each do |serializer|
+        entry = serializer.as_h
         name = entry["name"]?.try(&.as_s) || raise(CorruptPartError.new("Tuple serializer name is missing or malformed"))
-        raise UnsupportedFormatError.new("Tuple serializer order does not match columns.txt") unless name == column_name
+        raise UnsupportedFormatError.new("duplicate Tuple serializer name") if serializers_by_name.has_key?(name)
+        serializers_by_name[name] = entry
+      end
+      expected_names = columns.map(&.[0]).to_set
+      unless serializers_by_name.keys.to_set == expected_names
+        raise UnsupportedFormatError.new("Tuple serialization requires exact key and payload entries")
+      end
+      columns.each do |column_name, _column_type|
+        entry = serializers_by_name[column_name]
         defaults = entry["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple serializer default count is missing or malformed"))
         rows = entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple serializer row count is missing or malformed"))
         raise CorruptPartError.new("Tuple serializer row count does not match part") unless rows >= 0 && rows.to_u64 == row_count

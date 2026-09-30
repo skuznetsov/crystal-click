@@ -3,7 +3,9 @@
 Status: W91 neutral payload ownership is VERIFIED below; compositional Tuple
 admission remains PROPOSED. No new Tuple shape is admitted by this document.
 W92 exact-Tuple empty-EOF repair is VERIFIED within its separate boundary
-below. Stock Default metadata profiles and generic Tuple remain PROPOSED.
+below. W93 exact-Tuple Default metadata profiles are VERIFIED within the
+pinned boundary below; generic Tuple remains PROPOSED. W93's current seal
+supersedes the historical W92 continuation capsule.
 Continuation anchor: `3f09429`, with W90 debug/release and W80-W85 oracle
 verification recorded in `MODULARIZATION_FRONTIER.md`.
 
@@ -446,5 +448,184 @@ exact metadata-key sets reject it. That is a separate unadmitted profile,
 not evidence that W93's pinned binary covers master. No W93 edits or probes
 have been executed. In-scope local implementation/tests/atomic commits remain
 authorized; push, binary installation and external data mutation do not.
-All W92 heavy processes are terminal; the Qwen resource window was released
-at 03:55 UTC. Check its latest explicit release before the next heavy launch.
+All W92 heavy processes are terminal. Check the latest explicit Qwen resource
+release before each next heavy launch; the historical release is not a lease.
+
+## W93 exact Tuple Default metadata execution seal
+
+Status: VERIFIED within the observed DoD below; pre-change anchor `99f9d6b`.
+The fresh source
+anchor is `a9581941254d6113f3740a8ec125ee7519cb1bda`, not the pinned executable.
+`SerializationInfoByName` is a `std::map` and `writeJSON` iterates its name
+order; that order is not the column declaration order. Its constructor returns
+without records when `isAlwaysDefault()` is true (sparse threshold >= 1.0);
+Sparse selection requires a default ratio strictly above that threshold.
+
+Admit only two metadata profiles for the existing exact
+`Tuple(a UInt64, b String)` plus one UInt64 key schema:
+
+- Exactly two uniquely named Default records, whose names are the exact
+  key/payload set. Match by name, not array position; retain exact record
+  fields, child count, row counts and default-count bounds.
+- Exactly `columns: []`, as a separate AlwaysDefault profile. This is not a
+  missing/partial-record fallback. Retain every root/version/propagation gate
+  and the exact Default physical-stream inventory.
+
+Reject missing, partial, duplicate, unexpected, malformed and Sparse records;
+retain exact root fields/version 1, nested String version 1, true propagation,
+schema and physical stream order. Optional master `exact_num_defaults` remains
+unadmitted. Anonymous child records have no child names: swapping identical
+records is not an observable child-order guard; reversed schema is. No generic
+Tuple shape, new writer bytes, physical-stream extraction, or benchmark is
+included in this slice.
+
+Risk: CAUTION (serialization admission). Strongest failure: accepting an empty
+record list as permission to decode Sparse bytes as Default. The guard probe
+is a stock-created Sparse part copied locally, with records erased and valid
+part checksums refreshed; admission must still reject its physical inventory.
+Local temporary parts only; no external data mutation or binary installation.
+Rollback is one coherent local atomic commit; do not mix the next architectural
+owner or generic Tuple admission into it.
+
+Owned paths: `src/crystal_click/wide_part.cr` (minimal validator change),
+`spec/wide_part_reader_tuple_metadata_spec.cr` (public API profile/guard tests),
+`scripts/check_tuple_oracle.sh` (real stock positives and Sparse bypass probe),
+and this frontier document. First freeze and execute red profile tests on the
+unchanged production source. Stock positive metadata must be produced by the
+pinned binary, not edited into existence. Unit metadata mutations must refresh
+checksums so their failure discriminates metadata/physical guards.
+
+DoD: focused metadata, W92 EOF, payload seam, W23 reader and Tuple writer specs
+in debug and release; full debug suite; pinned 26.7.1.1315 Tuple oracle with
+stock-created full/ranged byte equality and stock CHECK plus retained
+library-written ATTACH/CHECK/full/key-range equality; format/shell/diff checks;
+scoped hostile review. No full release suite is declared for this bounded
+metadata slice; prior full release evidence is not transferred. Root owns the
+heavy execution window and alternates it with the Qwen diagnostic thread.
+The latest explicit release before preparation was 04:06 UTC on 2026-09-30.
+
+Refresh evidence on admission, schema, stream inventory, count/mark policy,
+fixture/checksum helper, compiler or pinned-binary changes. Passing these gates
+will close these two exact metadata profiles, not generic Tuple, master-wide
+compatibility, all types/MV/projections, or the <=10% slowdown objective.
+
+### W93 pre-change observations
+
+Production remained byte-for-byte unchanged at `99f9d6b` for these probes.
+The first oracle attempt was invalid as a reader falsifier: its fixture
+asserted Tuple name formatting without the space after the comma, whereas the
+stock binary emitted `Tuple(a UInt64, b String)`. Only that assertion changed.
+The first focused attempt additionally expected a missing `columns` field to
+reach the missing-array guard; the exact root-key guard correctly rejected it
+earlier. Only the expected rejection message changed, not production.
+
+The corrected focused command ran eight examples: six guard groups passed,
+and the two positive profiles failed precisely at the order and required-two-
+records gates (zero assertion failures, two errors, 82.84 ms execution). The
+corrected pinned stock oracle then passed its original id/.9375 profile,
+full/ranged reads and CHECK, asserted the reordered pk/.9375 profile, and
+failed at `Tuple serializer order does not match columns.txt` through the
+public reader. The stock empty-record positive was not reached in this red
+oracle; its actual persisted behavior still requires the post-change oracle.
+These observations authorize the minimal validator change, not its closure.
+
+Both red processes are terminal. Root released the heavy window after them
+for the Qwen thread's separately reviewed, bounded one-block CPU diagnostic;
+only light implementation/static work is allowed until its explicit release.
+
+### W93 DoD commands
+
+Use the declared SDK, temporary directory and isolated focused cache. Run
+these heavy commands sequentially, only in a freshly released resource window;
+each green gate must exit zero with no failed/error/pending examples or oracle
+exception. The oracle asserts real stock metadata before reading it.
+
+```sh
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+export TMPDIR=/private/tmp
+export CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w93-tuple-metadata-cache
+crystal spec spec/wide_part_reader_tuple_metadata_spec.cr \
+  spec/wide_part_reader_tuple_empty_eof_spec.cr \
+  spec/wide_part_reader_payload_seam_spec.cr \
+  spec/wide_part_reader_w23_spec.cr spec/wide_part_writer_tuple_spec.cr \
+  --link-flags='-fuse-ld=ld'
+crystal spec spec/wide_part_reader_tuple_metadata_spec.cr \
+  spec/wide_part_reader_tuple_empty_eof_spec.cr \
+  spec/wide_part_reader_payload_seam_spec.cr \
+  spec/wide_part_reader_w23_spec.cr spec/wide_part_writer_tuple_spec.cr \
+  --release --link-flags='-fuse-ld=ld'
+CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w88-cache \
+  crystal spec --link-flags='-fuse-ld=ld'
+CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse \
+  bash scripts/check_tuple_oracle.sh
+crystal tool format --check src/crystal_click/wide_part.cr \
+  spec/wide_part_reader_tuple_metadata_spec.cr
+bash -n scripts/check_tuple_oracle.sh
+git diff --check
+```
+
+### W93 post-change observations and closure
+
+The production diff changes only `validate_tuple_uint64_string_serialization`:
+an empty array returns after all root gates; nonempty metadata requires two
+unique names and the exact schema name set before running the preserved record
+validation by name. Physical stream parsing, child order, marks/ranges,
+payload decoding, writer bytes and other type paths are unchanged.
+
+The frozen five-file focused debug gate passed 31 examples with zero failures,
+errors or pending examples (146.07 ms execution). Focused release passed the
+same 31 examples with zero failures/errors/pending (134.3 ms). Full debug
+passed 1,159 examples with zero failures/errors/pending (35.72 s). The linker
+emitted the existing duplicate `-lc` warning. These are test execution times,
+excluding compilation, not benchmarks. No full release suite was declared or
+run for W93; older full release evidence is not transferred. The pinned
+Tuple oracle passed all four stock positives: id/.9375 explicit Default,
+pk/.9375 name-reordered Default, mixed id/1.0 exact empty records, and all-empty
+id/1.0 exact empty records. Each asserted actual stock metadata, full/ranged
+values and stock CHECK. The Sparse child profile remained rejected; its copied
+part with erased serializer records and refreshed checksums reached precisely
+the physical-stream inventory rejection. Existing library-written stock
+ATTACH/CHECK/full/key-range byte equality and W92 EOF controls remained green.
+
+The initial hostile review identified a real coverage gap, not a static
+production bypass: the retained key-record exact-field guard had no extra-field
+test. A key-only `exact_num_defaults: true` mutation now refreshes checksums and
+asserts the precise key-field rejection. Its bounded static re-review was
+ROBUST; runtime was included in the focused debug/release gates. The final
+whole-slice hostile source review returned ROBUST within the pinned profiles.
+Review is same-lineage/correlated and includes spec/oracle authorship, not
+independent runtime evidence. Root independently inspected the frozen diff and
+executed all declared runtime gates. Touched format, shell syntax and diff
+whitespace checks passed. The evidence-packet template/validator remain absent;
+this source-linked frontier is the curated fallback, not a validated packet.
+
+Scope of closure: only the two Default metadata profiles for the exact
+UInt64-key / named UInt64-String Tuple schema, including stock all-empty
+Default. Declared Sparse and erased-record stock Sparse remain rejected.
+The inventory guard is not authentication of arbitrarily rewritten data;
+selected reads still do not validate corruption confined to unselected marks.
+Fresh-master optional `exact_num_defaults` and wider versions/layouts remain
+unadmitted. Refresh this certificate on the W93 seal's admission, schema,
+stream/count/mark policy, fixture, compiler or pinned-binary decay triggers.
+
+### W93 continuation capsule
+
+Active goal remains full type read/write compatibility and MV/projection
+frontiers before performance work; matched <=10% slowdown is not proven.
+W93 closes exact Tuple Default metadata only, not a new Tuple shape. The next
+frontier remains compositional Tuple with named nonempty UInt64/String leaves:
+ordered descriptors and owned columnar buffers, separate cohesive owners with
+one concrete class/type per file, preserved exact pair APIs. Generic admission
+and an explicit physical-stream context are still PROPOSED, not implemented.
+Revisit the seam falsifier and freeze that separate API/profile seal before
+production: scalar root guards must survive while the same leaf owners serve
+arbitrary Tuple prefixes; persisted 1/2/3/9-field stock/writer parts must agree
+full/ranged, and invalid writer schemas must never invoke stage creation.
+
+Return pointers: the proposed boundary and next-falsifier sections above,
+W91 neutral payload owners, `validate_tuple_uint64_string_serialization`, and
+the pinned Tuple oracle. Local implementation/tests/atomic commits remain
+authorized; push, binary installation and external data mutation do not.
+All W93 heavy processes are terminal; root released the Qwen resource slot
+after the final full-debug gate. Check its latest explicit terminal/release
+before the next heavy launch, not this historical release as an ongoing lease.
