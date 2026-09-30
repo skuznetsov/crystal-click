@@ -26,6 +26,11 @@ require "./crystal_click/wide_part"
 require "./crystal_click/wide_part_set"
 require "./crystal_click/wide_part_table"
 require "./crystal_click/primary_key_index"
+require "./crystal_click/wide_part_writer/array_map_string_uint64_physical_plan"
+require "./crystal_click/wide_part_writer/array_map_numeric_physical_plan"
+require "./crystal_click/wide_part_writer/array_map_string_physical_plan"
+require "./crystal_click/wide_part_writer/array_map_array_physical_plan"
+require "./crystal_click/wide_part_writer/array_map_array_numeric_physical_plan"
 {% if flag?(:crystal_click_test_failpoints) %}
   require "./crystal_click/test_failpoints"
 {% end %}

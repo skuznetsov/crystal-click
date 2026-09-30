@@ -52,103 +52,6 @@ module CrystalClick
       end
     end
 
-    # The W80 serializer consumes the bounded physical plan directly. Keeping
-    # its role-selected streams and axes together prevents the writer from
-    # silently drifting to a separately hard-coded stream layout.
-    private struct ArrayMapStringUInt64PhysicalPlan
-      getter shadow : WideTypePlan::WidePhysicalPlanShadow
-      getter streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream)
-      getter size0 : WideTypePlan::WidePhysicalPlanShadow::Stream
-      getter size1 : WideTypePlan::WidePhysicalPlanShadow::Stream
-      getter key_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream
-      getter key_bytes : WideTypePlan::WidePhysicalPlanShadow::Stream
-      getter values : WideTypePlan::WidePhysicalPlanShadow::Stream
-
-      def initialize(
-        @shadow : WideTypePlan::WidePhysicalPlanShadow,
-        @streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream),
-        @size0 : WideTypePlan::WidePhysicalPlanShadow::Stream,
-        @size1 : WideTypePlan::WidePhysicalPlanShadow::Stream,
-        @key_sizes : WideTypePlan::WidePhysicalPlanShadow::Stream,
-        @key_bytes : WideTypePlan::WidePhysicalPlanShadow::Stream,
-        @values : WideTypePlan::WidePhysicalPlanShadow::Stream,
-      )
-      end
-    end
-
-    # The bounded W81 serializer consumes the plan's declared stream order,
-    # roles, semantic paths, widths, and cardinality axes. Key and nullable
-    # variants share one plan shape; absent streams are rejected when built.
-    private struct ArrayMapNumericPhysicalPlan
-      getter shadow : WideTypePlan::WidePhysicalPlanShadow
-      getter streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream)
-      getter string_keys : Bool
-      getter nullable_values : Bool
-
-      def initialize(
-        @shadow : WideTypePlan::WidePhysicalPlanShadow,
-        @streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream),
-        @string_keys : Bool,
-        @nullable_values : Bool,
-      )
-      end
-    end
-
-    # W82 keeps the String-leaf serializer tied to the bounded recursive plan:
-    # the Map-entry count and String-byte axes differ, and Nullable's null map
-    # is serialized before the nested String size/data pair.
-    private struct ArrayMapStringPhysicalPlan
-      getter shadow : WideTypePlan::WidePhysicalPlanShadow
-      getter streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream)
-      getter string_keys : Bool
-      getter nullable_values : Bool
-
-      def initialize(
-        @shadow : WideTypePlan::WidePhysicalPlanShadow,
-        @streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream),
-        @string_keys : Bool,
-        @nullable_values : Bool,
-      )
-      end
-    end
-
-    # W84 serializes Array(Map(K, Array(V))) through the plan's third count
-    # axis. The exact four admitted K/V combinations share this physical shape.
-    private struct ArrayMapArrayPhysicalPlan
-      getter shadow : WideTypePlan::WidePhysicalPlanShadow
-      getter streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream)
-      getter string_keys : Bool
-      getter string_values : Bool
-
-      def initialize(
-        @shadow : WideTypePlan::WidePhysicalPlanShadow,
-        @streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream),
-        @string_keys : Bool,
-        @string_values : Bool,
-      )
-      end
-    end
-
-    # W85 keeps numeric nested-array serialization separate from W84's
-    # UInt64/String serializer so the latter's checksum widths and encoding
-    # stay unchanged.
-    private struct ArrayMapArrayNumericPhysicalPlan
-      getter shadow : WideTypePlan::WidePhysicalPlanShadow
-      getter streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream)
-      getter string_keys : Bool
-      getter value_type : String
-      getter value_width : Int32
-
-      def initialize(
-        @shadow : WideTypePlan::WidePhysicalPlanShadow,
-        @streams : Array(WideTypePlan::WidePhysicalPlanShadow::Stream),
-        @string_keys : Bool,
-        @value_type : String,
-        @value_width : Int32,
-      )
-      end
-    end
-
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values
@@ -2330,7 +2233,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(String, UInt64)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_string_uint64_physical_plan(value_name)
+      physical_plan = ArrayMapStringUInt64PhysicalPlan.build(value_name)
       validate_array_map_string_uint64_inputs(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
 
       target = File.expand_path(destination)
@@ -2371,7 +2274,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = array_map_numeric_value_type_name(values)
-      physical_plan = array_map_numeric_physical_plan(value_name, "UInt64", type_name, false)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "UInt64", type_name, false, numeric_width(type_name))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, T, type_name, rows_per_mark, physical_plan)
     end
 
@@ -2384,7 +2287,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = array_map_numeric_value_type_name(values)
-      physical_plan = array_map_numeric_physical_plan(value_name, "String", type_name, false)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "String", type_name, false, numeric_width(type_name))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, T, type_name, rows_per_mark, physical_plan)
     end
 
@@ -2397,7 +2300,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = array_map_nullable_numeric_value_type_name(values)
-      physical_plan = array_map_numeric_physical_plan(value_name, "UInt64", type_name, true)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "UInt64", type_name, true, numeric_width(type_name))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, T, type_name, rows_per_mark, physical_plan)
     end
 
@@ -2410,7 +2313,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = array_map_nullable_numeric_value_type_name(values)
-      physical_plan = array_map_numeric_physical_plan(value_name, "String", type_name, true)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "String", type_name, true, numeric_width(type_name))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, T, type_name, rows_per_mark, physical_plan)
     end
 
@@ -2425,7 +2328,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(UInt64, String)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_string_physical_plan(value_name, "UInt64", false)
+      physical_plan = ArrayMapStringPhysicalPlan.build(value_name, "UInt64", false)
       write_array_map_string_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2437,7 +2340,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(String, String)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_string_physical_plan(value_name, "String", false)
+      physical_plan = ArrayMapStringPhysicalPlan.build(value_name, "String", false)
       write_array_map_string_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2449,7 +2352,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(UInt64, String?)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_string_physical_plan(value_name, "UInt64", true)
+      physical_plan = ArrayMapStringPhysicalPlan.build(value_name, "UInt64", true)
       write_array_map_string_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2461,7 +2364,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(String, String?)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_string_physical_plan(value_name, "String", true)
+      physical_plan = ArrayMapStringPhysicalPlan.build(value_name, "String", true)
       write_array_map_string_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2476,7 +2379,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(UInt64, Bool)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_numeric_physical_plan(value_name, "UInt64", "Bool", false)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "UInt64", "Bool", false, numeric_width("Bool"))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
     end
 
@@ -2488,7 +2391,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(String, Bool)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_numeric_physical_plan(value_name, "String", "Bool", false)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "String", "Bool", false, numeric_width("Bool"))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
     end
 
@@ -2500,7 +2403,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(UInt64, Bool?)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_numeric_physical_plan(value_name, "UInt64", "Bool", true)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "UInt64", "Bool", true, numeric_width("Bool"))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
     end
 
@@ -2512,7 +2415,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(String, Bool?)))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_numeric_physical_plan(value_name, "String", "Bool", true)
+      physical_plan = ArrayMapNumericPhysicalPlan.build(value_name, "String", "Bool", true, numeric_width("Bool"))
       write_array_map_numeric_pair(destination, key_name, keys, value_name, values, Bool, "Bool", rows_per_mark, physical_plan)
     end
 
@@ -2527,7 +2430,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(UInt64, Array(UInt64))))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_array_physical_plan(value_name, "UInt64", "UInt64")
+      physical_plan = ArrayMapArrayPhysicalPlan.build(value_name, "UInt64", "UInt64")
       write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2539,7 +2442,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(UInt64, Array(String))))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_array_physical_plan(value_name, "UInt64", "String")
+      physical_plan = ArrayMapArrayPhysicalPlan.build(value_name, "UInt64", "String")
       write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2551,7 +2454,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(String, Array(UInt64))))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_array_physical_plan(value_name, "String", "UInt64")
+      physical_plan = ArrayMapArrayPhysicalPlan.build(value_name, "String", "UInt64")
       write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2563,7 +2466,7 @@ module CrystalClick
       values : Slice(Array(Array(Tuple(String, Array(String))))),
       rows_per_mark : Int32 = 8192,
     ) : String
-      physical_plan = array_map_array_physical_plan(value_name, "String", "String")
+      physical_plan = ArrayMapArrayPhysicalPlan.build(value_name, "String", "String")
       write_array_map_array_pair(destination, key_name, keys, value_name, values, rows_per_mark, physical_plan)
     end
 
@@ -2579,7 +2482,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = array_map_array_numeric_value_type_name(values)
-      physical_plan = array_map_array_numeric_physical_plan(value_name, "UInt64", type_name)
+      physical_plan = ArrayMapArrayNumericPhysicalPlan.build(value_name, "UInt64", type_name, numeric_width(type_name))
       write_array_map_array_numeric_pair(destination, key_name, keys, value_name, values, type_name, rows_per_mark, physical_plan)
     end
 
@@ -2592,7 +2495,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = array_map_array_numeric_value_type_name(values)
-      physical_plan = array_map_array_numeric_physical_plan(value_name, "String", type_name)
+      physical_plan = ArrayMapArrayNumericPhysicalPlan.build(value_name, "String", type_name, numeric_width(type_name))
       write_array_map_array_numeric_pair(destination, key_name, keys, value_name, values, type_name, rows_per_mark, physical_plan)
     end
 
@@ -7928,573 +7831,6 @@ module CrystalClick
       end
       checked_array_element_checksum_size(total_entries, "Map entries")
       nil
-    end
-
-    private def self.array_map_string_uint64_physical_plan(
-      value_name : String,
-    ) : ArrayMapStringUInt64PhysicalPlan
-      shadow = WideTypePlan::WidePhysicalPlanShadow.for_type(
-        "Array(Map(String, UInt64))", value_name
-      ) || raise UnsupportedFormatError.new("Array(Map(String, UInt64)) has no bounded physical plan")
-      streams = shadow.streams
-      expected_names = [
-        "#{value_name}.size0",
-        "#{value_name}.size1",
-        "#{value_name}%2Ekeys.size",
-        "#{value_name}%2Ekeys",
-        "#{value_name}%2Evalues",
-      ]
-      raise UnsupportedFormatError.new("Array(Map(String, UInt64)) physical plan has an unexpected stream count") unless streams.size == expected_names.size
-      raise UnsupportedFormatError.new("Array(Map(String, UInt64)) physical plan has unexpected serializer order") unless streams.map(&.name) == expected_names
-
-      size0 = streams[0]
-      size1 = streams[1]
-      key_sizes = streams[2]
-      key_bytes = streams[3]
-      values = streams[4]
-      table_rows = shadow.mark_row_axis
-
-      unless size0.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize0 &&
-             size0.semantic_type == "Array(Map(String, UInt64))" &&
-             size0.semantic_path.empty? && size0.element_width == 8 &&
-             size0.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size0.storage_axis, table_rows) &&
-             size0.cardinality_parent_axis.try(&.id) == table_rows.id &&
-             size0.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
-        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) outer-size plan axes differ")
-      end
-      outer_elements = size0.cardinality_child_axis.not_nil!
-
-      unless size1.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize1 &&
-             size1.semantic_type == "Map(String, UInt64)" &&
-             size1.semantic_path.empty? && size1.element_width == 8 &&
-             size1.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size1.storage_axis, outer_elements) &&
-             size1.cardinality_parent_axis.try(&.id) == outer_elements.id &&
-             size1.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::MapEntries
-        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) map-size plan axes differ")
-      end
-      map_entries = size1.cardinality_child_axis.not_nil!
-
-      unless key_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
-             key_sizes.semantic_type == "String" && key_sizes.semantic_path == ["keys"] &&
-             key_sizes.element_width == 8 &&
-             key_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(key_sizes.storage_axis, map_entries) &&
-             key_sizes.cardinality_parent_axis.try(&.id) == map_entries.id &&
-             key_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
-        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) key-size plan axes differ")
-      end
-      string_bytes = key_sizes.cardinality_child_axis.not_nil!
-
-      unless key_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-             key_bytes.semantic_type == "String" && key_bytes.semantic_path == ["keys"] &&
-             key_bytes.element_width == 1 &&
-             key_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
-             same_plan_axis?(key_bytes.storage_axis, string_bytes) &&
-             key_bytes.cardinality_parent_axis.nil? && key_bytes.cardinality_child_axis.nil?
-        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) key-byte plan axes differ")
-      end
-
-      unless values.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-             values.semantic_type == "UInt64" && values.semantic_path == ["values"] &&
-             values.element_width == 8 &&
-             values.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-             same_plan_axis?(values.storage_axis, map_entries) &&
-             values.cardinality_parent_axis.nil? && values.cardinality_child_axis.nil?
-        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) value plan axes differ")
-      end
-
-      streams.each do |stream|
-        raise UnsupportedFormatError.new("Array(Map(String, UInt64)) stream mark axis differs") unless same_plan_axis?(stream.mark_row_axis, table_rows)
-      end
-
-      ArrayMapStringUInt64PhysicalPlan.new(shadow, streams, size0, size1, key_sizes, key_bytes, values)
-    end
-
-    private def self.array_map_string_physical_plan(
-      value_name : String,
-      key_type : String,
-      nullable_values : Bool,
-    ) : ArrayMapStringPhysicalPlan
-      string_keys = key_type == "String"
-      value_type = nullable_values ? "Nullable(String)" : "String"
-      full_type = "Array(Map(#{key_type}, #{value_type}))"
-      shadow = WideTypePlan::WidePhysicalPlanShadow.for_type(full_type, value_name) ||
-               raise UnsupportedFormatError.new("#{full_type} has no bounded physical plan")
-      streams = shadow.streams
-
-      expected_names = ["#{value_name}.size0", "#{value_name}.size1"]
-      if string_keys
-        expected_names << "#{value_name}%2Ekeys.size"
-        expected_names << "#{value_name}%2Ekeys"
-      else
-        expected_names << "#{value_name}%2Ekeys"
-      end
-      expected_names << "#{value_name}%2Evalues.null" if nullable_values
-      expected_names << "#{value_name}%2Evalues.size" << "#{value_name}%2Evalues"
-      unless streams.map(&.name) == expected_names
-        raise UnsupportedFormatError.new("#{full_type} physical plan has unexpected serializer order")
-      end
-
-      rows_axis = shadow.mark_row_axis
-      size0 = streams[0]
-      unless size0.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize0 &&
-             size0.semantic_type == full_type && size0.semantic_path.empty? && size0.element_width == 8 &&
-             size0.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size0.storage_axis, rows_axis) &&
-             size0.cardinality_parent_axis.try(&.id) == rows_axis.id &&
-             size0.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
-        raise UnsupportedFormatError.new("#{full_type} outer-size plan axes differ")
-      end
-      outer_axis = size0.cardinality_child_axis.not_nil!
-
-      size1 = streams[1]
-      map_type = "Map(#{key_type}, #{value_type})"
-      unless size1.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize1 &&
-             size1.semantic_type == map_type && size1.semantic_path.empty? && size1.element_width == 8 &&
-             size1.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size1.storage_axis, outer_axis) &&
-             size1.cardinality_parent_axis.try(&.id) == outer_axis.id &&
-             size1.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::MapEntries
-        raise UnsupportedFormatError.new("#{full_type} map-size plan axes differ")
-      end
-      map_axis = size1.cardinality_child_axis.not_nil!
-
-      key_index = 2
-      if string_keys
-        key_sizes = streams[key_index]
-        unless key_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
-               key_sizes.semantic_type == "String" && key_sizes.semantic_path == ["keys"] &&
-               key_sizes.element_width == 8 &&
-               key_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-               same_plan_axis?(key_sizes.storage_axis, map_axis) &&
-               key_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
-               key_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
-          raise UnsupportedFormatError.new("#{full_type} key-size plan axes differ")
-        end
-        key_bytes_axis = key_sizes.cardinality_child_axis.not_nil!
-        key_bytes = streams[key_index + 1]
-        unless key_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_bytes.semantic_type == "String" && key_bytes.semantic_path == ["keys"] &&
-               key_bytes.element_width == 1 &&
-               key_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
-               same_plan_axis?(key_bytes.storage_axis, key_bytes_axis) &&
-               key_bytes.cardinality_parent_axis.nil? && key_bytes.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} key-byte plan axes differ")
-        end
-        key_index += 2
-      else
-        key_values = streams[key_index]
-        unless key_values.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_values.semantic_type == "UInt64" && key_values.semantic_path == ["keys"] &&
-               key_values.element_width == 8 &&
-               key_values.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-               same_plan_axis?(key_values.storage_axis, map_axis) &&
-               key_values.cardinality_parent_axis.nil? && key_values.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} UInt64-key plan axes differ")
-        end
-        key_index += 1
-      end
-
-      if nullable_values
-        nulls = streams[key_index]
-        unless nulls.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::NullMap &&
-               nulls.semantic_type == value_type && nulls.semantic_path == ["values"] &&
-               nulls.element_width == 1 &&
-               nulls.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::NullMapBytes &&
-               same_plan_axis?(nulls.storage_axis, map_axis) &&
-               nulls.cardinality_parent_axis.nil? && nulls.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} null-map plan axes differ")
-        end
-        key_index += 1
-      end
-
-      value_sizes = streams[key_index]
-      unless value_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
-             value_sizes.semantic_type == value_type && value_sizes.semantic_path == ["values"] &&
-             value_sizes.element_width == 8 &&
-             value_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(value_sizes.storage_axis, map_axis) &&
-             value_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
-             value_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
-        raise UnsupportedFormatError.new("#{full_type} value-size plan axes differ")
-      end
-      value_bytes_axis = value_sizes.cardinality_child_axis.not_nil!
-      value_bytes = streams[key_index + 1]
-      unless value_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-             value_bytes.semantic_type == value_type && value_bytes.semantic_path == ["values"] &&
-             value_bytes.element_width == 1 &&
-             value_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
-             same_plan_axis?(value_bytes.storage_axis, value_bytes_axis) &&
-             value_bytes.cardinality_parent_axis.nil? && value_bytes.cardinality_child_axis.nil?
-        raise UnsupportedFormatError.new("#{full_type} value-byte plan axes differ")
-      end
-
-      streams.each do |stream|
-        raise UnsupportedFormatError.new("#{full_type} stream mark axis differs") unless same_plan_axis?(stream.mark_row_axis, rows_axis)
-      end
-      ArrayMapStringPhysicalPlan.new(shadow, streams, string_keys, nullable_values)
-    end
-
-    private def self.array_map_numeric_physical_plan(
-      value_name : String,
-      key_type : String,
-      value_type : String,
-      nullable_values : Bool,
-    ) : ArrayMapNumericPhysicalPlan
-      key_string = key_type == "String"
-      leaf_type = value_type
-      value_type = "Nullable(#{leaf_type})" if nullable_values
-      full_type = "Array(Map(#{key_type}, #{value_type}))"
-      shadow = WideTypePlan::WidePhysicalPlanShadow.for_type(full_type, value_name) ||
-               raise UnsupportedFormatError.new("#{full_type} has no bounded physical plan")
-      streams = shadow.streams
-      expected_names = ["#{value_name}.size0", "#{value_name}.size1"]
-      if key_string
-        expected_names << "#{value_name}%2Ekeys.size"
-        expected_names << "#{value_name}%2Ekeys"
-      else
-        expected_names << "#{value_name}%2Ekeys"
-      end
-      expected_names << "#{value_name}%2Evalues.null" if nullable_values
-      expected_names << "#{value_name}%2Evalues"
-      unless streams.map(&.name) == expected_names
-        raise UnsupportedFormatError.new("#{full_type} physical plan has unexpected serializer order")
-      end
-
-      rows_axis = shadow.mark_row_axis
-      size0 = streams[0]
-      unless size0.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize0 &&
-             size0.semantic_type == full_type && size0.semantic_path.empty? && size0.element_width == 8 &&
-             size0.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size0.storage_axis, rows_axis) &&
-             size0.cardinality_parent_axis.try(&.id) == rows_axis.id &&
-             size0.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
-        raise UnsupportedFormatError.new("#{full_type} outer-size plan axes differ")
-      end
-      outer_axis = size0.cardinality_child_axis.not_nil!
-
-      size1 = streams[1]
-      map_type = "Map(#{key_type}, #{value_type})"
-      unless size1.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize1 &&
-             size1.semantic_type == map_type && size1.semantic_path.empty? && size1.element_width == 8 &&
-             size1.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size1.storage_axis, outer_axis) &&
-             size1.cardinality_parent_axis.try(&.id) == outer_axis.id &&
-             size1.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::MapEntries
-        raise UnsupportedFormatError.new("#{full_type} map-size plan axes differ")
-      end
-      map_axis = size1.cardinality_child_axis.not_nil!
-
-      key_index = 2
-      if key_string
-        key_sizes = streams[key_index]
-        unless key_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
-               key_sizes.semantic_type == "String" && key_sizes.semantic_path == ["keys"] &&
-               key_sizes.element_width == 8 &&
-               key_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-               same_plan_axis?(key_sizes.storage_axis, map_axis) &&
-               key_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
-               key_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
-          raise UnsupportedFormatError.new("#{full_type} key-size plan axes differ")
-        end
-        bytes_axis = key_sizes.cardinality_child_axis.not_nil!
-        key_bytes = streams[key_index + 1]
-        unless key_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_bytes.semantic_type == "String" && key_bytes.semantic_path == ["keys"] &&
-               key_bytes.element_width == 1 &&
-               key_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
-               same_plan_axis?(key_bytes.storage_axis, bytes_axis) &&
-               key_bytes.cardinality_parent_axis.nil? && key_bytes.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} key-byte plan axes differ")
-        end
-        key_index += 2
-      else
-        key_values = streams[key_index]
-        unless key_values.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_values.semantic_type == "UInt64" && key_values.semantic_path == ["keys"] &&
-               key_values.element_width == 8 &&
-               key_values.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-               same_plan_axis?(key_values.storage_axis, map_axis) &&
-               key_values.cardinality_parent_axis.nil? && key_values.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} UInt64-key plan axes differ")
-        end
-        key_index += 1
-      end
-
-      if nullable_values
-        nulls = streams[key_index]
-        unless nulls.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::NullMap &&
-               nulls.semantic_type == value_type && nulls.semantic_path == ["values"] &&
-               nulls.element_width == 1 &&
-               nulls.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::NullMapBytes &&
-               same_plan_axis?(nulls.storage_axis, map_axis) &&
-               nulls.cardinality_parent_axis.nil? && nulls.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} null-map plan axes differ")
-        end
-        key_index += 1
-      end
-
-      value_stream = streams[key_index]
-      unless value_stream.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-             value_stream.semantic_type == value_type && value_stream.semantic_path == ["values"] &&
-             value_stream.element_width == numeric_width(leaf_type) &&
-             value_stream.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-             same_plan_axis?(value_stream.storage_axis, map_axis) &&
-             value_stream.cardinality_parent_axis.nil? && value_stream.cardinality_child_axis.nil?
-        raise UnsupportedFormatError.new("#{full_type} value plan axes differ")
-      end
-
-      streams.each do |stream|
-        raise UnsupportedFormatError.new("#{full_type} stream mark axis differs") unless same_plan_axis?(stream.mark_row_axis, rows_axis)
-      end
-      ArrayMapNumericPhysicalPlan.new(shadow, streams, key_string, nullable_values)
-    end
-
-    private def self.array_map_array_physical_plan(
-      value_name : String,
-      key_type : String,
-      value_type : String,
-    ) : ArrayMapArrayPhysicalPlan
-      string_keys = key_type == "String"
-      string_values = value_type == "String"
-      full_type = "Array(Map(#{key_type}, Array(#{value_type})))"
-      shadow = WideTypePlan::WidePhysicalPlanShadow.for_type(full_type, value_name) ||
-               raise UnsupportedFormatError.new("#{full_type} has no bounded physical plan")
-      streams = shadow.streams
-      expected_names = ["#{value_name}.size0", "#{value_name}.size1"]
-      if string_keys
-        expected_names << "#{value_name}%2Ekeys.size"
-      end
-      expected_names << "#{value_name}%2Ekeys" << "#{value_name}%2Evalues.size2"
-      expected_names << "#{value_name}%2Evalues.size" if string_values
-      expected_names << "#{value_name}%2Evalues"
-      unless streams.map(&.name) == expected_names
-        raise UnsupportedFormatError.new("#{full_type} physical plan has unexpected serializer order")
-      end
-
-      rows_axis = shadow.mark_row_axis
-      size0 = streams[0]
-      unless size0.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize0 &&
-             size0.semantic_type == full_type && size0.semantic_path.empty? && size0.element_width == 8 &&
-             size0.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size0.storage_axis, rows_axis) &&
-             size0.cardinality_parent_axis.try(&.id) == rows_axis.id &&
-             size0.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
-        raise UnsupportedFormatError.new("#{full_type} outer-size plan axes differ")
-      end
-      outer_axis = size0.cardinality_child_axis.not_nil!
-
-      size1 = streams[1]
-      map_type = "Map(#{key_type}, Array(#{value_type}))"
-      unless size1.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize1 &&
-             size1.semantic_type == map_type && size1.semantic_path.empty? && size1.element_width == 8 &&
-             size1.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size1.storage_axis, outer_axis) &&
-             size1.cardinality_parent_axis.try(&.id) == outer_axis.id &&
-             size1.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::MapEntries
-        raise UnsupportedFormatError.new("#{full_type} Map-size plan axes differ")
-      end
-      map_axis = size1.cardinality_child_axis.not_nil!
-
-      key_index = 2
-      if string_keys
-        key_sizes = streams[key_index]
-        unless key_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
-               key_sizes.semantic_type == "String" && key_sizes.semantic_path == ["keys"] &&
-               key_sizes.element_width == 8 &&
-               key_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-               same_plan_axis?(key_sizes.storage_axis, map_axis) &&
-               key_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
-               key_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
-          raise UnsupportedFormatError.new("#{full_type} key-size plan axes differ")
-        end
-        key_bytes_axis = key_sizes.cardinality_child_axis.not_nil!
-        key_bytes = streams[key_index + 1]
-        unless key_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_bytes.semantic_type == "String" && key_bytes.semantic_path == ["keys"] &&
-               key_bytes.element_width == 1 &&
-               key_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
-               same_plan_axis?(key_bytes.storage_axis, key_bytes_axis) &&
-               key_bytes.cardinality_parent_axis.nil? && key_bytes.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} key-byte plan axes differ")
-        end
-        key_index += 2
-      else
-        key_values = streams[key_index]
-        unless key_values.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_values.semantic_type == "UInt64" && key_values.semantic_path == ["keys"] &&
-               key_values.element_width == 8 &&
-               key_values.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-               same_plan_axis?(key_values.storage_axis, map_axis) &&
-               key_values.cardinality_parent_axis.nil? && key_values.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} UInt64-key plan axes differ")
-        end
-        key_index += 1
-      end
-
-      values_type = "Array(#{value_type})"
-      value_sizes = streams[key_index]
-      unless value_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize2 &&
-             value_sizes.semantic_type == values_type && value_sizes.semantic_path == ["values"] &&
-             value_sizes.element_width == 8 &&
-             value_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(value_sizes.storage_axis, map_axis) &&
-             value_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
-             value_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
-        raise UnsupportedFormatError.new("#{full_type} values.size2 plan axes differ")
-      end
-      values_axis = value_sizes.cardinality_child_axis.not_nil!
-      key_index += 1
-
-      if string_values
-        value_string_sizes = streams[key_index]
-        unless value_string_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
-               value_string_sizes.semantic_type == "String" && value_string_sizes.semantic_path == ["values"] &&
-               value_string_sizes.element_width == 8 &&
-               value_string_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-               same_plan_axis?(value_string_sizes.storage_axis, values_axis) &&
-               value_string_sizes.cardinality_parent_axis.try(&.id) == values_axis.id &&
-               value_string_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
-          raise UnsupportedFormatError.new("#{full_type} value-size plan axes differ")
-        end
-        value_bytes_axis = value_string_sizes.cardinality_child_axis.not_nil!
-        value_bytes = streams[key_index + 1]
-        unless value_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               value_bytes.semantic_type == "String" && value_bytes.semantic_path == ["values"] &&
-               value_bytes.element_width == 1 &&
-               value_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
-               same_plan_axis?(value_bytes.storage_axis, value_bytes_axis) &&
-               value_bytes.cardinality_parent_axis.nil? && value_bytes.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} value-byte plan axes differ")
-        end
-      else
-        value_data = streams[key_index]
-        unless value_data.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               value_data.semantic_type == "UInt64" && value_data.semantic_path == ["values"] &&
-               value_data.element_width == 8 &&
-               value_data.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-               same_plan_axis?(value_data.storage_axis, values_axis) &&
-               value_data.cardinality_parent_axis.nil? && value_data.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} UInt64-value plan axes differ")
-        end
-      end
-
-      streams.each do |stream|
-        raise UnsupportedFormatError.new("#{full_type} stream mark axis differs") unless same_plan_axis?(stream.mark_row_axis, rows_axis)
-      end
-      ArrayMapArrayPhysicalPlan.new(shadow, streams, string_keys, string_values)
-    end
-
-    private def self.array_map_array_numeric_physical_plan(
-      value_name : String,
-      key_type : String,
-      value_type : String,
-    ) : ArrayMapArrayNumericPhysicalPlan
-      string_keys = key_type == "String"
-      full_type = "Array(Map(#{key_type}, Array(#{value_type})))"
-      shadow = WideTypePlan::WidePhysicalPlanShadow.for_type(full_type, value_name) ||
-               raise UnsupportedFormatError.new("#{full_type} has no bounded physical plan")
-      streams = shadow.streams
-      expected_names = ["#{value_name}.size0", "#{value_name}.size1"]
-      if string_keys
-        expected_names << "#{value_name}%2Ekeys.size"
-      end
-      expected_names << "#{value_name}%2Ekeys" << "#{value_name}%2Evalues.size2" << "#{value_name}%2Evalues"
-      unless streams.map(&.name) == expected_names
-        raise UnsupportedFormatError.new("#{full_type} physical plan has unexpected serializer order")
-      end
-
-      rows_axis = shadow.mark_row_axis
-      size0 = streams[0]
-      unless size0.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize0 &&
-             size0.semantic_type == full_type && size0.semantic_path.empty? && size0.element_width == 8 &&
-             size0.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size0.storage_axis, rows_axis) &&
-             size0.cardinality_parent_axis.try(&.id) == rows_axis.id &&
-             size0.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
-        raise UnsupportedFormatError.new("#{full_type} outer-size plan axes differ")
-      end
-      outer_axis = size0.cardinality_child_axis.not_nil!
-
-      size1 = streams[1]
-      map_type = "Map(#{key_type}, Array(#{value_type}))"
-      unless size1.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize1 &&
-             size1.semantic_type == map_type && size1.semantic_path.empty? && size1.element_width == 8 &&
-             size1.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(size1.storage_axis, outer_axis) &&
-             size1.cardinality_parent_axis.try(&.id) == outer_axis.id &&
-             size1.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::MapEntries
-        raise UnsupportedFormatError.new("#{full_type} Map-size plan axes differ")
-      end
-      map_axis = size1.cardinality_child_axis.not_nil!
-
-      key_index = 2
-      if string_keys
-        key_sizes = streams[key_index]
-        unless key_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::StringSize &&
-               key_sizes.semantic_type == "String" && key_sizes.semantic_path == ["keys"] &&
-               key_sizes.element_width == 8 &&
-               key_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-               same_plan_axis?(key_sizes.storage_axis, map_axis) &&
-               key_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
-               key_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::StringBytes
-          raise UnsupportedFormatError.new("#{full_type} key-size plan axes differ")
-        end
-        key_bytes_axis = key_sizes.cardinality_child_axis.not_nil!
-        key_bytes = streams[key_index + 1]
-        unless key_bytes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_bytes.semantic_type == "String" && key_bytes.semantic_path == ["keys"] &&
-               key_bytes.element_width == 1 &&
-               key_bytes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::VariableBytes &&
-               same_plan_axis?(key_bytes.storage_axis, key_bytes_axis) &&
-               key_bytes.cardinality_parent_axis.nil? && key_bytes.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} key-byte plan axes differ")
-        end
-        key_index += 2
-      else
-        key_values = streams[key_index]
-        unless key_values.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-               key_values.semantic_type == "UInt64" && key_values.semantic_path == ["keys"] &&
-               key_values.element_width == 8 &&
-               key_values.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-               same_plan_axis?(key_values.storage_axis, map_axis) &&
-               key_values.cardinality_parent_axis.nil? && key_values.cardinality_child_axis.nil?
-          raise UnsupportedFormatError.new("#{full_type} UInt64-key plan axes differ")
-        end
-        key_index += 1
-      end
-
-      value_sizes = streams[key_index]
-      unless value_sizes.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::ArraySize2 &&
-             value_sizes.semantic_type == "Array(#{value_type})" && value_sizes.semantic_path == ["values"] &&
-             value_sizes.element_width == 8 &&
-             value_sizes.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::Counts &&
-             same_plan_axis?(value_sizes.storage_axis, map_axis) &&
-             value_sizes.cardinality_parent_axis.try(&.id) == map_axis.id &&
-             value_sizes.cardinality_child_axis.try(&.kind) == WideTypePlan::WidePhysicalPlanShadow::AxisKind::ArrayElements
-        raise UnsupportedFormatError.new("#{full_type} values.size2 plan axes differ")
-      end
-      values_axis = value_sizes.cardinality_child_axis.not_nil!
-      value_stream = streams[key_index + 1]
-      unless value_stream.role == WideTypePlan::WidePhysicalPlanShadow::StreamRole::Value &&
-             value_stream.semantic_type == value_type && value_stream.semantic_path == ["values"] &&
-             value_stream.element_width == numeric_width(value_type) &&
-             value_stream.storage_mode == WideTypePlan::WidePhysicalPlanShadow::StorageMode::FixedWidthValues &&
-             same_plan_axis?(value_stream.storage_axis, values_axis) &&
-             value_stream.cardinality_parent_axis.nil? && value_stream.cardinality_child_axis.nil?
-        raise UnsupportedFormatError.new("#{full_type} numeric value plan axes differ")
-      end
-
-      streams.each do |stream|
-        raise UnsupportedFormatError.new("#{full_type} stream mark axis differs") unless same_plan_axis?(stream.mark_row_axis, rows_axis)
-      end
-      ArrayMapArrayNumericPhysicalPlan.new(shadow, streams, string_keys, value_type, numeric_width(value_type))
-    end
-
-    private def self.same_plan_axis?(left : WideTypePlan::WidePhysicalPlanShadow::Axis, right : WideTypePlan::WidePhysicalPlanShadow::Axis) : Bool
-      left.id == right.id && left.kind == right.kind
     end
 
     private def self.write_array_map_string_pair(
