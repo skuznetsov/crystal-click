@@ -57,8 +57,8 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.supports_nullable_w15_semantic_type?("Nullable(Decimal(38, 0))").should be_false
 
     [
-      "Decimal(37, 0)",
-      "Decimal(39, 0)",
+      "Decimal(0, 0)",
+      "Decimal(77, 0)",
       "Decimal(38, 39)",
       "Decimal(38, 00)",
       "Nullable(Nullable(Decimal(38, 2)))",

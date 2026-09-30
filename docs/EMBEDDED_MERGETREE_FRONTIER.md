@@ -5,6 +5,9 @@ The later W94-W101 compositional Tuple frontier is tracked separately in
 `BOOL_TUPLE_FRONTIER.md`, `BOOL_SEMANTICS_FRONTIER.md`,
 `IDENTIFIER_TUPLE_FRONTIER.md`, `TEMPORAL_TUPLE_FRONTIER.md` and
 `PARAMETERIZED_TUPLE_FRONTIER.md`.
+The later W102 exact standalone Decimal precision frontier is tracked in
+`DECIMAL_PRECISION_FRONTIER.md`, including its six admitted column shapes and
+separate canonical-metadata versus catalog-DDL grammar.
 These bounded reader/writer/table/catalog extensions do not widen the
 MV/projection, arbitrary-table-write or
 memory/performance boundaries below. Owner-by-contract refactoring is tracked

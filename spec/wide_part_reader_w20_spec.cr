@@ -59,7 +59,7 @@ describe CrystalClick::WidePart do
       "Decimal(76, -1)",
       "Decimal(76, 1 )",
       "Decimal(76, 1, 2)",
-      "Decimal(75, 1)",
+      "Decimal(77, 1)",
       "Nullable(Nullable(Decimal(76, 1)))",
       "Decimal256(77)",
       "Decimal256(01)",

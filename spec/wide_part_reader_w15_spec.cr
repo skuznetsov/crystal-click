@@ -43,10 +43,10 @@ describe CrystalClick::WidePart do
       "Enum8( 'unprobed' = 1)",
       "Enum8('unprobed' = 1,  'also' = 2)",
       "Enum16('overflow' = 32768)",
-      "Decimal(8, 2)",
+      "Decimal(0, 0)",
       "Decimal(9, 10)",
       "Decimal(18, 19)",
-      "Decimal(19, 2)",
+      "Decimal(77, 0)",
       "Nullable(Decimal(9, 10))",
       "Enum8('unprobed\\nlabel' = 1)",
     ].each do |type|

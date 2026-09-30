@@ -132,7 +132,7 @@ describe CrystalClick::WidePart do
       "Array(Nullable(Decimal(38, 39)))", "Array(Nullable(Decimal(38, 02)))",
       "Array(Nullable(Decimal128(2)))", "Array(Nullable(Nullable(Decimal(38, 2))))",
       "Nullable(Array(Decimal(38, 2)))",
-      "Array(Decimal(37, 2))", "Array(Decimal(75, 2))",
+      "Array(Decimal(0, 2))", "Array(Decimal(77, 2))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end

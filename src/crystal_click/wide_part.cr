@@ -487,112 +487,14 @@ module CrystalClick
       end
     end
 
-    private def self.decimal_precision_scale(type : String, precision : Int32, maximum_scale : Int32) : Int32?
-      match = /\ADecimal\(([0-9]+), ([0-9]+)\)\z/.match(type)
-      return nil unless match && match[1] == precision.to_s && match[2].matches?(/\A(?:0|[1-9][0-9]*)\z/)
-      scale = match[2].to_i?
-      return nil unless scale && scale <= maximum_scale
-      scale
-    end
-
-    private def self.decimal32_alias_scale(type : String) : Int32?
-      match = /\ADecimal32\(([0-9])\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_decimal32_alias_scale(type : String) : Int32?
-      match = /\AArray\(Decimal32\(([0-9])\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_nullable_decimal32_alias_scale(type : String) : Int32?
-      match = /\AArray\(Nullable\(Decimal32\(([0-9])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_decimal64_alias_scale(type : String) : Int32?
-      match = /\AArray\(Decimal64\(([0-9]|1[0-8])\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_nullable_decimal64_alias_scale(type : String) : Int32?
-      match = /\AArray\(Nullable\(Decimal64\(([0-9]|1[0-8])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_decimal128_alias_scale(type : String) : Int32?
-      match = /\AArray\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_nullable_decimal128_alias_scale(type : String) : Int32?
-      match = /\AArray\(Nullable\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_decimal256_alias_scale(type : String) : Int32?
-      match = /\AArray\(Decimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_nullable_decimal256_alias_scale(type : String) : Int32?
-      match = /\AArray\(Nullable\(Decimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_decimal32_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Decimal32\(([0-9])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_nullable_decimal32_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Nullable\(Decimal32\(([0-9])\)\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_decimal64_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Decimal64\(([0-9]|1[0-8])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_nullable_decimal64_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Nullable\(Decimal64\(([0-9]|1[0-8])\)\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_decimal128_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_nullable_decimal128_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Nullable\(Decimal128\((0|[1-9]|[1-2][0-9]|3[0-8])\)\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_decimal256_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Decimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.array_array_nullable_decimal256_alias_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Nullable\(Decimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.decimal64_alias_scale(type : String) : Int32?
-      match = /\ADecimal64\(([0-9]|1[0-8])\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.decimal128_alias_scale(type : String) : Int32?
-      match = /\ADecimal128\(([0-9]|[1-2][0-9]|3[0-8])\)\z/.match(type)
-      match.try { |value| value[1].to_i }
-    end
-
-    private def self.decimal256_alias_scale(type : String) : Int32?
-      match = /\ADecimal256\((0|[1-9]|[1-6][0-9]|7[0-6])\)\z/.match(type)
-      match.try { |value| value[1].to_i }
+    private def self.decimal_column_scale(
+      type : String,
+      shape : DecimalColumnShape,
+      storage_width : Int32,
+    ) : Int32?
+      descriptor = DecimalColumnType.parse(type) || return nil
+      return nil unless descriptor.shape == shape && descriptor.storage_width == storage_width
+      descriptor.scale
     end
 
     # Enum declarations remain exact metadata, while row values are exposed as
@@ -676,139 +578,115 @@ module CrystalClick
       inner
     end
 
-    # ClickHouse normalizes Decimal32/64 aliases in columns.txt to the
-    # canonical precision forms Decimal(9, S) and Decimal(18, S).
+    # ClickHouse normalizes Decimal32/64 aliases in columns.txt to canonical
+    # Decimal(P, S) leaves; P selects the physical storage-width family.
     def self.decimal32_scale(type : String) : Int32?
-      decimal_precision_scale(type, 9, 9)
+      decimal_column_scale(type, DecimalColumnShape::Scalar, 4)
     end
 
     def self.decimal64_scale(type : String) : Int32?
-      decimal_precision_scale(type, 18, 18)
+      decimal_column_scale(type, DecimalColumnShape::Scalar, 8)
     end
 
     def self.decimal128_scale(type : String) : Int32?
-      decimal_precision_scale(type, 38, 38)
+      decimal_column_scale(type, DecimalColumnShape::Scalar, 16)
     end
 
     # Decimal256 is stored as a signed 32-byte coefficient. ClickHouse writes
-    # the logical alias as its canonical Decimal(76, S) metadata form.
+    # the logical alias as its canonical Decimal(P, S) metadata form.
     def self.decimal256_scale(type : String) : Int32?
-      decimal_precision_scale(type, 76, 76)
+      decimal_column_scale(type, DecimalColumnShape::Scalar, 32)
     end
 
     def self.nullable_decimal32_scale(type : String) : Int32?
-      nullable_inner(type).try { |inner| decimal32_scale(inner) }
+      decimal_column_scale(type, DecimalColumnShape::NullableScalar, 4)
     end
 
     def self.nullable_decimal64_scale(type : String) : Int32?
-      nullable_inner(type).try { |inner| decimal64_scale(inner) }
+      decimal_column_scale(type, DecimalColumnShape::NullableScalar, 8)
     end
 
     def self.nullable_decimal128_scale(type : String) : Int32?
-      nullable_inner(type).try { |inner| decimal128_scale(inner) }
+      decimal_column_scale(type, DecimalColumnShape::NullableScalar, 16)
     end
 
     def self.nullable_decimal256_scale(type : String) : Int32?
-      nullable_inner(type).try { |inner| decimal256_scale(inner) }
+      decimal_column_scale(type, DecimalColumnShape::NullableScalar, 32)
     end
 
     # Decimal32 Arrays preserve the canonical precision and scale in the
     # semantic declaration while storing signed Int32 coefficients.
     def self.array_decimal32_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      decimal32_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::Array, 4)
     end
 
     def self.array_nullable_decimal32_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(Nullable(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      nullable_decimal32_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::ArrayNullable, 4)
     end
 
     # Decimal64 Arrays keep the exact scale in metadata and expose signed
     # Int64 coefficients through semantic accessors only.
     def self.array_decimal64_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      decimal64_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::Array, 8)
     end
 
     def self.array_nullable_decimal64_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(Nullable(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      nullable_decimal64_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::ArrayNullable, 8)
     end
 
     # Decimal128 Arrays expose signed Int128 coefficients only through these
     # exact semantic gates; physical width alone does not admit Int128 Arrays.
     def self.array_decimal128_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      decimal128_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::Array, 16)
     end
 
     def self.array_nullable_decimal128_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(Nullable(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      nullable_decimal128_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::ArrayNullable, 16)
     end
 
     # Keep Decimal256 Arrays on their own signed Decimal256Value semantic
     # path; equal-width primitive Int256 Array metadata is not an alias.
     def self.array_decimal256_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      decimal256_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::Array, 32)
     end
 
     def self.array_nullable_decimal256_scale(type : String) : Int32?
-      return nil unless type.starts_with?("Array(Nullable(") && type.ends_with?(")")
-      inner = type.byte_slice("Array(".bytesize, type.bytesize - "Array()".bytesize)
-      nullable_decimal256_scale(inner)
+      decimal_column_scale(type, DecimalColumnShape::ArrayNullable, 32)
     end
 
     # W64 admits only exactly two Array levels over canonical Decimal(P, S)
     # declarations. Keep these semantic gates separate from primitive numeric
     # Array parsing so equal-width Int* leaves do not inherit Decimal admission.
     def self.array_array_decimal32_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 9, false)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArray, 4)
     end
 
     def self.array_array_nullable_decimal32_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 9, true)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArrayNullable, 4)
     end
 
     def self.array_array_decimal64_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 18, false)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArray, 8)
     end
 
     def self.array_array_nullable_decimal64_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 18, true)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArrayNullable, 8)
     end
 
     def self.array_array_decimal128_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 38, false)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArray, 16)
     end
 
     def self.array_array_nullable_decimal128_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 38, true)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArrayNullable, 16)
     end
 
     def self.array_array_decimal256_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 76, false)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArray, 32)
     end
 
     def self.array_array_nullable_decimal256_scale(type : String) : Int32?
-      array_array_decimal_scale(type, 76, true)
-    end
-
-    private def self.array_array_decimal_scale(type : String, precision : Int32, nullable : Bool) : Int32?
-      prefix = nullable ? "Array(Array(Nullable(" : "Array(Array("
-      suffix_bytes = nullable ? 3 : 2
-      return nil unless type.starts_with?(prefix) && type.ends_with?(")" * suffix_bytes)
-      decimal_type = type.byte_slice(prefix.bytesize, type.bytesize - prefix.bytesize - suffix_bytes)
-      decimal_precision_scale(decimal_type, precision, precision)
+      decimal_column_scale(type, DecimalColumnShape::ArrayArrayNullable, 32)
     end
 
     def self.array_array_decimal_payload_width(type : String) : Int32?
@@ -822,67 +700,10 @@ module CrystalClick
     # Normalize only the Decimal DDL aliases observed in stock metadata. The
     # caller retains the exact source spelling separately for API metadata.
     def self.catalog_type(type : String) : String?
-      return type if supports_typed_type?(type)
-
-      if scale = array_decimal32_alias_scale(type)
-        return "Array(Decimal(9, #{scale}))"
-      elsif scale = array_nullable_decimal32_alias_scale(type)
-        return "Array(Nullable(Decimal(9, #{scale})))"
-      elsif scale = array_decimal64_alias_scale(type)
-        return "Array(Decimal(18, #{scale}))"
-      elsif scale = array_nullable_decimal64_alias_scale(type)
-        return "Array(Nullable(Decimal(18, #{scale})))"
-      elsif scale = array_decimal128_alias_scale(type)
-        return "Array(Decimal(38, #{scale}))"
-      elsif scale = array_nullable_decimal128_alias_scale(type)
-        return "Array(Nullable(Decimal(38, #{scale})))"
-      elsif scale = array_decimal256_alias_scale(type)
-        return "Array(Decimal(76, #{scale}))"
-      elsif scale = array_nullable_decimal256_alias_scale(type)
-        return "Array(Nullable(Decimal(76, #{scale})))"
+      if normalized = DecimalColumnType.catalog_type(type)
+        return normalized
       end
-
-      if scale = array_array_decimal32_alias_scale(type)
-        return "Array(Array(Decimal(9, #{scale})))"
-      elsif scale = array_array_nullable_decimal32_alias_scale(type)
-        return "Array(Array(Nullable(Decimal(9, #{scale}))))"
-      elsif scale = array_array_decimal64_alias_scale(type)
-        return "Array(Array(Decimal(18, #{scale})))"
-      elsif scale = array_array_nullable_decimal64_alias_scale(type)
-        return "Array(Array(Nullable(Decimal(18, #{scale}))))"
-      elsif scale = array_array_decimal128_alias_scale(type)
-        return "Array(Array(Decimal(38, #{scale})))"
-      elsif scale = array_array_nullable_decimal128_alias_scale(type)
-        return "Array(Array(Nullable(Decimal(38, #{scale}))))"
-      elsif scale = array_array_decimal256_alias_scale(type)
-        return "Array(Array(Decimal(76, #{scale})))"
-      elsif scale = array_array_nullable_decimal256_alias_scale(type)
-        return "Array(Array(Nullable(Decimal(76, #{scale}))))"
-      end
-
-      if inner = nullable_inner(type)
-        if scale = decimal32_alias_scale(inner)
-          return "Nullable(Decimal(9, #{scale}))"
-        elsif scale = decimal64_alias_scale(inner)
-          return "Nullable(Decimal(18, #{scale}))"
-        elsif scale = decimal128_alias_scale(inner)
-          return "Nullable(Decimal(38, #{scale}))"
-        elsif scale = decimal256_alias_scale(inner)
-          return "Nullable(Decimal(76, #{scale}))"
-        end
-        return nil
-      end
-
-      if scale = decimal32_alias_scale(type)
-        return "Decimal(9, #{scale})"
-      elsif scale = decimal64_alias_scale(type)
-        return "Decimal(18, #{scale})"
-      elsif scale = decimal128_alias_scale(type)
-        return "Decimal(38, #{scale})"
-      elsif scale = decimal256_alias_scale(type)
-        return "Decimal(76, #{scale})"
-      end
-      nil
+      type if supports_typed_type?(type)
     end
 
     def self.supports_nullable_numeric_type?(type : String) : Bool
@@ -1868,31 +1689,31 @@ module CrystalClick
     # readers preserve the signed little-endian scaled integer bit-for-bit.
     def read_decimal32_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Decimal(9, S)") unless WidePart.decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Decimal(P, S) with P in 1..9") unless WidePart.decimal32_scale(@column_type)
       read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
     end
 
     def read_nullable_decimal32_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32?)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Nullable(Decimal(9, S))") unless WidePart.nullable_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 accessor requires canonical Nullable(Decimal(P, S)) with P in 1..9") unless WidePart.nullable_decimal32_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
     end
 
     def read_decimal64_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Decimal(18, S)") unless WidePart.decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Decimal(P, S) with P in 10..18") unless WidePart.decimal64_scale(@column_type)
       read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
     end
 
     def read_nullable_decimal64_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64?)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Nullable(Decimal(18, S))") unless WidePart.nullable_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 accessor requires canonical Nullable(Decimal(P, S)) with P in 10..18") unless WidePart.nullable_decimal64_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
     end
 
     def read_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int128)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Decimal(38, S)") unless WidePart.decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Decimal(P, S) with P in 19..38") unless WidePart.decimal128_scale(@column_type)
       read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
     end
 
@@ -1949,7 +1770,7 @@ module CrystalClick
 
     def read_nullable_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int128?)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(38, S))") unless WidePart.nullable_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 accessor requires canonical Nullable(Decimal(P, S)) with P in 19..38") unless WidePart.nullable_decimal128_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
     end
 
@@ -2041,7 +1862,7 @@ module CrystalClick
 
     def read_decimal256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Decimal256Value)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Decimal(76, S)") unless WidePart.decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Decimal(P, S) with P in 39..76") unless WidePart.decimal256_scale(@column_type)
 
       stream = @streams[column]
       start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
@@ -2067,7 +1888,7 @@ module CrystalClick
     # nullable semantic values.
     def read_nullable_decimal256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Decimal256Value?)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Nullable(Decimal(76, S))") unless WidePart.nullable_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 accessor requires canonical Nullable(Decimal(P, S)) with P in 39..76") unless WidePart.nullable_decimal256_scale(@column_type)
 
       null_stream = @streams["#{column}.null"]
       value_stream = @streams[column]
@@ -2649,7 +2470,7 @@ module CrystalClick
 
     def array_decimal32_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 Array accessor requires an exact Array(Decimal(9, S)) column") unless WidePart.array_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 Array accessor requires Array(Decimal(P, S)) with P in 1..9") unless WidePart.array_decimal32_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       value_stream = @streams[column]
@@ -2661,7 +2482,7 @@ module CrystalClick
 
     def array_decimal64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 Array accessor requires an exact Array(Decimal(18, S)) column") unless WidePart.array_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 Array accessor requires Array(Decimal(P, S)) with P in 10..18") unless WidePart.array_decimal64_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       value_stream = @streams[column]
@@ -2673,7 +2494,7 @@ module CrystalClick
 
     def array_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Decimal(38, S)) column") unless WidePart.array_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires Array(Decimal(P, S)) with P in 19..38") unless WidePart.array_decimal128_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       value_stream = @streams[column]
@@ -2685,7 +2506,7 @@ module CrystalClick
 
     def array_decimal256_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 Array accessor requires an exact Array(Decimal(76, S)) column") unless WidePart.array_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 Array accessor requires Array(Decimal(P, S)) with P in 39..76") unless WidePart.array_decimal256_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       value_stream = @streams[column]
@@ -2859,49 +2680,49 @@ module CrystalClick
     # stream before table materialization.
     def array_array_decimal32_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 nested Array accessor requires exact Array(Array(Decimal(9, S)))") unless WidePart.array_array_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 1..9") unless WidePart.array_array_decimal32_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 4, false)
     end
 
     def array_array_decimal64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 nested Array accessor requires exact Array(Array(Decimal(18, S)))") unless WidePart.array_array_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 10..18") unless WidePart.array_array_decimal64_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 8, false)
     end
 
     def array_array_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 nested Array accessor requires exact Array(Array(Decimal(38, S)))") unless WidePart.array_array_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 19..38") unless WidePart.array_array_decimal128_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 16, false)
     end
 
     def array_array_decimal256_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 nested Array accessor requires exact Array(Array(Decimal(76, S)))") unless WidePart.array_array_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 39..76") unless WidePart.array_array_decimal256_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 32, false)
     end
 
     def array_array_nullable_decimal32_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(9, S))))") unless WidePart.array_array_nullable_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 1..9") unless WidePart.array_array_nullable_decimal32_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 4, true)
     end
 
     def array_array_nullable_decimal64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(18, S))))") unless WidePart.array_array_nullable_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 10..18") unless WidePart.array_array_nullable_decimal64_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 8, true)
     end
 
     def array_array_nullable_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(38, S))))") unless WidePart.array_array_nullable_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 19..38") unless WidePart.array_array_nullable_decimal128_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 16, true)
     end
 
     def array_array_nullable_decimal256_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(76, S))))") unless WidePart.array_array_nullable_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 39..76") unless WidePart.array_array_nullable_decimal256_scale(@column_type)
       array_array_decimal_mark_range_raw_bytes(column, first_mark, mark_count, 32, true)
     end
 
@@ -3010,7 +2831,7 @@ module CrystalClick
 
     def array_nullable_decimal32_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 Array accessor requires an exact Array(Nullable(Decimal(9, S))) column") unless WidePart.array_nullable_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 1..9") unless WidePart.array_nullable_decimal32_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       {"#{column}.null", column}.each do |stream_name|
@@ -3025,7 +2846,7 @@ module CrystalClick
 
     def array_nullable_decimal64_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 Array accessor requires an exact Array(Nullable(Decimal(18, S))) column") unless WidePart.array_nullable_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 10..18") unless WidePart.array_nullable_decimal64_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       {"#{column}.null", column}.each do |stream_name|
@@ -3040,7 +2861,7 @@ module CrystalClick
 
     def array_nullable_decimal128_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Nullable(Decimal(38, S))) column") unless WidePart.array_nullable_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 19..38") unless WidePart.array_nullable_decimal128_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       {"#{column}.null", column}.each do |stream_name|
@@ -3055,7 +2876,7 @@ module CrystalClick
 
     def array_nullable_decimal256_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 Array accessor requires an exact Array(Nullable(Decimal(76, S))) column") unless WidePart.array_nullable_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 39..76") unless WidePart.array_nullable_decimal256_scale(@column_type)
 
       _, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       {"#{column}.null", column}.each do |stream_name|
@@ -5935,49 +5756,49 @@ module CrystalClick
 
     def read_array_array_decimal32_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int32)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 nested Array accessor requires exact Array(Array(Decimal(9, S)))") unless WidePart.array_array_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 1..9") unless WidePart.array_array_decimal32_scale(@column_type)
       read_array_array_decimal_values(column, first_mark, mark_count, 4, Int32)
     end
 
     def read_array_array_decimal64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int64)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 nested Array accessor requires exact Array(Array(Decimal(18, S)))") unless WidePart.array_array_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 10..18") unless WidePart.array_array_decimal64_scale(@column_type)
       read_array_array_decimal_values(column, first_mark, mark_count, 8, Int64)
     end
 
     def read_array_array_decimal128_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int128)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 nested Array accessor requires exact Array(Array(Decimal(38, S)))") unless WidePart.array_array_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 19..38") unless WidePart.array_array_decimal128_scale(@column_type)
       read_array_array_decimal_values(column, first_mark, mark_count, 16, Int128)
     end
 
     def read_array_array_decimal256_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Decimal256Value)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 nested Array accessor requires exact Array(Array(Decimal(76, S)))") unless WidePart.array_array_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 nested Array accessor requires Array(Array(Decimal(P, S))) with P in 39..76") unless WidePart.array_array_decimal256_scale(@column_type)
       read_array_array_decimal_values(column, first_mark, mark_count, 32, Decimal256Value)
     end
 
     def read_array_array_nullable_decimal32_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int32?)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(9, S))))") unless WidePart.array_array_nullable_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 1..9") unless WidePart.array_array_nullable_decimal32_scale(@column_type)
       read_array_array_nullable_decimal_values(column, first_mark, mark_count, 4, Int32)
     end
 
     def read_array_array_nullable_decimal64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int64?)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(18, S))))") unless WidePart.array_array_nullable_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 10..18") unless WidePart.array_array_nullable_decimal64_scale(@column_type)
       read_array_array_nullable_decimal_values(column, first_mark, mark_count, 8, Int64)
     end
 
     def read_array_array_nullable_decimal128_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Int128?)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(38, S))))") unless WidePart.array_array_nullable_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 19..38") unless WidePart.array_array_nullable_decimal128_scale(@column_type)
       read_array_array_nullable_decimal_values(column, first_mark, mark_count, 16, Int128)
     end
 
     def read_array_array_nullable_decimal256_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Array(Decimal256Value?)))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 nested nullable Array accessor requires exact Array(Array(Nullable(Decimal(76, S))))") unless WidePart.array_array_nullable_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 nested nullable Array accessor requires Array(Array(Nullable(Decimal(P, S)))) with P in 39..76") unless WidePart.array_array_nullable_decimal256_scale(@column_type)
       read_array_array_nullable_decimal_values(column, first_mark, mark_count, 32, Decimal256Value)
     end
 
@@ -6441,31 +6262,31 @@ module CrystalClick
 
     def read_array_decimal32_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int32))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 Array accessor requires an exact Array(Decimal(9, S)) column") unless WidePart.array_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 Array accessor requires Array(Decimal(P, S)) with P in 1..9") unless WidePart.array_decimal32_scale(@column_type)
       read_array_fixed_leaf_mark_range(column, first_mark, mark_count, Int32)
     end
 
     def read_array_nullable_decimal32_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int32?))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal32 Array accessor requires an exact Array(Nullable(Decimal(9, S))) column") unless WidePart.array_nullable_decimal32_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal32 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 1..9") unless WidePart.array_nullable_decimal32_scale(@column_type)
       read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, Int32)
     end
 
     def read_array_decimal64_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int64))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 Array accessor requires an exact Array(Decimal(18, S)) column") unless WidePart.array_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 Array accessor requires Array(Decimal(P, S)) with P in 10..18") unless WidePart.array_decimal64_scale(@column_type)
       read_array_fixed_leaf_mark_range(column, first_mark, mark_count, Int64)
     end
 
     def read_array_nullable_decimal64_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int64?))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal64 Array accessor requires an exact Array(Nullable(Decimal(18, S))) column") unless WidePart.array_nullable_decimal64_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal64 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 10..18") unless WidePart.array_nullable_decimal64_scale(@column_type)
       read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, Int64)
     end
 
     def read_array_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int128))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Decimal(38, S)) column") unless WidePart.array_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires Array(Decimal(P, S)) with P in 19..38") unless WidePart.array_decimal128_scale(@column_type)
       read_array_fixed_leaf_mark_range(column, first_mark, mark_count, Int128)
     end
 
@@ -6515,13 +6336,13 @@ module CrystalClick
 
     def read_array_nullable_decimal128_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Int128?))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal128 Array accessor requires an exact Array(Nullable(Decimal(38, S))) column") unless WidePart.array_nullable_decimal128_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal128 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 19..38") unless WidePart.array_nullable_decimal128_scale(@column_type)
       read_array_nullable_fixed_leaf_mark_range(column, first_mark, mark_count, Int128)
     end
 
     def read_array_decimal256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Decimal256Value))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 Array accessor requires an exact Array(Decimal(76, S)) column") unless WidePart.array_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 Array accessor requires Array(Decimal(P, S)) with P in 39..76") unless WidePart.array_decimal256_scale(@column_type)
 
       outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       value_stream = @streams[column]
@@ -6552,7 +6373,7 @@ module CrystalClick
 
     def read_array_nullable_decimal256_raw_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Decimal256Value?))
       ensure_column(column)
-      raise UnsupportedFormatError.new("Decimal256 Array accessor requires an exact Array(Nullable(Decimal(76, S))) column") unless WidePart.array_nullable_decimal256_scale(@column_type)
+      raise UnsupportedFormatError.new("Decimal256 Array accessor requires Array(Nullable(Decimal(P, S))) with P in 39..76") unless WidePart.array_nullable_decimal256_scale(@column_type)
 
       outer_sizes, flat_elements, rows, mark_flat_elements = read_array_outer_sizes(column, first_mark, mark_count)
       null_stream = @streams["#{column}.null"]

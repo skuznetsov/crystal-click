@@ -132,7 +132,7 @@ describe CrystalClick::WidePart do
     {
       "Array(Array(Decimal(9, 10)))",
       "Array(Array(Nullable(Decimal(38, -1))))",
-      "Array(Array(Decimal(10, 2)))",
+      "Array(Array(Decimal(77, 2)))",
       "Array(Array(Decimal(09, 2)))",
       "Array(Array(Decimal(9,2)))",
       "Array(Array(Nullable(Decimal256(2))))",

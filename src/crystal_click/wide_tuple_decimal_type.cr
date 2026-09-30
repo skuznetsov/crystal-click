@@ -4,40 +4,28 @@ module CrystalClick
     alias Buffer = Array(Decimal32Value) | Array(Decimal64Value) |
                    Array(Decimal128Value) | Array(Decimal256TupleValue)
 
-    @precision : Int32
-    @scale : Int32
-    @storage_width : Int32
+    @decimal_type : DecimalType
     @type_name : String
 
-    def initialize(@precision : Int32, @scale : Int32)
-      raise ArgumentError.new("Decimal precision must be between 1 and 76") unless @precision >= 1 && @precision <= 76
-      raise ArgumentError.new("Decimal scale must be between 0 and precision") unless @scale >= 0 && @scale <= @precision
-      @storage_width = if @precision <= 9
-                         4
-                       elsif @precision <= 18
-                         8
-                       elsif @precision <= 38
-                         16
-                       else
-                         32
-                       end
-      @type_name = "Decimal(#{@precision}, #{@scale})"
+    def initialize(precision : Int32, scale : Int32)
+      @decimal_type = DecimalType.new(precision, scale)
+      @type_name = @decimal_type.type_name
     end
 
     def precision : Int32
-      @precision
+      @decimal_type.precision
     end
 
     def scale : Int32
-      @scale
+      @decimal_type.scale
     end
 
     def storage_width : Int32
-      @storage_width
+      @decimal_type.storage_width
     end
 
     def width : Int32
-      @storage_width
+      @decimal_type.storage_width
     end
 
     def type_name : String
@@ -50,7 +38,7 @@ module CrystalClick
     end
 
     def validate_buffer!(buffer : Buffer) : Nil
-      case @storage_width
+      case storage_width
       when 4
         raise ArgumentError.new("Decimal buffer does not match exact storage width") unless buffer.is_a?(Array(Decimal32Value))
         buffer.each { |value| validate_value!(value.precision, value.scale) }
@@ -68,17 +56,15 @@ module CrystalClick
     end
 
     def ==(other : self) : Bool
-      @precision == other.precision && @scale == other.scale
+      precision == other.precision && scale == other.scale
     end
 
     def hash(hasher)
-      hasher = @precision.hash(hasher)
-      hasher = @scale.hash(hasher)
-      hasher
+      @decimal_type.hash(hasher)
     end
 
     private def validate_value!(precision : Int32, scale : Int32) : Nil
-      unless precision == @precision && scale == @scale
+      unless precision == @decimal_type.precision && scale == @decimal_type.scale
         raise ArgumentError.new("Decimal Tuple value precision/scale does not match exact type")
       end
       nil

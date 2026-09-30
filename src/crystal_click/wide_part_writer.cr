@@ -1038,8 +1038,9 @@ module CrystalClick
       values : Slice(Array(Int32)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
     ) : String
-      write_uint64_array_decimal32_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_decimal32_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     # Write signed Decimal64 coefficients without converting through a decimal
@@ -1052,8 +1053,9 @@ module CrystalClick
       values : Slice(Array(Int64)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
     ) : String
-      write_uint64_array_decimal64_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_decimal64_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     # Write signed Decimal128 coefficients as exact little-endian Int128 raw
@@ -1066,8 +1068,9 @@ module CrystalClick
       values : Slice(Array(Int128)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
     ) : String
-      write_uint64_array_decimal128_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_decimal128_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     # Write one immutable part with a sorted UInt64 key and exact Array(UUID)
@@ -1161,8 +1164,9 @@ module CrystalClick
       values : Slice(Array(Int32?)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
     ) : String
-      write_uint64_array_nullable_decimal32_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_nullable_decimal32_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     def self.write_uint64_array_nullable_decimal64_pair(
@@ -1173,8 +1177,9 @@ module CrystalClick
       values : Slice(Array(Int64?)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
     ) : String
-      write_uint64_array_nullable_decimal64_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_nullable_decimal64_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     def self.write_uint64_array_nullable_decimal128_pair(
@@ -1185,8 +1190,9 @@ module CrystalClick
       values : Slice(Array(Int128?)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
     ) : String
-      write_uint64_array_nullable_decimal128_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_nullable_decimal128_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     # Write signed Decimal256 coefficients in their exact 32-byte
@@ -1199,8 +1205,9 @@ module CrystalClick
       values : Slice(Array(Decimal256Value)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
     ) : String
-      write_uint64_array_decimal256_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_decimal256_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     # BASIC Array(Nullable(Decimal256)) keeps one zero-filled 32-byte nested
@@ -1213,8 +1220,9 @@ module CrystalClick
       values : Slice(Array(Decimal256Value?)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
     ) : String
-      write_uint64_array_nullable_decimal256_pair_internal(destination, key_name, keys, value_name, values, scale, rows_per_mark)
+      write_uint64_array_nullable_decimal256_pair_internal(destination, key_name, keys, value_name, values, scale, precision, rows_per_mark)
     end
 
     # Write BASIC Array(Nullable(UUID)); null slots retain a zero 16-byte
@@ -1703,8 +1711,9 @@ module CrystalClick
       values : Slice(Array(Array(Int32))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
     ) : String
-      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 9, "Int32", rows_per_mark)
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Int32", rows_per_mark)
     end
 
     # Write two Array levels over signed Decimal64 coefficients. Values are
@@ -1717,8 +1726,9 @@ module CrystalClick
       values : Slice(Array(Array(Int64))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
     ) : String
-      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 18, "Int64", rows_per_mark)
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Int64", rows_per_mark)
     end
 
     # Write two Array levels over signed Decimal128 coefficients. Values are
@@ -1731,8 +1741,9 @@ module CrystalClick
       values : Slice(Array(Array(Int128))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
     ) : String
-      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 38, "Int128", rows_per_mark)
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Int128", rows_per_mark)
     end
 
     # Decimal256 retains its exact signed two's-complement coefficient type.
@@ -1744,8 +1755,9 @@ module CrystalClick
       values : Slice(Array(Array(Decimal256Value))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
     ) : String
-      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 76, "Decimal256", rows_per_mark)
+      write_uint64_array_array_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Decimal256", rows_per_mark)
     end
 
     # Write two Array levels over Nullable Decimal32 coefficients. NULL leaves
@@ -1758,8 +1770,9 @@ module CrystalClick
       values : Slice(Array(Array(Int32?))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
     ) : String
-      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 9, "Int32", rows_per_mark)
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Int32", rows_per_mark)
     end
 
     def self.write_uint64_array_array_nullable_decimal64_pair(
@@ -1770,8 +1783,9 @@ module CrystalClick
       values : Slice(Array(Array(Int64?))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
     ) : String
-      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 18, "Int64", rows_per_mark)
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Int64", rows_per_mark)
     end
 
     def self.write_uint64_array_array_nullable_decimal128_pair(
@@ -1782,8 +1796,9 @@ module CrystalClick
       values : Slice(Array(Array(Int128?))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
     ) : String
-      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 38, "Int128", rows_per_mark)
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Int128", rows_per_mark)
     end
 
     def self.write_uint64_array_array_nullable_decimal256_pair(
@@ -1794,8 +1809,9 @@ module CrystalClick
       values : Slice(Array(Array(Decimal256Value?))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
     ) : String
-      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, 76, "Decimal256", rows_per_mark)
+      write_uint64_array_array_nullable_decimal_pair_internal(destination, key_name, keys, value_name, values, scale, precision, "Decimal256", rows_per_mark)
     end
 
     # Write one immutable part with a sorted UInt64 key and the exact
@@ -3432,62 +3448,67 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(BFloat16)", rows_per_mark)
     end
 
-    # Decimal32/64 retain signed scaled integers. ClickHouse normalizes their
-    # part declarations to Decimal(9, S) / Decimal(18, S).
+    # Decimal coefficients remain raw signed integers; precision and scale
+    # are preserved as exact semantic metadata.
     def self.write_uint64_decimal32_pair(
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Int32), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
     ) : String
-      raise ArgumentError.new("Decimal32 scale must be between 0 and 9") unless (0..9).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Decimal(9, #{scale})", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 4)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, decimal_type.type_name, rows_per_mark)
     end
 
     def self.write_uint64_decimal64_pair(
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Int64), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
     ) : String
-      raise ArgumentError.new("Decimal64 scale must be between 0 and 18") unless (0..18).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Decimal(18, #{scale})", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 8)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, decimal_type.type_name, rows_per_mark)
     end
 
     def self.write_uint64_nullable_decimal32_pair(
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Int32?), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
     ) : String
-      raise ArgumentError.new("Decimal32 scale must be between 0 and 9") unless (0..9).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(9, #{scale}))", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 4)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(#{decimal_type.type_name})", rows_per_mark)
     end
 
     def self.write_uint64_nullable_decimal64_pair(
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Int64?), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
     ) : String
-      raise ArgumentError.new("Decimal64 scale must be between 0 and 18") unless (0..18).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(18, #{scale}))", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 8)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(#{decimal_type.type_name})", rows_per_mark)
     end
 
-    # Decimal128 stores the signed Int128 coefficient unchanged. Its part
-    # declaration is normalized to Decimal(38, S) by ClickHouse.
+    # Decimal128 stores the signed Int128 coefficient unchanged.
     def self.write_uint64_decimal128_pair(
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Int128), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
     ) : String
-      raise ArgumentError.new("Decimal128 scale must be between 0 and 38") unless (0..38).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Decimal(38, #{scale})", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 16)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, decimal_type.type_name, rows_per_mark)
     end
 
     def self.write_uint64_nullable_decimal128_pair(
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Int128?), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
     ) : String
-      raise ArgumentError.new("Decimal128 scale must be between 0 and 38") unless (0..38).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(38, #{scale}))", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 16)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(#{decimal_type.type_name})", rows_per_mark)
     end
 
     # Decimal256 stores its signed two's-complement coefficient unchanged.
@@ -3495,18 +3516,20 @@ module CrystalClick
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Decimal256Value), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
     ) : String
-      raise ArgumentError.new("Decimal256 scale must be between 0 and 76") unless (0..76).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Decimal(76, #{scale})", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 32)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, decimal_type.type_name, rows_per_mark)
     end
 
     def self.write_uint64_nullable_decimal256_pair(
       destination : String, key_name : String, keys : Slice(UInt64),
       value_name : String, values : Slice(Decimal256Value?), scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
     ) : String
-      raise ArgumentError.new("Decimal256 scale must be between 0 and 76") unless (0..76).includes?(scale)
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(Decimal(76, #{scale}))", rows_per_mark)
+      decimal_type = decimal_type_for_width(precision, scale, 32)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(#{decimal_type.type_name})", rows_per_mark)
     end
 
     # Enum payloads retain a validated exact label/code declaration. Only
@@ -5032,9 +5055,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Int32)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal32_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 4)
       validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Int32")
 
       target = File.expand_path(destination)
@@ -5050,12 +5074,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Decimal(9, #{scale}))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_decimal32_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_decimal32_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5070,9 +5094,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Int32?)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal32_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 4)
       validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Int32")
 
       target = File.expand_path(destination)
@@ -5088,12 +5113,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(Decimal(9, #{scale})))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_nullable_decimal32_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_nullable_decimal32_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5108,9 +5133,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Int64)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal64_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 8)
       validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Int64")
 
       target = File.expand_path(destination)
@@ -5126,12 +5152,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Decimal(18, #{scale}))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_decimal64_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_decimal64_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5146,9 +5172,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Int64?)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal64_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 8)
       validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Int64")
 
       target = File.expand_path(destination)
@@ -5164,12 +5191,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(Decimal(18, #{scale})))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_nullable_decimal64_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_nullable_decimal64_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5184,9 +5211,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Int128)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal128_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 16)
       validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Int128")
 
       target = File.expand_path(destination)
@@ -5202,12 +5230,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Decimal(38, #{scale}))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_decimal128_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_decimal128_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5222,9 +5250,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Int128?)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal128_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 16)
       validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Int128")
 
       target = File.expand_path(destination)
@@ -5240,12 +5269,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(Decimal(38, #{scale})))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_nullable_decimal128_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_nullable_decimal128_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5260,9 +5289,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Decimal256Value)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal256_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 32)
       validate_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Decimal256", true)
 
       target = File.expand_path(destination)
@@ -5278,12 +5308,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Decimal(76, #{scale}))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5298,9 +5328,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Decimal256Value?)),
       scale : Int32,
+      precision : Int32,
       rows_per_mark : Int32,
     ) : String
-      validate_decimal256_array_scale(scale)
+      decimal_type = decimal_type_for_width(precision, scale, 32)
       validate_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, "Decimal256", true)
 
       target = File.expand_path(destination)
@@ -5316,12 +5347,12 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(Decimal(76, #{scale})))"))
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_nullable_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale)
+        validate_staged_array_nullable_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5340,7 +5371,7 @@ module CrystalClick
       physical_type : String,
       rows_per_mark : Int32,
     ) : String forall T
-      raise ArgumentError.new("Decimal Array(Array) scale must be in range 0..#{precision}") unless 0 <= scale <= precision
+      decimal_type = decimal_type_for_width(precision, scale, numeric_width(physical_type))
       validate_array_array_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, physical_type)
 
       target = File.expand_path(destination)
@@ -5356,8 +5387,7 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        decimal_type = "Decimal(#{precision}, #{scale})"
-        expected_type = "Array(Array(#{decimal_type}))"
+        expected_type = "Array(Array(#{decimal_type.type_name}))"
         write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
@@ -5557,7 +5587,7 @@ module CrystalClick
       physical_type : String,
       rows_per_mark : Int32,
     ) : String forall T
-      raise ArgumentError.new("Nullable Decimal Array(Array) scale must be in range 0..#{precision}") unless 0 <= scale <= precision
+      decimal_type = decimal_type_for_width(precision, scale, numeric_width(physical_type))
       validate_array_array_nullable_numeric_inputs(destination, key_name, keys, value_name, values, rows_per_mark, physical_type)
 
       target = File.expand_path(destination)
@@ -5573,8 +5603,7 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        decimal_type = "Decimal(#{precision}, #{scale})"
-        expected_type = "Array(Array(Nullable(#{decimal_type})))"
+        expected_type = "Array(Array(Nullable(#{decimal_type.type_name})))"
         write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
@@ -5688,20 +5717,37 @@ module CrystalClick
       end
     end
 
-    private def self.validate_decimal32_array_scale(scale : Int32) : Nil
-      raise ArgumentError.new("Decimal32 Array scale must be in range 0..9") unless 0 <= scale <= 9
+    private def self.decimal_type_for_width(precision : Int32, scale : Int32, storage_width : Int32) : DecimalType
+      # Preserve the legacy width-named entry points' scale diagnostics when
+      # callers retain their default precision. Interior precision uses the
+      # shared exact-P/S descriptor validation below.
+      maximum_precision = case storage_width
+                          when  4 then 9
+                          when  8 then 18
+                          when 16 then 38
+                          when 32 then 76
+                          else         0
+                          end
+      if precision == maximum_precision && (scale < 0 || scale > maximum_precision)
+        raise ArgumentError.new("Decimal#{storage_width * 8} scale must be between 0 and #{maximum_precision}")
+      end
+      decimal_type = DecimalType.new(precision, scale)
+      unless decimal_type.storage_width == storage_width
+        raise ArgumentError.new("Decimal precision does not match the selected raw coefficient width")
+      end
+      decimal_type
     end
 
-    private def self.validate_decimal64_array_scale(scale : Int32) : Nil
-      raise ArgumentError.new("Decimal64 Array scale must be in range 0..18") unless 0 <= scale <= 18
-    end
-
-    private def self.validate_decimal128_array_scale(scale : Int32) : Nil
-      raise ArgumentError.new("Decimal128 Array scale must be in range 0..38") unless 0 <= scale <= 38
-    end
-
-    private def self.validate_decimal256_array_scale(scale : Int32) : Nil
-      raise ArgumentError.new("Decimal256 Array scale must be in range 0..76") unless 0 <= scale <= 76
+    private def self.staged_decimal_type_for_width(precision : Int32, scale : Int32, storage_width : Int32) : DecimalType
+      decimal_type = begin
+        DecimalType.new(precision, scale)
+      rescue ArgumentError
+        raise CorruptPartError.new("staged Decimal precision or scale is invalid")
+      end
+      unless decimal_type.storage_width == storage_width
+        raise CorruptPartError.new("staged Decimal precision does not match the raw coefficient width")
+      end
+      decimal_type
     end
 
     private def self.write_uint64_array_uuid_pair_internal(
@@ -11069,14 +11115,14 @@ module CrystalClick
         raise UnsupportedFormatError.new("Nullable IPv6 writer requires exact Nullable(IPv6) metadata") unless type_name == "Nullable(IPv6)"
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Decimal256Value %}
-        raise UnsupportedFormatError.new("Decimal256 writer requires exact Decimal(76, S) metadata") unless WidePart.decimal256_scale(type_name)
+        raise UnsupportedFormatError.new("Decimal256 writer requires exact Decimal(P, S) metadata in the 39..76 precision band") unless WidePart.decimal256_scale(type_name)
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Decimal256Value? %}
-        raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(76, S)) metadata") unless WidePart.nullable_decimal256_scale(type_name)
+        raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(P, S)) metadata in the 39..76 precision band") unless WidePart.nullable_decimal256_scale(type_name)
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Int128 %}
         unless type_name == "Int128" || WidePart.decimal128_scale(type_name)
-          raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(38, S) metadata")
+          raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(P, S) metadata in the 19..38 precision band")
         end
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt128 %}
@@ -11096,7 +11142,7 @@ module CrystalClick
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Int128? %}
         unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
-          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
+          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Nullable(Decimal(P, S)) metadata in the 19..38 precision band")
         end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt128? %}
@@ -11145,14 +11191,14 @@ module CrystalClick
         raise UnsupportedFormatError.new("Nullable IPv6 writer requires exact Nullable(IPv6) metadata") unless type_name == "Nullable(IPv6)"
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Decimal256Value %}
-        raise UnsupportedFormatError.new("Decimal256 writer requires exact Decimal(76, S) metadata") unless WidePart.decimal256_scale(type_name)
+        raise UnsupportedFormatError.new("Decimal256 writer requires exact Decimal(P, S) metadata in the 39..76 precision band") unless WidePart.decimal256_scale(type_name)
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Decimal256Value? %}
-        raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(76, S)) metadata") unless WidePart.nullable_decimal256_scale(type_name)
+        raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(P, S)) metadata in the 39..76 precision band") unless WidePart.nullable_decimal256_scale(type_name)
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Int128 %}
         unless type_name == "Int128" || WidePart.decimal128_scale(type_name)
-          raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(38, S) metadata")
+          raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(P, S) metadata in the 19..38 precision band")
         end
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt128 %}
@@ -11172,7 +11218,7 @@ module CrystalClick
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Int128? %}
         unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
-          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
+          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Nullable(Decimal(P, S)) metadata in the 19..38 precision band")
         end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt128? %}
@@ -21379,7 +21425,8 @@ module CrystalClick
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      expected_type = "Array(Array(Decimal(#{precision}, #{scale})))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, numeric_width(physical_type))
+      expected_type = "Array(Array(#{decimal_type.type_name}))"
       unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested Decimal column metadata differs")
       end
@@ -21445,7 +21492,8 @@ module CrystalClick
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      expected_type = "Array(Array(Nullable(Decimal(#{precision}, #{scale}))))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, numeric_width(physical_type))
+      expected_type = "Array(Array(Nullable(#{decimal_type.type_name})))"
       unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested nullable Decimal column metadata differs")
       end
@@ -21499,14 +21547,15 @@ module CrystalClick
     end
 
     private def self.decimal_array_array_scale(type : String, precision : Int32) : Int32?
-      case precision
-      when 9
+      return nil unless (1..76).includes?(precision)
+      case DecimalType.new(precision, 0).storage_width
+      when 4
         WidePart.array_array_decimal32_scale(type)
-      when 18
+      when 8
         WidePart.array_array_decimal64_scale(type)
-      when 38
+      when 16
         WidePart.array_array_decimal128_scale(type)
-      when 76
+      when 32
         WidePart.array_array_decimal256_scale(type)
       else
         nil
@@ -21514,14 +21563,15 @@ module CrystalClick
     end
 
     private def self.nullable_decimal_array_array_scale(type : String, precision : Int32) : Int32?
-      case precision
-      when 9
+      return nil unless (1..76).includes?(precision)
+      case DecimalType.new(precision, 0).storage_width
+      when 4
         WidePart.array_array_nullable_decimal32_scale(type)
-      when 18
+      when 8
         WidePart.array_array_nullable_decimal64_scale(type)
-      when 38
+      when 16
         WidePart.array_array_nullable_decimal128_scale(type)
-      when 76
+      when 32
         WidePart.array_array_nullable_decimal256_scale(type)
       else
         nil
@@ -21733,6 +21783,7 @@ module CrystalClick
       values : Slice(Array(Int32)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 9,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -21740,7 +21791,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Decimal(9, #{scale}))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 4)
+      expected_type = "Array(#{decimal_type.type_name})"
       unless WidePart.array_decimal32_scale(expected_type) == scale
         raise CorruptPartError.new("staged Decimal32 Array scale or semantic declaration is invalid")
       end
@@ -21780,6 +21832,7 @@ module CrystalClick
       values : Slice(Array(Int32?)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 9,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -21787,7 +21840,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Nullable(Decimal(9, #{scale})))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 4)
+      expected_type = "Array(Nullable(#{decimal_type.type_name}))"
       unless WidePart.array_nullable_decimal32_scale(expected_type) == scale
         raise CorruptPartError.new("staged nullable Decimal32 Array scale or semantic declaration is invalid")
       end
@@ -21827,6 +21881,7 @@ module CrystalClick
       values : Slice(Array(Int64)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 18,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -21834,7 +21889,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Decimal(18, #{scale}))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 8)
+      expected_type = "Array(#{decimal_type.type_name})"
       unless WidePart.array_decimal64_scale(expected_type) == scale
         raise CorruptPartError.new("staged Decimal64 Array scale or semantic declaration is invalid")
       end
@@ -21874,6 +21930,7 @@ module CrystalClick
       values : Slice(Array(Int64?)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 18,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -21881,7 +21938,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Nullable(Decimal(18, #{scale})))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 8)
+      expected_type = "Array(Nullable(#{decimal_type.type_name}))"
       unless WidePart.array_nullable_decimal64_scale(expected_type) == scale
         raise CorruptPartError.new("staged nullable Decimal64 Array scale or semantic declaration is invalid")
       end
@@ -21921,6 +21979,7 @@ module CrystalClick
       values : Slice(Array(Int128)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 38,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -21928,7 +21987,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Decimal(38, #{scale}))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 16)
+      expected_type = "Array(#{decimal_type.type_name})"
       unless WidePart.array_decimal128_scale(expected_type) == scale
         raise CorruptPartError.new("staged Decimal128 Array scale or semantic declaration is invalid")
       end
@@ -21968,6 +22028,7 @@ module CrystalClick
       values : Slice(Array(Int128?)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 38,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -21975,7 +22036,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Nullable(Decimal(38, #{scale})))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 16)
+      expected_type = "Array(Nullable(#{decimal_type.type_name}))"
       unless WidePart.array_nullable_decimal128_scale(expected_type) == scale
         raise CorruptPartError.new("staged nullable Decimal128 Array scale or semantic declaration is invalid")
       end
@@ -22015,6 +22077,7 @@ module CrystalClick
       values : Slice(Array(Decimal256Value)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 76,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -22022,7 +22085,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Decimal(76, #{scale}))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 32)
+      expected_type = "Array(#{decimal_type.type_name})"
       unless WidePart.array_decimal256_scale(expected_type) == scale
         raise CorruptPartError.new("staged Decimal256 Array scale or semantic declaration is invalid")
       end
@@ -22062,6 +22126,7 @@ module CrystalClick
       values : Slice(Array(Decimal256Value?)),
       rows_per_mark : Int32,
       scale : Int32,
+      precision : Int32 = 76,
     ) : Nil
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -22069,7 +22134,8 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Nullable(Decimal(76, #{scale})))"
+      decimal_type = staged_decimal_type_for_width(precision, scale, 32)
+      expected_type = "Array(Nullable(#{decimal_type.type_name}))"
       unless WidePart.array_nullable_decimal256_scale(expected_type) == scale
         raise CorruptPartError.new("staged nullable Decimal256 Array scale or semantic declaration is invalid")
       end
@@ -24564,7 +24630,7 @@ module CrystalClick
         if WidePart.decimal256_scale(type_name)
           part.read_decimal256_raw_mark_range(column, mark_index, 1)
         else
-          raise UnsupportedFormatError.new("typed Decimal256 writer requires exact Decimal(76, S) metadata")
+          raise UnsupportedFormatError.new("typed Decimal256 writer requires exact Decimal(P, S) metadata in the 39..76 precision band")
         end
       {% elsif T == Bool %}
         part.read_bool_mark_range(column, mark_index, 1)
@@ -24634,7 +24700,7 @@ module CrystalClick
         elsif WidePart.decimal128_scale(type_name)
           part.read_decimal128_raw_mark_range(column, mark_index, 1)
         else
-          raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(38, S) metadata")
+          raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(P, S) metadata in the 19..38 precision band")
         end
       {% elsif T == UInt128 %}
         if type_name == "UInt128"
@@ -24823,7 +24889,7 @@ module CrystalClick
         if WidePart.nullable_decimal256_scale(type_name)
           part.read_nullable_decimal256_raw_mark_range(column, mark_index, 1)
         else
-          raise UnsupportedFormatError.new("typed Nullable Decimal256 writer requires exact Nullable(Decimal(76, S)) metadata")
+          raise UnsupportedFormatError.new("typed Nullable Decimal256 writer requires exact Nullable(Decimal(P, S)) metadata in the 39..76 precision band")
         end
       {% elsif T == Bool? %}
         part.read_nullable_bool_mark_range(column, mark_index, 1)
@@ -24893,7 +24959,7 @@ module CrystalClick
         elsif WidePart.nullable_decimal128_scale(type_name)
           part.read_nullable_decimal128_raw_mark_range(column, mark_index, 1)
         else
-          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Decimal(38, S) metadata")
+          raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Nullable(Decimal(P, S)) metadata in the 19..38 precision band")
         end
       {% elsif T == UInt128? %}
         if type_name == "Nullable(UInt128)"

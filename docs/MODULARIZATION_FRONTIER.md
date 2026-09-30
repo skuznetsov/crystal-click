@@ -446,3 +446,36 @@ DEBUG examples and fourteen pinned oracle launchers passed, with final
 format/syntax/diff checks. Scoped hostile review is ROBUST for the new owners
 and admitted profile. Full RELEASE, current-master runtime and the larger
 facade architecture are not established by these results.
+
+## W102 shared Decimal descriptor owners
+
+The standalone Decimal precision extension adds two concrete struct owners,
+one file each: `DecimalType` owns exact P/S identity, bounded canonical leaf
+parsing and the four physical-width bands; `DecimalColumnType` owns only the
+six admitted column shapes and catalog-only DDL normalization. The existing
+`WideTupleDecimalType` embeds the same immutable leaf descriptor and retains
+its public nominal-value, buffer and cached-name contract. This removes a
+duplicate precision/width law without forcing Tuple wrappers into raw scalar
+or Array APIs.
+
+Reader, writer, typed-table and offline-catalog facades delegate schema
+identity to these owners. Physical codecs, stream lifetime, selected-mark
+policy, budgets and staging remain under their existing owners. The new
+descriptor stores P/S only and derives width/name; this does not establish
+allocation, RSS or throughput improvement. Full facade decomposition and
+arbitrary recursive type composition remain open.
+
+Root executed 144 focused DEBUG and RELEASE examples each, 1,404 full DEBUG
+examples, the 72-core-profile bidirectional Decimal oracle with separate raw,
+statistics and empty/null controls, and ten unchanged regression oracles.
+All passed within the pinned physical profile; scoped hostile review is
+ROBUST. Full RELEASE and current-master executable parity remain unqualified.
+Exact source/runtime lineage, RED evidence, commands and residual boundaries
+are tracked in [the Decimal precision frontier](DECIMAL_PRECISION_FRONTIER.md).
+
+The reader is still 15,206 lines, writer 25,582, table 6,616 and catalog 5,315.
+Those are navigation counts, not coupling or performance measurements. The
+next cohesive extraction boundaries remain physical-stream lifetime/validation,
+leaf codecs, staging/read-write orchestration and table/catalog adapters, one
+concrete owner per file with behavior-preserving gates. This bounded W102
+change does not complete that larger architectural work.
