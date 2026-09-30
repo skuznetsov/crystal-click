@@ -2,6 +2,8 @@
 
 Status: W91 neutral payload ownership is VERIFIED below; compositional Tuple
 admission remains PROPOSED. No new Tuple shape is admitted by this document.
+W92 exact-Tuple empty-EOF repair is VERIFIED within its separate boundary
+below. Stock Default metadata profiles and generic Tuple remain PROPOSED.
 Continuation anchor: `3f09429`, with W90 debug/release and W80-W85 oracle
 verification recorded in `MODULARIZATION_FRONTIER.md`.
 
@@ -190,10 +192,10 @@ EOF, but `each_mark_range_bytes` has no corresponding Tuple empty-payload
 case. Both the exact Tuple read and raw-byte preflight call that range reader,
 even for zero expected bytes. The writer omits empty String frames, and its
 staged validator deliberately skips empty raw-frame readback. The cheapest
-next runtime falsifier is therefore a library-written one-row
+next runtime falsifier was therefore a library-written one-row
 `Tuple(a UInt64, b String)` with `{7_u64, ""}`, followed by full/ranged reads
-and raw-byte preflight. The source predicts the current EOF error; this probe
-has not been executed and is not a verified bug report.
+and raw-byte preflight. This was a source-only prediction in W91; W92's
+public-path red and bounded repair are recorded below.
 
 A future neutral physical-stream owner must derive and retain separate
 mark-EOF and range-EOF rules at admission, rather than silently unify them.
@@ -203,6 +205,57 @@ guard. Re-stat the file per operation, retain callback-scoped mmap/chunks and
 an operation-local decode workspace, and reuse checksum/bit helpers. Fixing
 the Tuple EOF mismatch is a separate compatibility action before or after
 that extraction, not an unannounced part of W91. Both routes remain PROPOSED.
+
+### W92 exact-Tuple empty-EOF execution seal
+
+At source `5c8b850`, `spec/wide_part_reader_tuple_empty_eof_spec.cr` ran through
+the public writer -> `open_typed` -> raw-byte preflight path. The command
+`crystal spec spec/wide_part_reader_tuple_empty_eof_spec.cr
+--link-flags='-fuse-ld=ld'` exited 1: four examples, three errors and the
+nonempty control passed. One empty row, five all-empty rows with a short final
+mark, and trailing empty marks after nonempty data all reached
+`empty payload range at EOF must select zero expected bytes`. Each test first
+verified published raw-file size and physical raw-mark offsets/row counts.
+This confirms the range-policy mismatch, not a generic Tuple admission gap.
+Those three red examples stopped at preflight, before their value-read
+assertions; source inspection showed both methods use the same range walker.
+
+Admitted change: in `WidePart#each_mark_range_bytes`, recognize only
+`#{@column}%2Eb` for the already admitted exact `Tuple(a UInt64, b String)`
+root as an empty payload stream, matching its existing mark admission.
+Keep the zero expected-byte requirement, zero decompressed offsets, exact EOF
+boundary, numeric/size-stream rules, root admission and metadata rejection.
+No writer bytes, public API, generic Tuple shape, Sparse serialization,
+metadata order or omitted-record policy changes belong to this slice.
+
+Risk: CAUTION (a shared corruption guard). Strongest failure: accidentally
+admitting a zero-byte stream when its size leaf demands nonzero bytes, or
+exempting the numeric/size leaves. Add a valid-frame-checksum counterexample
+with nonzero declared String bytes and empty raw data; both preflight and read
+must still raise `CorruptPartError`. Keep exact physical-file/mark assertions,
+the nonempty control and existing scalar-root/metadata rejection checks.
+
+Plan and ownership: production owner changes only the exact Tuple branch in
+`src/crystal_click/wide_part.cr`; spec owner adds the negative guard and gives
+the spec/helper names W92 identity. Root integrates Crystal all-empty reads
+into `scripts/check_tuple_oracle.sh` and records observed evidence here.
+Consumer inventory: `rg -n 'tuple_uint64_string_mark_range_raw_bytes|
+read_tuple_uint64_string_mark_range' src spec scripts` finds the exact reader
+methods and the table batch preflight/materialization consumers, W23 specs,
+and Tuple oracle. Both exact reader methods call the shared range walker;
+all other leaf readers retain their existing predicates. The corresponding
+mark policy already recognizes this exact raw stream.
+Do not extract the physical-stream owner in this bugfix.
+
+DoD: focused EOF, reader seam, W23 and writer Tuple specs in debug and release;
+full debug `crystal spec`; pinned `bash scripts/check_tuple_oracle.sh` with
+Crystal full/ranged all-empty equality as well as stock ATTACH/CHECK;
+touched-file format, shell syntax and `git diff --check`; scoped hostile
+review of the shared-guard change. Expected signal: all green, including
+nonzero-size/empty-raw rejection. W91's earlier full release run is not
+post-W92 verification. Rollback: one atomic bugfix commit, or discard only
+this slice's owned edits before commit. Evidence decays on range/mark policy,
+Tuple consumers/metadata, fixture, compiler or pinned-binary changes.
 
 A separate writer inventory found 170 public `write_*` entrypoints, all
 constrained to a UInt64 key and one top-level payload column, including the
@@ -285,14 +338,113 @@ aggregate import boundary. Same-lineage reviews are correlated; root's
 mechanical comparison and executed suites/oracles are the additional evidence.
 Direct internal-file imports, mutable caller inputs during synchronous writes,
 generic Tuple admission, Sparse/omitted/reordered metadata compatibility and
-current-master runtime compatibility are outside that verdict. The predicted
-all-empty Tuple reader EOF mismatch above remains an unexecuted next falsifier;
-the empty-payload seam tests and stock writer acceptance do not close it.
+current-master runtime compatibility are outside that verdict. At W91 closure
+the predicted all-empty Tuple reader EOF mismatch was still unexecuted;
+the empty-payload seam tests and stock writer acceptance did not close it.
+W92 subsequently reproduced that counterexample as recorded above.
 
 Evidence decays if owner bodies, root admission/range policy, require order,
 Crystal semantics, fixtures or the pinned executable/profile change. Re-run
 the affected focused/full/oracle checks rather than transferring this result
 to new types. The full type/MV/projection goal and matched slowdown <=10%
-condition remain open. Next: prove or refute the exact Tuple empty-EOF
-counterexample, then separately admit stock Default metadata profiles before
-generic Tuple expansion. Push still requires new authority.
+condition remain open. The W91 return pointer was the exact Tuple empty-EOF
+counterexample; after its separate W92 verification, next is to admit stock
+Default metadata profiles separately before generic Tuple expansion. Push
+still requires new authority.
+
+## W92 observed result (2026-09-30 UTC)
+
+State: VERIFIED for the existing exact `Tuple(a UInt64, b String)` profile.
+Lineage is `5c8b850` plus the two-line range-policy change, the six-example
+public-path EOF spec and the oracle's post-ATTACH Crystal read checks. Only
+the raw `%2Eb` leaf gains empty-EOF recognition; zero expected bytes, zero
+decompressed offsets, exact EOF, root/metadata admission, numeric/size leaves
+and writer bytes remain unchanged. All-empty and trailing-empty selected
+ranges now return their exact values and zero-byte preflight results.
+
+The first expanded debug attempt did not establish the corruption guards:
+two fixture setup errors occurred because its checksum refresh tried to
+decode a legal zero-byte compressed stream. That invalid probe was corrected
+in the spec only. Empty compressed entries must declare zero uncompressed
+bytes and use the empty raw hash without decompression; nonempty entries are
+still decoded. The corrected fixture changes the first String size from 0
+to 1, re-encodes a valid CityHash-protected frame with unchanged file/frame
+length, refreshes part checksum records, and retains the zero-byte raw file
+and marks. Both public preflight and value read then reject with the precise
+EOF guard error. Separate numeric/size mark mutations reject at mark parsing;
+they do not dynamically test a numeric exemption in the range walker.
+
+Observed DoD on frozen production/spec/oracle source:
+
+- Focused debug: 23 examples, zero failures/errors/pending (61.62 ms test
+  execution). Focused release: the same 23 examples, zero failures/errors/
+  pending (48.61 ms). Compilation is excluded; these are not benchmarks.
+- Full debug: 1,151 examples, zero failures/errors/pending (35.46 s test
+  execution). The linker emitted the existing duplicate `-lc` warning.
+- Pinned `26.7.1.1315` Tuple oracle passed: stock-created admitted Default
+  full/mark-range reads, retained reordered/omitted/Sparse rejection controls,
+  stock ATTACH/CHECK and full/key-range byte equality for library-written
+  parts, plus Crystal full/ranged all-empty reads after stock ATTACH.
+- Touched Crystal format, shell syntax and diff whitespace checks passed.
+  No post-W92 full release suite was declared or run; W91's full release
+  evidence is not transferred to this changed range policy.
+
+Commands (SDK/temporary directory are as in W91):
+
+```sh
+export CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w92-tuple-empty-red-cache
+crystal spec spec/wide_part_reader_tuple_empty_eof_spec.cr \
+  spec/wide_part_reader_payload_seam_spec.cr \
+  spec/wide_part_reader_w23_spec.cr spec/wide_part_writer_tuple_spec.cr \
+  --link-flags='-fuse-ld=ld'
+crystal spec spec/wide_part_reader_tuple_empty_eof_spec.cr \
+  spec/wide_part_reader_payload_seam_spec.cr \
+  spec/wide_part_reader_w23_spec.cr spec/wide_part_writer_tuple_spec.cr \
+  --release --link-flags='-fuse-ld=ld'
+CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w88-cache \
+  crystal spec --link-flags='-fuse-ld=ld'
+bash scripts/check_tuple_oracle.sh
+crystal tool format --check src/crystal_click/wide_part.cr \
+  spec/wide_part_reader_tuple_empty_eof_spec.cr
+bash -n scripts/check_tuple_oracle.sh
+git diff --check
+```
+
+Scoped hostile source review returned ROBUST for the exact EOF exception,
+not for broader types. Same-lineage review is correlated; root independently
+inspected the exact diff and executed the regression/oracle gates. A selected
+range does not promise to validate payload corruption confined to unselected
+marks. Stock-created all-empty Sparse remains rejected; library-written
+Default acceptance does not prove stock all-empty Default compatibility.
+The evidence decays on the W92 seal's range/mark/admission/compiler/fixture/
+binary changes and must be refreshed at those boundaries.
+
+### Continuation capsule
+
+Active goal: complete type read/write compatibility and MV/projection
+frontiers before performance work; the matched <=10% slowdown condition is
+still open. W92 closes only the exact Tuple EOF mismatch. The next local
+frontier is W93 Default metadata admission, still PROPOSED: two unique records
+matched by the exact key/payload name set regardless of top-level order, and
+exact `columns: []` as a separate AlwaysDefault profile. Missing, partial,
+duplicate, unexpected and Sparse profiles remain rejected. Preserve root
+fields/version, nested String version, schema, child count/order and physical
+streams. Anonymous Tuple child records carry no names: swapping identical
+records is not a meaningful detectable child-order falsifier; reversed schema
+is. Start with real stock reordered/ratio-1.0 parts and full/ranged byte
+equality, not hand-edited positive metadata. The strongest new negative is
+a stock Sparse part with its records erased and valid checksum refresh,
+which must still fail the exact Default physical-stream inventory.
+
+Next source/spec pointers: `validate_tuple_uint64_string_serialization` in
+`wide_part.cr`, the current stock-profile rejection helpers in
+`check_tuple_oracle.sh`, and the fresh source's
+`SerializationInfoByName::writeJSON`/AlwaysDefault constructor in
+`SerializationInfo.cpp`. Fresh master can emit optional
+`exact_num_defaults: true` (`SerializationInfo::writeJSONFields`); the current
+exact metadata-key sets reject it. That is a separate unadmitted profile,
+not evidence that W93's pinned binary covers master. No W93 edits or probes
+have been executed. In-scope local implementation/tests/atomic commits remain
+authorized; push, binary installation and external data mutation do not.
+All W92 heavy processes are terminal; the Qwen resource window was released
+at 03:55 UTC. Check its latest explicit release before the next heavy launch.

@@ -259,6 +259,18 @@ end
 raise "all-empty Tuple String marks did not repeat offset zero: #{empty_offsets.inspect}" unless empty_offsets == [0_u64, 0_u64, 0_u64, 0_u64]
 check_tuple_rows(binary, store, "tuple_writer_all_empty", empty_keys, empty_values, empty_keys[1, 4], empty_values[1, 4])
 
+# Stock acceptance of a library-written part does not imply that the library
+# can read it. Exercise the exact zero-byte raw stream after stock ATTACH too.
+empty_reader = CrystalClick::WidePart.open_typed(File.join(empty_data_path, "all_1_1_0"), "payload")
+raise "all-empty Crystal mark rows differ" unless empty_reader.mark_row_counts == [2_u64, 2_u64, 1_u64]
+raise "all-empty Crystal full raw-byte preflight differs" unless empty_reader.tuple_uint64_string_mark_range_raw_bytes("payload", 0, 3) == 0_u64
+raise "all-empty Crystal full Tuple values differ" unless empty_reader.read_tuple_uint64_string_mark_range("payload", 0, 3) == empty_values
+[{0, 1, 0, 2}, {1, 1, 2, 2}, {2, 1, 4, 1}, {1, 2, 2, 3}].each do |first_mark, mark_count, first_row, row_count|
+  raise "all-empty Crystal ranged raw-byte preflight differs" unless empty_reader.tuple_uint64_string_mark_range_raw_bytes("payload", first_mark, mark_count) == 0_u64
+  actual_values = empty_reader.read_tuple_uint64_string_mark_range("payload", first_mark, mark_count)
+  raise "all-empty Crystal ranged Tuple values differ" unless actual_values == empty_values[first_row, row_count]
+end
+
 # Rejected malformed input must not publish either a destination or leftover
 # sibling staging directory.
 invalid_part = File.join(ENV.fetch("INVALID_PARENT"), "unsorted")
@@ -277,7 +289,7 @@ rescue error : ArgumentError
   raise "malformed Tuple writer left staged artifacts" unless Dir.children(ENV.fetch("INVALID_PARENT")).empty?
 end
 
-puts "PASS Tuple reader/writer: admitted stock-created -> Crystal full/mark-range RowBinary, strict scalar roots and rejected reordered/omitted/sparse metadata profiles; Crystal-written -> stock attached full/key-range RowBinary, binary and empty strings, independent [2,2,2,1] marks, zero-byte all-empty stream, CHECK TABLE, and malformed-input no-publication"
+puts "PASS Tuple reader/writer: admitted stock-created -> Crystal full/mark-range RowBinary, strict scalar roots and rejected reordered/omitted/sparse metadata profiles; Crystal-written -> stock attached full/key-range RowBinary, binary and empty strings, independent [2,2,2,1] marks, zero-byte all-empty stream read full/ranged by Crystal after ATTACH, CHECK TABLE, and malformed-input no-publication"
 CRYSTAL
 
 printf 'PASS Tuple reader/writer oracle on ClickHouse %s\n' "$ACTUAL_VERSION"

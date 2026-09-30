@@ -14833,6 +14833,8 @@ module CrystalClick
                                stream.name == "#{@column}%2Ekeys.size" || stream.name == "#{@column}%2Ekeys" ||
                                  stream.name == "#{@column}%2Evalues.null" || stream.name == "#{@column}%2Evalues.size" ||
                                  stream.name == "#{@column}%2Evalues"
+                             elsif WidePart.supports_tuple_uint64_string_type?(@column_type)
+                               stream.name == "#{@column}%2Eb"
                              else
                                stream.name == @column && (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type))
                              end
