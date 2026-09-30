@@ -100,8 +100,6 @@ describe "W96 named numeric Tuple plan red" do
       "Tuple()",
       "Tuple(Int8)",
       "Tuple(value Nullable(Bool))",
-      "Tuple(value Date)",
-      "Tuple(value DateTime64(3))",
       "Tuple(value Decimal(9, 2))",
       "Tuple(value Nullable(Int8))",
       "Tuple(value Array(Int8))",

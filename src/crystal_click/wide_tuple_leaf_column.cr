@@ -2,21 +2,24 @@ module CrystalClick
   # One owned named leaf buffer. Sibling row alignment is intentionally a
   # writer preflight concern, so independently prepared columns can differ.
   class WideTupleLeafColumn
-    alias Value = WideTupleNumericType::Value | WideTupleIdentifierType::Value | Bool | String
-    alias Buffer = WideTupleNumericType::Buffer | WideTupleIdentifierType::Buffer | Array(Bool) | Array(String)
+    alias Value = WideTupleNumericType::Value | WideTupleIdentifierType::Value | WideTupleTemporalType::Value | Bool | String
+    alias Buffer = WideTupleNumericType::Buffer | WideTupleIdentifierType::Buffer | WideTupleTemporalType::Buffer | Array(Bool) | Array(String)
 
     @name : String
     @values : Buffer
+    @temporal_type_name : String?
 
     # Preserve the original constructor overloads and their union dispatch.
     def initialize(name : String, values : Array(UInt64))
       @name = String.new(name.to_slice)
       @values = values.dup
+      @temporal_type_name = nil
     end
 
     def initialize(name : String, values : Array(String))
       @name = String.new(name.to_slice)
       @values = values.map { |value| String.new(value.to_slice) }
+      @temporal_type_name = nil
     end
 
     # A closed union constructor is used by internal immutable-copy paths.
@@ -24,6 +27,17 @@ module CrystalClick
     # alias to a caller-owned Array or String.
     def initialize(name : String, values : Buffer)
       @name = String.new(name.to_slice)
+      reject_temporal_buffer!(values)
+      @values = copy_values(values)
+      @temporal_type_name = nil
+    end
+
+    # Temporal buffers require explicit semantic metadata, including when
+    # empty, because several wrappers share raw carrier widths.
+    def initialize(name : String, exact_type : String, values : WideTupleTemporalType::Buffer)
+      WideTupleTemporalType.validate_buffer!(exact_type, values)
+      @name = String.new(name.to_slice)
+      @temporal_type_name = String.new(exact_type.to_slice)
       @values = copy_values(values)
     end
 
@@ -32,6 +46,7 @@ module CrystalClick
     def initialize(name : String, values : Array(T)) forall T
       @name = String.new(name.to_slice)
       @values = copy_allowed_array(values)
+      @temporal_type_name = nil
     end
 
     def name : String
@@ -39,6 +54,9 @@ module CrystalClick
     end
 
     def type_name : String
+      if temporal_type_name = @temporal_type_name
+        return String.new(temporal_type_name.to_slice)
+      end
       values = @values
       if values.is_a?(Array(String))
         String.new("String".to_slice)
@@ -87,6 +105,12 @@ module CrystalClick
         raise UnsupportedFormatError.new("Tuple leaf is not Bool") unless values.is_a?(Array(Bool))
         values[index]
       {% elsif T == UUIDValue || T == IPv4Value || T == IPv6Value %}
+        values = @values
+        unless values.is_a?(Array(T))
+          raise UnsupportedFormatError.new("Tuple leaf does not match requested exact type")
+        end
+        values[index]
+      {% elsif T == DateValue || T == Date32Value || T == DateTimeValue || T == DateTime64Value || T == TimeValue || T == Time64Value %}
         values = @values
         unless values.is_a?(Array(T))
           raise UnsupportedFormatError.new("Tuple leaf does not match requested exact type")
@@ -145,6 +169,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("Tuple leaf does not match requested exact type")
         end
         values.dup
+      {% elsif T == DateValue || T == Date32Value || T == DateTimeValue || T == DateTime64Value || T == TimeValue || T == Time64Value %}
+        values = @values
+        unless values.is_a?(Array(T))
+          raise UnsupportedFormatError.new("Tuple leaf does not match requested exact type")
+        end
+        values.dup
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
                  T == Int128 || T == UInt128 || T == Int256Value || T == UInt256Value ||
@@ -176,7 +206,11 @@ module CrystalClick
     # Public immutable leaf objects may be retained by a result container;
     # copy remains explicit for callers that require a separate owned value.
     def owned_copy : WideTupleLeafColumn
-      WideTupleLeafColumn.new(@name, @values)
+      if temporal_type_name = @temporal_type_name
+        WideTupleLeafColumn.new(@name, temporal_type_name, @values.as(WideTupleTemporalType::Buffer))
+      else
+        WideTupleLeafColumn.new(@name, @values)
+      end
     end
 
     private def copy_values(values : Buffer) : Buffer
@@ -185,6 +219,10 @@ module CrystalClick
       elsif values.is_a?(Array(Bool))
         values.dup
       elsif values.is_a?(Array(UUIDValue)) || values.is_a?(Array(IPv4Value)) || values.is_a?(Array(IPv6Value))
+        values.dup
+      elsif values.is_a?(Array(DateValue)) || values.is_a?(Array(Date32Value)) ||
+            values.is_a?(Array(DateTimeValue)) || values.is_a?(Array(DateTime64Value)) ||
+            values.is_a?(Array(TimeValue)) || values.is_a?(Array(Time64Value))
         values.dup
       else
         copy_numeric_values(values.as(WideTupleNumericType::Buffer))
@@ -198,6 +236,8 @@ module CrystalClick
         values.dup
       {% elsif T == UUIDValue || T == IPv4Value || T == IPv6Value %}
         values.dup
+      {% elsif T == DateValue || T == Date32Value || T == DateTimeValue || T == DateTime64Value || T == TimeValue || T == Time64Value %}
+        raise ArgumentError.new("temporal Tuple leaf requires exact type metadata")
       {% elsif T == Int8 || T == UInt8 || T == Int16 || T == UInt16 ||
                  T == Int32 || T == UInt32 || T == Int64 || T == UInt64 ||
                  T == Int128 || T == UInt128 || T == Int256Value || T == UInt256Value ||
@@ -210,6 +250,15 @@ module CrystalClick
 
     private def identifier_buffer?(values : Buffer) : Bool
       values.is_a?(Array(UUIDValue)) || values.is_a?(Array(IPv4Value)) || values.is_a?(Array(IPv6Value))
+    end
+
+    private def reject_temporal_buffer!(values : Buffer) : Nil
+      if values.is_a?(Array(DateValue)) || values.is_a?(Array(Date32Value)) ||
+         values.is_a?(Array(DateTimeValue)) || values.is_a?(Array(DateTime64Value)) ||
+         values.is_a?(Array(TimeValue)) || values.is_a?(Array(Time64Value))
+        raise ArgumentError.new("temporal Tuple leaf requires exact type metadata")
+      end
+      nil
     end
 
     private def copy_numeric_values(values : WideTupleNumericType::Buffer) : WideTupleNumericType::Buffer

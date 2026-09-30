@@ -432,6 +432,9 @@ module CrystalClick
         ->(stage : String, column : String, values : WideTupleIdentifierType::Buffer, mark_size : Int32, leaf_type_name : String) {
           write_tuple_identifier_stream(stage, column, values, mark_size, leaf_type_name)
         },
+        ->(stage : String, column : String, values : WideTupleTemporalType::Buffer, mark_size : Int32, leaf_type_name : String) {
+          write_tuple_temporal_stream(stage, column, values, mark_size, leaf_type_name)
+        },
         ->(stage : String, values : Slice(UInt64), mark_size : Int32) {
           write_primary_index(stage, values, mark_size)
         },
@@ -499,6 +502,30 @@ module CrystalClick
           stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
         )
       end
+    end
+
+    private def self.write_tuple_temporal_stream(
+      stage : String,
+      column : String,
+      values : WideTupleTemporalType::Buffer,
+      rows_per_mark : Int32,
+      type_name : String,
+    ) : Array(ChecksumRecord)
+      WideTupleTemporalType.validate_buffer!(type_name, values)
+      temporal_width = WideTupleTemporalType.width(type_name) ||
+                       raise UnsupportedFormatError.new("Tuple temporal leaf type is unsupported")
+      unless temporal_width == numeric_width(type_name)
+        raise UnsupportedFormatError.new("Tuple temporal leaf width does not match its exact type")
+      end
+      {% for temporal_type in [DateValue, Date32Value, DateTimeValue, DateTime64Value, TimeValue, Time64Value] %}
+        if values.is_a?(Array({{temporal_type}}))
+          typed_values = values.as(Array({{temporal_type}}))
+          return write_typed_numeric_stream(
+            stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+          )
+        end
+      {% end %}
+      raise UnsupportedFormatError.new("Tuple temporal leaf buffer is unsupported")
     end
 
     # Write one sorted UInt64 key and the exact JSON(a UInt64, b String)
@@ -11410,6 +11437,12 @@ module CrystalClick
         bytes[offset] = CrystalClick::BoolValueCodec.encode(value)
       {% elsif T == BFloat16Value %}
         2.times { |index| bytes[offset + index] = ((value.bits >> (index * 8)) & 0xff_u16).to_u8 }
+      {% elsif T == DateValue || T == Date32Value || T == DateTimeValue ||
+                 T == DateTime64Value || T == TimeValue || T == Time64Value %}
+        # Temporal Tuple wrappers keep nominal identity and exact scale at the
+        # API boundary; their raw carrier reuses the existing LE primitive
+        # encoder rather than duplicating endian logic.
+        write_typed_numeric_le(bytes, offset, value.raw)
       {% elsif T == UInt8 %}
         bytes[offset] = value
       {% elsif T == UInt16 %}

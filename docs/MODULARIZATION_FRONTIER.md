@@ -24,6 +24,43 @@ new bidirectional stock oracle and seven unchanged regression oracles passed.
 Root's scoped adversarial verdict and residual limits are recorded in
 `IDENTIFIER_TUPLE_FRONTIER.md`; the larger facade refactor remains open.
 
+W100 extends the same named-flat Tuple contracts to the raw temporal family.
+Its six immutable value structs each have their own file, with one cohesive
+temporal identity/parameter owner. The compatibility evidence and exclusions
+are tracked separately in `TEMPORAL_TUPLE_FRONTIER.md`. Focused DEBUG/RELEASE
+(259 examples each), full DEBUG (1,348 examples), the bidirectional temporal
+oracle and eight unchanged regression oracles passed. Root's scoped verdict
+is ROBUST; this is not completion of the larger facade refactor.
+
+## W100 ownership boundary
+
+`DateValue`, `Date32Value`, `DateTimeValue`, `DateTime64Value`, `TimeValue`
+and `Time64Value` retain nominal identity rather than relabeling UInt16,
+Int32, UInt32 or Int64. Scaled values carry validated precision with their
+raw ticks. `src/crystal_click/wide_tuple_temporal_type.cr` owns the closed
+declarations, exact parameters, physical widths, actual owned slot sizes,
+raw/precision equality, buffer compatibility and qualified raw-zero storage
+default predicate. Calendar conversion and byte encoding do not belong to
+this owner; temporal values do not enter `WideTupleNumericType`.
+
+`WideTupleLeafColumn` retains exact metadata even for empty temporal buffers;
+the existing plan owns streams and aggregate charges. `TupleReader` and
+`TuplePartWriter` receive one temporal callback each and reuse the existing
+primitive LE codecs through narrow facade adapters. The writer takes one
+owned values snapshot, validates every row/precision before staging and
+checks exact nominal values during staged readback. Table/catalog continue
+through `WideTupleColumnData` and the single `WideTupleRow`; no production
+table/catalog edits, per-arity class or Cartesian combination union are added.
+
+At the frozen W100 production source, reader/writer facades contain 15,301
+and 25,359 lines, with table/catalog at 6,638 and 5,309. These navigation
+counts are not evidence of lower coupling, lower memory or faster execution.
+The larger facade decomposition, physical-stream lifetime/validation owner,
+cohesive leaf-codec extraction and table/catalog orchestration remain open.
+The older Array(Map) intermediate-file-open cleanup concern and bounded
+Tuple readback allocation are unchanged. Each future extraction still needs
+a behavior-preserving contract and one concrete owner per file.
+
 ## W99 ownership boundary
 
 `src/crystal_click/wide_tuple_identifier_type.cr` owns the closed UUID/IPv4/

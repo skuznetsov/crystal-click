@@ -42,6 +42,11 @@ module CrystalClick
               records.concat(infrastructure.write_identifier_stream(
                 stage, logical_name, values.as(WideTupleIdentifierType::Buffer), input.rows_per_mark, field.type_name
               ))
+            when Array(DateValue), Array(Date32Value), Array(DateTimeValue),
+                 Array(DateTime64Value), Array(TimeValue), Array(Time64Value)
+              records.concat(infrastructure.write_temporal_stream(
+                stage, logical_name, values.as(WideTupleTemporalType::Buffer), input.rows_per_mark, field.type_name
+              ))
             else
               records.concat(infrastructure.write_numeric_stream(
                 stage, logical_name, values.as(WideTupleNumericType::Buffer), input.rows_per_mark, field.type_name
@@ -155,19 +160,24 @@ module CrystalClick
         # before staging; this logical charge is not a peak-memory limit.
         keys_copy = Array(UInt64).new(keys.size) { |index| keys[index] }
         leaf_buffers = [] of TupleLeafBuffers
-        columns.each do |column|
+        columns.each_with_index do |column, index|
           if column.type_name == "UInt64"
             leaf_buffers << column.uint64_values
           elsif column.type_name == "String"
             leaf_buffers << infrastructure.copy_string_values(column)
           else
-            leaf_buffers << column.values
+            values = column.values
+            field_type = fields[index].type_name
+            if WideTupleTemporalType.width(field_type)
+              WideTupleTemporalType.validate_buffer!(field_type, values.as(WideTupleTemporalType::Buffer))
+            end
+            leaf_buffers << values
           end
         end
 
         columns_metadata = columns_metadata(key_name, value_name, type_plan)
         substreams_metadata = substreams_metadata(key_name, value_name, type_plan)
-        serialization_metadata = serialization_metadata(key_name, keys_copy, value_name, leaf_buffers)
+        serialization_metadata = serialization_metadata(key_name, keys_copy, value_name, leaf_buffers, fields)
         validate_metadata_limits(columns_metadata, substreams_metadata, serialization_metadata)
         validate_checksums_file_budget(
           logical_streams, compressed_sizes, raw_sizes, mark_file_size,
@@ -348,13 +358,25 @@ module CrystalClick
         keys : Array(UInt64),
         value_name : String,
         leaf_buffers : Array(TupleLeafBuffers),
+        fields : Array(WideTupleField),
       ) : String
         rows = keys.size
         all_payload_defaults = Array(Bool).new(rows, true)
         child_defaults = [] of Int32
-        leaf_buffers.each do |buffer|
+        leaf_buffers.each_with_index do |buffer, index|
           defaults = 0
           case buffer
+          when Array(DateValue), Array(Date32Value), Array(DateTimeValue),
+               Array(DateTime64Value), Array(TimeValue), Array(Time64Value)
+            field_type = fields[index].type_name
+            unless WideTupleTemporalType.width(field_type)
+              raise ArgumentError.new("Tuple temporal buffer does not match declared field type")
+            end
+            temporal_buffer = buffer.as(WideTupleTemporalType::Buffer)
+            WideTupleTemporalType.validate_buffer!(field_type, temporal_buffer)
+            # The owner's predicate uses ClickHouse's observed raw-zero
+            # storage default, including Date32 (not SQL getDefault).
+            defaults = temporal_default_count(temporal_buffer, all_payload_defaults)
           when Array(String)
             buffer.each_with_index do |value, row|
               if value.empty?
@@ -407,6 +429,21 @@ module CrystalClick
         defaults = 0
         buffer.each_with_index do |value, row|
           if WideTupleIdentifierType.is_default?(value)
+            defaults += 1
+          else
+            all_payload_defaults[row] = false
+          end
+        end
+        defaults
+      end
+
+      private def self.temporal_default_count(
+        buffer : WideTupleTemporalType::Buffer,
+        all_payload_defaults : Array(Bool),
+      ) : Int32
+        defaults = 0
+        buffer.each_with_index do |value, row|
+          if WideTupleTemporalType.is_default?(value)
             defaults += 1
           else
             all_payload_defaults[row] = false
@@ -569,6 +606,12 @@ module CrystalClick
             unless identifier_values_match?(expected_identifier, actual, input.type_plan.fields[index].type_name)
               raise CorruptPartError.new("staged Tuple identifier leaf readback differs")
             end
+          when Array(DateValue), Array(Date32Value), Array(DateTimeValue),
+               Array(DateTime64Value), Array(TimeValue), Array(Time64Value)
+            expected_temporal = expected.as(WideTupleTemporalType::Buffer)
+            unless temporal_values_match?(expected_temporal, actual, input.type_plan.fields[index].type_name)
+              raise CorruptPartError.new("staged Tuple temporal leaf readback differs")
+            end
           else
             expected_numeric = expected.as(WideTupleNumericType::Buffer)
             unless numeric_values_match?(expected_numeric, actual, input.type_plan.fields[index].type_name)
@@ -611,6 +654,24 @@ module CrystalClick
           else
             return false
           end
+        end
+        true
+      end
+
+      private def self.temporal_values_match?(
+        expected : WideTupleTemporalType::Buffer,
+        actual : WideTupleLeafColumn,
+        expected_type_name : String,
+      ) : Bool
+        return false unless actual.type_name == expected_type_name && actual.size == expected.size
+        expected.size.times do |row|
+          actual_value = case value = actual.value_at(row)
+                         when DateValue, Date32Value, DateTimeValue, DateTime64Value, TimeValue, Time64Value
+                           value
+                         else
+                           return false
+                         end
+          return false unless WideTupleTemporalType.same_bits?(expected[row], actual_value)
         end
         true
       end

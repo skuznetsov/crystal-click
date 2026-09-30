@@ -14588,7 +14588,7 @@ module CrystalClick
     private def ensure_compositional_tuple_column(column : String) : WideTupleTypePlan
       ensure_column(column)
       WideTupleTypePlan.for_type(@column_type) ||
-        raise UnsupportedFormatError.new("compositional Tuple accessor requires named numeric/identifier/Bool/String leaves")
+        raise UnsupportedFormatError.new("compositional Tuple accessor requires named supported scalar leaves")
     end
 
     private def tuple_reader(plan : WideTupleTypePlan, column : String) : TupleReader
@@ -14618,6 +14618,9 @@ module CrystalClick
         },
         ->(name : String, type_name : String, bytes : Bytes, rows : UInt64, width : Int32) {
           decode_tuple_identifier_leaf(name, type_name, bytes, rows, width)
+        },
+        ->(name : String, type_name : String, bytes : Bytes, rows : UInt64, width : Int32) {
+          decode_tuple_temporal_leaf(name, type_name, bytes, rows, width)
         }
       )
     end
@@ -14683,6 +14686,60 @@ module CrystalClick
         {% end %}
       end
       WideTupleLeafColumn.new(name, values)
+    end
+
+    # Temporal Tuple leaves reuse the established exact-width little-endian
+    # primitive decoders, then retain semantic type and precision in nominal
+    # wrappers instead of exposing or relabeling the raw carrier.
+    private def decode_tuple_temporal_leaf(
+      name : String,
+      type_name : String,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+    ) : WideTupleLeafColumn
+      expected_width = WideTupleTemporalType.width(type_name) ||
+                       raise(CorruptPartError.new("Tuple temporal stream has no fixed width"))
+      raise CorruptPartError.new("Tuple temporal stream width does not match schema") unless width == expected_width
+      if rows > Int32::MAX.to_u64 // expected_width.to_u64 ||
+         bytes.size.to_u64 != rows * expected_width.to_u64
+        raise CorruptPartError.new("Tuple temporal stream byte count does not match rows")
+      end
+
+      values = if type_name == "Date"
+                 Array(DateValue).new(rows.to_i) do |index|
+                   DateValue.new(decode_numeric_value(bytes, index * width, UInt16))
+                 end
+               elsif type_name == "Date32"
+                 Array(Date32Value).new(rows.to_i) do |index|
+                   Date32Value.new(decode_numeric_value(bytes, index * width, Int32))
+                 end
+               elsif type_name == "DateTime"
+                 Array(DateTimeValue).new(rows.to_i) do |index|
+                   DateTimeValue.new(decode_numeric_value(bytes, index * width, UInt32))
+                 end
+               elsif type_name == "Time"
+                 Array(TimeValue).new(rows.to_i) do |index|
+                   TimeValue.new(decode_numeric_value(bytes, index * width, Int32))
+                 end
+               elsif type_name.starts_with?("DateTime64(")
+                 precision = WideTupleTemporalType.precision(type_name) ||
+                             raise(CorruptPartError.new("Tuple DateTime64 precision is not canonical"))
+                 Array(DateTime64Value).new(rows.to_i) do |index|
+                   raw = decode_numeric_value(bytes, index * width, Int64)
+                   DateTime64Value.new(raw, precision.to_i)
+                 end
+               elsif type_name.starts_with?("Time64(")
+                 precision = WideTupleTemporalType.precision(type_name) ||
+                             raise(CorruptPartError.new("Tuple Time64 precision is not canonical"))
+                 Array(Time64Value).new(rows.to_i) do |index|
+                   raw = decode_numeric_value(bytes, index * width, Int64)
+                   Time64Value.new(raw, precision.to_i)
+                 end
+               else
+                 raise UnsupportedFormatError.new("unsupported temporal Tuple leaf type")
+               end
+      WideTupleLeafColumn.new(name, type_name, values)
     end
 
     private def decode_tuple_numeric_leaf(

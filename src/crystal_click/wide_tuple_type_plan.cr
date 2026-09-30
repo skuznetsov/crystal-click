@@ -1,6 +1,6 @@
 module CrystalClick
   # A syntax-only, bounded storage plan for named Tuples with exact primitive
-  # numeric, identifier/address, Bool, or String leaves. This plan does not by
+  # numeric, identifier/address, temporal, Bool, or String leaves. This plan does not by
   # itself admit a persisted part profile.
   class WideTupleTypePlan
     MAX_FIELD_NAME_BYTES   = 128
@@ -21,10 +21,16 @@ module CrystalClick
     end
 
     def self.for_type(type : String) : WideTupleTypePlan?
+      # Bound source before any lexical regular-expression checks below.
+      return nil if type.bytesize > 4_096
+
       # The shared syntax tree does not retain whether a scalar child was
       # written as a bare name or with empty arguments. This profile admits
       # only bare scalar spellings, so reject empty-argument aliases locally.
-      return nil if /\b(?:String|Bool|UUID|IPv4|IPv6|Int8|UInt8|Int16|UInt16|Int32|UInt32|Int64|UInt64|Int128|UInt128|Int256|UInt256|Float32|Float64|BFloat16)\s*\(\s*\)/.matches?(type)
+      return nil if /\b(?:String|Bool|UUID|IPv4|IPv6|Date|Date32|DateTime|DateTime64|Time|Time64|Int8|UInt8|Int16|UInt16|Int32|UInt32|Int64|UInt64|Int128|UInt128|Int256|UInt256|Float32|Float64|BFloat16)\s*\(\s*\)/.matches?(type)
+      # AST nodes erase source whitespace. Temporal parameters are admitted
+      # only in their exact canonical lexical form, e.g. DateTime64(3).
+      return nil if /\b(?:DateTime64|Time64)(?:\s+\(|\(\s+|\([0-9]\s+\))/.matches?(type)
       node = WideTypeExpression.parse(type) || return nil
       return nil unless node.name == "Tuple" && node.children.size > 0
 
@@ -39,10 +45,12 @@ module CrystalClick
         return nil unless seen.add?(name)
         numeric_width = WideTupleNumericType.width(child.name)
         identifier_width = WideTupleIdentifierType.width(child.name)
-        return nil unless child.children.empty? &&
+        temporal_type = WideTupleTemporalType.canonical_type(child)
+        leaf_type = temporal_type || child.name
+        return nil unless temporal_type || (child.children.empty? &&
                           (child.name == "String" || child.name == "Bool" ||
-                          !numeric_width.nil? || !identifier_width.nil?)
-        fields << WideTupleField.new(name, child.name)
+                          !numeric_width.nil? || !identifier_width.nil?))
+        fields << WideTupleField.new(name, leaf_type)
       end
 
       canonical = "Tuple(#{fields.map { |field| "#{field.name} #{field.type_name}" }.join(", ")})"
@@ -105,6 +113,8 @@ module CrystalClick
           return 1 if stream_name == leaf_stream
         elsif identifier_width = WideTupleIdentifierType.width(field.type_name)
           return identifier_width if stream_name == leaf_stream
+        elsif temporal_width = WideTupleTemporalType.width(field.type_name)
+          return temporal_width if stream_name == leaf_stream
         elsif stream_name == leaf_stream
           return WideTupleNumericType.width(field.type_name)
         end
@@ -127,6 +137,8 @@ module CrystalClick
                        STRING_SLOT_ACCOUNTING_BYTES
                      elsif field.type_name == "Bool"
                        1_u64
+                     elsif temporal_width = WideTupleTemporalType.owned_width(field.type_name)
+                       temporal_width.to_u64
                      else
                        (WideTupleIdentifierType.width(field.type_name) ||
                          WideTupleNumericType.width(field.type_name).not_nil!).to_u64

@@ -438,14 +438,14 @@ describe CrystalClick::WidePartWriter do
         end
       end
 
-      later_unsupported = [
+      nullable_date_is_unsupported = [
         CrystalClick::WideTupleLeafColumn.new("id", [CrystalClick::UUIDValue.new(1_u64, 2_u64), CrystalClick::UUIDValue.new(3_u64, 4_u64)]),
         CrystalClick::WideTupleLeafColumn.new("day", [0_u64, 1_u64]),
       ] of CrystalClick::WideTupleLeafColumn
       expect_raises(ArgumentError, "unsupported compositional Tuple type") do
         CrystalClick::WidePartWriter.w99_test_write_with_stage_factory(
-          File.join(parent, "later-unsupported"), "pk", keys.to_unsafe.to_slice(keys.size),
-          "payload", "Tuple(id UUID, day Date)", later_unsupported, 1, factory, copy_strings
+          File.join(parent, "nullable-date"), "pk", keys.to_unsafe.to_slice(keys.size),
+          "payload", "Tuple(id UUID, day Nullable(Date))", nullable_date_is_unsupported, 1, factory, copy_strings
         )
       end
 
