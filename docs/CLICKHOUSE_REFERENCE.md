@@ -44,6 +44,32 @@ persisted-column support matrix, or serializer compatibility proof. A narrower
 initial extraction missed the custom registration and was rejected after this
 check. `MultiPoint` is not admitted by the Crystal reader or writer yet.
 
+## Observed serializer additions
+
+The source-level comparison also identified these persisted-layout changes:
+
+- `DataTypeCustomGeo.cpp` now constructs `Geometry` with fixed Variant
+  discriminator order. Existing alternatives occupy 0 through 5, and
+  `MultiPoint` is appended at 6. The source explicitly documents the
+  persisted-discriminator compatibility constraint; cross-version part reads
+  have not been executed for this feature.
+- `SerializationObjectSharedData.h/.cpp` add `ADVANCED_CHUNKED = 3`. The June
+  reader accepts only `MAP`, `MAP_WITH_BUCKETS`, and `ADVANCED` (versions 0-2);
+  the fresh reader retains those and also accepts 3. The new shared-data format
+  uses chunk-then-streams in Wide parts and stream-then-chunks in Compact
+  parts. `object_shared_data_serialization_version = 'advanced_chunked'` is
+  opt-in; the normal setting remains `advanced`, and zero-level parts have
+  their own default. This shared-data version is distinct from the outer JSON
+  serialization version. Crystal's bounded JSON profile does not admit it.
+
+The discriminating runtime probes are an old-alternative Geometry part read
+across versions, plus Wide and Compact JSON parts with forced shared paths and
+the chunked setting. They require a current-capable executable; the pinned
+26.7 oracle cannot establish current-master behavior. Inspection of selected
+Dynamic, Variant, Tuple, and LowCardinality writer paths did not identify
+another persisted-byte change, but this bounded negative search is not a
+proof that every serializer or execution path is unchanged.
+
 ## Executable compatibility evidence
 
 Existing physical-format oracles remain pinned to
