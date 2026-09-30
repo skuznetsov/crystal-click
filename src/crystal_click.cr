@@ -1,6 +1,7 @@
 require "file_utils"
 
 require "./crystal_click/errors"
+require "./crystal_click/bool_value_codec"
 require "./crystal_click/city_hash_v1"
 require "./crystal_click/merge_tree_part_info"
 require "./crystal_click/uint64_slab_vector"

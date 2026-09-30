@@ -56,7 +56,7 @@ module CrystalClick
           infrastructure.write_plain_metadata(stage, "columns_substreams.txt", input.substreams_metadata)
           infrastructure.write_checksums(stage, records)
 
-          validate_staged_part(stage, input)
+          validate_staged_part(stage, input, infrastructure)
           infrastructure.publish_exclusively(stage, input.target)
           input.target
         ensure
@@ -464,7 +464,11 @@ module CrystalClick
         size
       end
 
-      private def self.validate_staged_part(stage : String, input : TuplePartWriteInput) : Nil
+      private def self.validate_staged_part(
+        stage : String,
+        input : TuplePartWriteInput,
+        infrastructure : TuplePartInfrastructure,
+      ) : Nil
         checksums = PartChecksums.open(stage)
         expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"] of String
         input.logical_streams.each do |logical|
@@ -536,6 +540,9 @@ module CrystalClick
             unless actual.type_name == "Bool" && actual.values_as(Bool) == expected
               raise CorruptPartError.new("staged Tuple Bool leaf readback differs")
             end
+            infrastructure.validate_bool_stream(
+              stage, "#{input.value_name}%2E#{input.type_plan.fields[index].name}", expected, input.rows_per_mark
+            )
           else
             expected_numeric = expected.as(WideTupleNumericType::Buffer)
             unless numeric_values_match?(expected_numeric, actual, input.type_plan.fields[index].type_name)

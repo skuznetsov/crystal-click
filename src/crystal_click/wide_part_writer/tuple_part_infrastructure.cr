@@ -11,6 +11,7 @@ module CrystalClick
         @write_uint64_stream : Proc(String, String, Slice(UInt64), Int32, Array(ChecksumRecord)),
         @write_string_streams : Proc(String, String, Slice(String), Int32, Array(ChecksumRecord)),
         @write_bool_stream : Proc(String, String, Slice(Bool), Int32, Array(ChecksumRecord)),
+        @validate_bool_stream : Proc(String, String, Array(Bool), Int32, Nil),
         @write_numeric_stream : Proc(String, String, WideTupleNumericType::Buffer, Int32, String, Array(ChecksumRecord)),
         @write_primary_index : Proc(String, Slice(UInt64), Int32, ChecksumRecord),
         @write_checksummed_file : Proc(String, String, String, ChecksumRecord),
@@ -44,6 +45,10 @@ module CrystalClick
 
       def write_bool_stream(stage : String, column : String, values : Slice(Bool), rows_per_mark : Int32) : Array(ChecksumRecord)
         @write_bool_stream.call(stage, column, values, rows_per_mark)
+      end
+
+      def validate_bool_stream(stage : String, column : String, values : Array(Bool), rows_per_mark : Int32) : Nil
+        @validate_bool_stream.call(stage, column, values, rows_per_mark)
       end
 
       def write_numeric_stream(

@@ -78,34 +78,60 @@ private def w83_reader_write_u64_bool_part(path : String) : Array(Array(Array(Tu
   values
 end
 
-describe "W83 Array(Map) Bool leaf reader validation" do
-  it "rejects byte 2 for a non-null Bool before any selected-mark callback" do
-    parent = File.tempname("crystal-click-w83-reader-invalid-bool")
+describe "W83 Array(Map) Bool leaf reader semantics" do
+  it "decodes a noncanonical non-null Bool byte before the selected-mark callback" do
+    parent = File.tempname("crystal-click-w83-reader-noncanonical-bool")
+    Dir.mkdir(parent)
+    part_path = File.join(parent, "all_1_1_0")
+    begin
+      values = w83_reader_write_u64_bool_part(part_path)
+      w83_reader_rewrite_mark_byte(part_path, "payload%2Evalues", 0, 2_u8)
+      expected = values.dup
+      expected[0][0][0] = {10_u64, true}
+
+      part = CrystalClick::WidePart.open_typed(part_path, "payload")
+      part.read_array_map_uint64_bool_mark_range("payload", 0, part.mark_count).should eq(expected)
+
+      table = CrystalClick::WidePartTable.open_selected_typed([part_path], ["pk", "payload"])
+      callbacks = 0
+      observed = [] of Array(Array(Tuple(UInt64, Bool)))
+      table.scan_typed_candidate_marks([[0]]) do |batch|
+        callbacks += 1
+        observed.concat(batch.array_map_uint64_bools_for("payload").to_a)
+      end
+      callbacks.should eq(1)
+      observed.should eq(expected[0, 1])
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "rejects a corrupt selected Bool value frame before the callback" do
+    parent = File.tempname("crystal-click-w83-reader-corrupt-bool-frame")
     Dir.mkdir(parent)
     part_path = File.join(parent, "all_1_1_0")
     begin
       w83_reader_write_u64_bool_part(part_path)
-      w83_reader_rewrite_mark_byte(part_path, "payload%2Evalues", 1, 2_u8)
+      data_path = File.join(part_path, "#{CrystalClick::StreamName.hash("payload%2Evalues")}.bin")
+      encoded = File.read(data_path).to_slice.dup
+      encoded[CrystalClick::CompressedBlock::CHECKSUM_SIZE].should eq(CrystalClick::CompressedBlock::METHOD_LZ4)
+      encoded.size.should be > CrystalClick::CompressedBlock::FRAME_HEADER_SIZE
+      4.times { |index| encoded[CrystalClick::CompressedBlock::CHECKSUM_SIZE + 1 + index] = 0_u8 }
+      File.write(data_path, encoded)
 
-      part = CrystalClick::WidePart.open_typed(part_path, "payload")
-      expect_raises(CrystalClick::CorruptPartError, "Bool byte is not 0 or 1") do
-        part.read_array_map_uint64_bool_mark_range("payload", 0, part.mark_count)
-      end
-
-      table = CrystalClick::WidePartTable.open_selected_typed([part_path], ["pk", "payload"])
       callbacks = 0
-      expect_raises(CrystalClick::CorruptPartError, "Bool byte is not 0 or 1") do
-        table.scan_typed_candidate_marks([[0, 1]]) do |_batch|
-          callbacks += 1
-        end
+      error = expect_raises(CrystalClick::CorruptPartError) do
+        table = CrystalClick::WidePartTable.open_selected_typed([part_path], ["pk", "payload"])
+        table.scan_typed_candidate_marks([[0]]) { |_batch| callbacks += 1 }
       end
+      (error.message || "").should contain("compressed frame size is invalid")
       callbacks.should eq(0)
     ensure
       FileUtils.rm_rf(parent)
     end
   end
 
-  it "does not decode an invalid nested Bool byte masked by Nullable(Bool) NULL" do
+  it "preserves NULL for a noncanonical nested Bool byte hidden beneath NULL" do
     parent = File.tempname("crystal-click-w83-reader-null-hidden-bool")
     Dir.mkdir(parent)
     part_path = File.join(parent, "all_1_1_0")

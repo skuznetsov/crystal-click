@@ -400,7 +400,17 @@ module CrystalClick
       stage_factory : Proc(String, String),
       copy_string_values : Proc(WideTupleLeafColumn, Array(String)),
     ) : String
-      infrastructure = TuplePartInfrastructure.new(
+      infrastructure = build_tuple_part_infrastructure(stage_factory, copy_string_values)
+      TuplePartWriter.write(
+        destination, key_name, keys, value_name, type_name, columns, rows_per_mark, infrastructure
+      )
+    end
+
+    private def self.build_tuple_part_infrastructure(
+      stage_factory : Proc(String, String),
+      copy_string_values : Proc(WideTupleLeafColumn, Array(String)),
+    ) : TuplePartInfrastructure
+      TuplePartInfrastructure.new(
         stage_factory,
         ->(name : String) { validate_column_name(name) },
         ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
@@ -412,6 +422,9 @@ module CrystalClick
         },
         ->(stage : String, column : String, values : Slice(Bool), mark_size : Int32) {
           write_tuple_bool_stream(stage, column, values, mark_size)
+        },
+        ->(stage : String, column : String, values : Array(Bool), mark_size : Int32) {
+          validate_staged_bool_values_stream(stage, column, values, mark_size)
         },
         ->(stage : String, column : String, values : WideTupleNumericType::Buffer, mark_size : Int32, leaf_type_name : String) {
           write_tuple_numeric_stream(stage, column, values, mark_size, leaf_type_name)
@@ -427,9 +440,6 @@ module CrystalClick
         ->(stage : String, target : String) { publish_exclusively(stage, target) },
         ->(raw_size : Int64, label : String) { checked_string_frame_size(raw_size, label) },
         copy_string_values
-      )
-      TuplePartWriter.write(
-        destination, key_name, keys, value_name, type_name, columns, rows_per_mark, infrastructure
       )
     end
 
@@ -11366,7 +11376,7 @@ module CrystalClick
 
     private def self.write_typed_numeric_le(bytes : Bytes, offset : Int, value : T) : Nil forall T
       {% if T == Bool %}
-        bytes[offset] = value ? 1_u8 : 0_u8
+        bytes[offset] = CrystalClick::BoolValueCodec.encode(value)
       {% elsif T == BFloat16Value %}
         2.times { |index| bytes[offset + index] = ((value.bits >> (index * 8)) & 0xff_u16).to_u8 }
       {% elsif T == UInt8 %}
@@ -12338,7 +12348,7 @@ module CrystalClick
             case stream_kind
             when .bool_values?
               if value.is_a?(Bool)
-                raw_memory.write_byte(value.as(Bool) ? 1_u8 : 0_u8)
+                raw_memory.write_byte(CrystalClick::BoolValueCodec.encode(value.as(Bool)))
               end
             when .string_sizes?
               if string_value = value.as?(String)
@@ -14759,7 +14769,7 @@ module CrystalClick
             element_offset = 0
             rows.times do |row|
               values[start_row + row].each do |value|
-                value_raw[element_offset] = value ? 1_u8 : 0_u8
+                value_raw[element_offset] = CrystalClick::BoolValueCodec.encode(value)
                 element_offset += 1
               end
             end
@@ -14876,7 +14886,7 @@ module CrystalClick
                   if value.nil?
                     null_raw[element_offset] = 1_u8
                   else
-                    value_raw[element_offset] = value ? 1_u8 : 0_u8
+                    value_raw[element_offset] = CrystalClick::BoolValueCodec.encode(value)
                   end
                   element_offset += 1
                 end
@@ -19166,6 +19176,9 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged Variant marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      validate_staged_variant_bool_values_stream(
+        stage, WideVariantBoolStringUInt64TypePlan.bool_stream(value_name), values, rows_per_mark
+      )
 
       index = PrimaryKeyIndex.open(stage, mark_count, checksums)
       expected_index = Array(UInt64).new(mark_count + 1)
@@ -19313,6 +19326,146 @@ module CrystalClick
       raise CorruptPartError.new("staged Tuple mark stream has trailing bytes for #{logical_name}") unless marks_file.gets_to_end.empty?
       raise CorruptPartError.new("staged Tuple data stream has trailing bytes for #{logical_name}") unless data_file.size == expected_offset
       nil
+    end
+
+    # Compare a Bool payload's canonical encoded bytes while the stage remains
+    # private. Only one mark's expected raw bytes are built at a time.
+    private def self.validate_staged_bool_stream(
+      stage : String,
+      logical_name : String,
+      row_count : Int32,
+      rows_per_mark : Int32,
+      omit_empty_frame : Bool = false,
+      &expected_raw_for_mark : Int32, Int32 -> Bytes
+    ) : Nil
+      base = StreamName.hash(logical_name)
+      File.open(File.join(stage, "#{base}.bin"), "r") do |data_file|
+        File.open(File.join(stage, "#{base}.mrk2"), "r") do |marks_file|
+          offset = 0_u64
+          start = 0
+          while start < row_count
+            rows = {rows_per_mark, row_count - start}.min
+            expected_raw = expected_raw_for_mark.call(start, rows)
+            offset = validate_staged_tuple_mark(
+              data_file, marks_file, logical_name, offset, rows.to_u64, expected_raw, omit_empty_frame
+            )
+            start += rows
+          end
+          validate_staged_tuple_sentinel(data_file, marks_file, logical_name, offset)
+        end
+      end
+      nil
+    end
+
+    private def self.validate_staged_bool_values_stream(
+      stage : String,
+      logical_name : String,
+      values : Array(Bool),
+      rows_per_mark : Int32,
+    ) : Nil
+      validate_staged_bool_values_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark)
+    end
+
+    private def self.validate_staged_bool_values_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(Bool),
+      rows_per_mark : Int32,
+    ) : Nil
+      validate_staged_bool_stream(stage, logical_name, values.size, rows_per_mark) do |start, rows|
+        raw = Bytes.new(rows)
+        rows.times do |offset|
+          raw[offset] = CrystalClick::BoolValueCodec.encode(values[start + offset])
+        end
+        raw
+      end
+    end
+
+    private def self.validate_staged_nullable_bool_values_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(Bool?),
+      rows_per_mark : Int32,
+    ) : Nil
+      validate_staged_bool_stream(stage, logical_name, values.size, rows_per_mark) do |start, rows|
+        raw = Bytes.new(rows)
+        rows.times do |offset|
+          raw[offset] = CrystalClick::BoolValueCodec.encode(values[start + offset] || false)
+        end
+        raw
+      end
+    end
+
+    private def self.validate_staged_array_bool_values_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(Array(Bool)),
+      rows_per_mark : Int32,
+    ) : Nil
+      validate_staged_bool_stream(stage, logical_name, values.size, rows_per_mark, omit_empty_frame: true) do |start, rows|
+        byte_count = 0_i64
+        rows.times do |offset|
+          byte_count += values[start + offset].size.to_i64
+        end
+        raise CorruptPartError.new("staged Array(Bool) raw mark exceeds writer bound") if byte_count > MAX_FRAME_RAW_BYTES.to_i64
+        raw = Bytes.new(byte_count.to_i)
+        cursor = 0
+        rows.times do |offset|
+          values[start + offset].each do |value|
+            raw[cursor] = CrystalClick::BoolValueCodec.encode(value)
+            cursor += 1
+          end
+        end
+        raw
+      end
+    end
+
+    private def self.validate_staged_array_nullable_bool_values_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(Array(Bool?)),
+      rows_per_mark : Int32,
+    ) : Nil
+      validate_staged_bool_stream(stage, logical_name, values.size, rows_per_mark, omit_empty_frame: true) do |start, rows|
+        byte_count = 0_i64
+        rows.times do |offset|
+          byte_count += values[start + offset].size.to_i64
+        end
+        raise CorruptPartError.new("staged Array(Nullable(Bool)) raw mark exceeds writer bound") if byte_count > MAX_FRAME_RAW_BYTES.to_i64
+        raw = Bytes.new(byte_count.to_i)
+        cursor = 0
+        rows.times do |offset|
+          values[start + offset].each do |value|
+            raw[cursor] = CrystalClick::BoolValueCodec.encode(value || false)
+            cursor += 1
+          end
+        end
+        raw
+      end
+    end
+
+    private def self.validate_staged_variant_bool_values_stream(
+      stage : String,
+      logical_name : String,
+      values : Slice(VariantBoolStringUInt64Value),
+      rows_per_mark : Int32,
+    ) : Nil
+      validate_staged_bool_stream(stage, logical_name, values.size, rows_per_mark, omit_empty_frame: true) do |start, rows|
+        bool_count = 0
+        rows.times do |offset|
+          bool_count += 1 if values[start + offset].is_a?(Bool)
+        end
+        raw = Bytes.new(bool_count)
+        cursor = 0
+        rows.times do |offset|
+          value = values[start + offset]
+          if value.is_a?(Bool)
+            raw[cursor] = CrystalClick::BoolValueCodec.encode(value.as(Bool))
+            cursor += 1
+          end
+        end
+        raw
+      end
     end
 
     private def self.validate_staged_array_tuple_part(
@@ -22218,6 +22371,7 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged Array(Bool) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      validate_staged_array_bool_values_stream(stage, value_name, values, rows_per_mark)
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
@@ -22277,6 +22431,7 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged Array(Nullable(Bool)) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      validate_staged_array_nullable_bool_values_stream(stage, value_name, values, rows_per_mark)
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
@@ -22863,10 +23018,10 @@ module CrystalClick
                     bool_raw[entry_index] = 0_u8
                   else
                     null_raw[entry_index] = 0_u8
-                    bool_raw[entry_index] = entry[1].not_nil! ? 1_u8 : 0_u8
+                    bool_raw[entry_index] = CrystalClick::BoolValueCodec.encode(entry[1].not_nil!)
                   end
                 {% else %}
-                  bool_raw[entry_index] = entry[1] ? 1_u8 : 0_u8
+                  bool_raw[entry_index] = CrystalClick::BoolValueCodec.encode(entry[1])
                 {% end %}
                 entry_index += 1
               end
@@ -24137,6 +24292,9 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged typed payload marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      {% if T == Bool %}
+        validate_staged_bool_values_stream(stage, value_name, values, rows_per_mark)
+      {% end %}
 
       index = PrimaryKeyIndex.open(stage, mark_count, checksums)
       expected_index = Array(UInt64).new(mark_count + 1)
@@ -24342,6 +24500,9 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged Nullable payload marks do not match") unless value_part.mark_row_counts == expected_mark_rows
+      {% if T == Bool? %}
+        validate_staged_nullable_bool_values_stream(stage, value_name, values, rows_per_mark)
+      {% end %}
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil

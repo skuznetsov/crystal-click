@@ -268,26 +268,45 @@ describe "W57 three-arm Variant admission" do
     end
   end
 
-  it "rejects invalid Bool child bytes and discriminator tags before callbacks" do
-    cases = {
-      "Bool child code"   => {"payload.Bool", [true, false, true] of CrystalClick::VariantBoolStringUInt64Value, 0, "Variant Bool child code is unsupported"},
-      "discriminator tag" => {"payload.variant_discr", [true, "tag probe", 7_u64] of CrystalClick::VariantBoolStringUInt64Value, 10, "Variant discriminator tag is unsupported"},
-    }
+  it "decodes noncanonical Bool children and still rejects unsupported discriminator tags" do
+    values = [false, "tag probe", 7_u64] of CrystalClick::VariantBoolStringUInt64Value
+    w57_with_writer_values_part(values) do |path|
+      logical_name = "payload.Bool"
+      stream = CrystalClick::StreamName.hash(logical_name)
+      data_path = File.join(path, "#{stream}.bin")
+      raw = CrystalClick::CompressedBlock.decode_all(File.read(data_path).to_slice).dup
+      raw[0] = 2_u8
+      w57_replace_stream_bytes(path, logical_name, raw)
 
-    cases.each do |label, (logical_name, values, offset, expected_error)|
-      w57_with_writer_values_part(values) do |path|
-        stream = CrystalClick::StreamName.hash(logical_name)
-        data_path = File.join(path, "#{stream}.bin")
-        raw = CrystalClick::CompressedBlock.decode_all(File.read(data_path).to_slice).dup
-        if label == "Bool child code"
-          raw[offset] = 2_u8
-        else
-          raw[offset].should eq(0_u8)
-          raw[offset] = 3_u8
-        end
-        w57_replace_stream_bytes(path, logical_name, raw)
-        w57_assert_scan_fails_before_callback(path, expected_error)
-      end
+      CrystalClick::WidePart.open_typed(path, "payload")
+        .read_variant_bool_string_uint64_mark_range("payload", 0, 1)
+        .should eq([true, "tag probe", 7_u64] of CrystalClick::VariantBoolStringUInt64Value)
+    end
+
+    w57_with_writer_values_part(values) do |path|
+      logical_name = "payload.variant_discr"
+      stream = CrystalClick::StreamName.hash(logical_name)
+      data_path = File.join(path, "#{stream}.bin")
+      raw = CrystalClick::CompressedBlock.decode_all(File.read(data_path).to_slice).dup
+      raw[10].should eq(0_u8)
+      raw[10] = 3_u8
+      w57_replace_stream_bytes(path, logical_name, raw)
+      w57_assert_scan_fails_before_callback(path, "Variant discriminator tag is unsupported")
+    end
+  end
+
+  it "rejects a corrupt selected Bool child frame before the callback" do
+    values = [false, "tag probe", 7_u64] of CrystalClick::VariantBoolStringUInt64Value
+    w57_with_writer_values_part(values) do |path|
+      stream = CrystalClick::StreamName.hash("payload.Bool")
+      data_path = File.join(path, "#{stream}.bin")
+      encoded = File.read(data_path).to_slice.dup
+      encoded[CrystalClick::CompressedBlock::CHECKSUM_SIZE].should eq(CrystalClick::CompressedBlock::METHOD_LZ4)
+      encoded.size.should be > CrystalClick::CompressedBlock::FRAME_HEADER_SIZE
+      4.times { |index| encoded[CrystalClick::CompressedBlock::CHECKSUM_SIZE + 1 + index] = 0_u8 }
+      File.write(data_path, encoded)
+
+      w57_assert_scan_fails_before_callback(path, "compressed frame size is invalid")
     end
   end
 

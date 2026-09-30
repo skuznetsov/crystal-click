@@ -13,6 +13,37 @@ W97's Bool extension uses those same Tuple owners with separate semantic Bool
 dispatch; its bounded compatibility certificate is in `BOOL_TUPLE_FRONTIER.md`.
 Bool is not added to the numeric identity owner or a per-combination Tuple class.
 
+W98 reconciles the existing Bool value-domain policies under one shared owner;
+its qualified RED and executed bounded compatibility certificate are recorded in
+`BOOL_SEMANTICS_FRONTIER.md`. This is not completion of the facade refactor.
+
+## W98 ownership boundary
+
+`src/crystal_click/bool_value_codec.cr` owns UInt8-to-Bool semantic decoding,
+canonical Bool-to-UInt8 encoding, and owned bulk decoding. Root, nullable,
+Array, Array(Map), Variant and named-Tuple consumers delegate to this one
+module/file; null-map and discriminator policies remain with their structural
+owners. Bool stays outside the numeric identity owner.
+
+The writer reuses bounded per-mark frame/mark/sentinel validation rather than
+adding whole-stream reads. Tuple orchestration receives the actual Bool raw
+validator through its existing infrastructure owner. Those staging helpers
+still live in the large writer facade; they are not a new decomposed physical
+stream subsystem. File-size reduction and independent ownership of the full
+reader/writer/table/catalog remain open, separately from W98's value-domain
+compatibility certificate. Focused DEBUG/RELEASE (168 examples each), full
+DEBUG (1,259 examples), the new nine-profile bidirectional oracle and five
+unchanged stock oracles passed; root's scoped adversarial review is ROBUST.
+These gates and residual risks are recorded in `BOOL_SEMANTICS_FRONTIER.md`.
+
+At the frozen W98 source, the reader/writer facades still have 15,195 and
+25,295 lines, with table/catalog at 6,638 and 5,309. These navigation counts
+do not establish performance or lower coupling. The next architectural slices
+remain physical-stream lifetime/validation ownership, cohesive leaf codecs and
+table/catalog orchestration, one concrete owner per file with behavior-preserving
+contracts. In particular, W98 does not close the older Array(Map) validator's
+intermediate-file-open cleanup concern or Tuple's bounded readback allocation.
+
 ## W97 ownership boundary
 
 `WideTupleLeafColumn` owns native Bool buffers alongside, but nominally separate
@@ -23,7 +54,7 @@ delegates provide nonzero-aware reading and the existing canonical Bool codec.
 `WideTupleRow` remains the single table/catalog row representation. No new
 production class or import-order change is needed for this extension.
 
-The current reader/writer facades still contain 15,223 and 25,134 lines; table
+At the historical W97 source, reader/writer facades contain 15,223 and 25,134 lines; table
 and catalog remain at 6,638 and 5,309. W97 does not claim to have decomposed
 these facades. A next compatibility slice should reconcile root/Array/container
 Bool's strict 0/1 read policy with the stock-supported nonzero domain, then

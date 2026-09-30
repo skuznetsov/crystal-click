@@ -69,7 +69,7 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.catalog_type("Nullable(Decimal64(18))").should eq("Nullable(Decimal(18, 18))")
   end
 
-  it "reads bare and nullable Bool while validating only non-NULL semantic bytes" do
+  it "decodes nonzero Bool payloads as true and preserves nullable NULL values" do
     parent = File.tempname("crystal-click-w15-reader-bool")
     Dir.mkdir(parent)
     keys = w15_reader_keys(3)
@@ -98,11 +98,9 @@ describe CrystalClick::WidePart do
       nullable_reader.read_nullable_bool_mark_range("flag", 0, nullable_reader.mark_count).should eq(nullable)
 
       w15_reader_replace_first_stream_byte(bare_part, "flag", 2_u8)
-      expect_raises(CrystalClick::CorruptPartError, "Bool byte is not 0 or 1") do
-        CrystalClick::WidePart.open_typed(bare_part, "flag").read_bool_mark_range("flag", 0, 1)
-      end
+      CrystalClick::WidePart.open_typed(bare_part, "flag").read_bool_mark_range("flag", 0, 1).should eq([true, true])
 
-      # The nested slot beneath NULL is consumed but not domain-validated.
+      # The nested slot beneath NULL remains hidden by the strict null map.
       w15_reader_replace_first_stream_byte(nullable_part, "flag", 2_u8)
       CrystalClick::WidePart.open_typed(nullable_part, "flag").read_nullable_bool_mark_range("flag", 0, 1).should eq([nil, true])
     ensure

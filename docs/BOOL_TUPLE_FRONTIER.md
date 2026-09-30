@@ -5,6 +5,10 @@ profile below. Pre-change implementation anchor: `3a50637`.
 The full compatible-type/MV/projection goal remains open. Memory and performance
 optimization stays deferred; no matched ClickHouse slowdown is claimed.
 
+W98's shared-policy follow-up is tracked in `BOOL_SEMANTICS_FRONTIER.md`.
+The strict root/Array policy described below is W97's historical baseline,
+not the new shared policy; W98 has its own executed evidence boundary.
+
 ## Boundary and discriminator
 
 W96 admits named, nonempty Tuples with 15 primitive numeric identities and

@@ -1783,8 +1783,8 @@ module CrystalClick
       values
     end
 
-    # Bool is physically one byte, but its semantic domain is intentionally
-    # narrower than UInt8: only 0 and 1 are admitted by this reader.
+    # Bool payload values use the shared semantic codec: zero is false and
+    # every nonzero source byte is true.
     def read_bool_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Bool)
       ensure_column(column)
       raise UnsupportedFormatError.new("Bool accessor requires an exact Bool column") unless @column_type == "Bool"
@@ -1792,13 +1792,7 @@ module CrystalClick
       start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 1)
       values = Array(Bool).new
       each_mark_range_bytes(start_mark, end_mark, expected_bytes, 1) do |bytes|
-        bytes.each do |value|
-          case value
-          when 0 then values << false
-          when 1 then values << true
-          else        raise CorruptPartError.new("Bool byte is not 0 or 1")
-          end
-        end
+        bytes.each { |byte| values << BoolValueCodec.decode(byte) }
       end
       values
     end
@@ -1822,11 +1816,10 @@ module CrystalClick
       raise UnsupportedFormatError.new("Bool accessor requires an exact Nullable(Bool) column") unless WidePart.supports_nullable_bool_type?(@column_type)
 
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 1, UInt8).map do |value|
-        case value
-        when nil then nil
-        when 0   then false
-        when 1   then true
-        else          raise CorruptPartError.new("Bool byte is not 0 or 1")
+        if value.nil?
+          nil
+        else
+          BoolValueCodec.decode(value.not_nil!)
         end
       end
     end
@@ -6881,8 +6874,7 @@ module CrystalClick
     end
 
     # Read exact Array(Bool) rows. Bool is intentionally handled outside the
-    # generic numeric Array codecs so visible payload bytes are restricted to
-    # the semantic values 0 and 1.
+    # generic numeric Array codecs and uses the shared semantic value codec.
     def read_array_bool_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Array(Bool))
       ensure_column(column)
       raise UnsupportedFormatError.new("Array(Bool) accessor requires an exact Array(Bool) column") unless WidePart.supports_array_bool_type?(@column_type)
@@ -6900,11 +6892,7 @@ module CrystalClick
         row = Array(Bool).new(size.to_i)
         size.to_i.times do
           raise CorruptPartError.new("Array(Bool) size0 exceeds selected child bytes") if byte_offset >= value_bytes.size
-          case value_bytes[byte_offset]
-          when 0 then row << false
-          when 1 then row << true
-          else        raise CorruptPartError.new("Array(Bool) byte is not 0 or 1")
-          end
+          row << BoolValueCodec.decode(value_bytes[byte_offset])
           byte_offset += 1
         end
         values << row
@@ -6944,11 +6932,7 @@ module CrystalClick
           if null_bytes[element_offset] == 1_u8
             row << nil
           else
-            case value_bytes[element_offset]
-            when 0 then row << false
-            when 1 then row << true
-            else        raise CorruptPartError.new("Array(Nullable(Bool)) byte is not 0 or 1")
-            end
+            row << BoolValueCodec.decode(value_bytes[element_offset])
           end
           element_offset += 1
         end
@@ -8279,11 +8263,9 @@ module CrystalClick
       raise CorruptPartError.new("Array(Map) Bool value mark rows differ") unless value_rows == rows
       validate_array_nested_stream_marks(value_stream, first_mark, mark_entries, 1)
       value_bytes = checked_array_mark_byte_count(entries, 1)
-      bool_bytes = read_mark_range_bytes(value_stream, value_start, value_end, value_bytes, 1)
-      bool_bytes.each_with_index do |value, index|
-        next if null_map && null_map[index] == 1_u8
-        raise CorruptPartError.new("Array(Map) Bool byte is not 0 or 1") unless value <= 1_u8
-      end
+      # Read and validate the complete selected value stream before yielding
+      # rows; Bool payload interpretation happens only during materialization.
+      read_mark_range_bytes(value_stream, value_start, value_end, value_bytes, 1)
 
       value_mark_bytes = mark_entries.map { |count| checked_array_mark_byte_count(count, 1).to_u64 }
       nullable_bytes = nullable_values ? checked_array_mark_byte_count(entries, 1).to_u64 : 0_u64
@@ -8363,11 +8345,8 @@ module CrystalClick
                       # not decode or validate the hidden value byte.
                       nil
                     else
-                      case value_bytes[entry_offset]?
-                      when 0_u8 then false
-                      when 1_u8 then true
-                      else           raise CorruptPartError.new("Array(Map) Bool byte is not 0 or 1")
-                      end
+                      value_byte = value_bytes[entry_offset]? || raise(CorruptPartError.new("Array(Map) Bool value bytes do not match selected Map entries"))
+                      BoolValueCodec.decode(value_byte)
                     end
             map << {key, value}
             entry_offset += 1
@@ -10093,10 +10072,6 @@ module CrystalClick
         bool_start, bool_end, bool_rows = checked_stream_mark_range(bool_stream, mark_index, 1)
         raise CorruptPartError.new("Variant Bool child mark rows differ") unless bool_rows == rows
         bool_bytes = read_mark_range_bytes(bool_stream, bool_start, bool_end, bool_count.to_i, 1)
-        bool_bytes.each do |code|
-          raise CorruptPartError.new("Variant Bool child code is unsupported") unless code == 0_u8 || code == 1_u8
-        end
-
         size_start, size_end, size_rows = checked_stream_mark_range(string_size_stream, mark_index, 1)
         raise CorruptPartError.new("Variant String-size child mark rows differ") unless size_rows == rows
         size_bytes = checked_byte_count(string_count, 8)
@@ -10133,7 +10108,7 @@ module CrystalClick
           tags.each do |tag|
             case tag
             when WideVariantBoolStringUInt64TypePlan::TAG_BOOL
-              values << (bool_bytes[bool_index] == 1_u8)
+              values << BoolValueCodec.decode(bool_bytes[bool_index])
               bool_index += 1
             when WideVariantBoolStringUInt64TypePlan::TAG_STRING
               length = sizes[string_index].to_i
@@ -14644,9 +14619,8 @@ module CrystalClick
       )
     end
 
-    # Named Tuple Bool is semantic rather than raw-byte preserving: any
-    # nonzero source byte becomes true, while the writer emits canonical 1.
-    # Root-column Bool accessors retain their separate strict 0/1 policy.
+    # Named Tuple Bool uses the same semantic value-byte policy as root and
+    # nested Bool accessors: any nonzero source byte becomes true.
     private def decode_tuple_bool_leaf(
       name : String,
       bytes : Bytes,
@@ -14658,9 +14632,7 @@ module CrystalClick
         raise CorruptPartError.new("Tuple Bool stream byte count does not match rows")
       end
 
-      values = Array(Bool).new(rows.to_i) do |index|
-        bytes[index] != 0_u8
-      end
+      values = BoolValueCodec.decode_values(bytes)
       WideTupleLeafColumn.new(name, values)
     end
 

@@ -280,8 +280,8 @@ describe CrystalClick::WidePart do
     end
   end
 
-  it "rejects visible plain and non-NULL nullable Boolean child bytes 2 and 255" do
-    [2_u8, 255_u8].each do |invalid_byte|
+  it "decodes visible plain and non-NULL nullable Boolean child bytes 2 and 255 as true" do
+    [2_u8, 255_u8].each do |noncanonical_byte|
       parent = File.tempname("crystal-click-w34-invalid-bool-byte")
       Dir.mkdir(parent)
       begin
@@ -289,29 +289,29 @@ describe CrystalClick::WidePart do
         raw_path = File.join(part, "#{CrystalClick::StreamName.hash("plain")}.bin")
         raw = CrystalClick::CompressedBlock.decode_all(File.read(raw_path).to_slice).dup
         raw[0].should eq(0_u8)
-        raw[0] = invalid_byte
+        raw[0] = noncanonical_byte
         w34_replace_raw_stream(part, "plain", raw)
         w34_refresh_checksums(part)
         CrystalClick::CompressedBlock.decode_all(File.read(raw_path).to_slice).size.should eq(raw.size)
 
-        error = expect_raises(CrystalClick::CorruptPartError) do
-          CrystalClick::WidePart.open_typed(part, "plain")
-            .read_array_bool_mark_range("plain", 0, 1)
-        end
-        (error.message || "").should contain("byte is not 0 or 1")
+        plain_expected = w34_bool_values[0, 2].map(&.dup)
+        plain_expected[1][0] = true
+        w34_decode_stream(part, "plain")[0].should eq(noncanonical_byte)
+        CrystalClick::WidePart.open_typed(part, "plain")
+          .read_array_bool_mark_range("plain", 0, 1).should eq(plain_expected)
 
-        nullable_part = w34_copy_fixture(parent, "nullable_#{invalid_byte}")
+        nullable_part = w34_copy_fixture(parent, "nullable_#{noncanonical_byte}")
         nullable_raw_path = File.join(nullable_part, "#{CrystalClick::StreamName.hash("maybe")}.bin")
         nullable_raw = CrystalClick::CompressedBlock.decode_all(File.read(nullable_raw_path).to_slice).dup
         nullable_raw[1].should eq(0_u8) # first non-NULL leaf follows the leading NULL slot
-        nullable_raw[1] = invalid_byte
+        nullable_raw[1] = noncanonical_byte
         w34_replace_raw_stream(nullable_part, "maybe", nullable_raw)
         w34_refresh_checksums(nullable_part)
-        nullable_error = expect_raises(CrystalClick::CorruptPartError) do
-          CrystalClick::WidePart.open_typed(nullable_part, "maybe")
-            .read_array_nullable_bool_mark_range("maybe", 0, 1)
-        end
-        (nullable_error.message || "").should contain("byte is not 0 or 1")
+        nullable_expected = w34_nullable_bool_values[0, 2].map(&.dup)
+        nullable_expected[1][1] = true
+        w34_decode_stream(nullable_part, "maybe")[1].should eq(noncanonical_byte)
+        CrystalClick::WidePart.open_typed(nullable_part, "maybe")
+          .read_array_nullable_bool_mark_range("maybe", 0, 1).should eq(nullable_expected)
       ensure
         FileUtils.rm_rf(parent)
       end
