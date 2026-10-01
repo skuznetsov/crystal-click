@@ -113,7 +113,7 @@ describe "W104 timezone-qualified DateTime type admission" do
       "Nullable(Array(DateTime('UTC')))",
       "Array(Array(Array(DateTime('UTC'))))",
       "Array(Nullable(Nullable(DateTime('UTC'))))",
-      "Tuple(event Nullable(DateTime('UTC')))",
+      "Tuple(event Nullable(Array(DateTime('UTC'))))",
       "Tuple(event DateTime64(03, 'UTC'))",
     ].each do |type_name|
       CrystalClick::WidePart.supports_typed_type?(type_name).should be_false

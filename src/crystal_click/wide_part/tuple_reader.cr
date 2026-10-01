@@ -14,6 +14,7 @@ module CrystalClick
       alias DecodeTemporalLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeDateTimeLeaf = Proc(String, DateTimeColumnType, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeParameterizedLeaf = Proc(String, WideTupleParameterizedType, Bytes, UInt64, Int32, WideTupleLeafColumn)
+      alias DecodeNullableLeaf = Proc(String, WideTupleLeafType, Bytes, ScalarNullMap, UInt64, Int32, WideTupleLeafColumn)
 
       @plan : WideTupleTypePlan
       @column : String
@@ -28,6 +29,7 @@ module CrystalClick
       @decode_temporal_leaf : DecodeTemporalLeaf
       @decode_datetime_leaf : DecodeDateTimeLeaf
       @decode_parameterized_leaf : DecodeParameterizedLeaf
+      @decode_nullable_leaf : DecodeNullableLeaf
 
       def initialize(
         @plan : WideTupleTypePlan,
@@ -43,6 +45,7 @@ module CrystalClick
         @decode_temporal_leaf : DecodeTemporalLeaf,
         @decode_datetime_leaf : DecodeDateTimeLeaf,
         @decode_parameterized_leaf : DecodeParameterizedLeaf,
+        @decode_nullable_leaf : DecodeNullableLeaf,
       )
       end
 
@@ -144,7 +147,12 @@ module CrystalClick
         validation_requests = [] of Tuple(String, Int32, Int32)
         @plan.fields.each do |field|
           leaf_stream = "#{@column}%2E#{field.name}"
-          if field.type_name == "String"
+          leaf_type = field.leaf_type
+          if leaf_type.nullable?
+            null_stream = "#{leaf_stream}.null"
+            validation_requests << {null_stream, checked_byte_count(rows, 1), 1}
+          end
+          if leaf_type.base_type_name == "String"
             size_stream = "#{leaf_stream}.size"
             encoded_sizes = @read_range.call(
               size_stream,
@@ -217,10 +225,67 @@ module CrystalClick
       ) : WideTupleColumnData
         rows, _string_payload_bytes, _charge = preflight_range(first_mark, mark_count, max_materialized_bytes)
 
+        # Validate every selected mask before invoking any scalar payload
+        # decoder. #each materializes one mark at a time, so a later corrupt
+        # mark cannot make us claim eager validation of the whole selection.
+        null_maps = Array(ScalarNullMap?).new(@plan.fields.size, nil)
+        @plan.fields.each_with_index do |field, field_index|
+          leaf_type = field.leaf_type
+          next unless leaf_type.nullable?
+          leaf_stream = "#{@column}%2E#{field.name}.null"
+          encoded = @read_range.call(
+            leaf_stream,
+            first_mark,
+            mark_count,
+            checked_byte_count(rows, 1),
+            1,
+            rows
+          )
+          begin
+            null_maps[field_index] = ScalarNullMap.new(encoded, rows)
+          rescue ex : ArgumentError
+            raise CorruptPartError.new("Tuple Nullable null map is invalid")
+          end
+        end
+
         columns = Array(WideTupleLeafColumn).new(@plan.fields.size)
-        @plan.fields.each do |field|
+        @plan.fields.each_with_index do |field, field_index|
           leaf_stream = "#{@column}%2E#{field.name}"
-          if field.type_name == "String"
+          leaf_type = field.leaf_type
+          if leaf_type.nullable? && leaf_type.base_type_name == "String"
+            null_map = null_maps[field_index] || raise(CorruptPartError.new("Tuple Nullable null map is missing"))
+            size_stream = "#{leaf_stream}.size"
+            encoded_sizes = @read_range.call(
+              size_stream,
+              first_mark,
+              mark_count,
+              checked_byte_count(rows, 8),
+              8,
+              rows
+            )
+            sizes = decode_sizes(encoded_sizes, rows)
+            payload_bytes = string_payload_byte_count(encoded_sizes)
+            raw_bytes = @read_range.call(leaf_stream, first_mark, mark_count, payload_bytes.to_i32, 1, rows)
+            values = Array(String).new(rows.to_i)
+            StringPayloadDecoder.each(sizes, raw_bytes, "Tuple(Nullable(String))") do |string_value, _index|
+              values << string_value
+              nil
+            end
+            columns << WideTupleLeafColumn.new(field.name, leaf_type, values, null_map)
+          elsif leaf_type.nullable?
+            null_map = null_maps[field_index] || raise(CorruptPartError.new("Tuple Nullable null map is missing"))
+            width = @plan.stream_width(@column, leaf_stream) ||
+                    raise(CorruptPartError.new("Nullable Tuple leaf stream has no fixed width"))
+            encoded = @read_range.call(
+              leaf_stream,
+              first_mark,
+              mark_count,
+              checked_byte_count(rows, width),
+              width,
+              rows
+            )
+            columns << @decode_nullable_leaf.call(field.name, leaf_type, encoded, null_map, rows, width)
+          elsif leaf_type.base_type_name == "String"
             size_stream = "#{leaf_stream}.size"
             encoded_sizes = @read_range.call(
               size_stream,
@@ -263,7 +328,7 @@ module CrystalClick
               rows
             )
             columns << @decode_datetime_leaf.call(field.name, exact_type, encoded, rows, width)
-          elsif field.type_name == "Bool"
+          elsif leaf_type.base_type_name == "Bool"
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple Bool stream has no fixed width"))
             encoded = @read_range.call(
@@ -275,7 +340,7 @@ module CrystalClick
               rows
             )
             columns << @decode_bool_leaf.call(field.name, encoded, rows, width)
-          elsif WideTupleIdentifierType.width(field.type_name)
+          elsif WideTupleIdentifierType.width(leaf_type.base_type_name)
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple identifier stream has no fixed width"))
             encoded = @read_range.call(
@@ -286,8 +351,8 @@ module CrystalClick
               width,
               rows
             )
-            columns << @decode_identifier_leaf.call(field.name, field.type_name, encoded, rows, width)
-          elsif WideTupleTemporalType.width(field.type_name)
+            columns << @decode_identifier_leaf.call(field.name, leaf_type.base_type_name, encoded, rows, width)
+          elsif WideTupleTemporalType.width(leaf_type.base_type_name)
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple temporal stream has no fixed width"))
             encoded = @read_range.call(
@@ -298,7 +363,7 @@ module CrystalClick
               width,
               rows
             )
-            columns << @decode_temporal_leaf.call(field.name, field.type_name, encoded, rows, width)
+            columns << @decode_temporal_leaf.call(field.name, leaf_type.base_type_name, encoded, rows, width)
           else
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))
@@ -310,7 +375,7 @@ module CrystalClick
               width,
               rows
             )
-            columns << @decode_numeric_leaf.call(field.name, field.type_name, encoded, rows, width)
+            columns << @decode_numeric_leaf.call(field.name, leaf_type.base_type_name, encoded, rows, width)
           end
         end
         WideTupleColumnData.new(@plan, columns)

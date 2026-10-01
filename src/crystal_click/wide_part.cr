@@ -14625,6 +14625,9 @@ module CrystalClick
         },
         ->(name : String, exact_type : WideTupleParameterizedType, bytes : Bytes, rows : UInt64, width : Int32) {
           decode_tuple_parameterized_leaf(name, exact_type, bytes, rows, width)
+        },
+        ->(name : String, leaf_type : WideTupleLeafType, bytes : Bytes, null_map : ScalarNullMap, rows : UInt64, width : Int32) {
+          decode_tuple_nullable_leaf(name, leaf_type, bytes, null_map, rows, width)
         }
       )
     end
@@ -14776,6 +14779,82 @@ module CrystalClick
                  raise CorruptPartError.new("Tuple DateTime descriptor family is unsupported")
                end
       WideTupleLeafColumn.new(name, exact_type, values)
+    end
+
+    # Decode the unchanged scalar physical profile, retaining raw Enum,
+    # Decimal, and Bool slots beneath NULL rather than normalizing hidden
+    # bytes through their non-null semantic decoders.
+    private def decode_tuple_nullable_leaf(
+      name : String,
+      leaf_type : WideTupleLeafType,
+      bytes : Bytes,
+      null_map : ScalarNullMap,
+      rows : UInt64,
+      width : Int32,
+    ) : WideTupleLeafColumn
+      raise CorruptPartError.new("Tuple Nullable descriptor is not nullable") unless leaf_type.nullable?
+      expected_width = leaf_type.raw_width ||
+                       raise(CorruptPartError.new("Nullable Tuple leaf has no fixed payload width"))
+      raise CorruptPartError.new("Nullable Tuple leaf stream width does not match schema") unless width == expected_width
+      if rows > Int32::MAX.to_u64 || rows > Int32::MAX.to_u64 // width.to_u64 ||
+         bytes.size.to_u64 != rows * width.to_u64 || null_map.size.to_u64 != rows
+        raise CorruptPartError.new("Nullable Tuple leaf byte count does not match rows")
+      end
+
+      base_type_name = leaf_type.base_type_name
+      physical : WideTupleLeafColumn::Buffer = if base_type_name == "Bool"
+        Array(UInt8).new(rows.to_i) { |index| bytes[index] }
+      elsif exact_type = leaf_type.parameterized_type
+        case exact_type
+        when WideTupleFixedStringType
+          decode_tuple_parameterized_leaf(name, exact_type, bytes, rows, width).physical_values
+        when WideTupleEnumType
+          if exact_type.definition.kind == :enum8
+            Array(Int8).new(rows.to_i) do |index|
+              decode_numeric_value(bytes, index * width, Int8)
+            end
+          else
+            Array(Int16).new(rows.to_i) do |index|
+              decode_numeric_value(bytes, index * width, Int16)
+            end
+          end
+        when WideTupleDecimalType
+          case exact_type.storage_width
+          when 4
+            Array(Int32).new(rows.to_i) do |index|
+              decode_array_decimal_value(bytes, index * width, Int32)
+            end
+          when 8
+            Array(Int64).new(rows.to_i) do |index|
+              decode_array_decimal_value(bytes, index * width, Int64)
+            end
+          when 16
+            Array(Int128).new(rows.to_i) do |index|
+              decode_array_decimal_value(bytes, index * width, Int128)
+            end
+          else
+            Array(Int256Value).new(rows.to_i) do |index|
+              decode_array_numeric_value(bytes, index * width, Int256Value)
+            end
+          end
+        else
+          raise CorruptPartError.new("Nullable Tuple parameterized descriptor is unsupported")
+        end
+      elsif exact_type = leaf_type.datetime_type
+        decode_tuple_datetime_leaf(name, exact_type, bytes, rows, width).physical_values
+      elsif WideTupleIdentifierType.width(base_type_name)
+        decode_tuple_identifier_leaf(name, base_type_name, bytes, rows, width).physical_values
+      elsif WideTupleTemporalType.width(base_type_name)
+        decode_tuple_temporal_leaf(name, base_type_name, bytes, rows, width).physical_values
+      else
+        decode_tuple_numeric_leaf(name, base_type_name, bytes, rows, width).physical_values
+      end
+
+      begin
+        WideTupleLeafColumn.new(name, leaf_type, physical, null_map)
+      rescue ex : ArgumentError
+        raise CorruptPartError.new("Nullable Tuple leaf payload is invalid")
+      end
     end
 
     # FixedString, Enum and Decimal share one raw leaf stream but retain their

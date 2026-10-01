@@ -33,7 +33,7 @@ module CrystalClick
 
     def fields : Array(WideTupleField)
       @fields.map do |field|
-        WideTupleField.new(field.name, field.type_name, field.parameterized_type, field.datetime_type)
+        WideTupleField.new(field.name, field.leaf_type)
       end
     end
 
@@ -41,7 +41,8 @@ module CrystalClick
       streams = Array(String).new
       @fields.each do |field|
         leaf_stream = leaf_stream_name(column, field)
-        streams << "#{leaf_stream}.size" if field.type_name == "String"
+        streams << "#{leaf_stream}.null" if field.leaf_type.nullable?
+        streams << "#{leaf_stream}.size" if field.leaf_type.base_type_name == "String"
         streams << leaf_stream
       end
       streams
@@ -49,17 +50,19 @@ module CrystalClick
 
     def raw_string_stream?(column : String, stream_name : String) : Bool
       @fields.any? do |field|
-        field.type_name == "String" && leaf_stream_name(column, field) == stream_name
+        field.leaf_type.base_type_name == "String" && leaf_stream_name(column, field) == stream_name
       end
     end
 
     def stream_width(column : String, stream_name : String) : Int32?
       @fields.each do |field|
         leaf_stream = leaf_stream_name(column, field)
-        if field.type_name == "String"
+        leaf_type = field.leaf_type
+        return 1 if leaf_type.nullable? && stream_name == "#{leaf_stream}.null"
+        if leaf_type.base_type_name == "String"
           return 8 if stream_name == "#{leaf_stream}.size"
           return 1 if stream_name == leaf_stream
-        elsif field.type_name == "Bool"
+        elsif leaf_type.base_type_name == "Bool"
           return 1 if stream_name == leaf_stream
         elsif parameterized_type = field.parameterized_type
           width = case parameterized_type
@@ -68,13 +71,13 @@ module CrystalClick
                   when WideTupleDecimalType     then parameterized_type.storage_width
                   end
           return width if stream_name == leaf_stream
-        elsif identifier_width = WideTupleIdentifierType.width(field.type_name)
+        elsif identifier_width = WideTupleIdentifierType.width(leaf_type.base_type_name)
           return identifier_width if stream_name == leaf_stream
         elsif datetime_type = field.datetime_type
           return datetime_type.raw_width if stream_name == leaf_stream
-        elsif temporal_width = WideTupleTemporalType.width(field.type_name)
+        elsif temporal_width = WideTupleTemporalType.width(leaf_type.base_type_name)
           return temporal_width if stream_name == leaf_stream
-        elsif numeric_width = WideTupleNumericType.width(field.type_name)
+        elsif numeric_width = WideTupleNumericType.width(leaf_type.base_type_name)
           return numeric_width if stream_name == leaf_stream
         end
       end
@@ -94,6 +97,15 @@ module CrystalClick
 
       row_bytes = RESULT_ROW_ACCOUNTING_BYTES
       @fields.each do |field|
+        leaf_type = field.leaf_type
+        leaf_charge = leaf_type.logical_charge
+        return nil if leaf_charge > UInt64::MAX - fixed_bytes
+        fixed_bytes += leaf_charge
+        if leaf_type.nullable?
+          null_map_owner_bytes = instance_sizeof(ScalarNullMap).to_u64
+          return nil if null_map_owner_bytes > UInt64::MAX - fixed_bytes
+          fixed_bytes += null_map_owner_bytes
+        end
         if parameterized_type = field.parameterized_type
           descriptor_charge = parameterized_type.logical_charge
           return nil if descriptor_charge > UInt64::MAX - fixed_bytes
@@ -106,6 +118,7 @@ module CrystalClick
         end
 
         slot_bytes = row_slot_bytes(field)
+        slot_bytes += 1_u64 if leaf_type.nullable?
         return nil if slot_bytes > UInt64::MAX - row_bytes
         row_bytes += slot_bytes
       end
@@ -117,6 +130,19 @@ module CrystalClick
     end
 
     private def row_slot_bytes(field : WideTupleField) : UInt64
+      leaf_type = field.leaf_type
+      base_type_name = leaf_type.base_type_name
+      if parameterized_type = field.parameterized_type
+        if leaf_type.nullable?
+          case parameterized_type
+          when WideTupleEnumType    then return parameterized_type.width.to_u64
+          when WideTupleDecimalType then return parameterized_type.storage_width.to_u64
+          end
+        end
+      end
+      if leaf_type.nullable? && base_type_name == "Bool"
+        return sizeof(UInt8).to_u64
+      end
       if parameterized_type = field.parameterized_type
         case parameterized_type
         when WideTupleFixedStringType
@@ -133,9 +159,9 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("unsupported parameterized Tuple descriptor")
         end
-      elsif field.type_name == "String"
+      elsif base_type_name == "String"
         STRING_SLOT_ACCOUNTING_BYTES
-      elsif field.type_name == "Bool"
+      elsif base_type_name == "Bool"
         1_u64
       elsif datetime_type = field.datetime_type
         if datetime_type.family == DateTimeColumnType::Family::DateTime
@@ -143,10 +169,10 @@ module CrystalClick
         else
           sizeof(DateTime64Value).to_u64
         end
-      elsif temporal_width = WideTupleTemporalType.owned_width(field.type_name)
+      elsif temporal_width = WideTupleTemporalType.owned_width(base_type_name)
         temporal_width.to_u64
       else
-        (WideTupleIdentifierType.width(field.type_name) || WideTupleNumericType.width(field.type_name).not_nil!).to_u64
+        (WideTupleIdentifierType.width(base_type_name) || WideTupleNumericType.width(base_type_name).not_nil!).to_u64
       end
     end
 

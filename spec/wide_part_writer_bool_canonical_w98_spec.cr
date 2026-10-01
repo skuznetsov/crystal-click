@@ -193,7 +193,7 @@ module CrystalClick
       rows_per_mark : Int32,
     ) : Nil
       type_plan = WideTupleTypePlan.for_type(type_name) || raise "invalid W98 Tuple test type"
-      leaf_buffers = Array(TupleLeafBuffers).new(columns.size) { |index| columns[index].values }
+      leaf_buffers = Array(TupleLeafBuffers).new(columns.size) { |index| columns[index].physical_values }
       logical_streams = ["pk"] + type_plan.physical_streams("payload")
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       input = TuplePartWriteInput.new(
@@ -204,6 +204,7 @@ module CrystalClick
         "payload",
         type_plan,
         leaf_buffers,
+        Array(Array(UInt8)?).new(leaf_buffers.size, nil),
         logical_streams,
         Array(Int64).new(logical_streams.size, 0_i64),
         Array(UInt64).new(logical_streams.size, 0_u64),

@@ -426,7 +426,13 @@ module CrystalClick
       write_uint64_tuple_pair_with_stage_factory(
         destination, key_name, keys, value_name, type_name, columns, rows_per_mark,
         ->(parent : String) { create_stage(parent) },
-        ->(column : WideTupleLeafColumn) { column.string_values }
+        ->(column : WideTupleLeafColumn) do
+          if column.leaf_type.nullable?
+            column.physical_values.as(Array(String))
+          else
+            column.string_values
+          end
+        end
       )
     end
 

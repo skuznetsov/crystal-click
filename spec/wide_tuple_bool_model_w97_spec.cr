@@ -5,6 +5,11 @@ private def w97_mutate_first_byte(value : String) : Nil
   value.to_unsafe[0] = 0x58_u8
 end
 
+private def w97_leaf_descriptor_charge(base_type_name : String) : UInt64
+  instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+    instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
+end
+
 private def w97_bool_row_after_data_scope : CrystalClick::WideTupleRow
   plan = CrystalClick::WideTupleTypePlan.for_type(
     "Tuple(flag Bool, byte UInt8, text String)"
@@ -51,10 +56,14 @@ describe "W97 Bool named-Tuple model" do
     plan.raw_string_stream?("payload", "payload%2Eflag").should be_false
     plan.raw_string_stream?("payload", "payload%2Etext").should be_true
 
-    # 64 container + three actual field slots + per row (8 row + 1 Bool +
+    # 64 container + three actual field slots + three independently measured
+    # leaf owners + per row (8 row + 1 Bool +
     # 1 UInt8 + 16 String slots) + three String payload bytes.
     fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                  w97_leaf_descriptor_charge("Bool") +
+                  w97_leaf_descriptor_charge("UInt8") +
+                  w97_leaf_descriptor_charge("String")
     row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
                 sizeof(Bool).to_u64 + sizeof(UInt8).to_u64 +
                 CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
@@ -64,11 +73,14 @@ describe "W97 Bool named-Tuple model" do
     plan.materialization_charge(0_u64, UInt64::MAX).should be_nil
   end
 
-  it "rejects empty-argument Bool aliases and neighboring compositions" do
+  it "admits Nullable Bool and rejects empty-argument or neighboring compositions" do
+    nullable = CrystalClick::WideTupleTypePlan.for_type("Tuple(flag Nullable(Bool))").not_nil!
+    nullable.fields.first.type_name.should eq("Nullable(Bool)")
+    nullable.fields.first.leaf_type.nullable?.should be_true
+
     [
       "Tuple(flag Bool())",
       "Tuple(flag Bool(UInt8))",
-      "Tuple(flag Nullable(Bool))",
       "Tuple(flag Array(Bool))",
       "Tuple(flag Tuple(value Bool))",
       "Tuple(Bool)",

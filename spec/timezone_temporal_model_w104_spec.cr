@@ -511,6 +511,7 @@ describe CrystalClick::DateTimeColumnType do
       fields = plan.fields
       fields.size.should eq(4)
       descriptor_charge = 0_u64
+      leaf_owner_charge = 0_u64
       fields.each do |field|
         descriptor = field.datetime_type
         descriptor.should_not be_nil
@@ -518,6 +519,9 @@ describe CrystalClick::DateTimeColumnType do
           descriptor.logical_charge.should be > 0_u64
           descriptor_charge += descriptor.logical_charge
         end
+        base_type_name = field.leaf_type.base_type_name
+        leaf_owner_charge += instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+                             instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
       end
 
       bare_datetime = CrystalClick::DateTimeColumnType.datetime
@@ -542,7 +546,7 @@ describe CrystalClick::DateTimeColumnType do
       # the separately retained temporal descriptor is charged once per field.
       field_slot_charge = sizeof(CrystalClick::WideTupleField).to_u64
       CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES.should eq(field_slot_charge)
-      base_charge = 64_u64 + 4_u64 * field_slot_charge + descriptor_charge
+      base_charge = 64_u64 + 4_u64 * field_slot_charge + leaf_owner_charge + descriptor_charge
       plan.materialization_charge(0_u64, 0_u64).should eq(base_charge)
       plan.materialization_charge(0_u64, 17_u64).should eq(base_charge + 17_u64)
 

@@ -234,7 +234,7 @@ module CrystalClick
       rows_per_mark : Int32,
     ) : Nil
       type_plan = WideTupleTypePlan.for_type(type_name) || raise "invalid W99 Tuple test type"
-      leaf_buffers = Array(TupleLeafBuffers).new(columns.size) { |index| columns[index].values }
+      leaf_buffers = Array(TupleLeafBuffers).new(columns.size) { |index| columns[index].physical_values }
       logical_streams = [key_name] + type_plan.physical_streams(value_name)
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       input = TuplePartWriteInput.new(
@@ -245,6 +245,7 @@ module CrystalClick
         value_name,
         type_plan,
         leaf_buffers,
+        Array(Array(UInt8)?).new(leaf_buffers.size, nil),
         logical_streams,
         Array(Int64).new(logical_streams.size, 0_i64),
         Array(UInt64).new(logical_streams.size, 0_u64),
@@ -438,14 +439,14 @@ describe CrystalClick::WidePartWriter do
         end
       end
 
-      nullable_date_is_unsupported = [
+      unsupported_array_leaf = [
         CrystalClick::WideTupleLeafColumn.new("id", [CrystalClick::UUIDValue.new(1_u64, 2_u64), CrystalClick::UUIDValue.new(3_u64, 4_u64)]),
         CrystalClick::WideTupleLeafColumn.new("day", [0_u64, 1_u64]),
       ] of CrystalClick::WideTupleLeafColumn
       expect_raises(ArgumentError, "unsupported compositional Tuple type") do
         CrystalClick::WidePartWriter.w99_test_write_with_stage_factory(
-          File.join(parent, "nullable-date"), "pk", keys.to_unsafe.to_slice(keys.size),
-          "payload", "Tuple(id UUID, day Nullable(Date))", nullable_date_is_unsupported, 1, factory, copy_strings
+          File.join(parent, "array-leaf"), "pk", keys.to_unsafe.to_slice(keys.size),
+          "payload", "Tuple(id UUID, day Array(UInt64))", unsupported_array_leaf, 1, factory, copy_strings
         )
       end
 

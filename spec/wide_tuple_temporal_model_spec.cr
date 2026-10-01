@@ -204,6 +204,8 @@ describe CrystalClick::WideTupleTypePlan do
     plan.materialization_charge(1_u64, 0_u64).should eq(
       CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
       CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+      instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+      instance_sizeof(String).to_u64 + "DateTime64(3)".bytesize.to_u64 + 1_u64 +
       plan.fields.first.datetime_type.not_nil!.logical_charge +
       CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
       sizeof(CrystalClick::DateTime64Value).to_u64

@@ -51,6 +51,17 @@ the sealed scope, executed gates and residual limits are in
 `TIMEZONE_TEMPORAL_FRONTIER.md`.
 It does not claim completion of the larger facade refactor.
 
+W105 adds one immutable `WideTupleLeafType` schema owner and one immutable
+`ScalarNullMap` storage owner, each in its own file, for nullable scalar fields
+inside named-flat Tuple. It preserves the closed raw carriers rather than
+adding a per-family Cartesian set of `Array(T?)` buffers. Reader, writer and
+table/catalog consumers use the same schema/mask contract. Focused DEBUG and
+RELEASE each passed 537 examples; full DEBUG passed 1,719. Bidirectional stock
+qualification, both timezone phases and ten unchanged Tuple/temporal/QBit
+regression scripts passed. The scoped certificate, accessor migration and
+logical-budget/RSS distinction are in `NULLABLE_TUPLE_FRONTIER.md`.
+The larger facade decomposition remains open.
+
 ## W104 ownership boundary
 
 `DateTimeColumnType` owns exact temporal family, precision, timezone provenance

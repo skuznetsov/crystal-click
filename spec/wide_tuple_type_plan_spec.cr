@@ -1,5 +1,10 @@
 require "./spec_helper"
 
+private def w94_leaf_descriptor_charge(base_type_name : String) : UInt64
+  instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+    instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
+end
+
 describe "W94 named scalar-leaf Tuple type plan" do
   it "plans ordered UInt64 and String leaves without a fixed arity whitelist" do
     types = {
@@ -56,7 +61,6 @@ describe "W94 named scalar-leaf Tuple type plan" do
       "Tuple(null String)",
       "Tuple(#{"a" * 129} String)",
       "Tuple(1field UInt64)",
-      "Tuple(a Nullable(UInt64))",
       "Tuple(a Bool())",
       "Tuple(a Array(String))",
       "Tuple(a Tuple(x UInt64))",
@@ -66,12 +70,17 @@ describe "W94 named scalar-leaf Tuple type plan" do
     rejected.each do |type_name|
       CrystalClick::WideTupleTypePlan.for_type(type_name).should be_nil
     end
+
+    nullable = CrystalClick::WideTupleTypePlan.for_type("Tuple(a Nullable(UInt64))").not_nil!
+    nullable.fields.first.type_name.should eq("Nullable(UInt64)")
+    nullable.fields.first.leaf_type.nullable?.should be_true
   end
 
   it "charges empty String slots, ordered fields and checked overflow through the shared budget model" do
     single = CrystalClick::WideTupleTypePlan.for_type("Tuple(value UInt64)").not_nil!
     fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                  CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                  w94_leaf_descriptor_charge("UInt64")
     single.materialization_charge(0_u64, 0_u64).should eq(fixed_bytes)
     single.materialization_charge(1_u64, 0_u64).should eq(
       fixed_bytes + CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
@@ -83,10 +92,12 @@ describe "W94 named scalar-leaf Tuple type plan" do
     nine_strings = CrystalClick::WideTupleTypePlan.for_type(
       "Tuple(a String, b String, c String, d String, e String, f String, g String, h String, i String)"
     ).not_nil!
-    # 64 container + nine actual field slots + 8 row + 9*16 String slots;
+    # 64 container + nine actual field slots + nine leaf owners + 8 row +
+    # 9*16 String slots;
     # empty payloads still consume a slot for every field.
     nine_string_fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                              9_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                              9_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                              9_u64 * w94_leaf_descriptor_charge("String")
     nine_string_row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
                             9_u64 * CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
     nine_strings.materialization_charge(1_u64, 0_u64).should eq(nine_string_fixed_bytes + nine_string_row_bytes)

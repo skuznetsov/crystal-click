@@ -122,6 +122,7 @@ module CrystalClick
         value_name,
         type_plan,
         expected_leaf_buffers,
+        Array(Array(UInt8)?).new(expected_leaf_buffers.size, nil),
         logical_streams,
         Array(Int64).new(logical_streams.size, 0_i64),
         Array(UInt64).new(logical_streams.size, 0_u64),
@@ -199,6 +200,12 @@ describe CrystalClick::WidePartWriter do
     plan = CrystalClick::WideTupleTypePlan.for_type(type_name).not_nil!
     keys = [1_u64, 3_u64, 5_u64, 8_u64, 9_u64]
     fixed_payload_bytes = (fixed_values.size * 3).to_u64
+    leaf_owner_bytes = 0_u64
+    columns.each do |column|
+      name_bytes = column.leaf_type.base_type_name.bytesize.to_u64
+      leaf_owner_bytes += instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+                          instance_sizeof(String).to_u64 + name_bytes + 1_u64
+    end
     descriptor_bytes = 0_u64
     columns.each do |column|
       descriptor_bytes += column.parameterized_type.not_nil!.logical_charge
@@ -214,7 +221,7 @@ describe CrystalClick::WidePartWriter do
     expected_plan_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
                            columns.size.to_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
                            keys.size.to_u64 * row_charge +
-                           fixed_payload_bytes + descriptor_bytes
+                           fixed_payload_bytes + leaf_owner_bytes + descriptor_bytes
     plan.materialization_charge(keys.size.to_u64, fixed_payload_bytes).should eq(expected_plan_charge)
     parent = File.tempname("crystal-click-wide-writer-parameterized")
     Dir.mkdir(parent)
@@ -457,7 +464,7 @@ describe CrystalClick::WidePartWriter do
       copy_calls.should be_empty
 
       original_buffers = [] of CrystalClick::WideTupleLeafColumn::Buffer
-      columns.each { |column| original_buffers << column.values }
+      columns.each { |column| original_buffers << column.physical_values }
       CrystalClick::WidePartWriter.w101_test_validate_tuple_stage(
         destination, "pk", keys, "payload", type_name, original_buffers, 2
       )

@@ -15,7 +15,7 @@ module CrystalClick
       row_count = columns.first?.try(&.size) || 0
       columns.each_with_index do |column, index|
         field = fields[index]
-        unless column.name == field.name && column.type_name == field.type_name
+        unless column.name == field.name && column.leaf_type == field.leaf_type
           raise ArgumentError.new("Tuple result leaf does not match schema order")
         end
         if exact_type = field.parameterized_type
@@ -41,20 +41,14 @@ module CrystalClick
       # immutable descriptor, so retained leaves do not keep duplicate maps.
       @columns = Array(WideTupleLeafColumn).new(columns.size) do |index|
         column = columns[index]
-        if exact_type = fields[index].parameterized_type
-          column.owned_copy_for(exact_type)
-        elsif exact_type = fields[index].datetime_type
-          column.owned_copy_for(exact_type)
-        else
-          column.owned_copy
-        end
+        column.owned_copy_for(fields[index].leaf_type)
       end
       @row_count = row_count
       @field_indices = {} of String => Int32
       @string_field_indices = [] of Int32
       fields.each_with_index do |field, index|
         @field_indices[String.new(field.name.to_slice)] = index.to_i32
-        @string_field_indices << index.to_i32 if field.type_name == "String" ||
+        @string_field_indices << index.to_i32 if field.leaf_type.base_type_name == "String" ||
                                                  field.parameterized_type.is_a?(WideTupleFixedStringType)
       end
     end

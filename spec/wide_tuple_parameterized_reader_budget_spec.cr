@@ -65,6 +65,9 @@ class CrystalClick::WidePart
           FixedStringValue.from_raw(width, row_bytes)
         end
         WideTupleLeafColumn.new(name, fixed_type, values)
+      },
+      ->(_name : String, _leaf_type : WideTupleLeafType, _bytes : Bytes, _null_map : ScalarNullMap, _encoded_rows : UInt64, _width : Int32) {
+        raise "unexpected Nullable leaf decode in FixedString budget test"
       }
     )
   end

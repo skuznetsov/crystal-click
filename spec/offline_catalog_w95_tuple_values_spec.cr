@@ -256,7 +256,7 @@ describe "W95 offline catalog named Tuple values" do
       error.message.should eq("table DDL and selected part column types differ")
     end
 
-    w95_with_offline_tuple_catalog([7_u64], columns, "Tuple(s Nullable(String))") do |root, _part|
+    w95_with_offline_tuple_catalog([7_u64], columns, "Tuple(s Array(String))") do |root, _part|
       selection = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"]
       error = expect_raises(CrystalClick::UnsupportedFormatError) { selection.values }
       error.message.should eq("selected table column type is unsupported")

@@ -93,6 +93,7 @@ module CrystalClick
         value_name,
         type_plan,
         expected_leaf_buffers,
+        Array(Array(UInt8)?).new(expected_leaf_buffers.size, nil),
         logical_streams,
         Array(Int64).new(logical_streams.size, 0_i64),
         Array(UInt64).new(logical_streams.size, 0_u64),
@@ -239,7 +240,7 @@ describe CrystalClick::WidePartWriter do
       original_buffers = [] of CrystalClick::WideTupleLeafColumn::Buffer
       columns.each_with_index do |column, index|
         decoded.columns[index].values.should eq(column.values)
-        original_buffers << column.values
+        original_buffers << column.physical_values
       end
 
       # First prove the unchanged canonical part passes with its actual source
@@ -397,8 +398,12 @@ describe CrystalClick::WidePartWriter do
     owned_width = CrystalClick::WideTupleTemporalType.owned_width("DateTime64(3)").not_nil!
     per_row_charge = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + owned_width.to_u64 + CrystalClick::WideTupleTypePlan::UINT64_SLOT_ACCOUNTING_BYTES
     datetime_descriptor_charge = plan.fields.first.datetime_type.not_nil!.logical_charge
+    leaf_name_bytes = plan.fields.first.leaf_type.base_type_name.bytesize.to_u64
+    leaf_type_charge = instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+                       instance_sizeof(String).to_u64 + leaf_name_bytes + 1_u64
     fixed_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                   CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES + datetime_descriptor_charge
+                   CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                   leaf_type_charge + datetime_descriptor_charge
     rows = ((CrystalClick::WideTupleTypePlan::MAX_MATERIALIZED_BYTES - fixed_charge) // per_row_charge + 1_u64).to_i32
     keys = Array(UInt64).new(rows) { |index| index.to_u64 + 1_u64 }
     values = Array(CrystalClick::DateTime64Value).new(rows) { CrystalClick::DateTime64Value.new(0_i64, 3) }

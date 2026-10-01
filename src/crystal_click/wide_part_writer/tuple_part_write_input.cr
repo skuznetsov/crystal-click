@@ -12,6 +12,7 @@ module CrystalClick
       getter value_name : String
       getter type_plan : WideTupleTypePlan
       getter leaf_buffers : Array(TupleLeafBuffers)
+      getter leaf_null_maps : Array(Array(UInt8)?)
       getter logical_streams : Array(String)
       getter compressed_sizes : Array(Int64)
       getter raw_sizes : Array(UInt64)
@@ -29,6 +30,7 @@ module CrystalClick
         @value_name : String,
         @type_plan : WideTupleTypePlan,
         @leaf_buffers : Array(TupleLeafBuffers),
+        @leaf_null_maps : Array(Array(UInt8)?),
         @logical_streams : Array(String),
         @compressed_sizes : Array(Int64),
         @raw_sizes : Array(UInt64),

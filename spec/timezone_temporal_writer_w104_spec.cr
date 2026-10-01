@@ -163,6 +163,7 @@ module CrystalClick
         "value",
         type_plan,
         leaf_buffers,
+        Array(Array(UInt8)?).new(leaf_buffers.size, nil),
         logical_streams,
         Array(Int64).new(logical_streams.size, 0_i64),
         Array(UInt64).new(logical_streams.size, 0_u64),

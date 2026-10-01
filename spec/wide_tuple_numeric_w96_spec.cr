@@ -1,5 +1,10 @@
 require "./spec_helper"
 
+private def w96_leaf_descriptor_charge(base_type_name : String) : UInt64
+  instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+    instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
+end
+
 private def w96_assert_numeric_plan(type_name : String, width : Int32) : Nil
   full_type = "Tuple(value #{type_name})"
   plan = CrystalClick::WideTupleTypePlan.for_type(full_type)
@@ -13,7 +18,8 @@ private def w96_assert_numeric_plan(type_name : String, width : Int32) : Nil
     plan.raw_string_stream?("payload", "payload%2Evalue").should be_false
 
     fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                  CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                  w96_leaf_descriptor_charge(type_name)
     bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + width.to_u64
     expected_charge = fixed_bytes + 3_u64 * bytes_per_row
     plan.materialization_charge(3_u64, 0_u64).should eq(expected_charge)
@@ -39,7 +45,8 @@ describe "W96 named numeric Tuple plan red" do
     plan.stream_width("payload", "payload%2Eb").should eq(1)
 
     fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  2_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                  2_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                  w96_leaf_descriptor_charge("UInt64") + w96_leaf_descriptor_charge("String")
     bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
                     CrystalClick::WideTupleTypePlan::UINT64_SLOT_ACCOUNTING_BYTES +
                     CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
@@ -92,25 +99,36 @@ describe "W96 named numeric Tuple plan red" do
     # 64 bytes of result container + five actual field slots; per row
     # 8-byte row + 1+4+2+32-byte numeric slots + one 16-byte String slot;
     # raw String payload bytes are added only once after all fields.
+    leaf_descriptor_bytes = 0_u64
+    ["Int8", "Float32", "BFloat16", "Int256", "String"].each do |base_type_name|
+      leaf_descriptor_bytes += w96_leaf_descriptor_charge(base_type_name)
+    end
     fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  5_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                  5_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                  leaf_descriptor_bytes
     row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 1_u64 + 4_u64 + 2_u64 +
                 32_u64 + CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
     plan.materialization_charge(3_u64, 5_u64).should eq(fixed_bytes + 3_u64 * row_bytes + 5_u64)
   end
 
-  it "rejects neighboring semantic, recursive, unnamed, and empty-argument types" do
+  it "admits Nullable scalar leaves and rejects malformed, recursive, unnamed, and empty-argument types" do
+    [
+      "Tuple(value Nullable(Bool))",
+      "Tuple(value Nullable(Int8))",
+      "Tuple(value Nullable(Enum8('a' = 1)))",
+      "Tuple(value Nullable(Decimal(9, 2)))",
+    ].each do |type_name|
+      CrystalClick::WideTupleTypePlan.for_type(type_name).should_not be_nil
+    end
+
     # Flat Decimal(P, S) and Enum8 leaves are admitted by W101; only malformed
     # precision or unsupported nullable/nested placements remain negative.
     rejected = [
       "Tuple()",
       "Tuple(Int8)",
-      "Tuple(value Nullable(Bool))",
       "Tuple(value Decimal(0, 2))",
-      "Tuple(value Nullable(Int8))",
       "Tuple(value Array(Int8))",
       "Tuple(value Tuple(inner Int8))",
-      "Tuple(value Nullable(Enum8('a' = 1)))",
       "Tuple(value String())",
       "Tuple(value UInt8())",
       "Tuple(value UInt16())",

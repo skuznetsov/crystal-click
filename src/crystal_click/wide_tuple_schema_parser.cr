@@ -24,6 +24,20 @@ module CrystalClick
       nil
     end
 
+    # Parse one exact admitted scalar leaf without wrapping it in a synthetic
+    # Tuple. The normal Tuple path calls #parse_leaf directly and therefore
+    # does not recurse through this public owner factory.
+    def self.parse_leaf_type(source : String) : WideTupleLeafType?
+      return nil if source.bytesize > MAX_SOURCE_BYTES
+      new(source).parse_standalone_leaf(source)
+    rescue ex : ArgumentError
+      nil
+    end
+
+    protected def parse_standalone_leaf(source : String) : WideTupleLeafType
+      parse_leaf(source)
+    end
+
     protected def parse : Array(WideTupleField)?
       # Match the legacy gate: leading whitespace is not accepted, while
       # whitespace after Tuple and after the closing parenthesis is.
@@ -50,8 +64,8 @@ module CrystalClick
         leaf_start = @offset
         leaf_end = scan_leaf_end
         leaf_source = String.new(@bytes[leaf_start, leaf_end - leaf_start])
-        type_name, parameterized_type, datetime_type = parse_leaf(leaf_source)
-        fields << WideTupleField.new(name, type_name, parameterized_type, datetime_type)
+        leaf_type = parse_leaf(leaf_source)
+        fields << WideTupleField.new(name, leaf_type)
         skip_whitespace
 
         case current_byte?
@@ -131,7 +145,21 @@ module CrystalClick
       ending
     end
 
-    private def parse_leaf(source : String) : {String, WideTupleParameterizedType?, DateTimeColumnType?}
+    private def parse_leaf(source : String) : WideTupleLeafType
+      if source.starts_with?("Nullable(")
+        add_node! # Nullable wrapper syntax is a node distinct from its base leaf.
+        raise ArgumentError.new("Nullable Tuple leaf wrapper is not canonical") unless source.ends_with?(')')
+        inner = String.new(source.to_slice[9, source.bytesize - 10])
+        raise ArgumentError.new("Nullable Tuple leaf cannot be nested") if inner.starts_with?("Nullable(")
+        base_name, parameterized_type, datetime_type = parse_bare_leaf(inner)
+        return WideTupleLeafType.new(base_name, true, parameterized_type, datetime_type)
+      end
+
+      base_name, parameterized_type, datetime_type = parse_bare_leaf(source)
+      WideTupleLeafType.new(base_name, false, parameterized_type, datetime_type)
+    end
+
+    private def parse_bare_leaf(source : String) : {String, WideTupleParameterizedType?, DateTimeColumnType?}
       add_node!
       if datetime_type = DateTimeColumnType.parse_leaf(source)
         add_node! if datetime_type.precision?

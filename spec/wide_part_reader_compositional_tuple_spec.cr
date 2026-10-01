@@ -278,7 +278,11 @@ describe "W94 compositional named Tuple reader" do
       reader = CrystalClick::WidePart.open_typed(part, "payload")
       field_count = columns.size.to_u64
       fixed_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                     field_count * sizeof(CrystalClick::WideTupleField).to_u64
+                     field_count * sizeof(CrystalClick::WideTupleField).to_u64 +
+                     field_count * (
+                       instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+                       instance_sizeof(String).to_u64 + "String".bytesize.to_u64 + 1_u64
+                     )
       row_charge = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
                    field_count * CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
       required_charge = fixed_charge + row_charge

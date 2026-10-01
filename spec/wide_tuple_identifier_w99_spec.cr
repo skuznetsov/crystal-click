@@ -1,5 +1,16 @@
 require "./spec_helper"
 
+private def w99_leaf_descriptor_charge(base_type_name : String) : UInt64
+  instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+    instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
+end
+
+private def w99_identifier_leaf_descriptor_bytes : UInt64
+  w99_leaf_descriptor_charge("IPv6") +
+    w99_leaf_descriptor_charge("IPv4") +
+    w99_leaf_descriptor_charge("UUID")
+end
+
 private def w99_identifier_columns : Array(CrystalClick::WideTupleLeafColumn)
   ipv6_values = [
     CrystalClick::IPv6Value.new(0x20010db885a30000_u64, 0x00008a2e03707334_u64),
@@ -205,14 +216,16 @@ describe "W99 identifier and address Tuple plan" do
     end
   end
 
-  it "rejects malformed, empty-argument, nullable, and recursive identifier aliases" do
+  it "admits Nullable UUID and rejects malformed, empty-argument, and recursive aliases" do
+    nullable = CrystalClick::WideTupleTypePlan.for_type("Tuple(value Nullable(UUID))").not_nil!
+    nullable.fields.first.type_name.should eq("Nullable(UUID)")
+
     rejected = [
       "Tuple()",
       "Tuple(UUID)",
       "Tuple(value UUID())",
       "Tuple(value IPv4())",
       "Tuple(value IPv6())",
-      "Tuple(value Nullable(UUID))",
       "Tuple(value Array(IPv4))",
       "Tuple(value Tuple(inner IPv6))",
     ]
@@ -313,7 +326,8 @@ describe "W99 identifier and address Tuple plan" do
     # 64-byte container + three actual field slots; per row is 8 row bytes
     # plus the exact 16+4+16-byte identifier payloads.
     fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                  w99_identifier_leaf_descriptor_bytes
     bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 16_u64 + 4_u64 + 16_u64
     plan.materialization_charge(0_u64, 0_u64).should eq(fixed_bytes)
     plan.materialization_charge(3_u64, 0_u64).should eq(fixed_bytes + 3_u64 * bytes_per_row)
@@ -334,7 +348,8 @@ describe "W99 identifier and address Tuple plan" do
       range_type = "Tuple(v6 IPv6, v4 IPv4, id UUID)"
       range_plan = CrystalClick::WideTupleTypePlan.for_type(range_type).not_nil!
       fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                    3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+                    3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                    w99_identifier_leaf_descriptor_bytes
       bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 16_u64 + 4_u64 + 16_u64
       reader.tuple_mark_range_materialization_charge("payload", 0, 3).should eq(
         range_plan.materialization_charge(5_u64, 0_u64)
@@ -364,17 +379,21 @@ describe "W99 identifier and address Tuple plan" do
         columns[2].values_as(CrystalClick::UUIDValue)[3]
       )
 
+      required_two_row_charge = fixed_bytes + 2_u64 * bytes_per_row
       expect_raises(CrystalClick::CorruptPartError) do
-        reader.read_tuple_mark_range("payload", 0, 1, max_materialized_bytes: 223_u64)
+        reader.read_tuple_mark_range("payload", 0, 1, max_materialized_bytes: required_two_row_charge - 1_u64)
       end
       callbacks = [] of Int32
       expect_raises(CrystalClick::CorruptPartError) do
-        reader.each_tuple_mark_range("payload", 0, 1, max_materialized_bytes: 223_u64) do |_data, mark_index|
+        reader.each_tuple_mark_range("payload", 0, 1, max_materialized_bytes: required_two_row_charge - 1_u64) do |_data, mark_index|
           callbacks << mark_index
           nil
         end
       end
       callbacks.should be_empty
+      reader.read_tuple_mark_range(
+        "payload", 0, 1, max_materialized_bytes: required_two_row_charge
+      ).row_count.should eq(2)
     ensure
       FileUtils.rm_rf(parent)
     end

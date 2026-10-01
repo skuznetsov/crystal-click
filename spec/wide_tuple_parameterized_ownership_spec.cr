@@ -20,6 +20,11 @@ private def w101own_mutate_string(value : String, byte : UInt8) : Nil
   value.to_unsafe[0] = byte
 end
 
+private def w101_leaf_descriptor_charge(base_type_name : String) : UInt64
+  instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
+    instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
+end
+
 private def w101own_detached_fixed_string_value : CrystalClick::FixedStringValue
   plan = CrystalClick::WideTupleTypePlan.for_type("Tuple(id FixedString(4))").not_nil!
   exact_type = plan.fields[0].parameterized_type.not_nil!.as(CrystalClick::WideTupleFixedStringType)
@@ -359,9 +364,11 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
     fixed_name = fixed_owner.type_name
     fixed_owner_charge = instance_sizeof(CrystalClick::WideTupleFixedStringType).to_u64 +
                          instance_sizeof(String).to_u64 + fixed_name.bytesize.to_u64 + 1_u64
+    fixed_leaf_owner_charge = w101_leaf_descriptor_charge("FixedString(4)")
     fixed_owner.logical_charge.should eq(fixed_owner_charge)
     fixed_empty_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                         CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES + fixed_owner_charge
+                         CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                         fixed_leaf_owner_charge + fixed_owner_charge
     fixed_plan.materialization_charge(0_u64, 0_u64).not_nil!.should eq(fixed_empty_charge)
     (fixed_plan.materialization_charge(1_u64, 0_u64).not_nil! -
       fixed_plan.materialization_charge(0_u64, 0_u64).not_nil!).should eq(
@@ -388,9 +395,11 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
                              enum_label_bytes + instance_sizeof(String).to_u64 +
                              enum_type_name.bytesize.to_u64 + 1_u64
     enum_owner_charge = instance_sizeof(CrystalClick::WideTupleEnumType).to_u64 + enum_definition_charge
+    enum_leaf_owner_charge = w101_leaf_descriptor_charge("Enum8('idle' = -1, 'run' = 2)")
     enum_owner.logical_charge.should eq(enum_owner_charge)
     enum_empty_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                        CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES + enum_owner_charge
+                        CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                        enum_leaf_owner_charge + enum_owner_charge
     enum_plan.materialization_charge(0_u64, 0_u64).not_nil!.should eq(enum_empty_charge)
     (enum_plan.materialization_charge(1_u64, 0_u64).not_nil! -
       enum_plan.materialization_charge(0_u64, 0_u64).not_nil!).should eq(
@@ -408,9 +417,11 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
       owner_name = owner.type_name
       owner_charge = instance_sizeof(CrystalClick::WideTupleDecimalType).to_u64 +
                      instance_sizeof(String).to_u64 + owner_name.bytesize.to_u64 + 1_u64
+      leaf_owner_charge = w101_leaf_descriptor_charge(declaration)
       owner.logical_charge.should eq(owner_charge)
       empty_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                     CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES + owner_charge
+                     CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                     leaf_owner_charge + owner_charge
       plan.materialization_charge(0_u64, 0_u64).not_nil!.should eq(empty_charge)
       (plan.materialization_charge(1_u64, 0_u64).not_nil! -
         plan.materialization_charge(0_u64, 0_u64).not_nil!).should eq(

@@ -8,6 +8,11 @@ The later W94-W101 compositional Tuple frontier is tracked separately in
 The later W102 exact standalone Decimal precision frontier is tracked in
 `DECIMAL_PRECISION_FRONTIER.md`, including its six admitted column shapes and
 separate canonical-metadata versus catalog-DDL grammar.
+The later W103 QBit, W104 timezone-qualified temporal and W105 nullable scalar
+Tuple increments are tracked in `QBIT_FRONTIER.md`,
+`TIMEZONE_TEMPORAL_FRONTIER.md` and `NULLABLE_TUPLE_FRONTIER.md`. They preserve
+the paired reader/writer qualification boundary; none certifies arbitrary
+recursive types or a newer stock binary.
 These bounded reader/writer/table/catalog extensions do not widen the
 MV/projection, arbitrary-table-write or
 memory/performance boundaries below. Owner-by-contract refactoring is tracked
