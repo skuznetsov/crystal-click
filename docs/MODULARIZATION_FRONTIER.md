@@ -6,6 +6,8 @@ are verified below. The larger reader/writer modularization remains future work.
 W95 high-level Tuple consumers are verified within their bounded profile in
 `COMPOSITIONAL_TUPLE_FRONTIER.md`; their three new concrete owners remain
 separate from the large existing facades.
+The October 1 catalog owner extraction is verified below; it preserves the
+existing API and behavior, not a completed responsibility-level architecture.
 W96 adds one closed numeric identity/width owner and extends the existing
 Tuple owners; its compatibility certificate is separate in
 `NUMERIC_TUPLE_FRONTIER.md`. It does not close the larger facade refactor.
@@ -84,6 +86,112 @@ full DEBUG passed 1,751. Paired W105/W106/W107 stock phases, all five affected
 Tuple family stock scripts and the 297-profile W104 writer phase passed.
 This is not a claim that the large facades or resource lifetimes have been
 decomposed, nor a combined/full RELEASE certificate.
+
+## Catalog owner decomposition (2026-10-01)
+
+Status: VERIFIED within the source-owner extraction and executed gates below.
+Baseline is `5c291c8117a3cec72cb51f84dde73ac0d73a6e77`.
+The original `offline_catalog.cr` has 5,395 lines and combines column-value
+aliases, three public metadata structs, table access, column selection,
+database navigation and catalog discovery/DDL parsing. The first extraction
+separates those existing owners; it does not introduce new types, change
+serialization, or claim that the table/catalog responsibilities are fully
+decomposed.
+
+Risk: CAUTION (large mechanical move and aggregate require integration).
+Rollback is the exact owner-file extraction and require changes; no data,
+dependency, publication or remote-history operation is involved. Preserve the
+separate proposed Map(Tuple) frontier rather than mixing it into this commit.
+
+Plan:
+
+1. Keep `OfflineCatalog` in `offline_catalog.cr`; move its private
+   `DatabaseLocation` model to `offline_catalog/database_location.cr` with
+   identical namespace and visibility.
+2. Give `OfflineColumn`, `OfflineProjection`, `OfflinePartCandidate`,
+   `OfflineTable`, `OfflineColumnSelection`, and `OfflineDatabase` one file
+   each under `src/crystal_click/`. Move aliases to `offline_column_value.cr`.
+3. Preserve declarations, comments and method bodies, allowing only enclosing
+   namespace/require integration and boundary blank lines. Keep metadata-only
+   lookup, lazy scans, owned value materialization, candidate-versus-Active
+   semantics and all bounds unchanged.
+4. Integrate the aggregate require graph, then compare the reconstructed
+   owners with the baseline. The strongest failure mode is a dropped private
+   method, visibility change or missing require hidden by a focused test.
+5. Execute the seven focused catalog/MV/projection/TUI specs in DEBUG and
+   RELEASE, full DEBUG, and the W86/W87/W88 stock oracles. Check format and
+   staged diff hygiene, inspect the exact diff, and make one local commit.
+
+The original aggregate import in `src/crystal_click.cr` is unchanged.
+`offline_catalog.cr` remains the compatibility entry point and requires the
+seven public/alias owners plus the private nested `DatabaseLocation` owner.
+`OfflineCatalog` now occupies 1,560 lines; the moved `OfflineTable` still
+occupies 3,615 lines and is not a responsibility-level decomposition.
+
+Executed certificate (2026-10-01, Crystal 1.21.0, ClickHouse 26.7.1.1315):
+
+- Baseline seven-file DEBUG: 113 examples, zero failures/errors/pending.
+- Post-extraction same seven files in DEBUG and RELEASE: 113 examples each,
+  zero failures/errors/pending, exit 0.
+- Full DEBUG: 1,751 examples, zero failures/errors/pending, exit 0. The linker
+  emitted a non-fatal duplicate `-lc` warning. Full RELEASE was not executed.
+- W86 stock metadata oracle: persisted MV/table kinds, exact DDL and named
+  projection metadata agree with stock-generated files, exit 0.
+- W87 stock projection oracle: both child parts and the four-row catalog scan
+  agree with ClickHouse; the incomplete projection set rejects before
+  callbacks, exit 0. Stock `CHECK TABLE` returned 1 for both source parts.
+- W88 stock MV oracle: stock trigger control and Crystal detached identity
+  recomputation pass; the generated part passes stock `ATTACH PART`,
+  `CHECK TABLE` and exact source/target row comparison, exit 0.
+- Complete source reconstruction from all eight extracted files and the
+  remaining catalog matches every nonblank baseline line, including comments,
+  constants, declarations and visibility. A seeded identifier drift is
+  rejected by that guard. Blank-line normalization is not a behavioral proof.
+- `crystal tool format --check` on all nine source files and diff hygiene pass.
+
+The focused inputs are `spec/offline_catalog_spec.cr`,
+`spec/offline_catalog_w86_spec.cr`,
+`spec/offline_catalog_projection_w87_spec.cr`,
+`spec/wide_part_table_projection_w87_spec.cr`,
+`spec/offline_mv_materialization_w88_spec.cr`,
+`spec/offline_catalog_w95_tuple_values_spec.cr`, and
+`spec/offline_tui_page_source_spec.cr`. From the repository root, the executed
+commands used `crystal spec --single-module --link-flags=-fuse-ld=ld` with
+those inputs, then the same invocation with `--release`, and finally the
+DEBUG invocation without explicit spec paths. Stock commands were
+`bash scripts/check_offline_schema_w86_oracle.sh`,
+`bash scripts/check_projection_w87_oracle.sh`, and
+`bash scripts/check_mv_materialization_w88_oracle.sh`.
+
+Heavy gates ran serially through
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh`, with a 600-second
+limit, 8 GiB focused/stock limit (32 GiB full DEBUG), and a 50% free-memory
+floor. Both `CLICKHOUSE` and `CLICKHOUSE_BIN` selected
+`/Users/sergey/.local/bin/clickhouse`; Crystal was
+`/opt/homebrew/bin/crystal`. The isolated cache was
+`/private/tmp/crystal-click-catalog-refactor-cache`; stock scripts used their
+own temporary caches. The host SDK was MacOSX26.5 and the system linker
+override above was retained. No current-master binary qualification is claimed.
+
+Frozen source fingerprint: SHA-256 of the newline-terminated
+`shasum -a 256` manifest, in the plan order (catalog, aliases, column,
+projection, candidate, table, selection, database, private location), is
+`5fc3cdf73efc848fc9fd769a3856f94f5b56ee6779f4de6b9d4d784d98b6076b`.
+All nine paths are under `src/crystal_click/`; the remaining catalog and
+eight owner files are the complete production scope of this extraction.
+
+Root's scoped adversarial verdict is ROBUST: reconstruction and its seeded
+negative control address lost bodies/declarations; aggregate compilation,
+runtime tests and stock probes address require integration and observable
+regressions. A Luna read-only static review also found no visibility or import
+widening; that correlated review alone is not independent runtime evidence.
+This certificate expires on affected source, require graph, compiler, binary
+or fixture/profile changes; rerun the affected identity and behavioral gates.
+
+Further responsibility extraction remains open: offline DDL parsing,
+selected-value materialization, physical-stream lifetimes, leaf codecs and
+reader/writer orchestration. One owner per file alone does not prove lower
+coupling, lower memory use, better throughput or full ClickHouse compatibility.
 
 ## W104 ownership boundary
 
