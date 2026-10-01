@@ -149,6 +149,51 @@ adding a separate class for every container/leaf combination is not the goal.
 Any widening from today's exact plans needs its own storage-profile falsifier
 and paired reader/writer evidence, not a name-only registration check.
 
+## Proposed shared physical-plan boundary (2026-10-01)
+
+Status: PROPOSED after source inspection at `3e36d5c`; not implementation or
+broader type admission. W114 Geometry qualification remains the active return
+pointer in `GEO_TYPES_FRONTIER.md`. Do not replace that frontier with a generic
+recursive-type rewrite before its stock controls and public refusal are sealed.
+
+`wide_type_plan.cr` already separates syntax parsing, five exact legacy
+admissions and a correctness-only `WidePhysicalPlanShadow`. The shadow models
+storage/cardinality/mark-row axes and stream widths, but explicitly does not
+authorize codecs. Tuple, Array(Tuple) and Map(Tuple) plans have overlapping
+stream responsibilities. `WidePart` independently classifies typed support,
+open-time inventory and empty EOF rules, primary streams, widths and selected
+range handling. Table preflight and catalog materializers separately choose
+semantic consumers. These observed repetitions motivate one physical authority;
+they do not prove that the current shadow can become that authority unchanged.
+
+Candidate dependency direction: syntax node -> explicit admitted nominal
+schema/profile -> immutable physical plan -> stream/range readers and writers.
+Row/value semantics, aggregate budgets and publication remain separate owners.
+Each concrete owner belongs in one file; do not introduce a class for every
+container/leaf combination or make parsing success mean physical support.
+
+Before migration, pin the following discriminators:
+
+- A parseable neighbor such as `Array(Tuple(a UInt8))` still fails typed
+  admission and any authoritative physical-plan factory until separately
+  qualified. The syntax parser may continue to accept it.
+- For one existing qualified composition, the new plan must match ordered
+  streams, widths, storage/cardinality axes and true physical mark-row axes.
+  The same descriptor must drive open-time inventory, primary stream, empty
+  EOF classification and selected validation; absent child streams are a
+  required counterexample rather than a skipped boundary.
+- Full, selected, lazy and catalog consumers must retain nominal value
+  semantics and one aggregate budget. A shared physical descriptor alone
+  cannot certify these higher-level contracts.
+
+First migrate one already-qualified composition end to end, preserving old
+dispatch/accessors as regression controls; require focused DEBUG/RELEASE,
+affected stock read/write and hostile neighbor/empty-stream checks before
+removing duplicated classification. Risk is CAUTION; rollback is the isolated
+owner and consumer diff over its then-current Git anchor. Exact files, APIs
+and execution commands must be sealed in that migration's own frontier before
+production edits. This proposal does not certify lower coupling, RSS or speed.
+
 ## Catalog owner decomposition (2026-10-01)
 
 Status: VERIFIED within the source-owner extraction and executed gates below.

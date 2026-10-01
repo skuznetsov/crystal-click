@@ -1,5 +1,149 @@
 # Geo types frontier
 
+## Active W114: Geometry qualification before paired implementation
+
+Status: design-sealed qualification; Geometry remains rejected by production.
+The full all-types and MV/projection goal remains active, followed by memory
+and performance work. This slice must not turn fixed Geometry storage into
+generic Variant admission or treat the W112 MultiPoint certificate as proof
+of Geometry's sparse arm cardinalities.
+
+Anchors: clean `3e36d5c`, shallow ClickHouse source
+`b762d6d7fe4b201147bdce1bd49b8fc87a8049d3`, and the isolated W112 executed
+26.10.1.1201 peer/hash/build identity recorded below. Source and executable
+revisions differ; qualify behavior on the actual executable. The source's
+`DataTypeCustomGeo.cpp:282-302` defines fixed persisted global tags:
+LineString=0, MultiLineString=1, MultiPolygon=2, Point=3, Polygon=4, Ring=5,
+MultiPoint=6. New alternatives are appended, not re-sorted. NULL is implicit
+tag 255, not an eighth arm. `SerializationVariant.cpp:787-815` writes a UInt8
+global tag followed by the selected arm's RowBinary value. In bulk storage
+the UInt64 BASIC/COMPACT mode prefix and per-granule tags are separate from
+sparse child streams; local in-memory offsets are not persisted streams.
+The same snapshot's immutable source tests corroborate the wire identity:
+`04837_geometry_discriminators_row_binary.sql` pins tags 0-6 and NULL255 and
+rejects tag7; `04511_geometry_discriminators_compatibility.sql` preserves
+pre-MultiPoint 26.7.1.767 blobs that must not be regenerated. Those Native and
+RowBinary fixtures are not six-arm MergeTree-part qualification.
+`04635_geometry_variant_local_discriminators.sql` separately exercises the
+local/global discriminator distinction; persisted tags are global.
+Root executed the eight literal RowBinary blobs from `04837` on the isolated
+26.10 peer and independently matched the complete output to the seven arm
+names plus `None`. The separate literal tag7 negative returned exit/code117
+and `INCORRECT_DATA` with `unexpected discriminator 7`. These wire checks
+do not qualify bulk-part cardinalities or serialization envelopes.
+Root also executed the two unchanged `04511` Native/RowBinary legacy blobs
+on that peer and compared the complete twelve-row output with the source's
+literal `.reference` file: exact match, exit0. The legacy wire certificate
+does not admit six-arm MergeTree storage or bind this peer to the source SHA.
+
+Root's first guarded stock witness created nominal Geometry values for NULL
+and MultiPoint, returned `None` and `MultiPoint` from `variantType`, and actual
+CHECK=1 for both parts. The payload enumerates 25 streams: discriminator,
+then arm size/coordinate streams in fixed tag order, including empty arms.
+Coordinates retain encoded Tuple suffixes (`payload.MultiPoint%2E1`, `%2E2`).
+The nonzero-PK part has the W112 serializer envelope with a single Default PK
+record and literal `exact_num_defaults: true`, plus `statistics.packed`.
+The separate one-row zero-PK part has Sparse PK metadata and is not admitted
+by the planned plain-PK profile. These are instrument observations, not a
+complete physical certificate or production RED.
+
+A separate guarded legacy 26.7.1.1315 witness produced one two-row Geometry
+part (PK1/2, NULL/LineString) at ratio 1.0, returned the expected nominal arm
+names and actual CHECK=1. Its exact substream declaration has 22 payload
+streams: the same order above with only MultiPoint's three streams absent.
+Its version-1/string-1 propagated serialization envelope has `columns: []`.
+This establishes a distinct inventory candidate, not six-arm reader/writer
+admission or a full BASIC/COMPACT compatibility certificate.
+
+Intermediate instrument checkpoint: root ran the frozen `fixtures` mode on
+Crystal1.21 under the serial 600-second/8-GiB guard and 50% free-memory floor:
+six profiles, 156 ordered streams and full/selected RowBinary generation,
+exit0. The script SHA-256 is
+`6f8656be4c026be41798c89c9d6e4db65c36aeacac8ba49895e1ed0f9b28e858`.
+Literal controls pin BASIC/COMPACT bytes, all-NULL and uniform-arm frames,
+all seven mixed arm prefixes, nested sizes and raw coordinate lanes. Root's
+source review corrected an omitted zero size0, a wrong pre-window Point
+prefix and UTF-8 expansion of NULL255 before the executed check. Scoped
+verdict: ROBUST for this instrument self-check only; stock part qualification,
+comparator mutation controls and the production-refusal RED remain pending.
+The checkpoint has no production dependency and rolls back as its script
+and related documentation diff. Refresh after any fixture/helper change.
+Replay from this repository through the existing serial guard:
+
+```sh
+env SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w114-fixtures-cache COGNI_RUN_SAFE_MIN_FREE_PCT=50 /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 8192 run --single-module --link-flags=-fuse-ld=ld scripts/probe_geometry_w114.cr -- fixtures
+```
+
+Planned paired surface: exact nominal Geometry beside one nondecreasing UInt64
+PK, Wide/LZ4/plain adaptive `.mrk2` and plain `primary.idx`; all seven arms and
+NULL, BASIC/COMPACT reading, owned raw Point bits and ragged topology,
+full/selected/lazy direct and table/catalog consumers, and stock-readable
+immutable writing. Table rows, per-arm value counts, nested size counts and
+Point counts are separate axes. Retained snapshots must not export mutable
+topology or confuse an empty tagged Array with NULL. Legacy six-arm Geometry
+is a separate required compatibility profile, not inferred from seven-arm
+acceptance; qualify it before admitting it. Wrapper/generic Array/Variant
+composition, Compact/Sparse layouts and arbitrary schemas remain rejected.
+
+Risk: CAUTION (serialization/API and shared physical leaf boundaries).
+Rollback: isolated local feature diff over the anchor; source/runtime/store
+fixtures remain separate and no installed binary or existing data is mutated.
+Likeliest failure: a valid tag stream paired with wrong sparse-arm origin or
+physical mark-row axis can return plausible but incorrect geometry. Guard:
+independent literal raw bytes and per-mark cardinalities, actual stock full
+and nonzero-key-selected RowBinary, and checksum-valid shifted/tag/topology
+attacks before callbacks or publication.
+
+Execution order and DoD:
+
+1. `scripts/probe_geometry_w114.{cr,sh}` must qualify stock source and fresh
+   ATTACH profiles before testing production refusal: mixed all-arm/NULL
+   BASIC and COMPACT, all-NULL, empty tagged Arrays, uniform-arm granules,
+   nonzero sparse-arm prefixes, tied keys, a short tail and raw IEEE bits.
+   Assert exact schema, inventory/hashes, metadata, discriminator prefix/tags,
+   nested raw bytes, literal marks/plain PK and actual CHECK=1/full/selected
+   RowBinary. Seed known wrong tags, raw bytes, marks and metadata to prove
+   the instrument's comparators are sensitive.
+2. `red` may count only an exact current public typed Geometry refusal after
+   those stock controls pass; UNKNOWN_TYPE, compiler/instrument failure or
+   a new unmodeled serializer envelope is not the feature RED. Preserve this
+   qualified evidence before production edits.
+3. Add cohesive one-class-per-file type/value/schedule, reader, adapters and
+   writer owners. Reuse existing Point, Geo Array, Variant discriminator and
+   staged publication contracts rather than duplicate codecs; enumerate and
+   test every shared consumer before widening an existing helper. Exact
+   caller-level API and owner paths require the qualification result first.
+4. Focused DEBUG/RELEASE, full DEBUG and affected Geo/Variant stock regression
+   gates must pass. Paired DoD additionally requires writer fresh ATTACH,
+   actual CHECK=1, literal full/selected stock RowBinary and independently
+   reviewed staged mutation rejection with absent destination/clean stage.
+   No full RELEASE or performance claim follows from narrower checks.
+
+Root owns this spec, serial guarded execution and independent hostile review;
+Luna owns separately assigned model/reader, writer and stock instrument work.
+All compiler/CH gates run through the existing serial memory guard. Refresh
+after affected source, discriminator order, runtime/settings, codec/marks,
+serializer envelope or ownership/consumer changes. Stop on stock-instrument
+failure and repair/qualify it rather than relax production exactness guards.
+
+Source-only hostile design review found two required implementation guards.
+The child-reader callback adapter must substitute true table-grid rows for
+physical range checks, and the common frame reader must recognize zero-byte
+Geometry arm ranges explicitly: its existing EOF classification is keyed by
+the root column type and currently recognizes only the predecessor profiles
+(`wide_part.cr:15381-15406,15630-15643,15738-15745`). Never skip absent-arm
+boundary validation. Lazy Geometry must fan out per outer mark after the
+whole selected-window preflight, not run seven child `each` loops sequentially
+and retain whole-window earlier-arm results. Its compact retained tag/count
+schedule and simultaneously live child result/scratch charges share one cap.
+Discarded child preflight sizes are transient charge, not retained topology.
+Tests must pin nonzero sparse origins with window-local arm indexes and
+absolute mark IDs, NULL versus empty/nested-empty, nominal same-depth aliases,
+aggregate threshold/minus-one and later-fault zero-callback behavior. A tag,
+payload and checksum rewrite forming another structurally valid value is a
+semantic data change, not detectable original-intent corruption. This review
+narrows the candidate design; it is not executed production verification.
+
 ## Active W112: nominal MultiPoint qualification and paired admission
 
 Status: VERIFIED within the executed paired W112 profile below. Full all-types
