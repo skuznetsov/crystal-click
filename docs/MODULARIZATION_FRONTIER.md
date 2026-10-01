@@ -149,6 +149,96 @@ adding a separate class for every container/leaf combination is not the goal.
 Any widening from today's exact plans needs its own storage-profile falsifier
 and paired reader/writer evidence, not a name-only registration check.
 
+## Active type-plan owner extraction (2026-10-01)
+
+Status: VERIFIED within the mechanical extraction and executed gates below
+over `951b5d7`; this is a behavior-preserving source-owner
+extraction, not the proposed authoritative physical-plan migration below.
+W114 Geometry qualification remains the capability return pointer.
+
+Keep `WideTypePlan`, its exact admission helpers and enums in
+`src/crystal_click/wide_type_plan.cr`. Move its existing nested concrete owners
+without method-body changes into these files, preserving their constant paths:
+
+- `wide_type_plan/physical_substream.cr`
+- `wide_type_plan/wide_physical_plan_shadow.cr`
+- `wide_type_plan/wide_physical_plan_shadow/axis.cr`
+- `wide_type_plan/wide_physical_plan_shadow/stream.cr`
+- `wide_type_plan/wide_physical_plan_shadow/builder.cr`
+
+The original file remains the compatibility entry point and loads the extracted
+owners. Reopening namespaces must retain lexical constant lookup and the
+Builder's private visibility. No type, codec, stream naming, mark/cardinality
+axis, buffer policy or public API changes are admitted by this extraction.
+
+Risk: CAUTION (source movement and require/visibility boundaries). Rollback is
+the isolated owner/require diff over the Git anchor. The likeliest failure is
+a changed lexical lookup or dropped method masked by an aggregate require.
+Guard by reconstructing every moved declaration against the anchor, checking
+the old entry point under its existing prerequisite imports, and retaining
+exact unsupported-neighbor admission tests. Parsing and shadow success must
+not become codec authority.
+
+DoD: baseline and extracted focused DEBUG/RELEASE runs of the thirteen
+`wide_type_plan_w{67,69,70,71,73,78,79,80,81,82,83,84,85}_spec.cr` inputs,
+`wide_array_tuple_w107_admission_spec.cr` and `wide_part_reader_w51_spec.cr`,
+plus the standalone `wide_type_plan_entrypoint_spec.cr` without the aggregate
+require, full DEBUG, formatter and diff checks. Execute compiler gates serially
+through the existing 600-second memory guard: 8 GiB for focused/entry-point
+runs and the established W113 32-GiB limit for full DEBUG, with the 50% free
+memory floor retained. A source reconstruction
+match and entry-point check are required in addition to green behavioral
+tests. A stock serialization rerun becomes necessary if reconstruction finds
+any substantive method change; do not silently treat that as mechanical work.
+Root independently reviews the frozen diff and executed signals before the
+atomic local commit. No smaller file count, coupling or performance claim
+follows from this navigation improvement alone.
+
+Executed certificate on the frozen October 1 source:
+
+- Baseline focused DEBUG and RELEASE each passed 36 examples. The new
+  standalone entry-point regression also passed its two examples before
+  extraction, with only the historical prerequisite imports.
+- Extracted focused DEBUG and RELEASE each passed 38 examples (the same
+  fifteen inputs plus the new entry-point spec). Standalone entry-point
+  DEBUG and RELEASE each independently passed two examples, without
+  `spec_helper` or the aggregate library import.
+- Full combined DEBUG passed 1,839 examples, no failures/errors/pending,
+  under the established 32-GiB guard. Two initial 8-GiB attempts terminated
+  during compilation, before tests; removing symbolic debug information
+  did not resolve that limit. These are not failed tests or a reader-memory
+  result. The successful command restored W113's existing full-suite recipe.
+- Root reconstructed all five moved declarations and the retained entry
+  declarations against `951b5d7`, ignoring only leading indentation and
+  blank lines: six exact matches. PhysicalSubstream is the anchor's lines
+  29-52; Axis 81-87; Stream 89-119; private Builder 364-557. The remaining
+  shadow is lines 54-558 minus those nested owners. The entry point retains
+  every other declaration and adds only the five trailing imports.
+- Formatting and diff checks passed. The frozen six-source-file fingerprint
+  is `256da02399ec2254ec84945cb058da2d20a8a8f905b848de15b44538e2738a35`:
+  SHA-256 of ordered `shasum -a 256` output for the entry point followed by
+  the five paths above. The new spec SHA-256 is
+  `7896b052d32992964f37e8b8dee449b9ba37c34547d6ef82a7a2bbaeb7bc4215`.
+
+Replay the standalone checks and full DEBUG serially using the SDK/cache/free
+floor environment from W113; focused replay uses the fifteen inputs named
+above plus `spec/wide_type_plan_entrypoint_spec.cr`, once without and once
+with `--release`:
+
+```sh
+/bin/bash "$guard" "$compiler" 600 8192 spec --single-module --link-flags=-fuse-ld=ld spec/wide_type_plan_entrypoint_spec.cr
+/bin/bash "$guard" "$compiler" 600 8192 spec --release --single-module --link-flags=-fuse-ld=ld spec/wide_type_plan_entrypoint_spec.cr
+/bin/bash "$guard" "$compiler" 600 32768 spec --single-module --link-flags=-fuse-ld=ld
+```
+
+Root's scoped hostile verdict is ROBUST: declarations and lexical namespaces
+are preserved; a separate import check prevents the aggregate require from
+masking missing owners; exact shadow-only and unsupported-neighbor controls
+remain closed. This is not full RELEASE, new serializer admission, a shared
+authoritative plan, facade decomposition, reduced coupling, RSS or performance
+evidence. Refresh on owner bodies, namespace/import graph, admission or compiler
+changes. W114 stock qualification remains the next capability falsifier.
+
 ## Proposed shared physical-plan boundary (2026-10-01)
 
 Status: PROPOSED after source inspection at `3e36d5c`; not implementation or
