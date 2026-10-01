@@ -23530,13 +23530,18 @@ module CrystalClick
       )
 
       streams = physical_plan.streams
-      data_files = streams.map { |stream| File.open(File.join(stage, "#{StreamName.hash(stream.name)}.bin"), "rb") }
-      mark_files = streams.map { |stream| File.open(File.join(stage, "#{StreamName.hash(stream.name)}.mrk2"), "rb") }
-      offsets = Array(UInt64).new(streams.size, 0_u64)
+      stream_paths = Array(String).new(streams.size * 2)
+      streams.each do |stream|
+        stream_paths << File.join(stage, "#{StreamName.hash(stream.name)}.bin")
+      end
+      streams.each do |stream|
+        stream_paths << File.join(stage, "#{StreamName.hash(stream.name)}.mrk2")
+      end
       expected_mark_rows = Array(UInt64).new(mark_count)
       start_row = 0
       mark_index = 0
-      begin
+      StagedStreamFileSet.with_paths(stream_paths) do |files|
+        offsets = Array(UInt64).new(streams.size, 0_u64)
         while start_row < keys.size
           rows = {rows_per_mark, keys.size - start_row}.min
           expected_mark_rows << rows.to_u64
@@ -23548,8 +23553,8 @@ module CrystalClick
           raw_streams = array_map_array_numeric_raw_streams(values, start_row, rows, physical_plan)
           raw_streams.each_with_index do |raw, stream_index|
             offsets[stream_index] = validate_staged_tuple_mark(
-              data_files[stream_index],
-              mark_files[stream_index],
+              files.file_at(stream_index),
+              files.file_at(streams.size + stream_index),
               streams[stream_index].name,
               offsets[stream_index],
               rows.to_u64,
@@ -23561,12 +23566,14 @@ module CrystalClick
           mark_index += 1
         end
 
-        data_files.each_with_index do |data_file, stream_index|
-          validate_staged_tuple_sentinel(data_file, mark_files[stream_index], streams[stream_index].name, offsets[stream_index])
+        streams.each_with_index do |stream, stream_index|
+          validate_staged_tuple_sentinel(
+            files.file_at(stream_index),
+            files.file_at(streams.size + stream_index),
+            stream.name,
+            offsets[stream_index]
+          )
         end
-      ensure
-        data_files.each { |file| file.close unless file.closed? }
-        mark_files.each { |file| file.close unless file.closed? }
       end
       unless mark_index == mark_count && key_part.mark_row_counts == expected_mark_rows &&
              value_part.mark_row_counts == expected_mark_rows
@@ -23653,23 +23660,27 @@ module CrystalClick
       streams = physical_plan.streams
       values_name = streams.last.name
       values_base = StreamName.hash(values_name)
-      values_data = File.open(File.join(stage, "#{values_base}.bin"), "rb")
-      values_marks = File.open(File.join(stage, "#{values_base}.mrk2"), "rb")
       nullable = physical_plan.nullable_values
-      nulls_data : File? = nil
-      nulls_marks : File? = nil
       nulls_name = ""
+      stream_paths = [
+        File.join(stage, "#{values_base}.bin"),
+        File.join(stage, "#{values_base}.mrk2"),
+      ]
       if nullable
         nulls_name = streams[streams.size - 2].name
         nulls_base = StreamName.hash(nulls_name)
-        nulls_data = File.open(File.join(stage, "#{nulls_base}.bin"), "rb")
-        nulls_marks = File.open(File.join(stage, "#{nulls_base}.mrk2"), "rb")
+        stream_paths << File.join(stage, "#{nulls_base}.bin")
+        stream_paths << File.join(stage, "#{nulls_base}.mrk2")
       end
 
-      values_offset = 0_u64
-      nulls_offset = 0_u64
-      start_row = 0
-      begin
+      StagedStreamFileSet.with_paths(stream_paths) do |files|
+        values_data = files.file_at(0)
+        values_marks = files.file_at(1)
+        nulls_data : File? = nullable ? files.file_at(2) : nil
+        nulls_marks : File? = nullable ? files.file_at(3) : nil
+        values_offset = 0_u64
+        nulls_offset = 0_u64
+        start_row = 0
         while start_row < values.size
           rows = {rows_per_mark, values.size - start_row}.min
           entries_in_mark = 0_u64
@@ -23728,15 +23739,6 @@ module CrystalClick
         validate_staged_tuple_sentinel(values_data, values_marks, values_name, values_offset)
         if nullable
           validate_staged_tuple_sentinel(nulls_data.not_nil!, nulls_marks.not_nil!, nulls_name, nulls_offset)
-        end
-      ensure
-        values_data.close unless values_data.closed?
-        values_marks.close unless values_marks.closed?
-        if file = nulls_data
-          file.close unless file.closed?
-        end
-        if file = nulls_marks
-          file.close unless file.closed?
         end
       end
       nil

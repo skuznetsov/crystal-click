@@ -5372,6 +5372,29 @@ pinned stock serialization, mark/codec layout, or reader/writer/consumer
 dispatch changes. This admits neither general recursive containers nor other
 ClickHouse versions, MV/projections, or a memory/performance result.
 
+W84 fixture-lifecycle refresh supporting W113 (2026-10-01): the historical
+`/private/tmp/crystal-click-w84-matrix.TrPW5I` remains the September 29 evidence
+anchor, not a continuing fixture authority. Root's first W84 writer rerun
+exited 1 with `UNKNOWN_TABLE default.w84_matrix` before reaching writer
+validation: the wrapper created a fresh store, but the Crystal oracle still
+defaulted to the old temporary store and never created its matrix table.
+This was an invalid oracle prerequisite, not a qualified production regression.
+
+The oracle now creates the matrix table in the wrapper's own fresh store and
+inserts literal row-wise RowBinary for the same five rows/four payload columns.
+The extracted transport helper retains the original per-column RowBinary
+encoding; independently derived raw-stream bytes, mark offsets, metadata,
+schema, full/keyed reads, direct/table selected reads, and the seeded selected
+mark rejection are unchanged. No external historical store is reused or
+mutated and no existing assertion is removed. Root executed W84 `writer` and
+then `full` on separate fresh stores with pinned ClickHouse 26.7.1.1315; both
+exited 0, including actual successful tab-separated `CHECK TABLE` contents,
+all four populated and four all-empty cases, and the 25-stream matrix fixture.
+This refresh restores a reproducible gate for the existing bounded profile;
+it does not widen type, layout, codec, version or performance compatibility.
+Replay through `W84_ORACLE_MODE=full scripts/check_array_map_array_w84_oracle.sh`
+under the serial memory guard recorded in `MODULARIZATION_FRONTIER.md`.
+
 ## W85 admitted frontier: primitive numeric Arrays inside Array(Map) values
 
 W85 extends W84's third offset axis to exactly

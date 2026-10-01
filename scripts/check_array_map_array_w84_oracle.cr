@@ -61,18 +61,22 @@ private def w84_rowbinary(
   io = IO::Memory.new
   indices.each do |index|
     w84_u64(io, keys[index])
-    row_maps = rows[index]
-    w84_varuint(io, row_maps.size.to_u64)
-    row_maps.each do |entries|
-      w84_varuint(io, entries.size.to_u64)
-      entries.each do |key, values|
-        w84_key(io, key)
-        w84_varuint(io, values.size.to_u64)
-        values.each { |value| w84_leaf(io, value) }
-      end
-    end
+    w84_array_map_rowbinary(io, rows[index])
   end
   io.to_slice
+end
+
+private def w84_array_map_rowbinary(io : IO, row_maps : Array(Array(Tuple(K, Array(V))))) : Nil forall K, V
+  w84_varuint(io, row_maps.size.to_u64)
+  row_maps.each do |entries|
+    w84_varuint(io, entries.size.to_u64)
+    entries.each do |key, values|
+      w84_key(io, key)
+      w84_varuint(io, values.size.to_u64)
+      values.each { |value| w84_leaf(io, value) }
+    end
+  end
+  nil
 end
 
 private def w84_expected_streams(
@@ -664,6 +668,18 @@ private def w84_fixture_expected_raw : Hash(String, Array(UInt8))
   raw
 end
 
+private def w84_fixture_rowbinary : Bytes
+  io = IO::Memory.new
+  W84_KEYS.each_with_index do |key, index|
+    w84_u64(io, key)
+    w84_array_map_rowbinary(io, w84_fixture_rows_uu[index])
+    w84_array_map_rowbinary(io, w84_fixture_rows_us[index])
+    w84_array_map_rowbinary(io, w84_fixture_rows_su[index])
+    w84_array_map_rowbinary(io, w84_fixture_rows_ss[index])
+  end
+  io.to_slice
+end
+
 private def w84_assert_fixture_metadata(part : String) : Nil
   streams = w84_fixture_streams
   columns = "columns format version: 1\n5 columns:\n`pk` UInt64\n" +
@@ -683,14 +699,36 @@ private def w84_assert_fixture_metadata(part : String) : Nil
   nil
 end
 
-private def w84_run_fixture(binary : String, fixture_store : String, root : String) : Nil
+private def w84_create_fixture_table(binary : String, store : String) : Nil
+  w84_clickhouse(binary, store, <<-SQL)
+  CREATE TABLE default.w84_matrix (
+    `pk` UInt64,
+    `p_uu` Array(Map(UInt64, Array(UInt64))),
+    `p_us` Array(Map(UInt64, Array(String))),
+    `p_su` Array(Map(String, Array(UInt64))),
+    `p_ss` Array(Map(String, Array(String)))
+  )
+  ENGINE = MergeTree ORDER BY pk
+  SETTINGS index_granularity = 2, index_granularity_bytes = 10485760,
+    enable_mixed_granularity_parts = 1, min_rows_for_wide_part = 0,
+    min_bytes_for_wide_part = 0, ratio_of_defaults_for_sparse_serialization = 1.0,
+    compress_marks = 0, min_compress_block_size = 0, max_compress_block_size = 4096,
+    write_final_mark = 1, default_compression_codec = 'LZ4'
+  SQL
+  input = IO::Memory.new(w84_fixture_rowbinary)
+  w84_clickhouse(binary, store, "INSERT INTO default.w84_matrix FORMAT RowBinary", input)
+  nil
+end
+
+private def w84_run_fixture(binary : String, store : String, root : String) : Nil
   table = "w84_matrix"
-  w84_check_table(binary, fixture_store, table)
-  w84_assert_fixture_rows(binary, fixture_store, "p_uu", w84_fixture_rows_uu)
-  w84_assert_fixture_rows(binary, fixture_store, "p_us", w84_fixture_rows_us)
-  w84_assert_fixture_rows(binary, fixture_store, "p_su", w84_fixture_rows_su)
-  w84_assert_fixture_rows(binary, fixture_store, "p_ss", w84_fixture_rows_ss)
-  part_path = w84_clickhouse(binary, fixture_store, "SELECT path FROM system.parts WHERE database = 'default' AND table = '#{table}' AND active FORMAT TSVRaw").strip
+  w84_create_fixture_table(binary, store)
+  w84_check_table(binary, store, table)
+  w84_assert_fixture_rows(binary, store, "p_uu", w84_fixture_rows_uu)
+  w84_assert_fixture_rows(binary, store, "p_us", w84_fixture_rows_us)
+  w84_assert_fixture_rows(binary, store, "p_su", w84_fixture_rows_su)
+  w84_assert_fixture_rows(binary, store, "p_ss", w84_fixture_rows_ss)
+  part_path = w84_clickhouse(binary, store, "SELECT path FROM system.parts WHERE database = 'default' AND table = '#{table}' AND active FORMAT TSVRaw").strip
   raise "W84 stock fixture part missing" unless Dir.exists?(part_path)
   part = File.join(root, "stock-w84-matrix")
   FileUtils.cp_r(part_path, part)
@@ -718,12 +756,11 @@ end
 binary = ENV.fetch("CLICKHOUSE_BIN")
 store = ENV.fetch("CLICKHOUSE_STORE")
 root = ENV.fetch("ORACLE_ROOT")
-fixture_store = ENV.fetch("W84_STOCK_STORE", "/private/tmp/crystal-click-w84-matrix.TrPW5I/store")
 mode = ENV.fetch("W84_ORACLE_MODE", "full")
 version = w84_clickhouse(binary, store, "SELECT version() FORMAT TSVRaw").strip
 raise "W84 oracle requires ClickHouse 26.7.1.1315, got #{version}" unless version == "26.7.1.1315"
 
-w84_run_fixture(binary, fixture_store, root)
+w84_run_fixture(binary, store, root)
 w84_run_case(binary, store, root, "uu", "UInt64", "UInt64", w84_edge_rows_uu)
 w84_run_case(binary, store, root, "us", "UInt64", "String", w84_edge_rows_us)
 w84_run_case(binary, store, root, "su", "String", "UInt64", w84_edge_rows_su)
@@ -733,6 +770,6 @@ w84_run_case(binary, store, root, "all_empty_us", "UInt64", "String", w84_all_em
 w84_run_case(binary, store, root, "all_empty_su", "String", "UInt64", w84_all_empty_rows("", 0_u64))
 w84_run_case(binary, store, root, "all_empty_ss", "String", "String", w84_all_empty_rows("", ""))
 
-reader_result = mode == "reader" || mode == "full" ? "stock-to-Crystal full/selected reads" : "stock-only"
+reader_result = mode == "reader" || mode == "full" ? "stock-to-Crystal full/selected reads" : "reader not requested"
 writer_result = mode == "writer" || mode == "full" ? "Crystal-to-stock ATTACH/CHECK/full/keyed RowBinary" : "writer not requested"
-puts "W84 oracle mode=#{mode}: ClickHouse #{version}; supplied fixture; four exact Array(Map(K, Array(V))) types; empty levels, duplicate keys, binary/empty Strings, all-empty child streams, exact substreams/marks; #{reader_result}; #{writer_result}"
+puts "W84 oracle mode=#{mode}: ClickHouse #{version}; fresh generated matrix fixture; four exact Array(Map(K, Array(V))) types; empty levels, duplicate keys, binary/empty Strings, all-empty child streams, exact substreams/marks; #{reader_result}; #{writer_result}"

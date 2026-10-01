@@ -8,6 +8,9 @@ W95 high-level Tuple consumers are verified within their bounded profile in
 separate from the large existing facades.
 The October 1 catalog owner extraction is verified below; it preserves the
 existing API and behavior, not a completed responsibility-level architecture.
+W113's private staged-stream lifetime owner is verified below for two existing
+writer validators; it fixes qualified partial-acquisition leaks without moving
+codec or publication policy into the new owner.
 W96 adds one closed numeric identity/width owner and extends the existing
 Tuple owners; its compatibility certificate is separate in
 `NUMERIC_TUPLE_FRONTIER.md`. It does not close the larger facade refactor.
@@ -276,7 +279,109 @@ Whole-facade decomposition, generic recursive types and performance remain
 open. Adding three class files is not evidence of lower coupling or faster
 execution.
 
-## Next proposed lifecycle extraction
+## W113 verified staged-stream lifecycle extraction
+
+Status: VERIFIED within the two-validator lifecycle scope below on the isolated
+W113 diff over `4cb8d02` (2026-10-01). The remaining facades contain 15,895
+reader, 25,998 writer, 7,026 table and 1,560 catalog lines; extracted
+`offline_table.cr` contains 3,654. These navigation counts do not measure
+coupling or performance and do not close the larger facade refactor.
+
+The narrow responsibility is staged stream-file lifetime, not another codec
+or a mechanical relocation of whole facades. At the qualified predecessor,
+`WidePartWriter.validate_staged_array_map_array_numeric_part` opened data and
+mark files before the cleanup region. In
+`validate_staged_array_map_bool_leaf_streams`, the values pair and optional
+null pair were likewise acquired before `begin/ensure`. A later open error
+could therefore bypass explicit closure of earlier acquired handles. Root ran
+`scripts/probe_staged_stream_lifetime_w113.cr qualify` against the writer code
+retained at `4cb8d02`: exit 0, six earlier real handles remained open on the
+numeric path and three on the Nullable(Bool) path. The injection intercepts
+one exact stage-local `.mrk2` open; both public writer calls propagated the
+same original sentinel exception and left no destination or stage. The probe
+counts actual handles before closing its own retained handles in `ensure`.
+The separate `red` mode expected zero open handles and intentionally exited 1,
+with the same qualified six/three counts. No missing future class or compiler
+error was used as the behavioral RED.
+
+Sealed owner: one `StagedStreamFileSet` class in
+`src/crystal_click/wide_part_writer/staged_stream_file_set.cr`. It owns only
+ordered acquisition and closure, including partial acquisition and a failing
+validation block. Validators depend on this owner; the owner depends only on
+standard file I/O, not the writer, reader, table or catalog. Path/hash selection,
+stream order, frame/mark/sentinel checks, metadata, staged readback and exclusive
+publication stay with their existing owners. Cleanup must attempt every owned
+handle and must not mask the original open or validation error. Construction
+is private and the only consumer access is ordered `file_at`; no mutable
+array of owned handles is exported. On successful validation a cleanup error
+may be reported only after attempting every close. On open/body failure the
+original exception identity has precedence over any cleanup failure.
+
+Risk: CAUTION (resource lifetime and exception propagation). Rollback: the
+isolated new owner, two call sites, aggregate require and related tests/docs;
+the W84 oracle fixture repair has no production dependency. Path selection,
+acquisition order, physical checks and publication retain their existing
+contracts. The strongest anticipated failure was an owner that closed only
+after complete acquisition, masked the original exception, or stopped cleanup
+at the first close failure.
+
+Root executed the following gates on frozen production and spec source:
+
+- The focused owner plus W83/W84/W85 writer specs passed DEBUG and RELEASE:
+  14 examples in each configuration, no failures/errors/pending. The six
+  owner examples test each acquisition position, successful ordered reads,
+  body failure, genuine `break` exit, close-error continuation, and original
+  exception identity/first-cleanup-error precedence.
+- The same public writer probe in `red` mode now exits 0: zero earlier real
+  handles remain open on either path (qualified predecessor: six and three),
+  with exactly one injected open error, unchanged exception identity, and
+  no destination or stage after either failure.
+- Pinned ClickHouse 26.7.1.1315 stock writer oracles W83 (eight populated/
+  all-empty Bool-family cases), W84 (four populated and four all-empty exact
+  types plus the matrix fixture), and W85 (twenty exact numeric leaf types)
+  exited 0. They retain literal raw-stream/mark expectations, fresh
+  `ATTACH PART`, actual tab-separated successful `CHECK TABLE` contents,
+  and full/keyed RowBinary comparisons. W84 `full` also exited 0 on a second
+  fresh store, including direct/typed-table selected reads and the seeded
+  selected-mark rejection before callbacks. Its fixture lifecycle repair is
+  recorded in `EMBEDDED_MERGETREE_FRONTIER.md`.
+- Full DEBUG passed 1,837 examples, no failures/errors/pending. This is not a
+  full RELEASE certificate. Formatting, shell syntax and diff checks passed.
+  The test-only File interception produces a deprecated `blocking` argument
+  warning on Crystal 1.21; it is not a production API change.
+
+Replay commands (run serially from the repository under the existing memory
+guard; the local SDK and compiler paths describe the executed host):
+
+```sh
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+export TMPDIR=/private/tmp
+export CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w113-cache
+export COGNI_RUN_SAFE_MIN_FREE_PCT=50
+guard=/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh
+compiler=/opt/homebrew/bin/crystal
+/bin/bash "$guard" "$compiler" 600 8192 spec --single-module --link-flags=-fuse-ld=ld spec/staged_stream_file_set_w113_spec.cr spec/wide_part_writer_w83_spec.cr spec/wide_part_writer_w84_spec.cr spec/wide_part_writer_w85_spec.cr
+/bin/bash "$guard" "$compiler" 600 8192 spec --release --single-module --link-flags=-fuse-ld=ld spec/staged_stream_file_set_w113_spec.cr spec/wide_part_writer_w83_spec.cr spec/wide_part_writer_w84_spec.cr spec/wide_part_writer_w85_spec.cr
+/bin/bash "$guard" "$compiler" 600 8192 run --single-module --link-flags=-fuse-ld=ld scripts/probe_staged_stream_lifetime_w113.cr -- red
+/bin/bash "$guard" "$compiler" 600 32768 spec --single-module --link-flags=-fuse-ld=ld
+W83_ORACLE_MODE=writer /bin/bash "$guard" /bin/bash 600 8192 scripts/check_array_map_bool_values_w83_oracle.sh
+W84_ORACLE_MODE=writer /bin/bash "$guard" /bin/bash 600 8192 scripts/check_array_map_array_w84_oracle.sh
+W84_ORACLE_MODE=full /bin/bash "$guard" /bin/bash 600 8192 scripts/check_array_map_array_w84_oracle.sh
+W85_ORACLE_MODE=writer /bin/bash "$guard" /bin/bash 600 8192 scripts/check_array_map_array_w85_oracle.sh
+```
+
+Root's scoped adversarial verdict is ROBUST: independently observed real
+handle closure, exception identity, all-close attempts, early exit and the
+unchanged physical stock contracts support this narrow lifecycle claim.
+Luna supplied implementation and a correlated read-only static review;
+their agreement is not independent runtime evidence. The close-error test
+shim raises only after real native closure: it proves continuation and error
+precedence, not that an actual OS close failure releases its descriptor.
+No universal writer lifetime, arbitrary block escape, artifact inventory,
+serialization widening, memory/RSS or throughput certificate follows.
+Evidence expires on the affected owner, call sites, require graph, File I/O
+semantics/compiler, fixture expectations or pinned runtime/profile changes;
+rerun the corresponding failure probes and stock gates before reuse.
 
 Adjacent artifact-integrity residual observed during W107 static review:
 `wide_part_writer/tuple_part_writer.cr#validate_staged_part` verifies the exact
@@ -284,44 +389,12 @@ checksums entry set and expected metadata contents, but does not compare the
 complete `Dir.children(stage)` inventory. This is also present at predecessor
 `63e03b4`; W107's `ArrayTuplePartWriter` does perform that complete comparison.
 No ordinary extra-file injection path or payload/mask/schema-check bypass was
-found. This is not a universal staged-artifact certificate for the older Tuple
-writer. A separate hardening slice must first seed an unexpected unchecksummed
+found. A separate hardening slice must first seed an unexpected unchecksummed
 stage file, establish its observed disposition, then qualify rejection and
 scratch-only cleanup before changing that publication boundary.
 
-Status: PROPOSED, not implemented or verified. At the qualified W104 source the
-four facades still contain 15,422 reader, 25,821 writer, 6,759 table and 5,371
-catalog lines. These navigation counts do not measure coupling or performance.
-
-The narrow next responsibility is staged stream-file lifetime, not another
-codec or a mechanical relocation of whole facades. In
-`WidePartWriter.validate_staged_array_map_array_numeric_part`, data and mark
-files are opened before the cleanup region. In
-`validate_staged_array_map_bool_leaf_streams`, the values pair and optional
-null pair are likewise acquired before `begin/ensure`. A later open error can
-therefore bypass explicit closure of earlier acquired handles. This is a
-source-level failure path; runtime leak qualification remains open.
-
-Proposed owner: one `StagedStreamFileSet` class in
-`src/crystal_click/wide_part_writer/staged_stream_file_set.cr`. It owns only
-ordered acquisition and closure, including partial acquisition and a failing
-validation block. Validators depend on this owner; the owner depends only on
-standard file I/O, not the writer, reader, table or catalog. Path/hash selection,
-stream order, frame/mark/sentinel checks, metadata, staged readback and exclusive
-publication stay with their existing owners. Cleanup must attempt every owned
-handle and must not mask the original open or validation error.
-
-Risk: CAUTION (resource lifetime and exception propagation). Rollback: only the
-new owner, the two call sites, aggregate require, and directly related tests.
-Before production, establish a discriminating partial-acquisition failure
-probe rather than treating a missing future class as behavioral RED. The owner
-contract then needs tests for failure at each acquisition position, validation
-failure, success, handle closure and preservation of the original error.
-DoD also retains `spec/wide_part_writer_w83_spec.cr`, W84 and W85 writer specs,
-their stock writer oracle modes, full DEBUG, format and diff checks. No type,
-codec, metadata, publication or performance widening belongs in that commit.
-After this slice, physical reader lifetime, leaf codecs, table scan adapters
-and catalog parsing/navigation remain separate larger extractions.
+Physical reader lifetime, leaf codecs, table scan adapters and catalog
+parsing/navigation remain separate larger responsibility extractions.
 
 ## W103 ownership boundary
 
