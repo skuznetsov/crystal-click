@@ -8,16 +8,16 @@ module CrystalClick
         @stage_factory : Proc(String, String),
         @validate_column_name : Proc(String, Nil),
         @checked_mark_count : Proc(Int32, Int32, Int32),
-        @write_uint64_stream : Proc(String, String, Slice(UInt64), Int32, Array(ChecksumRecord)),
-        @write_string_streams : Proc(String, String, Slice(String), Int32, Array(ChecksumRecord)),
-        @write_bool_stream : Proc(String, String, Slice(Bool), Int32, Array(ChecksumRecord)),
-        @validate_bool_stream : Proc(String, String, Array(Bool), Int32, Nil),
-        @write_numeric_stream : Proc(String, String, WideTupleNumericType::Buffer, Int32, String, Array(ChecksumRecord)),
-        @write_identifier_stream : Proc(String, String, WideTupleIdentifierType::Buffer, Int32, String, Array(ChecksumRecord)),
-        @write_temporal_stream : Proc(String, String, WideTupleTemporalType::Buffer, Int32, String, Array(ChecksumRecord)),
-        @write_fixed_string_stream : Proc(String, String, WideTupleFixedStringType::Buffer, WideTupleFixedStringType, Int32, Array(ChecksumRecord)),
-        @write_enum_stream : Proc(String, String, WideTupleEnumType::Buffer, WideTupleEnumType, Int32, Array(ChecksumRecord)),
-        @write_decimal_stream : Proc(String, String, WideTupleDecimalType::Buffer, WideTupleDecimalType, Int32, Array(ChecksumRecord)),
+        @write_uint64_stream : Proc(String, String, Slice(UInt64), Int32, TupleLeafMarkSchedule?, TupleLeafMarkSchedule::Axis, Array(ChecksumRecord)),
+        @write_string_streams : Proc(String, String, Slice(String), Int32, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
+        @write_bool_stream : Proc(String, String, Slice(Bool), Int32, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
+        @validate_bool_stream : Proc(String, String, Array(Bool), Int32, TupleLeafMarkSchedule?, Nil),
+        @write_numeric_stream : Proc(String, String, WideTupleNumericType::Buffer, Int32, String, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
+        @write_identifier_stream : Proc(String, String, WideTupleIdentifierType::Buffer, Int32, String, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
+        @write_temporal_stream : Proc(String, String, WideTupleTemporalType::Buffer, Int32, String, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
+        @write_fixed_string_stream : Proc(String, String, WideTupleFixedStringType::Buffer, WideTupleFixedStringType, Int32, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
+        @write_enum_stream : Proc(String, String, WideTupleEnumType::Buffer, WideTupleEnumType, Int32, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
+        @write_decimal_stream : Proc(String, String, WideTupleDecimalType::Buffer, WideTupleDecimalType, Int32, TupleLeafMarkSchedule?, Array(ChecksumRecord)),
         @write_primary_index : Proc(String, Slice(UInt64), Int32, ChecksumRecord),
         @write_checksummed_file : Proc(String, String, String, ChecksumRecord),
         @write_plain_metadata : Proc(String, String, String, Nil),
@@ -40,20 +40,33 @@ module CrystalClick
         @checked_mark_count.call(row_count, rows_per_mark)
       end
 
-      def write_uint64_stream(stage : String, column : String, values : Slice(UInt64), rows_per_mark : Int32) : Array(ChecksumRecord)
-        @write_uint64_stream.call(stage, column, values, rows_per_mark)
+      def write_uint64_stream(
+        stage : String,
+        column : String,
+        values : Slice(UInt64),
+        rows_per_mark : Int32,
+        schedule : TupleLeafMarkSchedule? = nil,
+        axis : TupleLeafMarkSchedule::Axis = TupleLeafMarkSchedule::Axis::Leaf,
+      ) : Array(ChecksumRecord)
+        @write_uint64_stream.call(stage, column, values, rows_per_mark, schedule, axis)
       end
 
-      def write_string_streams(stage : String, column : String, values : Slice(String), rows_per_mark : Int32) : Array(ChecksumRecord)
-        @write_string_streams.call(stage, column, values, rows_per_mark)
+      def write_string_streams(stage : String, column : String, values : Slice(String), rows_per_mark : Int32, schedule : TupleLeafMarkSchedule? = nil) : Array(ChecksumRecord)
+        @write_string_streams.call(stage, column, values, rows_per_mark, schedule)
       end
 
-      def write_bool_stream(stage : String, column : String, values : Slice(Bool), rows_per_mark : Int32) : Array(ChecksumRecord)
-        @write_bool_stream.call(stage, column, values, rows_per_mark)
+      def write_bool_stream(stage : String, column : String, values : Slice(Bool), rows_per_mark : Int32, schedule : TupleLeafMarkSchedule? = nil) : Array(ChecksumRecord)
+        @write_bool_stream.call(stage, column, values, rows_per_mark, schedule)
       end
 
-      def validate_bool_stream(stage : String, column : String, values : Array(Bool), rows_per_mark : Int32) : Nil
-        @validate_bool_stream.call(stage, column, values, rows_per_mark)
+      def validate_bool_stream(
+        stage : String,
+        column : String,
+        values : Array(Bool),
+        rows_per_mark : Int32,
+        schedule : TupleLeafMarkSchedule? = nil,
+      ) : Nil
+        @validate_bool_stream.call(stage, column, values, rows_per_mark, schedule)
       end
 
       def write_numeric_stream(
@@ -62,8 +75,9 @@ module CrystalClick
         values : WideTupleNumericType::Buffer,
         rows_per_mark : Int32,
         type_name : String,
+        schedule : TupleLeafMarkSchedule? = nil,
       ) : Array(ChecksumRecord)
-        @write_numeric_stream.call(stage, column, values, rows_per_mark, type_name)
+        @write_numeric_stream.call(stage, column, values, rows_per_mark, type_name, schedule)
       end
 
       def write_identifier_stream(
@@ -72,8 +86,9 @@ module CrystalClick
         values : WideTupleIdentifierType::Buffer,
         rows_per_mark : Int32,
         type_name : String,
+        schedule : TupleLeafMarkSchedule? = nil,
       ) : Array(ChecksumRecord)
-        @write_identifier_stream.call(stage, column, values, rows_per_mark, type_name)
+        @write_identifier_stream.call(stage, column, values, rows_per_mark, type_name, schedule)
       end
 
       def write_temporal_stream(
@@ -82,8 +97,9 @@ module CrystalClick
         values : WideTupleTemporalType::Buffer,
         rows_per_mark : Int32,
         type_name : String,
+        schedule : TupleLeafMarkSchedule? = nil,
       ) : Array(ChecksumRecord)
-        @write_temporal_stream.call(stage, column, values, rows_per_mark, type_name)
+        @write_temporal_stream.call(stage, column, values, rows_per_mark, type_name, schedule)
       end
 
       def write_fixed_string_stream(
@@ -92,8 +108,9 @@ module CrystalClick
         values : WideTupleFixedStringType::Buffer,
         exact_type : WideTupleFixedStringType,
         rows_per_mark : Int32,
+        schedule : TupleLeafMarkSchedule? = nil,
       ) : Array(ChecksumRecord)
-        @write_fixed_string_stream.call(stage, column, values, exact_type, rows_per_mark)
+        @write_fixed_string_stream.call(stage, column, values, exact_type, rows_per_mark, schedule)
       end
 
       def write_enum_stream(
@@ -102,8 +119,9 @@ module CrystalClick
         values : WideTupleEnumType::Buffer,
         exact_type : WideTupleEnumType,
         rows_per_mark : Int32,
+        schedule : TupleLeafMarkSchedule? = nil,
       ) : Array(ChecksumRecord)
-        @write_enum_stream.call(stage, column, values, exact_type, rows_per_mark)
+        @write_enum_stream.call(stage, column, values, exact_type, rows_per_mark, schedule)
       end
 
       def write_decimal_stream(
@@ -112,8 +130,9 @@ module CrystalClick
         values : WideTupleDecimalType::Buffer,
         exact_type : WideTupleDecimalType,
         rows_per_mark : Int32,
+        schedule : TupleLeafMarkSchedule? = nil,
       ) : Array(ChecksumRecord)
-        @write_decimal_stream.call(stage, column, values, exact_type, rows_per_mark)
+        @write_decimal_stream.call(stage, column, values, exact_type, rows_per_mark, schedule)
       end
 
       def write_primary_index(stage : String, keys : Slice(UInt64), rows_per_mark : Int32) : ChecksumRecord

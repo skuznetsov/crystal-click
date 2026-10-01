@@ -161,7 +161,7 @@ describe "W51 Array of named Tuple reader" do
     nullable.column_type.should eq("Array(Tuple(a Nullable(UInt64), b String))")
   end
 
-  it "admits only the three exact recursive declarations" do
+  it "preserves exact legacy declarations and admits supported generic scalar-leaf Tuples" do
     {
       "Array(Tuple(a UInt64, b String))",
       "Array(Tuple(a Nullable(UInt64), b String))",
@@ -170,12 +170,22 @@ describe "W51 Array of named Tuple reader" do
       CrystalClick::WidePart.supports_typed_type?(type).should be_true
     end
 
+    # These named scalar-leaf shapes use the generic W107 plan, not the three
+    # legacy-specialized W51 layouts above.
+    generic_two_leaf = "Array(Tuple(a UInt64, b UInt32))"
+    generic_three_leaf = "Array(Tuple(a Nullable(UInt64), b String, c UInt64))"
+    {generic_two_leaf, generic_three_leaf}.each do |type|
+      CrystalClick::WidePart.supports_typed_type?(type).should be_true
+      CrystalClick::WideTypePlan.admitted(type).should be_nil
+      CrystalClick::WideArrayTupleTypePlan.for_type(type).should_not be_nil
+    end
+
     {
       "Array(Tuple(UInt64, String))",
-      "Array(Tuple(a Nullable(UInt64), b String, c UInt64))",
       "Array(Nullable(Tuple(a UInt64, b String)))",
       "Nullable(Array(Tuple(a UInt64, b String)))",
       "Array(Array(Tuple(a UInt64, b String)))",
+      "Array(Tuple(a UInt64, b Array(UInt64)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end

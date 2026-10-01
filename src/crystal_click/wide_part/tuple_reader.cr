@@ -15,6 +15,8 @@ module CrystalClick
       alias DecodeDateTimeLeaf = Proc(String, DateTimeColumnType, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeParameterizedLeaf = Proc(String, WideTupleParameterizedType, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeNullableLeaf = Proc(String, WideTupleLeafType, Bytes, ScalarNullMap, UInt64, Int32, WideTupleLeafColumn)
+      alias LogicalRows = Proc(Int32, Int32, UInt64)
+      alias CombinedCharge = Proc(UInt64, UInt64, UInt64, UInt64?)
 
       @plan : WideTupleTypePlan
       @column : String
@@ -30,6 +32,8 @@ module CrystalClick
       @decode_datetime_leaf : DecodeDateTimeLeaf
       @decode_parameterized_leaf : DecodeParameterizedLeaf
       @decode_nullable_leaf : DecodeNullableLeaf
+      @logical_rows : LogicalRows?
+      @combined_charge : CombinedCharge?
 
       def initialize(
         @plan : WideTupleTypePlan,
@@ -46,6 +50,8 @@ module CrystalClick
         @decode_datetime_leaf : DecodeDateTimeLeaf,
         @decode_parameterized_leaf : DecodeParameterizedLeaf,
         @decode_nullable_leaf : DecodeNullableLeaf,
+        @logical_rows : LogicalRows? = nil,
+        @combined_charge : CombinedCharge? = nil,
       )
       end
 
@@ -136,8 +142,12 @@ module CrystalClick
         mark_count : Int32,
         max_materialized_bytes : UInt64,
       ) : {UInt64, UInt64, UInt64}
-        rows = validate_selected_schedule(first_mark, mark_count)
-        minimum_charge = @plan.materialization_charge(rows, 0_u64) ||
+        # Physical .mrk2 row counts remain the outer table-row axis for
+        # Array(Tuple) child streams. Logical payload cardinality may instead
+        # be the flattened element axis supplied by the schedule.
+        outer_rows = validate_selected_schedule(first_mark, mark_count)
+        rows = @logical_rows.try(&.call(first_mark, mark_count)) || outer_rows
+        minimum_charge = checked_materialization_charge(outer_rows, rows, 0_u64) ||
                          raise(CorruptPartError.new("Tuple materialization charge overflows"))
         if minimum_charge > max_materialized_bytes
           raise CorruptPartError.new("Tuple materialization charge exceeds per-range limit")
@@ -185,7 +195,7 @@ module CrystalClick
           end
         end
 
-        charge = @plan.materialization_charge(rows, string_payload_bytes) ||
+        charge = checked_materialization_charge(outer_rows, rows, string_payload_bytes) ||
                  raise(CorruptPartError.new("Tuple materialization charge overflows"))
         if charge > max_materialized_bytes
           raise CorruptPartError.new("Tuple materialization charge exceeds per-range limit")
@@ -198,6 +208,18 @@ module CrystalClick
           @validate_range.call(stream_name, first_mark, mark_count, expected_bytes, width, rows)
         end
         {rows, string_payload_bytes, charge}
+      end
+
+      private def checked_materialization_charge(
+        outer_rows : UInt64,
+        elements : UInt64,
+        string_payload_bytes : UInt64,
+      ) : UInt64?
+        if combined_charge = @combined_charge
+          combined_charge.call(outer_rows, elements, string_payload_bytes)
+        else
+          @plan.materialization_charge(elements, string_payload_bytes)
+        end
       end
 
       private def string_payload_byte_count(encoded_sizes : Bytes) : UInt64

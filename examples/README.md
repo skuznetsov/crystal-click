@@ -67,6 +67,21 @@ scalar String/numeric JSON paths with caller-normalized defaults. It does not
 preserve path presence or accept dynamic/shared JSON data; see the
 [JSON typed-path frontier](../docs/JSON_TYPED_PATH_FRONTIER.md).
 
+Write and read a ragged `Array` of recursively named Tuple elements:
+
+```sh
+crystal run examples/write_array_tuple_part.cr -- /tmp/my-new-array-tuple-part
+```
+
+This example includes an empty outer row, a nested `Nullable(String)` leaf,
+and distinct logical NULL/empty-String values. The writer takes outer row
+sizes separately from flattened leaf buffers. It creates a standalone
+Wide/LZ4/String-v1/plain-mark part with one sorted UInt64 key and one payload;
+it does not insert into a server table. Total outer rows and flat elements
+are each capped at 65,536 for staged readback. Use a new destination outside
+any ClickHouse data root. See the paired profile and exclusions in the
+[Array(Tuple) frontier](../docs/ARRAY_TUPLE_COMPOSITION_FRONTIER.md).
+
 ## Read-only ClickHouse data-root examples
 
 These examples read local files under a ClickHouse data root (`metadata/` and
@@ -134,8 +149,10 @@ the hard ceilings are rejected.
 Values follow the offline resolved-part and mark order, not SQL `ORDER BY`.
 Whole JSON objects and computed `ALIAS` columns are not materialized.
 
-Named nonempty `Tuple` columns with exact `UInt64`/`String` leaves also use
-this example. Additional field orders/arities return `WideTupleRow` values:
+Admitted recursively named, nonempty `Tuple` columns also use this example.
+Their scalar and Nullable-scalar terminal surface is described in the
+[nested Tuple frontier](../docs/NESTED_TUPLE_FRONTIER.md). Additional field
+orders/arities return `WideTupleRow` values:
 
 ```crystal
 row = catalog["lab"]["events"]["payload"].values.first.as(CrystalClick::WideTupleRow)
@@ -155,8 +172,19 @@ Typed streaming uses `batch.tuple_rows_for("payload")` for these non-exact
 profiles. Its slice is callback-scoped, but a copied row handle safely retains
 owned backing. Use an immutable source: all selected Tuple child schedules
 are checked before callbacks, while payload checks remain lazy per mark.
-Nested, unnamed, Nullable/other-leaf Tuples and Compact/Sparse/newer metadata
-profiles are not admitted by this API.
+Unnamed/empty Tuples, Nullable containers, arbitrary recursive containers,
+and Compact/Sparse/unknown metadata profiles are not admitted by this API.
+
+One outer `Array` around that admitted named Tuple tree returns
+`WideArrayTupleRow` handles. Index an outer row to access its `WideTupleRow`
+elements; typed batches expose `array_tuple_rows_for("payload")`. Catalog
+`max_tuple_cells:` counts flattened elements times Tuple leaves, not outer
+rows times leaves. The three exact legacy Array(Tuple) spellings retain
+their existing specialized return types. Retaining an element or outer row
+can retain its decoded mark. Lazy direct mark iteration retains the selected
+schedule and one current decoded mark; it is not a no-payload-I/O or RSS
+ceiling. Inner Array/Map/LowCardinality/Variant/Dynamic/JSON composition
+remains outside this profile.
 
 Read a bounded physical-row window from two `UInt64` columns without
 materializing the complete table:

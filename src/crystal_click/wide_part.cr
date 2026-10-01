@@ -1482,7 +1482,8 @@ module CrystalClick
         supports_map_uint64_array_string_type?(type) ||
         supports_map_uint64_nullable_uint64_type?(type) || supports_map_string_nullable_uint64_type?(type) ||
         supports_map_uint64_nullable_string_type?(type) || supports_map_string_nullable_string_type?(type) ||
-        supports_named_scalar_tuple_type?(type) || supports_variant_type?(type) || type == "Dynamic"
+        supports_named_scalar_tuple_type?(type) || supports_named_array_tuple_type?(type) ||
+        supports_variant_type?(type) || type == "Dynamic"
     end
 
     def self.json_type?(type : String) : Bool
@@ -11032,6 +11033,8 @@ module CrystalClick
       @streams = Hash(String, PhysicalStream).new
       qbit_plan = QBitColumnType.for_type(@column_type)
       variant_plan = WidePart.variant_type_plan(@column_type)
+      array_tuple_plan = WideArrayTupleTypePlan.for_type(@column_type)
+      legacy_array_tuple_plan = !WideTypePlan.admitted(@column_type).nil?
       dynamic_string = @column_type == "Dynamic"
       expected_mark_rows = nil.as(Array(UInt64)?)
       physical_streams.each do |stream_name|
@@ -11063,6 +11066,8 @@ module CrystalClick
                                  elsif WidePart.supports_array_type?(@column_type)
                                    stream_name != "#{@column}.size0" &&
                                      WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream_name)
+                                 elsif array_tuple_plan && !legacy_array_tuple_plan
+                                   stream_name != array_tuple_plan.outer_size_stream(@column)
                                  elsif WidePart.supports_array_map_type?(@column_type)
                                    array_map_stream_may_be_empty?(@column, stream_name)
                                  elsif WidePart.map_string_numeric_value_type(@column_type)
@@ -11147,6 +11152,8 @@ module CrystalClick
                            1
                          elsif dynamic_string && stream_name == "#{@column}.variant_discr"
                            1
+                         elsif array_tuple_plan && !legacy_array_tuple_plan
+                           stream_name == array_tuple_plan.outer_size_stream(@column) ? 8 : 1
                          elsif stream_name != "#{@column}.size0" &&
                                (WidePart.array_fixed_string_width(@column_type) || WidePart.array_nullable_fixed_string_width(@column_type) ||
                                WidePart.supports_array_bool_type?(@column_type) || WidePart.supports_array_nullable_bool_type?(@column_type))
@@ -11219,6 +11226,8 @@ module CrystalClick
       column = requested_column || columns[0][0]
       selected, source_column_name, source_column_type, column_type, json_typed_path =
         resolve_selected_column(columns, column)
+      array_tuple_plan = WideArrayTupleTypePlan.for_type(column_type)
+      generic_array_tuple = !array_tuple_plan.nil? && WideTypePlan.admitted(column_type).nil?
       raise UnsupportedFormatError.new("JSON typed paths require the exact typed scan") if json_typed_path && mode != :typed
       case mode
       when :numeric
@@ -11230,12 +11239,14 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if (WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" ||
+      if (WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple ||
          WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
         message = if !QBitColumnType.for_type(column_type).nil?
                     "QBit bounded profile requires CODEC(LZ4)"
                   elsif WidePart.supports_array_map_type?(column_type)
                     "Array(Map) bounded profile requires CODEC(LZ4)"
+                  elsif generic_array_tuple
+                    "Array(Tuple) bounded profile requires CODEC(LZ4)"
                   else
                     "Variant and Dynamic require CODEC(LZ4)"
                   end
@@ -11262,6 +11273,8 @@ module CrystalClick
         validate_array_map_bool_leaf_serialization(columns, selected, column_type)
       elsif WidePart.supports_array_map_numeric_type?(column_type)
         validate_array_map_numeric_serialization(columns, selected, column_type)
+      elsif generic_array_tuple
+        validate_array_type_serialization_version(column_type, columns, selected, row_count)
       elsif WidePart.supports_array_type?(column_type)
         validate_array_type_serialization_version(column_type, columns, selected, row_count)
       elsif WidePart.supports_map_uint64_string_type?(column_type)
@@ -11458,6 +11471,10 @@ module CrystalClick
           sibling_type = columns[index][1]
           expected_streams = expected_physical_streams(column, sibling_type)
           raise UnsupportedFormatError.new("W51 sibling physical substreams do not match exact serialization shape") unless streams == expected_streams
+        elsif WideArrayTupleTypePlan.for_type(selected_type) && WideTypePlan.admitted(selected_type).nil?
+          if columns.any? { |name, type| name == column && type == "UInt64" }
+            raise UnsupportedFormatError.new("Array(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
+          end
         elsif WidePart.supports_named_scalar_tuple_type?(selected_type)
           raise UnsupportedFormatError.new("Tuple key column must have one plain UInt64 stream") unless streams == [column]
         elsif WidePart.supports_variant_type?(selected_type)
@@ -11506,6 +11523,10 @@ module CrystalClick
         ["#{column}.dict", column]
       elsif plan = QBitColumnType.for_type(type)
         plan.physical_streams(column).map(&.[0])
+      elsif plan = WideTypePlan.admitted(type)
+        plan.physical_streams(column).map(&.name)
+      elsif plan = WideArrayTupleTypePlan.for_type(type)
+        plan.physical_streams(column)
       elsif tuple_plan = WideTupleTypePlan.for_type(type)
         tuple_plan.physical_streams(column)
       elsif WidePart.supports_array_map_type?(type)
@@ -11819,6 +11840,14 @@ module CrystalClick
       selected_column : String,
       row_count : UInt64,
     ) : Nil
+      generic_array_tuple = !WideArrayTupleTypePlan.for_type(type).nil? && WideTypePlan.admitted(type).nil?
+      if generic_array_tuple
+        selected = columns.find { |name, column_type| name == selected_column && column_type == type }
+        keys = columns.select { |name, column_type| name != selected_column && column_type == "UInt64" }
+        unless columns.size == 2 && selected && keys.size == 1
+          raise UnsupportedFormatError.new("Array(Tuple) serialization requires one UInt64 key and one selected payload")
+        end
+      end
       file = File.join(@path, "serialization.json")
       raise UnsupportedFormatError.new("serialization.json is required for this type") unless File.file?(file)
       raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
@@ -11898,7 +11927,9 @@ module CrystalClick
           raise CorruptPartError.new("array serializer default or row count does not match part")
         end
       end
-      raise UnsupportedFormatError.new("unsupported array serializer type") unless WidePart.supports_array_type?(type)
+      unless WidePart.supports_array_type?(type) || generic_array_tuple
+        raise UnsupportedFormatError.new("unsupported array serializer type")
+      end
       nil
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
       raise CorruptPartError.new("serialization.json is malformed")
@@ -13170,6 +13201,11 @@ module CrystalClick
         raise CorruptPartError.new("selected Array(Tuple) size0 stream is missing") unless stream_names.includes?(stream)
         return stream
       end
+      if plan = WideArrayTupleTypePlan.for_type(@column_type)
+        stream = plan.outer_size_stream(@column)
+        raise CorruptPartError.new("selected Array(Tuple) size0 stream is missing from its plan") unless stream_names.includes?(stream)
+        return stream
+      end
       if tuple_plan = WideTupleTypePlan.for_type(@column_type)
         stream = tuple_plan.physical_streams(@column).first
         raise CorruptPartError.new("selected Tuple child stream is missing") unless stream_names.includes?(stream)
@@ -13244,6 +13280,9 @@ module CrystalClick
         stream = plan.physical_streams(@column).find(&.name.==(stream_name)) ||
                  raise(UnsupportedFormatError.new("unsupported exact Array(Tuple) substream"))
         stream.element_width
+      elsif plan = WideArrayTupleTypePlan.for_type(@column_type)
+        plan.stream_width(@column, stream_name) ||
+          raise(UnsupportedFormatError.new("unsupported compositional Array(Tuple) substream"))
       elsif WidePart.nullable_uuid_array_element_type(@column_type)
         case stream_name
         when "#{@column}.null"  then 1
@@ -14576,7 +14615,14 @@ module CrystalClick
         raise UnsupportedFormatError.new("compositional Tuple accessor requires named supported scalar leaves")
     end
 
-    private def tuple_reader(plan : WideTupleTypePlan, column : String) : TupleReader
+    private def tuple_reader(
+      plan : WideTupleTypePlan,
+      column : String,
+      logical_rows : Proc(Int32, Int32, UInt64)? = nil,
+      combined_charge : Proc(UInt64, UInt64, UInt64, UInt64?)? = nil,
+      read_range : Proc(String, Int32, Int32, Int32, Int32, UInt64, Bytes)? = nil,
+      validate_range : Proc(String, Int32, Int32, Int32, Int32, UInt64, Nil)? = nil,
+    ) : TupleReader
       TupleReader.new(
         plan,
         column,
@@ -14586,10 +14632,10 @@ module CrystalClick
         ->(stream_name : String, mark_index : Int32) {
           tuple_reader_mark_rows(stream_name, mark_index)
         },
-        ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
+        read_range || ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
           tuple_reader_read_range(stream_name, first_mark, mark_count, expected_bytes, element_width, expected_rows)
         },
-        ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
+        validate_range || ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
           tuple_reader_validate_range(stream_name, first_mark, mark_count, expected_bytes, element_width, expected_rows)
         },
         ->(bytes : Bytes, offset : Int32) {
@@ -14615,7 +14661,9 @@ module CrystalClick
         },
         ->(name : String, leaf_type : WideTupleLeafType, bytes : Bytes, null_map : ScalarNullMap, rows : UInt64, width : Int32) {
           decode_tuple_nullable_leaf(name, leaf_type, bytes, null_map, rows, width)
-        }
+        },
+        logical_rows,
+        combined_charge
       )
     end
 
@@ -15253,6 +15301,13 @@ module CrystalClick
                                  stream.name == "#{@column}.UInt64"
                              elsif WidePart.supports_array_type?(@column_type)
                                WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream.name)
+                             elsif array_tuple_plan = WideArrayTupleTypePlan.for_type(@column_type)
+                               if WideTypePlan.admitted(@column_type).nil?
+                                 tuple_profile = true
+                                 stream.name != array_tuple_plan.outer_size_stream(@column)
+                               else
+                                 false
+                               end
                              elsif WidePart.supports_array_map_type?(@column_type)
                                array_map_stream_may_be_empty?(@column, stream.name)
                              elsif WidePart.map_string_numeric_value_type(@column_type)

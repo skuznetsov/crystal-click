@@ -28,6 +28,15 @@ module CrystalClick
       new(root)
     end
 
+    # Build the inner Tuple plan only from a complete bounded Array(Tuple)
+    # declaration. Keeping the parser tree out of this public API prevents a
+    # caller-built schema node graph from bypassing aggregate parser limits.
+    def self.for_array_type(type : String) : WideTupleTypePlan?
+      return nil if type.bytesize > WideTupleSchemaParser::MAX_SOURCE_BYTES
+      root = WideTupleSchemaParser.parse_array_tuple_tree(type) || return nil
+      new(root)
+    end
+
     def type_name : String
       String.new(@type_name.to_slice)
     end

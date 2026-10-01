@@ -169,6 +169,7 @@ module CrystalClick
         Array(UInt64).new(logical_streams.size, 0_u64),
         mark_count,
         rows_per_mark,
+        TupleLeafMarkSchedule.row_aligned(keys.size, rows_per_mark),
         expected_columns,
         File.read(File.join(stage, "columns_substreams.txt")),
         File.read(File.join(stage, "serialization.json")),

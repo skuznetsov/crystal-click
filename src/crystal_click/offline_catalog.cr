@@ -99,7 +99,7 @@ module CrystalClick
                              Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) |
                              OfflineArrayMapUInt64NumericValue | OfflineArrayMapStringNumericValue |
                              OfflineArrayMapUInt64NullableNumericValue | OfflineArrayMapStringNullableNumericValue |
-                             Tuple(UInt64, String) | WideTupleRow | Nil
+                             Tuple(UInt64, String) | WideTupleRow | WideArrayTupleRow | Nil
 
   # The column name and declared type parsed from ClickHouse table DDL.
   struct OfflineColumn
@@ -255,6 +255,7 @@ module CrystalClick
       observed_rows = 0_u64
       string_bytes = 0_u64
       array_elements = [0_u64]
+      tuple_cells = [0_u64]
 
       unless candidates.empty?
         scan_typed([column_name]) do |batch|
@@ -266,8 +267,10 @@ module CrystalClick
             observed_rows,
             string_bytes,
             array_elements,
+            tuple_cells,
             expected_rows,
-            max_string_bytes
+            max_string_bytes,
+            max_tuple_cells
           )
           nil
         end
@@ -285,8 +288,10 @@ module CrystalClick
       observed_rows : UInt64,
       string_bytes : UInt64,
       array_elements : Array(UInt64),
+      tuple_cells : Array(UInt64),
       expected_rows : UInt64,
       max_string_bytes : UInt64,
+      max_tuple_cells : UInt64,
     ) : {UInt64, UInt64}
       if qbit_plan = QBitColumnType.for_type(selected_type)
         if qbit_plan.nullable
@@ -295,6 +300,25 @@ module CrystalClick
           observed_rows = append_materialized_values(values, batch.qbits_for(column_name), observed_rows, expected_rows)
         end
         return {observed_rows, string_bytes}
+      end
+
+      if array_tuple_plan = WideArrayTupleTypePlan.for_type(selected_type)
+        if WideTypePlan.admitted(selected_type).nil?
+          observed_rows, array_elements[0], tuple_cells[0], string_bytes = ArrayTupleValuesMaterializer.append_rows(
+            values,
+            batch,
+            column_name,
+            observed_rows,
+            expected_rows,
+            array_elements[0],
+            tuple_cells[0],
+            string_bytes,
+            max_string_bytes,
+            max_tuple_cells,
+            array_tuple_plan.tuple_plan.fields.size
+          )
+          return {observed_rows, string_bytes}
+        end
       end
 
       if tuple_plan = WideTupleTypePlan.for_type(selected_type)

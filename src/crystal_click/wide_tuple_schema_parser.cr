@@ -30,6 +30,16 @@ module CrystalClick
       nil
     end
 
+    # Parse one outer Array around a recursively named, nonempty Tuple using
+    # the same aggregate source/depth/node counters as the Tuple parser. In
+    # particular, the outer Array syntax node is charged before its child.
+    def self.parse_array_tuple_tree(source : String) : WideTupleSchemaNode?
+      return nil if source.bytesize > MAX_SOURCE_BYTES
+      new(source).parse_array_tuple_tree
+    rescue ex : ArgumentError
+      nil
+    end
+
     # Parse one exact admitted scalar leaf without wrapping it in a synthetic
     # Tuple. The normal Tuple path calls #parse_leaf directly and therefore
     # does not recurse through this public owner factory.
@@ -50,6 +60,21 @@ module CrystalClick
       root = parse_tuple(nil, 1)
       skip_whitespace
       raise ArgumentError.new("trailing bytes after Tuple") unless @offset == @bytes.size
+      root
+    end
+
+    protected def parse_array_tuple_tree : WideTupleSchemaNode
+      expect_text!("Array")
+      add_node!
+      skip_whitespace
+      expect_byte!('('.ord.to_u8)
+      skip_whitespace
+
+      root = parse_tuple(nil, 2)
+      skip_whitespace
+      expect_byte!(')'.ord.to_u8)
+      skip_whitespace
+      raise ArgumentError.new("trailing bytes after Array(Tuple)") unless @offset == @bytes.size
       root
     end
 

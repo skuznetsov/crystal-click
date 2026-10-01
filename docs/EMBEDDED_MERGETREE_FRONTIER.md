@@ -16,6 +16,10 @@ recursive types or a newer stock binary.
 W106's bounded recursive named-Tuple extension is tracked separately in
 `NESTED_TUPLE_FRONTIER.md`; recursive Tuple edges do not admit arbitrary
 Array/Map/JSON composition or change the stock-version qualification boundary.
+W107's paired one-outer-Array over recursively named Tuple composition is
+verified within the executed bounded certificate in
+`ARRAY_TUPLE_COMPOSITION_FRONTIER.md`; it does not admit arbitrary recursive
+containers or current-master physical profiles.
 These bounded reader/writer/table/catalog extensions do not widen the
 MV/projection, arbitrary-table-write or
 memory/performance boundaries below. Owner-by-contract refactoring is tracked

@@ -21,63 +21,10 @@ module CrystalClick
           records.concat(infrastructure.write_uint64_stream(
             stage, input.key_name, input.keys.to_unsafe.to_slice(input.keys.size), input.rows_per_mark
           ))
-
-          fields = input.type_plan.fields
-          fields.each_with_index do |field, index|
-            logical_name = input.type_plan.leaf_stream_name(input.value_name, field)
-            if null_map = input.leaf_null_maps[index]
-              records.concat(infrastructure.write_numeric_stream(
-                stage, "#{logical_name}.null", null_map.as(WideTupleNumericType::Buffer),
-                input.rows_per_mark, "UInt8"
-              ))
-            end
-            stream_type_name = input.leaf_null_maps[index] ? nullable_physical_type_name(field) : field.type_name
-            case values = input.leaf_buffers[index]
-            when Array(UInt64)
-              records.concat(infrastructure.write_uint64_stream(
-                stage, logical_name, values.to_unsafe.to_slice(values.size), input.rows_per_mark
-              ))
-            when Array(String)
-              records.concat(infrastructure.write_string_streams(
-                stage, logical_name, values.to_unsafe.to_slice(values.size), input.rows_per_mark
-              ))
-            when Array(Bool)
-              records.concat(infrastructure.write_bool_stream(
-                stage, logical_name, values.to_unsafe.to_slice(values.size), input.rows_per_mark
-              ))
-            when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
-              records.concat(infrastructure.write_identifier_stream(
-                stage, logical_name, values.as(WideTupleIdentifierType::Buffer), input.rows_per_mark, stream_type_name
-              ))
-            when Array(DateValue), Array(Date32Value), Array(DateTimeValue),
-                 Array(DateTime64Value), Array(TimeValue), Array(Time64Value)
-              records.concat(infrastructure.write_temporal_stream(
-                stage, logical_name, values.as(WideTupleTemporalType::Buffer), input.rows_per_mark, stream_type_name
-              ))
-            when Array(FixedStringValue)
-              exact_type = field.leaf_type.parameterized_type.as?(WideTupleFixedStringType) ||
-                           raise UnsupportedFormatError.new("Tuple FixedString field has no exact owner")
-              records.concat(infrastructure.write_fixed_string_stream(
-                stage, logical_name, values.as(WideTupleFixedStringType::Buffer), exact_type, input.rows_per_mark
-              ))
-            when Array(Enum8Value), Array(Enum16Value)
-              exact_type = field.leaf_type.parameterized_type.as?(WideTupleEnumType) ||
-                           raise UnsupportedFormatError.new("Tuple Enum field has no exact owner")
-              records.concat(infrastructure.write_enum_stream(
-                stage, logical_name, values.as(WideTupleEnumType::Buffer), exact_type, input.rows_per_mark
-              ))
-            when Array(Decimal32Value), Array(Decimal64Value), Array(Decimal128Value), Array(Decimal256TupleValue)
-              exact_type = field.leaf_type.parameterized_type.as?(WideTupleDecimalType) ||
-                           raise UnsupportedFormatError.new("Tuple Decimal field has no exact owner")
-              records.concat(infrastructure.write_decimal_stream(
-                stage, logical_name, values.as(WideTupleDecimalType::Buffer), exact_type, input.rows_per_mark
-              ))
-            else
-              records.concat(infrastructure.write_numeric_stream(
-                stage, logical_name, values.as(WideTupleNumericType::Buffer), input.rows_per_mark, stream_type_name
-              ))
-            end
-          end
+          records.concat(TupleLeafStreamWriter.write(
+            stage, input.value_name, input.type_plan, input.type_plan.fields,
+            input.leaf_buffers, input.leaf_null_maps, input.schedule, infrastructure
+          ))
 
           records << infrastructure.write_primary_index(
             stage, input.keys.to_unsafe.to_slice(input.keys.size), input.rows_per_mark
@@ -95,24 +42,6 @@ module CrystalClick
           input.target
         ensure
           FileUtils.rm_rf(stage) if Dir.exists?(stage)
-        end
-      end
-
-      private def self.nullable_physical_type_name(field : WideTupleField) : String
-        leaf_type = field.leaf_type
-        if enum_type = leaf_type.parameterized_type.as?(WideTupleEnumType)
-          enum_type.width == 1 ? "Int8" : "Int16"
-        elsif decimal_type = leaf_type.parameterized_type.as?(WideTupleDecimalType)
-          case decimal_type.storage_width
-          when  4 then "Int32"
-          when  8 then "Int64"
-          when 16 then "Int128"
-          else         "Int256"
-          end
-        elsif leaf_type.base_type_name == "Bool"
-          "UInt8"
-        else
-          leaf_type.base_type_name
         end
       end
 
@@ -165,6 +94,7 @@ module CrystalClick
         raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
         index_size = (mark_count.to_i64 + 1_i64) * 8_i64
         raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+        schedule = TupleLeafMarkSchedule.row_aligned(keys.size, rows_per_mark)
 
         logical_streams = [key_name] + type_plan.physical_streams(value_name)
         if logical_streams.size - 1 > WidePart::MAX_METADATA_SUBSTREAMS
@@ -229,7 +159,7 @@ module CrystalClick
             leaf_buffers << infrastructure.copy_string_values(column)
           else
             values = column.physical_values
-            field_type = fields[index].type_name
+            field_type = field.type_name
             if WideTupleTemporalType.width(field_type)
               WideTupleTemporalType.validate_buffer!(field_type, values.as(WideTupleTemporalType::Buffer))
             end
@@ -252,6 +182,7 @@ module CrystalClick
         TuplePartWriteInput.new(
           target, parent, key_name, keys_copy, value_name, type_plan, leaf_buffers, leaf_null_maps,
           logical_streams, compressed_sizes, raw_sizes, mark_count, rows_per_mark,
+          schedule,
           columns_metadata, substreams_metadata, serialization_metadata
         )
       end
@@ -588,268 +519,31 @@ module CrystalClick
         decoded_columns = decoded.columns
         input.leaf_buffers.each_with_index do |expected, index|
           actual = decoded_columns[index]
+          field = fields[index]
+          unless actual.leaf_type == field.leaf_type && actual.type_name == field.type_name
+            raise CorruptPartError.new("staged Tuple leaf type identity differs")
+          end
           if expected_null_map = input.leaf_null_maps[index]
-            field = fields[index]
             actual_null_map = actual.null_map
             unless actual.leaf_type == field.leaf_type && actual_null_map && actual_null_map.bytes == expected_null_map
               raise CorruptPartError.new("staged Nullable Tuple mask readback differs")
             end
-            unless nullable_physical_values_match?(expected, actual.physical_values)
+            unless TupleLeafPhysicalValues.matches?(expected, actual.physical_values)
               raise CorruptPartError.new("staged Nullable Tuple raw leaf readback differs")
             end
             next
           end
-          case expected
-          when Array(UInt64)
-            unless actual.type_name == "UInt64" && actual.uint64_values == expected
-              raise CorruptPartError.new("staged Tuple UInt64 leaf readback differs")
-            end
-          when Array(String)
-            unless actual.type_name == "String" && actual.string_values == expected
-              raise CorruptPartError.new("staged Tuple String leaf readback differs")
-            end
-          when Array(Bool)
-            unless actual.type_name == "Bool" && actual.values_as(Bool) == expected
-              raise CorruptPartError.new("staged Tuple Bool leaf readback differs")
-            end
+          unless TupleLeafPhysicalValues.matches?(expected, actual.physical_values)
+            raise CorruptPartError.new(TupleLeafPhysicalValues.staged_mismatch_message(field.leaf_type))
+          end
+          if expected.is_a?(Array(Bool))
             infrastructure.validate_bool_stream(
-              stage, input.type_plan.leaf_stream_name(input.value_name, fields[index]), expected, input.rows_per_mark
+              stage, input.type_plan.leaf_stream_name(input.value_name, field), expected,
+              input.rows_per_mark, input.schedule
             )
-          when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
-            expected_identifier = expected.as(WideTupleIdentifierType::Buffer)
-            unless identifier_values_match?(expected_identifier, actual, fields[index].type_name)
-              raise CorruptPartError.new("staged Tuple identifier leaf readback differs")
-            end
-          when Array(DateValue), Array(Date32Value), Array(DateTimeValue),
-               Array(DateTime64Value), Array(TimeValue), Array(Time64Value)
-            expected_temporal = expected.as(WideTupleTemporalType::Buffer)
-            unless temporal_values_match?(expected_temporal, actual, fields[index].type_name)
-              raise CorruptPartError.new("staged Tuple temporal leaf readback differs")
-            end
-          when Array(FixedStringValue)
-            exact_type = fields[index].parameterized_type.as?(WideTupleFixedStringType)
-            unless exact_type && fixed_string_values_match?(expected, actual, exact_type)
-              raise CorruptPartError.new("staged Tuple FixedString leaf readback differs")
-            end
-          when Array(Enum8Value), Array(Enum16Value)
-            exact_type = fields[index].parameterized_type.as?(WideTupleEnumType)
-            unless exact_type && enum_values_match?(expected.as(WideTupleEnumType::Buffer), actual, exact_type)
-              raise CorruptPartError.new("staged Tuple Enum leaf readback differs")
-            end
-          when Array(Decimal32Value), Array(Decimal64Value), Array(Decimal128Value), Array(Decimal256TupleValue)
-            exact_type = fields[index].parameterized_type.as?(WideTupleDecimalType)
-            unless exact_type && decimal_values_match?(expected.as(WideTupleDecimalType::Buffer), actual, exact_type)
-              raise CorruptPartError.new("staged Tuple Decimal leaf readback differs")
-            end
-          else
-            expected_numeric = expected.as(WideTupleNumericType::Buffer)
-            unless numeric_values_match?(expected_numeric, actual, fields[index].type_name)
-              raise CorruptPartError.new("staged Tuple numeric leaf readback differs")
-            end
           end
         end
         nil
-      end
-
-      private def self.nullable_physical_values_match?(
-        expected : TupleLeafBuffers,
-        actual : TupleLeafBuffers,
-      ) : Bool
-        return false unless expected.size == actual.size
-        case expected
-        when Array(String)
-          actual_values = actual.as?(Array(String)) || return false
-          expected.each_with_index do |value, row|
-            return false unless value == actual_values[row]
-          end
-        when Array(UUIDValue)
-          actual_values = actual.as?(Array(UUIDValue)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleIdentifierType.same_bits?(value, actual_values[row])
-          end
-        when Array(IPv4Value)
-          actual_values = actual.as?(Array(IPv4Value)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleIdentifierType.same_bits?(value, actual_values[row])
-          end
-        when Array(IPv6Value)
-          actual_values = actual.as?(Array(IPv6Value)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleIdentifierType.same_bits?(value, actual_values[row])
-          end
-        when Array(DateValue)
-          actual_values = actual.as?(Array(DateValue)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleTemporalType.same_bits?(value, actual_values[row])
-          end
-        when Array(Date32Value)
-          actual_values = actual.as?(Array(Date32Value)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleTemporalType.same_bits?(value, actual_values[row])
-          end
-        when Array(DateTimeValue)
-          actual_values = actual.as?(Array(DateTimeValue)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleTemporalType.same_bits?(value, actual_values[row])
-          end
-        when Array(DateTime64Value)
-          actual_values = actual.as?(Array(DateTime64Value)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleTemporalType.same_bits?(value, actual_values[row])
-          end
-        when Array(TimeValue)
-          actual_values = actual.as?(Array(TimeValue)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleTemporalType.same_bits?(value, actual_values[row])
-          end
-        when Array(Time64Value)
-          actual_values = actual.as?(Array(Time64Value)) || return false
-          expected.each_with_index do |value, row|
-            return false unless WideTupleTemporalType.same_bits?(value, actual_values[row])
-          end
-        when Array(FixedStringValue)
-          actual_values = actual.as?(Array(FixedStringValue)) || return false
-          expected.each_with_index do |value, row|
-            return false unless value.width == actual_values[row].width && value.raw_bytes == actual_values[row].raw_bytes
-          end
-        else
-          expected_numeric = expected.as?(WideTupleNumericType::Buffer) || return false
-          actual_numeric = actual.as?(WideTupleNumericType::Buffer) || return false
-          expected_numeric.each_with_index do |value, row|
-            actual_value = actual_numeric[row]
-            return false unless WideTupleNumericType.same_bits?(value, actual_value)
-          end
-        end
-        true
-      end
-
-      private def self.identifier_values_match?(
-        expected : WideTupleIdentifierType::Buffer,
-        actual : WideTupleLeafColumn,
-        expected_type_name : String,
-      ) : Bool
-        return false unless actual.type_name == expected_type_name && actual.size == expected.size
-        expected.size.times do |row|
-          actual_value = actual.value_at(row)
-          unless actual_value.is_a?(UUIDValue) || actual_value.is_a?(IPv4Value) || actual_value.is_a?(IPv6Value)
-            return false
-          end
-          return false unless WideTupleIdentifierType.same_bits?(expected[row], actual_value)
-        end
-        true
-      end
-
-      private def self.numeric_values_match?(
-        expected : WideTupleNumericType::Buffer,
-        actual : WideTupleLeafColumn,
-        expected_type_name : String,
-      ) : Bool
-        return false unless actual.type_name == expected_type_name && actual.size == expected.size
-        expected.size.times do |row|
-          expected_value = expected[row]
-          actual_value = actual.value_at(row)
-          case actual_value
-          when Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
-               Int128, UInt128, Int256Value, UInt256Value, Float32, Float64, BFloat16Value
-            return false unless WideTupleNumericType.same_bits?(expected_value, actual_value)
-          else
-            return false
-          end
-        end
-        true
-      end
-
-      private def self.temporal_values_match?(
-        expected : WideTupleTemporalType::Buffer,
-        actual : WideTupleLeafColumn,
-        expected_type_name : String,
-      ) : Bool
-        return false unless actual.type_name == expected_type_name && actual.size == expected.size
-        expected.size.times do |row|
-          actual_value = case value = actual.value_at(row)
-                         when DateValue, Date32Value, DateTimeValue, DateTime64Value, TimeValue, Time64Value
-                           value
-                         else
-                           return false
-                         end
-          return false unless WideTupleTemporalType.same_bits?(expected[row], actual_value)
-        end
-        true
-      end
-
-      private def self.fixed_string_values_match?(
-        expected : WideTupleFixedStringType::Buffer,
-        actual : WideTupleLeafColumn,
-        expected_type : WideTupleFixedStringType,
-      ) : Bool
-        return false unless expected.size == actual.size
-        return false unless actual.type_name == expected_type.type_name
-        return false unless actual.parameterized_type == expected_type
-        expected.each_with_index do |expected_value, row|
-          actual_value = actual.value_at(row)
-          return false unless actual_value.is_a?(FixedStringValue) && actual_value == expected_value
-        end
-        true
-      end
-
-      private def self.enum_values_match?(
-        expected : WideTupleEnumType::Buffer,
-        actual : WideTupleLeafColumn,
-        expected_type : WideTupleEnumType,
-      ) : Bool
-        return false unless expected.size == actual.size
-        return false unless actual.type_name == expected_type.type_name
-        return false unless actual.parameterized_type == expected_type
-        case expected
-        when Array(Enum8Value)
-          expected.each_with_index do |expected_value, row|
-            actual_value = actual.value_at(row)
-            return false unless actual_value.is_a?(Enum8Value) && actual_value == expected_value
-          end
-        when Array(Enum16Value)
-          expected.each_with_index do |expected_value, row|
-            actual_value = actual.value_at(row)
-            return false unless actual_value.is_a?(Enum16Value) && actual_value == expected_value
-          end
-        else
-          return false
-        end
-        true
-      end
-
-      private def self.decimal_values_match?(
-        expected : WideTupleDecimalType::Buffer,
-        actual : WideTupleLeafColumn,
-        expected_type : WideTupleDecimalType,
-      ) : Bool
-        return false unless expected.size == actual.size
-        return false unless actual.type_name == expected_type.type_name
-        return false unless actual.parameterized_type == expected_type
-        case expected
-        when Array(Decimal32Value)
-          expected.each_with_index do |expected_value, row|
-            actual_value = actual.value_at(row)
-            return false unless actual_value.is_a?(Decimal32Value) && actual_value == expected_value
-          end
-        when Array(Decimal64Value)
-          expected.each_with_index do |expected_value, row|
-            actual_value = actual.value_at(row)
-            return false unless actual_value.is_a?(Decimal64Value) && actual_value == expected_value
-          end
-        when Array(Decimal128Value)
-          expected.each_with_index do |expected_value, row|
-            actual_value = actual.value_at(row)
-            return false unless actual_value.is_a?(Decimal128Value) && actual_value == expected_value
-          end
-        when Array(Decimal256TupleValue)
-          expected.each_with_index do |expected_value, row|
-            actual_value = actual.value_at(row)
-            return false unless actual_value.is_a?(Decimal256TupleValue) && actual_value == expected_value
-          end
-        else
-          return false
-        end
-        true
       end
     end
   end

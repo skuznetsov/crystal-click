@@ -436,6 +436,36 @@ module CrystalClick
       )
     end
 
+    # Write one outer Array of recursively named Tuple elements. Outer keys
+    # and row_sizes share a row axis; leaf buffers share the flattened element
+    # axis. This profile keeps its distinct ragged preflight/readback owner
+    # while reusing the common Tuple leaf codecs.
+    def self.write_uint64_array_tuple_part(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      row_sizes : Slice(UInt64),
+      columns : Array(WideTupleLeafColumn),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      infrastructure = build_tuple_part_infrastructure(
+        ->(parent : String) { create_stage(parent) },
+        ->(column : WideTupleLeafColumn) do
+          if column.leaf_type.nullable?
+            column.physical_values.as(Array(String))
+          else
+            column.string_values
+          end
+        end
+      )
+      ArrayTuplePartWriter.write(
+        destination, key_name, keys, value_name, type_name, row_sizes, columns,
+        rows_per_mark, infrastructure
+      )
+    end
+
     private def self.write_uint64_tuple_pair_with_stage_factory(
       destination : String,
       key_name : String,
@@ -461,35 +491,35 @@ module CrystalClick
         stage_factory,
         ->(name : String) { validate_column_name(name) },
         ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
-        ->(stage : String, column : String, values : Slice(UInt64), mark_size : Int32) {
-          write_uint64_stream(stage, column, values, mark_size)
+        ->(stage : String, column : String, values : Slice(UInt64), mark_size : Int32, schedule : TupleLeafMarkSchedule?, axis : TupleLeafMarkSchedule::Axis) {
+          write_uint64_stream(stage, column, values, mark_size, schedule, axis)
         },
-        ->(stage : String, column : String, values : Slice(String), mark_size : Int32) {
-          write_string_streams(stage, column, values, mark_size)
+        ->(stage : String, column : String, values : Slice(String), mark_size : Int32, schedule : TupleLeafMarkSchedule?) {
+          write_string_streams(stage, column, values, mark_size, schedule)
         },
-        ->(stage : String, column : String, values : Slice(Bool), mark_size : Int32) {
-          write_tuple_bool_stream(stage, column, values, mark_size)
+        ->(stage : String, column : String, values : Slice(Bool), mark_size : Int32, schedule : TupleLeafMarkSchedule?) {
+          write_tuple_bool_stream(stage, column, values, mark_size, schedule)
         },
-        ->(stage : String, column : String, values : Array(Bool), mark_size : Int32) {
-          validate_staged_bool_values_stream(stage, column, values, mark_size)
+        ->(stage : String, column : String, values : Array(Bool), mark_size : Int32, schedule : TupleLeafMarkSchedule?) {
+          validate_staged_bool_values_stream(stage, column, values, mark_size, schedule)
         },
-        ->(stage : String, column : String, values : WideTupleNumericType::Buffer, mark_size : Int32, leaf_type_name : String) {
-          write_tuple_numeric_stream(stage, column, values, mark_size, leaf_type_name)
+        ->(stage : String, column : String, values : WideTupleNumericType::Buffer, mark_size : Int32, leaf_type_name : String, schedule : TupleLeafMarkSchedule?) {
+          write_tuple_numeric_stream(stage, column, values, mark_size, leaf_type_name, schedule)
         },
-        ->(stage : String, column : String, values : WideTupleIdentifierType::Buffer, mark_size : Int32, leaf_type_name : String) {
-          write_tuple_identifier_stream(stage, column, values, mark_size, leaf_type_name)
+        ->(stage : String, column : String, values : WideTupleIdentifierType::Buffer, mark_size : Int32, leaf_type_name : String, schedule : TupleLeafMarkSchedule?) {
+          write_tuple_identifier_stream(stage, column, values, mark_size, leaf_type_name, schedule)
         },
-        ->(stage : String, column : String, values : WideTupleTemporalType::Buffer, mark_size : Int32, leaf_type_name : String) {
-          write_tuple_temporal_stream(stage, column, values, mark_size, leaf_type_name)
+        ->(stage : String, column : String, values : WideTupleTemporalType::Buffer, mark_size : Int32, leaf_type_name : String, schedule : TupleLeafMarkSchedule?) {
+          write_tuple_temporal_stream(stage, column, values, mark_size, leaf_type_name, schedule)
         },
-        ->(stage : String, column : String, values : WideTupleFixedStringType::Buffer, exact_type : WideTupleFixedStringType, mark_size : Int32) {
-          write_tuple_fixed_string_stream(stage, column, values, exact_type, mark_size)
+        ->(stage : String, column : String, values : WideTupleFixedStringType::Buffer, exact_type : WideTupleFixedStringType, mark_size : Int32, schedule : TupleLeafMarkSchedule?) {
+          write_tuple_fixed_string_stream(stage, column, values, exact_type, mark_size, schedule)
         },
-        ->(stage : String, column : String, values : WideTupleEnumType::Buffer, exact_type : WideTupleEnumType, mark_size : Int32) {
-          write_tuple_enum_stream(stage, column, values, exact_type, mark_size)
+        ->(stage : String, column : String, values : WideTupleEnumType::Buffer, exact_type : WideTupleEnumType, mark_size : Int32, schedule : TupleLeafMarkSchedule?) {
+          write_tuple_enum_stream(stage, column, values, exact_type, mark_size, schedule)
         },
-        ->(stage : String, column : String, values : WideTupleDecimalType::Buffer, exact_type : WideTupleDecimalType, mark_size : Int32) {
-          write_tuple_decimal_stream(stage, column, values, exact_type, mark_size)
+        ->(stage : String, column : String, values : WideTupleDecimalType::Buffer, exact_type : WideTupleDecimalType, mark_size : Int32, schedule : TupleLeafMarkSchedule?) {
+          write_tuple_decimal_stream(stage, column, values, exact_type, mark_size, schedule)
         },
         ->(stage : String, values : Slice(UInt64), mark_size : Int32) {
           write_primary_index(stage, values, mark_size)
@@ -610,8 +640,9 @@ module CrystalClick
       column : String,
       values : Slice(Bool),
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord)
-      write_typed_numeric_stream(stage, column, values, rows_per_mark, "Bool")
+      write_typed_numeric_stream(stage, column, values, rows_per_mark, "Bool", schedule)
     end
 
     private def self.write_tuple_numeric_stream(
@@ -620,12 +651,13 @@ module CrystalClick
       values : WideTupleNumericType::Buffer,
       rows_per_mark : Int32,
       type_name : String,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord)
       {% for scalar_type in [UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Int128, UInt128, Int256Value, UInt256Value, Float32, Float64, BFloat16Value] %}
         if values.is_a?(Array({{scalar_type}}))
           typed_values = values.as(Array({{scalar_type}}))
           return write_typed_numeric_stream(
-            stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+            stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name, schedule
           )
         end
       {% end %}
@@ -638,6 +670,7 @@ module CrystalClick
       values : WideTupleIdentifierType::Buffer,
       rows_per_mark : Int32,
       type_name : String,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord)
       unless WideTupleIdentifierType.type_name_for_buffer(values) == type_name
         raise UnsupportedFormatError.new("Tuple identifier leaf buffer does not match its exact type")
@@ -645,17 +678,17 @@ module CrystalClick
       if values.is_a?(Array(UUIDValue))
         typed_values = values.as(Array(UUIDValue))
         return write_typed_numeric_stream(
-          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name, schedule
         )
       elsif values.is_a?(Array(IPv4Value))
         typed_values = values.as(Array(IPv4Value))
         return write_typed_numeric_stream(
-          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name, schedule
         )
       else
         typed_values = values.as(Array(IPv6Value))
         write_typed_numeric_stream(
-          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+          stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name, schedule
         )
       end
     end
@@ -666,6 +699,7 @@ module CrystalClick
       values : WideTupleTemporalType::Buffer,
       rows_per_mark : Int32,
       type_name : String,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord)
       WideTupleTemporalType.validate_buffer!(type_name, values)
       temporal_width = WideTupleTemporalType.width(type_name) ||
@@ -677,7 +711,7 @@ module CrystalClick
         if values.is_a?(Array({{temporal_type}}))
           typed_values = values.as(Array({{temporal_type}}))
           return write_typed_numeric_stream(
-            stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name
+            stage, column, typed_values.to_unsafe.to_slice(typed_values.size), rows_per_mark, type_name, schedule
           )
         end
       {% end %}
@@ -690,6 +724,7 @@ module CrystalClick
       values : WideTupleFixedStringType::Buffer,
       exact_type : WideTupleFixedStringType,
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord)
       width = exact_type.width
       raise UnsupportedFormatError.new("Tuple FixedString width must be positive") if width <= 0
@@ -704,7 +739,7 @@ module CrystalClick
         end
       end
 
-      write_fixed_width_stream(stage, column, typed_values.size, width, rows_per_mark) do |raw, source_row, output_row|
+      write_fixed_width_stream(stage, column, typed_values.size, width, rows_per_mark, schedule) do |raw, source_row, output_row|
         row_bytes = typed_values[source_row].raw_bytes
         unless row_bytes.size == width
           raise UnsupportedFormatError.new("Tuple FixedString value bytes do not match its exact width")
@@ -722,6 +757,7 @@ module CrystalClick
       values : WideTupleEnumType::Buffer,
       exact_type : WideTupleEnumType,
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord)
       case values
       when Array(Enum8Value)
@@ -733,7 +769,7 @@ module CrystalClick
             raise UnsupportedFormatError.new("Tuple Enum8 row definition does not match its exact type")
           end
         end
-        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.width)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.width, schedule)
       when Array(Enum16Value)
         unless exact_type.width == 2 && exact_type.definition.kind == :enum16
           raise UnsupportedFormatError.new("Tuple Enum16 buffer does not match its exact type")
@@ -743,7 +779,7 @@ module CrystalClick
             raise UnsupportedFormatError.new("Tuple Enum16 row definition does not match its exact type")
           end
         end
-        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.width)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.width, schedule)
       else
         raise UnsupportedFormatError.new("Tuple Enum leaf buffer is unsupported")
       end
@@ -755,6 +791,7 @@ module CrystalClick
       values : WideTupleDecimalType::Buffer,
       exact_type : WideTupleDecimalType,
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord)
       case values
       when Array(Decimal32Value)
@@ -762,25 +799,25 @@ module CrystalClick
           raise UnsupportedFormatError.new("Tuple Decimal32 buffer does not match its exact type")
         end
         validate_tuple_decimal_rows!(values, exact_type)
-        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width, schedule)
       when Array(Decimal64Value)
         unless exact_type.storage_width == 8
           raise UnsupportedFormatError.new("Tuple Decimal64 buffer does not match its exact type")
         end
         validate_tuple_decimal_rows!(values, exact_type)
-        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width, schedule)
       when Array(Decimal128Value)
         unless exact_type.storage_width == 16
           raise UnsupportedFormatError.new("Tuple Decimal128 buffer does not match its exact type")
         end
         validate_tuple_decimal_rows!(values, exact_type)
-        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width, schedule)
       when Array(Decimal256TupleValue)
         unless exact_type.storage_width == 32
           raise UnsupportedFormatError.new("Tuple Decimal256 buffer does not match its exact type")
         end
         validate_tuple_decimal_rows!(values, exact_type)
-        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width)
+        write_tuple_parameterized_numeric_stream(stage, column, values, rows_per_mark, exact_type.storage_width, schedule)
       else
         raise UnsupportedFormatError.new("Tuple Decimal leaf buffer is unsupported")
       end
@@ -801,8 +838,9 @@ module CrystalClick
       values : Array(T),
       rows_per_mark : Int32,
       width : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord) forall T
-      write_fixed_width_stream(stage, column, values.size, width, rows_per_mark) do |raw, source_row, output_row|
+      write_fixed_width_stream(stage, column, values.size, width, rows_per_mark, schedule) do |raw, source_row, output_row|
         write_typed_numeric_le(raw, output_row * width, values[source_row])
       end
     end
@@ -11671,9 +11709,10 @@ module CrystalClick
       values : Slice(T),
       rows_per_mark : Int32,
       type_name : String,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord) forall T
       width = numeric_width(type_name)
-      write_fixed_width_stream(stage, column, values.size, width, rows_per_mark) do |raw, source_row, output_row|
+      write_fixed_width_stream(stage, column, values.size, width, rows_per_mark, schedule) do |raw, source_row, output_row|
         write_typed_numeric_le(raw, output_row * width, values[source_row])
       end
     end
@@ -11687,9 +11726,13 @@ module CrystalClick
       row_count : Int32,
       width : Int32,
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
       &encode_row : Bytes, Int32, Int32 -> Nil
     ) : Array(ChecksumRecord)
       raise ArgumentError.new("fixed-width stream width must be positive") if width <= 0
+      if schedule && schedule.not_nil!.leaf_count != row_count
+        raise ArgumentError.new("fixed-width Tuple stream differs from its mark schedule")
+      end
       base_name = StreamName.hash(column)
       data_name = "#{base_name}.bin"
       marks_name = "#{base_name}.mrk2"
@@ -11700,26 +11743,32 @@ module CrystalClick
       mark_bytes = IO::Memory.new
       data_size = 0_u64
       start_row = 0
+      mark_index = 0
 
       File.open(data_path, "wb") do |data_file|
-        while start_row < row_count
-          rows = {rows_per_mark, row_count - start_row}.min
+        while mark = TupleLeafMarkSchedule.scheduled_mark(
+                schedule, mark_index, start_row, row_count, rows_per_mark
+              )
+          rows = mark.leaf_count
           raw = Bytes.new(rows * width)
           rows.times do |row|
-            yield raw, start_row + row, row
+            yield raw, mark.leaf_start + row, row
           end
 
           write_uint64_le(mark_bytes, data_size)
           write_uint64_le(mark_bytes, 0_u64)
-          write_uint64_le(mark_bytes, rows.to_u64)
+          write_uint64_le(mark_bytes, mark.outer_rows.to_u64)
 
-          frame = encode_lz4_frame(raw)
-          raise ArgumentError.new("typed numeric data stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
-          data_file.write(frame)
-          data_hash.update(frame)
-          raw_hash.update(raw)
-          data_size += frame.size.to_u64
-          start_row += rows
+          unless rows == 0
+            frame = encode_lz4_frame(raw)
+            raise ArgumentError.new("typed numeric data stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+            data_file.write(frame)
+            data_hash.update(frame)
+            data_size += frame.size.to_u64
+          end
+          raw_hash.update(raw) unless raw.empty?
+          start_row = mark.leaf_start + rows
+          mark_index += 1
         end
       end
 
@@ -11927,8 +11976,10 @@ module CrystalClick
       column : String,
       values : Slice(UInt64),
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
+      axis : TupleLeafMarkSchedule::Axis = TupleLeafMarkSchedule::Axis::Leaf,
     ) : Array(ChecksumRecord)
-      LeafStreamWriter.write_uint64_stream(stage, column, values, rows_per_mark)
+      LeafStreamWriter.write_uint64_stream(stage, column, values, rows_per_mark, schedule, axis)
     end
 
     private def self.write_json_typed_path_stream(
@@ -12195,8 +12246,9 @@ module CrystalClick
       column : String,
       values : Slice(T),
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Array(ChecksumRecord) forall T
-      LeafStreamWriter.write_string_streams(stage, column, values, rows_per_mark)
+      LeafStreamWriter.write_string_streams(stage, column, values, rows_per_mark, schedule)
     end
 
     private def self.write_dynamic_string_streams(
@@ -19803,21 +19855,30 @@ module CrystalClick
       logical_name : String,
       row_count : Int32,
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
       omit_empty_frame : Bool = false,
       &expected_raw_for_mark : Int32, Int32 -> Bytes
     ) : Nil
+      if schedule && schedule.not_nil!.leaf_count != row_count
+        raise CorruptPartError.new("staged Bool leaf differs from its Tuple mark schedule")
+      end
       base = StreamName.hash(logical_name)
       File.open(File.join(stage, "#{base}.bin"), "r") do |data_file|
         File.open(File.join(stage, "#{base}.mrk2"), "r") do |marks_file|
           offset = 0_u64
           start = 0
-          while start < row_count
-            rows = {rows_per_mark, row_count - start}.min
-            expected_raw = expected_raw_for_mark.call(start, rows)
+          mark_index = 0
+          while mark = TupleLeafMarkSchedule.scheduled_mark(
+                  schedule, mark_index, start, row_count, rows_per_mark
+                )
+            rows = mark.leaf_count
+            expected_raw = expected_raw_for_mark.call(mark.leaf_start, rows)
             offset = validate_staged_tuple_mark(
-              data_file, marks_file, logical_name, offset, rows.to_u64, expected_raw, omit_empty_frame
+              data_file, marks_file, logical_name, offset, mark.outer_rows.to_u64, expected_raw,
+              omit_empty_frame || schedule != nil
             )
-            start += rows
+            start = mark.leaf_start + rows
+            mark_index += 1
           end
           validate_staged_tuple_sentinel(data_file, marks_file, logical_name, offset)
         end
@@ -19830,8 +19891,9 @@ module CrystalClick
       logical_name : String,
       values : Array(Bool),
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Nil
-      validate_staged_bool_values_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark)
+      validate_staged_bool_values_stream(stage, logical_name, values.to_unsafe.to_slice(values.size), rows_per_mark, schedule)
     end
 
     private def self.validate_staged_bool_values_stream(
@@ -19839,8 +19901,9 @@ module CrystalClick
       logical_name : String,
       values : Slice(Bool),
       rows_per_mark : Int32,
+      schedule : TupleLeafMarkSchedule? = nil,
     ) : Nil
-      validate_staged_bool_stream(stage, logical_name, values.size, rows_per_mark) do |start, rows|
+      validate_staged_bool_stream(stage, logical_name, values.size, rows_per_mark, schedule) do |start, rows|
         raw = Bytes.new(rows)
         rows.times do |offset|
           raw[offset] = CrystalClick::BoolValueCodec.encode(values[start + offset])

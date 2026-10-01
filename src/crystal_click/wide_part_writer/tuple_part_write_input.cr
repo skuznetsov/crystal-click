@@ -18,6 +18,7 @@ module CrystalClick
       getter raw_sizes : Array(UInt64)
       getter mark_count : Int32
       getter rows_per_mark : Int32
+      getter schedule : TupleLeafMarkSchedule
       getter columns_metadata : String
       getter substreams_metadata : String
       getter serialization_metadata : String
@@ -36,6 +37,7 @@ module CrystalClick
         @raw_sizes : Array(UInt64),
         @mark_count : Int32,
         @rows_per_mark : Int32,
+        @schedule : TupleLeafMarkSchedule,
         @columns_metadata : String,
         @substreams_metadata : String,
         @serialization_metadata : String,

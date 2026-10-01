@@ -6,7 +6,19 @@ module CrystalClick
         column : String,
         values : Slice(UInt64),
         rows_per_mark : Int32,
+        schedule : TupleLeafMarkSchedule? = nil,
+        axis : TupleLeafMarkSchedule::Axis = TupleLeafMarkSchedule::Axis::Leaf,
       ) : Array(ChecksumRecord)
+        if current = schedule
+          expected_count = if axis == TupleLeafMarkSchedule::Axis::Outer
+                             current.row_count
+                           else
+                             current.leaf_count
+                           end
+          if expected_count != values.size
+            raise ArgumentError.new("Tuple leaf stream differs from its mark schedule")
+          end
+        end
         base_name = StreamName.hash(column)
         data_name = "#{base_name}.bin"
         marks_name = "#{base_name}.mrk2"
@@ -17,26 +29,32 @@ module CrystalClick
         mark_bytes = IO::Memory.new
         data_size = 0_u64
         start_row = 0
+        mark_index = 0
 
         File.open(data_path, "wb") do |data_file|
-          while start_row < values.size
-            rows = {rows_per_mark, values.size - start_row}.min
+          while mark = TupleLeafMarkSchedule.scheduled_mark(
+                  schedule, mark_index, start_row, values.size, rows_per_mark, axis
+                )
+            rows = mark.leaf_count
             raw = Bytes.new(rows * 8)
             rows.times do |row|
-              StreamEncoding.write_uint64_le(raw, row * 8, values[start_row + row])
+              StreamEncoding.write_uint64_le(raw, row * 8, values[mark.leaf_start + row])
             end
 
             StreamEncoding.write_uint64_le(mark_bytes, data_size)
             StreamEncoding.write_uint64_le(mark_bytes, 0_u64)
-            StreamEncoding.write_uint64_le(mark_bytes, rows.to_u64)
+            StreamEncoding.write_uint64_le(mark_bytes, mark.outer_rows.to_u64)
 
-            frame = StreamEncoding.encode_lz4_frame(raw)
-            raise ArgumentError.new("data stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
-            data_file.write(frame)
-            data_hash.update(frame)
-            raw_hash.update(raw)
-            data_size += frame.size.to_u64
-            start_row += rows
+            unless rows == 0
+              frame = StreamEncoding.encode_lz4_frame(raw)
+              raise ArgumentError.new("data stream exceeds reader limit") if data_size > MAX_DATA_FILE_BYTES.to_u64 - frame.size.to_u64
+              data_file.write(frame)
+              data_hash.update(frame)
+              data_size += frame.size.to_u64
+            end
+            raw_hash.update(raw) unless raw.empty?
+            start_row = mark.leaf_start + rows
+            mark_index += 1
           end
         end
 
@@ -59,7 +77,11 @@ module CrystalClick
         column : String,
         values : Slice(T),
         rows_per_mark : Int32,
+        schedule : TupleLeafMarkSchedule? = nil,
       ) : Array(ChecksumRecord) forall T
+        if schedule && schedule.not_nil!.leaf_count != values.size
+          raise ArgumentError.new("Tuple String stream differs from its mark schedule")
+        end
         size_base = StreamName.hash("#{column}.size")
         value_base = StreamName.hash(column)
         size_data_name = "#{size_base}.bin"
@@ -80,15 +102,18 @@ module CrystalClick
         value_data_size = 0_u64
         total_raw_size = 0_u64
         start_row = 0
+        mark_index = 0
 
         File.open(size_data_path, "wb") do |size_data_file|
           File.open(value_data_path, "wb") do |value_data_file|
-            while start_row < values.size
-              rows = {rows_per_mark, values.size - start_row}.min
+            while mark = TupleLeafMarkSchedule.scheduled_mark(
+                    schedule, mark_index, start_row, values.size, rows_per_mark
+                  )
+              rows = mark.leaf_count
               sizes_raw = Bytes.new(rows * 8)
               string_raw_size = 0_i64
               rows.times do |row|
-                value_size = typed_string_value(values[start_row + row]).bytesize.to_i64
+                value_size = typed_string_value(values[mark.leaf_start + row]).bytesize.to_i64
                 if value_size > MAX_FRAME_RAW_BYTES.to_i64 - string_raw_size
                   raise ArgumentError.new("String payload granule exceeds decompressed frame limit")
                 end
@@ -100,7 +125,7 @@ module CrystalClick
               string_raw = Bytes.new(string_raw_size.to_i)
               string_offset = 0
               rows.times do |row|
-                value = typed_string_value(values[start_row + row])
+                value = typed_string_value(values[mark.leaf_start + row])
                 value_bytes = value.to_slice
                 if value_bytes.size > 0
                   value_bytes.copy_to(string_raw[string_offset, value_bytes.size])
@@ -110,17 +135,19 @@ module CrystalClick
 
               StreamEncoding.write_uint64_le(size_mark_bytes, size_data_size)
               StreamEncoding.write_uint64_le(size_mark_bytes, 0_u64)
-              StreamEncoding.write_uint64_le(size_mark_bytes, rows.to_u64)
+              StreamEncoding.write_uint64_le(size_mark_bytes, mark.outer_rows.to_u64)
               StreamEncoding.write_uint64_le(value_mark_bytes, value_data_size)
               StreamEncoding.write_uint64_le(value_mark_bytes, 0_u64)
-              StreamEncoding.write_uint64_le(value_mark_bytes, rows.to_u64)
+              StreamEncoding.write_uint64_le(value_mark_bytes, mark.outer_rows.to_u64)
 
-              size_frame = StreamEncoding.encode_lz4_frame(sizes_raw)
-              raise ArgumentError.new("String size stream exceeds reader limit") if size_data_size > MAX_DATA_FILE_BYTES.to_u64 - size_frame.size.to_u64
-              size_data_file.write(size_frame)
-              size_data_hash.update(size_frame)
-              size_raw_hash.update(sizes_raw)
-              size_data_size += size_frame.size.to_u64
+              unless rows == 0
+                size_frame = StreamEncoding.encode_lz4_frame(sizes_raw)
+                raise ArgumentError.new("String size stream exceeds reader limit") if size_data_size > MAX_DATA_FILE_BYTES.to_u64 - size_frame.size.to_u64
+                size_data_file.write(size_frame)
+                size_data_hash.update(size_frame)
+                size_raw_hash.update(sizes_raw)
+                size_data_size += size_frame.size.to_u64
+              end
 
               unless string_raw.empty?
                 string_frame = StreamEncoding.encode_lz4_frame(string_raw)
@@ -131,7 +158,8 @@ module CrystalClick
               end
               value_raw_hash.update(string_raw)
               total_raw_size += string_raw.size.to_u64
-              start_row += rows
+              start_row = mark.leaf_start + rows
+              mark_index += 1
             end
           end
         end

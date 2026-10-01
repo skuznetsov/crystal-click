@@ -761,6 +761,7 @@ module CrystalClick
     @variant_bool_string_uint64_values : Hash(String, Slice(VariantBoolStringUInt64Value))
     @tuple_string_values : Hash(String, Slice(Tuple(UInt64, String)))
     @tuple_row_values : Hash(String, Slice(WideTupleRow))
+    @array_tuple_row_values : Hash(String, Slice(WideArrayTupleRow))
     @map_uint64_string_values : Hash(String, Slice(Array(Tuple(UInt64, String))))
     @map_uint64_uint64_values : Hash(String, Slice(Array(Tuple(UInt64, UInt64))))
     @map_string_uint64_values : Hash(String, Slice(Array(Tuple(String, UInt64))))
@@ -824,6 +825,7 @@ module CrystalClick
       @variant_bool_string_uint64_values = Hash(String, Slice(VariantBoolStringUInt64Value)).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @tuple_row_values = Hash(String, Slice(WideTupleRow)).new
+      @array_tuple_row_values = Hash(String, Slice(WideArrayTupleRow)).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
       @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
@@ -889,6 +891,7 @@ module CrystalClick
       @variant_bool_string_uint64_values = Hash(String, Slice(VariantBoolStringUInt64Value)).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @tuple_row_values = Hash(String, Slice(WideTupleRow)).new
+      @array_tuple_row_values = Hash(String, Slice(WideArrayTupleRow)).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
       @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
@@ -954,6 +957,7 @@ module CrystalClick
       @variant_bool_string_uint64_values = Hash(String, Slice(VariantBoolStringUInt64Value)).new
       @tuple_string_values = Hash(String, Slice(Tuple(UInt64, String))).new
       @tuple_row_values = Hash(String, Slice(WideTupleRow)).new
+      @array_tuple_row_values = Hash(String, Slice(WideArrayTupleRow)).new
       @map_uint64_string_values = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
       @map_uint64_uint64_values = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
       @map_string_uint64_values = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
@@ -1065,6 +1069,7 @@ module CrystalClick
       @map_uint64_numeric_values = map_uint64_numeric_values
       @map_string_numeric_values = map_string_numeric_values
       @tuple_row_values = tuple_row_values
+      @array_tuple_row_values = Hash(String, Slice(WideArrayTupleRow)).new
     end
 
     def column_names : Array(String)
@@ -1972,6 +1977,29 @@ module CrystalClick
       @tuple_row_values[column]? || raise(UnsupportedFormatError.new("compositional Tuple column was not materialized in this batch"))
     end
 
+    # Return the per-outer-row handles for a generic named Array(Tuple)
+    # profile. W51/W55 retain their established specialized accessors.
+    def array_tuple_rows_for(column : String) : Slice(WideArrayTupleRow)
+      index = column_index(column)
+      type_name = @column_types[index]
+      unless WideArrayTupleTypePlan.for_type(type_name) && WideTypePlan.admitted(type_name).nil?
+        raise UnsupportedFormatError.new("Array(Tuple) row accessor requires a non-legacy admitted named Array(Tuple) column")
+      end
+      @array_tuple_row_values[column]? || raise(UnsupportedFormatError.new("Array(Tuple) column was not materialized in this batch"))
+    end
+
+    # Install a callback-batch slice after ordinary batch construction; this
+    # preserves the long-standing constructor overloads and exact typed APIs.
+    def install_array_tuple_rows(column : String, values : Slice(WideArrayTupleRow), expected_rows : Int)
+      index = column_index(column)
+      type_name = @column_types[index]
+      unless WideArrayTupleTypePlan.for_type(type_name) && WideTypePlan.admitted(type_name).nil?
+        raise UnsupportedFormatError.new("Array(Tuple) installation requires a non-legacy admitted named Array(Tuple) column")
+      end
+      raise CorruptPartError.new("selected Array(Tuple) row count differs from batch") unless values.size == expected_rows
+      @array_tuple_row_values[column] = values
+    end
+
     def map_uint64_strings_for(column : String) : Slice(Array(Tuple(UInt64, String)))
       index = column_index(column)
       raise UnsupportedFormatError.new("Map accessor requires an exact Map(UInt64, String) column") unless WidePart.supports_map_uint64_string_type?(@column_types[index])
@@ -2710,6 +2738,7 @@ module CrystalClick
             preflight_array_nullable_string_raw_bytes = Hash(String, UInt64).new
             preflight_array_nullable_string_charge_bytes = Hash(String, UInt64).new
             preflight_array_tuple_bytes = Hash(String, UInt64).new
+            preflight_array_tuple_reader_charges = Hash(String, UInt64).new
             preflight_tuple_row_charges = Hash(String, UInt64).new
             preflight_variant_string_uint64_raw_bytes = Hash(String, UInt64).new
             preflight_variant_string_uint64_charge_bytes = Hash(String, UInt64).new
@@ -2836,6 +2865,15 @@ module CrystalClick
                 else
                   preflight_array_tuple_bytes[selected.name] = bytes
                 end
+              elsif ArrayTupleColumnAdapter.generic_type?(selected.column_type)
+                charge = ArrayTupleColumnAdapter.preflight_mark_charge(
+                  selected.reader,
+                  selected.name,
+                  mark_index,
+                  (MAX_MARK_MATERIALIZED_BYTES - preflight_string_bytes).to_u64
+                )
+                preflight_array_tuple_reader_charges[selected.name] = charge
+                bytes = charge
               elsif selected.column_type == "String" || WidePart.supports_nullable_string_type?(selected.column_type)
                 bytes = if selected.column_type == "String"
                           selected.reader.string_mark_range_raw_bytes(selected.name, mark_index, 1)
@@ -3153,6 +3191,7 @@ module CrystalClick
             variant_bool_string_uint64_values = Hash(String, Array(VariantBoolStringUInt64Value)).new
             tuple_string_values = Hash(String, Array(Tuple(UInt64, String))).new
             tuple_row_values = Hash(String, Array(WideTupleRow)).new
+            generic_array_tuple_rows = Hash(String, Array(WideArrayTupleRow)).new
             map_uint64_string_values = Hash(String, Array(Array(Tuple(UInt64, String)))).new
             map_uint64_uint64_values = Hash(String, Array(Array(Tuple(UInt64, UInt64)))).new
             map_string_uint64_values = Hash(String, Array(Array(Tuple(String, UInt64)))).new
@@ -3430,6 +3469,27 @@ module CrystalClick
                 end
                 actual_string_bytes += observed_charge
                 tuple_row_values[selected.name] = rows
+                next
+              end
+
+              if ArrayTupleColumnAdapter.generic_type?(selected.column_type)
+                expected_charge = preflight_array_tuple_reader_charges[selected.name]? ||
+                                  raise(CorruptPartError.new("selected Array(Tuple) mark was not preflighted"))
+                remaining_charge = MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                values, observed_charge = ArrayTupleColumnAdapter.materialize_mark(
+                  selected.reader,
+                  selected.name,
+                  selected.column_type,
+                  mark_index,
+                  mark_rows,
+                  expected_charge,
+                  remaining_charge
+                )
+                if observed_charge > remaining_charge
+                  raise CorruptPartError.new("selected Array(Tuple) mark exceeds aggregate materialization limit")
+                end
+                actual_string_bytes += observed_charge
+                generic_array_tuple_rows[selected.name] = values
                 next
               end
 
@@ -4620,6 +4680,7 @@ module CrystalClick
               array_nullable_string_slices = Hash(String, WidePartArrayNullableStringSlice).new
               tuple_string_slices = Hash(String, Slice(Tuple(UInt64, String))).new
               tuple_row_slices = Hash(String, Slice(WideTupleRow)).new
+              generic_array_tuple_slices = Hash(String, Slice(WideArrayTupleRow)).new
               map_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
               map_uint64_uint64_slices = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
               map_string_uint64_slices = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
@@ -4707,6 +4768,8 @@ module CrystalClick
                   tuple_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = tuple_row_values[selected.name]?
                   tuple_row_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = generic_array_tuple_rows[selected.name]?
+                  generic_array_tuple_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = map_uint64_string_values[selected.name]?
                   map_uint64_string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = map_uint64_uint64_values[selected.name]?
@@ -4817,7 +4880,9 @@ module CrystalClick
                 tuple_row_values: tuple_row_slices
               )
               part.readers.each do |selected|
-                if values = qbit_values[selected.name]?
+                if values = generic_array_tuple_slices[selected.name]?
+                  batch.install_array_tuple_rows(selected.name, values, size)
+                elsif values = qbit_values[selected.name]?
                   selected_values = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                   batch.install_qbit_values(selected.name, selected_values, size)
                 elsif values = nullable_qbit_values[selected.name]?

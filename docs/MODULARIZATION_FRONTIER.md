@@ -72,6 +72,19 @@ full DEBUG passed 1,732, and the new bidirectional stock oracle plus W105,
 W104 and ten unchanged stock regression gates passed on frozen source.
 This is not the full facade decomposition.
 
+W107's bounded paired profile is verified in
+`ARRAY_TUPLE_COMPOSITION_FRONTIER.md`. Its twelve new concrete production
+owners each have one file: plan, ragged schedule, result/row handles, reader,
+table/catalog adapters, writer input/orchestrator, shared leaf-mark schedule,
+leaf dispatch and physical-value comparison. Physical outer-row marks are
+adapted to flattened Tuple elements without copying scalar decoders; W106 and
+W107 share the leaf stream writer. Focused DEBUG passed 581 examples; the
+same 55 RELEASE inputs passed in disjoint 24/24/7-file batches (581 total);
+full DEBUG passed 1,751. Paired W105/W106/W107 stock phases, all five affected
+Tuple family stock scripts and the 297-profile W104 writer phase passed.
+This is not a claim that the large facades or resource lifetimes have been
+decomposed, nor a combined/full RELEASE certificate.
+
 ## W104 ownership boundary
 
 `DateTimeColumnType` owns exact temporal family, precision, timezone provenance
@@ -97,6 +110,17 @@ open. Adding three class files is not evidence of lower coupling or faster
 execution.
 
 ## Next proposed lifecycle extraction
+
+Adjacent artifact-integrity residual observed during W107 static review:
+`wide_part_writer/tuple_part_writer.cr#validate_staged_part` verifies the exact
+checksums entry set and expected metadata contents, but does not compare the
+complete `Dir.children(stage)` inventory. This is also present at predecessor
+`63e03b4`; W107's `ArrayTuplePartWriter` does perform that complete comparison.
+No ordinary extra-file injection path or payload/mask/schema-check bypass was
+found. This is not a universal staged-artifact certificate for the older Tuple
+writer. A separate hardening slice must first seed an unexpected unchecksummed
+stage file, establish its observed disposition, then qualify rejection and
+scratch-only cleanup before changing that publication boundary.
 
 Status: PROPOSED, not implemented or verified. At the qualified W104 source the
 four facades still contain 15,422 reader, 25,821 writer, 6,759 table and 5,371
