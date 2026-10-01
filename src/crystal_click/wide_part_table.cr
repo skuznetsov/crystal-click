@@ -1158,10 +1158,12 @@ module CrystalClick
       @column_values[index].as(Slice(Int32))
     end
 
-    # Return raw UInt32 epoch seconds only for an exact bare DateTime column.
+    # Return raw UInt32 epoch seconds for a DateTime column while retaining
+    # its exact declared timezone in #column_types.
     def datetime_seconds_for(column : String) : Slice(UInt32)
       index = column_index(column)
-      raise UnsupportedFormatError.new("DateTime accessor requires an exact DateTime column") unless @column_types[index] == "DateTime"
+      datetime_type = DateTimeColumnType.parse_leaf(@column_types[index])
+      raise UnsupportedFormatError.new("DateTime accessor requires an exact DateTime column") unless datetime_type && datetime_type.family == DateTimeColumnType::Family::DateTime
       return @typed_numeric_values[column].as(Slice(UInt32)) if @typed_numeric_values.has_key?(column)
       @column_values[index].as(Slice(UInt32))
     end
@@ -1653,7 +1655,7 @@ module CrystalClick
 
     private def array_temporal_values_for(column : String, element_type : String, type : T.class) : Slice(Array(T)) forall T
       index = column_index(column)
-      unless WidePart.temporal_array_element_type(@column_types[index]) == element_type &&
+      unless WidePart.temporal_array_element_type(@column_types[index]).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed temporal Array accessor requires an exact semantic temporal column")
       end
@@ -1663,7 +1665,7 @@ module CrystalClick
 
     private def array_nullable_temporal_values_for(column : String, element_type : String, type : T.class) : Slice(Array(T?)) forall T
       index = column_index(column)
-      unless WidePart.nullable_temporal_array_element_type(@column_types[index]) == element_type &&
+      unless WidePart.nullable_temporal_array_element_type(@column_types[index]).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed nullable temporal Array accessor requires an exact semantic temporal column")
       end
@@ -1673,7 +1675,7 @@ module CrystalClick
 
     private def array_array_temporal_values_for(column : String, element_type : String, type : T.class) : Slice(Array(Array(T))) forall T
       index = column_index(column)
-      unless WidePart.array_array_temporal_element_type(@column_types[index]) == element_type &&
+      unless WidePart.array_array_temporal_element_type(@column_types[index]).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed temporal nested Array accessor requires an exact semantic temporal column")
       end
@@ -1683,7 +1685,7 @@ module CrystalClick
 
     private def array_array_nullable_temporal_values_for(column : String, element_type : String, type : T.class) : Slice(Array(Array(T?))) forall T
       index = column_index(column)
-      unless WidePart.array_array_nullable_temporal_element_type(@column_types[index]) == element_type &&
+      unless WidePart.array_array_nullable_temporal_element_type(@column_types[index]).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed nullable temporal nested Array accessor requires an exact semantic temporal column")
       end
@@ -2351,7 +2353,8 @@ module CrystalClick
 
     def nullable_datetime_seconds_for(column : String) : Slice(UInt32?)
       index = column_index(column)
-      raise UnsupportedFormatError.new("Nullable(DateTime) accessor requires an exact Nullable(DateTime) column") unless @column_types[index] == "Nullable(DateTime)"
+      datetime_type = DateTimeColumnType.parse(@column_types[index])
+      raise UnsupportedFormatError.new("Nullable(DateTime) accessor requires an exact Nullable(DateTime) column") unless datetime_type && datetime_type.shape == DateTimeColumnType::Shape::Nullable && datetime_type.family == DateTimeColumnType::Family::DateTime
       @nullable_values[column]?.try(&.as(Slice(UInt32?))) || raise(UnsupportedFormatError.new("Nullable(DateTime) column was not materialized in this batch"))
     end
 
@@ -3503,6 +3506,18 @@ module CrystalClick
                 raise CorruptPartError.new("selected temporal Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_numeric_values[selected.name] = values
+              when .starts_with?("Array(DateTime('")
+                element_type = WidePart.temporal_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported temporal Array type"))
+                values = read_array_temporal_values(selected.reader, selected.name, mark_index, element_type)
+                raise CorruptPartError.new("selected temporal Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected temporal Array mark was not preflighted"))
+                elements = values.sum(&.size).to_u64
+                physical_type = WidePart.temporal_array_physical_type(element_type).not_nil!
+                bytes = elements * WidePart.array_numeric_payload_width(physical_type).to_u64
+                raise CorruptPartError.new("selected temporal Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected temporal Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_numeric_values[selected.name] = values
               when "Array(Time)"
                 values = selected.reader.read_array_time_seconds_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Time Array mark row count changed") unless values.size.to_u64 == mark_rows
@@ -3669,6 +3684,17 @@ module CrystalClick
                 actual_string_bytes += bytes
                 array_nullable_bool_values[selected.name] = values
               when "Array(Nullable(Date))", "Array(Nullable(Date32))", "Array(Nullable(DateTime))"
+                element_type = WidePart.nullable_temporal_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported nullable temporal Array type"))
+                values = read_array_nullable_temporal_values(selected.reader, selected.name, mark_index, element_type)
+                raise CorruptPartError.new("selected nullable temporal Array mark row count changed") unless values.size.to_u64 == mark_rows
+                preflight_bytes = preflight_array_nullable_numeric_bytes[selected.name]? || raise(CorruptPartError.new("selected nullable temporal Array mark was not preflighted"))
+                physical_type = WidePart.temporal_array_physical_type(element_type).not_nil!
+                bytes = array_nullable_numeric_materialized_bytes(values, physical_type)
+                raise CorruptPartError.new("selected nullable temporal Array decoded bytes differ from preflight") unless bytes == preflight_bytes
+                raise CorruptPartError.new("selected nullable temporal Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                actual_string_bytes += bytes
+                array_nullable_numeric_values[selected.name] = values
+              when .starts_with?("Array(Nullable(DateTime('")
                 element_type = WidePart.nullable_temporal_array_element_type(selected.column_type) || raise(UnsupportedFormatError.new("unsupported nullable temporal Array type"))
                 values = read_array_nullable_temporal_values(selected.reader, selected.name, mark_index, element_type)
                 raise CorruptPartError.new("selected nullable temporal Array mark row count changed") unless values.size.to_u64 == mark_rows
@@ -4969,6 +4995,17 @@ module CrystalClick
         return reader.read_decimal256_raw_mark_range(selected.name, mark_index, 1)
       end
 
+      if datetime_type = DateTimeColumnType.parse_leaf(type)
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          return reader.read_datetime_seconds_mark_range(selected.name, mark_index, 1)
+        when DateTimeColumnType::Family::DateTime64
+          return reader.read_datetime64_ticks_mark_range(selected.name, mark_index, 1)
+        else
+          raise UnsupportedFormatError.new("unsupported exact DateTime type")
+        end
+      end
+
       case selected.column_type
       when "Date"
         reader.read_date_codes_mark_range(selected.name, mark_index, 1)
@@ -5150,10 +5187,12 @@ module CrystalClick
         reader.read_array_array_date_codes_mark_range(column, mark_index, 1)
       when "Date32"
         reader.read_array_array_date32_codes_mark_range(column, mark_index, 1)
-      when "DateTime"
-        reader.read_array_array_datetime_seconds_mark_range(column, mark_index, 1)
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported nested temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          reader.read_array_array_datetime_seconds_mark_range(column, mark_index, 1)
+        when DateTimeColumnType::Family::DateTime64
           reader.read_array_array_datetime64_ticks_mark_range(column, mark_index, 1)
         else
           raise UnsupportedFormatError.new("unsupported nested temporal Array leaf type")
@@ -5172,10 +5211,12 @@ module CrystalClick
         reader.read_array_array_nullable_date_codes_mark_range(column, mark_index, 1)
       when "Date32"
         reader.read_array_array_nullable_date32_codes_mark_range(column, mark_index, 1)
-      when "DateTime"
-        reader.read_array_array_nullable_datetime_seconds_mark_range(column, mark_index, 1)
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          reader.read_array_array_nullable_datetime_seconds_mark_range(column, mark_index, 1)
+        when DateTimeColumnType::Family::DateTime64
           reader.read_array_array_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
         else
           raise UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type")
@@ -5230,10 +5271,12 @@ module CrystalClick
         reader.read_array_date_codes_mark_range(column, mark_index, 1)
       when "Date32"
         reader.read_array_date32_codes_mark_range(column, mark_index, 1)
-      when "DateTime"
-        reader.read_array_datetime_seconds_mark_range(column, mark_index, 1)
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          reader.read_array_datetime_seconds_mark_range(column, mark_index, 1)
+        when DateTimeColumnType::Family::DateTime64
           reader.read_array_datetime64_ticks_mark_range(column, mark_index, 1)
         else
           raise UnsupportedFormatError.new("unsupported temporal Array leaf type")
@@ -5252,10 +5295,12 @@ module CrystalClick
         reader.read_array_nullable_date_codes_mark_range(column, mark_index, 1)
       when "Date32"
         reader.read_array_nullable_date32_codes_mark_range(column, mark_index, 1)
-      when "DateTime"
-        reader.read_array_nullable_datetime_seconds_mark_range(column, mark_index, 1)
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported nullable temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          reader.read_array_nullable_datetime_seconds_mark_range(column, mark_index, 1)
+        when DateTimeColumnType::Family::DateTime64
           reader.read_array_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
         else
           raise UnsupportedFormatError.new("unsupported nullable temporal Array leaf type")
@@ -6194,6 +6239,13 @@ module CrystalClick
         return reader.read_nullable_decimal128_raw_mark_range(selected.name, mark_index, 1)
       elsif !WidePart.nullable_decimal256_scale(type).nil?
         return reader.read_nullable_decimal256_raw_mark_range(selected.name, mark_index, 1)
+      end
+
+      if datetime_type = DateTimeColumnType.parse(type)
+        if datetime_type.shape == DateTimeColumnType::Shape::Nullable &&
+           datetime_type.family == DateTimeColumnType::Family::DateTime
+          return reader.read_nullable_datetime_seconds_mark_range(selected.name, mark_index, 1)
+        end
       end
 
       case selected.column_type

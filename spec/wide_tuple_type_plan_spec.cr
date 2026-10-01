@@ -70,17 +70,26 @@ describe "W94 named scalar-leaf Tuple type plan" do
 
   it "charges empty String slots, ordered fields and checked overflow through the shared budget model" do
     single = CrystalClick::WideTupleTypePlan.for_type("Tuple(value UInt64)").not_nil!
-    single.materialization_charge(0_u64, 0_u64).should eq(88_u64)
-    single.materialization_charge(1_u64, 0_u64).should eq(104_u64)
+    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                  CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+    single.materialization_charge(0_u64, 0_u64).should eq(fixed_bytes)
+    single.materialization_charge(1_u64, 0_u64).should eq(
+      fixed_bytes + CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
+      CrystalClick::WideTupleTypePlan::UINT64_SLOT_ACCOUNTING_BYTES
+    )
     single.materialization_charge(UInt64::MAX, 0_u64).should be_nil
     single.materialization_charge(0_u64, UInt64::MAX).should be_nil
 
     nine_strings = CrystalClick::WideTupleTypePlan.for_type(
       "Tuple(a String, b String, c String, d String, e String, f String, g String, h String, i String)"
     ).not_nil!
-    # 64 container + 9*24 field overhead + 8 row + 9*16 String slots;
+    # 64 container + nine actual field slots + 8 row + 9*16 String slots;
     # empty payloads still consume a slot for every field.
-    nine_strings.materialization_charge(1_u64, 0_u64).should eq(432_u64)
+    nine_string_fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                              9_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+    nine_string_row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
+                            9_u64 * CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+    nine_strings.materialization_charge(1_u64, 0_u64).should eq(nine_string_fixed_bytes + nine_string_row_bytes)
   end
 
   it "iterates String byte sizes without exposing payload String buffers" do

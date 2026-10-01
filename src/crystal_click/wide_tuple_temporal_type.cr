@@ -8,6 +8,9 @@ module CrystalClick
                    Array(DateTime64Value) | Array(TimeValue) | Array(Time64Value)
 
     def self.width(type_name : String) : Int32?
+      if datetime_type = DateTimeColumnType.parse_leaf(type_name)
+        return datetime_type.raw_width
+      end
       case type_name
       when "Date"
         2
@@ -24,6 +27,10 @@ module CrystalClick
     # The lexical caller must still reject source spellings such as `T( 3 )`
     # before parsing, because the shared AST intentionally drops whitespace.
     def self.precision(type_name : String) : UInt8?
+      if datetime_type = DateTimeColumnType.parse_leaf(type_name)
+        return datetime_type.precision? if datetime_type.family == DateTimeColumnType::Family::DateTime64
+        return nil
+      end
       match = /\A(?:DateTime64|Time64)\(([0-9])\)\z/.match(type_name)
       match.try { |value| value[1].to_u8 }
     end
@@ -53,6 +60,9 @@ module CrystalClick
     # Report the actual in-memory value representation charged for each row.
     # DateTime64Value and Time64Value include precision alongside raw ticks.
     def self.owned_width(type_name : String) : Int32?
+      if datetime_type = DateTimeColumnType.parse_leaf(type_name)
+        return datetime_type.family == DateTimeColumnType::Family::DateTime ? sizeof(DateTimeValue).to_i32 : sizeof(DateTime64Value).to_i32
+      end
       case type_name
       when "Date"
         sizeof(DateValue).to_i32
@@ -111,6 +121,19 @@ module CrystalClick
     # arrays: the element class and every scaled row must agree with the exact
     # declared semantic type.
     def self.validate_buffer!(type_name : String, buffer : Buffer) : Nil
+      if datetime_type = DateTimeColumnType.parse_leaf(type_name)
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          raise ArgumentError.new("temporal Tuple buffer does not match exact type") unless buffer.is_a?(Array(DateTimeValue))
+        when DateTimeColumnType::Family::DateTime64
+          raise ArgumentError.new("temporal Tuple buffer does not match exact type") unless buffer.is_a?(Array(DateTime64Value))
+          expected_precision = datetime_type.precision?.not_nil!
+          buffer.each do |value|
+            raise ArgumentError.new("DateTime64 value precision does not match exact type") unless value.precision == expected_precision
+          end
+        end
+        return nil
+      end
       case type_name
       when "Date"
         raise ArgumentError.new("temporal Tuple buffer does not match exact type") unless buffer.is_a?(Array(DateValue))

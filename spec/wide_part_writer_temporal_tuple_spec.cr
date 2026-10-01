@@ -396,7 +396,9 @@ describe CrystalClick::WidePartWriter do
     plan = CrystalClick::WideTupleTypePlan.for_type(type_name).not_nil!
     owned_width = CrystalClick::WideTupleTemporalType.owned_width("DateTime64(3)").not_nil!
     per_row_charge = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + owned_width.to_u64 + CrystalClick::WideTupleTypePlan::UINT64_SLOT_ACCOUNTING_BYTES
-    fixed_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES + CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+    datetime_descriptor_charge = plan.fields.first.datetime_type.not_nil!.logical_charge
+    fixed_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                   CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES + datetime_descriptor_charge
     rows = ((CrystalClick::WideTupleTypePlan::MAX_MATERIALIZED_BYTES - fixed_charge) // per_row_charge + 1_u64).to_i32
     keys = Array(UInt64).new(rows) { |index| index.to_u64 + 1_u64 }
     values = Array(CrystalClick::DateTime64Value).new(rows) { CrystalClick::DateTime64Value.new(0_i64, 3) }

@@ -7,7 +7,7 @@ module CrystalClick
     MAX_MATERIALIZED_BYTES = 64_u64 * 1024_u64 * 1024_u64
 
     RESULT_CONTAINER_ACCOUNTING_BYTES = 64_u64
-    FIELD_CONTAINER_ACCOUNTING_BYTES  = 24_u64
+    FIELD_CONTAINER_ACCOUNTING_BYTES  = sizeof(WideTupleField).to_u64
     RESULT_ROW_ACCOUNTING_BYTES       =  8_u64
     UINT64_SLOT_ACCOUNTING_BYTES      =  8_u64
     STRING_SLOT_ACCOUNTING_BYTES      = 16_u64
@@ -33,7 +33,7 @@ module CrystalClick
 
     def fields : Array(WideTupleField)
       @fields.map do |field|
-        WideTupleField.new(field.name, field.type_name, field.parameterized_type)
+        WideTupleField.new(field.name, field.type_name, field.parameterized_type, field.datetime_type)
       end
     end
 
@@ -70,6 +70,8 @@ module CrystalClick
           return width if stream_name == leaf_stream
         elsif identifier_width = WideTupleIdentifierType.width(field.type_name)
           return identifier_width if stream_name == leaf_stream
+        elsif datetime_type = field.datetime_type
+          return datetime_type.raw_width if stream_name == leaf_stream
         elsif temporal_width = WideTupleTemporalType.width(field.type_name)
           return temporal_width if stream_name == leaf_stream
         elsif numeric_width = WideTupleNumericType.width(field.type_name)
@@ -79,10 +81,11 @@ module CrystalClick
       nil
     end
 
-    # Conservative logical charge for the retained plan plus materialized
-    # rows. Descriptor storage is included once per field, wrapper slots use
-    # actual inline sizes, and caller-supplied variable/padded payload is
-    # included once. This is not a peak-RSS or GC estimate.
+    # Declared logical container/slot budget plus materialized rows.
+    # Descriptor storage is included once per field, wrapper slots use actual
+    # inline sizes, and caller-supplied variable/padded payload is included
+    # once. Copied schema-name Strings and transient allocation storage are
+    # not itemized; this is not a complete allocation, peak-RSS or GC estimate.
     def materialization_charge(rows : UInt64, string_payload_bytes : UInt64) : UInt64?
       fixed_bytes = RESULT_CONTAINER_ACCOUNTING_BYTES
       field_bytes = @fields.size.to_u64 * FIELD_CONTAINER_ACCOUNTING_BYTES
@@ -93,6 +96,11 @@ module CrystalClick
       @fields.each do |field|
         if parameterized_type = field.parameterized_type
           descriptor_charge = parameterized_type.logical_charge
+          return nil if descriptor_charge > UInt64::MAX - fixed_bytes
+          fixed_bytes += descriptor_charge
+        end
+        if datetime_type = field.datetime_type
+          descriptor_charge = datetime_type.logical_charge
           return nil if descriptor_charge > UInt64::MAX - fixed_bytes
           fixed_bytes += descriptor_charge
         end
@@ -129,6 +137,12 @@ module CrystalClick
         STRING_SLOT_ACCOUNTING_BYTES
       elsif field.type_name == "Bool"
         1_u64
+      elsif datetime_type = field.datetime_type
+        if datetime_type.family == DateTimeColumnType::Family::DateTime
+          sizeof(DateTimeValue).to_u64
+        else
+          sizeof(DateTime64Value).to_u64
+        end
       elsif temporal_width = WideTupleTemporalType.owned_width(field.type_name)
         temporal_width.to_u64
       else

@@ -1129,8 +1129,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(UInt32)),
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime", rows_per_mark)
+      column_type = DateTimeColumnType.datetime(time_zone: time_zone).with_shape(DateTimeColumnType::Shape::Array)
+      write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     def self.write_uint64_array_datetime64_pair(
@@ -1141,8 +1143,10 @@ module CrystalClick
       values : Slice(Array(Int64)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+      column_type = DateTimeColumnType.datetime64(scale, time_zone: time_zone).with_shape(DateTimeColumnType::Shape::Array)
+      write_uint64_array_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     def self.write_uint64_array_time_pair(
@@ -1257,8 +1261,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(UInt32?)),
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime", rows_per_mark)
+      column_type = DateTimeColumnType.datetime(time_zone: time_zone).with_shape(DateTimeColumnType::Shape::ArrayNullable)
+      write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     def self.write_uint64_array_nullable_datetime64_pair(
@@ -1269,8 +1275,10 @@ module CrystalClick
       values : Slice(Array(Int64?)),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+      column_type = DateTimeColumnType.datetime64(scale, time_zone: time_zone).with_shape(DateTimeColumnType::Shape::ArrayNullable)
+      write_uint64_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     def self.write_uint64_array_nullable_time_pair(
@@ -1779,8 +1787,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Array(UInt32))),
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime", rows_per_mark)
+      column_type = DateTimeColumnType.datetime(time_zone: time_zone).with_shape(DateTimeColumnType::Shape::ArrayArray)
+      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     def self.write_uint64_array_array_datetime64_pair(
@@ -1791,9 +1801,10 @@ module CrystalClick
       values : Slice(Array(Array(Int64))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
-      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+      column_type = DateTimeColumnType.datetime64(scale, time_zone: time_zone).with_shape(DateTimeColumnType::Shape::ArrayArray)
+      write_uint64_array_array_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     def self.write_uint64_array_array_nullable_date_pair(
@@ -1825,8 +1836,10 @@ module CrystalClick
       value_name : String,
       values : Slice(Array(Array(UInt32?))),
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime", rows_per_mark)
+      column_type = DateTimeColumnType.datetime(time_zone: time_zone).with_shape(DateTimeColumnType::Shape::ArrayArrayNullable)
+      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     def self.write_uint64_array_array_nullable_datetime64_pair(
@@ -1837,9 +1850,10 @@ module CrystalClick
       values : Slice(Array(Array(Int64?))),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
-      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, "DateTime64(#{scale})", rows_per_mark)
+      column_type = DateTimeColumnType.datetime64(scale, time_zone: time_zone).with_shape(DateTimeColumnType::Shape::ArrayArrayNullable)
+      write_uint64_array_array_nullable_temporal_pair(destination, key_name, keys, value_name, values, column_type.leaf_type_name, rows_per_mark, column_type)
     end
 
     # Write two Array levels over signed Decimal32 coefficients. Values are
@@ -3755,8 +3769,10 @@ module CrystalClick
       value_name : String,
       seconds : Slice(UInt32),
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, seconds, "DateTime", rows_per_mark)
+      column_type = DateTimeColumnType.datetime(time_zone: time_zone)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, seconds, column_type.type_name, rows_per_mark)
     end
 
     # Write a DateTime64 payload as raw signed ticks at the explicit decimal
@@ -3769,9 +3785,10 @@ module CrystalClick
       ticks : Slice(Int64),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, ticks, "DateTime64(#{scale})", rows_per_mark)
+      column_type = DateTimeColumnType.datetime64(scale, time_zone: time_zone)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, ticks, column_type.type_name, rows_per_mark)
     end
 
     # Write Time as raw signed Int32 seconds, without text or timezone conversion.
@@ -3834,8 +3851,10 @@ module CrystalClick
       value_name : String,
       values : Slice(UInt32?),
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(DateTime)", rows_per_mark)
+      column_type = DateTimeColumnType.datetime(time_zone: time_zone).with_shape(DateTimeColumnType::Shape::Nullable)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, column_type.type_name, rows_per_mark)
     end
 
     # Write Nullable(DateTime64(p)) as raw signed Int64 ticks. The explicit
@@ -3849,9 +3868,10 @@ module CrystalClick
       values : Slice(Int64?),
       scale : Int32,
       rows_per_mark : Int32 = 8192,
+      *, time_zone : String? = nil,
     ) : String
-      raise ArgumentError.new("DateTime64 precision must be between 0 and 9") if scale < 0 || scale > 9
-      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(DateTime64(#{scale}))", rows_per_mark)
+      column_type = DateTimeColumnType.datetime64(scale, time_zone: time_zone).with_shape(DateTimeColumnType::Shape::Nullable)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, column_type.type_name, rows_per_mark)
     end
 
     # Write Nullable(Time) as raw signed Int32 seconds with a separate null map.
@@ -5101,7 +5121,14 @@ module CrystalClick
       values : Slice(Array(T)),
       element_type : String,
       rows_per_mark : Int32,
+      column_type : DateTimeColumnType? = nil,
     ) : String forall T
+      if typed_time = column_type
+        unless typed_time.shape == DateTimeColumnType::Shape::Array &&
+               typed_time.leaf_type_name == element_type
+          raise ArgumentError.new("DateTime Array descriptor does not match its writer shape or leaf")
+        end
+      end
       time_element = WidePart.time_array_element_type("Array(#{element_type})") == element_type
       physical_type = if time_element
                         WidePart.time_array_physical_type(element_type)
@@ -5128,12 +5155,13 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{element_type})"))
+        expected_type = column_type.try(&.type_name) || "Array(#{element_type})"
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
+        validate_staged_array_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5149,7 +5177,14 @@ module CrystalClick
       values : Slice(Array(T?)),
       element_type : String,
       rows_per_mark : Int32,
+      column_type : DateTimeColumnType? = nil,
     ) : String forall T
+      if typed_time = column_type
+        unless typed_time.shape == DateTimeColumnType::Shape::ArrayNullable &&
+               typed_time.leaf_type_name == element_type
+          raise ArgumentError.new("Nullable DateTime Array descriptor does not match its writer shape or leaf")
+        end
+      end
       time_element = WidePart.nullable_time_array_element_type("Array(Nullable(#{element_type}))") == element_type
       physical_type = if time_element
                         WidePart.time_array_physical_type(element_type)
@@ -5176,12 +5211,13 @@ module CrystalClick
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
         records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{element_type}))"))
+        expected_type = column_type.try(&.type_name) || "Array(Nullable(#{element_type}))"
+        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_nullable_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
+        validate_staged_array_nullable_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5637,8 +5673,15 @@ module CrystalClick
       values : Slice(Array(Array(T))),
       element_type : String,
       rows_per_mark : Int32,
+      column_type : DateTimeColumnType? = nil,
     ) : String forall T
-      expected_type = "Array(Array(#{element_type}))"
+      if typed_time = column_type
+        unless typed_time.shape == DateTimeColumnType::Shape::ArrayArray &&
+               typed_time.leaf_type_name == element_type
+          raise ArgumentError.new("nested DateTime Array descriptor does not match its writer shape or leaf")
+        end
+      end
+      expected_type = column_type.try(&.type_name) || "Array(Array(#{element_type}))"
       physical_type = WidePart.temporal_array_physical_type(element_type)
       unless WidePart.array_array_temporal_element_type(expected_type) == element_type &&
              physical_type == WidePart.array_numeric_type_name(T)
@@ -5665,7 +5708,7 @@ module CrystalClick
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_array_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
+        validate_staged_array_array_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
         target
       ensure
@@ -5681,8 +5724,15 @@ module CrystalClick
       values : Slice(Array(Array(T?))),
       element_type : String,
       rows_per_mark : Int32,
+      column_type : DateTimeColumnType? = nil,
     ) : String forall T
-      expected_type = "Array(Array(Nullable(#{element_type})))"
+      if typed_time = column_type
+        unless typed_time.shape == DateTimeColumnType::Shape::ArrayArrayNullable &&
+               typed_time.leaf_type_name == element_type
+          raise ArgumentError.new("nested Nullable DateTime Array descriptor does not match its writer shape or leaf")
+        end
+      end
+      expected_type = column_type.try(&.type_name) || "Array(Array(Nullable(#{element_type})))"
       physical_type = WidePart.temporal_array_physical_type(element_type)
       unless WidePart.array_array_nullable_temporal_element_type(expected_type) == element_type &&
              physical_type == WidePart.array_numeric_type_name(T)
@@ -5709,7 +5759,7 @@ module CrystalClick
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
-        validate_staged_array_array_nullable_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
+        validate_staged_array_array_nullable_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
         target
       ensure
@@ -11377,6 +11427,10 @@ module CrystalClick
     end
 
     private def self.numeric_width(type_name : String) : Int32
+      if temporal_type = DateTimeColumnType.parse(type_name)
+        return temporal_type.raw_width
+      end
+
       case type_name
       when "UInt8", "Int8", "Bool"
         1
@@ -20600,6 +20654,7 @@ module CrystalClick
       values : Slice(Array(T)),
       rows_per_mark : Int32,
       element_type : String,
+      column_type : DateTimeColumnType? = nil,
     ) : Nil forall T
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -20607,7 +20662,7 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(#{element_type})"
+      expected_type = column_type.try(&.type_name) || "Array(#{element_type})"
       time_element = WidePart.time_array_element_type(expected_type) == element_type
       physical_type = if time_element
                         WidePart.time_array_physical_type(element_type)
@@ -20621,6 +20676,12 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged temporal Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged temporal Array type does not match") unless value_part.column_type == expected_type
+      if temporal_type = DateTimeColumnType.parse(expected_type)
+        if temporal_type.shape == DateTimeColumnType::Shape::Array &&
+           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+          raise CorruptPartError.new("staged temporal Array column metadata differs")
+        end
+      end
       raise CorruptPartError.new("staged temporal Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
       raise CorruptPartError.new("staged temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
 
@@ -21424,11 +21485,12 @@ module CrystalClick
       values : Slice(Array(Array(T))),
       rows_per_mark : Int32,
       element_type : String,
+      column_type : DateTimeColumnType? = nil,
     ) : Nil forall T
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      expected_type = "Array(Array(#{element_type}))"
+      expected_type = column_type.try(&.type_name) || "Array(Array(#{element_type}))"
       carrier = WidePart.temporal_array_physical_type(element_type)
       unless WidePart.array_array_temporal_element_type(expected_type) == element_type &&
              carrier == WidePart.array_numeric_type_name(T)
@@ -21492,11 +21554,12 @@ module CrystalClick
       values : Slice(Array(Array(T?))),
       rows_per_mark : Int32,
       element_type : String,
+      column_type : DateTimeColumnType? = nil,
     ) : Nil forall T
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      expected_type = "Array(Array(Nullable(#{element_type})))"
+      expected_type = column_type.try(&.type_name) || "Array(Array(Nullable(#{element_type})))"
       carrier = WidePart.temporal_array_physical_type(element_type)
       unless WidePart.array_array_nullable_temporal_element_type(expected_type) == element_type &&
              carrier == WidePart.array_numeric_type_name(T)
@@ -21851,6 +21914,7 @@ module CrystalClick
       values : Slice(Array(T?)),
       rows_per_mark : Int32,
       element_type : String,
+      column_type : DateTimeColumnType? = nil,
     ) : Nil forall T
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
@@ -21858,7 +21922,7 @@ module CrystalClick
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
       value_part = WidePart.open_typed(stage, value_name)
-      expected_type = "Array(Nullable(#{element_type}))"
+      expected_type = column_type.try(&.type_name) || "Array(Nullable(#{element_type}))"
       time_element = WidePart.nullable_time_array_element_type(expected_type) == element_type
       physical_type = if time_element
                         WidePart.time_array_physical_type(element_type)
@@ -21872,6 +21936,12 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged nullable temporal Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged nullable temporal Array type does not match") unless value_part.column_type == expected_type
+      if temporal_type = DateTimeColumnType.parse(expected_type)
+        if temporal_type.shape == DateTimeColumnType::Shape::ArrayNullable &&
+           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+          raise CorruptPartError.new("staged nullable temporal Array column metadata differs")
+        end
+      end
       raise CorruptPartError.new("staged nullable temporal Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
       raise CorruptPartError.new("staged nullable temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
 
@@ -24695,6 +24765,12 @@ module CrystalClick
       checksums.entries.each_key do |name|
         checksums.validate_selected_entries(stage, name)
       end
+      if temporal_type = DateTimeColumnType.parse(type_name)
+        if temporal_type.shape == DateTimeColumnType::Shape::Scalar &&
+           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+          raise CorruptPartError.new("staged typed temporal column metadata differs")
+        end
+      end
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -24786,8 +24862,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed writer requires an exact UInt16 or Date payload")
         end
       {% elsif T == UInt32 %}
-        if type_name == "DateTime"
-          part.read_datetime_seconds_mark_range(column, mark_index, 1)
+        if temporal_type = DateTimeColumnType.parse(type_name)
+          if temporal_type.family == DateTimeColumnType::Family::DateTime && temporal_type.shape == DateTimeColumnType::Shape::Scalar
+            part.read_datetime_seconds_mark_range(column, mark_index, 1)
+          else
+            raise UnsupportedFormatError.new("typed writer requires an exact UInt32 or DateTime payload")
+          end
         elsif type_name == "UInt32"
           part.read_numeric_mark_range(column, mark_index, 1, UInt32)
         else
@@ -24826,8 +24906,12 @@ module CrystalClick
       {% elsif T == Int64 %}
         if WidePart.time64_scale(type_name)
           part.read_time64_ticks_mark_range(column, mark_index, 1)
-        elsif type_name.starts_with?("DateTime64(")
-          part.read_datetime64_ticks_mark_range(column, mark_index, 1)
+        elsif temporal_type = DateTimeColumnType.parse(type_name)
+          if temporal_type.family == DateTimeColumnType::Family::DateTime64 && temporal_type.shape == DateTimeColumnType::Shape::Scalar
+            part.read_datetime64_ticks_mark_range(column, mark_index, 1)
+          else
+            raise UnsupportedFormatError.new("typed writer requires an exact Int64 or DateTime64 payload")
+          end
         elsif WidePart.decimal64_scale(type_name)
           part.read_decimal64_raw_mark_range(column, mark_index, 1)
         elsif type_name == "Int64"
@@ -24903,6 +24987,12 @@ module CrystalClick
     ) : Nil forall T
       checksums = PartChecksums.open(stage)
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
+      if temporal_type = DateTimeColumnType.parse(type_name)
+        if temporal_type.shape == DateTimeColumnType::Shape::Nullable &&
+           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+          raise CorruptPartError.new("staged Nullable temporal column metadata differs")
+        end
+      end
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -25045,8 +25135,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("typed Nullable UInt16 writer requires exact Date or numeric metadata")
         end
       {% elsif T == UInt32? %}
-        if type_name == "Nullable(DateTime)"
-          part.read_nullable_datetime_seconds_mark_range(column, mark_index, 1)
+        if temporal_type = DateTimeColumnType.parse(type_name)
+          if temporal_type.family == DateTimeColumnType::Family::DateTime && temporal_type.shape == DateTimeColumnType::Shape::Nullable
+            part.read_nullable_datetime_seconds_mark_range(column, mark_index, 1)
+          else
+            raise UnsupportedFormatError.new("typed Nullable UInt32 writer requires exact DateTime or numeric metadata")
+          end
         elsif type_name == "Nullable(UInt32)"
           part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt32)
         else
@@ -25085,8 +25179,12 @@ module CrystalClick
       {% elsif T == Int64? %}
         if WidePart.nullable_time64_scale(type_name)
           part.read_nullable_time64_ticks_mark_range(column, mark_index, 1)
-        elsif WidePart.nullable_datetime64_scale(type_name)
-          part.read_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
+        elsif temporal_type = DateTimeColumnType.parse(type_name)
+          if temporal_type.family == DateTimeColumnType::Family::DateTime64 && temporal_type.shape == DateTimeColumnType::Shape::Nullable
+            part.read_nullable_datetime64_ticks_mark_range(column, mark_index, 1)
+          else
+            raise UnsupportedFormatError.new("typed Nullable Int64 writer requires exact DateTime64 or numeric metadata")
+          end
         elsif WidePart.nullable_decimal64_scale(type_name)
           part.read_nullable_decimal64_raw_mark_range(column, mark_index, 1)
         elsif type_name == "Nullable(Int64)"

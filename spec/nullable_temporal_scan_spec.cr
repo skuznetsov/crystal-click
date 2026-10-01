@@ -147,13 +147,13 @@ describe CrystalClick::WidePart do
       "Nullable(DateTime64(03))",
       "Nullable(DateTime64(10))",
       "Nullable(DateTime64(-1))",
-      "Nullable(DateTime64(3, 'UTC'))",
       "Nullable(DateTime64(3) )",
       "Nullable(Nullable(Date))",
-      "Nullable(DateTime('UTC'))",
     ].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end
+    CrystalClick::WidePart.supports_typed_type?("Nullable(DateTime64(3, 'UTC'))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Nullable(DateTime('UTC'))").should be_true
 
     ["Nullable(Date)", "Nullable(Date32)", "Nullable(DateTime)", "Nullable(DateTime64(3))"].each do |type|
       CrystalClick::WidePart.supports_nullable_numeric_type?(type).should be_false
@@ -166,13 +166,13 @@ describe CrystalClick::WidePart do
       "Nullable(DateTime64(03))",
       "Nullable(DateTime64(10))",
       "Nullable(DateTime64(-1))",
-      "Nullable(DateTime64(3, 'UTC'))",
       "Nullable(DateTime64(3) )",
       "Nullable(Nullable(DateTime64(3)))",
       "DateTime64(3)",
     ].each do |type|
       CrystalClick::WidePart.nullable_datetime64_scale(type).should be_nil
     end
+    CrystalClick::WidePart.nullable_datetime64_scale("Nullable(DateTime64(3, 'UTC'))").should eq(3)
   end
 
   it "reads Nullable(Date) raw optional day codes and rejects primitive aliases" do

@@ -50,8 +50,8 @@ module CrystalClick
         leaf_start = @offset
         leaf_end = scan_leaf_end
         leaf_source = String.new(@bytes[leaf_start, leaf_end - leaf_start])
-        type_name, parameterized_type = parse_leaf(leaf_source)
-        fields << WideTupleField.new(name, type_name, parameterized_type)
+        type_name, parameterized_type, datetime_type = parse_leaf(leaf_source)
+        fields << WideTupleField.new(name, type_name, parameterized_type, datetime_type)
         skip_whitespace
 
         case current_byte?
@@ -131,26 +131,31 @@ module CrystalClick
       ending
     end
 
-    private def parse_leaf(source : String) : {String, WideTupleParameterizedType?}
+    private def parse_leaf(source : String) : {String, WideTupleParameterizedType?, DateTimeColumnType?}
       add_node!
+      if datetime_type = DateTimeColumnType.parse_leaf(source)
+        add_node! if datetime_type.precision?
+        add_node! if datetime_type.time_zone?
+        return {datetime_type.leaf_type_name, nil, datetime_type}
+      end
       case source
       when /\AFixedString\(([1-9][0-9]*)\)\z/
         digits = $1
         add_node! # The width argument is a syntax node as well.
         width = bounded_positive_integer(digits, 65_536) || raise(ArgumentError.new("FixedString width is out of range"))
         owner = WideTupleFixedStringType.new(width)
-        {owner.type_name, owner}
+        {owner.type_name, owner, nil}
       when /\A(?:Enum8|Enum16)\(/
         definition = parse_enum(source)
         owner = WideTupleEnumType.new(definition)
-        {owner.type_name, owner}
+        {owner.type_name, owner, nil}
       when /\A(?:Decimal|Decimal32|Decimal64|Decimal128|Decimal256)(?:\(|\z)/
         owner = parse_decimal(source)
-        {owner.type_name, owner}
+        {owner.type_name, owner, nil}
       else
         raise ArgumentError.new("Tuple leaf is not admitted") unless bare_leaf?(source)
         add_node! if source.starts_with?("DateTime64(") || source.starts_with?("Time64(")
-        {source, nil}
+        {source, nil, nil}
       end
     end
 

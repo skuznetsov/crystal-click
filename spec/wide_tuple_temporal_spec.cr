@@ -81,7 +81,7 @@ describe "W100 temporal Tuple plan admission" do
     string_plan.raw_string_stream?("payload", "payload%2Evalue").should be_true
   end
 
-  it "rejects malformed, noncanonical, timezone-qualified, and unsupported compositions" do
+  it "rejects malformed, noncanonical, and unsupported compositions while admitting exact zones" do
     rejected = [
       "Tuple(event DateTime64)",
       "Tuple(event DateTime64())",
@@ -89,7 +89,6 @@ describe "W100 temporal Tuple plan admission" do
       "Tuple(event DateTime64(-1))",
       "Tuple(event DateTime64(03))",
       "Tuple(event DateTime64( 3 ))",
-      "Tuple(event DateTime64(3, 'UTC'))",
       "Tuple(event DateTime64(3, UTC))",
       "Tuple(event Time64())",
       "Tuple(event Time64(10))",
@@ -100,7 +99,7 @@ describe "W100 temporal Tuple plan admission" do
       "Tuple(event Date())",
       "Tuple(event Date32(0))",
       "Tuple(event DateTime(UTC))",
-      "Tuple(event DateTime('UTC'))",
+      "Tuple(event DateTime('Definitely/Not_A_Zone'))",
       "Tuple(event Time(0))",
       "Tuple(DateTime)",
       "Tuple(DateTime64(3))",
@@ -114,5 +113,8 @@ describe "W100 temporal Tuple plan admission" do
     rejected.each do |type_name|
       CrystalClick::WideTupleTypePlan.for_type(type_name).should be_nil
     end
+
+    CrystalClick::WideTupleTypePlan.for_type("Tuple(event DateTime64(3, 'UTC'))").should_not be_nil
+    CrystalClick::WideTupleTypePlan.for_type("Tuple(event DateTime('UTC'))").should_not be_nil
   end
 end

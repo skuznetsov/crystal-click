@@ -84,13 +84,13 @@ describe CrystalClick::WidePart do
     CrystalClick::WidePart.datetime64_scale("DateTime64(03)").should be_nil
     CrystalClick::WidePart.datetime64_scale("DateTime64(10)").should be_nil
     CrystalClick::WidePart.datetime64_scale("DateTime64(-1)").should be_nil
-    CrystalClick::WidePart.datetime64_scale("DateTime64(3, 'UTC')").should be_nil
+    CrystalClick::WidePart.datetime64_scale("DateTime64(3, 'UTC')").should eq(3)
     CrystalClick::WidePart.datetime64_scale("DateTime64(3) ").should be_nil
     CrystalClick::WidePart.supports_typed_type?("DateTime").should be_true
-    CrystalClick::WidePart.supports_typed_type?("DateTime('UTC')").should be_false
+    CrystalClick::WidePart.supports_typed_type?("DateTime('UTC')").should be_true
     CrystalClick::WidePart.supports_typed_type?("DateTime64(03)").should be_false
     CrystalClick::WidePart.supports_typed_type?("DateTime64(10)").should be_false
-    CrystalClick::WidePart.supports_typed_type?("DateTime64(3, 'UTC')").should be_false
+    CrystalClick::WidePart.supports_typed_type?("DateTime64(3, 'UTC')").should be_true
   end
 
   it "reads bare DateTime raw UInt32 seconds across marks without numeric aliases" do
@@ -139,10 +139,8 @@ describe CrystalClick::WidePart do
     end
   end
 
-  it "rejects timezone-qualified and malformed time metadata at typed open" do
+  it "rejects malformed and out-of-range time metadata at typed open" do
     [
-      {"DateTime('UTC')", "UInt32"},
-      {"DateTime64(3, 'UTC')", "Int64"},
       {"DateTime64(03)", "Int64"},
       {"DateTime64(10)", "Int64"},
       {"DateTime64(-1)", "Int64"},

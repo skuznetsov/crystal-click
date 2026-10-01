@@ -310,11 +310,14 @@ describe "W99 identifier and address Tuple plan" do
   it "charges the exact 16+4+16 identifier slots with checked overflow" do
     plan = CrystalClick::WideTupleTypePlan.for_type("Tuple(v6 IPv6, v4 IPv4, id UUID)").not_nil!
 
-    # 64-byte container + 3*24-byte field descriptors; per row is 8 row bytes
+    # 64-byte container + three actual field slots; per row is 8 row bytes
     # plus the exact 16+4+16-byte identifier payloads.
-    plan.materialization_charge(0_u64, 0_u64).should eq(136_u64)
-    plan.materialization_charge(3_u64, 0_u64).should eq(268_u64)
-    plan.materialization_charge(5_u64, 0_u64).should eq(356_u64)
+    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+    bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 16_u64 + 4_u64 + 16_u64
+    plan.materialization_charge(0_u64, 0_u64).should eq(fixed_bytes)
+    plan.materialization_charge(3_u64, 0_u64).should eq(fixed_bytes + 3_u64 * bytes_per_row)
+    plan.materialization_charge(5_u64, 0_u64).should eq(fixed_bytes + 5_u64 * bytes_per_row)
     plan.materialization_charge(UInt64::MAX, 0_u64).should be_nil
     plan.materialization_charge(0_u64, UInt64::MAX).should be_nil
   end
@@ -328,8 +331,17 @@ describe "W99 identifier and address Tuple plan" do
       reader = CrystalClick::WidePart.open_typed(part, "payload")
 
       reader.mark_row_counts.should eq([2_u64, 2_u64, 1_u64])
-      reader.tuple_mark_range_materialization_charge("payload", 0, 3).should eq(356_u64)
-      reader.tuple_mark_range_materialization_charge("payload", 1, 1).should eq(224_u64)
+      range_type = "Tuple(v6 IPv6, v4 IPv4, id UUID)"
+      range_plan = CrystalClick::WideTupleTypePlan.for_type(range_type).not_nil!
+      fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                    3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+      bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 16_u64 + 4_u64 + 16_u64
+      reader.tuple_mark_range_materialization_charge("payload", 0, 3).should eq(
+        range_plan.materialization_charge(5_u64, 0_u64)
+      )
+      reader.tuple_mark_range_materialization_charge("payload", 1, 1).should eq(
+        fixed_bytes + 2_u64 * bytes_per_row
+      )
 
       full = reader.read_tuple_mark_range("payload", 0, 3)
       full.row_count.should eq(5)

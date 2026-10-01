@@ -12,6 +12,7 @@ module CrystalClick
       alias DecodeBoolLeaf = Proc(String, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeIdentifierLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeTemporalLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
+      alias DecodeDateTimeLeaf = Proc(String, DateTimeColumnType, Bytes, UInt64, Int32, WideTupleLeafColumn)
       alias DecodeParameterizedLeaf = Proc(String, WideTupleParameterizedType, Bytes, UInt64, Int32, WideTupleLeafColumn)
 
       @plan : WideTupleTypePlan
@@ -25,6 +26,7 @@ module CrystalClick
       @decode_bool_leaf : DecodeBoolLeaf
       @decode_identifier_leaf : DecodeIdentifierLeaf
       @decode_temporal_leaf : DecodeTemporalLeaf
+      @decode_datetime_leaf : DecodeDateTimeLeaf
       @decode_parameterized_leaf : DecodeParameterizedLeaf
 
       def initialize(
@@ -39,6 +41,7 @@ module CrystalClick
         @decode_bool_leaf : DecodeBoolLeaf,
         @decode_identifier_leaf : DecodeIdentifierLeaf,
         @decode_temporal_leaf : DecodeTemporalLeaf,
+        @decode_datetime_leaf : DecodeDateTimeLeaf,
         @decode_parameterized_leaf : DecodeParameterizedLeaf,
       )
       end
@@ -248,6 +251,18 @@ module CrystalClick
               rows
             )
             columns << @decode_parameterized_leaf.call(field.name, exact_type, encoded, rows, width)
+          elsif exact_type = field.datetime_type
+            width = @plan.stream_width(@column, leaf_stream) ||
+                    raise(CorruptPartError.new("Tuple DateTime stream has no fixed width"))
+            encoded = @read_range.call(
+              leaf_stream,
+              first_mark,
+              mark_count,
+              checked_byte_count(rows, width),
+              width,
+              rows
+            )
+            columns << @decode_datetime_leaf.call(field.name, exact_type, encoded, rows, width)
           elsif field.type_name == "Bool"
             width = @plan.stream_width(@column, leaf_stream) ||
                     raise(CorruptPartError.new("Tuple Bool stream has no fixed width"))

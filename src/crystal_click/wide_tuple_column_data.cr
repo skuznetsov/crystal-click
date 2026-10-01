@@ -27,6 +27,13 @@ module CrystalClick
         elsif column.parameterized_type
           raise ArgumentError.new("Tuple result leaf has unexpected parameterized metadata")
         end
+        if exact_type = field.datetime_type
+          leaf_type = column.datetime_type ||
+                      raise(ArgumentError.new("Tuple result leaf is missing exact DateTime metadata"))
+          raise ArgumentError.new("Tuple result leaf DateTime metadata does not match schema") unless leaf_type == exact_type
+        elsif column.datetime_type
+          raise ArgumentError.new("Tuple result leaf has unexpected DateTime metadata")
+        end
         raise ArgumentError.new("Tuple result leaves are not row-aligned") unless column.size == row_count
       end
 
@@ -35,6 +42,8 @@ module CrystalClick
       @columns = Array(WideTupleLeafColumn).new(columns.size) do |index|
         column = columns[index]
         if exact_type = fields[index].parameterized_type
+          column.owned_copy_for(exact_type)
+        elsif exact_type = fields[index].datetime_type
           column.owned_copy_for(exact_type)
         else
           column.owned_copy

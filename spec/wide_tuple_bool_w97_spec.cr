@@ -28,10 +28,15 @@ describe "W97 named Bool Tuple plan" do
       plan.raw_string_stream?("payload", "payload%2Ebyte").should be_false
       plan.raw_string_stream?("payload", "payload%2Etext").should be_true
 
-      # 64 container + 3*24 field descriptors + 5*(8 row + 1 Bool + 1 UInt8
+      # 64 container + three actual field slots + 5*(8 row + 1 Bool + 1 UInt8
       # + 16 String slot) + 9 raw String bytes. Empty strings still pay slots.
-      plan.materialization_charge(5_u64, 0_u64).should eq(266_u64)
-      plan.materialization_charge(5_u64, 9_u64).should eq(275_u64)
+      fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                    3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+      row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
+                  sizeof(Bool).to_u64 + sizeof(UInt8).to_u64 +
+                  CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+      plan.materialization_charge(5_u64, 0_u64).should eq(fixed_bytes + 5_u64 * row_bytes)
+      plan.materialization_charge(5_u64, 9_u64).should eq(fixed_bytes + 5_u64 * row_bytes + 9_u64)
     end
 
     uint8 = CrystalClick::WideTupleTypePlan.for_type("Tuple(value UInt8)").not_nil!

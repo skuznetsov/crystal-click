@@ -527,6 +527,8 @@ module CrystalClick
         observed_rows = append_date32_codes_values(values, batch, column_name, observed_rows, expected_rows)
       when "DateTime"
         observed_rows = append_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("DateTime('")
+        observed_rows = append_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
       when "Int64"
         observed_rows = append_int64_values(values, batch, column_name, observed_rows, expected_rows)
       when .starts_with?("DateTime64(")
@@ -568,6 +570,10 @@ module CrystalClick
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
       when "Array(DateTime)"
+        selected_values = batch.array_datetime_seconds_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(DateTime('")
         selected_values = batch.array_datetime_seconds_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_numeric(values, selected_values, array_elements[0])
@@ -702,6 +708,10 @@ module CrystalClick
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
       when "Array(Nullable(DateTime))"
+        selected_values = batch.array_nullable_datetime_seconds_for(column_name)
+        observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
+        array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
+      when .starts_with?("Array(Nullable(DateTime('")
         selected_values = batch.array_nullable_datetime_seconds_for(column_name)
         observed_rows = checked_materialized_value_rows(observed_rows, selected_values.size.to_u64, expected_rows)
         array_elements[0] = append_materialized_array_nullable_numeric(values, selected_values, array_elements[0])
@@ -1252,6 +1262,8 @@ module CrystalClick
       when "Nullable(Date32)"
         observed_rows = append_nullable_date32_codes_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(DateTime)"
+        observed_rows = append_nullable_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("Nullable(DateTime('")
         observed_rows = append_nullable_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(Time)"
         observed_rows = append_nullable_time_seconds_values(values, batch, column_name, observed_rows, expected_rows)
@@ -2031,11 +2043,14 @@ module CrystalClick
       element_type : String,
     ) : UInt64
       case element_type
-      when "Date"     then batch.array_array_date_codes_for(column).size.to_u64
-      when "Date32"   then batch.array_array_date32_codes_for(column).size.to_u64
-      when "DateTime" then batch.array_array_datetime_seconds_for(column).size.to_u64
+      when "Date"   then batch.array_array_date_codes_for(column).size.to_u64
+      when "Date32" then batch.array_array_date32_codes_for(column).size.to_u64
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported nested temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          batch.array_array_datetime_seconds_for(column).size.to_u64
+        when DateTimeColumnType::Family::DateTime64
           batch.array_array_datetime64_ticks_for(column).size.to_u64
         else
           raise UnsupportedFormatError.new("unsupported nested temporal Array leaf type")
@@ -2109,11 +2124,14 @@ module CrystalClick
       element_type : String,
     ) : UInt64
       case element_type
-      when "Date"     then batch.array_array_nullable_date_codes_for(column).size.to_u64
-      when "Date32"   then batch.array_array_nullable_date32_codes_for(column).size.to_u64
-      when "DateTime" then batch.array_array_nullable_datetime_seconds_for(column).size.to_u64
+      when "Date"   then batch.array_array_nullable_date_codes_for(column).size.to_u64
+      when "Date32" then batch.array_array_nullable_date32_codes_for(column).size.to_u64
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          batch.array_array_nullable_datetime_seconds_for(column).size.to_u64
+        when DateTimeColumnType::Family::DateTime64
           batch.array_array_nullable_datetime64_ticks_for(column).size.to_u64
         else
           raise UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type")
@@ -2129,11 +2147,14 @@ module CrystalClick
       observed_elements : UInt64,
     ) : UInt64
       case element_type
-      when "Date"     then append_materialized_array_array_numeric(values, batch.array_array_date_codes_for(column), observed_elements)
-      when "Date32"   then append_materialized_array_array_numeric(values, batch.array_array_date32_codes_for(column), observed_elements)
-      when "DateTime" then append_materialized_array_array_numeric(values, batch.array_array_datetime_seconds_for(column), observed_elements)
+      when "Date"   then append_materialized_array_array_numeric(values, batch.array_array_date_codes_for(column), observed_elements)
+      when "Date32" then append_materialized_array_array_numeric(values, batch.array_array_date32_codes_for(column), observed_elements)
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported nested temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          append_materialized_array_array_numeric(values, batch.array_array_datetime_seconds_for(column), observed_elements)
+        when DateTimeColumnType::Family::DateTime64
           append_materialized_array_array_numeric(values, batch.array_array_datetime64_ticks_for(column), observed_elements)
         else
           raise UnsupportedFormatError.new("unsupported nested temporal Array leaf type")
@@ -2149,11 +2170,14 @@ module CrystalClick
       observed_elements : UInt64,
     ) : UInt64
       case element_type
-      when "Date"     then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_date_codes_for(column), observed_elements)
-      when "Date32"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_date32_codes_for(column), observed_elements)
-      when "DateTime" then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_datetime_seconds_for(column), observed_elements)
+      when "Date"   then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_date_codes_for(column), observed_elements)
+      when "Date32" then append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_date32_codes_for(column), observed_elements)
       else
-        if WidePart.datetime64_scale(element_type)
+        datetime_type = DateTimeColumnType.parse_leaf(element_type) || raise(UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type"))
+        case datetime_type.family
+        when DateTimeColumnType::Family::DateTime
+          append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_datetime_seconds_for(column), observed_elements)
+        when DateTimeColumnType::Family::DateTime64
           append_materialized_array_array_nullable_numeric(values, batch.array_array_nullable_datetime64_ticks_for(column), observed_elements)
         else
           raise UnsupportedFormatError.new("unsupported nested nullable temporal Array leaf type")

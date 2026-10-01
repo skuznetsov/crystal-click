@@ -51,10 +51,15 @@ describe "W97 Bool named-Tuple model" do
     plan.raw_string_stream?("payload", "payload%2Eflag").should be_false
     plan.raw_string_stream?("payload", "payload%2Etext").should be_true
 
-    # 64 container + 3*24 field overhead + per row (8 row + 1 Bool +
+    # 64 container + three actual field slots + per row (8 row + 1 Bool +
     # 1 UInt8 + 16 String slots) + three String payload bytes.
-    plan.materialization_charge(0_u64, 0_u64).should eq(136_u64)
-    plan.materialization_charge(2_u64, 3_u64).should eq(191_u64)
+    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+    row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
+                sizeof(Bool).to_u64 + sizeof(UInt8).to_u64 +
+                CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+    plan.materialization_charge(0_u64, 0_u64).should eq(fixed_bytes)
+    plan.materialization_charge(2_u64, 3_u64).should eq(fixed_bytes + 2_u64 * row_bytes + 3_u64)
     plan.materialization_charge(UInt64::MAX, 0_u64).should be_nil
     plan.materialization_charge(0_u64, UInt64::MAX).should be_nil
   end

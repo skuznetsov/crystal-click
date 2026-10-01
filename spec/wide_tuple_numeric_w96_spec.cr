@@ -89,10 +89,14 @@ describe "W96 named numeric Tuple plan red" do
     plan.raw_string_stream?("payload", "payload%2Etext").should be_true
     plan.raw_string_stream?("payload", "payload%2Ewide").should be_false
 
-    # 64 bytes of result container + five 24-byte field descriptors; per row
+    # 64 bytes of result container + five actual field slots; per row
     # 8-byte row + 1+4+2+32-byte numeric slots + one 16-byte String slot;
     # raw String payload bytes are added only once after all fields.
-    plan.materialization_charge(3_u64, 5_u64).should eq(378_u64)
+    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                  5_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES
+    row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 1_u64 + 4_u64 + 2_u64 +
+                32_u64 + CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+    plan.materialization_charge(3_u64, 5_u64).should eq(fixed_bytes + 3_u64 * row_bytes + 5_u64)
   end
 
   it "rejects neighboring semantic, recursive, unnamed, and empty-argument types" do

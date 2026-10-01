@@ -47,6 +47,9 @@ class CrystalClick::WidePart
       ->(name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
         WideTupleLeafColumn.new(name, [] of UInt64)
       },
+      ->(name : String, _exact_type : DateTimeColumnType, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+        raise "unexpected DateTime leaf decode for #{name} in FixedString budget test"
+      },
       ->(name : String, exact_type : WideTupleParameterizedType, bytes : Bytes, encoded_rows : UInt64, width : Int32) {
         parameterized_decode_calls << name
         fixed_type = exact_type.as?(WideTupleFixedStringType) ||

@@ -333,12 +333,12 @@ describe CrystalClick::WidePart do
     {
       "Array(Array(DateTime64(01)))",
       "Array(Array(DateTime64(10)))",
-      "Array(Array(DateTime('UTC')))",
-      "Array(Array(DateTime64(3, 'UTC')))",
       "Array(Array(Array(Date)))",
     }.each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end
+    CrystalClick::WidePart.supports_typed_type?("Array(Array(DateTime('UTC')))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Array(DateTime64(3, 'UTC')))").should be_true
   end
 
   it "reads plain and nullable temporal leaves across raw widths, empty arrays, NULLs, and DateTime64 scales" do

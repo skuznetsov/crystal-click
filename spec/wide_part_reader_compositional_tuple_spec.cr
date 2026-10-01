@@ -276,20 +276,27 @@ describe "W94 compositional named Tuple reader" do
     begin
       part = w94_reader_write_part(parent, "empty-nine", columns, 1)
       reader = CrystalClick::WidePart.open_typed(part, "payload")
+      field_count = columns.size.to_u64
+      fixed_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
+                     field_count * sizeof(CrystalClick::WideTupleField).to_u64
+      row_charge = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
+                   field_count * CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+      required_charge = fixed_charge + row_charge
+
       expect_raises(CrystalClick::CorruptPartError, "Tuple materialization charge exceeds per-range limit") do
-        reader.read_tuple_mark_range("payload", 0, 1, max_materialized_bytes: 431_u64)
+        reader.read_tuple_mark_range("payload", 0, 1, max_materialized_bytes: required_charge - 1_u64)
       end
 
       callbacks = [] of Int32
       expect_raises(CrystalClick::CorruptPartError, "Tuple materialization charge exceeds per-range limit") do
-        reader.each_tuple_mark_range("payload", 0, 1, max_materialized_bytes: 431_u64) do |_mark, mark_index|
+        reader.each_tuple_mark_range("payload", 0, 1, max_materialized_bytes: required_charge - 1_u64) do |_mark, mark_index|
           callbacks << mark_index
           nil
         end
       end
       callbacks.should be_empty
 
-      result = reader.read_tuple_mark_range("payload", 0, 1, max_materialized_bytes: 432_u64)
+      result = reader.read_tuple_mark_range("payload", 0, 1, max_materialized_bytes: required_charge)
       result.row_count.should eq(1)
       result.columns.each { |column| column.string_values.should eq([""]) }
     ensure

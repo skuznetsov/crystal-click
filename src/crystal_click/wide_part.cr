@@ -703,6 +703,9 @@ module CrystalClick
       if normalized = DecimalColumnType.catalog_type(type)
         return normalized
       end
+      if normalized = DateTimeColumnType.catalog_type(type)
+        return normalized
+      end
       type if supports_typed_type?(type)
     end
 
@@ -830,11 +833,12 @@ module CrystalClick
       type == "Array(Nullable(Bool))"
     end
 
-    # Accept only the canonical one-digit DateTime64 precision. Timezone
-    # arguments and alternate spellings remain outside this reader's scope.
+    # Accept only the exact scalar DateTime64 leaf spelling. The timezone is
+    # retained in the descriptor but does not change its raw tick precision.
     def self.datetime64_scale(type : String) : Int32?
-      match = /\ADateTime64\(([0-9])\)\z/.match(type)
-      match.try { |value| value[1].to_i }
+      descriptor = DateTimeColumnType.parse_leaf(type) || return nil
+      return nil unless descriptor.family == DateTimeColumnType::Family::DateTime64
+      descriptor.precision?.try(&.to_i)
     end
 
     # Time64 keeps the same one-digit precision grammar as DateTime64 while
@@ -849,8 +853,10 @@ module CrystalClick
     # Keep this recognizer separate from Nullable(primitive numeric): callers
     # must opt into the semantic temporal contract explicitly.
     def self.nullable_datetime64_scale(type : String) : Int32?
-      match = /\ANullable\(DateTime64\(([0-9])\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
+      descriptor = DateTimeColumnType.parse(type) || return nil
+      return nil unless descriptor.shape == DateTimeColumnType::Shape::Nullable &&
+                        descriptor.family == DateTimeColumnType::Family::DateTime64
+      descriptor.precision?.try(&.to_i)
     end
 
     def self.nullable_time64_scale(type : String) : Int32?
@@ -862,6 +868,9 @@ module CrystalClick
     # the canonical DateTime64 precision. These recognizers deliberately stay
     # separate from the numeric Array grammar even when physical widths match.
     def self.temporal_array_element_type(type : String) : String?
+      if descriptor = DateTimeColumnType.parse(type)
+        return descriptor.leaf_type_name if descriptor.shape == DateTimeColumnType::Shape::Array
+      end
       case type
       when "Array(Date)"     then "Date"
       when "Array(Date32)"   then "Date32"
@@ -874,6 +883,9 @@ module CrystalClick
     end
 
     def self.nullable_temporal_array_element_type(type : String) : String?
+      if descriptor = DateTimeColumnType.parse(type)
+        return descriptor.leaf_type_name if descriptor.shape == DateTimeColumnType::Shape::ArrayNullable
+      end
       case type
       when "Array(Nullable(Date))"     then "Date"
       when "Array(Nullable(Date32))"   then "Date32"
@@ -889,6 +901,9 @@ module CrystalClick
     # family. Keep this semantic gate separate from the nested numeric gate:
     # Date and DateTime intentionally share physical widths with integers.
     def self.array_array_temporal_element_type(type : String) : String?
+      if descriptor = DateTimeColumnType.parse(type)
+        return descriptor.leaf_type_name if descriptor.shape == DateTimeColumnType::Shape::ArrayArray
+      end
       case type
       when "Array(Array(Date))"     then "Date"
       when "Array(Array(Date32))"   then "Date32"
@@ -901,6 +916,9 @@ module CrystalClick
     end
 
     def self.array_array_nullable_temporal_element_type(type : String) : String?
+      if descriptor = DateTimeColumnType.parse(type)
+        return descriptor.leaf_type_name if descriptor.shape == DateTimeColumnType::Shape::ArrayArrayNullable
+      end
       case type
       when "Array(Array(Nullable(Date)))"     then "Date"
       when "Array(Array(Nullable(Date32)))"   then "Date32"
@@ -913,13 +931,11 @@ module CrystalClick
     end
 
     def self.array_array_datetime64_scale(type : String) : Int32?
-      match = /\AArray\(Array\(DateTime64\(([0-9])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
+      datetime64_array_scale(type, DateTimeColumnType::Shape::ArrayArray)
     end
 
     def self.array_array_nullable_datetime64_scale(type : String) : Int32?
-      match = /\AArray\(Array\(Nullable\(DateTime64\(([0-9])\)\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
+      datetime64_array_scale(type, DateTimeColumnType::Shape::ArrayArrayNullable)
     end
 
     # W66's paired nested Time family remains separate from the W65
@@ -965,13 +981,18 @@ module CrystalClick
     end
 
     def self.array_datetime64_scale(type : String) : Int32?
-      match = /\AArray\(DateTime64\(([0-9])\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
+      datetime64_array_scale(type, DateTimeColumnType::Shape::Array)
     end
 
     def self.nullable_array_datetime64_scale(type : String) : Int32?
-      match = /\AArray\(Nullable\(DateTime64\(([0-9])\)\)\)\z/.match(type)
-      match.try { |value| value[1].to_i }
+      datetime64_array_scale(type, DateTimeColumnType::Shape::ArrayNullable)
+    end
+
+    private def self.datetime64_array_scale(type : String, expected_shape : DateTimeColumnType::Shape) : Int32?
+      descriptor = DateTimeColumnType.parse(type) || return nil
+      return nil unless descriptor.shape == expected_shape &&
+                        descriptor.family == DateTimeColumnType::Family::DateTime64
+      descriptor.precision?.try(&.to_i)
     end
 
     def self.array_time64_scale(type : String) : Int32?
@@ -987,6 +1008,9 @@ module CrystalClick
     # Map an admitted temporal leaf to its on-disk fixed-width carrier. This
     # is an internal codec choice; public numeric Array gates remain unchanged.
     def self.temporal_array_physical_type(element_type : String) : String?
+      if descriptor = DateTimeColumnType.parse_leaf(element_type)
+        return descriptor.family == DateTimeColumnType::Family::DateTime ? "UInt32" : "Int64"
+      end
       case element_type
       when "Date"     then "UInt16"
       when "Date32"   then "Int32"
@@ -996,12 +1020,28 @@ module CrystalClick
       end
     end
 
+    # Raw reader entry points select a semantic family while retaining the
+    # full declared name in column metadata. Timezone is provenance and does
+    # not relabel or rescale the UInt32/Int64 carrier.
+    def self.same_temporal_leaf_family?(left : String, right : String) : Bool
+      left_datetime = DateTimeColumnType.parse_leaf(left)
+      right_datetime = DateTimeColumnType.parse_leaf(right)
+      if left_datetime && right_datetime
+        left_datetime.family == right_datetime.family && left_datetime.precision? == right_datetime.precision?
+      else
+        left == right
+      end
+    end
+
     def self.time_array_physical_type(element_type : String) : String?
       return "Int32" if element_type == "Time"
       "Int64" if time64_scale(element_type)
     end
 
     def self.supports_nullable_temporal_type?(type : String) : Bool
+      if descriptor = DateTimeColumnType.parse(type)
+        return descriptor.shape == DateTimeColumnType::Shape::Nullable
+      end
       type == "Nullable(Date)" || type == "Nullable(Date32)" || type == "Nullable(DateTime)" || !nullable_datetime64_scale(type).nil?
     end
 
@@ -1416,6 +1456,7 @@ module CrystalClick
 
     def self.supports_typed_type?(type : String) : Bool
       !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
+        !DateTimeColumnType.parse(type).nil? ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         type == "Time" || !datetime64_scale(type).nil? || !time64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
         type == "Int256" || type == "UInt256" ||
@@ -2157,7 +2198,8 @@ module CrystalClick
     # stays separate from the primitive UInt32 reader.
     def read_datetime_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt32)
       ensure_column(column)
-      raise UnsupportedFormatError.new("DateTime accessor requires an exact DateTime column") unless @column_type == "DateTime"
+      datetime_type = DateTimeColumnType.parse_leaf(@column_type)
+      raise UnsupportedFormatError.new("DateTime accessor requires an exact DateTime column") unless datetime_type && datetime_type.family == DateTimeColumnType::Family::DateTime
 
       start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 4)
       values = Array(UInt32).new
@@ -2242,7 +2284,8 @@ module CrystalClick
 
     def read_nullable_datetime_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt32?)
       ensure_column(column)
-      raise UnsupportedFormatError.new("Nullable(DateTime) accessor requires an exact Nullable(DateTime) column") unless @column_type == "Nullable(DateTime)"
+      datetime_type = DateTimeColumnType.parse(@column_type)
+      raise UnsupportedFormatError.new("Nullable(DateTime) accessor requires an exact Nullable(DateTime) column") unless datetime_type && datetime_type.shape == DateTimeColumnType::Shape::Nullable && datetime_type.family == DateTimeColumnType::Family::DateTime
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 4, UInt32)
     end
 
@@ -5691,7 +5734,7 @@ module CrystalClick
       type : T.class,
     ) : Array(Array(Array(T))) forall T
       ensure_column(column)
-      unless WidePart.array_array_temporal_element_type(@column_type) == element_type &&
+      unless WidePart.array_array_temporal_element_type(@column_type).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed nested temporal Array accessor does not match selected semantic column type")
       end
@@ -5706,7 +5749,7 @@ module CrystalClick
       type : T.class,
     ) : Array(Array(Array(T?))) forall T
       ensure_column(column)
-      unless WidePart.array_array_nullable_temporal_element_type(@column_type) == element_type &&
+      unless WidePart.array_array_nullable_temporal_element_type(@column_type).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed nested nullable temporal Array accessor does not match selected semantic column type")
       end
@@ -6644,7 +6687,7 @@ module CrystalClick
 
     private def read_array_temporal_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T)) forall T
       ensure_column(column)
-      unless WidePart.temporal_array_element_type(@column_type) == element_type &&
+      unless WidePart.temporal_array_element_type(@column_type).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed temporal Array accessor does not match selected semantic column type")
       end
@@ -6664,7 +6707,7 @@ module CrystalClick
 
     private def read_array_nullable_temporal_mark_range(column : String, first_mark : Int, mark_count : Int, element_type : String, type : T.class) : Array(Array(T?)) forall T
       ensure_column(column)
-      unless WidePart.nullable_temporal_array_element_type(@column_type) == element_type &&
+      unless WidePart.nullable_temporal_array_element_type(@column_type).try { |actual| WidePart.same_temporal_leaf_family?(actual, element_type) } &&
              WidePart.temporal_array_physical_type(element_type) == WidePart.array_numeric_type_name(type)
         raise UnsupportedFormatError.new("typed nullable temporal Array accessor does not match selected semantic column type")
       end
@@ -13614,10 +13657,8 @@ module CrystalClick
         2
       elsif @column_type == "Date32"
         4
-      elsif @column_type == "DateTime"
-        4
-      elsif WidePart.datetime64_scale(@column_type)
-        8
+      elsif datetime_type = DateTimeColumnType.parse_leaf(@column_type)
+        datetime_type.raw_width
       elsif @column_type == "Time"
         4
       elsif WidePart.time64_scale(@column_type)
@@ -13660,6 +13701,9 @@ module CrystalClick
     end
 
     private def nullable_temporal_width(type : String) : Int32
+      if datetime_type = DateTimeColumnType.parse(type)
+        return datetime_type.raw_width if datetime_type.shape == DateTimeColumnType::Shape::Nullable
+      end
       case type
       when "Nullable(Date)"     then 2
       when "Nullable(Date32)"   then 4
@@ -14576,6 +14620,9 @@ module CrystalClick
         ->(name : String, type_name : String, bytes : Bytes, rows : UInt64, width : Int32) {
           decode_tuple_temporal_leaf(name, type_name, bytes, rows, width)
         },
+        ->(name : String, exact_type : DateTimeColumnType, bytes : Bytes, rows : UInt64, width : Int32) {
+          decode_tuple_datetime_leaf(name, exact_type, bytes, rows, width)
+        },
         ->(name : String, exact_type : WideTupleParameterizedType, bytes : Bytes, rows : UInt64, width : Int32) {
           decode_tuple_parameterized_leaf(name, exact_type, bytes, rows, width)
         }
@@ -14697,6 +14744,38 @@ module CrystalClick
                  raise UnsupportedFormatError.new("unsupported temporal Tuple leaf type")
                end
       WideTupleLeafColumn.new(name, type_name, values)
+    end
+
+    private def decode_tuple_datetime_leaf(
+      name : String,
+      exact_type : DateTimeColumnType,
+      bytes : Bytes,
+      rows : UInt64,
+      width : Int32,
+    ) : WideTupleLeafColumn
+      raise CorruptPartError.new("Tuple DateTime descriptor is not scalar") unless exact_type.shape == DateTimeColumnType::Shape::Scalar
+      expected_width = exact_type.raw_width
+      raise CorruptPartError.new("Tuple DateTime stream width does not match schema") unless width == expected_width
+      if rows > Int32::MAX.to_u64 // expected_width.to_u64 ||
+         bytes.size.to_u64 != rows * expected_width.to_u64
+        raise CorruptPartError.new("Tuple DateTime stream byte count does not match rows")
+      end
+
+      values = case exact_type.family
+               when DateTimeColumnType::Family::DateTime
+                 Array(DateTimeValue).new(rows.to_i) do |index|
+                   DateTimeValue.new(decode_numeric_value(bytes, index * width, UInt32))
+                 end
+               when DateTimeColumnType::Family::DateTime64
+                 precision = exact_type.precision?.not_nil!.to_i
+                 Array(DateTime64Value).new(rows.to_i) do |index|
+                   raw = decode_numeric_value(bytes, index * width, Int64)
+                   DateTime64Value.new(raw, precision)
+                 end
+               else
+                 raise CorruptPartError.new("Tuple DateTime descriptor family is unsupported")
+               end
+      WideTupleLeafColumn.new(name, exact_type, values)
     end
 
     # FixedString, Enum and Decimal share one raw leaf stream but retain their

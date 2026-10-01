@@ -42,6 +42,75 @@ passed 1,433 examples. The bidirectional 80-profile QBit stock oracle, its
 Root's scoped verdict is ROBUST in `QBIT_FRONTIER.md`; this is not the full
 facade refactor.
 
+W104's timezone-qualified DateTime/DateTime64 extension is verified within its
+pinned seven-shape profile: focused DEBUG/RELEASE each passed 431 examples,
+full DEBUG passed 1,695, both 297-profile stock-oracle phases and six regression
+oracles passed.
+Its new declaration and timezone admission owners each have their own file;
+the sealed scope, executed gates and residual limits are in
+`TIMEZONE_TEMPORAL_FRONTIER.md`.
+It does not claim completion of the larger facade refactor.
+
+## W104 ownership boundary
+
+`DateTimeColumnType` owns exact temporal family, precision, timezone provenance
+and the six existing scalar/Nullable/Array shapes. `TimezoneName` owns a copied
+admitted token; the private `ClickHouseTimezoneCatalog26_7_1_1315` owns the
+versioned pinned name manifest. Each concrete class has one source file.
+Persisted parsing is strict, while catalog-only parameter normalization is a
+separate entry point. No host timezone lookup or duplicate temporal codec is
+introduced.
+
+Named-flat Tuple field/plan/leaf owners retain the scalar descriptor and
+share it through owned row/column snapshots. Raw DateTime value structs are
+unchanged: timezone provenance belongs to the schema, not each raw value.
+The plan bills the actual field slot and retained descriptor independently
+of physical width. This logical budget is not a peak-RSS certificate.
+
+Reader, writer and high-level consumer facades use the shared recognizers;
+their existing mark/checksum/stream-lifetime and publication infrastructure
+remain in place. The new owners and Tuple snapshots defend their String
+exports, but older facade String exports are not universally hardened here.
+Whole-facade decomposition, generic recursive types and performance remain
+open. Adding three class files is not evidence of lower coupling or faster
+execution.
+
+## Next proposed lifecycle extraction
+
+Status: PROPOSED, not implemented or verified. At the qualified W104 source the
+four facades still contain 15,422 reader, 25,821 writer, 6,759 table and 5,371
+catalog lines. These navigation counts do not measure coupling or performance.
+
+The narrow next responsibility is staged stream-file lifetime, not another
+codec or a mechanical relocation of whole facades. In
+`WidePartWriter.validate_staged_array_map_array_numeric_part`, data and mark
+files are opened before the cleanup region. In
+`validate_staged_array_map_bool_leaf_streams`, the values pair and optional
+null pair are likewise acquired before `begin/ensure`. A later open error can
+therefore bypass explicit closure of earlier acquired handles. This is a
+source-level failure path; runtime leak qualification remains open.
+
+Proposed owner: one `StagedStreamFileSet` class in
+`src/crystal_click/wide_part_writer/staged_stream_file_set.cr`. It owns only
+ordered acquisition and closure, including partial acquisition and a failing
+validation block. Validators depend on this owner; the owner depends only on
+standard file I/O, not the writer, reader, table or catalog. Path/hash selection,
+stream order, frame/mark/sentinel checks, metadata, staged readback and exclusive
+publication stay with their existing owners. Cleanup must attempt every owned
+handle and must not mask the original open or validation error.
+
+Risk: CAUTION (resource lifetime and exception propagation). Rollback: only the
+new owner, the two call sites, aggregate require, and directly related tests.
+Before production, establish a discriminating partial-acquisition failure
+probe rather than treating a missing future class as behavioral RED. The owner
+contract then needs tests for failure at each acquisition position, validation
+failure, success, handle closure and preservation of the original error.
+DoD also retains `spec/wide_part_writer_w83_spec.cr`, W84 and W85 writer specs,
+their stock writer oracle modes, full DEBUG, format and diff checks. No type,
+codec, metadata, publication or performance widening belongs in that commit.
+After this slice, physical reader lifetime, leaf codecs, table scan adapters
+and catalog parsing/navigation remain separate larger extractions.
+
 ## W103 ownership boundary
 
 `QBitType` owns the closed element identity and dimension/stride grammar;

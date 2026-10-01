@@ -15,6 +15,7 @@ module CrystalClick
     @values : Buffer
     @temporal_type_name : String?
     @parameterized_type : WideTupleParameterizedType?
+    @datetime_type : DateTimeColumnType?
 
     # Preserve the original constructor overloads and their union dispatch.
     def initialize(name : String, values : Array(UInt64))
@@ -22,6 +23,7 @@ module CrystalClick
       @values = values.dup
       @temporal_type_name = nil
       @parameterized_type = nil
+      @datetime_type = nil
     end
 
     def initialize(name : String, values : Array(String))
@@ -29,6 +31,7 @@ module CrystalClick
       @values = values.map { |value| String.new(value.to_slice) }
       @temporal_type_name = nil
       @parameterized_type = nil
+      @datetime_type = nil
     end
 
     # A closed legacy-buffer constructor remains useful for internal immutable
@@ -40,16 +43,36 @@ module CrystalClick
       @values = copy_values(values)
       @temporal_type_name = nil
       @parameterized_type = nil
+      @datetime_type = nil
     end
 
     # Temporal buffers require explicit semantic metadata, including when
     # empty, because several wrappers share raw carrier widths.
     def initialize(name : String, exact_type : String, values : WideTupleTemporalType::Buffer)
-      WideTupleTemporalType.validate_buffer!(exact_type, values)
       @name = String.new(name.to_slice)
-      @temporal_type_name = String.new(exact_type.to_slice)
       @parameterized_type = nil
+      if datetime_type = DateTimeColumnType.parse_leaf(exact_type)
+        validate_datetime_buffer!(datetime_type, values)
+        @temporal_type_name = nil
+        @datetime_type = datetime_type
+      else
+        WideTupleTemporalType.validate_buffer!(exact_type, values)
+        @temporal_type_name = String.new(exact_type.to_slice)
+        @datetime_type = nil
+      end
       @values = copy_values(values)
+    end
+
+    # DateTime column metadata is shared by identity across schema snapshots
+    # and Tuple leaves; it is not reconstructed for each row or copy.
+    def initialize(name : String, exact_type : DateTimeColumnType, values : WideTupleTemporalType::Buffer)
+      raise ArgumentError.new("DateTime Tuple leaves require a scalar descriptor") unless exact_type.shape == DateTimeColumnType::Shape::Scalar
+      validate_datetime_buffer!(exact_type, values)
+      @name = String.new(name.to_slice)
+      @values = copy_values(values)
+      @temporal_type_name = nil
+      @parameterized_type = nil
+      @datetime_type = exact_type
     end
 
     # W101 buffers retain exact declaration metadata even when they contain no
@@ -58,6 +81,7 @@ module CrystalClick
       @name = String.new(name.to_slice)
       @temporal_type_name = nil
       @parameterized_type = exact_type
+      @datetime_type = nil
       @values = copy_parameterized_values(exact_type, values)
     end
 
@@ -69,6 +93,7 @@ module CrystalClick
       @values = copy_allowed_array(values)
       @temporal_type_name = nil
       @parameterized_type = nil
+      @datetime_type = nil
     end
 
     def name : String
@@ -78,6 +103,9 @@ module CrystalClick
     def type_name : String
       if parameterized_type = @parameterized_type
         return parameterized_type.type_name
+      end
+      if datetime_type = @datetime_type
+        return datetime_type.leaf_type_name
       end
       if temporal_type_name = @temporal_type_name
         return String.new(temporal_type_name.to_slice)
@@ -96,6 +124,10 @@ module CrystalClick
 
     def parameterized_type : WideTupleParameterizedType?
       @parameterized_type
+    end
+
+    def datetime_type : DateTimeColumnType?
+      @datetime_type
     end
 
     def size : Int32
@@ -246,6 +278,8 @@ module CrystalClick
     def owned_copy : WideTupleLeafColumn
       if parameterized_type = @parameterized_type
         owned_copy_for(parameterized_type)
+      elsif datetime_type = @datetime_type
+        owned_copy_for(datetime_type)
       elsif temporal_type_name = @temporal_type_name
         WideTupleLeafColumn.new(@name, temporal_type_name, @values.as(WideTupleTemporalType::Buffer))
       else
@@ -261,6 +295,27 @@ module CrystalClick
         raise ArgumentError.new("Tuple leaf exact type differs from requested owner")
       end
       WideTupleLeafColumn.new(@name, exact_type, @values)
+    end
+
+    def owned_copy_for(exact_type : DateTimeColumnType) : WideTupleLeafColumn
+      current = @datetime_type || raise(ArgumentError.new("Tuple leaf has no DateTime descriptor"))
+      raise ArgumentError.new("Tuple leaf DateTime descriptor differs from requested owner") unless current == exact_type
+      WideTupleLeafColumn.new(@name, exact_type, @values.as(WideTupleTemporalType::Buffer))
+    end
+
+    private def validate_datetime_buffer!(exact_type : DateTimeColumnType, values : WideTupleTemporalType::Buffer) : Nil
+      raise ArgumentError.new("DateTime Tuple leaves require a scalar descriptor") unless exact_type.shape == DateTimeColumnType::Shape::Scalar
+      case exact_type.family
+      when DateTimeColumnType::Family::DateTime
+        raise ArgumentError.new("DateTime buffer has the wrong carrier") unless values.is_a?(Array(DateTimeValue))
+      when DateTimeColumnType::Family::DateTime64
+        raise ArgumentError.new("DateTime64 buffer has the wrong carrier") unless values.is_a?(Array(DateTime64Value))
+        expected_precision = exact_type.precision?.not_nil!
+        values.each do |value|
+          raise ArgumentError.new("DateTime64 value precision does not match exact type") unless value.precision == expected_precision
+        end
+      end
+      nil
     end
 
     private def copy_parameterized_values(exact_type : WideTupleParameterizedType, values : Buffer) : Buffer

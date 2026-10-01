@@ -7,6 +7,12 @@ focused DEBUG/RELEASE, full DEBUG and all declared stock-oracle gates below.
 The active goal is all type read/write compatibility and MV/projection support
 before memory/performance work, not completion of this one family.
 
+W104 subsequently admits exact timezone-qualified DateTime and DateTime64
+leaves under its separate seven-shape certificate in
+`TIMEZONE_TEMPORAL_FRONTIER.md`. The historical timezone rejection below is
+the W100 boundary, not the current W104 admission policy; the original W100
+certificate is not retroactively widened.
+
 ## Problem, scope and design laws
 
 The existing scalar and Array temporal paths retain exact semantic type

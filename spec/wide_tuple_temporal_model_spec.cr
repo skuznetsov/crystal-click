@@ -15,9 +15,11 @@ describe CrystalClick::WideTupleTemporalType do
       CrystalClick::WideTupleTemporalType.width(type_name).should eq(width)
     end
 
-    ["Date()", "DateTime64", "DateTime64(10)", "DateTime64(03)", "DateTime64(3, 'UTC')", "Time64(10)"].each do |type_name|
+    ["Date()", "DateTime64", "DateTime64(10)", "DateTime64(03)", "DateTime64(3,'UTC')", "Time64(10)"].each do |type_name|
       CrystalClick::WideTupleTemporalType.width(type_name).should be_nil
     end
+    CrystalClick::WideTupleTemporalType.width("DateTime('UTC')").should eq(4)
+    CrystalClick::WideTupleTemporalType.width("DateTime64(3, 'UTC')").should eq(8)
     CrystalClick::WideTupleTemporalType.precision("DateTime64(10)").should be_nil
     CrystalClick::WideTupleTemporalType.precision("Time64(03)").should be_nil
     CrystalClick::WideTupleTemporalType.owned_width("DateTime64(10)").should be_nil
@@ -181,13 +183,14 @@ describe CrystalClick::WideTupleTypePlan do
       "Tuple(value DateTime64 (3))",
       "Tuple(value DateTime64(03))",
       "Tuple(value DateTime64(10))",
-      "Tuple(value DateTime64(3, 'UTC'))",
       "Tuple(value Time64( 9 ))",
       "Tuple(value Time64(9 ))",
       "Tuple(value Time64(10))",
-      "Tuple(value DateTime('UTC'))",
     ].each do |type_name|
       CrystalClick::WideTupleTypePlan.for_type(type_name).should be_nil
+    end
+    ["Tuple(value DateTime64(3, 'UTC'))", "Tuple(value DateTime('UTC'))"].each do |type_name|
+      CrystalClick::WideTupleTypePlan.for_type(type_name).should_not be_nil
     end
     long_parameter = "x" * 4_100
     CrystalClick::WideTupleTypePlan.for_type("Tuple(value DateTime64(#{long_parameter}))").should be_nil
@@ -201,6 +204,7 @@ describe CrystalClick::WideTupleTypePlan do
     plan.materialization_charge(1_u64, 0_u64).should eq(
       CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
       CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+      plan.fields.first.datetime_type.not_nil!.logical_charge +
       CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
       sizeof(CrystalClick::DateTime64Value).to_u64
     )
