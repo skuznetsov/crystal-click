@@ -1,5 +1,6 @@
 module CrystalClick
-  # Closed storage plan for bounded named, nonempty, flat Tuple schemas.
+  # Closed storage plan for bounded named, nonempty Tuple schemas with
+  # compositional named-Tuple children and scalar terminal leaves.
   # Parsing and admission stay Tuple-local; the shared expression AST and its
   # other physical profiles are intentionally unchanged.
   class WideTupleTypePlan
@@ -13,18 +14,18 @@ module CrystalClick
     STRING_SLOT_ACCOUNTING_BYTES      = 16_u64
 
     @type_name : String
+    @root : WideTupleSchemaNode
     @fields : Array(WideTupleField)
 
-    private def initialize(@type_name : String, fields : Array(WideTupleField))
-      @type_name = String.new(@type_name.to_slice)
-      @fields = fields.dup
+    private def initialize(@root : WideTupleSchemaNode)
+      @type_name = @root.type_name
+      @fields = @root.flattened_fields
     end
 
     def self.for_type(type : String) : WideTupleTypePlan?
       return nil if type.bytesize > WideTupleSchemaParser::MAX_SOURCE_BYTES
-      fields = WideTupleSchemaParser.parse(type) || return nil
-      canonical = "Tuple(#{fields.map { |field| "#{field.name} #{field.type_name}" }.join(", ")})"
-      new(canonical, fields)
+      root = WideTupleSchemaParser.parse_tree(type) || return nil
+      new(root)
     end
 
     def type_name : String
@@ -32,9 +33,83 @@ module CrystalClick
     end
 
     def fields : Array(WideTupleField)
-      @fields.map do |field|
-        WideTupleField.new(field.name, field.leaf_type)
+      @fields.map(&.owned_copy)
+    end
+
+    # Immediate top-level schema members. Node exports are immutable; only
+    # this array is copied for callers.
+    def root_fields : Array(WideTupleSchemaNode)
+      @root.children
+    end
+
+    def field_count : Int32
+      @fields.size.to_i32
+    end
+
+    def field_count_under(path : Array(String)) : Int32
+      count = 0_i32
+      @fields.each do |field|
+        count += 1 if field.path_starts_with?(path) && field.path_depth > path.size
       end
+      count
+    end
+
+    # Canonical physical stream authority. Each tuple edge is encoded
+    # separately, so a logical dotted field path can never be confused with a
+    # literal stream-name delimiter.
+    def leaf_stream_name(column : String, field : WideTupleField) : String
+      "#{column}#{field.stream_path_suffix}"
+    end
+
+    # Return a schema subtree addressed by local name segments. Empty path
+    # denotes the synthetic root.
+    def node_at(path : Array(String)) : WideTupleSchemaNode?
+      node = @root
+      path.each do |segment|
+        child = node.children.find { |candidate| candidate.name == segment }
+        return nil unless child
+        node = child
+      end
+      node
+    end
+
+    def node_at(path : String) : WideTupleSchemaNode?
+      return nil if path.empty?
+      segments = path.split('.')
+      return nil if segments.any?(&.empty?)
+      node_at(segments)
+    end
+
+    # Flat terminal fields below a subtree, with names relative to that
+    # subtree. The returned descriptors are detached snapshots.
+    def fields_under(path : Array(String)) : Array(WideTupleField)
+      @fields.compact_map do |field|
+        segments = field.path_segments
+        next unless path_prefix?(segments, path)
+        relative = segments[path.size..]
+        next if relative.empty?
+        relative_name = relative.join(".")
+        WideTupleField.new(relative_name, field.leaf_type, relative)
+      end
+    end
+
+    def field_index(path : Array(String), field_name : String) : Int32?
+      relative = field_name.split('.')
+      return nil if relative.empty? || relative.any?(&.empty?)
+      full_path = path + relative
+      @fields.each_with_index do |field, index|
+        return index.to_i32 if field.path_equals?(full_path)
+      end
+      nil
+    end
+
+    def field_under?(index : Int32, path : Array(String)) : Bool
+      field = @fields[index]?
+      !!field && field.path_starts_with?(path)
+    end
+
+    def type_name_at(path : Array(String)) : String?
+      node_at(path).try(&.type_name)
     end
 
     def physical_streams(column : String) : Array(String)
@@ -87,16 +162,24 @@ module CrystalClick
     # Declared logical container/slot budget plus materialized rows.
     # Descriptor storage is included once per field, wrapper slots use actual
     # inline sizes, and caller-supplied variable/padded payload is included
-    # once. Copied schema-name Strings and transient allocation storage are
-    # not itemized; this is not a complete allocation, peak-RSS or GC estimate.
+    # once. Retained schema nodes, local names and flattened paths are included;
+    # canonical/exported schema Strings and transient allocation storage are
+    # excluded. This is not a complete allocation, peak-RSS or GC estimate.
     def materialization_charge(rows : UInt64, string_payload_bytes : UInt64) : UInt64?
       fixed_bytes = RESULT_CONTAINER_ACCOUNTING_BYTES
+      tree_charge = @root.logical_charge
+      return nil if tree_charge > UInt64::MAX - fixed_bytes
+      fixed_bytes += tree_charge
       field_bytes = @fields.size.to_u64 * FIELD_CONTAINER_ACCOUNTING_BYTES
       return nil if field_bytes > UInt64::MAX - fixed_bytes
       fixed_bytes += field_bytes
 
       row_bytes = RESULT_ROW_ACCOUNTING_BYTES
       @fields.each do |field|
+        path_charge = field.path_metadata_charge
+        return nil if path_charge > UInt64::MAX - fixed_bytes
+        fixed_bytes += path_charge
+
         leaf_type = field.leaf_type
         leaf_charge = leaf_type.logical_charge
         return nil if leaf_charge > UInt64::MAX - fixed_bytes
@@ -176,8 +259,9 @@ module CrystalClick
       end
     end
 
-    private def leaf_stream_name(column : String, field : WideTupleField) : String
-      "#{column}%2E#{field.name}"
+    private def path_prefix?(segments : Array(String), prefix : Array(String)) : Bool
+      return false if prefix.size >= segments.size
+      prefix.each_with_index.all? { |segment, index| segments[index] == segment }
     end
   end
 end

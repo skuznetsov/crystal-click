@@ -1,5 +1,14 @@
 require "./spec_helper"
 
+private def w106_temporal_flat_tree_and_path_charge(name : String) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64 +
+               instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  string_bytes = instance_sizeof(String).to_u64 + name.bytesize.to_u64 + 1_u64
+  node_bytes + sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64 +
+    node_bytes + string_bytes +
+    instance_sizeof(Array(String)).to_u64 + sizeof(Pointer(String)).to_u64 + string_bytes
+end
+
 describe CrystalClick::WideTupleTemporalType do
   it "maps only the six exact temporal identities to their physical widths" do
     {
@@ -204,6 +213,7 @@ describe CrystalClick::WideTupleTypePlan do
     plan.materialization_charge(1_u64, 0_u64).should eq(
       CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
       CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+      w106_temporal_flat_tree_and_path_charge("value") +
       instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
       instance_sizeof(String).to_u64 + "DateTime64(3)".bytesize.to_u64 + 1_u64 +
       plan.fields.first.datetime_type.not_nil!.logical_charge +

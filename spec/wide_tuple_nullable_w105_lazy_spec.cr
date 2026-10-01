@@ -1,5 +1,14 @@
 require "./spec_helper"
 
+private def w106_nullable_tree_and_path_charge(name : String) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64 +
+               instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  string_bytes = instance_sizeof(String).to_u64 + name.bytesize.to_u64 + 1_u64
+  node_bytes + sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64 +
+    node_bytes + string_bytes +
+    instance_sizeof(Array(String)).to_u64 + sizeof(Pointer(String)).to_u64 + string_bytes
+end
+
 class CrystalClick::WidePart
   # A spec-only TupleReader factory with observable stream and decoder
   # callbacks. It lets the tests corrupt a mask without also corrupting its
@@ -218,6 +227,7 @@ describe "W105 nullable Tuple reader adversarial boundaries" do
                        instance_sizeof(String).to_u64 + leaf_name_bytes + 1_u64
     exact_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
                    sizeof(CrystalClick::WideTupleField).to_u64 +
+                   w106_nullable_tree_and_path_charge("text") +
                    leaf_type_charge +
                    instance_sizeof(CrystalClick::ScalarNullMap).to_u64 +
                    CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +

@@ -13,6 +13,9 @@ Tuple increments are tracked in `QBIT_FRONTIER.md`,
 `TIMEZONE_TEMPORAL_FRONTIER.md` and `NULLABLE_TUPLE_FRONTIER.md`. They preserve
 the paired reader/writer qualification boundary; none certifies arbitrary
 recursive types or a newer stock binary.
+W106's bounded recursive named-Tuple extension is tracked separately in
+`NESTED_TUPLE_FRONTIER.md`; recursive Tuple edges do not admit arbitrary
+Array/Map/JSON composition or change the stock-version qualification boundary.
 These bounded reader/writer/table/catalog extensions do not widen the
 MV/projection, arbitrary-table-write or
 memory/performance boundaries below. Owner-by-contract refactoring is tracked

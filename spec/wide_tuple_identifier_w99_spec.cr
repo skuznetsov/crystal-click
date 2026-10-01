@@ -11,6 +11,23 @@ private def w99_identifier_leaf_descriptor_bytes : UInt64
     w99_leaf_descriptor_charge("UUID")
 end
 
+private def w99_flat_tree_and_path_charge(field_names : Array(String)) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64
+  node_children_bytes = instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  name_header_bytes = instance_sizeof(String).to_u64
+  node_reference_bytes = sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64
+  path_header_bytes = instance_sizeof(Array(String)).to_u64
+  path_reference_bytes = sizeof(Pointer(String)).to_u64
+
+  total = node_bytes + node_children_bytes + field_names.size.to_u64 * node_reference_bytes
+  field_names.each do |name|
+    owned_name_bytes = name_header_bytes + name.bytesize.to_u64 + 1_u64
+    total += node_bytes + node_children_bytes + owned_name_bytes
+    total += path_header_bytes + path_reference_bytes + owned_name_bytes
+  end
+  total
+end
+
 private def w99_identifier_columns : Array(CrystalClick::WideTupleLeafColumn)
   ipv6_values = [
     CrystalClick::IPv6Value.new(0x20010db885a30000_u64, 0x00008a2e03707334_u64),
@@ -216,7 +233,7 @@ describe "W99 identifier and address Tuple plan" do
     end
   end
 
-  it "admits Nullable UUID and rejects malformed, empty-argument, and recursive aliases" do
+  it "admits Nullable UUID and nested paths while rejecting malformed and unsupported recursive aliases" do
     nullable = CrystalClick::WideTupleTypePlan.for_type("Tuple(value Nullable(UUID))").not_nil!
     nullable.fields.first.type_name.should eq("Nullable(UUID)")
 
@@ -227,12 +244,17 @@ describe "W99 identifier and address Tuple plan" do
       "Tuple(value IPv4())",
       "Tuple(value IPv6())",
       "Tuple(value Array(IPv4))",
-      "Tuple(value Tuple(inner IPv6))",
+      "Tuple(value Tuple())",
+      "Tuple(value Array(Tuple(inner IPv6)))",
     ]
 
     rejected.each do |type_name|
       CrystalClick::WideTupleTypePlan.for_type(type_name).should be_nil
     end
+
+    nested = CrystalClick::WideTupleTypePlan.for_type("Tuple(value Tuple(inner IPv6))").not_nil!
+    nested.fields.map { |field| {field.name, field.type_name} }.should eq([{"value.inner", "IPv6"}])
+    nested.physical_streams("payload").should eq(["payload%2Evalue%2Einner"])
   end
 
   it "keeps wrapper buffers owned and exact nominal access distinct" do
@@ -323,12 +345,14 @@ describe "W99 identifier and address Tuple plan" do
   it "charges the exact 16+4+16 identifier slots with checked overflow" do
     plan = CrystalClick::WideTupleTypePlan.for_type("Tuple(v6 IPv6, v4 IPv4, id UUID)").not_nil!
 
-    # 64-byte container + three actual field slots; per row is 8 row bytes
-    # plus the exact 16+4+16-byte identifier payloads.
-    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+    # 64-byte container + three actual field slots, independent schema-tree
+    # and path storage, and leaf owners; per row is 8 row bytes plus exact
+    # 16+4+16-byte identifier payloads.
+    fixed_bytes = 64_u64 +
+                  3_u64 * sizeof(CrystalClick::WideTupleField).to_u64 +
+                  w99_flat_tree_and_path_charge(["v6", "v4", "id"] of String) +
                   w99_identifier_leaf_descriptor_bytes
-    bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 16_u64 + 4_u64 + 16_u64
+    bytes_per_row = 8_u64 + 16_u64 + 4_u64 + 16_u64
     plan.materialization_charge(0_u64, 0_u64).should eq(fixed_bytes)
     plan.materialization_charge(3_u64, 0_u64).should eq(fixed_bytes + 3_u64 * bytes_per_row)
     plan.materialization_charge(5_u64, 0_u64).should eq(fixed_bytes + 5_u64 * bytes_per_row)
@@ -345,14 +369,13 @@ describe "W99 identifier and address Tuple plan" do
       reader = CrystalClick::WidePart.open_typed(part, "payload")
 
       reader.mark_row_counts.should eq([2_u64, 2_u64, 1_u64])
-      range_type = "Tuple(v6 IPv6, v4 IPv4, id UUID)"
-      range_plan = CrystalClick::WideTupleTypePlan.for_type(range_type).not_nil!
-      fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                    3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+      fixed_bytes = 64_u64 +
+                    3_u64 * sizeof(CrystalClick::WideTupleField).to_u64 +
+                    w99_flat_tree_and_path_charge(["v6", "v4", "id"] of String) +
                     w99_identifier_leaf_descriptor_bytes
-      bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 16_u64 + 4_u64 + 16_u64
+      bytes_per_row = 8_u64 + 16_u64 + 4_u64 + 16_u64
       reader.tuple_mark_range_materialization_charge("payload", 0, 3).should eq(
-        range_plan.materialization_charge(5_u64, 0_u64)
+        fixed_bytes + 5_u64 * bytes_per_row
       )
       reader.tuple_mark_range_materialization_charge("payload", 1, 1).should eq(
         fixed_bytes + 2_u64 * bytes_per_row

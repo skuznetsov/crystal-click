@@ -224,7 +224,7 @@ describe "W101 parameterized Tuple leaf type plan" do
       "Tuple(value Enum8('a' = -0))",
       "Tuple(value Enum8('a' = 0, ))",
       "Tuple(value Enum8('raw\ncontrol' = 0))",
-      "Tuple(value Tuple(inner UInt64))",
+      "Tuple(value Tuple(inner Array(UInt64)))",
       "Tuple(UInt64, String)",
       "Tuple()",
       "Tuple(value Decimal(9, 2), value String)",
@@ -234,6 +234,8 @@ describe "W101 parameterized Tuple leaf type plan" do
     rejected.each do |source|
       CrystalClick::WideTupleTypePlan.for_type(source).should be_nil
     end
+
+    CrystalClick::WideTupleTypePlan.for_type("Tuple(value Tuple(inner UInt64))").should_not be_nil
 
     nested_leaf = "Array(" * 65 + "UInt64" + ")" * 65
     CrystalClick::WideTupleTypePlan.for_type("Tuple(value #{nested_leaf})").should be_nil

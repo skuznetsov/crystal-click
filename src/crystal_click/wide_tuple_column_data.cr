@@ -57,6 +57,10 @@ module CrystalClick
       @plan.fields
     end
 
+    def root_fields : Array(WideTupleSchemaNode)
+      @plan.root_fields
+    end
+
     def columns : Array(WideTupleLeafColumn)
       @columns.map(&.owned_copy)
     end
@@ -70,7 +74,23 @@ module CrystalClick
     end
 
     def field_count : Int32
-      @field_indices.size
+      @plan.field_count
+    end
+
+    def field_count_under(path : Array(String)) : Int32
+      @plan.field_count_under(path)
+    end
+
+    def fields_under(path : Array(String)) : Array(WideTupleField)
+      @plan.fields_under(path)
+    end
+
+    def node_at(path : Array(String)) : WideTupleSchemaNode?
+      @plan.node_at(path)
+    end
+
+    def type_name_at(path : Array(String)) : String?
+      @plan.type_name_at(path)
     end
 
     # Construct a row handle only after checking in the caller's original
@@ -88,6 +108,15 @@ module CrystalClick
       value_at_field_index(field_index(field_name), row_index)
     end
 
+    def value_at_scoped(
+      scope_path : Array(String),
+      field_name : String,
+      index : Int,
+    ) : WideTupleLeafColumn::Value
+      row_index = checked_row_index(index)
+      value_at_field_index(scoped_field_index(scope_path, field_name), row_index)
+    end
+
     # Exact nominal access for consumers that require a concrete scalar type.
     # No same-width conversion is performed.
     def value_as(field_name : String, index : Int, type : T.class) : T forall T
@@ -95,8 +124,27 @@ module CrystalClick
       @columns[field_index(field_name)].value_at(row_index, type)
     end
 
+    def value_as_scoped(
+      scope_path : Array(String),
+      field_name : String,
+      index : Int,
+      type : T.class,
+    ) : T forall T
+      row_index = checked_row_index(index)
+      @columns[scoped_field_index(scope_path, field_name)].value_at(row_index, type)
+    end
+
     private def field_index(field_name : String) : Int32
       @field_indices[field_name]? || raise(KeyError.new("Tuple field not found: #{field_name}"))
+    end
+
+    private def scoped_field_index(scope_path : Array(String), field_name : String) : Int32
+      relative = field_name.split('.')
+      raise KeyError.new("Tuple field not found: #{field_name}") if relative.empty? || relative.any?(&.empty?)
+      full_path = scope_path + relative
+      index = @plan.field_index(scope_path, field_name)
+      return index if index
+      raise KeyError.new("Tuple field not found: #{full_path.join(".")}")
     end
 
     private def value_at_field_index(field_index : Int32, index : Int32) : WideTupleLeafColumn::Value
@@ -122,9 +170,20 @@ module CrystalClick
 
     # Sum String payload lengths for one row without copying any String bytes.
     def string_bytesize_at(index : Int32) : UInt64
+      string_bytesize_at_scoped(index, nil)
+    end
+
+    def string_bytesize_at(index : Int32, scope_path : Array(String)) : UInt64
+      string_bytesize_at_scoped(index, scope_path)
+    end
+
+    private def string_bytesize_at_scoped(index : Int32, scope_path : Array(String)?) : UInt64
       raise BoundsError.new("Tuple row index is out of bounds") if index < 0 || index >= @row_count
       total = 0_u64
       @string_field_indices.each do |field_index|
+        if path = scope_path
+          next unless @plan.field_under?(field_index, path)
+        end
         field_bytes = @columns[field_index].string_bytesize_at(index)
         if field_bytes > UInt64::MAX - total
           raise CorruptPartError.new("Tuple String byte count overflows")

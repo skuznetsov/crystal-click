@@ -24,7 +24,7 @@ module CrystalClick
 
           fields = input.type_plan.fields
           fields.each_with_index do |field, index|
-            logical_name = "#{input.value_name}%2E#{field.name}"
+            logical_name = input.type_plan.leaf_stream_name(input.value_name, field)
             if null_map = input.leaf_null_maps[index]
               records.concat(infrastructure.write_numeric_stream(
                 stage, "#{logical_name}.null", null_map.as(WideTupleNumericType::Buffer),
@@ -240,7 +240,9 @@ module CrystalClick
 
         columns_metadata = columns_metadata(key_name, value_name, type_plan)
         substreams_metadata = substreams_metadata(key_name, value_name, type_plan)
-        serialization_metadata = serialization_metadata(key_name, keys_copy, value_name, leaf_buffers, leaf_null_maps, fields)
+        serialization_metadata = TupleSerializationStatistics.build(
+          key_name, keys_copy, value_name, type_plan, leaf_buffers, leaf_null_maps, fields
+        )
         validate_metadata_limits(columns_metadata, substreams_metadata, serialization_metadata)
         validate_checksums_file_budget(
           logical_streams, compressed_sizes, raw_sizes, mark_file_size,
@@ -452,184 +454,6 @@ module CrystalClick
         end
       end
 
-      private def self.serialization_metadata(
-        key_name : String,
-        keys : Array(UInt64),
-        value_name : String,
-        leaf_buffers : Array(TupleLeafBuffers),
-        leaf_null_maps : Array(Array(UInt8)?),
-        fields : Array(WideTupleField),
-      ) : String
-        rows = keys.size
-        all_payload_defaults = Array(Bool).new(rows, true)
-        child_defaults = [] of Int32
-        leaf_buffers.each_with_index do |buffer, index|
-          defaults = 0
-          if null_map = leaf_null_maps[index]
-            defaults = null_map.count { |is_null| is_null == 1_u8 }
-            null_map.each_with_index do |is_null, row|
-              all_payload_defaults[row] = false if is_null.zero?
-            end
-          else
-            case buffer
-            when Array(DateValue), Array(Date32Value), Array(DateTimeValue),
-                 Array(DateTime64Value), Array(TimeValue), Array(Time64Value)
-              field_type = fields[index].type_name
-              unless WideTupleTemporalType.width(field_type)
-                raise ArgumentError.new("Tuple temporal buffer does not match declared field type")
-              end
-              temporal_buffer = buffer.as(WideTupleTemporalType::Buffer)
-              WideTupleTemporalType.validate_buffer!(field_type, temporal_buffer)
-              # The owner's predicate uses ClickHouse's observed raw-zero
-              # storage default, including Date32 (not SQL getDefault).
-              defaults = temporal_default_count(temporal_buffer, all_payload_defaults)
-            when Array(String)
-              buffer.each_with_index do |value, row|
-                if value.empty?
-                  defaults += 1
-                else
-                  all_payload_defaults[row] = false
-                end
-              end
-            when Array(Bool)
-              buffer.each_with_index do |value, row|
-                if value
-                  all_payload_defaults[row] = false
-                else
-                  defaults += 1
-                end
-              end
-            when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
-              defaults = identifier_default_count(buffer.as(WideTupleIdentifierType::Buffer), all_payload_defaults)
-            when Array(FixedStringValue)
-              defaults = fixed_string_default_count(buffer.as(WideTupleFixedStringType::Buffer), all_payload_defaults)
-            when Array(Enum8Value), Array(Enum16Value)
-              defaults = enum_default_count(buffer.as(WideTupleEnumType::Buffer), all_payload_defaults)
-            when Array(Decimal32Value), Array(Decimal64Value), Array(Decimal128Value), Array(Decimal256TupleValue)
-              defaults = decimal_default_count(buffer.as(WideTupleDecimalType::Buffer), all_payload_defaults)
-            else
-              buffer.each_with_index do |value, row|
-                if WideTupleNumericType.is_default?(value)
-                  defaults += 1
-                else
-                  all_payload_defaults[row] = false
-                end
-              end
-            end
-          end
-          child_defaults << defaults
-        end
-
-        key_record = "{\"kind\":\"Default\",\"name\":\"#{key_name}\",\"num_defaults\":#{keys.count(&.zero?)},\"num_rows\":#{rows}}"
-        subcolumns = leaf_buffers.each_with_index.map do |buffer, index|
-          "{\"kind\":\"Default\",\"num_defaults\":#{child_defaults[index]},\"num_rows\":#{rows}}"
-        end.join(",")
-        payload_record = "{\"kind\":\"Default\",\"name\":\"#{value_name}\",\"num_defaults\":#{all_payload_defaults.count(true)},\"num_rows\":#{rows},\"subcolumns\":[#{subcolumns}]}"
-        records = [{key_name, key_record}, {value_name, payload_record}].sort_by(&.[0])
-
-        String.build do |json|
-          json << "{\"columns\":["
-          json << records.map(&.[1]).join(",")
-          json << "],\"propagate_types_serialization_versions_to_nested_types\":true,"
-          json << "\"types_serialization_versions\":{\"string\":1},\"version\":1}"
-        end
-      end
-
-      private def self.identifier_default_count(
-        buffer : WideTupleIdentifierType::Buffer,
-        all_payload_defaults : Array(Bool),
-      ) : Int32
-        defaults = 0
-        buffer.each_with_index do |value, row|
-          if WideTupleIdentifierType.is_default?(value)
-            defaults += 1
-          else
-            all_payload_defaults[row] = false
-          end
-        end
-        defaults
-      end
-
-      private def self.temporal_default_count(
-        buffer : WideTupleTemporalType::Buffer,
-        all_payload_defaults : Array(Bool),
-      ) : Int32
-        defaults = 0
-        buffer.each_with_index do |value, row|
-          if WideTupleTemporalType.is_default?(value)
-            defaults += 1
-          else
-            all_payload_defaults[row] = false
-          end
-        end
-        defaults
-      end
-
-      private def self.fixed_string_default_count(
-        buffer : WideTupleFixedStringType::Buffer,
-        all_payload_defaults : Array(Bool),
-      ) : Int32
-        defaults = 0
-        buffer.each_with_index do |value, row|
-          all_zero = true
-          value.raw_bytes.each { |byte| all_zero = false unless byte.zero? }
-          if all_zero
-            defaults += 1
-          else
-            all_payload_defaults[row] = false
-          end
-        end
-        defaults
-      end
-
-      private def self.enum_default_count(
-        buffer : WideTupleEnumType::Buffer,
-        all_payload_defaults : Array(Bool),
-      ) : Int32
-        defaults = 0
-        buffer.each_with_index do |value, row|
-          # SerializationInfo statistics use the raw-zero storage predicate.
-          # This is distinct from Enum's SQL/nested-NULL default (smallest code).
-          if value.code == 0
-            defaults += 1
-          else
-            all_payload_defaults[row] = false
-          end
-        end
-        defaults
-      end
-
-      private def self.decimal_default_count(
-        buffer : WideTupleDecimalType::Buffer,
-        all_payload_defaults : Array(Bool),
-      ) : Int32
-        defaults = 0
-        buffer.each_with_index do |value, row|
-          if decimal_storage_default?(value)
-            defaults += 1
-          else
-            all_payload_defaults[row] = false
-          end
-        end
-        defaults
-      end
-
-      private def self.decimal_storage_default?(value : Decimal32Value) : Bool
-        value.raw == 0
-      end
-
-      private def self.decimal_storage_default?(value : Decimal64Value) : Bool
-        value.raw == 0
-      end
-
-      private def self.decimal_storage_default?(value : Decimal128Value) : Bool
-        value.raw == 0
-      end
-
-      private def self.decimal_storage_default?(value : Decimal256TupleValue) : Bool
-        value.raw.low == 0_u128 && value.raw.high == 0_u128
-      end
-
       private def self.validate_metadata_limits(columns : String, substreams : String, serialization : String) : Nil
         {columns, substreams, serialization}.each do |metadata|
           if metadata.bytesize > WidePart::MAX_METADATA_FILE_BYTES
@@ -759,12 +583,13 @@ module CrystalClick
         end
         decoded = part.read_tuple_mark_range(input.value_name, 0, input.mark_count)
         raise CorruptPartError.new("staged Tuple readback row count differs") unless decoded.row_count == input.keys.size
-        raise CorruptPartError.new("staged Tuple readback schema differs") unless decoded.fields == input.type_plan.fields
+        fields = input.type_plan.fields
+        raise CorruptPartError.new("staged Tuple readback schema differs") unless decoded.fields == fields
         decoded_columns = decoded.columns
         input.leaf_buffers.each_with_index do |expected, index|
           actual = decoded_columns[index]
           if expected_null_map = input.leaf_null_maps[index]
-            field = input.type_plan.fields[index]
+            field = fields[index]
             actual_null_map = actual.null_map
             unless actual.leaf_type == field.leaf_type && actual_null_map && actual_null_map.bytes == expected_null_map
               raise CorruptPartError.new("staged Nullable Tuple mask readback differs")
@@ -788,37 +613,37 @@ module CrystalClick
               raise CorruptPartError.new("staged Tuple Bool leaf readback differs")
             end
             infrastructure.validate_bool_stream(
-              stage, "#{input.value_name}%2E#{input.type_plan.fields[index].name}", expected, input.rows_per_mark
+              stage, input.type_plan.leaf_stream_name(input.value_name, fields[index]), expected, input.rows_per_mark
             )
           when Array(UUIDValue), Array(IPv4Value), Array(IPv6Value)
             expected_identifier = expected.as(WideTupleIdentifierType::Buffer)
-            unless identifier_values_match?(expected_identifier, actual, input.type_plan.fields[index].type_name)
+            unless identifier_values_match?(expected_identifier, actual, fields[index].type_name)
               raise CorruptPartError.new("staged Tuple identifier leaf readback differs")
             end
           when Array(DateValue), Array(Date32Value), Array(DateTimeValue),
                Array(DateTime64Value), Array(TimeValue), Array(Time64Value)
             expected_temporal = expected.as(WideTupleTemporalType::Buffer)
-            unless temporal_values_match?(expected_temporal, actual, input.type_plan.fields[index].type_name)
+            unless temporal_values_match?(expected_temporal, actual, fields[index].type_name)
               raise CorruptPartError.new("staged Tuple temporal leaf readback differs")
             end
           when Array(FixedStringValue)
-            exact_type = input.type_plan.fields[index].parameterized_type.as?(WideTupleFixedStringType)
+            exact_type = fields[index].parameterized_type.as?(WideTupleFixedStringType)
             unless exact_type && fixed_string_values_match?(expected, actual, exact_type)
               raise CorruptPartError.new("staged Tuple FixedString leaf readback differs")
             end
           when Array(Enum8Value), Array(Enum16Value)
-            exact_type = input.type_plan.fields[index].parameterized_type.as?(WideTupleEnumType)
+            exact_type = fields[index].parameterized_type.as?(WideTupleEnumType)
             unless exact_type && enum_values_match?(expected.as(WideTupleEnumType::Buffer), actual, exact_type)
               raise CorruptPartError.new("staged Tuple Enum leaf readback differs")
             end
           when Array(Decimal32Value), Array(Decimal64Value), Array(Decimal128Value), Array(Decimal256TupleValue)
-            exact_type = input.type_plan.fields[index].parameterized_type.as?(WideTupleDecimalType)
+            exact_type = fields[index].parameterized_type.as?(WideTupleDecimalType)
             unless exact_type && decimal_values_match?(expected.as(WideTupleDecimalType::Buffer), actual, exact_type)
               raise CorruptPartError.new("staged Tuple Decimal leaf readback differs")
             end
           else
             expected_numeric = expected.as(WideTupleNumericType::Buffer)
-            unless numeric_values_match?(expected_numeric, actual, input.type_plan.fields[index].type_name)
+            unless numeric_values_match?(expected_numeric, actual, fields[index].type_name)
               raise CorruptPartError.new("staged Tuple numeric leaf readback differs")
             end
           end

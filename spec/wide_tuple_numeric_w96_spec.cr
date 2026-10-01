@@ -5,6 +5,23 @@ private def w96_leaf_descriptor_charge(base_type_name : String) : UInt64
     instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
 end
 
+private def w96_flat_tree_and_path_charge(field_names : Array(String)) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64
+  node_children_bytes = instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  name_header_bytes = instance_sizeof(String).to_u64
+  node_reference_bytes = sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64
+  path_header_bytes = instance_sizeof(Array(String)).to_u64
+  path_reference_bytes = sizeof(Pointer(String)).to_u64
+
+  total = node_bytes + node_children_bytes + field_names.size.to_u64 * node_reference_bytes
+  field_names.each do |name|
+    owned_name_bytes = name_header_bytes + name.bytesize.to_u64 + 1_u64
+    total += node_bytes + node_children_bytes + owned_name_bytes
+    total += path_header_bytes + path_reference_bytes + owned_name_bytes
+  end
+  total
+end
+
 private def w96_assert_numeric_plan(type_name : String, width : Int32) : Nil
   full_type = "Tuple(value #{type_name})"
   plan = CrystalClick::WideTupleTypePlan.for_type(full_type)
@@ -17,10 +34,10 @@ private def w96_assert_numeric_plan(type_name : String, width : Int32) : Nil
     plan.stream_width("payload", "payload%2Evalue").should eq(width)
     plan.raw_string_stream?("payload", "payload%2Evalue").should be_false
 
-    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+    fixed_bytes = 64_u64 + sizeof(CrystalClick::WideTupleField).to_u64 +
+                  w96_flat_tree_and_path_charge(["value"] of String) +
                   w96_leaf_descriptor_charge(type_name)
-    bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + width.to_u64
+    bytes_per_row = 8_u64 + width.to_u64
     expected_charge = fixed_bytes + 3_u64 * bytes_per_row
     plan.materialization_charge(3_u64, 0_u64).should eq(expected_charge)
   end
@@ -44,12 +61,10 @@ describe "W96 named numeric Tuple plan red" do
     plan.stream_width("payload", "payload%2Eb.size").should eq(8)
     plan.stream_width("payload", "payload%2Eb").should eq(1)
 
-    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  2_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+    fixed_bytes = 64_u64 + 2_u64 * sizeof(CrystalClick::WideTupleField).to_u64 +
+                  w96_flat_tree_and_path_charge(["a", "b"] of String) +
                   w96_leaf_descriptor_charge("UInt64") + w96_leaf_descriptor_charge("String")
-    bytes_per_row = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
-                    CrystalClick::WideTupleTypePlan::UINT64_SLOT_ACCOUNTING_BYTES +
-                    CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+    bytes_per_row = 8_u64 + 8_u64 + 16_u64
     plan.materialization_charge(3_u64, 5_u64).should eq(fixed_bytes + 3_u64 * bytes_per_row + 5_u64)
   end
 
@@ -96,22 +111,22 @@ describe "W96 named numeric Tuple plan red" do
     plan.raw_string_stream?("payload", "payload%2Etext").should be_true
     plan.raw_string_stream?("payload", "payload%2Ewide").should be_false
 
-    # 64 bytes of result container + five actual field slots; per row
+    # 64 bytes of result container + five actual field slots and independent
+    # schema-tree/path metadata; per row
     # 8-byte row + 1+4+2+32-byte numeric slots + one 16-byte String slot;
     # raw String payload bytes are added only once after all fields.
     leaf_descriptor_bytes = 0_u64
     ["Int8", "Float32", "BFloat16", "Int256", "String"].each do |base_type_name|
       leaf_descriptor_bytes += w96_leaf_descriptor_charge(base_type_name)
     end
-    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  5_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+    fixed_bytes = 64_u64 + 5_u64 * sizeof(CrystalClick::WideTupleField).to_u64 +
+                  w96_flat_tree_and_path_charge(["signed", "ratio", "bf", "wide", "text"] of String) +
                   leaf_descriptor_bytes
-    row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES + 1_u64 + 4_u64 + 2_u64 +
-                32_u64 + CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+    row_bytes = 8_u64 + 1_u64 + 4_u64 + 2_u64 + 32_u64 + 16_u64
     plan.materialization_charge(3_u64, 5_u64).should eq(fixed_bytes + 3_u64 * row_bytes + 5_u64)
   end
 
-  it "admits Nullable scalar leaves and rejects malformed, recursive, unnamed, and empty-argument types" do
+  it "admits Nullable scalar and nested leaves while rejecting malformed and unsupported recursive types" do
     [
       "Tuple(value Nullable(Bool))",
       "Tuple(value Nullable(Int8))",
@@ -128,7 +143,8 @@ describe "W96 named numeric Tuple plan red" do
       "Tuple(Int8)",
       "Tuple(value Decimal(0, 2))",
       "Tuple(value Array(Int8))",
-      "Tuple(value Tuple(inner Int8))",
+      "Tuple(value Tuple())",
+      "Tuple(value Array(Tuple(inner Int8)))",
       "Tuple(value String())",
       "Tuple(value UInt8())",
       "Tuple(value UInt16())",
@@ -150,5 +166,9 @@ describe "W96 named numeric Tuple plan red" do
     rejected.each do |type_name|
       CrystalClick::WideTupleTypePlan.for_type(type_name).should be_nil
     end
+
+    nested = CrystalClick::WideTupleTypePlan.for_type("Tuple(value Tuple(inner Int8))").not_nil!
+    nested.fields.map { |field| {field.name, field.type_name} }.should eq([{"value.inner", "Int8"}])
+    nested.physical_streams("payload").should eq(["payload%2Evalue%2Einner"])
   end
 end

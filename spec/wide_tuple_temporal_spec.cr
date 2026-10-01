@@ -106,7 +106,8 @@ describe "W100 temporal Tuple plan admission" do
       "Tuple(event Nullable(Date32()))",
       "Tuple(event Nullable(DateTime64(03)))",
       "Tuple(event Array(Time64(3)))",
-      "Tuple(event Tuple(value DateTime))",
+      "Tuple(event Tuple())",
+      "Tuple(event Tuple(value Array(Time64(3))))",
       "Tuple(event DateTime64(3),)",
     ]
 
@@ -116,5 +117,10 @@ describe "W100 temporal Tuple plan admission" do
 
     CrystalClick::WideTupleTypePlan.for_type("Tuple(event DateTime64(3, 'UTC'))").should_not be_nil
     CrystalClick::WideTupleTypePlan.for_type("Tuple(event DateTime('UTC'))").should_not be_nil
+    nested = CrystalClick::WideTupleTypePlan.for_type(
+      "Tuple(event Tuple(value DateTime('UTC')) )"
+    ).not_nil!
+    nested.fields.map(&.name).should eq(["event.value"])
+    nested.fields.first.datetime_type.not_nil!.time_zone?.not_nil!.name.should eq("UTC")
   end
 end

@@ -1,5 +1,18 @@
 require "./spec_helper"
 
+private def w104_temporal_flat_tree_and_path_charge(names : Array(String)) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64 +
+               instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  string_owner_bytes = instance_sizeof(String).to_u64
+  total = node_bytes + names.size.to_u64 * sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64
+  names.each do |name|
+    string_bytes = string_owner_bytes + name.bytesize.to_u64 + 1_u64
+    total += node_bytes + string_bytes
+    total += instance_sizeof(Array(String)).to_u64 + sizeof(Pointer(String)).to_u64 + string_bytes
+  end
+  total
+end
+
 private def w104_timezone_fixture_names : Array(String)
   File.read(File.expand_path("fixtures/stock_timezone_names_26_7.txt", __DIR__))
     .split('\n')
@@ -546,7 +559,12 @@ describe CrystalClick::DateTimeColumnType do
       # the separately retained temporal descriptor is charged once per field.
       field_slot_charge = sizeof(CrystalClick::WideTupleField).to_u64
       CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES.should eq(field_slot_charge)
-      base_charge = 64_u64 + 4_u64 * field_slot_charge + leaf_owner_charge + descriptor_charge
+      # Independently count the synthetic root, its leaf-node references,
+      # each leaf node/name owner, and the flat path array/name owner retained
+      # by each field. The base formula must not ask the plan for its charge.
+      tree_and_path_charge = w104_temporal_flat_tree_and_path_charge(["a", "b", "c", "d"] of String)
+      base_charge = 64_u64 + 4_u64 * field_slot_charge + tree_and_path_charge +
+                    leaf_owner_charge + descriptor_charge
       plan.materialization_charge(0_u64, 0_u64).should eq(base_charge)
       plan.materialization_charge(0_u64, 17_u64).should eq(base_charge + 17_u64)
 

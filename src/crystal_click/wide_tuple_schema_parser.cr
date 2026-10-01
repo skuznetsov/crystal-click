@@ -18,8 +18,14 @@ module CrystalClick
     end
 
     def self.parse(source : String) : Array(WideTupleField)?
+      parse_tree(source).try(&.flattened_fields)
+    end
+
+    # Parse one complete named Tuple tree with a single source, depth and node
+    # budget. #parse remains the compatibility flat-leaf projection.
+    def self.parse_tree(source : String) : WideTupleSchemaNode?
       return nil if source.bytesize > MAX_SOURCE_BYTES
-      new(source).parse
+      new(source).parse_tree
     rescue ex : ArgumentError
       nil
     end
@@ -38,15 +44,23 @@ module CrystalClick
       parse_leaf(source)
     end
 
-    protected def parse : Array(WideTupleField)?
+    protected def parse_tree : WideTupleSchemaNode
       # Match the legacy gate: leading whitespace is not accepted, while
       # whitespace after Tuple and after the closing parenthesis is.
+      root = parse_tuple(nil, 1)
+      skip_whitespace
+      raise ArgumentError.new("trailing bytes after Tuple") unless @offset == @bytes.size
+      root
+    end
+
+    private def parse_tuple(tuple_name : String?, depth : Int32) : WideTupleSchemaNode
+      raise ArgumentError.new("Tuple nesting exceeds limit") if depth > MAX_DEPTH
       expect_text!("Tuple")
-      @node_count = 1
+      add_node!
       skip_whitespace
       expect_byte!('('.ord.to_u8)
 
-      fields = [] of WideTupleField
+      children = [] of WideTupleSchemaNode
       names = Set(String).new
       skip_whitespace
       raise ArgumentError.new("Tuple must have at least one field") if current_byte? == ')'.ord.to_u8
@@ -62,10 +76,14 @@ module CrystalClick
         end
         skip_whitespace
         leaf_start = @offset
-        leaf_end = scan_leaf_end
+        leaf_end = scan_leaf_end(depth)
         leaf_source = String.new(@bytes[leaf_start, leaf_end - leaf_start])
-        leaf_type = parse_leaf(leaf_source)
-        fields << WideTupleField.new(name, leaf_type)
+        if leaf_source.starts_with?("Tuple")
+          children << parse_nested_tuple(name, leaf_source, depth + 1)
+        else
+          leaf_type = parse_leaf(leaf_source)
+          children << WideTupleSchemaNode.leaf(name, leaf_type)
+        end
         skip_whitespace
 
         case current_byte?
@@ -83,9 +101,27 @@ module CrystalClick
         end
       end
 
-      skip_whitespace
-      raise ArgumentError.new("trailing bytes after Tuple") unless @offset == @bytes.size
-      fields
+      if tuple_name
+        WideTupleSchemaNode.tuple(tuple_name, children)
+      else
+        WideTupleSchemaNode.root(children)
+      end
+    end
+
+    private def parse_nested_tuple(name : String, source : String, depth : Int32) : WideTupleSchemaNode
+      previous_bytes = @bytes
+      previous_offset = @offset
+      begin
+        @bytes = source.to_slice
+        @offset = 0
+        node = parse_tuple(name, depth)
+        skip_whitespace
+        raise ArgumentError.new("trailing bytes after nested Tuple") unless @offset == @bytes.size
+        node
+      ensure
+        @bytes = previous_bytes
+        @offset = previous_offset
+      end
     end
 
     private def parse_field_name : String
@@ -102,7 +138,7 @@ module CrystalClick
 
     # Scan through one leaf without treating separators inside quoted Enum
     # labels or nested parentheses as Tuple delimiters.
-    private def scan_leaf_end : Int32
+    private def scan_leaf_end(tuple_depth : Int32) : Int32
       start = @offset
       depth = 0_i32
       in_quote = false
@@ -123,7 +159,7 @@ module CrystalClick
             in_quote = true
           when '('.ord.to_u8
             depth += 1
-            raise ArgumentError.new("Tuple leaf nesting exceeds limit") if depth + 1 > MAX_DEPTH
+            raise ArgumentError.new("Tuple leaf nesting exceeds limit") if tuple_depth + depth > MAX_DEPTH
           when ')'.ord.to_u8
             break if depth == 0
             depth -= 1

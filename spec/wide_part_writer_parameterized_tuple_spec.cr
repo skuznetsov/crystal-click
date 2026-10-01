@@ -196,6 +196,8 @@ describe CrystalClick::WidePartWriter do
       CrystalClick::WideTupleLeafColumn.new("d128", CrystalClick::WideTupleDecimalType.new(38_i32, 4_i32), decimal128_values),
       CrystalClick::WideTupleLeafColumn.new("d256", CrystalClick::WideTupleDecimalType.new(76_i32, 5_i32), decimal256_values),
     ] of CrystalClick::WideTupleLeafColumn
+    schema_names = ["fixed", "state8", "state16", "d32", "d64", "d128", "d256"]
+    columns.map(&.name).should eq(schema_names)
     type_name = w101_writer_tuple_type(columns)
     plan = CrystalClick::WideTupleTypePlan.for_type(type_name).not_nil!
     keys = [1_u64, 3_u64, 5_u64, 8_u64, 9_u64]
@@ -210,6 +212,21 @@ describe CrystalClick::WidePartWriter do
     columns.each do |column|
       descriptor_bytes += column.parameterized_type.not_nil!.logical_charge
     end
+    # Independently account for the retained synthetic root and seven leaf
+    # nodes, including each node's child-array header and each owned local
+    # name. The flattened fields retain a separate one-segment path array and
+    # String for each name; `WideTupleField#name` itself is derived on access.
+    schema_node_header_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64 +
+                               instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+    schema_tree_bytes = schema_node_header_bytes +
+                        schema_names.size.to_u64 * sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64
+    path_metadata_bytes = 0_u64
+    schema_names.each do |name|
+      owned_name_bytes = instance_sizeof(String).to_u64 + name.bytesize.to_u64 + 1_u64
+      schema_tree_bytes += schema_node_header_bytes + owned_name_bytes
+      path_metadata_bytes += instance_sizeof(Array(String)).to_u64 +
+                             sizeof(Pointer(String)).to_u64 + owned_name_bytes
+    end
     row_charge = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
                  sizeof(CrystalClick::FixedStringValue).to_u64 +
                  sizeof(CrystalClick::Enum8Value).to_u64 +
@@ -221,7 +238,8 @@ describe CrystalClick::WidePartWriter do
     expected_plan_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
                            columns.size.to_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
                            keys.size.to_u64 * row_charge +
-                           fixed_payload_bytes + leaf_owner_bytes + descriptor_bytes
+                           fixed_payload_bytes + leaf_owner_bytes + descriptor_bytes +
+                           schema_tree_bytes + path_metadata_bytes
     plan.materialization_charge(keys.size.to_u64, fixed_payload_bytes).should eq(expected_plan_charge)
     parent = File.tempname("crystal-click-wide-writer-parameterized")
     Dir.mkdir(parent)

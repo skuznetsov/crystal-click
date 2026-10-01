@@ -10,6 +10,23 @@ private def w97_leaf_descriptor_charge(base_type_name : String) : UInt64
     instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
 end
 
+private def w97_flat_tree_and_path_charge(field_names : Array(String)) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64
+  node_children_bytes = instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  name_header_bytes = instance_sizeof(String).to_u64
+  node_reference_bytes = sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64
+  path_header_bytes = instance_sizeof(Array(String)).to_u64
+  path_reference_bytes = sizeof(Pointer(String)).to_u64
+
+  total = node_bytes + node_children_bytes + field_names.size.to_u64 * node_reference_bytes
+  field_names.each do |name|
+    owned_name_bytes = name_header_bytes + name.bytesize.to_u64 + 1_u64
+    total += node_bytes + node_children_bytes + owned_name_bytes
+    total += path_header_bytes + path_reference_bytes + owned_name_bytes
+  end
+  total
+end
+
 private def w97_bool_row_after_data_scope : CrystalClick::WideTupleRow
   plan = CrystalClick::WideTupleTypePlan.for_type(
     "Tuple(flag Bool, byte UInt8, text String)"
@@ -56,17 +73,18 @@ describe "W97 Bool named-Tuple model" do
     plan.raw_string_stream?("payload", "payload%2Eflag").should be_false
     plan.raw_string_stream?("payload", "payload%2Etext").should be_true
 
-    # 64 container + three actual field slots + three independently measured
-    # leaf owners + per row (8 row + 1 Bool +
+    # 64 container + three actual field slots + independently measured tree,
+    # paths and leaf owners + per row (8 row + 1 Bool +
     # 1 UInt8 + 16 String slots) + three String payload bytes.
-    fixed_bytes = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
-                  3_u64 * CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+    fixed_bytes = 64_u64 +
+                  3_u64 * sizeof(CrystalClick::WideTupleField).to_u64 +
+                  w97_flat_tree_and_path_charge(["flag", "byte", "text"] of String) +
                   w97_leaf_descriptor_charge("Bool") +
                   w97_leaf_descriptor_charge("UInt8") +
                   w97_leaf_descriptor_charge("String")
-    row_bytes = CrystalClick::WideTupleTypePlan::RESULT_ROW_ACCOUNTING_BYTES +
+    row_bytes = 8_u64 +
                 sizeof(Bool).to_u64 + sizeof(UInt8).to_u64 +
-                CrystalClick::WideTupleTypePlan::STRING_SLOT_ACCOUNTING_BYTES
+                16_u64
     plan.materialization_charge(0_u64, 0_u64).should eq(fixed_bytes)
     plan.materialization_charge(2_u64, 3_u64).should eq(fixed_bytes + 2_u64 * row_bytes + 3_u64)
     plan.materialization_charge(UInt64::MAX, 0_u64).should be_nil
@@ -82,12 +100,17 @@ describe "W97 Bool named-Tuple model" do
       "Tuple(flag Bool())",
       "Tuple(flag Bool(UInt8))",
       "Tuple(flag Array(Bool))",
-      "Tuple(flag Tuple(value Bool))",
+      "Tuple(flag Tuple())",
+      "Tuple(flag Array(Tuple(value Bool)))",
       "Tuple(Bool)",
       "Tuple(flag Bool, flag UInt8)",
     ].each do |type_name|
       CrystalClick::WideTupleTypePlan.for_type(type_name).should be_nil
     end
+
+    nested = CrystalClick::WideTupleTypePlan.for_type("Tuple(flag Tuple(value Bool))").not_nil!
+    nested.fields.map { |field| {field.name, field.type_name} }.should eq([{"flag.value", "Bool"}])
+    nested.physical_streams("payload").should eq(["payload%2Eflag%2Evalue"])
   end
 
   it "owns Bool inputs and returned snapshots while preserving exact scalar access" do

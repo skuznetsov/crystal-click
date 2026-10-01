@@ -1,5 +1,18 @@
 require "./spec_helper"
 
+private def w94_reader_w106_flat_tree_and_path_charge(names : Array(String)) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64 +
+               instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  string_owner_bytes = instance_sizeof(String).to_u64
+  total = node_bytes + names.size.to_u64 * sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64
+  names.each do |name|
+    string_bytes = string_owner_bytes + name.bytesize.to_u64 + 1_u64
+    total += node_bytes + string_bytes
+    total += instance_sizeof(Array(String)).to_u64 + sizeof(Pointer(String)).to_u64 + string_bytes
+  end
+  total
+end
+
 private def w94_reader_tuple_type(columns : Array(CrystalClick::WideTupleLeafColumn)) : String
   "Tuple(#{columns.map { |column| "#{column.name} #{column.type_name}" }.join(", ")})"
 end
@@ -276,9 +289,12 @@ describe "W94 compositional named Tuple reader" do
     begin
       part = w94_reader_write_part(parent, "empty-nine", columns, 1)
       reader = CrystalClick::WidePart.open_typed(part, "payload")
-      field_count = columns.size.to_u64
+      field_names = ["a", "b", "c", "d", "e", "f", "g", "h", "i"] of String
+      columns.map(&.name).should eq(field_names)
+      field_count = field_names.size.to_u64
       fixed_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
                      field_count * sizeof(CrystalClick::WideTupleField).to_u64 +
+                     w94_reader_w106_flat_tree_and_path_charge(field_names) +
                      field_count * (
                        instance_sizeof(CrystalClick::WideTupleLeafType).to_u64 +
                        instance_sizeof(String).to_u64 + "String".bytesize.to_u64 + 1_u64

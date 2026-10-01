@@ -62,6 +62,16 @@ regression scripts passed. The scoped certificate, accessor migration and
 logical-budget/RSS distinction are in `NULLABLE_TUPLE_FRONTIER.md`.
 The larger facade decomposition remains open.
 
+W106 introduces an immutable recursive named-Tuple schema node, recursive
+serialization-metadata validator, and writer statistics/node-statistics owners,
+each in its own file. The existing leaf buffers and codecs remain unchanged;
+schema topology and physical path naming have one shared authority. Its paired
+qualification and remaining exclusions are recorded in
+`NESTED_TUPLE_FRONTIER.md`: focused DEBUG/RELEASE each passed 550 examples,
+full DEBUG passed 1,732, and the new bidirectional stock oracle plus W105,
+W104 and ten unchanged stock regression gates passed on frozen source.
+This is not the full facade decomposition.
+
 ## W104 ownership boundary
 
 `DateTimeColumnType` owns exact temporal family, precision, timezone provenance

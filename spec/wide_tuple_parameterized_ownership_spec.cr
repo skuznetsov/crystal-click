@@ -25,6 +25,15 @@ private def w101_leaf_descriptor_charge(base_type_name : String) : UInt64
     instance_sizeof(String).to_u64 + base_type_name.bytesize.to_u64 + 1_u64
 end
 
+private def w106_parameterized_tree_and_path_charge(name : String) : UInt64
+  node_bytes = instance_sizeof(CrystalClick::WideTupleSchemaNode).to_u64 +
+               instance_sizeof(Array(CrystalClick::WideTupleSchemaNode)).to_u64
+  string_bytes = instance_sizeof(String).to_u64 + name.bytesize.to_u64 + 1_u64
+  node_bytes + sizeof(Pointer(CrystalClick::WideTupleSchemaNode)).to_u64 +
+    node_bytes + string_bytes +
+    instance_sizeof(Array(String)).to_u64 + sizeof(Pointer(String)).to_u64 + string_bytes
+end
+
 private def w101own_detached_fixed_string_value : CrystalClick::FixedStringValue
   plan = CrystalClick::WideTupleTypePlan.for_type("Tuple(id FixedString(4))").not_nil!
   exact_type = plan.fields[0].parameterized_type.not_nil!.as(CrystalClick::WideTupleFixedStringType)
@@ -368,6 +377,7 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
     fixed_owner.logical_charge.should eq(fixed_owner_charge)
     fixed_empty_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
                          CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                         w106_parameterized_tree_and_path_charge("id") +
                          fixed_leaf_owner_charge + fixed_owner_charge
     fixed_plan.materialization_charge(0_u64, 0_u64).not_nil!.should eq(fixed_empty_charge)
     (fixed_plan.materialization_charge(1_u64, 0_u64).not_nil! -
@@ -399,6 +409,7 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
     enum_owner.logical_charge.should eq(enum_owner_charge)
     enum_empty_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
                         CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                        w106_parameterized_tree_and_path_charge("state") +
                         enum_leaf_owner_charge + enum_owner_charge
     enum_plan.materialization_charge(0_u64, 0_u64).not_nil!.should eq(enum_empty_charge)
     (enum_plan.materialization_charge(1_u64, 0_u64).not_nil! -
@@ -421,6 +432,7 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
       owner.logical_charge.should eq(owner_charge)
       empty_charge = CrystalClick::WideTupleTypePlan::RESULT_CONTAINER_ACCOUNTING_BYTES +
                      CrystalClick::WideTupleTypePlan::FIELD_CONTAINER_ACCOUNTING_BYTES +
+                     w106_parameterized_tree_and_path_charge("amount") +
                      leaf_owner_charge + owner_charge
       plan.materialization_charge(0_u64, 0_u64).not_nil!.should eq(empty_charge)
       (plan.materialization_charge(1_u64, 0_u64).not_nil! -
@@ -690,7 +702,7 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
       "Tuple(value Decimal(#{huge_code}, 0))",
       "Tuple(value Enum8('bad\\q' = 0))",
       "Tuple(value Enum8('unterminated = 0))",
-      "Tuple(value Tuple(inner UInt64))",
+      "Tuple(value Tuple(inner Array(UInt64)))",
       "Tuple(UInt64, String)",
     ].each do |source|
       CrystalClick::WideTupleSchemaParser.parse(source).should be_nil
@@ -698,6 +710,12 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
 
     too_long = "Tuple(value FixedString(4))" + (" " * 4_100)
     CrystalClick::WideTupleSchemaParser.parse(too_long).should be_nil
+
+    nested_enum = CrystalClick::WideTupleSchemaParser.parse(
+      "Tuple(group Tuple(state Enum8('DateTime64 (3)' = -1, 'UInt64()' = 2)))"
+    ).not_nil!
+    nested_enum.map(&.name).should eq(["group.state"])
+    nested_enum.first.parameterized_type.not_nil!.as(CrystalClick::WideTupleEnumType).width.should eq(1)
   end
 
   it "preserves Tuple outer whitespace and applies the bounded node limit once per node" do
@@ -720,5 +738,48 @@ describe "W101 parameterized Tuple immutable owners and nominal values" do
     rejected_source.bytesize.should be <= CrystalClick::WideTupleSchemaParser::MAX_SOURCE_BYTES
     CrystalClick::WideTupleSchemaParser.parse(accepted_source).not_nil!.size.should eq(511)
     CrystalClick::WideTupleSchemaParser.parse(rejected_source).should be_nil
+  end
+
+  it "applies one aggregate source, depth, and syntax-node budget through nested parses" do
+    base = "Tuple(value UInt8)"
+    exact_source = base + (" " * (CrystalClick::WideTupleSchemaParser::MAX_SOURCE_BYTES - base.bytesize))
+    too_long_source = exact_source + " "
+    exact_source.bytesize.should eq(CrystalClick::WideTupleSchemaParser::MAX_SOURCE_BYTES)
+    CrystalClick::WideTupleSchemaParser.parse_tree(exact_source).should_not be_nil
+    CrystalClick::WideTupleSchemaParser.parse_tree(too_long_source).should be_nil
+
+    nested_for_depth = ->(target_depth : Int32) {
+      source = "Tuple(value Bool)"
+      (target_depth - 1).times { source = "Tuple(child #{source})" }
+      source
+    }
+    CrystalClick::WideTupleSchemaParser.parse_tree(nested_for_depth.call(64)).should_not be_nil
+    CrystalClick::WideTupleSchemaParser.parse_tree(nested_for_depth.call(65)).should be_nil
+
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_".chars.map(&.to_s)
+    outer_names = alphabet[0, 32]
+    inner_names = alphabet[0, 15]
+    nested_source_for = ->(last_group_leaf_count : Int32) {
+      groups = [] of String
+      outer_names.each_with_index do |group_name, group_index|
+        leaf_count = group_index == outer_names.size - 1 ? last_group_leaf_count : inner_names.size
+        leaves = inner_names[0, leaf_count].map_with_index do |leaf_name, leaf_index|
+          leaf_type = if group_index == 0 && leaf_index == 0
+                        "Nullable(DateTime64(3, 'UTC'))"
+                      else
+                        "Bool"
+                      end
+          "#{leaf_name} #{leaf_type}"
+        end
+        groups << "#{group_name} Tuple(#{leaves.join(",")})"
+      end
+      "Tuple(#{groups.join(",")})"
+    }
+    at_node_limit = nested_source_for.call(11)
+    over_node_limit = nested_source_for.call(12)
+    at_node_limit.bytesize.should be <= CrystalClick::WideTupleSchemaParser::MAX_SOURCE_BYTES
+    over_node_limit.bytesize.should be <= CrystalClick::WideTupleSchemaParser::MAX_SOURCE_BYTES
+    CrystalClick::WideTupleSchemaParser.parse_tree(at_node_limit).not_nil!.flattened_fields.size.should eq(476)
+    CrystalClick::WideTupleSchemaParser.parse_tree(over_node_limit).should be_nil
   end
 end

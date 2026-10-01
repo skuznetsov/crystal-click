@@ -12316,25 +12316,12 @@ module CrystalClick
             raise UnsupportedFormatError.new("unsupported named Tuple serializer fields")
           end
           subcolumns = entry["subcolumns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Tuple child serializer metadata is required"))
-          unless subcolumns.size == tuple_plan.not_nil!.fields.size
-            message = if WidePart.supports_tuple_uint64_string_type?(selected_type)
-                        "exactly two Tuple child serializers are required"
-                      else
-                        "Tuple child serializer count does not match schema"
-                      end
-            raise UnsupportedFormatError.new(message)
-          end
-          subcolumns.each do |child|
-            child_entry = child.as_h
-            unless child_entry.keys.to_set == Set{"kind", "num_defaults", "num_rows"}
-              raise UnsupportedFormatError.new("unsupported Tuple child serializer fields")
-            end
-            raise UnsupportedFormatError.new("only Default Tuple child serializers are supported") unless child_entry["kind"]?.try(&.as_s) == "Default"
-            child_defaults = child_entry["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple child default count is missing or malformed"))
-            child_rows = child_entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Tuple child row count is missing or malformed"))
-            raise CorruptPartError.new("Tuple child row count does not match part") unless child_rows >= 0 && child_rows.to_u64 == row_count
-            raise CorruptPartError.new("Tuple child default count is invalid") unless child_defaults >= 0 && child_defaults <= child_rows
-          end
+          TupleSerializationMetadataValidator.validate_subcolumns!(
+            subcolumns,
+            tuple_plan.not_nil!.root_fields,
+            row_count,
+            WidePart.supports_tuple_uint64_string_type?(selected_type),
+          )
         else
           unless entry.keys.to_set == Set{"kind", "name", "num_defaults", "num_rows"}
             raise UnsupportedFormatError.new("unsupported Tuple key serializer fields")

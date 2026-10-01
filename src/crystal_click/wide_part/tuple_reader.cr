@@ -146,7 +146,7 @@ module CrystalClick
         string_payload_bytes = 0_u64
         validation_requests = [] of Tuple(String, Int32, Int32)
         @plan.fields.each do |field|
-          leaf_stream = "#{@column}%2E#{field.name}"
+          leaf_stream = @plan.leaf_stream_name(@column, field)
           leaf_type = field.leaf_type
           if leaf_type.nullable?
             null_stream = "#{leaf_stream}.null"
@@ -232,7 +232,7 @@ module CrystalClick
         @plan.fields.each_with_index do |field, field_index|
           leaf_type = field.leaf_type
           next unless leaf_type.nullable?
-          leaf_stream = "#{@column}%2E#{field.name}.null"
+          leaf_stream = "#{@plan.leaf_stream_name(@column, field)}.null"
           encoded = @read_range.call(
             leaf_stream,
             first_mark,
@@ -250,7 +250,7 @@ module CrystalClick
 
         columns = Array(WideTupleLeafColumn).new(@plan.fields.size)
         @plan.fields.each_with_index do |field, field_index|
-          leaf_stream = "#{@column}%2E#{field.name}"
+          leaf_stream = @plan.leaf_stream_name(@column, field)
           leaf_type = field.leaf_type
           if leaf_type.nullable? && leaf_type.base_type_name == "String"
             null_map = null_maps[field_index] || raise(CorruptPartError.new("Tuple Nullable null map is missing"))
