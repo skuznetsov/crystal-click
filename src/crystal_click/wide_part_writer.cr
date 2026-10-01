@@ -496,6 +496,44 @@ module CrystalClick
       )
     end
 
+    # Write a bounded paired Point column with a sorted UInt64 primary key.
+    # Point identity remains explicit; only the two Float64 streams delegate
+    # to the shared Tuple leaf framing authority.
+    def self.write_uint64_point_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(WidePointValue),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_point_pair_with_hooks(
+        destination, key_name, keys, value_name, values, rows_per_mark,
+        ->(parent : String) { create_stage(parent) },
+        ->(_stage : String) { nil }
+      )
+    end
+
+    private def self.write_point_pair_with_hooks(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(WidePointValue),
+      rows_per_mark : Int32,
+      stage_factory : Proc(String, String),
+      before_validation_hook : Proc(String, Nil),
+    ) : String
+      infrastructure = build_tuple_part_infrastructure(
+        stage_factory,
+        ->(column : WideTupleLeafColumn) { column.string_values }
+      )
+      PointPartWriter.write(
+        destination, key_name, keys, value_name, values, rows_per_mark,
+        infrastructure, before_validation_hook
+      )
+    end
+
     private def self.write_uint64_tuple_pair_with_stage_factory(
       destination : String,
       key_name : String,

@@ -97,6 +97,9 @@ module CrystalClick
       if qbit_plan = QBitColumnType.for_type(selected_type)
         QBitValuesMaterializer.checked_expected_charge(expected_rows, qbit_plan)
       end
+      if point_plan = PointColumnType.for_type(selected_type)
+        PointValuesMaterializer.checked_expected_charge(expected_rows, point_plan)
+      end
       values = Array(OfflineColumnValue).new(expected_rows.to_i)
       observed_rows = 0_u64
       string_bytes = 0_u64
@@ -139,6 +142,17 @@ module CrystalClick
       max_string_bytes : UInt64,
       max_tuple_cells : UInt64,
     ) : {UInt64, UInt64}
+      if PointColumnType.for_type(selected_type)
+        observed_rows = PointValuesMaterializer.append_values(
+          values,
+          batch,
+          column_name,
+          observed_rows,
+          expected_rows
+        )
+        return {observed_rows, string_bytes}
+      end
+
       if qbit_plan = QBitColumnType.for_type(selected_type)
         if qbit_plan.nullable
           observed_rows = append_materialized_values(values, batch.nullable_qbits_for(column_name), observed_rows, expected_rows)

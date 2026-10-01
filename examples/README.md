@@ -67,6 +67,22 @@ scalar String/numeric JSON paths with caller-normalized defaults. It does not
 preserve path presence or accept dynamic/shared JSON data; see the
 [JSON typed-path frontier](../docs/JSON_TYPED_PATH_FRONTIER.md).
 
+Write and lazily read exact scalar `Point` values:
+
+```sh
+crystal run examples/write_point_part.cr -- /tmp/my-new-point-part
+```
+
+The example writes one sorted UInt64 key and one exact Point payload, then
+prints each coordinate's IEEE bits by mark, including negative zero, NaN and
+infinity. It preserves the `Point` declaration rather than exposing an unnamed
+Tuple. Choose a new standalone destination outside a live server data root.
+The bounded profile is Wide/LZ4, Default serialization and plain adaptive marks;
+Geo arrays, Nullable Point and general Geometry are not admitted by this API.
+Lazy delivery has eager structural validation of all selected mark boundaries
+before the first callback; it is not a promise of zero selected preflight I/O.
+See the [Geo frontier](../docs/GEO_TYPES_FRONTIER.md) for exact qualification.
+
 Write and read a ragged `Array` of recursively named Tuple elements:
 
 ```sh

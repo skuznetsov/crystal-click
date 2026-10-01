@@ -107,6 +107,20 @@ counts, not evidence of reduced coupling or performance. Cohesive physical
 stream lifetime/policy, codec dispatch, staging and table responsibility
 decomposition remains open.
 
+W109 adds paired scalar Point through nine concrete owners, each in its own
+file: raw value, exact type descriptor, serialization profile, physical reader,
+table adapter, offline materializer, writer input, statistics and orchestrator.
+It shares Float64 decoding, Tuple leaf framing, checksums and staging authority
+instead of introducing a second codec or disguising Point as an unnamed Tuple.
+Its bounded certificate is verified in `GEO_TYPES_FRONTIER.md`: final focused
+and regression DEBUG/RELEASE each passed 83 examples, full DEBUG passed 1,793,
+and both four-profile stock phases passed exact raw-bit/metadata/mark/PK,
+fresh ATTACH CHECK=1 and literal full/selected RowBinary checks. Root's scoped
+hostile verdict is ROBUST. The facade line counts at this fingerprint are
+reader 15,764, writer 25,958, table 6,980, catalog 1,560 and OfflineTable 3,651.
+The large facades still need responsibility-level decomposition; one owner
+per file does not prove lower coupling or performance.
+
 ## Catalog owner decomposition (2026-10-01)
 
 Status: VERIFIED within the source-owner extraction and executed gates below.

@@ -1455,7 +1455,7 @@ module CrystalClick
     end
 
     def self.supports_typed_type?(type : String) : Bool
-      !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
+      !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         !DateTimeColumnType.parse(type).nil? ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         type == "Time" || !datetime64_scale(type).nil? || !time64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
@@ -1690,6 +1690,71 @@ module CrystalClick
       plan = ensure_qbit_reader_type(column, nil)
       checked_first_mark, checked_mark_count = qbit_reader_checked_range(plan, column, first_mark, mark_count)
       qbit_reader(plan, column).materialization_charge(checked_first_mark, checked_mark_count)
+    end
+
+    # Point is a fixed two-coordinate Float64 value. Both coordinate marks are
+    # structurally checked before this method returns any selected values.
+    def read_point_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = PointColumnType::MAX_MATERIALIZED_BYTES,
+    ) : Array(WidePointValue)
+      plan = ensure_point_reader_type(column)
+      checked_first_mark, checked_mark_count = point_reader_checked_range(plan, column, first_mark, mark_count)
+      point_reader(plan, column).read(checked_first_mark, checked_mark_count, max_materialized_bytes)
+    end
+
+    # Mark-local values are delivered only after every selected mark boundary
+    # and the combined retained-schedule/per-mark charge has been checked.
+    def each_point_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = PointColumnType::MAX_MATERIALIZED_BYTES,
+      & : Array(WidePointValue), Int32 -> Nil
+    ) : Nil
+      plan = ensure_point_reader_type(column)
+      checked_first_mark, checked_mark_count = point_reader_checked_range(plan, column, first_mark, mark_count)
+      point_reader(plan, column).each(checked_first_mark, checked_mark_count, max_materialized_bytes) do |values, mark_index|
+        yield values, mark_index
+      end
+      nil
+    end
+
+    # Metadata-only table-scan preflight. It verifies selected mark row counts
+    # and the combined Point charge without reading/decompressing payloads.
+    def point_mark_range_materialization_charge(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = PointColumnType::MAX_MATERIALIZED_BYTES,
+    ) : UInt64
+      plan = ensure_point_reader_type(column)
+      checked_first_mark, checked_mark_count = point_reader_checked_range(plan, column, first_mark, mark_count)
+      point_reader(plan, column).materialization_charge(
+        checked_first_mark,
+        checked_mark_count,
+        max_materialized_bytes
+      )
+    end
+
+    # Structural selected-range preflight for table scans. It checks both
+    # coordinate boundaries before a batch callback but does not materialize
+    # Point values.
+    def validate_point_mark_range_structure(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = PointColumnType::MAX_MATERIALIZED_BYTES,
+    ) : Nil
+      plan = ensure_point_reader_type(column)
+      checked_first_mark, checked_mark_count = point_reader_checked_range(plan, column, first_mark, mark_count)
+      point_reader(plan, column).validate_selected_structure(
+        checked_first_mark,
+        checked_mark_count,
+        max_materialized_bytes
+      )
     end
 
     # Bool payload values use the shared semantic codec: zero is false and
@@ -11032,6 +11097,7 @@ module CrystalClick
       @low_cardinality_string_state = nil
       @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
+      point_plan = PointColumnType.for_type(@column_type)
       qbit_plan = QBitColumnType.for_type(@column_type)
       variant_plan = WidePart.variant_type_plan(@column_type)
       array_tuple_plan = WideArrayTupleTypePlan.for_type(@column_type)
@@ -11048,6 +11114,9 @@ module CrystalClick
         if qbit_plan && compressed_marks
           raise UnsupportedFormatError.new("QBit requires plain .mrk2 marks")
         end
+        if point_plan && compressed_marks
+          raise UnsupportedFormatError.new("Point requires plain .mrk2 marks")
+        end
         if WidePart.supports_array_map_type?(@column_type) && compressed_marks
           raise UnsupportedFormatError.new("Array(Map) numeric profile requires plain .mrk2 marks")
         end
@@ -11059,6 +11128,8 @@ module CrystalClick
         element_width = stream_element_width(stream_name)
         allow_empty_string_eof = if plan = variant_plan
                                    stream_name != plan.discriminator_stream(@column)
+                                 elsif point_plan
+                                   true
                                  elsif dynamic_string
                                    stream_name == "#{@column}.SharedVariant.size" ||
                                      stream_name == "#{@column}.SharedVariant" ||
@@ -11232,6 +11303,7 @@ module CrystalClick
       column = requested_column || columns[0][0]
       selected, source_column_name, source_column_type, column_type, json_typed_path =
         resolve_selected_column(columns, column)
+      point_plan = PointColumnType.for_type(column_type)
       array_tuple_plan = WideArrayTupleTypePlan.for_type(column_type)
       generic_array_tuple = !array_tuple_plan.nil? && WideTypePlan.admitted(column_type).nil?
       map_tuple_plan = WideMapTupleTypePlan.for_type(column_type)
@@ -11247,9 +11319,11 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if (WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_map_tuple ||
+      if (point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_map_tuple ||
          WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
-        message = if !QBitColumnType.for_type(column_type).nil?
+        message = if point_plan
+                    "Point bounded profile requires CODEC(LZ4)"
+                  elsif !QBitColumnType.for_type(column_type).nil?
                     "QBit bounded profile requires CODEC(LZ4)"
                   elsif WidePart.supports_array_map_type?(column_type)
                     "Array(Map) bounded profile requires CODEC(LZ4)"
@@ -11266,7 +11340,9 @@ module CrystalClick
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
 
       json_paths = [] of {String, String}
-      if QBitColumnType.for_type(column_type)
+      if point_plan
+        validate_point_serialization_profile(columns, selected, row_count)
+      elsif QBitColumnType.for_type(column_type)
         validate_qbit_serialization_profile
       elsif json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
@@ -11343,6 +11419,22 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
 
       QBitSerializationProfile.validate!(text)
+    end
+
+    private def validate_point_serialization_profile(
+      columns : Array({String, String}),
+      selected_column : String,
+      row_count : UInt64,
+    ) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for Point") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      PointSerializationProfile.validate!(text, columns, selected_column, row_count)
     end
 
     private def resolve_selected_column(
@@ -11487,6 +11579,10 @@ module CrystalClick
           if columns.any? { |name, type| name == column && type == "UInt64" }
             raise UnsupportedFormatError.new("Map(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
           end
+        elsif PointColumnType.for_type(selected_type)
+          if columns.any? { |name, type| name == column && type == "UInt64" }
+            raise UnsupportedFormatError.new("Point primary key column must have one plain UInt64 stream") unless streams == [column]
+          end
         elsif WideArrayTupleTypePlan.for_type(selected_type) && WideTypePlan.admitted(selected_type).nil?
           if columns.any? { |name, type| name == column && type == "UInt64" }
             raise UnsupportedFormatError.new("Array(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
@@ -11538,6 +11634,8 @@ module CrystalClick
       elsif type == "LowCardinality(String)"
         ["#{column}.dict", column]
       elsif plan = QBitColumnType.for_type(type)
+        plan.physical_streams(column).map(&.[0])
+      elsif plan = PointColumnType.for_type(type)
         plan.physical_streams(column).map(&.[0])
       elsif plan = WideTypePlan.admitted(type)
         plan.physical_streams(column).map(&.name)
@@ -13213,6 +13311,11 @@ module CrystalClick
         raise CorruptPartError.new("selected QBit plane stream is missing") unless stream_names.includes?(stream)
         return stream
       end
+      if plan = PointColumnType.for_type(@column_type)
+        stream = plan.coordinate_streams(@column)[0]
+        raise CorruptPartError.new("selected Point coordinate stream is missing from its plan") unless stream_names.includes?(stream)
+        return stream
+      end
       if plan = WidePart.variant_type_plan(@column_type)
         stream = plan.discriminator_stream(@column)
         raise CorruptPartError.new("selected Variant discriminator stream is missing") unless stream_names.includes?(stream)
@@ -13282,6 +13385,8 @@ module CrystalClick
     private def stream_element_width(stream_name : String) : Int32
       if plan = QBitColumnType.for_type(@column_type)
         plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported QBit substream"))
+      elsif plan = PointColumnType.for_type(@column_type)
+        plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported Point coordinate stream"))
       elsif @column_type == "Dynamic"
         stream_name == "#{@column}.String.size" || stream_name == "#{@column}.UInt64" ? 8 : 1
       elsif WidePart.supports_array_map_type?(@column_type)
@@ -14642,6 +14747,74 @@ module CrystalClick
       )
     end
 
+    private def ensure_point_reader_type(column : String) : PointColumnType
+      ensure_column(column)
+      PointColumnType.for_type(@column_type) ||
+        raise UnsupportedFormatError.new("Point accessor requires an exact Point column")
+    end
+
+    private def point_reader_checked_range(
+      plan : PointColumnType,
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {Int32, Int32}
+      reference_stream = plan.coordinate_streams(column)[0]
+      # Check caller-width indices against the real stream before narrowing.
+      checked_stream_mark_range(@streams[reference_stream], first_mark, mark_count)
+      {first_mark.to_i32, mark_count.to_i32}
+    end
+
+    private def point_reader(plan : PointColumnType, column : String) : PointReader
+      PointReader.new(
+        plan,
+        column,
+        ->(stream_name : String, first_mark : Int32, mark_count : Int32) {
+          tuple_reader_range_rows(stream_name, first_mark, mark_count)
+        },
+        ->(stream_name : String, mark_index : Int32) {
+          tuple_reader_mark_rows(stream_name, mark_index)
+        },
+        ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
+          point_reader_read_range(stream_name, first_mark, mark_count, expected_bytes, element_width, expected_rows)
+        },
+        ->(stream_name : String, first_mark : Int32, mark_count : Int32, expected_bytes : Int32, element_width : Int32, expected_rows : UInt64) {
+          point_reader_validate_range(stream_name, first_mark, mark_count, expected_bytes, element_width, expected_rows)
+        },
+        ->(bytes : Bytes, offset : Int32) {
+          decode_numeric_value(bytes, offset, Float64)
+        }
+      )
+    end
+
+    private def point_reader_read_range(
+      stream_name : String,
+      first_mark : Int32,
+      mark_count : Int32,
+      expected_bytes : Int32,
+      element_width : Int32,
+      expected_rows : UInt64,
+    ) : Bytes
+      stream = @streams[stream_name]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      raise CorruptPartError.new("Point coordinate mark rows differ") unless rows == expected_rows
+      read_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, element_width)
+    end
+
+    private def point_reader_validate_range(
+      stream_name : String,
+      first_mark : Int32,
+      mark_count : Int32,
+      expected_bytes : Int32,
+      element_width : Int32,
+      expected_rows : UInt64,
+    ) : Nil
+      stream = @streams[stream_name]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      raise CorruptPartError.new("Point coordinate mark rows differ") unless rows == expected_rows
+      validate_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, element_width)
+    end
+
     private def ensure_compositional_tuple_column(column : String) : WideTupleTypePlan
       ensure_column(column)
       WideTupleTypePlan.for_type(@column_type) ||
@@ -15332,6 +15505,9 @@ module CrystalClick
       tuple_profile = false
       empty_payload_stream = if plan = WidePart.variant_type_plan(@column_type)
                                stream.name != plan.discriminator_stream(@column)
+                             elsif plan = PointColumnType.for_type(@column_type)
+                               tuple_profile = true
+                               plan.coordinate_streams(@column).includes?(stream.name)
                              elsif @column_type == "Dynamic"
                                stream.name == "#{@column}.SharedVariant.size" ||
                                  stream.name == "#{@column}.SharedVariant" ||
@@ -15450,8 +15626,9 @@ module CrystalClick
         workspace = CompressedBlock::DecodeWorkspace.new
         loop do
           qbit_profile = !QBitColumnType.for_type(@column_type).nil?
+          point_profile = !PointColumnType.for_type(@column_type).nil?
           if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic" ||
-             WidePart.supports_array_map_type?(@column_type) || qbit_profile
+             WidePart.supports_array_map_type?(@column_type) || qbit_profile || point_profile
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
               if WidePart.supports_array_map_type?(@column_type) &&
@@ -15464,6 +15641,8 @@ module CrystalClick
                           "Array(Map) numeric profile requires LZ4 compressed streams"
                         elsif qbit_profile
                           "QBit requires LZ4 compressed streams"
+                        elsif point_profile
+                          "Point requires LZ4 compressed streams"
                         else
                           "Variant requires LZ4 compressed streams"
                         end
