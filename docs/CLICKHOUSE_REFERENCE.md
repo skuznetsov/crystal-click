@@ -76,7 +76,8 @@ rg --files src/DataTypes -g '*.cpp' | xargs perl -0777 -ne 'while(/register(?:Si
 This is a literal-registration comparison, not a complete alias inventory,
 persisted-column support matrix, or serializer compatibility proof. A narrower
 initial extraction missed the custom registration and was rejected after this
-check. `MultiPoint` is not admitted by the Crystal reader or writer yet.
+check. The paired nominal `MultiPoint` profile is now qualified separately in
+`GEO_TYPES_FRONTIER.md`; this registration comparison alone does not admit it.
 
 ## Historical June-to-September serializer additions
 
@@ -112,6 +113,55 @@ another persisted-byte change, but this bounded negative search is not a
 proof that every serializer or execution path is unchanged.
 
 ## Executable compatibility evidence
+
+### Isolated W112 capable peer (bounded paired qualification)
+
+On 2026-10-01 root downloaded the official macOS arm64 moving-master binary
+linked by `https://clickhouse.com/support/platforms`, from
+`https://builds.clickhouse.com/master/macos-aarch64/clickhouse`, into
+`/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse`. No installed binary
+or default symlink was replaced. The retrieved self-extracting carrier was
+174,530,241 bytes; its SHA-256 was
+`23b2e0292f622565b8312795c190b8af89cb0eae559b6e51ac856a7259bdbf44`.
+On its first invocation the carrier expanded and replaced its own temporary
+path with a 746,226,224-byte Mach-O arm64 executable, SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The fresh source's `utils/self-extracting-executable/decompressor.cpp:508-574`
+implements this Darwin copy-over followed by `execv`. Root observed the size
+change, repeated the guarded version invocation successfully, and rechecked
+the expanded hash afterward. The first stock wrapper run stopped at the
+carrier-versus-expanded hash mismatch before compilation; that was not a
+feature RED. The wrapper now gates the two known input identities and strictly
+requires the expanded identity after version invocation. These locally
+computed hashes pin different artifacts; neither is a publisher checksum.
+
+Actual `local --version` is `26.10.1.1201 (official build)`.
+`system.build_options` reports `GIT_HASH` and `VERSION_GITHASH` as
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`. This differs from the fresh source
+checkout above. The moving URL is not a source revision identity.
+
+Root's serial guarded query on an isolated local store exited 0:
+
+```sql
+SELECT version(),
+       toTypeName(CAST([(1.,2.)], 'MultiPoint')),
+       toTypeName(CAST(CAST((1.,2.), 'Point'), 'Geometry'));
+```
+
+It returned `26.10.1.1201`, `MultiPoint`, `Geometry`. An initial generic
+`Tuple(Float64,Float64)` to Geometry cast was correctly rejected; the
+qualification uses a nominal Point instead. This small query proves only this
+executable's nominal capability. Root subsequently ran the stock-first W112
+qualification and reader/writer GREEN modes: five source plus fresh-ATTACH
+profiles, followed by four Crystal-written MultiPoint profiles accepted on
+fresh ATTACH. Every CHECK result was asserted as `part_name\t1`, with literal
+full and selected RowBinary, raw coordinate bits, topology, physical stream
+bytes, marks, metadata and checksum hashes. The full executed profile and
+hostile guards are recorded in `GEO_TYPES_FRONTIER.md`. This does not certify
+Geometry, current-source build equivalence, arbitrary schemas or all layouts.
+Pinned 26.7 predecessor certificates are unchanged and are not upgraded by
+this capability probe. Refresh the retrieved byte/version/build pins before
+using another peer or treating a future download as equivalent.
 
 Existing physical-format oracles remain pinned to
 `ClickHouse local version 26.7.1.1315 (official build).` at

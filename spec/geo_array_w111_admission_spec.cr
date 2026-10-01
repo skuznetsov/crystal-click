@@ -58,7 +58,6 @@ describe CrystalClick::GeoArraySerializationProfile do
     invalid_columns = [
       [{"pk", "UInt64"}],
       [{"pk", "UInt64"}, {"shape", "Geometry"}],
-      [{"pk", "UInt64"}, {"shape", "MultiPoint"}],
       [{"pk", "UInt32"}, {"shape", "MultiPolygon"}],
       [{"pk", "UInt64"}, {"shape", "MultiPolygon"}, {"extra", "String"}],
     ]

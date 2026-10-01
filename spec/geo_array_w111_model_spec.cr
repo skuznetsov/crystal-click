@@ -1,8 +1,9 @@
 require "./spec_helper"
 
 describe CrystalClick::GeoArrayColumnType do
-  it "admits only the five exact nominal Geo names and maps their physical lanes" do
+  it "admits only the six exact nominal Geo Array names and maps their physical lanes" do
     expected = {
+      "MultiPoint"      => {1, ["shape.size0"]},
       "LineString"      => {1, ["shape.size0"]},
       "Ring"            => {1, ["shape.size0"]},
       "Polygon"         => {2, ["shape.size0", "shape.size1"]},
@@ -23,7 +24,7 @@ describe CrystalClick::GeoArrayColumnType do
       expect_raises(CrystalClick::BoundsError) { plan.size_stream("shape", plan.depth) }
     end
 
-    {"MultiPoint", "Geometry", "Array(Point)", "linestring"}.each do |name|
+    {"Geometry", "Array(Point)", "linestring", "multipoint", "MultiPoint "}.each do |name|
       CrystalClick::GeoArrayColumnType.for_type(name).should be_nil
     end
   end

@@ -1,5 +1,5 @@
 module CrystalClick
-  # Exact physical plan for the five stock-qualified Geo Array declarations.
+  # Exact physical plan for the stock-qualified Geo Array declarations.
   # The Geo name remains the logical type even when two names share a depth.
   class GeoArrayColumnType
     MAX_MATERIALIZED_BYTES = 64_u64 * 1024_u64 * 1024_u64
@@ -17,9 +17,9 @@ module CrystalClick
 
     def self.for_type(type_name : String) : GeoArrayColumnType?
       depth = case type_name
-              when "LineString", "Ring"         then 1
-              when "Polygon", "MultiLineString" then 2
-              when "MultiPolygon"               then 3
+              when "MultiPoint", "LineString", "Ring" then 1
+              when "Polygon", "MultiLineString"       then 2
+              when "MultiPolygon"                     then 3
               else
                 return nil
               end

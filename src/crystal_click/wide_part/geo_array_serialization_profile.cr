@@ -11,6 +11,8 @@ module CrystalClick
       "types_serialization_versions",
       "propagate_types_serialization_versions_to_nested_types",
     }
+    DEFAULT_ENTRY_FIELDS       = Set{"kind", "name", "num_defaults", "num_rows"}
+    EXACT_DEFAULT_ENTRY_FIELDS = Set{"kind", "name", "num_defaults", "num_rows", "exact_num_defaults"}
 
     def self.validate!(
       text : String,
@@ -44,8 +46,13 @@ module CrystalClick
       end
       raise UnsupportedFormatError.new("Geo Array serialization permits only the primary-key Default record") unless serializers.size == 1
       entry = serializers.first.as_h
-      expected_keys = Set{"kind", "name", "num_defaults", "num_rows"}
-      raise UnsupportedFormatError.new("unsupported Geo Array primary-key serializer fields") unless entry.keys.to_set == expected_keys
+      entry_keys = entry.keys.to_set
+      has_exact_defaults = entry_keys.includes?("exact_num_defaults")
+      expected_keys = has_exact_defaults ? EXACT_DEFAULT_ENTRY_FIELDS : DEFAULT_ENTRY_FIELDS
+      raise UnsupportedFormatError.new("unsupported Geo Array primary-key serializer fields") unless entry_keys == expected_keys
+      if has_exact_defaults && entry["exact_num_defaults"].raw != true
+        raise UnsupportedFormatError.new("Geo Array primary-key exact-default flag must be true when present")
+      end
       raise UnsupportedFormatError.new("only Default Geo Array primary-key serializers are supported") unless entry["kind"]?.try(&.as_s) == "Default"
       raise UnsupportedFormatError.new("Geo Array serializer record does not name its primary key") unless entry["name"]?.try(&.as_s) == key[0]
       rows = entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("Geo Array primary-key row count is missing or malformed"))

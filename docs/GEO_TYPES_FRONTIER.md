@@ -1,6 +1,178 @@
 # Geo types frontier
 
-## Current frontier: W111 paired Geo Array certificate
+## Active W112: nominal MultiPoint qualification and paired admission
+
+Status: VERIFIED within the executed paired W112 profile below. Full all-types
+and MV/projection scope remains active; memory and
+performance optimization are deferred. A source declaration of
+`MultiPoint = Array(Point)` does not certify either the nominal metadata or a
+physical part profile on an executable that rejects `MultiPoint`.
+
+Anchor: clean local `0d99b7a`, fresh source snapshot
+`b762d6d7fe4b201147bdce1bd49b8fc87a8049d3`, and existing pinned runtime
+26.7.1.1315. That runtime is a predecessor oracle, not a capable MultiPoint
+peer. Root qualified an isolated official macOS arm64 executable by its
+actual version, local SHA-256 and nominal behavior before using it. A moving
+master download URL is not a revision identity or a current-source certificate.
+The installed default binary and original source checkouts must remain intact.
+
+The qualified runtime identity distinguishes its self-extracting downloaded
+carrier (174,530,241 bytes, SHA-256
+`23b2e0292f622565b8312795c190b8af89cb0eae559b6e51ac856a7259bdbf44`)
+from the executed expanded Mach-O (746,226,224 bytes, SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`).
+Darwin self-replacement is implemented in the fresh source's
+`utils/self-extracting-executable/decompressor.cpp:508-574`. Root measured this
+transition and stable expanded identity on a repeated guarded version run.
+The initial wrapper hash refusal was an instrument identity mismatch before
+compilation, not a production unsupported-type RED; strict post-expansion
+identity remains mandatory.
+
+Risk: CAUTION for storage/API admission. Rollback is the local Git anchor;
+runtime stores and downloaded peers remain isolated outside tracked files.
+Luna owns source/codec and stock-instrument work; root owns facade/doc
+integration, serial guarded execution and independent hostile review.
+
+Execution order and falsifiers:
+
+1. Qualify a capable peer with exact nominal MultiPoint DDL and roundtrip;
+   never substitute LineString, Ring or a generic Array alias. Independently
+   inspect literal size/coordinate bytes, outer-row marks, plain PK/index,
+   serialization metadata and exact inventory. Mixed and all-empty stock
+   parts and fresh ATTACH copies must assert CHECK=1 and literal full/selected
+   RowBinary before a Crystal unsupported-type refusal counts as feature RED.
+2. Extend the shared exact Geo descriptor only after that RED. Preserve the
+   MultiPoint name through owned topology/rows, reader/table/catalog and
+   writer/staged readback. Reuse existing leaves and publication guards;
+   adding a descriptor must not create another depth-one codec or broad alias
+   admission. Geometry, wrappers and generic Array(Point) stay rejected.
+3. Run focused DEBUG/RELEASE, affected Geo stock reader/writer regression and
+   full DEBUG. W112 bidirectional nominal stock checks must pass independently
+   of expected-file generators. Test nominal identity, nonzero selected
+   origins, all-empty values, later selected corruption before callbacks and
+   same-length topology mutation with refreshed checksums before publication.
+
+First DoD is a repeatable qualified nominal stock probe with a real typed
+refusal at the anchor; binary UNKNOWN_TYPE, instrument mismatch, compiler
+failure and unsupported new metadata are different signals. Paired DoD also
+requires successful reader/writer stock acceptance and actual selected values,
+not only shared-code unit tests. If the new peer changes the physical profile,
+qualify and model that profile explicitly; do not weaken exact-envelope guards
+to make a gate pass. Refresh after runtime/settings/code/profile changes.
+
+Observed discriminator before the complete fixture gate: root's isolated
+26.10.1.1201 peer (build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`) created a
+two-row nominal MultiPoint Wide/LZ4/plain part at ratio 0.9375. It returned
+`all_1_1_0\t1` from CHECK and the literal `[]` / `[(1,2)]` values. Substreams
+are `payload.size0`, `payload%2E1`, `payload%2E2`. Its PK Default statistics
+record includes `exact_num_defaults: true`; W111's exact four-field record
+guard does not admit that new five-field record. W112 therefore needs an
+explicit metadata profile as well as nominal MultiPoint admission. Predecessor
+absent-field records remain supported; malformed flags and unknown record keys
+must not become silently accepted. The small probe is not the mixed/all-empty,
+literal-byte or paired production certificate. Exact defaults semantics must
+be source-checked before claiming any physical recount guarantee.
+
+The same measured current part also contains `statistics.packed`; the stock
+instrument must include its exact ancillary inventory and checksum rather than
+disable the new runtime's automatic-statistics default. Geo value readers must
+not use opaque optimizer statistics as row-value or pruning authority. Writer
+staged inventories remain exact to their own producer contract; optional stock
+statistics must not be fabricated or required from a Crystal writer unless
+actual stock acceptance proves that requirement.
+
+Root executed `crystal spec --single-module --link-flags=-fuse-ld=ld
+spec/multipoint_w112_writer_spec.cr` under the serial 600-second/8-GiB,
+50-percent-free-memory guard before any production edits. Compilation passed;
+all three examples stopped at `Geo Array writer requires an exact stock
+declaration` (ArgumentError), exit 1. The two positive examples errored and the
+hostile example failed its later-stage expected error. This is the measured
+preflight absence, not a staged hostile certificate or a substitute for the
+remaining full stock qualification.
+
+Root subsequently executed the remaining three W112 spec files before
+production edits: 11 examples, one failure and ten errors, exit 1, with
+successful compilation. Missing nominal descriptor/metadata admission caused
+the early refusals; none establishes the later hostile assertion yet.
+
+After correcting the runtime's self-expansion identity and source-backed
+ATTACH inventory expectations, root ran `scripts/probe_multipoint_w112.sh
+qualify` under the same serial guard: exit 0, five profiles, ten actual
+`part_name\t1` CHECK results, literal schema/substreams/bytes/24-byte marks/plain
+PK/index/serialization metadata, checksum hashes, full and nonzero-PK-selected
+RowBinary. The profiles cover mixed nine rows, the separate two-row witness,
+all-empty at ratios 0.9375 and 1.0, and a LineString metadata control. The
+fresh-ATTACH part must have `invalidated_system_columns.txt` with exactly
+`_block_number` and `_block_offset`, in either NameSet order, outside checksums;
+the source part must omit it. Fresh source
+`IMergeTreeDataPart.cpp:1888-1948` and `MergeTreeData.cpp:8900-8913` define that
+adoption behavior. It is semantic for virtual system-column reads, which this
+selected physical payload profile does not expose, not merely cache metadata.
+
+Root then ran the same stock-first `red` mode: all five profiles requalified,
+then the unchanged typed reader returned exactly `unsupported exact typed
+column` for MultiPoint and `unsupported Geo Array primary-key serializer
+fields` for LineString. The intentional exit 1 distinguishes nominal absence
+from the new metadata envelope refusal. This is the qualified behavioral RED
+that permits the two shared-owner admission edits, not a paired GREEN claim.
+
+W112 implementation reuses the W111 depth-one owners and all existing leaf
+codecs. The exact descriptor adds `MultiPoint` without erasing its nominal
+identity; the Geo serialization envelope additionally accepts the canonical
+optional `exact_num_defaults: true` field on the single PK Default record.
+Absent-field legacy records and `columns: []` remain admitted. False, non-Bool,
+null flags and extra fields remain rejected; row/default counter bounds remain
+checked. This does not physically recount defaults or grant optimizer
+statistics any pruning authority. The writer continues emitting its existing
+legacy four-field record, not fabricated automatic statistics or a new layout.
+
+Executed paired gates on 2026-10-01, with source anchor `0d99b7a` plus the W112
+diff and the exact isolated runtime above:
+
+- `CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse
+  bash scripts/probe_multipoint_w112.sh reader`: exit 0. All five stock source
+  and fresh-ATTACH profiles requalified (ten asserted CHECK=1 results), then
+  typed full/range/lazy and table full/window/UInt64-PK-candidate reads passed
+  against independent literal topology and IEEE-bit expectations.
+- The same command with `writer`: exit 0. After the same five-profile stock
+  qualification, all four MultiPoint writer profiles passed exact producer
+  inventory, independently calculated per-mark frames, fresh stock ATTACH,
+  asserted CHECK=1, full/selected RowBinary and typed table readback. Producer
+  parts omit `statistics.packed`; attached writer parts retain that absence.
+- The unchanged 26.7 W111 reader and writer scripts both exited 0: fifteen
+  stock-source profiles and ten writer profiles, including all-empty values.
+  The W109 Point reader and writer phases also exited 0 (four profiles each).
+- Full DEBUG exited 0: 1,831 examples, no failures/errors/pending. Focused W112,
+  W111 and W109 DEBUG/RELEASE inputs contain sixteen files and 55 examples.
+  After full DEBUG, the nominal-substitution spec was strengthened to compare
+  every checksummed file's actual hash with its recorded checksum before and
+  after the `columns.txt`-only attack; focused DEBUG and RELEASE were repeated,
+  55/55 passing in each mode. No full RELEASE claim is made.
+
+Every compiler/runtime gate ran serially through
+`cogni-ml/scripts/run_safe.sh`, with 600-second limits, a 50-percent free-memory
+floor, 8-GiB focused/oracle and 32-GiB full-DEBUG caps. The full command is
+`crystal spec --single-module --link-flags=-fuse-ld=ld`; focused RELEASE adds
+`--release`. Formatting, shell syntax, invalid-mode exit 2 and whitespace
+checks passed. The local Git commit contains the exact gate sources; no remote
+mutation or installed-runtime replacement is included.
+
+Root's strongest applicable guards are actual checksum-valid selected-mark
+corruption before any full/window callback, an unaffected earlier-only window,
+budget-minus-one rejection before coordinate decoding, caller snapshot
+mutation, and same-length nominal `MultiPoint` to `LineString` substitution
+before publish with absent destination and cleaned stage. The scoped root
+Adversary verdict is ROBUST on these observed checks. This is a bounded
+paired nominal-storage certificate, not all-type, all-layout, peak-memory or
+performance parity. Refresh after code, runtime/settings or profile changes.
+
+Geometry is the next separate fixed-discriminator Variant frontier; a
+MultiPoint certificate cannot promote that contract. General multi-column
+writing, recursive serializer coverage, MV/projection creation/materialization,
+larger responsibility-level facade decomposition and performance parity remain
+open and must not be replaced by this slice's local DoD.
+
+## Historical W111 paired Geo Array certificate
 
 Status: VERIFIED within the executed W111 profile below. W111 admits exact
 `LineString`, `Ring`, `Polygon`, `MultiLineString` and `MultiPolygon`, preserving
@@ -8,7 +180,8 @@ nominal identity with depth-aware immutable flattened topology and raw Point
 values. The physical profile is two-column Wide/LZ4, one nondecreasing UInt64
 PK and one Geo payload, plain adaptive `.mrk2` and plain `primary.idx`.
 Completely empty Geo payloads in nonempty parts are qualified, including
-zero-length nested streams. MultiPoint and Geometry remain rejected.
+zero-length nested streams. MultiPoint and Geometry remained rejected at the
+W111 anchor; W112 above supersedes only the nominal MultiPoint exclusion.
 
 Risk: CAUTION. Local rollback anchor is clean `197f587`; no remote mutation.
 Root owns facade/require integration, serial guarded execution and independent
