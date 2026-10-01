@@ -2,31 +2,65 @@
 
 ## Current source snapshot
 
-The user requested a fresh, separate depth-1 checkout on 2026-09-29. The
-reference source for new comparisons is now:
+The user requested a fresh, separate depth-1 checkout, refreshed on
+2026-10-01. The reference source for new comparisons is now:
 
-- Checkout: `/Users/sergey/SrcArchives/clickhouse-2026-09-29-depth1`
+- Checkout: `/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1`
 - Repository: `https://github.com/ClickHouse/ClickHouse.git`
 - Branch: `master`
-- Commit: `a9581941254d6113f3740a8ec125ee7519cb1bda`
-- Commit time: `2026-09-29T23:09:07Z`
+- Commit: `b762d6d7fe4b201147bdce1bd49b8fc87a8049d3`
+- Commit time: `2026-10-01T11:09:44Z`
 
 It was created with:
 
 ```sh
-git clone --depth 1 --single-branch https://github.com/ClickHouse/ClickHouse.git /Users/sergey/SrcArchives/clickhouse-2026-09-29-depth1
+git clone --depth 1 --single-branch https://github.com/ClickHouse/ClickHouse.git /Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1
 ```
 
 Observed checks: `git rev-parse --is-shallow-repository` returned `true`,
 `git rev-list --count HEAD` returned `1`, and `git status --porcelain=v1`
-returned no changes. The older checkout at
-`/Users/sergey/SrcArchives/clickhouse` was not changed. Its previously inspected
-June snapshot must not be described as current master.
+returned no changes. The September 29 snapshot at
+`/Users/sergey/SrcArchives/clickhouse-2026-09-29-depth1`, revision
+`a9581941254d6113f3740a8ec125ee7519cb1bda`, and the older checkout at
+`/Users/sergey/SrcArchives/clickhouse` were not changed. The latter's previously
+inspected June snapshot must not be described as current master.
 
-## Observed registration delta
+## October 1 comparison with September 29
+
+Both snapshots have 68 distinct literal registrations using the extraction
+below, with identical sorted name sets. This includes custom Geo registration;
+it is not an alias inventory or a proof of complete physical-type support.
+The Geo registration implementation and `DataTypeFactory.cpp` are identical.
+`SerializationInfoSettings.{h,cpp}`, `SerializationInfo.{h,cpp}` and
+`SerializationInfoTuple.*` are also identical.
+
+The nine differing files under `src/DataTypes` were inventoried with
+`diff -qr`. Relevant source-derived deltas are:
+
+- `ISerialization.h:379` adds requested-subcolumn context; `IDataType.cpp:245`
+  passes it into stream enumeration. `SerializationObject.cpp:226` narrows
+  typed-path enumeration for a requested subcolumn, while full enumeration
+  retains its previous sorted order. This is a stream-selection change, not
+  an observed change to the written typed-path layout.
+- `DataTypeAggregateFunction.cpp:210` introduces a shared window-only function
+  rejection guard, also called by binary type decoding in
+  `DataTypesBinaryEncoding.cpp:771`. Type names did not change, but the set
+  of accepted aggregate-state declarations did.
+- Nullable and Variant text parsing now uses the default `PeekableReadBuffer`
+  constructor instead of an explicit one-byte initial buffer. These inspected
+  call sites are not persisted-part binary serialization changes.
+
+The inspected MergeTree settings delta expands help text for
+`adaptive_write_buffer_initial_size` without changing its 16 KiB default.
+Empty-part subcolumn-size accounting and alias dependency selection also
+changed; no stream encoding change was identified in those paths. This is a
+bounded source comparison, not a universal cross-version compatibility proof.
+No current-master executable was built or substituted for the pinned oracle.
+
+## Historical June-to-September registration delta
 
 Comparing literal registration names under `src/DataTypes` at the old
-`4576ba3bfaca2c2b6bba3fc43dd7142f581db082` and current reference commits
+`4576ba3bfaca2c2b6bba3fc43dd7142f581db082` and September 29 reference commits
 produced 67 and 68 distinct names, respectively. The only added name is
 `MultiPoint`; none were removed in this comparison. The current
 `DataTypeCustomGeo.cpp` registers it as a custom type backed by `Array(Point)`
@@ -44,7 +78,7 @@ persisted-column support matrix, or serializer compatibility proof. A narrower
 initial extraction missed the custom registration and was rejected after this
 check. `MultiPoint` is not admitted by the Crystal reader or writer yet.
 
-## Observed serializer additions
+## Historical June-to-September serializer additions
 
 The source-level comparison also identified these persisted-layout changes:
 
