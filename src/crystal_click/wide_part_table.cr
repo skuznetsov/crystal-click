@@ -735,6 +735,7 @@ module CrystalClick
     @typed_numeric_values : Hash(String, WidePartNumericSlice)
     @qbit_values : Hash(String, Slice(QBitValue))
     @point_values : Hash(String, Slice(WidePointValue))
+    @geo_array_rows : Hash(String, Slice(WideGeoArrayRow)) = Hash(String, Slice(WideGeoArrayRow)).new
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @string_values : Hash(String, Slice(String))
     @fixed_string_values : Hash(String, Slice(String))
@@ -1106,6 +1107,23 @@ module CrystalClick
              raise(UnsupportedFormatError.new("QBit accessor requires an exact canonical QBit column"))
       raise UnsupportedFormatError.new("QBit accessor requires Nullable(QBit)") unless plan.nullable
       @nullable_qbit_values[column]? || raise(UnsupportedFormatError.new("Nullable(QBit) column was not materialized in this batch"))
+    end
+
+    def geo_array_rows_for(column : String) : Slice(WideGeoArrayRow)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Geo Array accessor requires an exact admitted Geo Array column") unless GeoArrayColumnType.for_type(@column_types[index])
+      @geo_array_rows[column]? || raise(UnsupportedFormatError.new("Geo Array column was not materialized in this batch"))
+    end
+
+    def install_geo_array_rows(column : String, values : Slice(WideGeoArrayRow), expected_rows : Int) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Geo Array materializer received an unsupported column") unless GeoArrayColumnType.for_type(@column_types[index])
+      raise CorruptPartError.new("Geo Array batch slice row count mismatch") unless values.size == expected_rows
+      values.each do |row|
+        raise CorruptPartError.new("Geo Array row nominal type differs from column declaration") unless row.data.type_name == @column_types[index]
+      end
+      @geo_array_rows[column] = values
+      nil
     end
 
     def point_values_for(column : String) : Slice(WidePointValue)
@@ -2734,7 +2752,7 @@ module CrystalClick
       # including later marks, so their corruption or combined nested-charge
       # overflow cannot surface after an earlier callback escapes. This is
       # intentionally not a whole-scan atomicity promise for other codecs.
-      preflight_point_selected_marks(candidate_marks, window_rows)
+      preflight_coordinate_selected_marks(candidate_marks, window_rows)
       preflight_array_map_leaf_selected_marks(candidate_marks, window_rows)
 
       source_row_offset = 0_u64
@@ -2773,6 +2791,7 @@ module CrystalClick
             preflight_string_bytes = 0_u64
             preflight_qbit_charges = Hash(String, UInt64).new
             preflight_point_charges = Hash(String, UInt64).new
+            preflight_geo_array_charges = Hash(String, UInt64).new
             preflight_array_numeric_bytes = Hash(String, UInt64).new
             preflight_array_nullable_numeric_bytes = Hash(String, UInt64).new
             preflight_array_uuid_bytes = Hash(String, UInt64).new
@@ -2842,6 +2861,13 @@ module CrystalClick
                   bytes = selected.reader.dynamic_string_mark_range_materialization_preflight(selected.name, mark_index, 1)
                   preflight_dynamic_string_raw_bytes[selected.name] = bytes
                 end
+              elsif GeoArrayColumnAdapter.type?(selected.column_type)
+                charge = GeoArrayColumnAdapter.preflight_charge(
+                  selected.reader, selected.name, mark_index, mark_rows,
+                  MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
+                )
+                preflight_geo_array_charges[selected.name] = charge
+                bytes = charge
               elsif PointColumnAdapter.type?(selected.column_type)
                 charge = PointColumnAdapter.preflight_charge(
                   selected.reader,
@@ -3283,9 +3309,21 @@ module CrystalClick
             qbit_values = Hash(String, Array(QBitValue)).new
             nullable_qbit_values = Hash(String, Array(QBitValue?)).new
             point_values = Hash(String, Array(WidePointValue)).new
+            geo_array_rows = Hash(String, Array(WideGeoArrayRow)).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
-              if PointColumnAdapter.type?(selected.column_type)
+              if GeoArrayColumnAdapter.type?(selected.column_type)
+                expected_charge = preflight_geo_array_charges[selected.name]? ||
+                                  raise(CorruptPartError.new("selected Geo Array mark was not preflighted"))
+                values, charge = GeoArrayColumnAdapter.materialize_mark(
+                  selected.reader, selected.name, selected.column_type, mark_index,
+                  mark_rows, expected_charge,
+                  MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                )
+                actual_string_bytes += charge
+                geo_array_rows[selected.name] = values
+                next
+              elsif PointColumnAdapter.type?(selected.column_type)
                 expected_charge = preflight_point_charges[selected.name]? ||
                                   raise(CorruptPartError.new("selected Point mark was not preflighted"))
                 remaining_charge = MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
@@ -4792,6 +4830,7 @@ module CrystalClick
               generic_array_tuple_slices = Hash(String, Slice(WideArrayTupleRow)).new
               generic_map_tuple_slices = Hash(String, Slice(WideMapTupleRow)).new
               point_values_slices = Hash(String, Slice(WidePointValue)).new
+              geo_array_slices = Hash(String, Slice(WideGeoArrayRow)).new
               map_uint64_string_slices = Hash(String, Slice(Array(Tuple(UInt64, String)))).new
               map_uint64_uint64_slices = Hash(String, Slice(Array(Tuple(UInt64, UInt64)))).new
               map_string_uint64_slices = Hash(String, Slice(Array(Tuple(String, UInt64)))).new
@@ -4928,6 +4967,8 @@ module CrystalClick
                   else
                     numeric_map_string_slices[selected.name] = values.slice_rows(mark_row_offset.to_i, size)
                   end
+                elsif values = geo_array_rows[selected.name]?
+                  geo_array_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif values = point_values[selected.name]?
                   point_values_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 elsif qbit_values.has_key?(selected.name) || nullable_qbit_values.has_key?(selected.name)
@@ -4999,6 +5040,8 @@ module CrystalClick
                   batch.install_array_tuple_rows(selected.name, values, size)
                 elsif values = generic_map_tuple_slices[selected.name]?
                   batch.install_map_tuple_rows(selected.name, values, size)
+                elsif values = geo_array_slices[selected.name]?
+                  batch.install_geo_array_rows(selected.name, values, size)
                 elsif values = point_values_slices[selected.name]?
                   batch.install_point_values(selected.name, values, size)
                 elsif values = qbit_values[selected.name]?
@@ -5028,7 +5071,7 @@ module CrystalClick
       nil
     end
 
-    private def preflight_point_selected_marks(
+    private def preflight_coordinate_selected_marks(
       candidate_marks : Array(Array(Int32))?,
       window_rows : {UInt64, UInt64}?,
     ) : Nil
@@ -5056,8 +5099,11 @@ module CrystalClick
           end
 
           part.readers.each do |selected|
-            next unless PointColumnAdapter.type?(selected.column_type)
-            selected.reader.validate_point_mark_range_structure(selected.name, mark_index, 1)
+            if PointColumnAdapter.type?(selected.column_type)
+              selected.reader.validate_point_mark_range_structure(selected.name, mark_index, 1)
+            elsif GeoArrayColumnAdapter.type?(selected.column_type)
+              selected.reader.validate_geo_array_mark_range_structure(selected.name, mark_index, 1)
+            end
           end
         end
         source_row_offset &+= part.row_count

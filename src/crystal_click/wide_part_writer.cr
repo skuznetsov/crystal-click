@@ -534,6 +534,44 @@ module CrystalClick
       )
     end
 
+    # Exact Geo declarations share numeric leaf framing, not nominal aliases.
+    def self.write_uint64_geo_array_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      level_sizes : Array(Array(UInt64)),
+      points : Array(WidePointValue),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_geo_array_pair_with_hooks(
+        destination, key_name, keys, value_name, type_name, level_sizes, points, rows_per_mark,
+        ->(parent : String) { create_stage(parent) }, ->(_stage : String) { nil }
+      )
+    end
+
+    private def self.write_geo_array_pair_with_hooks(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      level_sizes : Array(Array(UInt64)),
+      points : Array(WidePointValue),
+      rows_per_mark : Int32,
+      stage_factory : Proc(String, String),
+      before_validation_hook : Proc(String, Nil),
+    ) : String
+      infrastructure = build_tuple_part_infrastructure(
+        stage_factory, ->(column : WideTupleLeafColumn) { column.string_values }
+      )
+      GeoArrayPartWriter.write(
+        destination, key_name, keys, value_name, type_name, level_sizes, points.to_unsafe.to_slice(points.size),
+        rows_per_mark, infrastructure, before_validation_hook
+      )
+    end
+
     private def self.write_uint64_tuple_pair_with_stage_factory(
       destination : String,
       key_name : String,

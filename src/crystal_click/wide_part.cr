@@ -1455,7 +1455,7 @@ module CrystalClick
     end
 
     def self.supports_typed_type?(type : String) : Bool
-      !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
+      !GeoArrayColumnType.for_type(type).nil? || !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         !DateTimeColumnType.parse(type).nil? ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         type == "Time" || !datetime64_scale(type).nil? || !time64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
@@ -1755,6 +1755,57 @@ module CrystalClick
         checked_mark_count,
         max_materialized_bytes
       )
+    end
+
+    # Ragged cardinality discovery reads bounded size streams. All selected
+    # structural boundaries pass before coordinates or callbacks are exposed.
+    def read_geo_array_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = GeoArrayColumnType::MAX_MATERIALIZED_BYTES,
+    ) : WideGeoArrayColumnData
+      plan = ensure_geo_array_reader_type(column)
+      first, count = geo_array_reader_checked_range(plan, column, first_mark, mark_count)
+      geo_array_reader(plan, column).read(first, count, max_materialized_bytes)
+    end
+
+    def each_geo_array_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = GeoArrayColumnType::MAX_MATERIALIZED_BYTES,
+      & : WideGeoArrayColumnData, Int32 -> Nil
+    ) : Nil
+      plan = ensure_geo_array_reader_type(column)
+      first, count = geo_array_reader_checked_range(plan, column, first_mark, mark_count)
+      geo_array_reader(plan, column).each(first, count, max_materialized_bytes) do |data, mark_index|
+        yield data, mark_index
+      end
+      nil
+    end
+
+    # This is bounded size-stream I/O, not a metadata-only estimate.
+    def geo_array_mark_range_materialization_charge(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = GeoArrayColumnType::MAX_MATERIALIZED_BYTES,
+    ) : UInt64
+      plan = ensure_geo_array_reader_type(column)
+      first, count = geo_array_reader_checked_range(plan, column, first_mark, mark_count)
+      geo_array_reader(plan, column).materialization_charge(first, count, max_materialized_bytes)
+    end
+
+    def validate_geo_array_mark_range_structure(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = GeoArrayColumnType::MAX_MATERIALIZED_BYTES,
+    ) : Nil
+      plan = ensure_geo_array_reader_type(column)
+      first, count = geo_array_reader_checked_range(plan, column, first_mark, mark_count)
+      geo_array_reader(plan, column).validate_selected_structure(first, count, max_materialized_bytes)
     end
 
     # Bool payload values use the shared semantic codec: zero is false and
@@ -11098,6 +11149,7 @@ module CrystalClick
       @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
       point_plan = PointColumnType.for_type(@column_type)
+      geo_array_plan = GeoArrayColumnType.for_type(@column_type)
       qbit_plan = QBitColumnType.for_type(@column_type)
       variant_plan = WidePart.variant_type_plan(@column_type)
       array_tuple_plan = WideArrayTupleTypePlan.for_type(@column_type)
@@ -11117,6 +11169,9 @@ module CrystalClick
         if point_plan && compressed_marks
           raise UnsupportedFormatError.new("Point requires plain .mrk2 marks")
         end
+        if geo_array_plan && compressed_marks
+          raise UnsupportedFormatError.new("Geo arrays require plain .mrk2 marks")
+        end
         if WidePart.supports_array_map_type?(@column_type) && compressed_marks
           raise UnsupportedFormatError.new("Array(Map) numeric profile requires plain .mrk2 marks")
         end
@@ -11130,6 +11185,8 @@ module CrystalClick
                                    stream_name != plan.discriminator_stream(@column)
                                  elsif point_plan
                                    true
+                                 elsif geo_array_plan
+                                   stream_name != geo_array_plan.size_stream(@column, 0)
                                  elsif dynamic_string
                                    stream_name == "#{@column}.SharedVariant.size" ||
                                      stream_name == "#{@column}.SharedVariant" ||
@@ -11227,6 +11284,8 @@ module CrystalClick
                            1
                          elsif dynamic_string && stream_name == "#{@column}.variant_discr"
                            1
+                         elsif geo_array_plan
+                           stream_name == geo_array_plan.size_stream(@column, 0) ? 8 : 1
                          elsif array_tuple_plan && !legacy_array_tuple_plan
                            stream_name == array_tuple_plan.outer_size_stream(@column) ? 8 : 1
                          elsif map_tuple_plan
@@ -11304,6 +11363,7 @@ module CrystalClick
       selected, source_column_name, source_column_type, column_type, json_typed_path =
         resolve_selected_column(columns, column)
       point_plan = PointColumnType.for_type(column_type)
+      geo_array_plan = GeoArrayColumnType.for_type(column_type)
       array_tuple_plan = WideArrayTupleTypePlan.for_type(column_type)
       generic_array_tuple = !array_tuple_plan.nil? && WideTypePlan.admitted(column_type).nil?
       map_tuple_plan = WideMapTupleTypePlan.for_type(column_type)
@@ -11319,9 +11379,11 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if (point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_map_tuple ||
+      if (geo_array_plan || point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_map_tuple ||
          WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
-        message = if point_plan
+        message = if geo_array_plan
+                    "Geo Array bounded profile requires CODEC(LZ4)"
+                  elsif point_plan
                     "Point bounded profile requires CODEC(LZ4)"
                   elsif !QBitColumnType.for_type(column_type).nil?
                     "QBit bounded profile requires CODEC(LZ4)"
@@ -11340,7 +11402,9 @@ module CrystalClick
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
 
       json_paths = [] of {String, String}
-      if point_plan
+      if geo_array_plan
+        validate_geo_array_serialization_profile(columns, selected, row_count)
+      elsif point_plan
         validate_point_serialization_profile(columns, selected, row_count)
       elsif QBitColumnType.for_type(column_type)
         validate_qbit_serialization_profile
@@ -11419,6 +11483,21 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
 
       QBitSerializationProfile.validate!(text)
+    end
+
+    private def validate_geo_array_serialization_profile(
+      columns : Array({String, String}),
+      selected_column : String,
+      row_count : UInt64,
+    ) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for Geo arrays") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+      GeoArraySerializationProfile.validate!(text, columns, selected_column, row_count)
     end
 
     private def validate_point_serialization_profile(
@@ -11583,6 +11662,10 @@ module CrystalClick
           if columns.any? { |name, type| name == column && type == "UInt64" }
             raise UnsupportedFormatError.new("Point primary key column must have one plain UInt64 stream") unless streams == [column]
           end
+        elsif GeoArrayColumnType.for_type(selected_type)
+          if columns.any? { |name, type| name == column && type == "UInt64" }
+            raise UnsupportedFormatError.new("Geo Array primary key column must have one plain UInt64 stream") unless streams == [column]
+          end
         elsif WideArrayTupleTypePlan.for_type(selected_type) && WideTypePlan.admitted(selected_type).nil?
           if columns.any? { |name, type| name == column && type == "UInt64" }
             raise UnsupportedFormatError.new("Array(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
@@ -11637,6 +11720,8 @@ module CrystalClick
         plan.physical_streams(column).map(&.[0])
       elsif plan = PointColumnType.for_type(type)
         plan.physical_streams(column).map(&.[0])
+      elsif plan = GeoArrayColumnType.for_type(type)
+        plan.size_streams(column) + plan.coordinate_streams(column).to_a
       elsif plan = WideTypePlan.admitted(type)
         plan.physical_streams(column).map(&.name)
       elsif plan = WideArrayTupleTypePlan.for_type(type)
@@ -13316,6 +13401,11 @@ module CrystalClick
         raise CorruptPartError.new("selected Point coordinate stream is missing from its plan") unless stream_names.includes?(stream)
         return stream
       end
+      if plan = GeoArrayColumnType.for_type(@column_type)
+        stream = plan.size_stream(@column, 0)
+        raise CorruptPartError.new("selected Geo Array size0 stream is missing") unless stream_names.includes?(stream)
+        return stream
+      end
       if plan = WidePart.variant_type_plan(@column_type)
         stream = plan.discriminator_stream(@column)
         raise CorruptPartError.new("selected Variant discriminator stream is missing") unless stream_names.includes?(stream)
@@ -13387,6 +13477,8 @@ module CrystalClick
         plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported QBit substream"))
       elsif plan = PointColumnType.for_type(@column_type)
         plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported Point coordinate stream"))
+      elsif plan = GeoArrayColumnType.for_type(@column_type)
+        plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported Geo Array stream"))
       elsif @column_type == "Dynamic"
         stream_name == "#{@column}.String.size" || stream_name == "#{@column}.UInt64" ? 8 : 1
       elsif WidePart.supports_array_map_type?(@column_type)
@@ -14747,6 +14839,39 @@ module CrystalClick
       )
     end
 
+    private def ensure_geo_array_reader_type(column : String) : GeoArrayColumnType
+      ensure_column(column)
+      GeoArrayColumnType.for_type(@column_type) ||
+        raise UnsupportedFormatError.new("Geo Array accessor requires an exact admitted Geo Array column")
+    end
+
+    private def geo_array_reader_checked_range(
+      plan : GeoArrayColumnType,
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {Int32, Int32}
+      checked_stream_mark_range(@streams[plan.size_stream(column, 0)], first_mark, mark_count)
+      {first_mark.to_i32, mark_count.to_i32}
+    end
+
+    private def geo_array_reader(plan : GeoArrayColumnType, column : String) : GeoArrayReader
+      GeoArrayReader.new(
+        plan,
+        column,
+        ->(stream : String, first : Int32, count : Int32) { tuple_reader_range_rows(stream, first, count) },
+        ->(stream : String, mark : Int32) { tuple_reader_mark_rows(stream, mark) },
+        ->(stream : String, first : Int32, count : Int32, bytes : Int32, width : Int32, rows : UInt64) {
+          tuple_reader_read_range(stream, first, count, bytes, width, rows)
+        },
+        ->(stream : String, first : Int32, count : Int32, bytes : Int32, width : Int32, rows : UInt64) {
+          tuple_reader_validate_range(stream, first, count, bytes, width, rows)
+        },
+        ->(bytes : Bytes, offset : Int32) { decode_numeric_value(bytes, offset, UInt64) },
+        ->(bytes : Bytes, offset : Int32) { decode_numeric_value(bytes, offset, Float64) }
+      )
+    end
+
     private def ensure_point_reader_type(column : String) : PointColumnType
       ensure_column(column)
       PointColumnType.for_type(@column_type) ||
@@ -15508,6 +15633,9 @@ module CrystalClick
                              elsif plan = PointColumnType.for_type(@column_type)
                                tuple_profile = true
                                plan.coordinate_streams(@column).includes?(stream.name)
+                             elsif plan = GeoArrayColumnType.for_type(@column_type)
+                               tuple_profile = true
+                               stream.name != plan.size_stream(@column, 0)
                              elsif @column_type == "Dynamic"
                                stream.name == "#{@column}.SharedVariant.size" ||
                                  stream.name == "#{@column}.SharedVariant" ||
@@ -15627,8 +15755,9 @@ module CrystalClick
         loop do
           qbit_profile = !QBitColumnType.for_type(@column_type).nil?
           point_profile = !PointColumnType.for_type(@column_type).nil?
+          geo_array_profile = !GeoArrayColumnType.for_type(@column_type).nil?
           if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic" ||
-             WidePart.supports_array_map_type?(@column_type) || qbit_profile || point_profile
+             WidePart.supports_array_map_type?(@column_type) || qbit_profile || point_profile || geo_array_profile
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
               if WidePart.supports_array_map_type?(@column_type) &&
@@ -15643,6 +15772,8 @@ module CrystalClick
                           "QBit requires LZ4 compressed streams"
                         elsif point_profile
                           "Point requires LZ4 compressed streams"
+                        elsif geo_array_profile
+                          "Geo arrays require LZ4 compressed streams"
                         else
                           "Variant requires LZ4 compressed streams"
                         end

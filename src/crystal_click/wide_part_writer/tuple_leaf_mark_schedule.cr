@@ -122,6 +122,42 @@ module CrystalClick
         new(marks, row_count, leaf_start.to_i32, rows_per_mark, count)
       end
 
+      # Framing adapter for an already qualified depth-aware logical schedule.
+      # This validates one stream's contiguous intervals, not cross-level Geo
+      # topology. Its physical row axis always remains the outer table rows.
+      def self.from_intervals(
+        outer_rows : UInt64,
+        rows_per_mark : Int32,
+        leaf_starts : Array(UInt64),
+        leaf_counts : Array(UInt64),
+        max_schedule_bytes : UInt64 = 64_u64 * 1024 * 1024,
+      ) : TupleLeafMarkSchedule
+        raise ArgumentError.new("outer row count exceeds mark schedule limit") if outer_rows == 0 || outer_rows > Int32::MAX.to_u64
+        raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+        row_count = outer_rows.to_i32
+        count = mark_count_for(row_count, rows_per_mark)
+        unless leaf_starts.size == count && leaf_counts.size == count
+          raise ArgumentError.new("logical stream intervals differ from outer mark count")
+        end
+        charge = ragged_logical_charge(count) || raise(ArgumentError.new("logical mark schedule charge overflows"))
+        raise ArgumentError.new("logical mark schedule exceeds materialization limit") if charge > max_schedule_bytes
+
+        total = 0_u64
+        count.times do |index|
+          raise ArgumentError.new("logical stream intervals are not contiguous") unless leaf_starts[index] == total
+          size = leaf_counts[index]
+          raise ArgumentError.new("logical stream interval exceeds native limit") if size > Int32::MAX.to_u64 - total
+          total += size
+        end
+        # All cardinality and retained-storage checks precede the owned array.
+        marks = Array(Mark).new(count) do |index|
+          start = index.to_i64 * rows_per_mark.to_i64
+          rows = {rows_per_mark.to_i64, row_count.to_i64 - start}.min.to_i32
+          Mark.new(start.to_i32, rows, leaf_starts[index].to_i32, leaf_counts[index].to_i32)
+        end
+        new(marks, row_count, total.to_i32, rows_per_mark, count)
+      end
+
       def self.scheduled_mark(
         schedule : TupleLeafMarkSchedule?,
         mark_index : Int32,

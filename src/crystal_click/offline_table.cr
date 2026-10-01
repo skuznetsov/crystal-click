@@ -100,6 +100,9 @@ module CrystalClick
       if point_plan = PointColumnType.for_type(selected_type)
         PointValuesMaterializer.checked_expected_charge(expected_rows, point_plan)
       end
+      if GeoArrayColumnType.for_type(selected_type)
+        return GeoArrayValuesMaterializer.materialize(self, candidates, column_name, selected_type, expected_rows)
+      end
       values = Array(OfflineColumnValue).new(expected_rows.to_i)
       observed_rows = 0_u64
       string_bytes = 0_u64

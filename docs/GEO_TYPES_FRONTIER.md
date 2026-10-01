@@ -1,10 +1,178 @@
 # Geo types frontier
 
-## Active continuation: W110 Geo Array qualification
+## Current frontier: W111 paired Geo Array certificate
 
-Status: VERIFIED for the W110 stock-only qualification below; paired Geo
-implementation remains IN_PROGRESS. Production admission is still W109 Point
-below. Candidate shared topology is depth 1 for `MultiPoint`,
+Status: VERIFIED within the executed W111 profile below. W111 admits exact
+`LineString`, `Ring`, `Polygon`, `MultiLineString` and `MultiPolygon`, preserving
+nominal identity with depth-aware immutable flattened topology and raw Point
+values. The physical profile is two-column Wide/LZ4, one nondecreasing UInt64
+PK and one Geo payload, plain adaptive `.mrk2` and plain `primary.idx`.
+Completely empty Geo payloads in nonempty parts are qualified, including
+zero-length nested streams. MultiPoint and Geometry remain rejected.
+
+Risk: CAUTION. Local rollback anchor is clean `197f587`; no remote mutation.
+Root owns facade/require integration, serial guarded execution and independent
+review. Luna owns separately the model/reader, writer, and stock oracle files.
+Shared leaf codecs, frame readers, checksums and exclusive publication remain
+the authority. Existing one-level ragged scheduling must not be treated as a
+depth-three cardinality certificate.
+
+Public model contract: `GeoArrayColumnType.for_type` selects an exact nominal
+depth; `WideGeoArrayTopology` owns checked level sizes and prefix offsets;
+`WideGeoArrayColumnData` retains topology and immutable raw Points; retained
+`WideGeoArrayRow` handles expose `size`, `terminal?`, `array_at` and `point_at`.
+Exports are detached snapshots, not mutable aliases. Retained selected-mark
+schedules are separate from result topology. Cardinalities and aggregate
+logical allocation charge are checked before owned copies. Ragged charge
+discovery performs bounded size-stream I/O and is not metadata-only.
+
+Reader entry points are `read_geo_array_mark_range`,
+`each_geo_array_mark_range`, `geo_array_mark_range_materialization_charge`
+and `validate_geo_array_mark_range_structure`. Every selected structural
+boundary must pass before any callback. Writer entry point is
+`write_uint64_geo_array_pair(destination, key_name, keys, value_name,
+type_name, level_sizes, points, rows_per_mark)`; topology/sorted keys and
+combined snapshot/readback/staging budgets precede owned snapshots or stage.
+Staged exact schema, sizes, Point bits, marks and PK must pass before publish.
+
+Executed DoD: focused model/admission/reader/writer/consumer/hostile specs in DEBUG
+and RELEASE, full DEBUG regression, bidirectional five-name stock oracles
+including all-empty Geo payloads with asserted CHECK=1 and literal full/nonzero
+selected RowBinary, formatting/shell/whitespace checks, root diff review.
+Strongest guard: same-byte-length nested topology mutation with refreshed
+checksums must fail staged readback; a corrupt later selected boundary must
+fail before callbacks, while an earlier-only window remains readable. These
+signals passed at the fingerprints below; this is not a general type or
+current-master runtime certificate.
+
+Executed pre-implementation discriminator: root's serial guarded
+`bash scripts/probe_geo_array_w111.sh qualify-empty` exited 0 on 2026-10-01
+with pinned 26.7.1.1315. Five names times ratios 0.9375/1.0 times source/fresh
+ATTACH produced twenty asserted exact part-name/CHECK=1 results. Exact schema,
+inventory/checksums, raw size/Point lanes, outer adaptive mark rows, plain PK,
+metadata and literal full/six-row PK-selected RowBinary passed. Deeper size and
+coordinate streams exist with zero raw bytes and zero decompressed mark
+offsets; every stream retains the same outer table-row marks. The 0.9375
+profile has only the PK Default record; ratio 1.0 has exact `columns: []`.
+Seeded nonempty root-size bytes, PK bytes and metadata counter drift are
+rejected by the instrument. This qualifies the empty physical profile, not
+production rejection or paired Geo support.
+
+### Executed W111 certificate (2026-10-01)
+
+Root executed all heavy gates serially through
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh`, using a
+600-second limit, 8 GiB focused/stock limit, 32 GiB full DEBUG limit and
+50-percent free-memory floor. Crystal was `1.21.0`; the independent storage
+peer was `/Users/sergey/.local/bin/clickhouse` at `26.7.1.1315`. The host SDK
+was MacOSX26.5; the cache was `/private/tmp/crystal-click-w111-cache` for specs
+and each stock wrapper's temporary cache. Payload commands were:
+
+```sh
+crystal spec --single-module --link-flags=-fuse-ld=ld <focused inputs below>
+crystal spec --single-module --link-flags=-fuse-ld=ld --release <same inputs>
+crystal spec --single-module --link-flags=-fuse-ld=ld
+bash scripts/probe_geo_array_w111_green.sh --green-reader
+bash scripts/probe_geo_array_w111_green.sh --green-writer
+```
+
+The twelve focused inputs are the seven `spec/geo_array_w111_` specs named
+`model`, `reader`, `admission`, `hostile`, `framing`, `writer` and `consumers`,
+plus `spec/point_w109_` specs named `writer`, `reader`, `consumers`, `hostile`
+and `admission` (each filename ends in `_spec.cr`). DEBUG and RELEASE each
+passed 41 examples, zero failures/errors/pending, exit 0. Full DEBUG passed
+1,817 examples with the same zero-error signal, exit 0. The linker emitted
+a non-fatal duplicate `-lc` warning. Full RELEASE was not executed.
+
+Final stock reader: fifteen profiles (five mixed at ratio 0.9375 and five
+all-empty payloads at each ratio 0.9375/1.0). Every stock source and fresh
+ATTACH copy passed its asserted exact part-name/CHECK=1 result: thirty checks.
+Exact schema, stream inventory/checksums, raw size/coordinate lanes, actual
+outer-row marks, PK and metadata passed against literal expectations, followed
+by full, nonzero-origin selected and each-mark typed reads. The asymmetric
+MultiPolygon fixture has eight polygons, nine rings and seven Points;
+coincident nested axes cannot make a broken schedule appear correct.
+
+Final stock writer: ten profiles (five mixed and five all-empty payloads).
+Independent per-mark literal-LZ4 framing/offset expectations, all raw lanes,
+metadata and PK passed. All ten fresh ATTACH parts returned CHECK=1 and exact
+literal full/six-row PK-selected RowBinary, followed by typed readback.
+Stock-created and Crystal-created parts need not have identical frame packing.
+Together the final two phases assert forty successful CHECK results.
+
+Public consumer tests cover all five nominal names through full/window table
+scans, catalog `.values`, catalog full/window scans and retained row handles.
+The PK candidate path selects mark 1 for key 3, observes the complete granule
+keys `[2,3]`, and applies a caller residual filter to obtain exactly key 3.
+This is granule pruning plus caller filtering, not an exact-row PK index or
+a new generic offline typed-PK convenience method.
+
+Hostile controls passed: bounded count/overflow refusal before deeper reads,
+later selected structure before callbacks, detached immutable exports, exact
+budget boundary checks, and same-byte-length nested size mutation with
+refreshed checksums before publication. The staged mutation preserves total
+Points but changes the nested topology; the expected semantic error precedes
+the original checksum-record comparison, and no destination or stage remains.
+A real later coordinate mark corruption with refreshed checksums rejects the
+full scan and spanning window with zero callbacks, while the earlier window
+still reads. Root rejected an initial test that also corrupted that earlier
+window's end boundary; the corrected defect is at mark 2, not mark 1.
+Root also corrected the missing-root-field test's expected exception to the
+existing exact-envelope guard; no production metadata check was relaxed.
+
+The W109 Point, W107 Array(Tuple) and W108 Map(Tuple) reader/writer stock phases
+all passed as affected regressions. Those phases preceded mechanical formatting
+of the new Geo descriptor and its model spec; final focused/full specs and
+both W111 stock phases ran after formatting. Final format, shell syntax,
+unknown/extra-argument exit-2 controls and diff whitespace checks passed.
+
+Frozen source fingerprint is SHA-256 of the newline-terminated `shasum -a 256`
+manifest in this order: aggregate `src/crystal_click.cr`; under
+`src/crystal_click/`, `offline_column_value.cr`, `offline_table.cr`,
+`wide_part.cr`, `wide_part_table.cr`, `wide_part_writer.cr`,
+`wide_part_writer/tuple_leaf_mark_schedule.cr`, `geo_array_column_type.cr`,
+`wide_geo_array_topology.cr`, `wide_geo_array_column_data.cr`,
+`wide_geo_array_row.cr`, `wide_geo_array_mark_schedule.cr`,
+`wide_part/geo_array_serialization_profile.cr`, `wide_part/geo_array_reader.cr`,
+`wide_part_table/geo_array_column_adapter.cr`,
+`offline_table/geo_array_values_materializer.cr`,
+`wide_part_writer/geo_array_part_write_input.cr`, and
+`wide_part_writer/geo_array_part_writer.cr`:
+`ac62928f0082a9509a806322a54ee7a94fa7f6b8757df368dff9fb08adc2eb9f`.
+The evidence manifest lists the seven new specs in the focused order above,
+then `spec/point_w109_admission_spec.cr`, then
+`scripts/probe_geo_array_w111.cr`, `.sh`, `probe_geo_array_w111_green.cr`,
+`.sh`: `34c19ad4c2db25488dd5a7f71a8be61bc3581e32b8e3f61af4f126f0e3c359cf`.
+Both fingerprints remained unchanged across the final gates.
+
+Root hostile verdict: ROBUST within this bounded paired profile, based on
+root-executed tests, actual stock acceptance and semantic/selected-boundary
+attacks. Luna's static review is supplementary and same-lineage, not an
+independent runtime certificate. Eleven new concrete owners each have one
+file; existing Float64 codecs, framing, checksums and exclusive staging are
+reused. The larger facade decomposition remains open.
+
+Limits: 65,536 selected outer rows, each nested record axis and Points;
+64 MiB combined logical materialization accounting. The latter is not an RSS,
+allocator-capacity or decompression-workspace certificate. Generic Array(Point),
+Nullable Geo wrappers, arbitrary schemas/composition/depth, Sparse/Compact,
+MultiPoint, Geometry, current-master executable compatibility and performance
+are not admitted. Serialization accepts only the exact version-one envelope
+with either a bounded PK Default record or `columns: []`; sampled defaults
+are not required to equal a physical recount. Refresh after code, oracle,
+runtime, settings or physical-profile changes.
+
+Next Geo frontier: qualify MultiPoint on a capable executable (the pinned peer
+returns UNKNOWN_TYPE), then treat Geometry's fixed Variant discriminator
+contract separately. The broader all-types, MV/projection and architecture
+work remains active; memory/performance optimization stays deferred.
+
+## Historical W110 Geo Array qualification
+
+Status: VERIFIED for the historical W110 stock-only qualification below.
+At that source state production admission was W109 Point; W111 above now
+supersedes its measured unsupported-Geo refusal. The W110 RED command is not
+a current-production refusal certificate. Candidate shared topology is depth 1 for `MultiPoint`,
 `LineString` and `Ring`; depth 2 for `Polygon` and `MultiLineString`; depth 3
 for `MultiPolygon`. Nominal names must survive even when topology is identical.
 Fresh source anchor remains `b762d6d7fe4b201147bdce1bd49b8fc87a8049d3`.
@@ -119,10 +287,11 @@ the qualification when the binary, settings, oracle fingerprint or physical
 profile changes; the refusal certificate also expires when typed admission
 changes. The broader goal remains active.
 
-### Proposed paired owner plan
+### W110 paired owner plan, implemented by W111
 
-This is a conditional implementation plan, not a production certificate. Keep
-one concrete owner per file and narrow the existing facade seams:
+This historical plan governed W111; its executed certificate above is the
+current admission authority. Keep one concrete owner per file and narrow the
+existing facade seams:
 
 - `geo_array_column_type.cr`: exact nominal Geo declaration, depth and stream
   names; generic Array aliases and Geometry are not equivalent admission.

@@ -121,6 +121,31 @@ reader 15,764, writer 25,958, table 6,980, catalog 1,560 and OfflineTable 3,651.
 The large facades still need responsibility-level decomposition; one owner
 per file does not prove lower coupling or performance.
 
+W111 adds paired depth-aware Geo arrays through eleven concrete owners, each
+with one file: exact nominal/depth plan, immutable topology, owned data and
+row handle, selected logical mark schedule, serialization envelope, reader,
+table adapter, offline materializer, writer input and writer orchestrator.
+It reuses Float64 codecs, physical framing, checksums and exclusive publication.
+The shared internal `TupleLeafMarkSchedule.from_intervals` validates one
+stream's contiguous interval schedule, not cross-depth topology; the Geo
+owners retain that separate authority.
+
+The executed bounded certificate is in `GEO_TYPES_FRONTIER.md`: final focused
+DEBUG/RELEASE each passed 41 examples, full DEBUG passed 1,817, both W111
+stock phases passed fifteen reader and ten writer profiles with forty asserted
+CHECK=1 results, and six affected predecessor stock phases passed. Root's
+scoped hostile verdict is ROBUST; full RELEASE, current-master executable,
+RSS and performance are not certified.
+
+The remaining navigation counts are reader 15,895 lines, writer 25,996,
+table 7,026, catalog 1,560 and OfflineTable 3,654. Adding owner files has not
+completed the requested responsibility-level decomposition. Shared recursive
+type/substream planning, physical stream lifetimes and policy, codec dispatch,
+staging, and table/materializer orchestration are still the relevant seams;
+adding a separate class for every container/leaf combination is not the goal.
+Any widening from today's exact plans needs its own storage-profile falsifier
+and paired reader/writer evidence, not a name-only registration check.
+
 ## Catalog owner decomposition (2026-10-01)
 
 Status: VERIFIED within the source-owner extraction and executed gates below.
