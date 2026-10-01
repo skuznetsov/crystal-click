@@ -32,6 +32,46 @@ are tracked separately in `TEMPORAL_TUPLE_FRONTIER.md`. Focused DEBUG/RELEASE
 oracle and eight unchanged regression oracles passed. Root's scoped verdict
 is ROBUST; this is not completion of the larger facade refactor.
 
+W103 adds paired scalar/Nullable QBit through twelve concrete owners, each
+with its own source file. Its type, owned raw value, plane codec, physical
+reader/validator, table adapter, writer input/infrastructure/orchestrator and
+offline materialization boundaries are described in `QBIT_FRONTIER.md`.
+Focused DEBUG and RELEASE each passed 41 combined QBit/PK examples; full DEBUG
+passed 1,433 examples. The bidirectional 80-profile QBit stock oracle, its
+3000-row split-plane control and five existing regression oracles passed.
+Root's scoped verdict is ROBUST in `QBIT_FRONTIER.md`; this is not the full
+facade refactor.
+
+## W103 ownership boundary
+
+`QBitType` owns the closed element identity and dimension/stride grammar;
+`QBitColumnType` owns bounded physical planning and logical materialization
+charges. `QBitValue` owns exact raw element bytes, with defensive export and
+raw-bit equality. `QBitPlaneCodec` alone owns transpose/untranspose bit order.
+These are four separate files, not a new per-carrier class hierarchy.
+
+`QBitSerializationProfile`, `QBitStreamValidator` and
+`WidePart::QBitReader` own physical profile admission, metadata-only schedule
+validation and selected-range decoding in three files under `wide_part/`.
+The lower reader never depends on a table adapter. The separate
+`QBitColumnAdapter` consumes that lower-layer contract, and
+`QBitValuesMaterializer` bounds the actual offline union slot
+charge before allocating `.values`. Neither adapter owns a second plane codec.
+
+The writer's `QBitPartWriteInput`, `QBitPartInfrastructure` and
+`QBitPartWriter` each have one file under `wide_part_writer/`. Input capture,
+physical callbacks and stage orchestration remain separate. The writer uses
+the existing bounded frame/marks/checksum/exclusive-publication helpers via
+narrow facade delegates and validates real staged bytes before publish; the
+test seam cannot replace its validator. QBit does not enter the named-Tuple
+leaf union or imply arbitrary recursive compositions.
+
+The existing four facades still own shared infrastructure and orchestration.
+Physical-stream lifetime/validation ownership, cohesive leaf-codec extraction,
+table/catalog orchestration and the older Array(Map) intermediate-file-open
+cleanup concern remain open. New owner files and shorter navigation paths do
+not establish reduced coupling, lower peak RSS or improved throughput.
+
 ## W100 ownership boundary
 
 `DateValue`, `Date32Value`, `DateTimeValue`, `DateTime64Value`, `TimeValue`

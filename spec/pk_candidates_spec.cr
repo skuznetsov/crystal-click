@@ -1,5 +1,120 @@
 require "./spec_helper"
 
+private def pk_candidates_set_u64(bytes : Bytes, offset : Int, value : UInt64) : Nil
+  8.times { |byte| bytes[offset + byte] = ((value >> (byte * 8)) & 0xff_u64).to_u8 }
+end
+
+private def pk_candidates_read_var_uint(bytes : Bytes, cursor : Int32) : {UInt64, Int32}
+  value = 0_u64
+  index = 0
+  loop do
+    raise "truncated test checksum varUInt" if cursor >= bytes.size
+    byte = bytes[cursor]
+    cursor += 1
+    payload = (byte & 0x7f).to_u64
+    if index == 9
+      raise "overflowing test checksum varUInt" if payload > 1 || (byte & 0x80) != 0
+    end
+    value |= payload << (index * 7)
+    if (byte & 0x80) == 0
+      raise "non-canonical test checksum varUInt" if index > 0 && value < (1_u64 << (index * 7))
+      return {value, cursor}
+    end
+    index += 1
+    raise "oversized test checksum varUInt" if index > 9
+  end
+end
+
+private def pk_candidates_literal_lz4_frame(raw : Bytes) : Bytes
+  raise "test checksum payload cannot be empty" if raw.empty?
+  extension_size = raw.size < 15 ? 0 : ((raw.size - 15) // 255) + 1
+  payload_size = 1 + extension_size + raw.size
+  compressed_size = CrystalClick::CompressedBlock::HEADER_SIZE + payload_size
+  frame = Bytes.new(CrystalClick::CompressedBlock::FRAME_HEADER_SIZE + payload_size, 0_u8)
+  header = CrystalClick::CompressedBlock::CHECKSUM_SIZE
+  frame[header] = CrystalClick::CompressedBlock::METHOD_LZ4
+  4.times do |index|
+    frame[header + 1 + index] = ((compressed_size >> (index * 8)) & 0xff).to_u8
+    frame[header + 5 + index] = ((raw.size >> (index * 8)) & 0xff).to_u8
+  end
+
+  cursor = CrystalClick::CompressedBlock::FRAME_HEADER_SIZE
+  if raw.size < 15
+    frame[cursor] = (raw.size << 4).to_u8
+    cursor += 1
+  else
+    frame[cursor] = 0xf0_u8
+    cursor += 1
+    remaining = raw.size - 15
+    while remaining >= 255
+      frame[cursor] = 255_u8
+      cursor += 1
+      remaining -= 255
+    end
+    frame[cursor] = remaining.to_u8
+    cursor += 1
+  end
+  raw.copy_to(frame[cursor, raw.size])
+  hash = CrystalClick::CityHashV1.hash128(frame[header, compressed_size])
+  pk_candidates_set_u64(frame, 0, hash[0])
+  pk_candidates_set_u64(frame, 8, hash[1])
+  frame
+end
+
+private def pk_candidates_refresh_physical_hash(part_path : String, name : String, physical_bytes : Bytes) : Nil
+  checksum_path = File.join(part_path, "checksums.txt")
+  checksum_data = File.read(checksum_path)
+  checksum_bytes = checksum_data.to_slice
+  entries = CrystalClick::PartChecksums.parse(checksum_bytes)
+  entry = entries.entry(name) || raise "missing test checksum entry for #{name}"
+  raise "test hash rewrite must preserve physical size" unless entry.physical_size == physical_bytes.size.to_u64
+
+  header_size = CrystalClick::PartChecksums::CHECKSUMS_HEADER.bytesize
+  payload = CrystalClick::CompressedBlock.decode_all(
+    checksum_bytes[header_size, checksum_bytes.size - header_size],
+    CrystalClick::PartChecksums::MAX_FRAME_COMPRESSED_BYTES,
+    CrystalClick::PartChecksums::MAX_FRAME_DECOMPRESSED_BYTES,
+    CrystalClick::PartChecksums::MAX_PAYLOAD_BYTES
+  ).dup
+  count, cursor = pk_candidates_read_var_uint(payload, 0)
+  found = false
+  count.to_i.times do
+    name_length, cursor = pk_candidates_read_var_uint(payload, cursor)
+    raise "invalid test checksum entry name" if name_length > (payload.size - cursor).to_u64
+    current_name = String.new(payload[cursor, name_length.to_i])
+    cursor += name_length.to_i
+    _, cursor = pk_candidates_read_var_uint(payload, cursor) # physical size
+    raise "truncated test checksum physical hash" if cursor > payload.size - 16
+    hash_offset = cursor
+    cursor += 16
+    flag = payload[cursor]? || raise "truncated test checksum entry"
+    cursor += 1
+    case flag
+    when 0_u8
+    when 1_u8
+      _, cursor = pk_candidates_read_var_uint(payload, cursor) # uncompressed size
+      raise "truncated test checksum uncompressed hash" if cursor > payload.size - 16
+      cursor += 16
+    else
+      raise "invalid test checksum compression flag"
+    end
+
+    if current_name == name
+      hash = CrystalClick::CityHashV1.file_hash(physical_bytes)
+      pk_candidates_set_u64(payload, hash_offset, hash[0])
+      pk_candidates_set_u64(payload, hash_offset + 8, hash[1])
+      found = true
+    end
+  end
+  raise "trailing test checksum payload" unless cursor == payload.size
+  raise "test checksum entry was not found" unless found
+
+  output = IO::Memory.new
+  output << CrystalClick::PartChecksums::CHECKSUMS_HEADER
+  output.write(pk_candidates_literal_lz4_frame(payload))
+  File.write(checksum_path, output.to_slice)
+end
+
 module OfflinePKCandidateSpecSupport
   DB_UUID    = "a1666606-4ca2-4afb-9900-000000000001"
   TABLE_UUID = "a1666606-4ca2-4afb-9900-000000000002"
@@ -280,7 +395,8 @@ describe CrystalClick::OfflineTable do
 
       malformed = OfflinePKCandidateSpecSupport.encode_uint64s([0_u64, 2_u64, 1_u64, 2_u64, 3_u64, 4_u64])
       File.write(index_path, malformed)
-      expect_raises(CrystalClick::CorruptPartError) do
+      pk_candidates_refresh_physical_hash(part_path, "primary.idx", malformed)
+      expect_raises(CrystalClick::CorruptPartError, "primary index keys are not monotone") do
         table.scan_uint64_pk_candidates(["pk"], lower_bound: 0_u64) { |_| callbacks += 1 }
       end
       callbacks.should eq(0)
@@ -303,17 +419,26 @@ describe CrystalClick::OfflineTable do
     OfflinePKCandidateSpecSupport.with_table("cidx") do |table, _, table_path|
       part_path = File.join(table_path, "all_1_1_0")
       compressed_path = File.join(part_path, "primary.cidx")
+      checksum_path = File.join(part_path, "checksums.txt")
       original = writable_file_bytes(compressed_path)
+      original_checksums = writable_file_bytes(checksum_path)
       bytes = original.dup
       bytes[16] = 0x81_u8
       File.write(compressed_path, bytes)
       callbacks = 0
-      expect_raises(CrystalClick::UnsupportedFormatError) do
+      expect_raises(CrystalClick::CorruptPartError, "primary index file hash does not match checksums.txt") do
+        table.scan_uint64_pk_candidates(["pk"], lower_bound: 0_u64) { |_| callbacks += 1 }
+      end
+      callbacks.should eq(0)
+
+      pk_candidates_refresh_physical_hash(part_path, "primary.cidx", bytes)
+      expect_raises(CrystalClick::UnsupportedFormatError, "unsupported ClickHouse compression method") do
         table.scan_uint64_pk_candidates(["pk"], lower_bound: 0_u64) { |_| callbacks += 1 }
       end
       callbacks.should eq(0)
 
       File.write(compressed_path, original)
+      File.write(checksum_path, original_checksums)
       FileUtils.cp(compressed_path, File.join(part_path, "primary.idx"))
       expect_raises(CrystalClick::CorruptPartError) do
         table.scan_uint64_pk_candidates(["pk"], lower_bound: 0_u64) { |_| callbacks += 1 }

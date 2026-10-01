@@ -129,6 +129,47 @@ module CrystalClick
       end
     end
 
+    # Write a sorted UInt64 key and an exact raw-bit scalar QBit payload. The
+    # payload keeps ClickHouse's group-major, MSB-first FixedString plane
+    # streams and canonical QBit declaration.
+    def self.write_uint64_qbit_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      values : Slice(QBitValue),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      value_at = ->(index : Int32) { values[index].as(QBitValue?) }
+      write_qbit_pair_with_hooks(
+        destination, key_name, keys, value_name, type_name, values.size, false,
+        value_at, rows_per_mark,
+        ->(parent : String) { create_stage(parent) },
+        ->(_stage : String, _input : QBitPartWriteInput) { nil }
+      )
+    end
+
+    # BASIC Nullable(QBit) writes one null byte per row and keeps a dense
+    # nested QBit row for every input; NULL nested rows are all-zero planes.
+    def self.write_uint64_nullable_qbit_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      values : Slice(QBitValue?),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      value_at = ->(index : Int32) { values[index] }
+      write_qbit_pair_with_hooks(
+        destination, key_name, keys, value_name, type_name, values.size, true,
+        value_at, rows_per_mark,
+        ->(parent : String) { create_stage(parent) },
+        ->(_stage : String, _input : QBitPartWriteInput) { nil }
+      )
+    end
+
     # Write one immutable part with a sorted UInt64 primary key and a regular
     # String payload. String lengths are stored in the `.size` substream and
     # each mark's raw payload bytes are concatenated without terminators.
@@ -455,6 +496,106 @@ module CrystalClick
         ->(stage : String, target : String) { publish_exclusively(stage, target) },
         ->(raw_size : Int64, label : String) { checked_string_frame_size(raw_size, label) },
         copy_string_values
+      )
+    end
+
+    private def self.write_qbit_pair_with_hooks(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      value_count : Int32,
+      nullable : Bool,
+      value_at : Proc(Int32, QBitValue?),
+      rows_per_mark : Int32,
+      stage_factory : Proc(String, String),
+      before_validation_hook : Proc(String, QBitPartWriteInput, Nil),
+    ) : String
+      infrastructure = build_qbit_part_infrastructure(stage_factory, before_validation_hook)
+      QBitPartWriter.write(
+        destination, key_name, keys, value_name, type_name, value_count,
+        nullable, value_at, rows_per_mark, infrastructure
+      )
+    end
+
+    private def self.validate_qbit_checksum_hash(
+      stage : String,
+      name : String,
+      expected_hash : {UInt64, UInt64},
+    ) : Nil
+      path = File.join(stage, name)
+      raise CorruptPartError.new("staged QBit checksum file must not be a symbolic link") if File.symlink?(path)
+
+      hasher = CityHashV1::FileHasher.new
+      File.open(path, "rb") do |file|
+        buffer = Bytes.new(64 * 1024)
+        loop do
+          bytes_read = file.read(buffer)
+          break if bytes_read == 0
+          hasher.update(buffer[0, bytes_read])
+        end
+      end
+      unless hasher.finish == expected_hash
+        raise CorruptPartError.new("staged QBit checksum differs for #{name}")
+      end
+      nil
+    rescue ex : IO::Error
+      raise CorruptPartError.new(ex.message || "cannot verify staged QBit checksum")
+    end
+
+    private def self.qbit_checksums_file_record(stage : String) : ChecksumRecord
+      path = File.join(stage, "checksums.txt")
+      raise CorruptPartError.new("staged QBit checksum file must not be a symbolic link") if File.symlink?(path)
+
+      size = File.size(path).to_u64
+      hasher = CityHashV1::FileHasher.new
+      File.open(path, "rb") do |file|
+        buffer = Bytes.new(64 * 1024)
+        loop do
+          bytes_read = file.read(buffer)
+          break if bytes_read == 0
+          hasher.update(buffer[0, bytes_read])
+        end
+      end
+      ChecksumRecord.new("checksums.txt", size, hasher.finish, false)
+    rescue ex : IO::Error
+      raise CorruptPartError.new(ex.message || "cannot hash staged QBit checksums file")
+    end
+
+    private def self.build_qbit_part_infrastructure(
+      stage_factory : Proc(String, String),
+      before_validation_hook : Proc(String, QBitPartWriteInput, Nil),
+    ) : QBitPartInfrastructure
+      QBitPartInfrastructure.new(
+        stage_factory,
+        ->(name : String) { validate_column_name(name) },
+        ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
+        ->(stage : String, column : String, values : Slice(UInt64), mark_size : Int32) {
+          write_uint64_stream(stage, column, values, mark_size)
+        },
+        ->(stage : String, column : String, row_count : Int32, width : Int32, mark_size : Int32, encoder : Proc(Bytes, Int32, Int32, Nil)) {
+          write_fixed_width_stream(stage, column, row_count, width, mark_size) do |raw, source_row, output_row|
+            encoder.call(raw, source_row, output_row)
+          end
+        },
+        ->(stage : String, values : Slice(UInt64), mark_size : Int32) {
+          write_primary_index(stage, values, mark_size)
+        },
+        ->(stage : String, name : String, content : String) {
+          write_checksummed_file(stage, name, content)
+        },
+        ->(stage : String, name : String, content : String) { write_plain_metadata(stage, name, content) },
+        ->(stage : String, records : Array(ChecksumRecord)) {
+          write_checksums(stage, records)
+          qbit_checksums_file_record(stage)
+        },
+        ->(stage : String, name : String, expected_hash : {UInt64, UInt64}) {
+          validate_qbit_checksum_hash(stage, name, expected_hash)
+        },
+        before_validation_hook,
+        ->(stage : String, target : String) { publish_exclusively(stage, target) },
+        ->(raw_size : Int64, label : String) { checked_string_frame_size(raw_size, label) }
       )
     end
 

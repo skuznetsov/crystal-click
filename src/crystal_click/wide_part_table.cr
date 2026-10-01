@@ -733,6 +733,8 @@ module CrystalClick
     @column_types : Array(String)
     @column_values : Array(WidePartNumericSlice)
     @typed_numeric_values : Hash(String, WidePartNumericSlice)
+    @qbit_values : Hash(String, Slice(QBitValue))
+    @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @string_values : Hash(String, Slice(String))
     @fixed_string_values : Hash(String, Slice(String))
     @nullable_values : Hash(String, WidePartNullableSlice)
@@ -794,6 +796,8 @@ module CrystalClick
     )
       @column_types = column_types
       @typed_numeric_values = Hash(String, WidePartNumericSlice).new
+      @qbit_values = Hash(String, Slice(QBitValue)).new
+      @nullable_qbit_values = Hash(String, Slice(QBitValue?)).new
       @string_values = Hash(String, Slice(String)).new
       @fixed_string_values = Hash(String, Slice(String)).new
       @nullable_values = Hash(String, WidePartNullableSlice).new
@@ -857,6 +861,8 @@ module CrystalClick
       @column_types = Array(String).new(column_values.size, "UInt64")
       @column_values = column_values.map { |values| values.as(WidePartNumericSlice) }
       @typed_numeric_values = Hash(String, WidePartNumericSlice).new
+      @qbit_values = Hash(String, Slice(QBitValue)).new
+      @nullable_qbit_values = Hash(String, Slice(QBitValue?)).new
       @string_values = Hash(String, Slice(String)).new
       @fixed_string_values = Hash(String, Slice(String)).new
       @nullable_values = Hash(String, WidePartNullableSlice).new
@@ -921,6 +927,8 @@ module CrystalClick
       @string_values : Hash(String, Slice(String)),
       @nullable_values : Hash(String, WidePartNullableSlice),
     )
+      @qbit_values = Hash(String, Slice(QBitValue)).new
+      @nullable_qbit_values = Hash(String, Slice(QBitValue?)).new
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = Hash(String, Slice(String)).new
       @nullable_string_values = Hash(String, WidePartNullableStringSlice).new
@@ -1026,6 +1034,8 @@ module CrystalClick
       @array_map_numeric_values : Hash(String, WidePartArrayMapNumericSliceBase) = Hash(String, WidePartArrayMapNumericSliceBase).new,
       tuple_row_values : Hash(String, Slice(WideTupleRow)) = Hash(String, Slice(WideTupleRow)).new,
     )
+      @qbit_values = Hash(String, Slice(QBitValue)).new
+      @nullable_qbit_values = Hash(String, Slice(QBitValue?)).new
       @column_values = [] of WidePartNumericSlice
       @fixed_string_values = fixed_string_values
       @nullable_fixed_string_values = nullable_fixed_string_values
@@ -1065,6 +1075,51 @@ module CrystalClick
     # as DateTime64 ticks need this metadata to retain their precision label.
     def column_type_for(column : String) : String
       @column_types[column_index(column)]
+    end
+
+    def qbits_for(column : String) : Slice(QBitValue)
+      index = column_index(column)
+      plan = QBitColumnType.for_type(@column_types[index]) ||
+             raise(UnsupportedFormatError.new("QBit accessor requires an exact canonical QBit column"))
+      raise UnsupportedFormatError.new("QBit accessor requires a non-nullable QBit column") if plan.nullable
+      @qbit_values[column]? || raise(UnsupportedFormatError.new("QBit column was not materialized in this batch"))
+    end
+
+    def nullable_qbits_for(column : String) : Slice(QBitValue?)
+      index = column_index(column)
+      plan = QBitColumnType.for_type(@column_types[index]) ||
+             raise(UnsupportedFormatError.new("QBit accessor requires an exact canonical QBit column"))
+      raise UnsupportedFormatError.new("QBit accessor requires Nullable(QBit)") unless plan.nullable
+      @nullable_qbit_values[column]? || raise(UnsupportedFormatError.new("Nullable(QBit) column was not materialized in this batch"))
+    end
+
+    # Internal table-scan hook. Values remain borrowed slices into this
+    # callback's per-mark owner arrays, matching the other batch accessors.
+    def install_qbit_values(column : String, values : Slice(QBitValue), expected_rows : Int) : Nil
+      index = column_index(column)
+      plan = QBitColumnType.for_type(@column_types[index]) ||
+             raise(CorruptPartError.new("QBit materializer received a non-QBit column"))
+      raise CorruptPartError.new("QBit materializer received Nullable(QBit)") if plan.nullable
+      raise CorruptPartError.new("QBit batch slice row count mismatch") unless values.size == expected_rows
+      values.each do |value|
+        raise CorruptPartError.new("QBit batch value type differs from column declaration") unless value.type == plan.value_type
+      end
+      @qbit_values[column] = values
+      nil
+    end
+
+    def install_nullable_qbit_values(column : String, values : Slice(QBitValue?), expected_rows : Int) : Nil
+      index = column_index(column)
+      plan = QBitColumnType.for_type(@column_types[index]) ||
+             raise(CorruptPartError.new("QBit materializer received a non-QBit column"))
+      raise(CorruptPartError.new("QBit materializer received a non-nullable QBit")) unless plan.nullable
+      raise CorruptPartError.new("Nullable(QBit) batch slice row count mismatch") unless values.size == expected_rows
+      values.each do |value|
+        next unless value
+        raise CorruptPartError.new("Nullable(QBit) batch value type differs from column declaration") unless value.type == plan.value_type
+      end
+      @nullable_qbit_values[column] = values
+      nil
     end
 
     def values_for(column : String) : Slice(UInt64)
@@ -2638,6 +2693,7 @@ module CrystalClick
             # parts contract is not transactional; the actual aggregate is
             # checked again before callback exposure.
             preflight_string_bytes = 0_u64
+            preflight_qbit_charges = Hash(String, UInt64).new
             preflight_array_numeric_bytes = Hash(String, UInt64).new
             preflight_array_nullable_numeric_bytes = Hash(String, UInt64).new
             preflight_array_uuid_bytes = Hash(String, UInt64).new
@@ -2705,6 +2761,9 @@ module CrystalClick
                   bytes = selected.reader.dynamic_string_mark_range_materialization_preflight(selected.name, mark_index, 1)
                   preflight_dynamic_string_raw_bytes[selected.name] = bytes
                 end
+              elsif QBitColumnAdapter.type?(selected.column_type)
+                bytes = QBitColumnAdapter.preflight_charge(selected.reader, selected.name, mark_index)
+                preflight_qbit_charges[selected.name] = bytes
               elsif selected.column_type == "Variant(String, UInt64)"
                 raw_bytes, charge_bytes = selected.reader.variant_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
                 preflight_variant_string_uint64_raw_bytes[selected.name] = raw_bytes
@@ -3110,9 +3169,30 @@ module CrystalClick
             map_uint64_nullable_string_values = Hash(String, Array(Array(Tuple(UInt64, String?)))).new
             map_string_nullable_string_values = Hash(String, Array(Array(Tuple(String, String?)))).new
             numeric_map_values = Hash(String, WidePartNumericMapRowsBase).new
+            qbit_values = Hash(String, Array(QBitValue)).new
+            nullable_qbit_values = Hash(String, Array(QBitValue?)).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
-              if selected.column_type == "Variant(String, UInt64)"
+              if qbit_plan = QBitColumnType.for_type(selected.column_type)
+                expected_charge = preflight_qbit_charges[selected.name]? ||
+                                  raise(CorruptPartError.new("selected QBit mark was not preflighted"))
+                exact_charge = qbit_plan.materialization_charge(mark_rows)
+                raise CorruptPartError.new("selected QBit charge changed after preflight") unless expected_charge == exact_charge
+                if expected_charge > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                  raise CorruptPartError.new("selected QBit mark exceeds aggregate materialization limit")
+                end
+                if qbit_plan.nullable
+                  values = QBitColumnAdapter.read_nullable(selected.reader, selected.name, mark_index)
+                  raise CorruptPartError.new("selected Nullable(QBit) mark row count changed") unless values.size.to_u64 == mark_rows
+                  nullable_qbit_values[selected.name] = values
+                else
+                  values = QBitColumnAdapter.read_non_nullable(selected.reader, selected.name, mark_index)
+                  raise CorruptPartError.new("selected QBit mark row count changed") unless values.size.to_u64 == mark_rows
+                  qbit_values[selected.name] = values
+                end
+                actual_string_bytes += expected_charge
+                next
+              elsif selected.column_type == "Variant(String, UInt64)"
                 values = selected.reader.read_variant_string_uint64_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected Variant mark row count changed") unless values.size.to_u64 == mark_rows
                 expected_raw = preflight_variant_string_uint64_raw_bytes[selected.name]? || raise(CorruptPartError.new("selected Variant mark was not preflighted"))
@@ -4646,6 +4726,8 @@ module CrystalClick
                   else
                     numeric_map_string_slices[selected.name] = values.slice_rows(mark_row_offset.to_i, size)
                   end
+                elsif qbit_values.has_key?(selected.name) || nullable_qbit_values.has_key?(selected.name)
+                  # QBit slices are installed on the constructed batch below.
                 else
                   raise CorruptPartError.new("selected typed column was not materialized")
                 end
@@ -4708,6 +4790,15 @@ module CrystalClick
                 array_map_numeric_values: array_map_numeric_slices,
                 tuple_row_values: tuple_row_slices
               )
+              part.readers.each do |selected|
+                if values = qbit_values[selected.name]?
+                  selected_values = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                  batch.install_qbit_values(selected.name, selected_values, size)
+                elsif values = nullable_qbit_values[selected.name]?
+                  selected_values = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                  batch.install_nullable_qbit_values(selected.name, selected_values, size)
+                end
+              end
               yield batch
               mark_row_offset &+= size.to_u64
               break if whole_marks

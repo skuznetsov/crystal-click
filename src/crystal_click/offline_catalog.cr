@@ -32,7 +32,7 @@ module CrystalClick
 
   alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
                              Int8 | Int16 | Int32 | Int64 | Int128 | UInt128 |
-                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value |
+                             Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | QBitValue? |
                              Int256Value | UInt256Value | Decimal256Value | BFloat16Value | BFloat16Value? |
                              Array(UInt64) | Array(UInt64?) | Array(UInt8?) | Array(UInt16?) | Array(UInt32?) | Array(Int8?) | Array(Int16?) | Array(Int32?) | Array(Int64?) | Array(Float32?) | Array(Float64?) |
                              Array(String) | Array(String?) | Array(Array(UInt64)) | Array(Array(UInt64?)) | Array(Array(String)) |
@@ -248,6 +248,9 @@ module CrystalClick
       if plan = tuple_plan
         TupleValuesMaterializer.checked_expected_cells(expected_rows, plan.fields.size, max_tuple_cells)
       end
+      if qbit_plan = QBitColumnType.for_type(selected_type)
+        QBitValuesMaterializer.checked_expected_charge(expected_rows, qbit_plan)
+      end
       values = Array(OfflineColumnValue).new(expected_rows.to_i)
       observed_rows = 0_u64
       string_bytes = 0_u64
@@ -285,6 +288,15 @@ module CrystalClick
       expected_rows : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if qbit_plan = QBitColumnType.for_type(selected_type)
+        if qbit_plan.nullable
+          observed_rows = append_materialized_values(values, batch.nullable_qbits_for(column_name), observed_rows, expected_rows)
+        else
+          observed_rows = append_materialized_values(values, batch.qbits_for(column_name), observed_rows, expected_rows)
+        end
+        return {observed_rows, string_bytes}
+      end
+
       if tuple_plan = WideTupleTypePlan.for_type(selected_type)
         # Keep the long-standing exact pair value shape and accessor path;
         # other admitted W94 profiles use owned row handles without arity
@@ -1400,7 +1412,9 @@ module CrystalClick
 
         column = @columns.find { |entry| entry.name == column_name }
         raise UnsupportedFormatError.new("selected column is not declared by table DDL") unless column
-        raise UnsupportedFormatError.new("selected table column is not UInt64") unless column.type == "UInt64"
+        unless column.type == "UInt64" || QBitColumnType.for_type(column.type)
+          raise UnsupportedFormatError.new("selected table column is neither UInt64 nor canonical QBit")
+        end
       end
 
       key_column = @primary_key_column || raise(UnsupportedFormatError.new("table does not have a supported simple ascending UInt64 ORDER BY key"))
@@ -1409,7 +1423,7 @@ module CrystalClick
       candidates = resolved_scan_parts
       return nil if candidates.empty?
 
-      reader = WidePartTable.open_selected(candidates.map(&.path), columns)
+      reader = WidePartTable.open_selected_typed(candidates.map(&.path), columns)
       reader.column_types.each do |column_name, part_type|
         ddl_column = @columns.find { |entry| entry.name == column_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
         unless ddl_column.type == part_type
@@ -1422,10 +1436,10 @@ module CrystalClick
       candidate_marks = Array(Array(Int32)).new(candidates.size)
       candidates.each_with_index do |candidate, part_index|
         checksums = PartChecksums.open(candidate.path)
-        index = PrimaryKeyIndex.open(candidate.path, part_mark_rows[part_index].size, checksums)
+        index = PrimaryKeyIndex.open(candidate.path, part_mark_rows[part_index].size, checksums, verify_recorded_hash: true)
         candidate_marks << index.candidate_marks(lower_bound, upper_bound)
       end
-      reader.scan_candidate_marks(candidate_marks, &block)
+      reader.scan_typed_candidate_marks(candidate_marks, &block)
     end
 
     # Scan selected exact primitive numeric columns. The type declared by the
@@ -1474,6 +1488,24 @@ module CrystalClick
       &block : WidePartTableBatch -> Nil
     ) : Nil
       if reader = open_typed_reader(columns, batch_rows, "batch")
+        reader.scan_typed(batch_rows: batch_rows, &block)
+      end
+    end
+
+    # Scan only exact canonical QBit and Nullable(QBit) columns through the
+    # shared typed reader. Table-DDL/part matching is checked before callbacks.
+    def scan_qbit(
+      columns : Array(String),
+      batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+      &block : WidePartTableBatch -> Nil
+    ) : Nil
+      columns.each do |column_name|
+        _source_name, _source_type, selected_type, _json_path = resolve_typed_ddl_selection(column_name)
+        unless QBitColumnType.for_type(selected_type)
+          raise UnsupportedFormatError.new("scan_qbit requires exact canonical QBit columns")
+        end
+      end
+      if reader = open_typed_reader(columns, batch_rows, "QBit batch")
         reader.scan_typed(batch_rows: batch_rows, &block)
       end
     end

@@ -1415,7 +1415,7 @@ module CrystalClick
     end
 
     def self.supports_typed_type?(type : String) : Bool
-      supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
+      !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         type == "Time" || !datetime64_scale(type).nil? || !time64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
         type == "Int256" || type == "UInt256" ||
@@ -1602,6 +1602,51 @@ module CrystalClick
         end
       end
       values
+    end
+
+    # Preserve the exact nominal QBit descriptor and raw element bytes. Range
+    # budgeting and all plane/null schedules are checked before payload reads.
+    def read_qbit_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = QBitColumnType::MAX_MATERIALIZED_BYTES,
+    ) : Array(QBitValue)
+      plan = ensure_qbit_reader_type(column, false)
+      checked_first_mark, checked_mark_count = qbit_reader_checked_range(plan, column, first_mark, mark_count)
+      qbit_reader(plan, column).read_scalar(checked_first_mark, checked_mark_count, max_materialized_bytes)
+    end
+
+    def read_nullable_qbit_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = QBitColumnType::MAX_MATERIALIZED_BYTES,
+    ) : Array(QBitValue?)
+      plan = ensure_qbit_reader_type(column, true)
+      checked_first_mark, checked_mark_count = qbit_reader_checked_range(plan, column, first_mark, mark_count)
+      qbit_reader(plan, column).read_nullable(checked_first_mark, checked_mark_count, max_materialized_bytes)
+    end
+
+    # Dense nested rows include nullable zero placeholders. The null map is
+    # still read and validated, so this is also suitable for staged readback.
+    def read_qbit_dense_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      max_materialized_bytes : UInt64 = QBitColumnType::MAX_MATERIALIZED_BYTES,
+    ) : Array(QBitValue)
+      plan = ensure_qbit_reader_type(column, nil)
+      checked_first_mark, checked_mark_count = qbit_reader_checked_range(plan, column, first_mark, mark_count)
+      qbit_reader(plan, column).read_dense(checked_first_mark, checked_mark_count, max_materialized_bytes)
+    end
+
+    # Preflight only: verifies every physical mark schedule and returns the
+    # conservative result charge without opening a selected payload stream.
+    def qbit_mark_range_materialization_charge(column : String, first_mark : Int, mark_count : Int) : UInt64
+      plan = ensure_qbit_reader_type(column, nil)
+      checked_first_mark, checked_mark_count = qbit_reader_checked_range(plan, column, first_mark, mark_count)
+      qbit_reader(plan, column).materialization_charge(checked_first_mark, checked_mark_count)
     end
 
     # Bool payload values use the shared semantic codec: zero is false and
@@ -10942,6 +10987,7 @@ module CrystalClick
       @low_cardinality_string_state = nil
       @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
+      qbit_plan = QBitColumnType.for_type(@column_type)
       variant_plan = WidePart.variant_type_plan(@column_type)
       dynamic_string = @column_type == "Dynamic"
       expected_mark_rows = nil.as(Array(UInt64)?)
@@ -10950,6 +10996,9 @@ module CrystalClick
         data_path, mark_path, compressed_marks = resolve_stream(stream_name)
         if (variant_plan || dynamic_string) && compressed_marks
           raise UnsupportedFormatError.new("Variant and Dynamic require plain .mrk2 marks")
+        end
+        if qbit_plan && compressed_marks
+          raise UnsupportedFormatError.new("QBit requires plain .mrk2 marks")
         end
         if WidePart.supports_array_map_type?(@column_type) && compressed_marks
           raise UnsupportedFormatError.new("Array(Map) numeric profile requires plain .mrk2 marks")
@@ -11082,6 +11131,7 @@ module CrystalClick
                               element_width,
                               allow_empty_string_eof,
                               mark_row_width: mark_row_width,
+                              alignment_width: qbit_plan ? 1 : nil,
                               required_first_mark_decompressed_offset: if (!!variant_plan &&
                                                                            stream_name == variant_plan.not_nil!.discriminator_stream(@column)) ||
                                                                           dynamic_string && stream_name == "#{@column}.variant_discr"
@@ -11138,15 +11188,23 @@ module CrystalClick
 
       codec = validate_default_codec
       if (WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" ||
-         WidePart.supports_array_map_type?(column_type)) && codec != "CODEC(LZ4)"
-        message = WidePart.supports_array_map_type?(column_type) ? "Array(Map) bounded profile requires CODEC(LZ4)" : "Variant and Dynamic require CODEC(LZ4)"
+         WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
+        message = if !QBitColumnType.for_type(column_type).nil?
+                    "QBit bounded profile requires CODEC(LZ4)"
+                  elsif WidePart.supports_array_map_type?(column_type)
+                    "Array(Map) bounded profile requires CODEC(LZ4)"
+                  else
+                    "Variant and Dynamic require CODEC(LZ4)"
+                  end
         raise UnsupportedFormatError.new(message)
       end
       row_count = parse_count_file("count.txt")
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
 
       json_paths = [] of {String, String}
-      if json_typed_path
+      if QBitColumnType.for_type(column_type)
+        validate_qbit_serialization_profile
+      elsif json_typed_path
         json_paths = WidePart.json_typed_paths(source_column_type)
         validate_json_typed_path_serialization(source_column_name, json_paths)
       elsif column_type == "LowCardinality(String)"
@@ -11205,6 +11263,18 @@ module CrystalClick
       {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, physical_streams}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
+    end
+
+    private def validate_qbit_serialization_profile : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for QBit") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      QBitSerializationProfile.validate!(text)
     end
 
     private def resolve_selected_column(
@@ -11391,6 +11461,8 @@ module CrystalClick
         variant_plan.physical_streams(column)
       elsif type == "LowCardinality(String)"
         ["#{column}.dict", column]
+      elsif plan = QBitColumnType.for_type(type)
+        plan.physical_streams(column).map(&.[0])
       elsif tuple_plan = WideTupleTypePlan.for_type(type)
         tuple_plan.physical_streams(column)
       elsif WidePart.supports_array_map_type?(type)
@@ -12952,6 +13024,7 @@ module CrystalClick
       mark_row_width : Int32,
       max_records : Int? = nil,
       required_first_mark_decompressed_offset : UInt64? = 0_u64,
+      alignment_width : Int32? = nil,
     ) : {Array(Mark), Mark}
       size = File.size(file)
       raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
@@ -13014,7 +13087,8 @@ module CrystalClick
         raise CorruptPartError.new("mark offset is not monotonic") if compressed < previous_compressed
         raise CorruptPartError.new("mark decompressed offset is not monotonic") if compressed == previous_compressed && decompressed < previous_decompressed
         raise CorruptPartError.new("mark offset exceeds limit") if decompressed > MAX_FRAME_DECOMPRESSED_BYTES
-        raise CorruptPartError.new("mark decompressed offset is not column-type-aligned") unless decompressed % element_width.to_u64 == 0
+        aligned_width = alignment_width || element_width
+        raise CorruptPartError.new("mark decompressed offset is not column-type-aligned") unless aligned_width > 0 && decompressed % aligned_width.to_u64 == 0
         if rows == 0
           raise CorruptPartError.new("zero-row mark must be the sentinel") unless offset + MARK_SIZE == bytes.size
           raise CorruptPartError.new("EOF sentinel must have zero local offset") if compressed == data_size && decompressed != 0
@@ -13045,6 +13119,12 @@ module CrystalClick
       if @column_type == "Dynamic"
         stream = "#{@column}.variant_discr"
         raise CorruptPartError.new("selected Dynamic discriminator stream is missing") unless stream_names.includes?(stream)
+        return stream
+      end
+      if plan = QBitColumnType.for_type(@column_type)
+        stream = plan.physical_streams(@column).find { |candidate| candidate[0] != "#{@column}.null" }.try(&.[0])
+        raise CorruptPartError.new("selected QBit plane stream is missing from its plan") unless stream
+        raise CorruptPartError.new("selected QBit plane stream is missing") unless stream_names.includes?(stream)
         return stream
       end
       if plan = WidePart.variant_type_plan(@column_type)
@@ -13104,7 +13184,9 @@ module CrystalClick
     end
 
     private def stream_element_width(stream_name : String) : Int32
-      if @column_type == "Dynamic"
+      if plan = QBitColumnType.for_type(@column_type)
+        plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported QBit substream"))
+      elsif @column_type == "Dynamic"
         stream_name == "#{@column}.String.size" || stream_name == "#{@column}.UInt64" ? 8 : 1
       elsif WidePart.supports_array_map_type?(@column_type)
         plan = WideTypePlan::WidePhysicalPlanShadow.for_type(@column_type, @column).not_nil!
@@ -14406,6 +14488,57 @@ module CrystalClick
       raise UnsupportedFormatError.new("column is not present") unless column == @column
     end
 
+    private def ensure_qbit_reader_type(column : String, nullable : Bool?) : QBitColumnType
+      ensure_column(column)
+      plan = QBitColumnType.for_type(@column_type) ||
+             raise(UnsupportedFormatError.new("QBit accessor requires a canonical QBit column"))
+      unless nullable.nil?
+        expected_nullable = nullable
+        unless plan.nullable == expected_nullable
+          shape = expected_nullable ? "Nullable(QBit)" : "non-nullable QBit"
+          raise UnsupportedFormatError.new("QBit accessor requires an exact #{shape} column")
+        end
+      end
+      plan
+    end
+
+    private def qbit_reader_checked_range(
+      plan : QBitColumnType,
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {Int32, Int32}
+      reference_stream = plan.physical_streams(column).first? ||
+                         raise(CorruptPartError.new("QBit has no physical plane streams"))
+      # Check caller-sized indices against the actual selected stream before
+      # narrowing to the reader Proc's Int32 interface.
+      checked_stream_mark_range(@streams[reference_stream[0]], first_mark, mark_count)
+      {first_mark.to_i32, mark_count.to_i32}
+    end
+
+    private def qbit_reader(plan : QBitColumnType, column : String) : QBitReader
+      QBitReader.new(
+        plan,
+        column,
+        ->(stream_name : String, first_mark : Int32, mark_count : Int32, width : Int32?) {
+          stream = @streams[stream_name]
+          start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+          if element_width = width
+            bytes = read_mark_range_bytes(
+              stream,
+              start_mark,
+              end_mark,
+              checked_byte_count(rows, element_width),
+              element_width
+            )
+            {rows, bytes}
+          else
+            {rows, nil}
+          end
+        }
+      )
+    end
+
     private def ensure_compositional_tuple_column(column : String) : WideTupleTypePlan
       ensure_column(column)
       WideTupleTypePlan.for_type(@column_type) ||
@@ -15074,8 +15207,9 @@ module CrystalClick
         started = false
         workspace = CompressedBlock::DecodeWorkspace.new
         loop do
+          qbit_profile = !QBitColumnType.for_type(@column_type).nil?
           if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic" ||
-             WidePart.supports_array_map_type?(@column_type)
+             WidePart.supports_array_map_type?(@column_type) || qbit_profile
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
               if WidePart.supports_array_map_type?(@column_type) &&
@@ -15086,6 +15220,8 @@ module CrystalClick
                           "Dynamic requires LZ4 compressed streams"
                         elsif WidePart.supports_array_map_type?(@column_type)
                           "Array(Map) numeric profile requires LZ4 compressed streams"
+                        elsif qbit_profile
+                          "QBit requires LZ4 compressed streams"
                         else
                           "Variant requires LZ4 compressed streams"
                         end
@@ -15110,7 +15246,8 @@ module CrystalClick
           end
           selected_size = (local_end - local_start).to_i64
           raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > expected_bytes.to_i64 - selected_bytes
-          raise CorruptPartError.new("numeric bytes are not column-type-aligned") unless selected_size % element_width == 0
+          frame_alignment = QBitColumnType.for_type(@column_type) ? 1 : element_width
+          raise CorruptPartError.new("numeric bytes are not column-type-aligned") unless selected_size % frame_alignment == 0
           yield frame.output[local_start.to_i, selected_size.to_i] if selected_size > 0
           selected_bytes += selected_size
           if current == end_offset
