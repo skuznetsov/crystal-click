@@ -57,30 +57,31 @@ class CrystalClick::WidePart
         8.times { |index| value |= bytes[offset + index].to_u64 << (index * 8) }
         value
       },
-      ->(_name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        raise "unexpected numeric Tuple decoder"
-      },
-      ->(_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        raise "unexpected Bool Tuple decoder"
-      },
-      ->(_name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        raise "unexpected identifier Tuple decoder"
-      },
-      ->(_name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        raise "unexpected temporal Tuple decoder"
-      },
-      ->(_name : String, _exact_type : DateTimeColumnType, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        raise "unexpected DateTime Tuple decoder"
-      },
-      ->(_name : String, _exact_type : WideTupleParameterizedType, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        raise "unexpected parameterized Tuple decoder"
-      },
-      ->(name : String, leaf_type : WideTupleLeafType, bytes : Bytes, null_map : ScalarNullMap, rows : UInt64, _width : Int32) {
-        decode_calls << name
-        raise "test nullable decoder expects UInt8" unless leaf_type.base_type_name == "UInt8"
-        values = Array(UInt8).new(rows.to_i) { |index| bytes[index] }
-        WideTupleLeafColumn.new(name, leaf_type, values, null_map)
-      }
+      TupleLeafDecoder.new(
+        ->(_name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          raise "unexpected numeric Tuple decoder"
+        },
+        ->(_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          raise "unexpected Bool Tuple decoder"
+        },
+        ->(_name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          raise "unexpected identifier Tuple decoder"
+        },
+        ->(_name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          raise "unexpected temporal Tuple decoder"
+        },
+        ->(_name : String, _exact_type : DateTimeColumnType, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          raise "unexpected DateTime Tuple decoder"
+        },
+        ->(_name : String, _exact_type : WideTupleParameterizedType, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          raise "unexpected parameterized Tuple decoder"
+        },
+        ->(name : String, leaf_type : WideTupleLeafType, bytes : Bytes, null_map : ScalarNullMap, rows : UInt64, _width : Int32) {
+          decode_calls << name
+          raise "test nullable decoder expects UInt8" unless leaf_type.base_type_name == "UInt8"
+          values = Array(UInt8).new(rows.to_i) { |index| bytes[index] }
+          WideTupleLeafColumn.new(name, leaf_type, values, null_map)
+        })
     )
   end
 end

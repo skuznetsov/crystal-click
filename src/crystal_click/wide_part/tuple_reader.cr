@@ -8,13 +8,6 @@ module CrystalClick
       alias ReadRange = Proc(String, Int32, Int32, Int32, Int32, UInt64, Bytes)
       alias ValidateRange = Proc(String, Int32, Int32, Int32, Int32, UInt64, Nil)
       alias DecodeUInt64 = Proc(Bytes, Int32, UInt64)
-      alias DecodeNumericLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
-      alias DecodeBoolLeaf = Proc(String, Bytes, UInt64, Int32, WideTupleLeafColumn)
-      alias DecodeIdentifierLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
-      alias DecodeTemporalLeaf = Proc(String, String, Bytes, UInt64, Int32, WideTupleLeafColumn)
-      alias DecodeDateTimeLeaf = Proc(String, DateTimeColumnType, Bytes, UInt64, Int32, WideTupleLeafColumn)
-      alias DecodeParameterizedLeaf = Proc(String, WideTupleParameterizedType, Bytes, UInt64, Int32, WideTupleLeafColumn)
-      alias DecodeNullableLeaf = Proc(String, WideTupleLeafType, Bytes, ScalarNullMap, UInt64, Int32, WideTupleLeafColumn)
       alias LogicalRows = Proc(Int32, Int32, UInt64)
       alias CombinedCharge = Proc(UInt64, UInt64, UInt64, UInt64?)
 
@@ -25,13 +18,7 @@ module CrystalClick
       @read_range : ReadRange
       @validate_range : ValidateRange
       @decode_uint64 : DecodeUInt64
-      @decode_numeric_leaf : DecodeNumericLeaf
-      @decode_bool_leaf : DecodeBoolLeaf
-      @decode_identifier_leaf : DecodeIdentifierLeaf
-      @decode_temporal_leaf : DecodeTemporalLeaf
-      @decode_datetime_leaf : DecodeDateTimeLeaf
-      @decode_parameterized_leaf : DecodeParameterizedLeaf
-      @decode_nullable_leaf : DecodeNullableLeaf
+      @leaf_decoder : TupleLeafDecoder
       @logical_rows : LogicalRows?
       @combined_charge : CombinedCharge?
 
@@ -43,13 +30,7 @@ module CrystalClick
         @read_range : ReadRange,
         @validate_range : ValidateRange,
         @decode_uint64 : DecodeUInt64,
-        @decode_numeric_leaf : DecodeNumericLeaf,
-        @decode_bool_leaf : DecodeBoolLeaf,
-        @decode_identifier_leaf : DecodeIdentifierLeaf,
-        @decode_temporal_leaf : DecodeTemporalLeaf,
-        @decode_datetime_leaf : DecodeDateTimeLeaf,
-        @decode_parameterized_leaf : DecodeParameterizedLeaf,
-        @decode_nullable_leaf : DecodeNullableLeaf,
+        @leaf_decoder : TupleLeafDecoder,
         @logical_rows : LogicalRows? = nil,
         @combined_charge : CombinedCharge? = nil,
       )
@@ -306,7 +287,7 @@ module CrystalClick
               width,
               rows
             )
-            columns << @decode_nullable_leaf.call(field.name, leaf_type, encoded, null_map, rows, width)
+            columns << @leaf_decoder.decode_nullable(field, encoded, null_map, rows, width)
           elsif leaf_type.base_type_name == "String"
             size_stream = "#{leaf_stream}.size"
             encoded_sizes = @read_range.call(
@@ -326,69 +307,9 @@ module CrystalClick
               nil
             end
             columns << WideTupleLeafColumn.new(field.name, values)
-          elsif exact_type = field.parameterized_type
-            width = @plan.stream_width(@column, leaf_stream) ||
-                    raise(CorruptPartError.new("Tuple parameterized stream has no fixed width"))
-            encoded = @read_range.call(
-              leaf_stream,
-              first_mark,
-              mark_count,
-              checked_byte_count(rows, width),
-              width,
-              rows
-            )
-            columns << @decode_parameterized_leaf.call(field.name, exact_type, encoded, rows, width)
-          elsif exact_type = field.datetime_type
-            width = @plan.stream_width(@column, leaf_stream) ||
-                    raise(CorruptPartError.new("Tuple DateTime stream has no fixed width"))
-            encoded = @read_range.call(
-              leaf_stream,
-              first_mark,
-              mark_count,
-              checked_byte_count(rows, width),
-              width,
-              rows
-            )
-            columns << @decode_datetime_leaf.call(field.name, exact_type, encoded, rows, width)
-          elsif leaf_type.base_type_name == "Bool"
-            width = @plan.stream_width(@column, leaf_stream) ||
-                    raise(CorruptPartError.new("Tuple Bool stream has no fixed width"))
-            encoded = @read_range.call(
-              leaf_stream,
-              first_mark,
-              mark_count,
-              checked_byte_count(rows, width),
-              width,
-              rows
-            )
-            columns << @decode_bool_leaf.call(field.name, encoded, rows, width)
-          elsif WideTupleIdentifierType.width(leaf_type.base_type_name)
-            width = @plan.stream_width(@column, leaf_stream) ||
-                    raise(CorruptPartError.new("Tuple identifier stream has no fixed width"))
-            encoded = @read_range.call(
-              leaf_stream,
-              first_mark,
-              mark_count,
-              checked_byte_count(rows, width),
-              width,
-              rows
-            )
-            columns << @decode_identifier_leaf.call(field.name, leaf_type.base_type_name, encoded, rows, width)
-          elsif WideTupleTemporalType.width(leaf_type.base_type_name)
-            width = @plan.stream_width(@column, leaf_stream) ||
-                    raise(CorruptPartError.new("Tuple temporal stream has no fixed width"))
-            encoded = @read_range.call(
-              leaf_stream,
-              first_mark,
-              mark_count,
-              checked_byte_count(rows, width),
-              width,
-              rows
-            )
-            columns << @decode_temporal_leaf.call(field.name, leaf_type.base_type_name, encoded, rows, width)
           else
             width = @plan.stream_width(@column, leaf_stream) ||
-                    raise(CorruptPartError.new("Tuple numeric stream has no fixed width"))
+                    raise(CorruptPartError.new("Tuple leaf stream has no fixed width"))
             encoded = @read_range.call(
               leaf_stream,
               first_mark,
@@ -397,7 +318,7 @@ module CrystalClick
               width,
               rows
             )
-            columns << @decode_numeric_leaf.call(field.name, leaf_type.base_type_name, encoded, rows, width)
+            columns << @leaf_decoder.decode_fixed(field, encoded, rows, width)
           end
         end
         WideTupleColumnData.new(@plan, columns)

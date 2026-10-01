@@ -9,9 +9,9 @@ module CrystalClick
 
     RESULT_CONTAINER_ACCOUNTING_BYTES = 64_u64
     FIELD_CONTAINER_ACCOUNTING_BYTES  = sizeof(WideTupleField).to_u64
-    RESULT_ROW_ACCOUNTING_BYTES       =  8_u64
-    UINT64_SLOT_ACCOUNTING_BYTES      =  8_u64
-    STRING_SLOT_ACCOUNTING_BYTES      = 16_u64
+    RESULT_ROW_ACCOUNTING_BYTES       = 8_u64
+    UINT64_SLOT_ACCOUNTING_BYTES      = 8_u64
+    STRING_SLOT_ACCOUNTING_BYTES      = WideTupleLeafType::STRING_SLOT_ACCOUNTING_BYTES
 
     @type_name : String
     @root : WideTupleSchemaNode
@@ -35,6 +35,15 @@ module CrystalClick
       return nil if type.bytesize > WideTupleSchemaParser::MAX_SOURCE_BYTES
       root = WideTupleSchemaParser.parse_array_tuple_tree(type) || return nil
       new(root)
+    end
+
+    # Parse a complete Map(K, Tuple(...)) expression once, retaining one
+    # validated nonnullable scalar key descriptor and the recursive value
+    # Tuple plan. This is the only Map-to-value-plan admission path.
+    def self.for_map_type(type : String) : {WideTupleLeafType, WideTupleTypePlan}?
+      return nil if type.bytesize > WideTupleSchemaParser::MAX_SOURCE_BYTES
+      key_type, root = WideTupleSchemaParser.parse_map_tuple_tree(type) || return nil
+      {key_type, new(root)}
     end
 
     def type_name : String
@@ -209,7 +218,7 @@ module CrystalClick
           fixed_bytes += descriptor_charge
         end
 
-        slot_bytes = row_slot_bytes(field)
+        slot_bytes = leaf_type.owned_slot_bytes
         slot_bytes += 1_u64 if leaf_type.nullable?
         return nil if slot_bytes > UInt64::MAX - row_bytes
         row_bytes += slot_bytes
@@ -219,53 +228,6 @@ module CrystalClick
       fixed_bytes += rows * row_bytes
       return nil if string_payload_bytes > UInt64::MAX - fixed_bytes
       fixed_bytes + string_payload_bytes
-    end
-
-    private def row_slot_bytes(field : WideTupleField) : UInt64
-      leaf_type = field.leaf_type
-      base_type_name = leaf_type.base_type_name
-      if parameterized_type = field.parameterized_type
-        if leaf_type.nullable?
-          case parameterized_type
-          when WideTupleEnumType    then return parameterized_type.width.to_u64
-          when WideTupleDecimalType then return parameterized_type.storage_width.to_u64
-          end
-        end
-      end
-      if leaf_type.nullable? && base_type_name == "Bool"
-        return sizeof(UInt8).to_u64
-      end
-      if parameterized_type = field.parameterized_type
-        case parameterized_type
-        when WideTupleFixedStringType
-          sizeof(FixedStringValue).to_u64
-        when WideTupleEnumType
-          parameterized_type.definition.kind == :enum8 ? sizeof(Enum8Value).to_u64 : sizeof(Enum16Value).to_u64
-        when WideTupleDecimalType
-          case parameterized_type.storage_width
-          when  4 then sizeof(Decimal32Value).to_u64
-          when  8 then sizeof(Decimal64Value).to_u64
-          when 16 then sizeof(Decimal128Value).to_u64
-          else         sizeof(Decimal256TupleValue).to_u64
-          end
-        else
-          raise UnsupportedFormatError.new("unsupported parameterized Tuple descriptor")
-        end
-      elsif base_type_name == "String"
-        STRING_SLOT_ACCOUNTING_BYTES
-      elsif base_type_name == "Bool"
-        1_u64
-      elsif datetime_type = field.datetime_type
-        if datetime_type.family == DateTimeColumnType::Family::DateTime
-          sizeof(DateTimeValue).to_u64
-        else
-          sizeof(DateTime64Value).to_u64
-        end
-      elsif temporal_width = WideTupleTemporalType.owned_width(base_type_name)
-        temporal_width.to_u64
-      else
-        (WideTupleIdentifierType.width(base_type_name) || WideTupleNumericType.width(base_type_name).not_nil!).to_u64
-      end
     end
 
     private def path_prefix?(segments : Array(String), prefix : Array(String)) : Bool

@@ -167,6 +167,28 @@ module CrystalClick
         end
       end
 
+      if map_tuple_plan = WideMapTupleTypePlan.for_type(selected_type)
+        if WideTypePlan.admitted(selected_type).nil?
+          observed_rows, array_elements[0], tuple_cells[0], string_bytes = MapTupleValuesMaterializer.append_rows(
+            values,
+            batch,
+            column_name,
+            map_tuple_plan.column_type,
+            map_tuple_plan.tuple_plan.type_name,
+            map_tuple_plan.key_type.base_type_name == "String" || map_tuple_plan.key_type.parameterized_type.is_a?(WideTupleFixedStringType),
+            observed_rows,
+            expected_rows,
+            array_elements[0],
+            tuple_cells[0],
+            string_bytes,
+            max_string_bytes,
+            max_tuple_cells,
+            map_tuple_plan.tuple_plan.fields.size
+          )
+          return {observed_rows, string_bytes}
+        end
+      end
+
       if tuple_plan = WideTupleTypePlan.for_type(selected_type)
         # Keep the long-standing exact pair value shape and accessor path;
         # other admitted W94 profiles use owned row handles without arity

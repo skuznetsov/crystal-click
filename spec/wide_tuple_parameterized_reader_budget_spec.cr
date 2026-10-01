@@ -35,40 +35,41 @@ class CrystalClick::WidePart
         nil
       },
       ->(_bytes : Bytes, _offset : Int32) { 0_u64 },
-      ->(name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        WideTupleLeafColumn.new(name, [] of UInt64)
-      },
-      ->(name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        WideTupleLeafColumn.new(name, [] of Bool)
-      },
-      ->(name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        WideTupleLeafColumn.new(name, [] of UInt64)
-      },
-      ->(name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        WideTupleLeafColumn.new(name, [] of UInt64)
-      },
-      ->(name : String, _exact_type : DateTimeColumnType, _bytes : Bytes, _rows : UInt64, _width : Int32) {
-        raise "unexpected DateTime leaf decode for #{name} in FixedString budget test"
-      },
-      ->(name : String, exact_type : WideTupleParameterizedType, bytes : Bytes, encoded_rows : UInt64, width : Int32) {
-        parameterized_decode_calls << name
-        fixed_type = exact_type.as?(WideTupleFixedStringType) ||
-                     raise "unexpected non-FixedString parameterized decode"
-        unless width == fixed_type.width && bytes.size.to_u64 == encoded_rows * width.to_u64
-          raise CorruptPartError.new("test FixedString decode dimensions do not match")
-        end
+      TupleLeafDecoder.new(
+        ->(name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          WideTupleLeafColumn.new(name, [] of UInt64)
+        },
+        ->(name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          WideTupleLeafColumn.new(name, [] of Bool)
+        },
+        ->(name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          WideTupleLeafColumn.new(name, [] of UInt64)
+        },
+        ->(name : String, _type_name : String, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          WideTupleLeafColumn.new(name, [] of UInt64)
+        },
+        ->(name : String, _exact_type : DateTimeColumnType, _bytes : Bytes, _rows : UInt64, _width : Int32) {
+          raise "unexpected DateTime leaf decode for #{name} in FixedString budget test"
+        },
+        ->(name : String, exact_type : WideTupleParameterizedType, bytes : Bytes, encoded_rows : UInt64, width : Int32) {
+          parameterized_decode_calls << name
+          fixed_type = exact_type.as?(WideTupleFixedStringType) ||
+                       raise "unexpected non-FixedString parameterized decode"
+          unless width == fixed_type.width && bytes.size.to_u64 == encoded_rows * width.to_u64
+            raise CorruptPartError.new("test FixedString decode dimensions do not match")
+          end
 
-        values = Array(FixedStringValue).new(encoded_rows.to_i) do |row_index|
-          offset = row_index * width
-          row_bytes = Bytes.new(width)
-          width.times { |byte_index| row_bytes[byte_index] = bytes[offset + byte_index] }
-          FixedStringValue.from_raw(width, row_bytes)
-        end
-        WideTupleLeafColumn.new(name, fixed_type, values)
-      },
-      ->(_name : String, _leaf_type : WideTupleLeafType, _bytes : Bytes, _null_map : ScalarNullMap, _encoded_rows : UInt64, _width : Int32) {
-        raise "unexpected Nullable leaf decode in FixedString budget test"
-      }
+          values = Array(FixedStringValue).new(encoded_rows.to_i) do |row_index|
+            offset = row_index * width
+            row_bytes = Bytes.new(width)
+            width.times { |byte_index| row_bytes[byte_index] = bytes[offset + byte_index] }
+            FixedStringValue.from_raw(width, row_bytes)
+          end
+          WideTupleLeafColumn.new(name, fixed_type, values)
+        },
+        ->(_name : String, _leaf_type : WideTupleLeafType, _bytes : Bytes, _null_map : ScalarNullMap, _encoded_rows : UInt64, _width : Int32) {
+          raise "unexpected Nullable leaf decode in FixedString budget test"
+        })
     )
   end
 end

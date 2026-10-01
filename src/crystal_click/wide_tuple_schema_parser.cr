@@ -40,6 +40,16 @@ module CrystalClick
       nil
     end
 
+    # Parse a complete Map declaration with one aggregate source/depth/node
+    # budget. The key remains an exact scalar descriptor and the value is the
+    # normal recursive Tuple tree; neither child is reparsed by a new parser.
+    def self.parse_map_tuple_tree(source : String) : {WideTupleLeafType, WideTupleSchemaNode}?
+      return nil if source.bytesize > MAX_SOURCE_BYTES
+      new(source).parse_map_tuple_tree
+    rescue ex : ArgumentError
+      nil
+    end
+
     # Parse one exact admitted scalar leaf without wrapping it in a synthetic
     # Tuple. The normal Tuple path calls #parse_leaf directly and therefore
     # does not recurse through this public owner factory.
@@ -76,6 +86,30 @@ module CrystalClick
       skip_whitespace
       raise ArgumentError.new("trailing bytes after Array(Tuple)") unless @offset == @bytes.size
       root
+    end
+
+    protected def parse_map_tuple_tree : {WideTupleLeafType, WideTupleSchemaNode}
+      expect_text!("Map")
+      add_node!
+      skip_whitespace
+      expect_byte!('('.ord.to_u8)
+      skip_whitespace
+
+      key_start = @offset
+      key_end = scan_leaf_end(1)
+      key_source = String.new(@bytes[key_start, key_end - key_start])
+      key_type = parse_leaf(key_source)
+      raise ArgumentError.new("Map key cannot be Nullable") if key_type.nullable?
+      skip_whitespace
+      expect_byte!(','.ord.to_u8)
+      skip_whitespace
+
+      value_root = parse_tuple(nil, 2)
+      skip_whitespace
+      expect_byte!(')'.ord.to_u8)
+      skip_whitespace
+      raise ArgumentError.new("trailing bytes after Map(Tuple)") unless @offset == @bytes.size
+      {key_type, value_root}
     end
 
     private def parse_tuple(tuple_name : String?, depth : Int32) : WideTupleSchemaNode

@@ -466,6 +466,36 @@ module CrystalClick
       )
     end
 
+    # Write an outer Map whose ordered entries hold recursively named Tuple
+    # values. Primary keys and Map row sizes share the outer-row axis; the
+    # Map-key/value leaf buffers share the flattened-entry axis.
+    def self.write_uint64_map_tuple_part(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type_name : String,
+      row_sizes : Slice(UInt64),
+      map_keys : WideTupleLeafColumn,
+      value_columns : Array(WideTupleLeafColumn),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      infrastructure = build_tuple_part_infrastructure(
+        ->(parent : String) { create_stage(parent) },
+        ->(column : WideTupleLeafColumn) do
+          if column.leaf_type.nullable?
+            column.physical_values.as(Array(String))
+          else
+            column.string_values
+          end
+        end
+      )
+      MapTuplePartWriter.write(
+        destination, key_name, keys, value_name, type_name, row_sizes,
+        map_keys, value_columns, rows_per_mark, infrastructure
+      )
+    end
+
     private def self.write_uint64_tuple_pair_with_stage_factory(
       destination : String,
       key_name : String,

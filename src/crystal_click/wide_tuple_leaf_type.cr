@@ -3,6 +3,8 @@ module CrystalClick
   # wrapped once in Nullable. The physical codec remains owned by the existing
   # scalar-family descriptors.
   class WideTupleLeafType
+    STRING_SLOT_ACCOUNTING_BYTES = 16_u64
+
     @base_type_name : String
     @nullable : Bool
     @parameterized_type : WideTupleParameterizedType?
@@ -89,6 +91,56 @@ module CrystalClick
     def logical_charge : UInt64
       instance_sizeof(WideTupleLeafType).to_u64 +
         instance_sizeof(String).to_u64 + @base_type_name.bytesize.to_u64 + 1_u64
+    end
+
+    # Physical value-slot size shared by Tuple and Map-key result accounting.
+    # The Nullable bitmap byte is charged separately by the containing plan.
+    def owned_slot_bytes : UInt64
+      base_name = @base_type_name
+      if parameterized_type = @parameterized_type
+        if @nullable
+          case parameterized_type
+          when WideTupleEnumType
+            return parameterized_type.width.to_u64
+          when WideTupleDecimalType
+            return parameterized_type.storage_width.to_u64
+          end
+        end
+      end
+      if @nullable && base_name == "Bool"
+        return sizeof(UInt8).to_u64
+      end
+      if parameterized_type = @parameterized_type
+        case parameterized_type
+        when WideTupleFixedStringType
+          sizeof(FixedStringValue).to_u64
+        when WideTupleEnumType
+          parameterized_type.definition.kind == :enum8 ? sizeof(Enum8Value).to_u64 : sizeof(Enum16Value).to_u64
+        when WideTupleDecimalType
+          case parameterized_type.storage_width
+          when  4 then sizeof(Decimal32Value).to_u64
+          when  8 then sizeof(Decimal64Value).to_u64
+          when 16 then sizeof(Decimal128Value).to_u64
+          else         sizeof(Decimal256TupleValue).to_u64
+          end
+        else
+          raise UnsupportedFormatError.new("unsupported parameterized Tuple descriptor")
+        end
+      elsif base_name == "String"
+        STRING_SLOT_ACCOUNTING_BYTES
+      elsif base_name == "Bool"
+        1_u64
+      elsif datetime_type = @datetime_type
+        if datetime_type.family == DateTimeColumnType::Family::DateTime
+          sizeof(DateTimeValue).to_u64
+        else
+          sizeof(DateTime64Value).to_u64
+        end
+      elsif temporal_width = WideTupleTemporalType.owned_width(base_name)
+        temporal_width.to_u64
+      else
+        (WideTupleIdentifierType.width(base_name) || WideTupleNumericType.width(base_name).not_nil!).to_u64
+      end
     end
 
     def with_nullable(nullable : Bool = true) : WideTupleLeafType

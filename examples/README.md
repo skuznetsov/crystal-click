@@ -186,6 +186,29 @@ schedule and one current decoded mark; it is not a no-payload-I/O or RSS
 ceiling. Inner Array/Map/LowCardinality/Variant/Dynamic/JSON composition
 remains outside this profile.
 
+One BASIC `Map(K, Tuple(...))` wrapper around the same named Tuple tree,
+in the qualified two-column Wide/LZ4 profile with one sorted UInt64 primary key,
+returns `WideMapTupleRow` handles. Keys use admitted non-Nullable scalar leaf
+descriptors; entries are ordered and duplicate keys are not collapsed:
+
+```crystal
+row = catalog["lab"]["events"]["payload"].values.first.as(CrystalClick::WideMapTupleRow)
+row.each do |key, value|
+  puts "#{key.inspect}: #{value.fields.map { |field| value[field.name] }.inspect}"
+end
+```
+
+Typed batches expose `map_tuple_rows_for("payload")`; direct part reads use
+`read_map_tuple_mark_range` or `each_map_tuple_mark_range`. The paired writer
+is `WidePartWriter.write_uint64_map_tuple_part`: pass outer PK rows, a
+per-row entry-count vector, a key leaf named `keys`, and Tuple leaves in schema
+order. Empty Maps still occupy outer rows. Catalog cell limits count flattened
+entries times value leaves, and String limits include key bytes and value bytes
+hidden beneath NULL. Row handles retain their decoded backing; this is not an
+RSS bound. WITH_BUCKETS, Nullable keys/containers and other inner containers
+remain rejected. See the [Map(Tuple) frontier](../docs/MAP_TUPLE_COMPOSITION_FRONTIER.md)
+for the exact physical profile and qualification scope.
+
 Read a bounded physical-row window from two `UInt64` columns without
 materializing the complete table:
 

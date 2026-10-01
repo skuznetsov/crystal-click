@@ -87,6 +87,26 @@ Tuple family stock scripts and the 297-profile W104 writer phase passed.
 This is not a claim that the large facades or resource lifetimes have been
 decomposed, nor a combined/full RELEASE certificate.
 
+W108 adds ten concrete production owners, each with one file: Map(Tuple)
+plan, ragged schedule, owned column data, row handle, reader, table adapter,
+offline materializer, writer input and orchestrator, plus a shared internal
+Tuple leaf decoder. The existing Tuple reader and Map keys delegate to that
+one decoder; the leaf stream writer exposes one internal explicit-path seam
+instead of duplicating a codec/width table. The new Map row identity and
+outer/entry axes remain separate from Array(Tuple).
+
+The scoped certificate is in `MAP_TUPLE_COMPOSITION_FRONTIER.md`: focused
+DEBUG 25, regression DEBUG 82, the same 22 inputs split into two RELEASE
+batches (31 + 51), full DEBUG 1,776, five-profile reader and writer stock
+phases, six predecessor phases and five affected leaf-family stock scripts
+passed. Root's scoped hostile verdict is ROBUST. This is not a combined/full
+RELEASE, current-master executable, RSS or full architecture certificate.
+The remaining facade counts are reader 15,585 lines, writer 25,920, table
+6,889, catalog 1,560 and extracted OfflineTable 3,637. These are navigation
+counts, not evidence of reduced coupling or performance. Cohesive physical
+stream lifetime/policy, codec dispatch, staging and table responsibility
+decomposition remains open.
+
 ## Catalog owner decomposition (2026-10-01)
 
 Status: VERIFIED within the source-owner extraction and executed gates below.
