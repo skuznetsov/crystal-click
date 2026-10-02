@@ -1,5 +1,6 @@
 require "json"
 require "./wide_part/variant_discriminator_decoder"
+require "./wide_part/low_cardinality_binary_codec"
 
 module CrystalClick
   class WidePart
@@ -10575,38 +10576,15 @@ module CrystalClick
       global_dictionary : Bool,
       shared_keys : Array(String),
     ) : {Array(String), Int32}
-      raise CorruptPartError.new("LowCardinality index mark boundaries are invalid") if start_offset > end_offset || end_offset > bytes.size.to_u64
-      segment = bytes[start_offset.to_i, (end_offset - start_offset).to_i]
-      header = low_cardinality_read_u64(segment, 0)
-      expected_header = if global_dictionary
-                          mark_index == 0 ? 0x500_u64 : 0x100_u64
-                        else
-                          0x600_u64
-                        end
-      if header != expected_header
-        raise UnsupportedFormatError.new("unsupported or changing LowCardinality dictionary state")
-      end
-      keys = shared_keys
-      cursor = 8
-      unless global_dictionary
-        key_count = low_cardinality_read_u64(segment, cursor)
-        cursor += 8
-        raise CorruptPartError.new("LowCardinality local dictionary is empty or exceeds key limit") if key_count == 0_u64 || key_count > MAX_LOW_CARDINALITY_DICTIONARY_KEYS
-        keys = Array(String).new(key_count.to_i)
-        seen = Set(String).new
-        key_count.to_i.times do
-          key, cursor = low_cardinality_read_string(segment, cursor)
-          raise CorruptPartError.new("LowCardinality local dictionary contains duplicate keys") unless seen.add?(key)
-          keys << key
-        end
-        raise CorruptPartError.new("LowCardinality local dictionary must reserve the empty default at ID zero") unless keys.first.empty?
-      end
-      row_count = low_cardinality_read_u64(segment, cursor)
-      cursor += 8
-      raise CorruptPartError.new("LowCardinality index row count differs from marks") unless row_count == mark.rows
-      raise CorruptPartError.new("LowCardinality index row count exceeds limit") if row_count > MAX_LOW_CARDINALITY_MARK_ROWS
-      raise CorruptPartError.new("LowCardinality index IDs are truncated or have trailing bytes") unless segment.size - cursor == row_count
-      {keys, start_offset.to_i + cursor}
+      LowCardinalityBinaryCodec.parse_index_mark(
+        bytes,
+        start_offset,
+        end_offset,
+        mark,
+        mark_index,
+        global_dictionary,
+        shared_keys
+      )
     end
 
     private def decode_low_cardinality_compressed_stream(
@@ -10677,50 +10655,19 @@ module CrystalClick
     end
 
     private def low_cardinality_read_dictionary(bytes : Bytes, offset : Int, limit : Int?) : {Array(String), Int32}
-      count = low_cardinality_read_u64(bytes, offset)
-      cursor = offset + 8
-      maximum = limit || bytes.size
-      raise CorruptPartError.new("LowCardinality dictionary is empty or exceeds key limit") if count == 0_u64 || count > MAX_LOW_CARDINALITY_DICTIONARY_KEYS
-      keys = Array(String).new(count.to_i)
-      seen = Set(String).new
-      count.to_i.times do
-        key, cursor = low_cardinality_read_string(bytes, cursor)
-        raise CorruptPartError.new("LowCardinality dictionary contains duplicate keys") unless seen.add?(key)
-        keys << key
-      end
-      raise CorruptPartError.new("LowCardinality dictionary record exceeds mark boundary") if cursor > maximum
-      {keys, cursor.to_i32}
+      LowCardinalityBinaryCodec.read_dictionary(bytes, offset, limit)
     end
 
     private def low_cardinality_read_u64(bytes : Bytes, offset : Int) : UInt64
-      raise CorruptPartError.new("LowCardinality UInt64 field is truncated") if offset < 0 || offset > bytes.size - 8
-      u64(bytes, offset)
+      LowCardinalityBinaryCodec.read_u64(bytes, offset)
     end
 
     private def low_cardinality_read_string(bytes : Bytes, offset : Int) : {String, Int32}
-      length, data_offset = low_cardinality_read_var_uint(bytes, offset)
-      raise CorruptPartError.new("LowCardinality String length exceeds remaining bytes") if length > (bytes.size - data_offset).to_u64
-      finish = data_offset + length.to_i
-      {String.new(bytes[data_offset, length.to_i]), finish.to_i32}
+      LowCardinalityBinaryCodec.read_string(bytes, offset)
     end
 
     private def low_cardinality_read_var_uint(bytes : Bytes, offset : Int) : {UInt64, Int32}
-      raise CorruptPartError.new("LowCardinality VarUInt is truncated") if offset < 0
-      value = 0_u64
-      cursor = offset
-      10.times do |index|
-        raise CorruptPartError.new("LowCardinality VarUInt is truncated") if cursor >= bytes.size
-        byte = bytes[cursor]
-        payload = (byte & 0x7f_u8).to_u64
-        raise CorruptPartError.new("LowCardinality VarUInt overflows UInt64") if index == 9 && payload > 1_u64
-        value |= payload << (index * 7)
-        cursor += 1
-        unless byte & 0x80_u8 != 0
-          raise CorruptPartError.new("LowCardinality VarUInt is noncanonical") if index > 0 && payload == 0_u64
-          return {value, cursor.to_i32}
-        end
-      end
-      raise CorruptPartError.new("LowCardinality VarUInt is too long")
+      LowCardinalityBinaryCodec.read_var_uint(bytes, offset)
     end
 
     # Read an exact FixedString(N) mark range. Each returned String contains

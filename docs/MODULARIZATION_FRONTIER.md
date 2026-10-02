@@ -1,5 +1,8 @@
 # CrystalClick Modularization Frontier
 
+The October 2 LowCardinality binary grammar extraction is verified below:
+one private concrete owner/file, unchanged physical admission and facade API.
+
 Document status: W89 implemented and verified on the combined W88+W89 source;
 W90 Array(Map) plan owners, W91 payload owners and W94 bounded Tuple owners
 are verified below. The larger reader/writer modularization remains future work.
@@ -22,7 +25,8 @@ Exact seven-arm Geometry is now admitted within that profile; wrappers and
 generic Variant widening remain rejected. The larger facade refactor remains
 open. Source files alone do not prove lower coupling or performance.
 Current navigation counts are 16,029 reader lines, 26,034 writer lines, 7,080
-table lines, 1,560 catalog lines and 3,657 offline-table lines. The next cohesive
+table lines, 1,560 catalog lines and 3,657 offline-table lines at W120
+(`74a8752`, before the extraction below). The next cohesive
 architectural boundaries remain shared type/substream planning, physical-stream
 lifetime/validation, leaf codecs, staging orchestration and table/catalog
 materialization; do not replace these with a Cartesian set of type combinations.
@@ -1185,3 +1189,103 @@ next cohesive extraction boundaries remain physical-stream lifetime/validation,
 leaf codecs, staging/read-write orchestration and table/catalog adapters, one
 concrete owner per file with behavior-preserving gates. This bounded W102
 change does not complete that larger architectural work.
+
+## LowCardinality binary grammar owner (2026-10-02)
+
+Status: VERIFIED within the behavior-neutral extraction and gates below.
+The implementation anchor is `74a8752`; executed final source is the isolated
+four-file owner/import/delegation/spec/documentation diff over `0626874`.
+CAUTION: moving private serialization helpers can silently change bounds,
+exception classification, dictionary ownership or absolute row coordinates.
+Rollback is the exact owner/import/delegation/spec diff and its isolated commit;
+the unrelated uncommitted W121 JSON design draft is outside this change.
+
+The existing reader/writer/cache characterization passed 16 DEBUG examples
+before movement (`wide_part_reader_w22_spec.cr`, `wide_part_writer_w22_spec.cr`,
+`wide_part_table_low_cardinality_cache_spec.cr`). Extract one private concrete
+class, `WidePart::LowCardinalityBinaryCodec`, into
+`src/crystal_click/wide_part/low_cardinality_binary_codec.cr`. It owns only
+index-mark grammar, dictionary records, little-endian UInt64, binary Strings
+and canonical VarUInt. Preserve all five existing private facade signatures as
+delegates and copy the exact private bounded UInt64 primitive. The reader
+requires the owner beside its existing private Variant decoder import.
+
+Consumer inventory is limited to selected-range/full-state mark parsing,
+shared/per-mark dictionary parsing and their nested primitive reads in
+`wide_part.cr`. Compression/frame decoding, absolute mark mapping, cache/state
+lifetime, serialization metadata, type admission, limits and materialization
+remain with their existing owners. This does not admit broader LowCardinality
+index widths, Nullable, dictionary updates, new types or new physical layouts.
+
+DoD: qualify the missing-owner RED using
+`spec/low_cardinality_binary_codec_spec.cr`, then pass that spec plus the three
+existing LC specs in DEBUG and RELEASE; pass full DEBUG and the unchanged
+`scripts/check_lowcard_string_oracle.sh` against its pinned 26.7.1.1315 runtime.
+Root checks source-body parity (only owner qualification/internal call renames),
+existing delegate signatures, format and diff hygiene. The strongest guard is
+a deliberately removed dictionary-state header check: direct negative tests
+must detect it, then the guard must be restored before all final gates.
+Tests cover global/local dictionary ownership, absolute offsets, binary bytes,
+counts, defaults, duplicates, selected boundaries and malformed VarUInt.
+
+This is one responsibility-level extraction, not completion of the large
+reader/writer/table decomposition or evidence of lower allocations or speed.
+The active capability return pointer remains W121 in
+`JSON_GENERAL_STORAGE_FRONTIER.md`; memory/performance follow paired types and
+MV/projection compatibility rather than being inferred from this refactor.
+
+### Executed result and replay
+
+Root independently normalized each of the five original method bodies against
+the moved static methods: only indentation, owner/internal-call qualification
+and explicit parent constant names differ. The private bounded UInt64 primitive
+is also an exact copy. All five original facade signatures are preserved.
+The new owner is 104 lines; the reader is 15,976, writer 26,034 and table 7,080.
+These are navigation counts, not coupling or performance measurements.
+
+Observed gates on the restored, frozen production/spec source:
+
+- Qualified missing-owner RED: the direct spec exited 1 solely because
+  `LowCardinalityBinaryCodec` did not yet exist, after the 16-example existing
+  DEBUG baseline passed. This establishes the new seam, not a pre-existing bug.
+- Final focused DEBUG and RELEASE: 28 examples each, no failures/errors/pending.
+- Full DEBUG: 1,973 examples, no failures/errors/pending. The existing W113
+  test-only deprecated `blocking` warning and duplicate `-lc` linker warning
+  remain; full RELEASE was not executed.
+- A temporary `false && header != expected_header` instrument made the direct
+  spec fail (12 examples, one failure: expected UnsupportedFormatError but
+  nothing was raised). The original guard was restored before all final gates.
+- The unchanged stock LC oracle exited 0 against pinned ClickHouse 26.7.1.1315:
+  stock shared/local dictionaries, exact streams/marks, full/key-range reads,
+  authored-part ATTACH/actual CHECK=1 and RowBinary checks passed. Both same-size
+  dictionary/index corruption controls were detected and restored by the script.
+- Final format checks, diff hygiene and restored source-body parity passed.
+
+Luna's static review is correlated, not independent runtime evidence. Root's
+scoped adversarial verdict is ROBUST for behavior preservation, backed by the
+body comparison, seeded guard detection and independently executed gates.
+No general LowCardinality, whole-JSON, allocation or throughput claim follows.
+
+Logs are `/private/tmp/crystal-click-architecture-20261002.VOBfQV/`:
+`baseline-focused-debug.log`, `owner-missing-red.log`,
+`header-guard-seeded-red.log`, `final-focused-debug.log`,
+`final-focused-release.log`, `final-full-debug.log`, `final-stock-lowcard.log`.
+Replay from the repository, serially under the existing `run_safe.sh` memory
+guard (50% minimum free; 600 seconds; focused/oracle 8,192 MiB, full 32,768 MiB):
+
+```sh
+crystal spec spec/low_cardinality_binary_codec_spec.cr spec/wide_part_reader_w22_spec.cr spec/wide_part_writer_w22_spec.cr spec/wide_part_table_low_cardinality_cache_spec.cr --single-module --link-flags=-fuse-ld=ld --error-trace
+# Repeat the focused command with --release.
+crystal spec --single-module --link-flags=-fuse-ld=ld --error-trace
+CLICKHOUSE_BIN=/Users/sergey/.local/bin/clickhouse bash scripts/check_lowcard_string_oracle.sh
+crystal tool format --check src/crystal_click/wide_part.cr src/crystal_click/wide_part/low_cardinality_binary_codec.cr spec/low_cardinality_binary_codec_spec.cr
+git diff --check
+```
+
+Executed compiler: `/opt/homebrew/bin/crystal` 1.21.0, LLVM 22.1.8, AArch64;
+`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`,
+`TMPDIR=/private/tmp`, isolated cache directories under the log root.
+The current 31d2addb source snapshot is not the stock executable's provenance.
+Refresh this certificate when a moved body, delegation, limits, consumer,
+require graph, toolchain or tested runtime changes. Source continuity does not
+widen admission: re-run focused/full/oracle gates before reusing that claim.
