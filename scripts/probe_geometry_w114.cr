@@ -4,12 +4,13 @@ require "json"
 require "file_utils"
 require "../src/crystal_click"
 
-W114_VERSION    = "26.10.1.1201"
-W114_BUILD_HASH = "d9bcb5ab007f0f6299f7f973f2642245bab3d028"
-W114_SETTINGS   = "index_granularity = 2, index_granularity_bytes = 10485760, enable_mixed_granularity_parts = 1, min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0, ratio_of_defaults_for_sparse_serialization = 0.9375, compress_marks = 0, compress_primary_key = 0, min_compress_block_size = 0, max_compress_block_size = 4096, default_compression_codec = 'LZ4'"
-W114_MARK_BYTES = 24
-W114_TAGS       = {"LineString", "MultiLineString", "MultiPolygon", "Point", "Polygon", "Ring", "MultiPoint"}
-W114_DEPTHS     = {"LineString" => 1, "MultiLineString" => 2, "MultiPolygon" => 3, "Point" => 0, "Polygon" => 2, "Ring" => 1, "MultiPoint" => 1}
+W114_VERSION           = "26.10.1.1201"
+W114_BUILD_HASH        = "d9bcb5ab007f0f6299f7f973f2642245bab3d028"
+W114_EXECUTABLE_SHA256 = "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+W114_SETTINGS          = "index_granularity = 2, index_granularity_bytes = 10485760, enable_mixed_granularity_parts = 1, min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0, ratio_of_defaults_for_sparse_serialization = 0.9375, compress_marks = 0, compress_primary_key = 0, min_compress_block_size = 0, max_compress_block_size = 4096, default_compression_codec = 'LZ4'"
+W114_MARK_BYTES        = 24
+W114_TAGS              = {"LineString", "MultiLineString", "MultiPolygon", "Point", "Polygon", "Ring", "MultiPoint"}
+W114_DEPTHS            = {"LineString" => 1, "MultiLineString" => 2, "MultiPolygon" => 3, "Point" => 0, "Polygon" => 2, "Ring" => 1, "MultiPoint" => 1}
 
 class W114Mismatch < Exception
 end
@@ -505,6 +506,19 @@ def w114_expected_selected_indexes(profile : W114Profile) : Array(Int32)
   end
 end
 
+def w114_expected_rowbinary_sizes(profile : W114Profile) : {Int32, Int32}
+  case profile.name
+  when "mixed_basic", "mixed_compact"
+    {417, 118}
+  when "all_null_basic", "all_null_compact"
+    {45, 18}
+  when "uniform_point_multipoint_basic", "uniform_point_multipoint_compact"
+    {112, 62}
+  else
+    w114_fail("RowBinary size literals missing for #{profile.name}")
+  end
+end
+
 def w114_fixture_self_check : Nil
   checked_streams = 0
   checked_full_rowbinary = 0
@@ -533,11 +547,12 @@ def w114_fixture_self_check : Nil
 
     full_rowbinary = w114_rowbinary(profile, all_indexes)
     selected_rowbinary = w114_rowbinary(profile, selected_indexes)
+    expected_full_size, expected_selected_size = w114_expected_rowbinary_sizes(profile)
     independently_projected = all_indexes.select { |index| expected_selected.includes?(index) }
     w114_require(independently_projected == expected_selected, "#{profile.name}: selected RowBinary projection is not an ordered subset")
     w114_require(selected_rowbinary == w114_rowbinary(profile, independently_projected), "#{profile.name}: selected RowBinary generation differs from literal ordered projection")
-    w114_require(full_rowbinary.bytesize >= profile.keys.size * 9, "#{profile.name}: full RowBinary omitted key/tag bytes")
-    w114_require(selected_rowbinary.bytesize >= expected_selected.size * 9, "#{profile.name}: selected RowBinary omitted key/tag bytes")
+    w114_require(full_rowbinary.bytesize == expected_full_size, "#{profile.name}: literal full RowBinary size differs (expected #{expected_full_size}, got #{full_rowbinary.bytesize})")
+    w114_require(selected_rowbinary.bytesize == expected_selected_size, "#{profile.name}: literal selected RowBinary size differs (expected #{expected_selected_size}, got #{selected_rowbinary.bytesize})")
     checked_full_rowbinary += 1
     checked_selected_rowbinary += 1
   end
@@ -547,9 +562,124 @@ def w114_fixture_self_check : Nil
   puts "PASS W114 fixture self-check: #{W114_PROFILES.size} profiles, #{checked_streams} ordered streams, full+selected RowBinary generated"
 end
 
-unless ARGV.size == 1 && ARGV[0] == "fixtures"
-  STDERR.puts "usage: crystal run scripts/probe_geometry_w114.cr -- fixtures"
+def w114_run(binary : String, store : String, query : String, input : IO? = nil) : String
+  output = IO::Memory.new
+  error = IO::Memory.new
+  status = if input
+             Process.run(binary, ["local", "--path", store, "--query", query], input: input, output: output, error: error)
+           else
+             Process.run(binary, ["local", "--path", store, "--query", query], output: output, error: error)
+           end
+  raise "ClickHouse capture command failed: #{error}\n#{query}" unless status.success?
+  output.to_s
+end
+
+def w114_stock_capture_profile(binary : String, store : String, profile : W114Profile) : Nil
+  table = "w114_capture_#{profile.name}"
+  w114_run(binary, store, "CREATE TABLE default.#{table} (pk UInt64, payload Geometry) ENGINE = MergeTree ORDER BY pk SETTINGS #{profile.settings}")
+  indexes = (0...profile.values.size).map(&.to_i32)
+  rowbinary = IO::Memory.new(w114_rowbinary(profile, indexes).to_slice)
+  w114_run(binary, store, "INSERT INTO default.#{table} FORMAT RowBinary", rowbinary)
+
+  columns = w114_run(binary, store, "SELECT name || ' ' || type FROM system.columns WHERE database='default' AND table='#{table}' ORDER BY position FORMAT TSVRaw")
+  parts = w114_run(binary, store, "SELECT path, part_type, rows FROM system.parts WHERE database='default' AND table='#{table}' AND active FORMAT TSVRaw")
+  check = w114_run(binary, store, "CHECK TABLE default.#{table} FORMAT TabSeparated")
+  w114_require(!parts.empty?, "#{profile.name}: capture found no active stock part")
+
+  puts "\n=== W114 STOCK-CAPTURE ONLY: #{profile.name} ==="
+  puts "table=#{table}"
+  puts "settings=#{profile.settings}"
+  puts "insert_rowbinary_bytes=#{rowbinary.size}"
+  puts "system.columns TSVRaw:"
+  print columns
+  puts "system.parts TSVRaw:"
+  print parts
+  puts "CHECK TABLE observed output:"
+  print check
+
+  parts.lines.each do |line|
+    fields = line.split('\t')
+    w114_require(fields.size == 3, "#{profile.name}: capture part record is malformed")
+    part = fields[0]
+    w114_require(Dir.exists?(part), "#{profile.name}: capture part directory is unavailable: #{part}")
+
+    puts "part=#{part}"
+    puts "inventory name<TAB>size_bytes:"
+    Dir.children(part).sort.each do |name|
+      path = File.join(part, name)
+      puts "#{name}\t#{File.size(path)}" if File.file?(path)
+    end
+
+    {"columns.txt", "columns_substreams.txt", "serialization.json"}.each do |name|
+      path = File.join(part, name)
+      puts "#{name} observed contents:"
+      if File.file?(path)
+        print File.read(path)
+        puts unless File.read(path).ends_with?('\n')
+      else
+        puts "<absent>"
+      end
+    end
+
+    {"checksums.txt", "statistics.packed", "primary.idx"}.each do |name|
+      path = File.join(part, name)
+      if File.file?(path)
+        bytes = File.read(path).to_slice
+        puts "#{name} observed hex (#{bytes.size} bytes): #{bytes.hexstring}"
+      else
+        puts "#{name} observed: <absent>"
+      end
+    end
+  end
+end
+
+def w114_stock_capture : Nil
+  binary = ENV["CLICKHOUSE_BIN"]? || raise "set CLICKHOUSE_BIN to the isolated W114 ClickHouse executable"
+  store = ENV["W114_CAPTURE_STORE"]? || raise "set W114_CAPTURE_STORE to a fresh temporary ClickHouse store"
+  expanded_store = File.expand_path(store)
+  parent = File.realpath(File.dirname(expanded_store))
+  store = File.join(parent, File.basename(expanded_store))
+  unless store.starts_with?("/private/tmp/")
+    raise "refusing non-temporary W114 capture store path: #{store}"
+  end
+  raise "refusing symlink W114 capture store: #{store}" if File.symlink?(store)
+  if Dir.exists?(store)
+    raise "W114 capture store must be fresh and empty: #{store}" unless Dir.empty?(store)
+  else
+    Dir.mkdir(store)
+  end
+
+  hash_output = IO::Memory.new
+  hash_error = IO::Memory.new
+  hash_status = Process.run("shasum", ["-a", "256", binary], output: hash_output, error: hash_error)
+  raise "could not inspect ClickHouse executable SHA-256: #{hash_error}" unless hash_status.success?
+  executable_sha256 = hash_output.to_s.split(' ').first? || raise "ClickHouse SHA-256 output is malformed"
+  w114_require(executable_sha256 == W114_EXECUTABLE_SHA256, "W114 executable SHA-256 differs: #{executable_sha256}")
+
+  version_output = IO::Memory.new
+  version_error = IO::Memory.new
+  version_status = Process.run(binary, ["local", "--version"], output: version_output, error: version_error)
+  raise "could not inspect ClickHouse version: #{version_error}" unless version_status.success?
+  expected_version = "ClickHouse local version #{W114_VERSION} (official build)."
+  w114_require(version_output.to_s.strip == expected_version, "W114 requires #{expected_version}, got #{version_output.to_s.strip}")
+
+  build_options = w114_run(binary, store, "SELECT name || '=' || value FROM system.build_options WHERE name IN ('GIT_HASH', 'VERSION_GITHASH') ORDER BY name FORMAT TSVRaw").lines.map(&.strip)
+  expected_build_options = ["GIT_HASH=#{W114_BUILD_HASH}", "VERSION_GITHASH=#{W114_BUILD_HASH}"]
+  w114_require(build_options == expected_build_options, "W114 binary build identity differs: #{build_options.inspect}")
+
+  puts "W114 STOCK-CAPTURE ONLY: observations follow; this mode is neither qualification nor production RED"
+  puts "runtime=#{expected_version}; build=#{W114_BUILD_HASH}; executable_sha256=#{executable_sha256}"
+  W114_PROFILES.each { |profile| w114_stock_capture_profile(binary, store, profile) }
+end
+
+unless ARGV.size == 1 && {"fixtures", "stock-capture"}.includes?(ARGV[0])
+  STDERR.puts "usage: crystal run scripts/probe_geometry_w114.cr -- fixtures|stock-capture"
   exit 2
 end
 
-w114_fixture_self_check
+case ARGV[0]
+when "fixtures"
+  w114_fixture_self_check
+when "stock-capture"
+  w114_stock_capture
+end

@@ -2,7 +2,8 @@
 
 ## Active W114: Geometry qualification before paired implementation
 
-Status: design-sealed qualification; Geometry remains rejected by production.
+Status: design-sealed qualification with verified capture-only instrumentation;
+Geometry remains rejected by production.
 The full all-types and MV/projection goal remains active, followed by memory
 and performance work. This slice must not turn fixed Geometry storage into
 generic Variant admission or treat the W112 MultiPoint certificate as proof
@@ -73,6 +74,63 @@ Replay from this repository through the existing serial guard:
 ```sh
 env SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w114-fixtures-cache COGNI_RUN_SAFE_MIN_FREE_PCT=50 /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 8192 run --single-module --link-flags=-fuse-ld=ld scripts/probe_geometry_w114.cr -- fixtures
 ```
+
+### Capture-only checkpoint (2026-10-01)
+
+The earlier fixture fingerprint above is historical. Over production anchor
+`49d9c0a`, root executed the updated script with SHA-256
+`f18344e387ea273cb909888ccfab735983ca0fd0d6456c3ea8c1ff42e31172bb`:
+`fixtures` exited0 with six profiles/156 ordered streams; `stock-capture`
+exited0 on the pinned expanded 26.10 executable. Both used the serial
+600-second/8192-MiB guard and 50% free-memory floor. No production admission
+or reader/writer implementation changed in this checkpoint.
+
+The capture produced one Wide part per profile: mixed BASIC/COMPACT each
+17 rows, all-NULL BASIC/COMPACT each5, and uniform Point/MultiPoint
+BASIC/COMPACT each5. Root independently inspected all six actual
+`CHECK TABLE` records (`all_1_1_0<TAB>1<TAB>`), the exact two-column schema
+`pk UInt64, payload Geometry`, and declarations of one PK plus 25 payload
+substreams. The observed version-1 serialization envelope contains only one
+Default PK record, `exact_num_defaults=true`, propagated nested versions,
+and string version1. Its `(num_rows, num_defaults)` is `(17,2)`, `(5,1)`
+and `(5,2)` respectively. No Geometry column record appears. The packed
+statistics captures are337/253/245 bytes respectively; their binary hex,
+checksums hex and primary-index hex are observations, not decoded physical
+qualification. Full/selected fixture RowBinary byte counts are417/118,
+45/18 and112/62; stock full/selected output equality is still pending.
+
+Evidence is local and disposable:
+`/private/tmp/crystal-click-w114-stock-capture.lOpxj4/capture-path-guard.log`,
+SHA-256 `c8568acf4fc3d3a2eeb325d2ced3c52019889a6bc63fe02b67a468647a7bda7e`;
+its isolated store is the sibling `store-path-guard`. Runtime data, executable
+and logs are not tracked. The source snapshot and executed binary remain
+different revisions.
+
+The instrument canonicalizes an existing store parent, confines the resulting
+path to `/private/tmp/`, refuses a symlink store and requires an empty or new
+store. Root's executed negative controls each exited1 for the expected reason:
+wrong executable SHA, populated store, `/private/tmp/../var`, and a symlink
+to the captured store. These failures precede ClickHouse queries. The wrong
+peer may leave an empty newly-created temporary store. This is an accidental
+path-reuse guard for a serial local probe, not a concurrent hostile-filesystem
+sandbox. Scoped adversary verdict: ROBUST for the fixture/capture and tested
+peer/path/refusal boundaries only. Capture reports CHECK output; it must not
+be mistaken for a comparator that fails on CHECK=0.
+
+Replay capture with a fresh parent and the pinned isolated executable:
+
+```sh
+W114_capture_root="$(mktemp -d /private/tmp/crystal-click-w114-capture.XXXXXX)"
+env CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse W114_CAPTURE_STORE="$W114_capture_root/store" SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk TMPDIR=/private/tmp CRYSTAL_CACHE_DIR="$W114_capture_root/cache" COGNI_RUN_SAFE_MIN_FREE_PCT=50 /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 8192 run --single-module --link-flags=-fuse-ld=ld scripts/probe_geometry_w114.cr -- stock-capture
+```
+
+Next return pointer: execution-order step1 below. Build strict source/fresh
+ATTACH comparators for all six profiles, including raw streams, marks, PK,
+metadata and actual full/selected RowBinary, then seed known wrong inputs.
+Only after those controls pass may the exact public Geometry refusal count
+as production RED. The six-arm legacy bulk profile also remains unqualified.
+Refresh this checkpoint after any script/fixture, executable, settings or
+serializer change; rollback is this isolated script/documentation diff.
 
 Planned paired surface: exact nominal Geometry beside one nondecreasing UInt64
 PK, Wide/LZ4/plain adaptive `.mrk2` and plain `primary.idx`; all seven arms and
