@@ -9,6 +9,7 @@ module CrystalClick
     getter bucket_count : UInt64
 
     @dynamic_paths : Array(String)
+    @dynamic_path_set : Set(String)
     @legacy_max_dynamic_paths : UInt64?
     @statistics : StructureStatistics?
 
@@ -63,6 +64,7 @@ module CrystalClick
         end
         seen.add(path)
       end
+      @dynamic_path_set = seen
 
       if value = statistics
         unless value.count_count == @dynamic_paths.size
@@ -91,6 +93,10 @@ module CrystalClick
 
     def dynamic_path_byte_at(index : Int, byte_index : Int) : UInt8
       @dynamic_paths[index].to_slice[byte_index]
+    end
+
+    def has_dynamic_path?(path : String) : Bool
+      @dynamic_path_set.includes?(path)
     end
 
     def legacy_max_dynamic_paths : UInt64?

@@ -7,6 +7,20 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryCodecLimits.default,
     ) : ObjectDynamicStructureStreams
       budget = BinaryCodecBudget.new(limits, true)
+      encode_with_budget(structure_set, budget)
+    end
+
+    # Borrowed-budget entry point for a wider Object document operation. The
+    # Object and every Dynamic metadata stream share the caller's budget.
+    def self.encode_with_budget(
+      structure_set : ObjectDynamicStructureSet,
+      budget : BinaryCodecBudget,
+    ) : ObjectDynamicStructureStreams
+      unless budget.writing?
+        raise ArgumentError.new("Object/Dynamic structure encode requires a writing budget")
+      end
+
+      limits = budget.limits
       object_context = BinaryCodecContext.new(limits, nil, true, budget)
       ObjectStructureCodec.write_to(structure_set.object, object_context)
       object_bytes = object_context.finish_bytes
@@ -27,10 +41,25 @@ module CrystalClick
       streams : ObjectDynamicStructureStreams,
       limits : BinaryCodecLimits = BinaryCodecLimits.default,
     ) : ObjectDynamicStructureSet
+      budget = BinaryCodecBudget.new(limits)
+      decode_with_budget(streams, budget)
+    end
+
+    # Borrowed-budget entry point for a wider Object document operation. It
+    # charges all metadata stream bytes once before any byte-copying getter,
+    # then shares recursive descriptor work with the parent operation.
+    def self.decode_with_budget(
+      streams : ObjectDynamicStructureStreams,
+      budget : BinaryCodecBudget,
+    ) : ObjectDynamicStructureSet
+      if budget.writing?
+        raise ArgumentError.new("Object/Dynamic structure decode requires a reading budget")
+      end
+
+      limits = budget.limits
       # Do not call the byte-copying getters until the complete aggregate input
       # byte count has passed and been charged.
       total_input_bytes = streams.total_input_byte_size
-      budget = BinaryCodecBudget.new(limits)
       budget.charge_wire_bytes(total_input_bytes)
 
       object_bytes = streams.object

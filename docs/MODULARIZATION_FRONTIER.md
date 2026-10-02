@@ -1,5 +1,8 @@
 # CrystalClick Modularization Frontier
 
+W123's flattened Object document composition is verified below with five
+separate owners/files. Public physical part admission remains unchanged.
+
 The October 2 LowCardinality binary grammar extraction is verified below:
 one private concrete owner/file, unchanged physical admission and facade API.
 
@@ -1410,3 +1413,48 @@ assumption was corrected without changing production code; independent semantic
 qualification plus exact retained bytes remain required. Root's scoped verdict
 is ROBUST; Luna's static review is correlated. Full details and temporary
 evidence pointers are in the capability frontier rather than duplicated here.
+
+## Flattened Object document owners (W123, 2026-10-02)
+
+Status: VERIFIED within the normalized V3/one-bucket MAP document profile and
+two captured-stock profiles in `JSON_GENERAL_STORAGE_FRONTIER.md`.
+CAUTION: document-level composition over `3bcdefc`; rollback is the isolated
+five-owner/import/metadata-predicate/spec/oracle/documentation diff.
+No legacy part/table/catalog facade is rerouted or enlarged.
+
+Each new concrete responsibility has one production file:
+
+- `object_document.cr`: detached, byte-ordered flattened path/value row.
+- `object_document_plan.cr`: exact disjoint typed schema and Object/Dynamic
+  metadata association; not schema inference or fresh statistics synthesis.
+- `object_document_streams.cr`: owned metadata and complete typed/Dynamic/shared
+  lane sets with the full outer row grid; not compressed-file acquisition.
+- `object_document_shared_codec.cr`: shared named-Tuple Array framing, aggregate
+  pending-envelope reservation and strict exact-path/envelope validation.
+- `object_document_codec.cr`: paired metadata/child composition, selected-window
+  validation and all-or-error document assembly under one logical budget.
+
+ObjectDynamicStructureCodec's additive borrowed-budget entry points preserve
+its standalone grammar. ObjectStructure retains its existing detached uniqueness
+set and exposes a non-copying raw-byte membership predicate; repeated roster
+scans are not delegated to model getters. Equality/hash identity remains the
+metadata itself, not this derived index. The two String layout authorities are
+explicitly separate: typed/Dynamic profile and shared profile.
+
+The five new files total 915 lines (61/74/136/213/431). The existing legacy
+reader/writer/table/catalog/offline-table remain unchanged at
+15,976/26,034/7,080/1,560/3,657 lines. These are navigation counts, not a
+completed architecture or coupling/performance certificate. Physical lifetime,
+compressed-mark adapters, codec dispatch, fresh statistics/staging and
+table/catalog responsibilities still need cohesive extraction.
+
+Root executed 131 focused DEBUG and 131 focused RELEASE examples, 2,050 full
+non-release examples without symbolic debug info, four W123 authored-stream
+isolated ATTACH/CHECK=1 cases and the unchanged W122 oracle. Independent
+literal wire/window limits, a detected/restored grid-guard defect and a qualified
+32 MiB quadratic-copy allocation RED supplement the correlated Luna review.
+The final allocation guard passes below 2 MiB; this is not an RSS/speed claim.
+Full RELEASE was not run. The scoped hostile verdict is ROBUST; replay, exact
+profiles, source/runtime identities, exclusions, lineage and decay triggers are
+recorded in the capability frontier. Public whole-JSON read/write, complete
+type/MV/projection coverage and the large-facade refactor remain open.

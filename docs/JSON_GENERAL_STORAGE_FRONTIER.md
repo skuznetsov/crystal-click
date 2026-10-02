@@ -6,17 +6,19 @@ shared-MAP block codec and W119's fixed-width scalar extension were executed
 on 2026-10-02. W117, W118 and W119 are VERIFIED
 within their scalar/block profiles and gates below, not as a general
 Object/Dynamic/MergeTree codec. The precise whole-document missing-capability
-RED is qualified, not resolved. General JSON
-document reading/writing is not admitted. W24/W72 declared scalar projections
-remain the only paired JSON capability; see `JSON_TYPED_PATH_FRONTIER.md`.
+RED is qualified, not resolved in the public part facade. General JSON
+part reading/writing is not admitted. W24/W72 declared scalar projections
+remain the paired JSON capability in that facade; see `JSON_TYPED_PATH_FRONTIER.md`.
 W120's paired complete decompressed structure-metadata codecs are VERIFIED
 within the source/local and V3 MAP stock gates below. W121's paired normalized
 Dynamic discriminator streams and selected sparse schedules are VERIFIED within
 their strict captured-writer profile below. W122's reusable recursive bulk and
 Dynamic logical-value codecs are VERIFIED within their normalized profile and
-two retained-stock gates below. Compressed physical adapters, Object document
-assembly and staged writer publication remain the next owner boundary;
-metadata, schedules and standalone child codecs do not admit whole-document JSON.
+two retained-stock gates below. W123's paired flattened Object document
+composition is VERIFIED within its normalized V3/one-bucket MAP profile and
+two captured-stock profiles below. Compressed physical adapters, public part
+integration and staged writer publication remain the next owner boundary;
+logical document streams are not a public whole-JSON part capability.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
 
@@ -1869,3 +1871,201 @@ Remaining recursive/type families and MV/projection coverage precede memory
 and throughput optimization. The overall goal is active, not completed or
 blocked. Owner/API/profile/runtime/toolchain/coordinate/budget/comparator
 changes reopen dependent evidence.
+
+## W123 design seal: flattened Object documents over paired MAP lanes
+
+Risk: CAUTION (serialization and a new logical API). Rollback: the clean W122
+commit `3bcdefc`; no existing facade routing, declaration admission, source
+checkout or retained fixture is modified. This slice composes existing owners
+rather than extending the legacy WidePart/WidePartWriter monoliths.
+
+Source anchor: shallow source `31d2addbabda0d8e14ffd325fc0a9106528aa1c7`.
+`ColumnObject.cpp:294-322` returns flattened path/value fields: every typed
+path, non-null Dynamic paths and decoded shared envelopes. Missing and NULL
+Dynamic values are intentionally indistinguishable. `SerializationObject.cpp:
+1130-1166` reads all three lanes and checks consistent row counts, then repairs
+some Dynamic/shared duplicates. W123 does not implement that repair policy.
+`SerializationObjectSharedData.cpp:45,133-143` delegates to the shared type's
+default serializer. Its `serialization_map` variable is not its nominal type:
+`DataTypeObject.cpp:900-905` specifies `Array(Tuple(paths String, values String))`.
+String values contain the binary nominal-type/value envelopes, not JSON text.
+`SerializationObjectSharedData.cpp:48` selects default serialization independently
+of the settings propagated to typed/Dynamic paths (`DataTypeObject.cpp:189-193`).
+The retained stock shared lanes are single-stream Strings even where Dynamic
+String children use WITH_SIZE_STREAM. A uniform Object-wide String profile is
+therefore refuted by the exact retained inventory; it is not a codec alias.
+JSON textual
+dot expansion/escaping belongs to `SerializationJSON`, not this storage API.
+
+Admitted:
+
+- `ObjectDocument` owns detached raw String path identities and nominal
+  `BinaryValue` fields. Paths are byte-sorted for traversal; empty paths,
+  embedded NUL, invalid UTF-8 and `a`/`a.b` remain distinct identities. This is
+  a flattened storage document, not a JSON::Any tree or JSON text parser.
+- `ObjectDocumentPlan` binds supplied Object/Dynamic metadata to an exact,
+  disjoint typed schema. `ObjectDocumentStreams` owns that metadata, exact
+  typed and Dynamic lane sets, shared bulk MAP and the full outer row grid.
+  Metadata constructors are detached input ownership, not a budgeted decoder.
+- Paired `ObjectDocumentCodec.encode/decode`, with additive `*_with_budget`
+  plumbing, compose one operation budget through metadata, descriptor trees,
+  path/grid records, typed bulks, Dynamic discriminators/arms, shared envelopes
+  and final document assembly. No reset per mark/path/child. W118 remains
+  unchanged; marked shared MAP uses W122 bulk named-Tuple Array. `profile:`
+  selects typed/Dynamic String layout; separate `shared_profile:` defaults to
+  single-stream and explicitly selects shared layout. An abstract WITH_SIZE
+  shared profile is not claimed to match the retained stock producer.
+- Encoding requires every typed field, including a typed Nullable NULL, with
+  exact nominal descriptor equality. It does not synthesize missing typed
+  defaults or cast values. Every supplied Dynamic/non-typed Nothing NULL is
+  normalized to absence. Missing Dynamic values become discriminator NULL.
+  Non-typed top-level Nullable is outside the canonical profile, as in W122.
+- Object V3, one MAP bucket and Dynamic V3 only in this composition slice.
+  Metadata statistics are supplied/preserved, not recomputed or proved by this
+  codec. The eventual staged writer must own fresh metadata/statistics.
+- Every structural grid and exact lane roster is checked, even for an empty
+  selected window. Full outer row counts must agree with every Dynamic mark.
+  Only selected bodies are decoded; unselected body bytes are not certified.
+  Every selected child and shared envelope is validated before documents are
+  returned. Shared paths must be strictly byte-sorted and cannot equal any
+  typed or Dynamic roster path, even where the Dynamic value is NULL.
+- Writer argument/unsupported failures and malformed-reader failures remain
+  explicit. Invalid selection arguments are rejected before indexing. Output
+  is an all-or-error returned value, not incremental callbacks/publication.
+- Raw-byte Dynamic path membership must not repeatedly traverse/copy the full
+  roster for every typed or shared field. Reuse the immutable Object roster's
+  retained uniqueness index through one non-copying predicate; constructors
+  remain detached input ownership. A pinned allocation guard must distinguish
+  this from the prior quadratic name-copying route. This closes a resource-work
+  guard, not the parked throughput/performance frontier.
+
+Rejected/not admitted: legacy Object/Dynamic versions in this orchestrator,
+bucketed/advanced shared data, implicit duplicate repair, JSON textual rendering
+or parsing, escaping/collapsing dots, schema inference, default synthesis,
+LC/Variant/Object nested into the W117 descriptor kernel, compressed-file
+adapter, public whole-JSON facade admission and staged part publication.
+No full-JSON, all-type, MV/projection or speed claim follows.
+
+Plan / ownership:
+
+1. Root: independent missing-API RED and mixed literal/window falsifier before
+   production changes; living frontier and root-only serial compiler/stock/Git.
+2. Luna models/tests: one file each for ObjectDocument, ObjectDocumentPlan,
+   ObjectDocumentStreams; bounded adversary specs. No compiler/stock processes.
+3. Luna codec: ObjectDocumentCodec plus a small shared-envelope owner if useful;
+   additive borrowed-budget seams in ObjectDynamicStructureCodec. Reuse W122
+   typed/Dynamic/bulk work. Shared pending envelopes must be bounded before
+   retaining framed String copies; charge final wire bytes exactly once.
+4. Luna stock source/oracle: independently authored documents/streams from the
+   retained W115/W116 literals, full and nonzero-origin reads, production-
+   authored JSON lanes copied only into fresh isolated parts; exact actual
+   ATTACH, CHECK=1 and full/pk3..6 stock queries, both discriminator modes.
+5. Root: inspect diff, hostile guards/seed, focused debug/release, full nonrelease
+   suite, stock gate and unchanged W122 regression; exact format/diff hygiene,
+   evidence seal and atomic local commit. No push or performance work.
+
+Strongest likely failure: valid child streams disagree about outer rows/path
+ownership, or a late invalid envelope is silently discarded. First falsifier:
+mixed typed/dynamic/shared literals over marks 1..2 with a malformed final shared
+value; no documents returned. Guards also attack duplicate ownership, a wrong
+last Dynamic row count on an empty window, trailing bytes, aggregate byte/node/
+edge limits across individually valid children, descriptor validation before
+recursive name/default work, and String profile mismatch. Local round trips
+cannot substitute for independent literal or real stock gates.
+
+DoD: guarded focused W117-W123 specs in debug and release, guarded full
+`crystal spec --no-debug --single-module --link-flags=-fuse-ld=ld --error-trace`,
+new W123 stock oracle and unchanged W122 stock oracle, formatter/shell syntax/
+`git diff --check`, proportionate hostile verdict and an exact atomic commit.
+Expected signals: zero failures/errors, explicit stock CHECK=1 and literal full/
+selected results. Source/runtime/profile/owner/budget/comparator changes reopen
+the corresponding certificate. Temporary evidence must be regenerated if lost.
+
+### Executed W123 evidence and continuation (2026-10-02)
+
+Root executed the gates on the frozen additive diff over `3bcdefc`, with
+Crystal 1.21.0/LLVM 22.1.8, the SDK and serial resource guard used by W122.
+The 50% free-memory floor was unchanged; no worker ran compiler/stock processes.
+The five new owners and two additive metadata/predicate seams are indexed in
+`MODULARIZATION_FRONTIER.md`. This is a logical document certificate, not a
+completed compressed-part adapter or staged writer.
+
+- Qualified missing-API REDs named ObjectDocumentPlan and ObjectDocumentCodec.
+  Independent root literals mix typed UInt64, Dynamic String/NULL and shared
+  Bool/Int64 over three marks, including a nonzero-origin window and a malformed
+  final shared envelope. Exact aggregate read-byte limits are 113 full / 91
+  selected; minus-one limits reject. BASIC writer bytes and grids match those
+  independent literals, not just its own decoder.
+- Three root guard REDs exposed a late outer-grid budget check, zero-row real
+  Object marks and misclassification of a recognized unsupported shared profile.
+  Removing the restored two-line full-grid budget admission caused exactly one
+  targeted failure; restoration passed the final gates. K=0 remains admitted.
+- The bounded same-lineage hostile review found repeated quadratic Dynamic
+  roster scans/name copies. Root's qualified allocation RED measured 32,102,384
+  bytes for a 1,000-by-1,000 typed/Dynamic plan. The existing immutable roster
+  uniqueness set is now retained and queried without copies; the pinned guard
+  passes below 2 MiB. Exact raw-byte identities and input/getter detachment pass.
+  This is a Crystal/Boehm allocation discriminator, not RSS or throughput evidence.
+- Final focused W117-W123 DEBUG and RELEASE each passed 131 examples; full
+  non-release `spec --no-debug` passed 2,050. All had zero failures/errors/pending.
+  Full RELEASE was not executed. The full run retains the existing duplicate
+  lib-c linker warning and deprecated blocking-argument warning in W113's spec.
+- Final W123 stock gate directly decoded both source and attached retained
+  parts for both captured profiles. Four fresh isolated copied parts (two
+  profiles x BASIC/COMPACT) replaced every JSON metadata/value lane with
+  production-authored streams. Each passed actual ATTACH/CHECK=1, independent
+  bytes/grids, manifest/schema checks and full/pk3..6 semantic readback.
+  PK and other table/part sidecars are borrowed; this is not a whole-part writer.
+  Object-wide uniform String layout was refuted, not weakened into an alias:
+  typed/Dynamic Strings use WITH_SIZE_STREAM, shared Strings use default layout.
+- Wrong-byte/statistic/outer-row/CHECK=0 comparator controls passed. These
+  instrument controls are not claims that ClickHouse rejected malformed parts.
+  The unchanged W122 oracle also passed both retained roles and all four
+  authored ATTACH/CHECK=1/full/selected cases. Crystal format, shell syntax and
+  diff hygiene passed; the five legacy part/table/catalog facades are unchanged.
+
+Replay: use the sixteen focused W117-W122 spec paths plus the three new paths
+`spec/object_documents_w123_root_spec.cr`,
+`spec/object_documents_w123_adversary_spec.cr`,
+`spec/object_documents_w123_spec.cr`; the exact root invocations are retained
+in this chat's command evidence.
+Invoke Crystal through the serial guard with DEBUG / `--release`, isolated
+caches, `--single-module --link-flags=-fuse-ld=ld --error-trace`, guard 600/8192.
+Full suite: the same command with `spec --no-debug`, guard 600/32768.
+For stock replay use W122's environment, `W123_KEEP_TMP=1` and
+`scripts/check_object_documents_w123.sh`; then unchanged W122 with its flag.
+Source/runtime identities at the top are separate: this runtime was not built
+from the shallow source SHA. Keep the retained W115 source store quiescent.
+
+Root logs: `/private/tmp/crystal-click-w123-root.vdfkpL`; isolated cache root:
+`/private/tmp/crystal-click-w123-cache.chjRUy`. W123 retained store/cache:
+`/private/tmp/crystal-click-json-w123.nN6bb6` /
+`/private/tmp/crystal-click-json-w123-cache.fWhH1m`. W122 regression store/cache:
+`/private/tmp/crystal-click-json-w122.vxVoXa` /
+`/private/tmp/crystal-click-json-w122-cache.FUMQPC`.
+Final log SHA-256 identities, relative to the root log directory:
+
+- `focused-debug-final.log`: `b22530ce1d5758036586b0fee9b6f48cb59fd9614b94febc7ec725125b4d4d18`
+- `focused-release-final.log`: `71e533d3d51da36f62be86fab3f7737e5ecb53b55b266cbb4681d1ac36dd0153`
+- `full-nonrelease-final.log`: `ffe2aa96882365368398c15d30c72063e88399a9cd085cfd5d181f743f2b4375`
+- `stock-w123-final.log`: `8def8d617ebc52141e0a0e8382e0a6d0b4b5db0d3ab259b44cc2f7dfec80fc82`
+- `regression-w122-final.log`: `4e2fcc245c56cfd202a85cecd3017d9bbfb5ca5816032034887edf8486862c2c`
+
+Root scoped adversary verdict: ROBUST for executed default-bounded normalized
+document laws and the two captured producer profiles. Independent literals,
+source inspection, seeded guard and actual stock execution supplement Luna's
+correlated implementation/review. No all-types, all JSON layouts, fresh-master
+executable, public part writer, allocator/RSS, raised-limit stack or speed claim.
+Borrowed slices retain their internal read-only convention; detached model
+construction/getters are not an operation-budget/RSS guarantee. Supplied
+metadata statistics are preserved, not synthesized or validated against rows.
+
+Continuation: the overall all-types/MV/projection/performance goal remains
+active. Next frontier is paired compressed physical adapters and fresh
+metadata/staged publication; first falsifier is library-owned full/nonzero-window
+part I/O without borrowing already serialized JSON lanes or statistics.
+Bucketed/advanced/legacy Object, remaining recursive type compositions and
+MV/projection coverage remain open. Large-facade extraction is also unfinished.
+No performance work or push is authorized by this checkpoint. Owner/profile,
+producer/build, toolchain, budget, comparator or relevant source changes reopen
+this certificate; lost temporary artifacts require replay, not citation alone.
