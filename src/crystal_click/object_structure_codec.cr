@@ -72,6 +72,13 @@ module CrystalClick
 
     # Internal shared-budget entry point for a paired Object + Dynamic batch.
     def self.read_from(context : BinaryCodecContext) : ObjectStructure
+      read_with_statistics_offset(context)[0]
+    end
+
+    # Reads the complete metadata while exposing the relative start of the
+    # statistics suffix (or the V3 statistics flag) for paired mark checks.
+    def self.read_with_statistics_offset(context : BinaryCodecContext) : Tuple(ObjectStructure, Int32)
+      parse_start = context.input_offset
       context.visit_node(1)
       version = read_u64_le(context)
       case version
@@ -113,6 +120,7 @@ module CrystalClick
         end
       end
 
+      statistics_offset = (context.input_offset - parse_start).to_i32
       statistics = if version == 4_u64
                      case context.read_byte
                      when 0_u8
@@ -127,7 +135,7 @@ module CrystalClick
                    end
 
       begin
-        ObjectStructure.new(
+        structure = ObjectStructure.new(
           paths,
           version: version,
           shared_data_version: shared_data_version,
@@ -135,6 +143,7 @@ module CrystalClick
           legacy_max_dynamic_paths: legacy_max_dynamic_paths,
           statistics: statistics
         )
+        {structure, statistics_offset}
       rescue ex : ArgumentError
         context.corrupt!("invalid Object structure metadata: #{ex.message}")
       end

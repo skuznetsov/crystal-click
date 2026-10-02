@@ -19,16 +19,19 @@ composition is VERIFIED within its normalized V3/one-bucket MAP profile and
 two captured-stock profiles below. W124's paired compressed-file/plain-adaptive-
 mark transport is VERIFIED within the explicit-path/profile gates below.
 W125's generic type/path/role binding is VERIFIED within its explicit profile
-and focused/full/stock gates below. Complete file-backed Object reading, fresh
-metadata/statistics and staged writer publication remain the next owner
-boundary. Normalized document streams are not a public whole-JSON part
-capability.
+and focused/full/stock gates below. W126's explicit-schema/profile file-backed
+Object reader is VERIFIED within its Wide/SUFFIX V3/one-bucket MAP gates below.
+Fresh metadata/statistics and staged writer publication remain the next owner
+boundary. The legacy part facade still has no general whole-JSON admission.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
 
 W125 is design-sealed and verified below for generic descriptor/path binding.
 It deliberately separates that reusable owner from the subsequent complete
 file-backed Object reader, metadata discovery, and whole-part publisher.
+
+W126 is design-sealed and verified below for a normalized file-backed reader.
+Its explicit profile is not general JSON layout or catalog/facade admission.
 
 ## Source anchor and compatibility boundary
 
@@ -2543,3 +2546,218 @@ serializer defaults/propagation, alias auto-resolution, publication, whole-part
 integrity, concurrent-mutation safety or performance. The overall goal remains
 active and optimization parked. Changes to owner/API/imports, profile/naming/
 budget semantics, source/runtime/toolchain or comparators reopen this evidence.
+
+## W126 design seal: normalized Object file reader
+
+Design-sealed on October 2 over `9e3ec4b`. Risk is CAUTION: fixture-derived
+prefixes or selected row grids can conceal incorrect physical metadata and
+unselected lane misalignment. Rollback is that clean commit; legacy facades
+remain untouched. No push is authorized. Source is `31d2addb`; executable
+qualification will use the separately pinned runtime above, not current master.
+
+Admitted: an explicit Wide/SUFFIX, Object V3 wire=4, one-bucket MAP=0,
+Dynamic V3 file reader, with caller-supplied raw column name, typed-path schema,
+uniform explicit bulk String profile, separate shared String profile, and
+explicit hashed/unhashed filename policy. Dynamic paths and alternatives come
+from actual complete metadata files, never a fixture inventory. Ordinary bulk
+lanes have zero prefix; Dynamic discriminators have an eight-byte mode prefix.
+Full physical adaptive rows are outer rows, not sparse arm/Array child counts.
+The existing selected discriminator schedules derive those child counts.
+
+Source correction: `SerializationObject.cpp:431-483` and
+`SerializationDynamic.cpp:270-321` put the V3 statistics flag in the suffix for
+SUFFIX mode. The physical metadata prefix ends BEFORE that flag. PREFIX and
+PREFIX_EMPTY put it in the prefix and are not admitted here. Root inspected
+the decisive source branches; this supersedes the rejected after-flag offset
+hypothesis before implementation. All real metadata marks must point to the
+parser-measured before-flag offset; terminal marks point to complete logical
+EOF including statistics. Every metadata/value/discriminator lane must have
+the same complete outer row grid, even for a zero-length selection.
+
+Owners, one class/module per file:
+
+- `compressed_mark_grid.cr`: detached complete rows/logical positions and
+  prefix/EOF coordinates. `CompressedMarkReader.inspect` validates plain marks
+  and compressed frame headers without decoding or authenticating payloads.
+  It accepts an optional expected prefix, otherwise derives the first logical
+  position through the validated frame index. Metadata prefixes can span
+  frames; a nonzero first compressed offset and frame-end aliases are legal.
+  Root independently inspected Wide writer SUFFIX selection at
+  `MergeTreeDataPartWriterWide.cpp:560-578`, shared outer-row emission at
+  `:457-475` and suffix-before-terminal ordering at `:851-864`. Existing `read` and
+  `read_all` behavior is preserved.
+- Existing Object/Dynamic structure codecs gain additive
+  `read_with_statistics_offset(context)` returning the decoded complete model
+  and relative before-flag offset. Existing `read_from` delegates unchanged.
+- `part_stream_source.cr`: internal checksum-sized, explicit-alias stream
+  resolution and physical acquisition. It owns its checksum snapshot; callers
+  cannot mutate retained entries. Size validation is not a file-hash claim.
+- `object_document_file_reader.cr`: metadata discovery, exact suffix/grid
+  validation, generic W125 binding, selected W124 acquisition and W123
+  composition. Public `read(part_path, column_name, typed_schema, first_mark:,
+  mark_count:, profile:, shared_profile:, hashed:, limits:, transport_limits:)`
+  returns owned documents grouped by selected granule, rebased locally.
+
+Operation-local codec and transport budgets are consumptive. Discovery and
+composition metadata parses, grid inspection and selected acquisition are all
+charged even when work repeats. The complete source mark roster is bounded
+before proportional collections; selected-only rows cannot replace that guard.
+Existing `PartChecksums` has its own bounded parsing envelope, not a combined
+operation/RSS budget. Filename/model/getter copies are not an RSS certificate.
+Trusted quiescent directories are required; this is not a concurrent snapshot.
+All metadata frame checksums and touched value-frame checksums are verified;
+untouched value payload checksums and whole-file hashes are not.
+
+Rejected/guard-only: PREFIX/PREFIX_EMPTY metadata, legacy/bucketed/advanced
+Object layouts, Compact parts, compressed marks, schema/serializer default
+inference, automatic alias resolution, fresh statistics/sidecars, publication,
+active-set recovery, existing public facade/catalog routing and performance
+claims. Descriptor admission remains W117-W125's admitted normalized grammar.
+This slice is not the complete JSON or all-types goal.
+
+Plan and DoD:
+
+1. Root adds independent literal specs and executes the missing-API RED before
+   production edits. Consumer inventory: `rg` over `src/crystal_click`, `spec`
+   and `scripts` found existing structure callers in paired metadata codecs
+   and W120 specs, transport callers in W124/W125 specs/oracles, and document
+   consumers in W123-W125. Additive APIs avoid migrating those callers.
+2. Luna owns transport/grid/metadata changes; another Luna owns resolver/reader;
+   a third owns a separate stock oracle. Root owns imports, independent specs,
+   docs, serial guarded compiler/CH commands and Git. Workers must not revert
+   others' changes, run resource-heavy commands, write Git or spawn agents.
+3. Focused DEBUG and RELEASE must pass. Falsifiers include exact suffix flag
+   boundary, nonzero/zero selection, outside-window row mismatch, malformed
+   terminal/metadata coordinates, empty sparse arms, arbitrary escaped names,
+   explicit aliases, missing/size-mismatched/symlink files, budget exhaustion,
+   detached lifetimes and selected-only checksum scope.
+4. The new pinned stock oracle invokes the production file reader using only
+   part path, raw column, typed schema and profiles. Independently authored
+   expectations may qualify source bytes but must not assemble reader inputs.
+   Full/nonzero/zero windows over both captured profiles and discriminator
+   modes must match W123 documents. Replay unchanged W125 stock checks.
+5. Full non-release suite, exact-path formatting, shell syntax and diff hygiene
+   must pass under the unchanged serial 50%-free-memory guard before one exact
+   atomic local commit. A scoped hostile review must attack full-domain
+   alignment and metadata discovery before promoting this seal to VERIFIED.
+
+## W126 execution certificate and continuation
+
+Status: VERIFIED over `9e3ec4b` within the preceding design seal. Root executed
+the final focused DEBUG/RELEASE, stock and full-suite DoD below and returned
+ROBUST within this explicit profile. Correlated Luna static reviews are support,
+not the basis for that verdict. No broader JSON admission or performance claim
+follows.
+
+The normalized reader now accepts a part directory, raw column name, explicit
+typed-path schema, String profiles and filename policy. It discovers complete
+Object/Dynamic metadata, checks all source outer-row grids and exact SUFFIX
+boundaries, then acquires and decodes locally rebased selected streams. Complete
+metadata frames and touched value frames are authenticated; untouched value
+payloads and whole-file checksum hashes remain outside this certificate.
+`CompressedMarkReader.inspect` is header/grid inspection, not payload integrity.
+No old part/table/catalog facade is routed to the new reader.
+
+Independent root falsifiers use literal-only LZ4 frames and raw adaptive records,
+not a production writer round trip. They cover arbitrary escaped raw names,
+explicit aliases, repeated metadata positions before the statistics flag,
+multi-frame prefixes and equivalent frame-boundary coordinates, empty sparse
+lanes with positive outer rows, selected/nonselected checksum scope, malformed
+terminal/metadata coordinates, off-window row mismatches including zero
+selection, missing/size-changed/symlink lanes, detached result lifetimes and
+consumptive limits. Nineteen root examples supplement the unchanged 210-example
+focused baseline. Three independent seeded guard checks are qualified REDs:
+
+- Bypassing only the unhashed name preflight reached part lookup instead of
+  rejecting the oversized basename; restoring the guard returns the intended
+  early `UnsupportedFormatError`. The 4096-byte bound is the checksums parser's
+  admitted basename bound, not an assertion about the host filesystem's
+  `NAME_MAX`. A long logical column and typed path remain readable with short
+  hashed basenames. Logical-name and physical-basename bounds are not identical.
+- Bypassing only the source-roster charge let a 16-mark/zero-selection input
+  with `max_elements: 15` reach missing value lookup instead of the intended
+  codec element limit. An earlier three-mark probe also failed, but at the
+  separate physical-plan limit; it was sharpened rather than treating that
+  confounded error as the strongest discriminator.
+- The original later-metadata mutation also made coordinates non-monotone;
+  generic transport could reject it without exercising metadata validation.
+  Root changed all subsequent real marks together, preserving monotonicity.
+  Bypassing only the exact real-mark statistics-boundary check then accepted
+  the corrupt later mark, producing the intended test failure. The first-mark
+  after-flag case still exercises the separate prefix boundary. All production
+  guards were restored before final focused and full-suite commands; the stock
+  commands consumed the same restored production source.
+
+Root repaired Crystal grammar/API errors found by compilation: optional-index
+assignment, double block shorthand, abstract callback argument type and Hash
+capacity constructor spelling. The literal tests initially compared value
+object identity; observed matching type/payload bytes prompted semantic
+`as_uint64`/`as_string` assertions. These failed compile/instrument checks are
+not compatibility results. The original missing-API RED remains qualified.
+
+Executed final-source gates:
+
+- Focused DEBUG: 229 examples, zero failures/errors; focused RELEASE: the same
+  229 examples, zero failures/errors.
+- Unchanged W125 oracle: four fresh isolated copied-part ATTACH cases, actual
+  asserted CHECK=1, complete and PK `3..6` stock document readback.
+- W126 oracle: production file-reader full four-granule, middle two-granule and
+  terminal zero windows over those same four fresh W125 stores; independent
+  W123 document expectations and stock full/PK readback agree. Its seeded wrong
+  document, regrouped granule and CHECK=0 comparators reject the intended faults.
+  W126 itself reopens already attached stores; it does not claim another fresh
+  ATTACH or fresh metadata publication. BASIC/COMPACT label discriminator
+  encodings here, not MergeTree part layout: all four parts are Wide.
+- Full non-release after the sharpened metadata falsifier: 2,121 examples,
+  zero failures/errors/pending, symbolic debug information disabled. Its one
+  existing deprecated `File.new` argument warning in W113 is unrelated to this
+  slice. Exact nine-path Crystal formatting, wrapper shell syntax and diff
+  hygiene passed. Full RELEASE was not run.
+
+Evidence directory: `/private/tmp/crystal-click-w126-root.OnYJkD`. Final logs are
+`focused-debug.log`, `focused-release.log`, `w125-stock-regression.log`,
+`w126-stock-reader.log` and `full-nonrelease.log`. Qualified controls are
+`missing-api-red.log`, `name-guard-seeded-red.log` and
+`source-roster-k16-seeded-red.log` and `metadata-boundary-seeded-red.log`.
+Historical failed frontend/comparator probes
+and the confounded three-mark roster probe are retained separately. Fresh stock
+stores are `/private/tmp/crystal-click-json-w125.sNifcC`, derived from retained
+`/private/tmp/crystal-click-json-w115.6qs6Kq`. The W126 wrapper removes only its
+own successful compiler cache; the root logs and W125 stores are retained.
+Removing these temporary paths decays replay availability, not source coverage.
+
+Replay uses the SDK, Crystal and pinned ClickHouse identities at the top of
+this document. All compiler/runtime jobs are serial under
+`COGNI_RUN_SAFE_MIN_FREE_PCT=50` and `RUN_SAFE_PASSTHROUGH_STDIO=1`, using
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh`. Focused specs are
+the W125 25-file roster plus `spec/object_file_reader_w126_root_spec.cr`, with
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`; RELEASE
+adds `--release`. Full non-release uses `crystal spec --no-debug --threads 1
+--single-module --link-flags=-fuse-ld=ld --error-trace`. Stock commands, each
+through the same guard with `/bin/bash`, are:
+
+```sh
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  W125_KEEP_TMP=1 CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse \
+  bash scripts/check_physical_stream_plans_w125.sh
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  W125_OUTPUT_ROOT=/private/tmp/crystal-click-json-w125.sNifcC \
+  CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse \
+  bash scripts/check_object_file_reader_w126.sh
+```
+
+The full goal remains active, with optimization parked. The confirmed next
+frontier is fresh paired Object/Dynamic statistics and schema-sidecar synthesis,
+then normalized whole-part staging without borrowing source metadata. The next
+discriminator must have stock CH ATTACH/CHECK=1/readback consume those fresh
+outputs, and the W126 production reader independently consume them. Statistics
+mode, descriptor/schema identity, String profile and filename policy remain
+explicit. Legacy/bucketed/advanced JSON, other recursive/type profiles, Compact
+parts, facade/catalog integration, broader MV/projections and the large-facade
+refactor remain open. No full RELEASE, allocator/RSS, performance or current-
+master executable claim is admitted. Changes to source/owners/imports, metadata
+offsets, grid/budget/naming semantics, source/runtime/toolchain, oracle inputs or
+comparators reopen the corresponding gates. Trusted quiescent part directories
+remain a premise; no active-set or concurrent-mutation snapshot is established.

@@ -76,6 +76,72 @@ module CrystalClick
       window.not_nil!
     end
 
+    # Inspects and validates the full physical row grid without authenticating
+    # or decoding any compressed payload. Returned coordinates and row counts
+    # are detached from both mmap lifetimes and parser-owned collections.
+    def self.inspect(
+      data_path : String,
+      marks_path : String,
+      expected_data_size : Int64,
+      expected_mark_size : Int64,
+      prefix_size : Int? = nil,
+      budget : CompressedStreamBudget = CompressedStreamBudget.read_default,
+    ) : CompressedMarkGrid
+      budget.ensure_direction(false)
+      validate_expected_size(expected_data_size, "data")
+      validate_expected_size(expected_mark_size, "mark")
+      if expected_mark_size > budget.limits.max_mark_bytes
+        raise CorruptPartError.new("mark file exceeds configured limit")
+      end
+      if expected_data_size > Int32::MAX || expected_mark_size > Int32::MAX
+        raise CorruptPartError.new("paired file exceeds supported in-memory domain")
+      end
+      if expected_data_size > Int64::MAX - expected_mark_size
+        raise ArgumentError.new("paired file sizes overflow")
+      end
+      if requested_prefix = prefix_size
+        if requested_prefix < 0 || requested_prefix > Int32::MAX
+          raise ArgumentError.new("prefix size exceeds supported in-memory domain")
+        end
+      end
+      budget.reserve_file_bytes(expected_data_size + expected_mark_size)
+
+      mark_record_count = if expected_mark_size > 0 && expected_mark_size % MARK_RECORD_SIZE == 0
+                            expected_mark_size // MARK_RECORD_SIZE
+                          else
+                            0_i64
+                          end
+      if mark_record_count > Int32::MAX
+        raise CorruptPartError.new("mark grid exceeds supported in-memory domain")
+      end
+      # Bound proportional mark parsing before mapping or allocating records.
+      budget.reserve_records(mark_record_count) if mark_record_count > 0
+
+      marks = read_marks(marks_path, expected_mark_size, budget.limits, budget, mark_record_count)
+      lane_count = marks.size - 1
+      if expected_data_size == 0
+        validate_empty_grid!(marks, lane_count, 0)
+        if prefix_size && prefix_size != 0
+          raise CorruptPartError.new("empty data requires a zero prefix")
+        end
+        verify_empty_regular_file(data_path)
+        positions = Array(Int64).new(marks.size, 0_i64)
+        rows = Array(UInt64).new(lane_count)
+        lane_count.times { |mark| rows << marks[mark].rows }
+        return CompressedMarkGrid.new(positions, rows, 0, 0_i64)
+      end
+
+      raise CorruptPartError.new("zero-domain mark grid requires empty data") if lane_count == 0
+      ensure_not_symlink(data_path, "data file")
+
+      grid = nil.as(CompressedMarkGrid?)
+      MMapDataSource.with_file(data_path, expected_data_size, budget.limits.max_file_bytes) do |data|
+        index = CompressedFrameIndex.new(data, budget.limits, budget)
+        grid = inspected_grid(marks, index, prefix_size)
+      end
+      grid.not_nil!
+    end
+
     # Reads an unmarked stream in full. This deliberately rejects empty input:
     # without a paired grid there is no lane-domain evidence for an empty file.
     def self.read_all(
@@ -165,6 +231,16 @@ module CrystalClick
         raise CorruptPartError.new("first mark does not name the serialization prefix")
       end
 
+      validated_grid_positions(marks, index)
+    end
+
+    private def self.validated_grid_positions(
+      marks : Array(Mark),
+      index : CompressedFrameIndex,
+    ) : Array(Int64)
+      lane_count = marks.size - 1
+      raise CorruptPartError.new("zero-domain mark grid requires empty data") if lane_count == 0
+
       positions = Array(Int64).new(marks.size)
       previous = -1_i64
       marks.each_with_index do |mark, mark_index|
@@ -185,6 +261,28 @@ module CrystalClick
         raise CorruptPartError.new("terminal mark does not name logical EOF")
       end
       positions
+    end
+
+    private def self.inspected_grid(
+      marks : Array(Mark),
+      index : CompressedFrameIndex,
+      expected_prefix_size : Int?,
+    ) : CompressedMarkGrid
+      lane_count = marks.size - 1
+      raise CorruptPartError.new("zero-domain mark grid requires empty data") if lane_count == 0
+
+      positions = validated_grid_positions(marks, index)
+      observed_prefix = positions.first? || raise CorruptPartError.new("adaptive mark grid has no first position")
+      if expected_prefix_size && observed_prefix != expected_prefix_size.to_i64
+        raise CorruptPartError.new("first mark does not name the expected serialization prefix")
+      end
+      if observed_prefix > Int32::MAX
+        raise CorruptPartError.new("serialization prefix exceeds supported in-memory domain")
+      end
+
+      rows = Array(UInt64).new(lane_count)
+      lane_count.times { |mark| rows << marks[mark].rows }
+      CompressedMarkGrid.new(positions, rows, observed_prefix.to_i, index.logical_size)
     end
 
     private def self.validate_empty_grid!(marks : Array(Mark), lane_count : Int, prefix_size : Int) : Nil

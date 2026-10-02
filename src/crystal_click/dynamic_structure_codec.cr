@@ -49,6 +49,13 @@ module CrystalClick
 
     # Internal shared-budget entry point for a paired structure operation.
     def self.read_from(context : BinaryCodecContext) : DynamicStructure
+      read_with_statistics_offset(context)[0]
+    end
+
+    # Reads the complete metadata while exposing the relative start of the
+    # statistics suffix flag for paired mark checks.
+    def self.read_with_statistics_offset(context : BinaryCodecContext) : Tuple(DynamicStructure, Int32)
+      parse_start = context.input_offset
       context.visit_node(1)
       version = read_u64_le(context)
       case version
@@ -86,6 +93,7 @@ module CrystalClick
         context.corrupt!("invalid Dynamic V3 alternative roster: #{ex.message}")
       end
 
+      statistics_offset = (context.input_offset - parse_start).to_i32
       statistics = case context.read_byte
                    when 0_u8
                      nil
@@ -96,7 +104,8 @@ module CrystalClick
                    end
 
       begin
-        DynamicStructure.new(types, statistics)
+        structure = DynamicStructure.new(types, statistics)
+        {structure, statistics_offset}
       rescue ex : ArgumentError
         context.corrupt!("invalid Dynamic V3 statistics: #{ex.message}")
       end

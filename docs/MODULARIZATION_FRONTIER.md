@@ -3,6 +3,9 @@
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Public
 type/path binding and whole-JSON part admission remain unchanged.
+W126 adds three file-backed Object read owners below, keeping full-grid
+validation, physical file resolution and document composition separate from
+the unchanged legacy facades.
 
 The October 2 LowCardinality binary grammar extraction is verified below:
 one private concrete owner/file, unchanged physical admission and facade API.
@@ -1538,3 +1541,58 @@ discovery and complete file-backed Object assembly, then fresh metadata and
 staged publication. Old facade planning/dispatch/orchestration and table/catalog
 materialization still require extraction. No public whole-JSON part, all-type,
 expanded MV/projection, full RELEASE or performance claim follows.
+
+## File-backed Object read owners (W126, 2026-10-02)
+
+Status: VERIFIED within the explicit Wide/SUFFIX V3/one-bucket MAP certificate
+in `JSON_GENERAL_STORAGE_FRONTIER.md`. CAUTION: complete physical-grid discovery,
+metadata suffix coordinates and selected acquisition over `9e3ec4b`.
+Rollback is the isolated three-owner/import/transport/metadata-codec/spec/oracle
+and living-document diff. No legacy facade dispatch or publication changes.
+
+Each concrete production responsibility has one file:
+
+- `compressed_mark_grid.cr`: detached complete outer-row grid and normalized
+  logical positions, including prefix and terminal EOF.
+- `part_stream_source.cr`: checksums-sized physical file resolver and transport
+  adapter for a trusted quiescent part directory. It refuses missing, changed-
+  size, symlink or unsafe-basename inputs; it does not verify whole-file hashes.
+- `object_document_file_reader.cr`: explicit-schema/profile Object and Dynamic
+  metadata discovery, complete cross-lane row alignment and selected-window
+  document assembly. Private binding DTOs belong to this owner; they are not
+  additional public responsibilities or per-type-combination classes.
+
+The three files total 743 lines (73/125/545). The existing compressed mark
+reader is now 550 lines: header/grid inspection and selected payload acquisition
+share full-grid validation. Structure codecs add parser-measured, relative
+before-statistics offsets without changing their existing grammar. Owned grids,
+mapped physical lifetimes, recursive logical codecs and document composition
+remain distinct boundaries.
+
+The unchanged legacy owners still have 15,976 reader, 26,034 writer, 7,080 table,
+1,560 catalog and 3,657 offline-table lines. This slice does not complete the
+requested architecture refactor or prove reduced RSS, lower allocation or
+greater speed. Shared facade planning/dispatch, leaf codecs, staging and
+table/catalog materialization still need responsibility-level extraction.
+
+Root's nineteen literal-wire examples supplement the Luna implementation and
+correlated static reviews. Focused DEBUG and RELEASE each passed 229 examples.
+Three qualified seeded guard failures distinguish early unhashed-name bounds,
+full-source logical roster charging and exact later-metadata coordinates; all
+production guards were restored. The unchanged W125 oracle passed four fresh
+copied-part ATTACH/actual CHECK=1 cases. W126 separately reopened those stores
+and matched production file-reader full/middle/zero windows against independent
+documents and stock full/PK readback. BASIC/COMPACT here mean discriminator
+encoding, not part layout; all four parts are Wide. No fresh metadata synthesis
+or another W126 ATTACH is claimed.
+
+Final full non-release after strengthening the metadata falsifier passed 2,121
+examples with zero failures/errors/pending and symbolic debug information
+disabled. Exact-path formatting, shell syntax and diff hygiene passed. Root's
+scoped hostile verdict is ROBUST; no full RELEASE or general-layout claim follows.
+
+Exact source/runtime identities, limits, replay, evidence paths and exclusions
+are in `JSON_GENERAL_STORAGE_FRONTIER.md`. Next are fresh paired metadata and
+schema sidecars, then staged publication without borrowed metadata. Catalog/
+facade routing, older or advanced JSON layouts, broader type/MV/projection
+coverage, full RELEASE and performance remain open.
