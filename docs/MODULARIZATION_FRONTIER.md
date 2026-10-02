@@ -1498,3 +1498,43 @@ independent literal falsifiers and scoped ROBUST verdict are recorded in the
 capability frontier, together with exact identities, replay and exclusions.
 Full RELEASE, general JSON part binding/writing, all layouts/types, expanded
 MV/projection coverage, allocator/RSS and performance remain unclaimed.
+
+## Generic physical stream binding owners (W125, 2026-10-02)
+
+Status: VERIFIED within the explicit naming/profile certificate in
+`JSON_GENERAL_STORAGE_FRONTIER.md`. CAUTION: role/name binding over `99b47d6`;
+rollback is the isolated four-owner/import/spec/oracle/living-document diff.
+Existing facades and W124 transport owners are unchanged.
+
+Each concrete production responsibility has one file:
+
+- `physical_stream_name.cr`: bytewise ClickHouse escaping and bounded rendered-
+  name construction, with raw versus escaped syntax explicitly separated.
+- `physical_stream_plan_context.cr`: shared consumptive descriptor/record/name
+  counters, not payload transport or allocation/RSS accounting.
+- `binary_bulk_physical_plan.cr`: recursive logical-role to exact physical-
+  basename binding under an explicit String profile. Its private escaped-
+  prefix value token is cohesive with that constructor invariant, not an
+  additional public planning responsibility.
+- `object_document_physical_plan.cr`: typed/Dynamic/shared-MAP composition and
+  Object-wide physical-name collision refusal over an explicit logical plan.
+
+The four files total 775 lines (131/75/289/280). The actual unchanged legacy
+owners are `wide_part.cr` 15,976, `wide_part_writer.cr` 26,034,
+`wide_part_table.cr` 7,080, `offline_catalog.cr` 1,560 and `offline_table.cr`
+3,657. `embedded_merge_tree_table.cr` is a separate 810-line owner, not the
+7,080-line table facade. Counts aid navigation; they do not certify reduced
+coupling, completed decomposition, memory savings or speed.
+
+Root's 21 independent literal/negative examples supplement Luna implementation
+and correlated static review. Focused DEBUG and RELEASE each passed 210
+examples. Four W125 production-bound copied-part ATTACH/actual CHECK=1/full+PK
+readback cases and the unchanged four-case W124 oracle passed. Full non-release
+passed 2,102 examples with symbolic debug information disabled; exact-path
+formatting, shell syntax and diff hygiene passed. Root's scoped hostile verdict
+is ROBUST. Full source, runtime, profile, repair, replay and exclusion details are in
+`JSON_GENERAL_STORAGE_FRONTIER.md`. The next responsibility is metadata/grid
+discovery and complete file-backed Object assembly, then fresh metadata and
+staged publication. Old facade planning/dispatch/orchestration and table/catalog
+materialization still require extraction. No public whole-JSON part, all-type,
+expanded MV/projection, full RELEASE or performance claim follows.

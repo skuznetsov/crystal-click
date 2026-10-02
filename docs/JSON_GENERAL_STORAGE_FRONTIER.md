@@ -18,11 +18,17 @@ two retained-stock gates below. W123's paired flattened Object document
 composition is VERIFIED within its normalized V3/one-bucket MAP profile and
 two captured-stock profiles below. W124's paired compressed-file/plain-adaptive-
 mark transport is VERIFIED within the explicit-path/profile gates below.
-Public type/path binding, fresh metadata/statistics and staged writer publication
-remain the next owner boundary; file-backed normalized document streams are not
-a public whole-JSON part capability.
+W125's generic type/path/role binding is VERIFIED within its explicit profile
+and focused/full/stock gates below. Complete file-backed Object reading, fresh
+metadata/statistics and staged writer publication remain the next owner
+boundary. Normalized document streams are not a public whole-JSON part
+capability.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
+
+W125 is design-sealed and verified below for generic descriptor/path binding.
+It deliberately separates that reusable owner from the subsequent complete
+file-backed Object reader, metadata discovery, and whole-part publisher.
 
 ## Source anchor and compatibility boundary
 
@@ -2303,3 +2309,237 @@ remaining recursive compositions, Compact parts, broader MV/projection support
 and large-facade responsibility extraction remain open. Owner/profile,
 coordinate/budget, producer/build, toolchain or comparator changes reopen this
 certificate. No push or performance promotion follows from this checkpoint.
+
+## W125 design seal: generic physical stream binding
+
+Design-sealed on October 2 over `99b47d6`. The next admitted move removes
+fixture-authored role maps from physical transport consumers, not from the
+independent oracle expectations. Risk is CAUTION: a plausible-looking wrong
+filename can silently select another lane. Rollback is the clean base commit;
+the existing facades and W124 owners remain unchanged. No push is authorized.
+
+### Source and contract
+
+The source reference is `31d2addb` above. Root inspected
+`ISerialization.cpp:302-457`, `SerializationDynamic.cpp:108-135`,
+`SerializationVariant.cpp:124-169`, `DataTypeMap.cpp:120-140`,
+`SerializationMap.cpp:652-671`, `DataTypeObject.cpp:900-904`, and
+`escapeForFileName.cpp:8-30`. Luna's initial claim that Dynamic value arms
+descend under `.dynamic_structure` was refuted by the push/pop sequence and
+captured filenames; the corrected sibling placement is load-bearing.
+
+Four concrete owners, each in its own production file:
+
+- `physical_stream_name.cr`: bytewise uppercase percent escaping, bounded
+  concatenation, and the existing `StreamName.hash` alias. It never unescapes a
+  hashed name or guesses which filename representation a part selected.
+- `physical_stream_plan_context.cr`: operation-local descriptor/edge/record/name
+  bounds shared across the complete Object plan. This is a logical work/name
+  bound, not an RSS guarantee or a budget for payload/transport/checksums.
+- `binary_bulk_physical_plan.cr`: generic recursive descriptor and explicitly
+  supplied String profile to exact logical-role/rendered-name bindings.
+- `object_document_physical_plan.cr`: typed path, Dynamic structure/arm and
+  shared-MAP bindings over an explicit `ObjectDocumentPlan`. No captured path
+  or arm roster belongs in production.
+
+`BinaryBulkPhysicalPlan.new(type, column_name, profile: ..., limits: ...)`
+accepts a raw column name. `stream_names` returns a detached role-to-rendered-
+basename Hash; `stream_name_for(role)`, `data_file_for(role, hashed: false)`
+and `marks_file_for(role, hashed: false)` return detached names. An internal
+shared-context factory takes an already escaped prefix for Object children.
+It must validate that prefix rather than accepting filesystem separators.
+
+`ObjectDocumentPhysicalPlan.new(column_name, plan, profile: ...,
+shared_profile: ..., limits: ...)` supplies `object_structure_stream`,
+`dynamic_structure_stream(path)`, `discriminator_stream(path)`, `typed(path)`,
+`dynamic_arm(path, arm_name)`, `shared`, and a detached sorted `stream_names`
+roster. Lookup failures do not guess an alternative. All logical names across
+metadata, discriminators, typed, Dynamic and shared lanes must be unique;
+collisions reject before a plan is returned. Input rosters are already detached
+by the existing models; getter results cannot mutate retained bindings.
+Completed plan getters do not depend on later consumption of their shared
+construction context. Returned snapshots and fixed-extension filename copies
+are outside the retained-binding byte counter, not an RSS certificate.
+
+Naming preserves ArrayElements depth across Tuple/Nullable/Map descendants:
+Array sizes are `.sizeN`, Nullable is `.null`, String sizes are `.size`, tuple
+fields escape the entire `.<field>` (including its separator), unnamed fields
+are one-based, BASIC Map fields are `keys`/`values`. Object paths escape only
+their raw path after a literal separator; Variant arms escape their SQL type
+name after a literal separator. Dynamic structure/discriminator/arms are
+siblings. Shared MAP is the existing `Array(Tuple(paths String, values String))`,
+not a generic Map substitution. Empty lane payloads do not erase their binding.
+
+The profile fixes no shared Nested offsets, escaped Variant arms, stored lanes
+only, non-specialized prefixes/suffixes, BASIC Map, Object V3 wire=4 with one
+MAP bucket/shared version=0, and Dynamic V3. String profile is explicit and
+uniform within each supplied recursive bulk plan; shared String profile is
+separate. Serializer-version propagation/default selection is not inferred
+from a SQL type. Existing descriptor admission is unchanged.
+
+Bounds must walk descriptor depth/nodes and count-derived role collections
+before allocating proportional rosters. Opaque column/path/field bytes and
+percent expansion must be checked before constructing names. Dynamic type
+display-name production needs a conservative metadata-aware size preflight
+before recursive rendering. Charge actual retained role/rendered-name bytes
+and logical records to the shared context; conservative temporary-name
+preflights may reject otherwise valid inputs under unusually tiny limits.
+The Object-wide context is consumptive and incremental: each contributing
+descriptor/name/role collection is bounded before its own materialization.
+A later invalid child can reject after bounded earlier children were built;
+none are returned or published. This is not a whole-schema zero-allocation
+rejection guarantee. Dynamic descriptor preview must stop at the remaining
+node/element bound during traversal, not count an entire excessive tree first.
+Caller/profile errors use ArgumentError, unsupported collisions/bounds use
+UnsupportedFormatError. No model-constructor or getter-copy RSS claim follows.
+
+Rejected: shared Nested offsets, bucketed Map/Object, legacy Object, advanced or
+chunked shared layouts, automatic schema/serializer discovery, filename alias
+auto-resolution, new recursive type admission, direct catalogue/facade routing,
+whole-part integrity, fresh statistics/sidecars, staged publication and speed
+claims. W124 selected windows do not expose complete source row grids; a future
+Object file reader must solve cross-lane full-domain alignment explicitly rather
+than treat selected rows as the full source domain. Structure marks include a
+prefix-only repeated coordinate and statistics suffix before terminal EOF;
+they are not ordinary value-lane windows.
+
+### Execution and falsifiers
+
+1. Root's missing-API RED is qualified at
+   `/private/tmp/crystal-click-w125-root.0lO25q/missing-api-red-unsandboxed.log`:
+   undefined `BinaryBulkPhysicalPlan`. The initial sandboxed attempt was stopped
+   by process-group isolation, not by a test failure. Guard limits remain intact.
+2. Luna implements the four owners; root owns aggregate imports, independent
+   literal specs and resource-heavy commands. A second Luna owns a separate
+   stock/capture oracle and supplementary specs. Neither runs a compiler/CH,
+   mutates Git, changes unrelated files, or reverts another worker's edits.
+3. Focused DEBUG/RELEASE: new plans plus W117-W124 specs, compression, mmap and
+   checksums. Expect no failures/errors/pending. Literal expectations include
+   nested Array(Tuple(Array(Nullable(String)))), BASIC Map, escaped raw bytes,
+   unnamed fields, Dynamic sibling placement, empty arms, both String profiles,
+   arbitrary non-fixture paths and multi-lane filename collisions.
+4. The W125 oracle compares all derived bindings against the independently
+   authored W116/W122 inventories; it uses the production bindings for complete
+   full/nonzero-window Object assembly over retained stock parts and for all
+   output lane placement in isolated copied-part ATTACH/CHECK=1/full+PK reads.
+   Wrong-name/role/CHECK=0 controls must demonstrably reject. This remains a
+   copied-sidecar oracle, not fresh whole-part output.
+5. Replay the unchanged W124 stock oracle and full non-release suite under the
+   unchanged 50% free-memory guard, one compiler/CH workload at a time, single
+   module/thread for the full suite. Formatting, shell syntax and diff hygiene
+   must pass before one exact-path atomic local commit.
+
+The strongest failure modes are array-level reset, double escaping or a raw
+dot treated as a separator, Dynamic metadata prefix leakage, profile inference,
+and two distinct logical roles producing the same physical name. Exact literal
+maps, complete independent retained inventories, non-fixture plans and seeded
+comparator failures are the guard checks. A bounded naming certificate does not
+close the subsequent complete file-backed reader or all-layout compatibility.
+
+### W125 execution evidence and continuation
+
+Implemented on October 2 over `99b47d6`, without changes to any W124 transport
+owner or legacy part/table/catalog facade. Four new production owners total
+775 lines (131/75/289/280 in the inventory order above). Root owns the 21 new
+literal/negative examples and all compiler/stock/Git commands; Luna owns the
+four production files and a separate stock oracle. Luna's static review is
+correlated, not independent runtime evidence.
+
+Executed on the finalized production source:
+
+- Qualified missing-API RED: undefined `BinaryBulkPhysicalPlan`. The initial
+  sandboxed resource-guard attempt returned 75 because process-group isolation
+  was unavailable; it is not a test RED. The successful retry retained all
+  limits, including the 50% free-memory floor.
+- Focused W117-W125 plus compression/mmap/checksum DEBUG and RELEASE each
+  passed 210 examples, with no failures/errors/pending. Root's 21 new examples
+  cover exact recursive names, both String profiles, non-fixture Object paths,
+  Dynamic metadata siblings, tuple/path collisions, missing lookups, empty
+  Nothing lanes, raw percent versus structural syntax, detached mutable-byte
+  snapshots, malformed escaped prefixes and aggregate/depth/metadata bounds.
+- Four W125 stock copied-part cases (`dynamic_paths`/`typed_mixed` times BASIC/
+  COMPACT discriminator encoding) passed actual ATTACH, exact `CHECK TABLE`=1,
+  full and PK3..6 stock readback and production full/nonzero-window Object
+  assembly. Here COMPACT names discriminator encoding, not Compact parts.
+  Production W125 bindings choose every JSON lane's input/output filename;
+  complete W116 inventories and W122 role maps independently qualify them
+  before transport. Wrong-role, wrong-name and CHECK=0 controls all reject.
+- The unchanged W124 stock oracle passed its four ATTACH/CHECK=1/readback
+  cases on this source state.
+- Full non-release passed 2,102 examples with no failures/errors/pending:
+  `crystal spec --no-debug --threads 1 --single-module
+  --link-flags=-fuse-ld=ld --error-trace` under the serial resource guard,
+  timeout 600 seconds, memory limit 32,768 MiB and unchanged 50% free-memory
+  floor. Symbolic debug information alone is disabled; non-release checks
+  remain enabled. The guard returned exit 0 after approximately 186 seconds.
+  One pre-existing deprecated File argument warning remains. Full RELEASE
+  was not executed.
+- Exact-path Crystal `tool format --check` over the four owners, aggregate
+  import, new spec and oracle passed; shell syntax and final diff hygiene
+  passed. No unrelated user changes, guard weakening or foreign-process
+  termination was needed.
+
+Root rejected a public prevalidated-prefix bypass during review; the final
+factory accepts only validated escaped syntax through a private value token.
+Descriptor preview now stops at the remaining shared node/element limit before
+descending, rather than counting an excessive complete tree first. Opaque
+Tuple fields and Object paths are measured through byte accessors before their
+copies/percent expansions. Dynamic SQL-name bounds include fields, Enum labels
+and timezones. Completed filename getters remain usable after their shared
+construction context is fully consumed. These guards do not imply a whole-
+schema zero-allocation rejection or model/getter RSS bound.
+
+Two execution failures were not compatibility falsifiers: the first detached-
+snapshot test attempted to mutate Crystal's read-only `String#to_slice` view;
+root changed the test to mutate heap-backed `to_unsafe` bytes. The larger
+focused build then exposed Crystal's definite-initialization requirement;
+both constructors now explicitly assign the Hash returned by `build_bindings`.
+All positive focused/stock gates above ran after these repairs.
+
+Source, pinned stock runtime and toolchain identities remain those above:
+separate shallow source `31d2addb`, stock 26.10.1.1201 build `d9bcb5ab`,
+Crystal 1.21.0/LLVM 22.1.8/AArch64 and MacOSX26.5 SDK. Root replayed recursive
+source comparisons of DataTypes, Columns and MergeTree between `0c68f01a`
+and `31d2addb`; each returned exit 0 with no diff output. That is scoped source
+continuity, not a freshly built current-master runtime certificate.
+
+Temporary evidence index: `/private/tmp/crystal-click-w125-root.0lO25q`,
+including `missing-api-red-unsandboxed.log`, `first-debug.log`,
+`focused-debug.log`, `focused-debug-fixed.log`, `focused-release.log`,
+`stock-w125.log`, `stock-w124-regression.log` and
+`full-nonrelease-single.log`, with `format-check-final.log` for final formatting.
+W125 retained part/cache roots are
+`/private/tmp/crystal-click-json-w125.msh17X` and
+`/private/tmp/crystal-click-json-w125-cache.E7OAmC`; W124 replay roots are
+`/private/tmp/crystal-click-json-w124.vg7GqO` and
+`/private/tmp/crystal-click-json-w124-cache.HSEVBB`. These pointers are an index,
+not proof if temporary artifacts disappear. Replay focused specs, full
+non-release specs and `scripts/check_physical_stream_plans_w125.sh` plus
+the unchanged `scripts/check_compressed_mark_transport_w124.sh` under the
+serial unchanged resource guard and pinned identities.
+
+Root's scoped hostile verdict is ROBUST for the admitted raw/escaped naming,
+recursive level/profile semantics, exact generic role binding, global Object
+collision refusal and consumptive logical construction limits. Independent
+literal expectations, current source anchors, seeded comparator failures and
+executed stock cases supplement the correlated Luna review. The construction
+budget is incremental and bounds logical descriptors/records plus charged
+retained role/rendered-name bytes; it does not account for all lookup-key,
+model-constructor, getter-copy or transient/RSS allocations. Late invalid
+children may reject after earlier bounded plans were allocated, without
+returning or publishing any partial plan. W124's quiescent-file and selected-
+only checksum/decode boundaries remain unchanged. Oracle schema/statistics/
+sidecars are borrowed in isolated copies, not freshly synthesized whole parts.
+
+Continuation: the next boundary is a complete library-owned file-backed Object
+reader, including metadata discovery and cross-lane full source-grid alignment.
+W124 selected rows cannot stand in for that source grid. Structure lanes have
+repeated prefix coordinates and a statistics suffix, not ordinary value marks.
+Then synthesize fresh Object/Dynamic statistics/schema sidecars and stage a
+whole part without borrowing those files. Legacy/bucketed/advanced JSON,
+remaining recursive/type profiles, Compact parts, broader MV/projections and
+large-facade extraction remain open. W125 does not change descriptor admission,
+serializer defaults/propagation, alias auto-resolution, publication, whole-part
+integrity, concurrent-mutation safety or performance. The overall goal remains
+active and optimization parked. Changes to owner/API/imports, profile/naming/
+budget semantics, source/runtime/toolchain or comparators reopen this evidence.
