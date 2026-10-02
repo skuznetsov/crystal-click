@@ -2,7 +2,8 @@
 
 ## Active W114: Geometry qualification before paired implementation
 
-Status: design-sealed qualification with verified capture-only instrumentation;
+Status: VERIFIED stock qualification and exact production-refusal RED within
+the seven-arm W114 fixture profile below; paired implementation is next.
 Geometry remains rejected by production.
 The full all-types and MV/projection goal remains active, followed by memory
 and performance work. This slice must not turn fixed Geometry storage into
@@ -124,13 +125,115 @@ W114_capture_root="$(mktemp -d /private/tmp/crystal-click-w114-capture.XXXXXX)"
 env CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse W114_CAPTURE_STORE="$W114_capture_root/store" SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk TMPDIR=/private/tmp CRYSTAL_CACHE_DIR="$W114_capture_root/cache" COGNI_RUN_SAFE_MIN_FREE_PCT=50 /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 8192 run --single-module --link-flags=-fuse-ld=ld scripts/probe_geometry_w114.cr -- stock-capture
 ```
 
-Next return pointer: execution-order step1 below. Build strict source/fresh
+Historical return pointer (resolved by the strict checkpoint below): step1.
+Build strict source/fresh
 ATTACH comparators for all six profiles, including raw streams, marks, PK,
 metadata and actual full/selected RowBinary, then seed known wrong inputs.
 Only after those controls pass may the exact public Geometry refusal count
 as production RED. The six-arm legacy bulk profile also remains unqualified.
 Refresh this checkpoint after any script/fixture, executable, settings or
 serializer change; rollback is this isolated script/documentation diff.
+
+### Strict qualification and exact RED checkpoint (2026-10-01)
+
+Over clean `3fee48e`, root separately unpacked all156 stock `.mrk2` files
+using Ruby UInt64LE records, without the Crystal marks parser: every stream,
+including absent arms, has the outer-table row grid documented above. Root
+also decoded the stock `.bin` frames through native Homebrew LZ4 1.10.0 via
+Ruby Fiddle, without `CompressedBlock`, and matched all six discriminator
+streams to separately written literal byte vectors. Their first mark is
+`(0,8,2)`; EOF is `(0,raw_bytes,0)`, with raw sizes mixed25/42,
+all-NULL13/17 and uniform13/17 for BASIC/COMPACT respectively. These are
+fallback observations on the retained capture store, not fresh-ATTACH or
+complete payload qualification. They share the fixture provenance and do
+not constitute independent data-origin replication.
+
+Over production anchor `3fee48e`, root executed the frozen strict instrument:
+
+- `scripts/probe_geometry_w114.cr` SHA-256
+  `86c4e50cbb8415bdb7dc80a46cb89d8ca91cd165186003b845d5894354065b09`;
+- its thin `.sh` wrapper SHA-256
+  `1c31e6e23218c9190bc2ca2fe13ae045ea47bc95a4fc3fd6cfd8c0f66b63b1c7`.
+
+The whole wrapper ran under the serial 600-second/8192-MiB guard and 50%
+free-memory floor. `qualify` exited0 after all six source and six fresh-ATTACH
+parts passed exact schema, ordered stream/file/checksum inventories, physical
+file sizes/hashes, serialization envelope and packed-statistics fingerprints,
+literal decoded stream bytes, all mark tuples/plain PK, actual CHECK=1 and
+literal full/selected RowBinary. Each run covers312 ordered physical streams
+(624 `.bin`/`.mrk2` files), 12 CHECK records and12 RowBinary pairs. These are
+small one-LZ4-frame fixtures, not arbitrary-frame or arbitrary-schema proof.
+
+The observed actual values were seeded wrong after positive preconditions:
+global-tag, size, raw coordinate and PK bytes; discriminator mark offset;
+PK default-count metadata; and synthetic CHECK result0/wrong-part records.
+Each failed at its named comparator with the required mismatch identity.
+Root review corrected a dropped discriminator in the expected substream
+declaration before execution. Comparator mutations are instrument sensitivity
+checks, not corrupted production-part rejection tests.
+
+The separate `red` run repeated all stock and comparator controls in another
+fresh store, then exercised `WidePart.open_typed(part, "payload")` on each
+qualified attached profile. All six produced exactly
+`UnsupportedFormatError("unsupported exact typed column")`; only then did
+the script emit the final `EXPECTED RED W114` marker and exit1 by design.
+Compiler, CHECK, schema, envelope and unrelated reader errors cannot satisfy
+this RED. Production code and admission predicates are unchanged.
+
+Evidence logs (local/disposable, not tracked):
+
+- `/private/tmp/crystal-click-w114-gates.PWJ4nl/qualify.log`, SHA-256
+  `846ce049dc97102322fd4593d1d5bc0523067407d90945e02f9c7f1b98f290d2`;
+- `/private/tmp/crystal-click-w114-gates.PWJ4nl/red.log`, SHA-256
+  `146cb44a0756fb8f40b08c3a9cdac2ad7d71d5af8bc7a16e7ed6223edfcfaed9`.
+
+Retained stores are `/private/tmp/crystal-click-w114.gsaXX7/store` and
+`/private/tmp/crystal-click-w114.aDxpkX/store`. Root additionally decoded all
+624 raw streams across their24 parts through native Homebrew LZ4 via Ruby
+Fiddle, matching separately written literal byte multisets. Standard Ruby
+UInt64LE/JSON parsing checked every outer mark-row vector, monotone offsets,
+zero compressed offsets, exact EOF raw sizes, schema and serialization
+envelope. This fallback does not bind raw bytes to logical stream names and
+shares fixture data provenance; the strict named-stream comparator and actual
+stock CHECK/RowBinary gates remain necessary.
+
+Replay the whole wrapper from this repository, serially:
+
+```sh
+env CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse CRYSTAL_BIN=/opt/homebrew/bin/crystal W114_KEEP_TMP=1 SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk TMPDIR=/private/tmp COGNI_RUN_SAFE_MIN_FREE_PCT=50 /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /bin/bash 600 8192 /Users/sergey/Projects/Crystal/crystal-click/scripts/probe_geometry_w114.sh qualify
+env CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse CRYSTAL_BIN=/opt/homebrew/bin/crystal W114_KEEP_TMP=1 SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk TMPDIR=/private/tmp COGNI_RUN_SAFE_MIN_FREE_PCT=50 /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /bin/bash 600 8192 /Users/sergey/Projects/Crystal/crystal-click/scripts/probe_geometry_w114.sh red
+```
+
+Expected signals: terminal `PASS W114 qualify` and exit0; then terminal
+`EXPECTED RED W114: all stock profiles qualified; exact typed Geometry guard
+remains closed` and exit1. The wrapper creates its own fresh temporary parent;
+KEEP1 avoids cleanup for inspection. This is a serial accidental-path-reuse
+guard, not a concurrent hostile-filesystem sandbox.
+
+Scoped adversary verdict: ROBUST for this instrument qualification and exact
+seven-arm production-refusal RED. No paired reader/writer, legacy six-arm bulk,
+full-suite, arbitrary-frame or performance certificate follows. Refresh after
+script/fixture, executable/settings, serializer, codec/marks or affected public
+guard changes. Rollback is this isolated script/wrapper/documentation diff.
+Next return pointer: execution-order step3 below; steps1/2 are qualified within
+the declared profile. Keep the separate legacy bulk profile rejected until its
+own qualification and paired implementation gates execute.
+
+Ownership decision for the next implementation: shared immutable result/mark
+owners with lightweight row handles, not copied per-row topology. This follows
+`WideGeoArrayColumnData` (copied topology/points, detached public exports) and
+`WideGeoArrayRow` (owner/level/record-index handle), independently inspected by
+root at the production anchor. One lazy output owner contains all seven arm
+lanes for one outer mark; direct range reads may own the whole requested range.
+The Geometry row retains its nominal arm identity, including tagged empty
+arrays, and distinguishes NULL from Point and ragged arrays. Reuse existing
+owned Point/Geo topology contracts where their dense per-arm semantics fit;
+do not duplicate those codecs or infer table mark rows from arm cardinality.
+New exact plan, schedule, data/row, reader, table/catalog adapter and writer
+owners belong in separate class files. Charge retained owners once by identity,
+with concurrently live schedule/output/scratch counted separately; whole-window
+preflight must precede lazy callbacks. These are design constraints, not an
+implemented Geometry API or a measured memory/performance claim.
 
 Planned paired surface: exact nominal Geometry beside one nondecreasing UInt64
 PK, Wide/LZ4/plain adaptive `.mrk2` and plain `primary.idx`; all seven arms and

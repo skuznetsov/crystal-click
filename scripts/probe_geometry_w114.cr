@@ -4,13 +4,23 @@ require "json"
 require "file_utils"
 require "../src/crystal_click"
 
-W114_VERSION           = "26.10.1.1201"
-W114_BUILD_HASH        = "d9bcb5ab007f0f6299f7f973f2642245bab3d028"
-W114_EXECUTABLE_SHA256 = "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
-W114_SETTINGS          = "index_granularity = 2, index_granularity_bytes = 10485760, enable_mixed_granularity_parts = 1, min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0, ratio_of_defaults_for_sparse_serialization = 0.9375, compress_marks = 0, compress_primary_key = 0, min_compress_block_size = 0, max_compress_block_size = 4096, default_compression_codec = 'LZ4'"
-W114_MARK_BYTES        = 24
-W114_TAGS              = {"LineString", "MultiLineString", "MultiPolygon", "Point", "Polygon", "Ring", "MultiPoint"}
-W114_DEPTHS            = {"LineString" => 1, "MultiLineString" => 2, "MultiPolygon" => 3, "Point" => 0, "Polygon" => 2, "Ring" => 1, "MultiPoint" => 1}
+W114_VERSION               = "26.10.1.1201"
+W114_BUILD_HASH            = "d9bcb5ab007f0f6299f7f973f2642245bab3d028"
+W114_EXECUTABLE_SHA256     = "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+W114_SETTINGS              = "index_granularity = 2, index_granularity_bytes = 10485760, enable_mixed_granularity_parts = 1, min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0, ratio_of_defaults_for_sparse_serialization = 0.9375, compress_marks = 0, compress_primary_key = 0, min_compress_block_size = 0, max_compress_block_size = 4096, default_compression_codec = 'LZ4'"
+W114_MARK_BYTES            = 24
+W114_TAGS                  = {"LineString", "MultiLineString", "MultiPolygon", "Point", "Polygon", "Ring", "MultiPoint"}
+W114_DEPTHS                = {"LineString" => 1, "MultiLineString" => 2, "MultiPolygon" => 3, "Point" => 0, "Polygon" => 2, "Ring" => 1, "MultiPoint" => 1}
+W114_EXPECTED_STREAM_NAMES = [
+  "pk", "payload.variant_discr",
+  "payload.LineString.size0", "payload.LineString%2E1", "payload.LineString%2E2",
+  "payload.MultiLineString.size0", "payload.MultiLineString.size1", "payload.MultiLineString%2E1", "payload.MultiLineString%2E2",
+  "payload.MultiPolygon.size0", "payload.MultiPolygon.size1", "payload.MultiPolygon.size2", "payload.MultiPolygon%2E1", "payload.MultiPolygon%2E2",
+  "payload.Point%2E1", "payload.Point%2E2",
+  "payload.Polygon.size0", "payload.Polygon.size1", "payload.Polygon%2E1", "payload.Polygon%2E2",
+  "payload.Ring.size0", "payload.Ring%2E1", "payload.Ring%2E2",
+  "payload.MultiPoint.size0", "payload.MultiPoint%2E1", "payload.MultiPoint%2E2",
+]
 
 class W114Mismatch < Exception
 end
@@ -482,15 +492,8 @@ def w114_assert_point_lanes(streams : Array(W114Stream), arm : String, full : Ar
 end
 
 def w114_fixture_stream_names(profile : W114Profile) : Array(String)
-  names = ["pk", "payload.variant_discr"]
-  W114_TAG_NAMES.each do |type_name|
-    W114_DEPTHS[type_name].times do |level|
-      names << "payload.#{type_name}.size#{level}"
-    end
-    names << "payload.#{type_name}%2E1"
-    names << "payload.#{type_name}%2E2"
-  end
-  names
+  w114_require(W114_PROFILES.any? { |candidate| candidate.name == profile.name }, "unknown W114 fixture profile: #{profile.name}")
+  W114_EXPECTED_STREAM_NAMES
 end
 
 def w114_expected_selected_indexes(profile : W114Profile) : Array(Int32)
@@ -517,6 +520,432 @@ def w114_expected_rowbinary_sizes(profile : W114Profile) : {Int32, Int32}
   else
     w114_fail("RowBinary size literals missing for #{profile.name}")
   end
+end
+
+def w114_assert_bytes(actual : String, expected : String, label : String) : Nil
+  return if actual == expected
+  limit = Math.min(actual.bytesize, expected.bytesize)
+  index = 0
+  while index < limit && actual.to_slice[index] == expected.to_slice[index]
+    index += 1
+  end
+  got = index < actual.bytesize ? actual.to_slice[index].to_s(16).rjust(2, '0') : "<eof>"
+  wanted = index < expected.bytesize ? expected.to_slice[index].to_s(16).rjust(2, '0') : "<eof>"
+  w114_fail("#{label}: byte mismatch expected #{expected.bytesize}, got #{actual.bytesize}; first diff #{index}: expected #{wanted}, got #{got}")
+end
+
+def w114_seeded_byte_mismatch(actual : String, expected : String, offset : Int32, label : String) : Nil
+  w114_require(offset >= 0 && offset < expected.bytesize, "#{label}: invalid seeded-byte offset")
+  w114_assert_bytes(actual, expected, "#{label} control precondition")
+  altered_bytes = actual.to_slice.dup
+  altered_bytes[offset] ^= 0x01_u8
+  altered_actual = String.new(altered_bytes)
+  begin
+    w114_assert_bytes(altered_actual, expected, label)
+  rescue ex : W114Mismatch
+    message = ex.message || "<missing mismatch message>"
+    w114_require(message.starts_with?("#{label}: byte mismatch") && message.includes?("first diff #{offset}:"), "#{label}: negative control failed for an unrelated mismatch: #{message}")
+    puts "PASS W114 byte comparator negative control: #{label} (first diff #{offset})"
+    return
+  end
+  w114_fail("#{label}: seeded wrong-byte expectation was accepted")
+end
+
+def w114_expected_substreams : String
+  payload = W114_EXPECTED_STREAM_NAMES[1, W114_EXPECTED_STREAM_NAMES.size - 1]
+  lines = [
+    "columns substreams version: 1", "2 columns:",
+    "1 substreams for column `pk`:", "\tpk",
+    "25 substreams for column `payload`:",
+  ]
+  payload.each { |name| lines << "\t#{name}" }
+  lines.join("\n") + "\n"
+end
+
+def w114_expected_columns : Array(String)
+  ["columns format version: 1", "2 columns:", "`pk` UInt64", "`payload` Geometry"]
+end
+
+def w114_profile_default_count(profile : W114Profile) : Int32
+  profile.keys.count(0_u64).to_i32
+end
+
+def w114_validate_pk_record(record : Hash(String, JSON::Any), defaults : Int32, rows : Int32, label : String) : Nil
+  expected_keys = ["exact_num_defaults", "kind", "name", "num_defaults", "num_rows"].sort
+  w114_require(record.keys.sort == expected_keys, "#{label}: exact PK record keys differ")
+  w114_require(record["kind"]?.try(&.as_s) == "Default", "#{label}: PK kind differs")
+  w114_require(record["name"]?.try(&.as_s) == "pk", "#{label}: PK name differs")
+  w114_require(record["num_rows"]?.try(&.as_i) == rows.to_i64, "#{label}: PK row count differs")
+  w114_require(record["num_defaults"]?.try(&.as_i) == defaults.to_i64, "#{label}: PK default count differs")
+  w114_require(record["exact_num_defaults"]?.try(&.as_bool) == true, "#{label}: PK exact_num_defaults differs")
+end
+
+def w114_assert_serialization(part : String, profile : W114Profile, label : String) : Nil
+  info = JSON.parse(File.read(File.join(part, "serialization.json"))).as_h
+  expected_keys = ["columns", "propagate_types_serialization_versions_to_nested_types", "types_serialization_versions", "version"].sort
+  w114_require(info.keys.sort == expected_keys, "#{label}: exact serialization envelope differs: #{info.keys.sort.inspect}")
+  w114_require(info["version"]?.try(&.as_i) == 1_i64, "#{label}: serialization version differs")
+  w114_require(info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool) == true, "#{label}: nested type-version propagation differs")
+  versions = info["types_serialization_versions"]?.try(&.as_h) || raise "#{label}: type-version map missing"
+  w114_require(versions.size == 1 && versions["string"]?.try(&.as_i) == 1_i64, "#{label}: exact String version map differs")
+  records = info["columns"]?.try(&.as_a) || raise "#{label}: serialization columns are missing"
+  w114_require(records.size == 1, "#{label}: Geometry envelope must contain exactly one PK record")
+  record = records[0].as_h
+  w114_validate_pk_record(record, w114_profile_default_count(profile), profile.keys.size.to_i32, label)
+end
+
+def w114_expect_metadata_mismatch(part : String, profile : W114Profile, label : String) : Nil
+  info = JSON.parse(File.read(File.join(part, "serialization.json"))).as_h
+  record = info["columns"]?.try(&.as_a).try(&.first?).try(&.as_h) || raise "#{label}: PK record missing for negative control"
+  defaults = w114_profile_default_count(profile)
+  w114_validate_pk_record(record, defaults, profile.keys.size.to_i32, "#{label} control precondition")
+  record["num_defaults"] = JSON::Any.new((defaults + 1).to_i64)
+  begin
+    w114_validate_pk_record(record, defaults, profile.keys.size.to_i32, label)
+  rescue ex : W114Mismatch
+    message = ex.message || "<missing mismatch message>"
+    w114_require(message == "#{label}: PK default count differs", "#{label}: metadata negative control caught an unrelated failure: #{message}")
+    puts "PASS W114 metadata comparator negative control: #{label} (PK default count)"
+    return
+  end
+  w114_fail("#{label}: seeded wrong PK default-count expectation was accepted")
+end
+
+def w114_statistics_expectation(profile : W114Profile) : {Int32, String}
+  # Exact bytes are fingerprinted by the independent stock-capture checkpoint
+  # for this SHA-pinned executable; BASIC/COMPACT pairs share the family file.
+  case profile.name
+  when "mixed_basic", "mixed_compact"
+    {337, "30e1a2455ac8559af5d83489e4f3fe31ee46d4447bb37d37738cbed081f3896b"}
+  when "all_null_basic", "all_null_compact"
+    {253, "3243d3fdcdde97f5751ea15facef9dac97122817fdf0b95301753e23a3f4f902"}
+  when "uniform_point_multipoint_basic", "uniform_point_multipoint_compact"
+    {245, "0c01e738bbe47b361f135cbb6cf37f37f3fba6b7f5bdb966bd4a5098460a1416"}
+  else
+    w114_fail("statistics.packed has no exact stock fingerprint for #{profile.name}")
+  end
+end
+
+def w114_file_sha256(path : String) : String
+  output = IO::Memory.new
+  error = IO::Memory.new
+  status = Process.run("shasum", ["-a", "256", path], output: output, error: error)
+  w114_require(status.success?, "could not fingerprint #{path}: #{error}")
+  output.to_s.split(' ').first? || w114_fail("SHA-256 output is malformed for #{path}")
+end
+
+def w114_expected_marks(profile : W114Profile, stream : W114Stream) : Array({UInt64, UInt64, UInt64})
+  w114_require(profile.boundaries.size == profile.mark_rows.size, "#{profile.name}: exact mark vectors differ in length")
+  profile.boundaries.map_with_index do |boundary, index|
+    decompressed = stream.prefix.bytesize.to_u64
+    stream.row_fragments[0, boundary].each do |row|
+      row.each { |fragment| decompressed += fragment.bytesize.to_u64 }
+    end
+    # This captured Geometry profile uses one bounded LZ4 frame per stream;
+    # all mark compressed offsets are zero, including its explicit EOF row.
+    {0_u64, decompressed, profile.mark_rows[index]}
+  end.to_a
+end
+
+def w114_marks(part : String, stream_name : String) : Array({UInt64, UInt64, UInt64})
+  hashed = CrystalClick::StreamName.hash(stream_name)
+  bytes = File.read(File.join(part, "#{hashed}.mrk2")).to_slice
+  w114_require(bytes.size % W114_MARK_BYTES == 0, "#{stream_name}: partial 24-byte .mrk2 record")
+  Array({UInt64, UInt64, UInt64}).new(bytes.size // W114_MARK_BYTES) do |record|
+    start = record * W114_MARK_BYTES
+    fields = Array(UInt64).new(3) do |field|
+      at = start + field * 8
+      8.times.reduce(0_u64) { |value, byte| value | (bytes[at + byte].to_u64 << (byte * 8)) }
+    end
+    {fields[0], fields[1], fields[2]}
+  end
+end
+
+def w114_assert_marks(actual : Array({UInt64, UInt64, UInt64}), expected : Array({UInt64, UInt64, UInt64}), label : String) : Nil
+  if actual.size != expected.size
+    w114_fail("#{label}: mark record count differs: expected #{expected.size}, got #{actual.size}")
+  end
+  actual.each_with_index do |record, index|
+    next if record == expected[index]
+    w114_fail("#{label}: mark record #{index} differs: expected #{expected[index].inspect}, got #{record.inspect}")
+  end
+end
+
+def w114_expect_mark_mismatch(actual : Array({UInt64, UInt64, UInt64}), expected : Array({UInt64, UInt64, UInt64}), label : String) : Nil
+  w114_require(!expected.empty?, "#{label}: mark negative control has no fixture record")
+  w114_assert_marks(actual, expected, "#{label} control precondition")
+  altered_actual = actual.dup
+  first = altered_actual[0]
+  altered_actual[0] = {first[0], first[1] + 1_u64, first[2]}
+  begin
+    w114_assert_marks(altered_actual, expected, label)
+  rescue ex : W114Mismatch
+    message = ex.message || "<missing mismatch message>"
+    w114_require(message.starts_with?("#{label}: mark record 0 differs"), "#{label}: mark negative control caught an unrelated failure: #{message}")
+    puts "PASS W114 mark comparator negative control: #{label} (record 0 decompressed offset)"
+    return
+  end
+  w114_fail("#{label}: seeded wrong mark tuple was accepted")
+end
+
+def w114_expected_primary(profile : W114Profile) : String
+  data_boundaries = profile.boundaries[0, profile.boundaries.size - 1]
+  data_boundaries.map { |row| w114_u64(profile.keys[row]) }.join + w114_u64(profile.keys.last)
+end
+
+def w114_read_raw(part : String, stream_name : String) : String
+  hashed = CrystalClick::StreamName.hash(stream_name)
+  encoded = File.read(File.join(part, "#{hashed}.bin")).to_slice
+  return "" if encoded.empty?
+  String.new(CrystalClick::CompressedBlock.decode_all(encoded))
+end
+
+def w114_assert_checksum_hashes(part : String, checksums : CrystalClick::PartChecksums, profile : W114Profile, label : String) : Nil
+  checksums.entries.each do |name, entry|
+    file_bytes = File.read(File.join(part, name))
+    actual_hash = CrystalClick::CityHashV1.file_hash(file_bytes.to_slice)
+    w114_require(actual_hash == entry.file_hash, "#{label} #{name}: file bytes differ from checksums.txt")
+  end
+  stats_size, stats_sha256 = w114_statistics_expectation(profile)
+  stats_path = File.join(part, "statistics.packed")
+  w114_require(File.size(stats_path) == stats_size, "#{label}: statistics.packed size differs (expected #{stats_size}, got #{File.size(stats_path)})")
+  actual_stats_sha256 = w114_file_sha256(stats_path)
+  w114_require(actual_stats_sha256 == stats_sha256, "#{label}: statistics.packed fingerprint differs: #{actual_stats_sha256}")
+end
+
+def w114_assert_invalidated_system_columns(part : String, label : String) : Nil
+  path = File.join(part, "invalidated_system_columns.txt")
+  contents = File.read(path)
+  w114_require(contents == "_block_number\n_block_offset\n" || contents == "_block_offset\n_block_number\n", "#{label}: invalidated_system_columns.txt differs: #{contents.inspect}")
+end
+
+def w114_assert_layout(part : String, profile : W114Profile, label : String, attached : Bool = false) : Nil
+  streams = w114_streams(profile)
+  actual_columns = File.read(File.join(part, "columns.txt")).lines.map(&.strip)
+  w114_require(actual_columns == w114_expected_columns, "#{label}: exact two-column declaration differs: #{actual_columns.inspect}")
+  actual_substreams = File.read(File.join(part, "columns_substreams.txt"))
+  w114_require(actual_substreams == w114_expected_substreams, "#{label}: exact 25-substream order differs")
+  w114_require(File.read(File.join(part, "default_compression_codec.txt")) == "CODEC(LZ4)", "#{label}: default codec differs")
+  w114_require(File.read(File.join(part, "metadata_version.txt")) == "0", "#{label}: metadata version differs")
+  w114_require(File.read(File.join(part, "count.txt")) == profile.keys.size.to_s, "#{label}: outer row count differs")
+  w114_assert_serialization(part, profile, label)
+
+  expected_files = [
+    "checksums.txt", "columns.txt", "columns_substreams.txt", "count.txt",
+    "default_compression_codec.txt", "metadata_version.txt", "primary.idx",
+    "serialization.json", "statistics.packed",
+  ]
+  if attached
+    expected_files << "invalidated_system_columns.txt"
+    w114_assert_invalidated_system_columns(part, label)
+  end
+  W114_EXPECTED_STREAM_NAMES.each do |stream_name|
+    hashed = CrystalClick::StreamName.hash(stream_name)
+    expected_files << "#{hashed}.bin" << "#{hashed}.mrk2"
+  end
+  actual_files = Dir.children(part).sort
+  w114_require(actual_files == expected_files.sort, "#{label}: exact file inventory differs (missing=#{(expected_files - actual_files).sort.inspect}, extra=#{(actual_files - expected_files).sort.inspect})")
+
+  checksums = CrystalClick::PartChecksums.open(part)
+  checksum_files = expected_files - [
+    "checksums.txt", "columns.txt", "columns_substreams.txt", "default_compression_codec.txt",
+    "metadata_version.txt", "invalidated_system_columns.txt",
+  ]
+  w114_require(checksums.entries.keys.sort == checksum_files.sort, "#{label}: exact checksum inventory differs")
+  checksums.entries.each_key { |name| checksums.validate_selected_entries(part, name) }
+  w114_assert_checksum_hashes(part, checksums, profile, label)
+
+  w114_assert_bytes(File.read(File.join(part, "primary.idx")), w114_expected_primary(profile), "#{label} literal plain primary.idx")
+  streams.each do |stream|
+    w114_assert_bytes(w114_read_raw(part, stream.name), stream.raw, "#{label} #{stream.name} raw stream")
+    expected_marks = w114_expected_marks(profile, stream)
+    actual_marks = w114_marks(part, stream.name)
+    w114_require(expected_marks.size == profile.boundaries.size && expected_marks.last[2] == 0_u64, "#{label} #{stream.name}: expected mark fixture lacks EOF")
+    w114_assert_marks(actual_marks, expected_marks, "#{label} #{stream.name}")
+  end
+end
+
+def w114_assert_check_record(actual : String, part_name : String, result : String, error : String, label : String) : Nil
+  expected = "#{part_name}\t#{result}\t#{error}\n"
+  w114_fail("#{label}: CHECK record mismatch") unless actual == expected
+end
+
+def w114_expect_check_mismatch(part_name : String, result : String, seeded_actual : String, label : String) : Nil
+  begin
+    w114_assert_check_record(seeded_actual, part_name, result, "", label)
+  rescue ex : W114Mismatch
+    message = ex.message || "<missing mismatch message>"
+    w114_require(message == "#{label}: CHECK record mismatch", "#{label}: CHECK negative control caught an unrelated failure: #{message}")
+    puts "PASS W114 CHECK comparator negative control: #{label}"
+    return
+  end
+  w114_fail("#{label}: seeded wrong CHECK record was accepted")
+end
+
+def w114_read_check(binary : String, store : String, table : String) : String
+  w114_run(binary, store, "CHECK TABLE default.#{table} FORMAT TabSeparated")
+end
+
+def w114_check(binary : String, store : String, table : String, part : String, label : String) : Nil
+  part_name = File.basename(part.chomp("/"))
+  actual = w114_read_check(binary, store, table)
+  w114_assert_check_record(actual, part_name, "1", "", label)
+  puts "PASS #{label}: actual CHECK=1"
+  w114_expect_check_mismatch(part_name, "1", "#{part_name}\t0\t\n", "#{label} seeded CHECK result=0")
+  w114_expect_check_mismatch(part_name, "1", "wrong_#{part_name}\t1\t\n", "#{label} seeded part name")
+end
+
+def w114_stock_part_path(binary : String, store : String, table : String, profile : W114Profile) : String
+  rows = w114_run(binary, store, "SELECT path, part_type, rows FROM system.parts WHERE database='default' AND table='#{table}' AND active FORMAT TSVRaw").lines.map(&.strip).reject(&.empty?)
+  w114_require(rows.size == 1, "#{table}: expected exactly one active part, got #{rows.inspect}")
+  fields = rows[0].split('\t')
+  w114_require(fields.size == 3 && fields[1] == "Wide" && fields[2] == profile.keys.size.to_s, "#{table}: expected one Wide part with #{profile.keys.size} rows, got #{rows[0].inspect}")
+  w114_require(Dir.exists?(fields[0]), "#{table}: active part path is absent: #{fields[0]}")
+  fields[0]
+end
+
+def w114_assert_schema(binary : String, store : String, table : String) : Nil
+  actual = w114_run(binary, store, "SELECT name || ' ' || type FROM system.columns WHERE database='default' AND table='#{table}' ORDER BY position FORMAT TSVRaw").lines.map(&.strip)
+  w114_require(actual == ["pk UInt64", "payload Geometry"], "#{table}: exact nominal schema differs: #{actual.inspect}")
+end
+
+def w114_rowbinary_checks(binary : String, store : String, table : String, profile : W114Profile, label : String) : Nil
+  all_indexes = (0...profile.keys.size).to_a
+  expected_full = w114_rowbinary(profile, all_indexes)
+  actual_full = w114_run(binary, store, "SELECT pk, payload FROM default.#{table} ORDER BY pk FORMAT RowBinary")
+  w114_assert_bytes(actual_full, expected_full, "#{label} full RowBinary")
+  selected_indexes = w114_expected_selected_indexes(profile)
+  expected_selected = w114_rowbinary(profile, selected_indexes)
+  actual_selected = w114_run(binary, store, "SELECT pk, payload FROM default.#{table} WHERE pk >= #{profile.selected_min} AND pk < #{profile.selected_max} ORDER BY pk FORMAT RowBinary")
+  w114_assert_bytes(actual_selected, expected_selected, "#{label} selected RowBinary")
+  puts "PASS #{label}: literal full and selected RowBinary (#{expected_full.bytesize}/#{expected_selected.bytesize} bytes)"
+end
+
+def w114_create_table(binary : String, store : String, table : String, profile : W114Profile) : Nil
+  w114_run(binary, store, "CREATE TABLE default.#{table} (pk UInt64, payload Geometry) ENGINE = MergeTree ORDER BY pk SETTINGS #{profile.settings}")
+end
+
+def w114_insert_profile(binary : String, store : String, table : String, profile : W114Profile) : Nil
+  indexes = (0...profile.values.size).to_a
+  input = IO::Memory.new(w114_rowbinary(profile, indexes).to_slice)
+  w114_run(binary, store, "INSERT INTO default.#{table} FORMAT RowBinary", input)
+end
+
+def w114_attach_part(binary : String, store : String, table : String, profile : W114Profile, source_part : String) : String
+  w114_create_table(binary, store, table, profile)
+  data_path = w114_run(binary, store, "SELECT data_paths[1] FROM system.tables WHERE database='default' AND name='#{table}' FORMAT TSVRaw").strip
+  w114_require(!data_path.empty?, "#{table}: fresh ATTACH destination path is missing")
+  detached = File.join(data_path, "detached")
+  FileUtils.mkdir_p(detached)
+  target = File.join(detached, "all_1_1_0")
+  w114_require(!File.exists?(target), "#{table}: detached ATTACH target already exists")
+  FileUtils.cp_r(source_part, target)
+  w114_run(binary, store, "ALTER TABLE default.#{table} ATTACH PART 'all_1_1_0'")
+  w114_stock_part_path(binary, store, table, profile)
+end
+
+def w114_qualify_profile(binary : String, store : String, profile : W114Profile) : {String, String}
+  source_table = "w114_source_#{profile.name}"
+  attached_table = "w114_attached_#{profile.name}"
+  w114_create_table(binary, store, source_table, profile)
+  w114_insert_profile(binary, store, source_table, profile)
+  source_part = w114_stock_part_path(binary, store, source_table, profile)
+  w114_assert_schema(binary, store, source_table)
+  w114_assert_layout(source_part, profile, "W114 #{profile.name} stock source")
+  w114_check(binary, store, source_table, source_part, "W114 #{profile.name} stock source")
+  w114_rowbinary_checks(binary, store, source_table, profile, "W114 #{profile.name} stock source")
+
+  attached_part = w114_attach_part(binary, store, attached_table, profile, source_part)
+  w114_assert_schema(binary, store, attached_table)
+  w114_assert_layout(attached_part, profile, "W114 #{profile.name} fresh ATTACH", attached: true)
+  w114_check(binary, store, attached_table, attached_part, "W114 #{profile.name} fresh ATTACH")
+  w114_rowbinary_checks(binary, store, attached_table, profile, "W114 #{profile.name} fresh ATTACH")
+  {source_part, attached_part}
+end
+
+def w114_comparator_negative_controls(part : String, profile : W114Profile) : Nil
+  streams = w114_streams(profile)
+  tag_stream = streams.find { |stream| stream.name == "payload.variant_discr" } || w114_fail("W114 negative controls: discriminator stream missing")
+  tag_raw = w114_read_raw(part, tag_stream.name)
+  w114_seeded_byte_mismatch(tag_raw, tag_stream.raw, 8, "W114 seeded wrong global tag")
+
+  size_stream = streams.find { |stream| stream.name == "payload.LineString.size0" } || w114_fail("W114 negative controls: size stream missing")
+  w114_seeded_byte_mismatch(w114_read_raw(part, size_stream.name), size_stream.raw, 0, "W114 seeded wrong size vector")
+  coordinate_stream = streams.find { |stream| stream.name == "payload.LineString%2E1" } || w114_fail("W114 negative controls: coordinate stream missing")
+  w114_seeded_byte_mismatch(w114_read_raw(part, coordinate_stream.name), coordinate_stream.raw, 0, "W114 seeded wrong coordinate IEEE lane")
+
+  discr_expected_marks = w114_expected_marks(profile, tag_stream)
+  w114_expect_mark_mismatch(w114_marks(part, tag_stream.name), discr_expected_marks, "W114 seeded wrong outer-grid .mrk2")
+
+  expected_primary = w114_expected_primary(profile)
+  w114_seeded_byte_mismatch(File.read(File.join(part, "primary.idx")), expected_primary, 0, "W114 seeded wrong plain PK")
+  w114_expect_metadata_mismatch(part, profile, "W114 seeded wrong serialization metadata")
+  puts "PASS W114 comparator sensitivity: wrong tag, size, coordinate, mark, PK and metadata each rejected by its named comparator"
+end
+
+def w114_prepare_store(store_path : String) : String
+  expanded = File.expand_path(store_path)
+  parent = File.realpath(File.dirname(expanded))
+  store = File.join(parent, File.basename(expanded))
+  w114_require(store.starts_with?("/private/tmp/"), "refusing non-temporary W114 store path: #{store}")
+  w114_require(!File.symlink?(store), "refusing symlink W114 store: #{store}")
+  if Dir.exists?(store)
+    w114_require(Dir.empty?(store), "W114 store must be fresh and empty: #{store}")
+  else
+    Dir.mkdir(store)
+  end
+  store
+end
+
+def w114_verify_runtime(binary : String, store : String) : String
+  executable_sha256 = w114_file_sha256(binary)
+  w114_require(executable_sha256 == W114_EXECUTABLE_SHA256, "W114 executable SHA-256 differs: #{executable_sha256}")
+  output = IO::Memory.new
+  error = IO::Memory.new
+  status = Process.run(binary, ["local", "--version"], output: output, error: error)
+  w114_require(status.success?, "could not inspect W114 ClickHouse version: #{error}")
+  expected_version = "ClickHouse local version #{W114_VERSION} (official build)."
+  w114_require(output.to_s.strip == expected_version, "W114 requires #{expected_version}, got #{output.to_s.strip}")
+  build_options = w114_run(binary, store, "SELECT name || '=' || value FROM system.build_options WHERE name IN ('GIT_HASH', 'VERSION_GITHASH') ORDER BY name FORMAT TSVRaw").lines.map(&.strip)
+  expected_build_options = ["GIT_HASH=#{W114_BUILD_HASH}", "VERSION_GITHASH=#{W114_BUILD_HASH}"]
+  w114_require(build_options == expected_build_options, "W114 binary build identity differs: #{build_options.inspect}")
+  puts "W114 runtime identity: #{expected_version}; build=#{W114_BUILD_HASH}; executable_sha256=#{executable_sha256}"
+  expected_version
+end
+
+def w114_qualify_stock(mode : String) : Nil
+  w114_fixture_self_check
+  binary = ENV["CLICKHOUSE_BIN"]? || raise "set CLICKHOUSE_BIN to the isolated W114 ClickHouse executable"
+  store_value = ENV["W114_STORE"]? || raise "set W114_STORE to a fresh temporary ClickHouse store"
+  store = w114_prepare_store(store_value)
+  w114_verify_runtime(binary, store)
+
+  qualified = {} of String => {String, String}
+  W114_PROFILES.each do |profile|
+    qualified[profile.name] = w114_qualify_profile(binary, store, profile)
+  end
+  puts "PASS W114 stock qualification: 6 profiles, 12 source/fresh-ATTACH Wide parts, 312 ordered physical streams (624 .bin/.mrk2 files), exact schema/inventory/checksums/metadata/raw bytes/marks/PK, 12 CHECK=1, 12 full+selected RowBinary pairs"
+
+  mixed_source = qualified["mixed_basic"][0]
+  w114_comparator_negative_controls(mixed_source, W114_PROFILES[0])
+
+  if mode == "red"
+    qualified.each do |name, parts|
+      begin
+        CrystalClick::WidePart.open_typed(parts[1], "payload")
+      rescue ex : CrystalClick::UnsupportedFormatError
+        w114_require(ex.message == "unsupported exact typed column", "W114 #{name}: Geometry refusal differs from exact public-type guard: #{ex.message.inspect}")
+        puts "EXPECTED RED W114 #{name}: #{ex.message}"
+        next
+      rescue ex
+        w114_fail("W114 #{name}: typed Geometry open failed outside the exact unsupported-type refusal: #{ex.class}: #{ex.message}")
+      end
+      w114_fail("W114 #{name}: public typed Geometry reader unexpectedly admitted the qualified stock part")
+    end
+    puts "EXPECTED RED W114: all stock profiles qualified; exact typed Geometry guard remains closed"
+    exit 1
+  end
+  puts "PASS W114 qualify: strict stock qualification and comparator controls complete; no production admission tested"
 end
 
 def w114_fixture_self_check : Nil
@@ -672,8 +1101,8 @@ def w114_stock_capture : Nil
   W114_PROFILES.each { |profile| w114_stock_capture_profile(binary, store, profile) }
 end
 
-unless ARGV.size == 1 && {"fixtures", "stock-capture"}.includes?(ARGV[0])
-  STDERR.puts "usage: crystal run scripts/probe_geometry_w114.cr -- fixtures|stock-capture"
+unless ARGV.size == 1 && {"fixtures", "stock-capture", "qualify", "red"}.includes?(ARGV[0])
+  STDERR.puts "usage: crystal run scripts/probe_geometry_w114.cr -- fixtures|stock-capture|qualify|red"
   exit 2
 end
 
@@ -682,4 +1111,6 @@ when "fixtures"
   w114_fixture_self_check
 when "stock-capture"
   w114_stock_capture
+when "qualify", "red"
+  w114_qualify_stock(ARGV[0])
 end
