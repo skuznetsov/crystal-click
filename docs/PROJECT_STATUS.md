@@ -1,8 +1,9 @@
 # CrystalClick project status
 
-Source checkpoint: `571dc3c`, plus the separate sparse-consumer Tuple inference
-correction in [COMPOSITIONAL_TUPLE_FRONTIER.md](COMPOSITIONAL_TUPLE_FRONTIER.md).
-The shared writer extraction is documented in
+Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
+correction `9d87293`, and the W128 normalized whole-part qualification in
+[JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
+Responsibility-level owner boundaries are documented in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
 Reviewed on 2026-10-02. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
@@ -20,6 +21,15 @@ source/runtime identities and executed evidence.
   [EMBEDDED_MERGETREE_FRONTIER.md](EMBEDDED_MERGETREE_FRONTIER.md) and its
   linked family frontiers. A supported scalar does not imply every container
   or serialization profile containing it.
+- `WidePartWriter.write_uint64_object_pair`: a complete standalone normalized
+  JSON/Object part from library-owned keys, explicit schema/rosters and
+  documents, without borrowed stock sidecars. W128 qualifies hashed Wide,
+  Object V3/Dynamic V3, one-bucket shared MAP, LZ4 and plain adaptive marks;
+  declared typed fields are UInt64/String. Five fresh parts passed actual stock
+  ATTACH/CHECK=1/full/PK SQL and explicit file-reader full/middle/zero windows.
+  This is not yet public table/catalog Object dispatch. See
+  [the example](../examples/write_object_document_part.cr) and
+  [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
   column objects and part candidates. `catalog[db][table][column].values`
   explicitly materializes a bounded owned column; it is not a lazy result.
@@ -39,12 +49,12 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **Complete general JSON parts and table API integration.** W117-W127 provide
+1. **General JSON table API integration.** W117-W128 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
-   reader and unpublished column writer owners. W127 creates fresh JSON column
-   files/statistics, but its stock whole-part oracle borrows surrounding part
-   metadata from a matching stock-generated shell. It does not prove that the
-   library creates a complete general JSON part. The public table facade still
+   reader, column writer and complete normalized whole-part owners. W128
+   generates every pre-ATTACH file from owned inputs and has fresh stock
+   qualification; W127's older shell-based oracle is not the whole-part
+   certificate. The public table facade still
    admits only the older scalar typed-path JSON profile; it does not dispatch
    through `ObjectDocumentFileReader`. See
    [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
@@ -71,20 +81,18 @@ source/runtime identities and executed evidence.
 
 ## Next implementation order
 
-1. Continue behavior-preserving decomposition: shared encoding/checksums and
-   staging/publication first, then explicit schema/substream planning, physical
+1. Continue behavior-preserving decomposition. Shared VarUInt/checksums,
+   primary index and staging/publication have separate owners; the new Object
+   schema, metadata and whole-part orchestrator also have separate files.
+   Next are legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
-2. Introduce an explicit reusable JSON schema owner and whole-part metadata
-   composer with table/PK/granularity/partition context. Emit every required
-   pre-ATTACH file from library-owned inputs; borrow no stock part sidecars.
-   Gate on actual stock ATTACH/CHECK=1 and exact full/PK/window reads.
-3. Wire the qualified normalized Object reader/writer into the table/catalog
+2. Wire the qualified normalized Object reader/writer into the table/catalog
    facade without silently widening layout or schema discovery.
-4. Expand remaining paired type/profile and MV/projection frontiers.
+3. Expand remaining paired type/profile and MV/projection frontiers.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
-5. Only then reopen memory/performance work. No current claim of stock-reader
+4. Only then reopen memory/performance work. No current claim of stock-reader
    speed parity or a quantified percentage of complete ClickHouse support.
 
 ## Source reference

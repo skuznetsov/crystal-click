@@ -2961,3 +2961,201 @@ admitted. Source/owner/import, routing/count/name/profile/budget/mark, toolchain
 runtime/source or oracle-input/comparator changes reopen the dependent gate.
 Trusted quiescent input directories remain a premise, not an active-set or
 concurrent-mutation snapshot certificate.
+
+## W128: library-owned normalized whole parts
+
+Design-sealed and verified on 2026-10-02 over `9d87293`, within the bounded
+contract and executed certificate below. This is not full JSON compatibility.
+The missing boundary is complete part construction, not another column codec.
+No source part path, stock sidecar, captured bytes or stock-generated key stream
+is an input to this writer or its positive whole-part oracle.
+
+The bounded surface is an immutable, unpartitioned Wide part containing a
+nondecreasing UInt64 key and one normalized Object V3/SUFFIX, Dynamic V3,
+one-bucket MAP column. It uses hashed filenames, plain adaptive marks, LZ4,
+uniform outer granules (a short final granule is legal), and an explicit schema
+and descriptor roster. BASIC and COMPACT discriminator encodings are not
+Compact *parts*. `ObjectDocumentSchema` owns declared capacities and detached
+typed fields; this first whole-part schema admits UInt64/String typed fields
+only. It checks exact nominal typed-schema agreement and dynamic path/type
+capacities before encoding. Automatic roster inference, SKIP clauses, arbitrary
+typed declarations, partition expressions, compound keys and server lifecycle
+integration remain rejected or outside this API.
+
+The additive `WidePartWriter.write_uint64_object_pair` facade delegates to a
+cohesive private `ObjectPartWriter`. `ObjectPartMetadata` composes columns,
+substreams, count, codec, metadata version and serialization metadata from
+owned inputs. Existing shared key/index/checksum/publication owners are reused.
+Metadata version is explicit (default zero), not borrowed from a stock table.
+The ordinary bulk String profile binds the persisted String serialization
+version: SINGLE_STREAM is zero and WITH_SIZE_STREAM is one, propagated to
+nested ordinary serializers. Whole-part shared MAP is fixed to SINGLE_STREAM;
+an explicit WITH_SIZE_STREAM shared profile is rejected before encoding or
+staging. The column-only W127 transport has a wider profile selector, which
+does not imply stock-compatible whole-part admission.
+The checksum readback uses one aggregate read-direction transport budget after
+the column encoder's separate aggregate write-direction budget; these are
+phase-specific logical bounds, not a single RSS ceiling.
+Stock optimizer statistics (`statistics.packed` / `statistics_*.stats`) are
+deliberately omitted; Object/Dynamic suffix statistics are still freshly
+recomputed by W127 and are not the same capability.
+
+Source anchors at `101871ba6da8221c7cf30ac3a04bc1063106f412`:
+`MergedBlockOutputStream.cpp:407-499` emits count, persisted serialization
+info, optional optimizer statistics and plain metadata/checksums;
+`ColumnsSubstreams.cpp:207-224` defines the text grammar;
+`MergeTreeDataPartWriterOnDisk.cpp:716-737` and `ISerialization.cpp:441-457`
+persist escaped physical substream names, not decoded dotted logical paths;
+`MergeTreeDataPartWriterWide.cpp:882` and `MergeTreeWriterStream.cpp:331-349`
+retain compressed/raw checksum metadata even for an empty data lane;
+`DataTypeObject.cpp:240-305` renders capacities and sorted typed paths;
+`DataTypeString.cpp:38` and `SerializationString.cpp:286-327` bind persisted
+String serialization settings to the physical stream profile;
+`SerializationObjectSharedData.cpp:43-48` constructs MAP with its independent
+default serialization (SINGLE_STREAM), not ordinary nested String settings;
+`IMergeTreeDataPart.cpp:1297-1320,1393-1404,1434-1441` admits the no-optimizer-
+statistics path. Wide substream metadata can be tolerated/ignored by stock,
+and CHECK does not establish serialization counters or PK semantics: independent
+expectations are mandatory, not an ATTACH/CHECK-only completion claim.
+
+Risk: CAUTION (new file-format publication surface). Rollback: revert the one
+W128 feature commit, retaining `9d87293` and the W127 column API. Most likely
+failure: internally consistent bytes/checksums attach while schema, roster,
+row grid, defaults or primary index disagree with the authored input.
+Guard: literal/model-derived metadata, complete inventory, PK/index and mark
+checks, with seeded metadata/counter/index defects proving sensitivity.
+Preflight failures must leave no staging directory, and publication must not
+replace an existing file, directory or dangling symlink. No power-loss or
+concurrent-input snapshot guarantee is added.
+
+Execution plan / ownership:
+
+1. Root: missing-API RED and independent
+   `spec/object_part_writer_w128_root_spec.cr`; imports, facade wiring and
+   frontier/status evidence. Root alone executes serial resource-guarded gates.
+2. Luna schema/metadata: `src/crystal_click/object_document_schema.cr`,
+   `src/crystal_click/wide_part_writer/object_part_metadata.cr` and
+   `spec/object_document_schema_w128_spec.cr`; no shared facade/import edits.
+3. Luna writer: `src/crystal_click/wide_part_writer/object_part_writer.cr` and
+   `spec/object_part_writer_w128_spec.cr`; no shared facade/import edits.
+4. Luna oracle: `scripts/check_object_part_writer_w128.cr` and `.sh`; empty
+   stock target tables only, fresh production whole parts, no shell copying.
+
+Declared DoD: missing API RED; focused DEBUG and RELEASE specs; complete
+non-release suite; pinned `26.10.1.1201` actual ATTACH/CHECK=1/full/PK-window
+SQL plus W126 full/middle/terminal-zero reads on dynamic-paths and typed-mixed
+documents in both discriminator modes. A library-generated nonempty part must
+have an exact planned file set with no optimizer statistics; every sidecar and
+key/JSON pair must be generated from library-owned inputs. Independent tests
+must detect wrong count, substream roster, serialization counters and primary
+index even when stock would tolerate them. An additional single-stream typed
+String part tests empty,
+embedded-NUL and UTF-8 values, zero keys and a short final granule against stock.
+The newest source checkout is a grammar reference, not the qualified runtime
+build. Full public table/catalog
+Object dispatch remains the next separately qualified boundary.
+
+### W128 executed bounded certificate
+
+Root, not a worker, ran all compiler and ClickHouse jobs strictly serially
+under the unchanged 50% free-memory guard. The pinned runtime is
+`/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse`, version
+`26.10.1.1201`, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, executable
+SHA-256 `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The newer shallow source revision `101871ba6da8221c7cf30ac3a04bc1063106f412`
+is a grammar reference, not this runtime's build revision.
+
+Observed signals on the frozen production inputs:
+
+- Initial qualified missing-API RED: the independent root spec could not
+  resolve `ObjectDocumentSchema` before implementation.
+- Focused DEBUG and RELEASE: 55 examples each, zero failures/errors/pending.
+  Independent root cases cover literal columns/substreams/inventory/index,
+  zero-key default counters, embedded NUL, a shared Dynamic type spill,
+  short final granules, nested shared values, untyped Nothing NULL normalized
+  to absence, schema ownership and preflight rejection without residue.
+  Existing destinations and dangling symlinks are preserved.
+- Full non-release: 2,163 examples, zero failures/errors/pending, symbolic
+  debug information disabled. The unchanged W113 deprecated blocking-argument
+  and duplicate `-lc` linker warnings remain; no full RELEASE result is claimed.
+- Final `scripts/check_object_part_writer_w128.sh`: five new isolated parts,
+  four dynamic-paths/typed-mixed cases in BASIC and COMPACT discriminator modes
+  and one typed-String SINGLE_STREAM case. Every pre-ATTACH file, key and JSON
+  stream is generated by the library. Stock creates only an empty target
+  table: no INSERT, captured part, copied shell or borrowed sidecar.
+  Actual ATTACH and CHECK=1, exact full/PK SQL and W126 full/middle/terminal-zero
+  reads pass in all five cases. All parts are Wide.
+- Independent authored expectations validate complete file inventory,
+  columns/substreams, count, exact key defaults/rows and String version,
+  primary-index bytes, every lane's raw bytes and complete mark grid. A separate
+  v4 checksum-envelope parser checks recorded raw hash/size, including empty
+  compressed lanes. Deliberately poisoned input statistics are recomputed.
+  Wrong count, inventory/substream roster, default/row counters, String version,
+  primary index, document/grid and CHECK=0 controls reject through the same
+  positive predicates. ATTACH success alone is not the metadata certificate.
+- Standalone `examples/write_object_document_part.cr` passed: three authored
+  documents in two granules, including shared `extra.flag`, a Dynamic spill
+  and an absent path, read back through the explicit file reader.
+- Ten exact Crystal paths pass formatting; wrapper shell syntax and
+  `git diff --check` pass. No installed server store, source fixture or other
+  public type/facade admission is changed.
+
+The first root focused run had test-expectation defects, not a production
+RED: the literal expected shared paths/values used unescaped dots, and the
+ownership attack attempted mutation through a read-only `String#to_slice`.
+The corrected expectation matches the fresh stock source; an explicit unsafe
+pointer attack tests detached ownership without treating String mutation as
+a supported API. Earlier stock-oracle compile attempts exposed a nested-tuple
+macro parse and unsupported `delete_prefix`/`delete_suffix` methods. These
+oracle-only errors were corrected and the entire stock gate rerun after
+formatting; neither failed attempt is a runtime compatibility certificate.
+
+Replay toolchain: Crystal 1.21.0 / LLVM 22.1.8, macOS AArch64,
+`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`,
+`TMPDIR=/private/tmp`. Set `COGNI_RUN_SAFE_MIN_FREE_PCT=50` and
+`RUN_SAFE_PASSTHROUGH_STDIO=1`; use
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh` as the serial
+parent guard, 600s/32768 MiB for Crystal and 900s/32768 MiB for stock wrappers.
+Focused inputs under `spec/` are:
+
+```text
+object_document_schema_w128_spec.cr
+object_part_writer_w128_spec.cr
+object_part_writer_w128_root_spec.cr
+object_column_writer_w127_spec.cr
+object_column_writer_w127_root_spec.cr
+object_statistics_w127_spec.cr
+object_file_reader_w126_root_spec.cr
+```
+
+Run `crystal spec` with those inputs and
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`;
+RELEASE adds `--release`. Full non-release uses the full suite with those
+flags and `--no-debug`. Stock replay, through the separate serial parent guard:
+
+```sh
+W128_KEEP_TMP=1 CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse \
+  bash scripts/check_object_part_writer_w128.sh
+```
+
+Root evidence: `/private/tmp/crystal-click-w128-root.QWqhcy`, logs `red.log`,
+`focused-debug.log`, `focused-release.log`, `full-nonrelease.log`,
+`stock-w128-final.log`, `example.log` and `format-final.log`.
+Failed oracle attempts remain separately named `stock-w128.log` and
+`stock-w128-attempt2.log`; `stock-w128-attempt3.log` is the successful
+pre-format run. The final isolated stock store root is recorded in
+`stock-w128-final.log`; removing temporary roots decays replay availability.
+
+Root adversary verdict: ROBUST within the declared explicit normalized
+profile, supported by independently authored metadata/bytes, falsifier
+predicates and actual stock reads, not Luna agreement. Public Object table/
+catalog integration, automatic roster discovery, more typed schemas,
+bucketed/advanced or legacy layouts, Compact parts, partitions/compound keys,
+server lifecycle, concurrent-input snapshots and power-loss durability remain
+open. No all-type, current-master executable, full RELEASE, allocator/RSS or
+speed claim follows. Refresh affected gates after owner/import, schema/roster,
+name/profile/default/count/mark/budget, oracle comparator/input, toolchain,
+source/runtime or publication-policy changes. Optimization stays parked and
+the whole goal remains active; the next capability falsifier is explicit
+public table/catalog dispatch without silent layout or schema widening.

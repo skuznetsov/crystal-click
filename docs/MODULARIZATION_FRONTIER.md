@@ -1,9 +1,10 @@
 # CrystalClick Modularization Frontier
 
-Current transition (2026-10-02): behavior-preserving extraction of shared
-writer infrastructure over `9ca6a6b`. No type, layout, catalog, JSON publication,
-MV/projection or performance admission changes. The bounded contract and
-verification plan are at the end of this document.
+Current transition (2026-10-02): W128 library-owned normalized Object whole
+parts over `9d87293`, following the verified shared writer extraction below.
+The bounded capability certificate is in `JSON_GENERAL_STORAGE_FRONTIER.md`.
+Public table/catalog Object dispatch is the next separate boundary; no
+MV/projection or performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Public
@@ -1747,3 +1748,37 @@ latest-master runtime compatibility or the complete architectural refactor.
 Refresh this certificate when the helpers, their callers, publication flags,
 compiler/platform or pinned runtime change; rerun the affected guards rather
 than inheriting the claim from file layout.
+
+## Normalized Object whole-part owners (W128, 2026-10-02)
+
+Status: VERIFIED only within the sealed W128 contract in
+`JSON_GENERAL_STORAGE_FRONTIER.md`. Three cohesive production owners have
+separate files:
+
+- `object_document_schema.cr`: explicit declared capacities, detached typed
+  paths, canonical bounded declaration and exact schema/plan agreement.
+- `wide_part_writer/object_part_metadata.cr`: owned plain metadata composed
+  from that schema, the physical roster and authored key/default counts.
+- `wide_part_writer/object_part_writer.cr`: preflight, W127 column composition,
+  shared key/index/checksum writing, staged semantic validation and exclusive
+  publication. Its private plan/lane DTOs do not create new public authorities.
+
+These owners total 1,150 lines (320/189/641). The public writer adds a thin
+delegating method; shared encoding, leaf I/O, checksums, primary index and
+publication policy remain with their existing owners. No new class per JSON
+type combination or copy of a logical codec is introduced.
+
+Root executed 55 focused DEBUG and 55 RELEASE examples, 2,163 full non-release
+examples, and five library-only stock ATTACH/actual CHECK=1/full/PK cases with
+independent metadata/checksum/mark expectations and W126 full/middle/zero reads.
+The standalone example also passed. Root's scoped hostile verdict is ROBUST;
+the Luna implementation/static review is correlated supporting evidence, not
+an independent runtime certificate. The capability frontier records exact
+commands, identities, earlier oracle-only errors, evidence paths and decay.
+
+This does not complete the requested large-facade decomposition or prove
+lower coupling, RSS or runtime cost. Shared legacy type/substream planning,
+physical I/O/validation and leaf dispatch, then thin table/catalog adapters,
+remain the responsibility-level seams. Full Object facade dispatch, additional
+paired types/profiles and broader MV/projections remain open; optimization is
+still parked.

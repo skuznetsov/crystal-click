@@ -33,6 +33,32 @@ module CrystalClick
     MAX_PRIMARY_INDEX_BYTES                = PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
     RENAME_EXCL                            = 0x0000_0004_u32
 
+    # Creates a complete normalized Object V3 Wide part from an explicit
+    # schema, descriptor roster and outer granules. Hashed filenames and the
+    # unpartitioned UInt64-key profile are fixed; no source part is required.
+    def self.write_uint64_object_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      schema : ObjectDocumentSchema,
+      plan : ObjectDocumentPlan,
+      granules : Array(Array(ObjectDocument)),
+      rows_per_mark : Int32 = 8192,
+      mode : UInt64 = ObjectDocumentCodec::DEFAULT_MODE,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : String
+      ObjectPartWriter.write(
+        destination, key_name, keys, value_name, schema, plan, granules,
+        rows_per_mark, mode, profile, shared_profile, frame_bytes,
+        metadata_version, limits, transport_limits)
+    end
+
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values

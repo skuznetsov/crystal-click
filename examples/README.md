@@ -98,6 +98,28 @@ are each capped at 65,536 for staged readback. Use a new destination outside
 any ClickHouse data root. See the paired profile and exclusions in the
 [Array(Tuple) frontier](../docs/ARRAY_TUPLE_COMPOSITION_FRONTIER.md).
 
+## Write a complete normalized JSON/Object part
+
+```sh
+crystal run examples/write_object_document_part.cr -- /tmp/my-new-object-part
+```
+
+The destination must not exist. This standalone writer creates the key and
+JSON data, marks, primary index, checksums and all pre-ATTACH sidecars itself;
+it does not borrow a stock-generated part or insert into a server data root.
+The example reads the result through `ObjectDocumentFileReader`, not the
+older table/catalog JSON facade.
+
+This profile is a hashed Wide part with a sorted UInt64 key, explicit typed
+UInt64/String JSON fields and explicit Dynamic path/type rosters. Object V3,
+Dynamic V3, one-bucket shared MAP, LZ4 and plain adaptive marks are required.
+The example includes a Dynamic type spill, a shared path, an absent path and
+a short final granule. Capacities are declared in `ObjectDocumentSchema`;
+path/type roster inference is not implemented. Publication is process-atomic
+and exclusive on macOS, not a power-loss durability or server-lifecycle
+guarantee. See the [general JSON frontier](../docs/JSON_GENERAL_STORAGE_FRONTIER.md)
+for the exact qualified surface and stock runtime.
+
 ## Read-only ClickHouse data-root examples
 
 These examples read local files under a ClickHouse data root (`metadata/` and
