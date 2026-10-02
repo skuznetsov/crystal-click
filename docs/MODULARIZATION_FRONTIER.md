@@ -219,6 +219,23 @@ are in `JSON_GENERAL_STORAGE_FRONTIER.md`. These owners extend only the binary
 kernel, not table dispatch or whole-part writing. The large facade decomposition
 is still open; file counts alone do not establish lower coupling or speed.
 
+W120 adds ten concrete metadata responsibility owners, each in its own file:
+one immutable shared statistic, positional/unordered-map statistics, Object
+and Dynamic structures, three bounded codecs, paired owned models/streams,
+and a shared-budget batch codec. They range from 46 to 171 lines. The existing
+binary kernel is reused for recursive descriptors; no class is created per
+JSON spelling or nested combination. Preallocation guards, raw-name ownership,
+path/count alignment and permutation-independent shared-map equality/hash
+have separate falsifiers. Root executed 54 focused examples in each of DEBUG
+and RELEASE, 1,961 full DEBUG examples, all 20 retained stock structures and
+three isolated authored-metadata ATTACH/CHECK=1 copies, plus unchanged W116-W119
+regressions. These are complete decompressed metadata owners, not physical
+value lanes, general JSON or a production part writer. Source/local-only legacy
+and bucketed metadata boundaries, the qualified REDs and exact certificate are
+in `JSON_GENERAL_STORAGE_FRONTIER.md`. The large reader/writer/table facades
+are still open decomposition work; these additions do not certify lower
+coupling, allocation footprint or speed for the overall engine.
+
 ## Variant discriminator owner extraction (2026-10-01)
 
 Status: VERIFIED within the behavior-neutral extraction and executed gates

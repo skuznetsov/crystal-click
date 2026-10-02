@@ -9,21 +9,26 @@ Object/Dynamic/MergeTree codec. The precise whole-document missing-capability
 RED is qualified, not resolved. General JSON
 document reading/writing is not admitted. W24/W72 declared scalar projections
 remain the only paired JSON capability; see `JSON_TYPED_PATH_FRONTIER.md`.
+W120's paired complete decompressed structure-metadata codecs are VERIFIED
+within the source/local and V3 MAP stock gates below. Dynamic value lanes,
+sparse ranks and physical mark schedules remain the next owner boundary;
+structure metadata does not admit whole-document JSON.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
 
 ## Source anchor and compatibility boundary
 
-The separate shallow reference checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1-935de744`, revision
-`935de7442d7890eb5631372e4ad6f66faaf35f90`. Its source informs the design; it
+The current separate shallow reference checkout is
+`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-0c68f01a`, revision
+`0c68f01a75a913b1aa5e132b41a80642260c3009`. Its source informs the design; it
 is not the build provenance of the runtime oracle. The initial runtime is
 ClickHouse 26.10.1.1201, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`,
 Mach-O SHA-256
 `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
 Its measured outputs must not be described as current-master executable evidence.
-The newer separate source reference at `0c68f01a75a913b1aa5e132b41a80642260c3009`
-was compared to this baseline on October 2; the relevant serializers, binary
+It was compared on October 2 to the initial capture/literal-source baseline,
+`/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1-935de744`, revision
+`935de7442d7890eb5631372e4ad6f66faaf35f90`; the relevant serializers, binary
 encoding, Columns and Formats are unchanged. See `CLICKHOUSE_SOURCE_REFERENCE.md`.
 Keep the initial capture/literal source and runtime identities intact.
 
@@ -956,6 +961,299 @@ qualified Object/Dynamic structure and physical lane/mark schedule owners,
 with remaining recursive leaf grammars kept explicitly closed until qualified.
 Large facade decomposition, MV/projections and performance remain open.
 
+## W120 complete structure metadata
+
+Status: VERIFIED within the bounded metadata profile and executed gates below,
+over `cf4b9b1`; not whole-document JSON or a production part writer. Risk: CAUTION
+for new paired serialization APIs. Anchor: fresh source `0c68f01a75a913b1aa5e132b41a80642260c3009`,
+W116 independent physical vectors and W119's existing bounded descriptor kernel.
+The pre-change focused W117/W118/W119 baseline passed 36 examples on October 2.
+Rollback is this isolated feature's exact paths; do not modify existing facade
+dispatch, retained parts, source checkouts or server stores. The existing
+whole-JSON refusal remains load-bearing.
+
+### Admitted profile and sealed design laws
+
+- Exact, complete, fully decompressed single MergeTree structure blobs only.
+  Object part versions V1/V2/V3 have codes 0/2/4. V1 preserves its ignored
+  legacy maximum-path field; V1/V2 use MAP and require the complete unflagged
+  positional counts plus shared map, matching current MergeTree producers and
+  statistics-enabled readers. EOF after their roster is truncation in this
+  complete-blob API, not admission of a standalone prefix. V3 requires its
+  statistics flag (0/1), and only V3 can represent absent statistics.
+- Object V3 records shared versions MAP=0, MAP_WITH_BUCKETS=1, ADVANCED=2,
+  ADVANCED_CHUNKED=3. MAP has implicit one bucket; other modes have 1..256.
+  Admission concerns metadata only, not any bucketed/advanced value layout.
+- Dynamic V3 (code 4) concatenates up to 254 current W117-W119 binary type
+  descriptors, with no length frames. The implicit SharedVariant is a spilled
+  value alternative, not NULL (NULL discriminator is 255). Positional counts
+  use canonical SQL-name order including SharedVariant, not descriptor wire
+  order. The model preserves each descriptor's nominal identity, including
+  Decimal width. Duplicate/equal-display-name alternatives are rejected as a
+  no-alias profile guard rather than silently collapsed as upstream can do.
+  Top-level Nothing/Nullable are outside the admitted canonical roster.
+- Object decode accepts unsorted unique path rosters and preserves their order
+  and corresponding counts. Encode sorts path/count pairs together. Shared
+  statistics maps accept unordered entries; duplicate keys are rejected as an
+  explicit stricter no-alias profile. Encode sorts those maps deterministically.
+  Shared-map equality and hashing are order-independent; positional count
+  arrays remain ordered and Object roster order remains representation identity.
+  Canonical re-emission need not preserve noncanonical input bytes.
+- Names are opaque detached String bytes (including empty, NUL and non-UTF8),
+  not filename components or JSON::Any. Returned arrays, hashes and byte slices
+  must not expose mutable owner storage. Absent statistics and present all-zero
+  statistics are different states. Counts are UInt64 metadata estimates; no
+  row-count/sum truth, prefix-vs-suffix provenance or marks are inferred.
+- Prefix and suffix statistics end up in the same full structure stream.
+  Parsing the complete decompressed blob does not reconstruct placement mode.
+  V1/V2 statistics have no flag; V3 flag=0 must be exact EOF. Recognized
+  Native-only versions are wrong-channel corruption in this MergeTree API;
+  recognized older Dynamic part versions are unsupported, not corrupted.
+  Unknown Object/Dynamic version codes are corruption, matching the source's
+  incorrect-data branch; a recognized unadmitted profile is not the same case.
+- Reuse strict minimal VarUInt and the existing depth/node/element/byte kernel.
+  Domain, minimum remaining wire bytes and aggregate node/element budgets are
+  preflighted before declared collection allocation. An Object plus all its
+  Dynamic children shares one operation budget, including descriptors and
+  statistics; no fresh per-child budget may bypass aggregate limits. Decode
+  must check the complete aggregate input byte count before traversing it.
+- Malformed/truncated/overflowed input, invalid flags/counts, alias guards,
+  mismatched child path keys and trailing bytes raise CorruptPartError. Valid
+  but unadmitted descriptor/version profiles raise UnsupportedFormatError.
+  Invalid constructed models raise ArgumentError at construction. Write budget exhaustion
+  remains UnsupportedFormatError, matching the kernel.
+
+Rejected: Native/Compact or multi-header streams, compression, file access,
+marks/rank schedules, actual Dynamic lanes, shared value layouts, whole JSON,
+schema parsing, facade admission, generic Variant, MV/projections and performance.
+Old Dynamic text-name versions remain open until a reusable nominal parser is
+qualified; this slice does not remove those eventual requirements.
+
+### Owner/API and execution plan
+
+One owner per new file under `src/crystal_click/`:
+
+- `StructureStatistic(name : String, count : UInt64)` and
+  `StructureStatistics(counts : Array(UInt64), shared : Array(StructureStatistic))`.
+- `ObjectStructure(dynamic_paths, version: 4_u64, shared_data_version: 0_u64,
+  bucket_count: 1_u64, legacy_max_dynamic_paths: nil, statistics: nil)`.
+- `DynamicStructure(types : Array(BinaryDataType), statistics: nil)` exposes
+  canonical variant names (including SharedVariant) and its shared index.
+- `ObjectStructureCodec` and `DynamicStructureCodec`: public exact `encode`
+  and `decode` with BinaryCodecLimits; internal shared-budget entry points.
+- `StructureStatisticsCodec`: shared bounded count/string/statistics grammar.
+- `ObjectDynamicStructureSet(object, dynamics : Hash(String, DynamicStructure))`
+  and `ObjectDynamicStructureStreams(object : Bytes, dynamics : Hash(String, Bytes))`.
+  Keys must match the Object roster exactly in a decoded or encoded set.
+- `ObjectDynamicStructureCodec.encode(set, limits)` / `.decode(streams, limits)`
+  return paired owned streams/models with one aggregate budget.
+
+Consumer inventory: `rg -l 'BinaryDataTypeCodec|BinaryCodecContext|BinaryCodecBudget|ObjectSharedMapCodec'
+src spec scripts --glob '*.cr'` found six kernel files, three oracle scripts and
+three focused specs, no table/facade consumer. Existing signatures need not change;
+only `src/crystal_click.cr` adds imports. Root owns docs and all compiler,
+ClickHouse and Git processes; Luna workers own disjoint new src/spec and script
+paths and must preserve each other's work. Root independently owns
+`spec/object_dynamic_structure_w120_budget_spec.cr`: fixed literal budget
+counts in both directions, aggregate-byte-before-parse precedence and an
+allocation-sensitive oversized-input check before detached accessor copying.
+
+Execution: (1) author `spec/object_dynamic_structure_w120_spec.cr` only, run and
+retain the missing-API RED; (2) implement the ten owners/imports; (3) execute
+focused DEBUG/RELEASE and full DEBUG; (4) qualify the separate stock instrument;
+(5) hostile review, record bounded evidence and exact-path atomic local commit.
+No push. Proposed DoD uses Crystal 1.21.0 with the same serial resource guard,
+SDKROOT, isolated caches and linker flags as W119. Focused command adds the new
+two specs to W119's four paths; full DEBUG is `crystal spec` under 600s/32768MiB guard.
+Oracle command is guarded `bash scripts/check_object_dynamic_structure_w120.sh`
+with pinned CLICKHOUSE_BIN and W115 artifact root; it must report actual observed
+gate results, not a schema/field-presence validator.
+
+### Falsifiers and oracle boundaries
+
+Independent literal vectors cover versions, buckets, empty rosters, absent vs
+zero statistics, unsorted paths, Dynamic canonical ordering, nominal Decimal
+collisions, raw names, detachment, recursive descriptors, exact/minus-one
+aggregate limits, malformed/truncated/domain/minimum-wire/duplicate/trailing
+controls. Strongest failure: statistics associated with the wrong type/path or
+per-child budgets falsely passing an oversized aggregate operation. Guard both
+with differently constructed expected counts and individually-fitting children.
+
+New test-only scripts `check_object_dynamic_structure_w120.cr/.sh` (optional
+`w120_structure_vectors.cr`) decode all ten W115 source structure streams and
+their ten attached counterparts against metadata derived from the literal eight
+input documents. Writer inputs must not be derived from production decode or
+captured/W116 output bytes. Re-encode authored Object plus every existing Dynamic
+structure into three isolated copied parts, rebuild prefix/terminal decompressed
+mark offsets, compression and checksums, then ATTACH into fresh isolated stores.
+Require actual CHECK=1 for each copy plus independent literal full and selected
+JSON-document semantics. RowBinary source/copy equality is supplementary
+differential evidence, not a literal binary oracle. Preserve W116 unchanged and
+run it on untouched retained parts as the baseline. A valid permuted shared-map
+case and wrong-statistics metadata-comparator control must prevent accidental
+order pinning or reliance on CHECK to validate estimates. Seed at least one
+expected byte/count mismatch to qualify the new comparator. Legacy Object,
+bucketed/advanced metadata and no-stat cases remain source/local only unless
+their actual stock gates are separately observed. CHECK of copied parts does
+not admit a production library part writer.
+
+Pre-implementation hostile correction: accepting legacy EOF-after-roster was
+rejected as a complete MergeTree-part promise. Wide writes SUFFIX statistics
+(`MergeTreeDataPartWriterWide.cpp:576`); Object V1/V2 emit unflagged counts in
+that mode (`SerializationObject.cpp:964-997`) and the statistics-enabled reader
+consumes them (`:801-829`). V3 is the explicit absent-statistics profile. A
+standalone legacy prefix API is outside this slice; do not silently re-admit it.
+
+### Executed W120 evidence (2026-10-02)
+
+Root executed all compiler and ClickHouse gates serially with Crystal 1.21.0,
+LLVM 22.1.8/arm64, the SDKROOT/TMPDIR and linker settings used in W119, a 50%
+free-memory floor, isolated caches, and the pinned runtime identified above.
+The ten new owners range from 46 to 171 lines, each in its own file. Only the
+aggregate library imports change among existing production files; no table,
+facade, physical I/O or writer-publication admission is widened.
+
+The missing-API RED was observed at the authored `ObjectStructureCodec` call.
+Earlier syntax-only probes were invalid instruments, not compatibility REDs.
+Two separately exercised runtime allocation guards then failed: Object shared
+statistics were reordered/copied before their budget check (3,932,880 allocated
+bytes), and a foreign Dynamic roster was detached before exact-key validation
+(3,934,016 bytes). Both now reject below the 131,072-byte test threshold. This
+measures GC allocation for those rejecting codec operations, not RSS, total
+model construction or performance. A same-cardinality 2 MiB wrong-key guard
+also rejects before copying the foreign key map.
+
+Separate qualified REDs caught unknown structure codes classified as unsupported
+rather than corrupted, and order-sensitive equality for an unordered shared
+statistics map. The former now distinguishes unknown/wrong-channel corruption
+from recognized old Dynamic versions. The latter retains a collision-resolved
+name index and uses order-independent shared-entry equality/hashing, while
+positional counts remain ordered. The root-authored spec checks equal hashes,
+Hash-key lookup, changed counts/names, and canonical Dynamic model round trips.
+Raw-byte comparison resolves digest collisions in both duplicate detection and
+equality; no literal digest-collision fixture was executed.
+
+Final focused command inputs, with the common guard/options:
+
+```sh
+crystal spec spec/binary_value_codec_w117_spec.cr \
+  spec/object_shared_map_w118_spec.cr \
+  spec/binary_parameter_owners_w119_spec.cr \
+  spec/binary_scalar_types_w119_spec.cr \
+  spec/object_dynamic_structure_w120_spec.cr \
+  spec/object_dynamic_structure_w120_budget_spec.cr \
+  --single-module --link-flags=-fuse-ld=ld --error-trace
+```
+
+Root observed 54 examples in DEBUG and 54 with `--release`, all passing.
+Final full DEBUG `crystal spec --single-module --link-flags=-fuse-ld=ld
+--error-trace` under the 600s/32768MiB guard passed 1,961 examples. The existing
+deprecated `blocking` argument and duplicate `-lc` warnings remain. Full RELEASE
+was not executed. Logs are under
+`/private/tmp/crystal-click-structure-w120.PEydyc`:
+
+- `focused-debug-final.log`: SHA-256
+  `e9aa897396dde5623d2db4f29ec40f8e72be70ff685d48bd883da2705fb6cde6`.
+- `focused-release-final.log`: SHA-256
+  `d17dd3ba71795b260e23daf3d68bd42672e024953de35d1a84cd3a0ecb909120`.
+- `full-debug-final.log`: SHA-256
+  `51acf51cd8ac0fc83888beedc837e8dc74bb0de69e8514406e1ed26c0e6fcb0c`.
+- `stock-w120-qualified.log`: SHA-256
+  `b168cab70ae56873976a844f3a008ada488b4a389cf78b808b84141a7528a860`.
+
+Root ran `scripts/check_object_dynamic_structure_w120.sh` under the 600s/8192MiB
+guard with `W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq`,
+`CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse`,
+`CRYSTAL_BIN=/opt/homebrew/bin/crystal`, and `W120_KEEP_TMP=1`.
+Artifacts are `/private/tmp/crystal-click-json-w120.ZPDLm0`, with the isolated
+cache `/private/tmp/crystal-click-json-w120-cache.goj6Bv`. Observed gates:
+
+- All 20 Object/Dynamic structures across six retained source/attached parts
+  match independently authored metadata from the eight literal input rows.
+  Root independently counted the literal path/type statistics.
+- Three new isolated copies had production-encoded complete Object/Dynamic
+  structure streams substituted by the test instrument, with rebuilt physical
+  marks, LZ4 frames and checksums. All three freshly ATTACHed and returned actual
+  CHECK=1. Source and copy full/selected `pk 3..6` documents match independent
+  literal expectations; source/copy RowBinary equality is supplementary only.
+- Valid permuted Object and Dynamic shared maps decode and canonically re-emit;
+  absent/present-zero statistics stay distinct. A seeded byte mismatch is
+  rejected. The NULL-255 control excludes NULL from SharedVariant counts, and
+  the wrong-spilled-type-statistics control fails the metadata comparator.
+  CHECK is explicitly not an oracle for statistical estimates.
+
+Two preceding oracle compiles failed in the test instrument (`Tuple#sort`,
+then a missing test-only LZ4 helper). They were corrected before any qualified
+stock result and are not compatibility REDs. W116 itself remains unchanged;
+W120 has separately named test-only framing/checksum helpers, including the
+old-size guard for every unchanged compressed stream.
+
+Root reran unchanged W116-W119 on the final source state, all passing:
+
+- W116: six actual CHECK=1 results, twelve negative CHECK comparator controls,
+  twelve literal full/selected semantic checks, copied raw/type/mark/schema
+  attacks, and the precise existing whole-JSON admission refusal. Artifacts:
+  `/private/tmp/crystal-click-json-w116.8zQC0V`.
+- W117: 36 stock-writer and 36 stock-reader/re-emission vectors, with its
+  unchanged corruption and comparator controls. Artifacts:
+  `/private/tmp/crystal-click-binary-w117.QXrLyk`.
+- W118: three profiles, six retained parts, twelve windows, eighteen independent
+  literal lanes plus writer-byte/symlink/NULL controls. This W118 regression
+  does not run another ATTACH/CHECK. Artifacts:
+  `/private/tmp/crystal-click-object-shared-map-w118.wnzJXC`.
+- W119: 22 vectors in each stock direction plus its local/canonical/corrupt
+  controls. Artifacts: `/private/tmp/crystal-click-binary-w119.zmvhkp`.
+
+The regression logs are `regression-w116-final.log` through
+`regression-w119-final.log` in the W120 log root. Crystal format, shell syntax
+and `git diff --check` passed. The ordered SHA-256 manifest of the 16 non-doc
+feature paths is `23fa334ec82ebd541bbeabeb13f9e5af8aa7e7e700b3234dbce87c047d29bb07`.
+Hash each of these relative paths in order with `shasum -a 256`, then hash
+that command's output with `shasum -a 256`:
+
+```text
+src/crystal_click.cr
+src/crystal_click/structure_statistic.cr
+src/crystal_click/structure_statistics.cr
+src/crystal_click/object_structure.cr
+src/crystal_click/dynamic_structure.cr
+src/crystal_click/structure_statistics_codec.cr
+src/crystal_click/object_structure_codec.cr
+src/crystal_click/dynamic_structure_codec.cr
+src/crystal_click/object_dynamic_structure_set.cr
+src/crystal_click/object_dynamic_structure_streams.cr
+src/crystal_click/object_dynamic_structure_codec.cr
+spec/object_dynamic_structure_w120_spec.cr
+spec/object_dynamic_structure_w120_budget_spec.cr
+scripts/check_object_dynamic_structure_w120.cr
+scripts/check_object_dynamic_structure_w120.sh
+scripts/w120_structure_vectors.cr
+```
+
+The feature's two doc paths
+are this frontier and `MODULARIZATION_FRONTIER.md`; no generated artifacts or
+unrelated paths belong in its atomic local commit. No push.
+
+Root hostile verdict: ROBUST for the declared default-bounded metadata profile,
+using the executed literal, stock, budget, detachment and seeded-defect gates.
+The same-lineage static review supplements those observations, not independent
+execution. Legacy Object and bucketed/advanced metadata remain source/local
+qualified only; no stock execution of those layouts is inferred. Constructors,
+large caller-raised limits, CPU complexity, RSS, speed, whole JSON, production
+part publication and facade decomposition are outside this certificate.
+Source/runtime, grammar, ownership/budget propagation or instrument/comparator
+changes invalidate their dependent gates; rerun positive and negative checks.
+
+Continuation: the user goal remains all paired types, then MV/projections,
+then performance. The next confirmed return pointer is a reusable Dynamic
+lane/rank/mark schedule owner, using W120 rosters and the W117-W119 scalar kernel.
+Before widening, qualify mixed/spilled/NULL tags and nonzero-origin sparse ranks
+against literal W115 rows, and corruption in a later selected mark before any
+callback. Keep compression/physical access separate, share one aggregate budget,
+and preserve exact whole-JSON refusal until document assembly is qualified.
+Existing local-copy/test authority remains valid; no live-store write, push or
+performance claim is authorized by this checkpoint.
+
 ### Subsequent Object/Dynamic integration
 
 Use one concrete owner per file for distinct responsibilities, not per schema
@@ -966,15 +1264,15 @@ owned nominal document values, document reader, and staged writer orchestration.
 Schema parsing must preserve JSON parameters and typed declarations; admitting
 only a spelling of bare `JSON` is not a substitute for these physical profiles.
 
-The first production codec must handle the binary DataType descriptor followed
-by that type's single-value serialization, shared by Dynamic SharedVariant and
-Object MAP values. Bulk column serializers are not substitutes for that scalar
-grammar. Require bounded recursive decoding, exact cursor consumption, nominal
-type identity and floating-point raw-bit preservation. Its first falsifiers
-include indistinguishable JSON text for differently typed empty arrays,
-truncated or noncanonical type/value encodings, trailing bytes and exhausted
-depth/element/byte limits. This codec alone will not admit whole-document JSON;
-dictionary, lane/rank, mark and shared-data schedule owners remain necessary.
+W117-W119 now handle a binary DataType descriptor followed by that type's
+single-value serialization, reusable by Dynamic SharedVariant and Object MAP
+values within their admitted grammar. Bulk column serializers are not
+substitutes for this scalar kernel. Preserve its bounded recursive decoding,
+exact cursor consumption, nominal identity and floating-point raw bits when
+integrating it. Its qualified empty-array/type, truncation, trailing-byte and
+depth/element/byte falsifiers remain load-bearing. That kernel, W118 MAP rows
+and W120 metadata do not yet admit whole-document JSON; physical lane/rank,
+mark and shared-data schedule owners remain necessary.
 
 Preserve stored ClickHouse semantics, including typed defaults and dynamic
 null/path normalization, rather than promising preservation of original input
