@@ -1732,9 +1732,13 @@ Additional adverse probe: the unchanged compositional Tuple stock oracle
 failed compilation at `wide_tuple_leaf_column.cr:690` (impossible identifier
 buffer cast for an UInt64 consumer). An isolated `git archive 9ca6a6b` replay
 failed identically; the affected source was unchanged by this extraction.
-This preexisting sparse-consumer defect remains a separate fix, not a green
-Tuple stock certificate. Evidence: `final-stock-tuple.log` and
+At this extraction checkpoint, the preexisting sparse-consumer defect was
+reserved for a separate fix, not a green Tuple stock certificate.
+Evidence: `final-stock-tuple.log` and
 `baseline-stock-tuple.log` in the same temporary root.
+The subsequent separate inference correction and qualified Tuple stock replay
+are recorded in [COMPOSITIONAL_TUPLE_FRONTIER.md](COMPOSITIONAL_TUPLE_FRONTIER.md);
+they do not retroactively change this extraction's original evidence.
 
 Root verdict: ROBUST for the moved infrastructure contract, with literal and
 stock checks independent of Luna's correlated static review. It does not

@@ -1,7 +1,9 @@
 # CrystalClick project status
 
-Source checkpoint: `9ca6a6b`, plus the behavior-preserving shared writer
-infrastructure extraction documented in [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+Source checkpoint: `571dc3c`, plus the separate sparse-consumer Tuple inference
+correction in [COMPOSITIONAL_TUPLE_FRONTIER.md](COMPOSITIONAL_TUPLE_FRONTIER.md).
+The shared writer extraction is documented in
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
 Reviewed on 2026-10-02. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.

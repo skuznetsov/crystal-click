@@ -686,8 +686,12 @@ module CrystalClick
                     "String"
                   elsif values.is_a?(Array(Bool))
                     "Bool"
-                  elsif identifier_buffer?(values)
-                    WideTupleIdentifierType.type_name_for_buffer(values.as(WideTupleIdentifierType::Buffer))
+                  elsif values.is_a?(Array(UUIDValue))
+                    WideTupleIdentifierType.type_name(UUIDValue)
+                  elsif values.is_a?(Array(IPv4Value))
+                    WideTupleIdentifierType.type_name(IPv4Value)
+                  elsif values.is_a?(Array(IPv6Value))
+                    WideTupleIdentifierType.type_name(IPv6Value)
                   elsif values.is_a?(Array(DateValue))
                     "Date"
                   elsif values.is_a?(Array(Date32Value))
@@ -816,10 +820,6 @@ module CrystalClick
       {% else %}
         raise UnsupportedFormatError.new("unsupported numeric Tuple leaf buffer")
       {% end %}
-    end
-
-    private def identifier_buffer?(values : Buffer) : Bool
-      values.is_a?(Array(UUIDValue)) || values.is_a?(Array(IPv4Value)) || values.is_a?(Array(IPv6Value))
     end
 
     private def reject_descriptor_buffer!(values : Buffer) : Nil

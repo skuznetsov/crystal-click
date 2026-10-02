@@ -1246,3 +1246,79 @@ authorized; push, binary installation and external data mutation do not.
 All W93 heavy processes are terminal; root released the Qwen resource slot
 after the final full-debug gate. Check its latest explicit terminal/release
 before the next heavy launch, not this historical release as an ongoing lease.
+
+## Sparse-consumer inference correction (2026-10-02)
+
+Status: VERIFIED within the narrow consumer-inference contract. This is a
+compile-time correction, not additional type or layout admission.
+Anchor: the unchanged compositional Tuple stock oracle failed to compile at
+`wide_tuple_leaf_column.cr:690`, both before and after the separate shared
+writer extraction. `identifier_buffer?` returned plain Bool and did not narrow
+an UInt64 argument before an impossible cast to the identifier Buffer union.
+The baseline was an isolated archive of `9ca6a6b`; extraction commit `571dc3c`
+did not alter the affected source.
+
+Direct UUID/IPv4/IPv6 array checks now select the existing exact nominal
+type-name overloads. The carrier set, descriptor policy, copying and persisted
+bytes remain unchanged. The unused predicate helper is removed.
+Risk: CAUTION (shared leaf dispatch); rollback is this separate exact-path
+commit/diff, not the already verified writer extraction.
+
+Root's `scripts/probe_tuple_leaf_sparse_consumer.cr` exposes a test-only seam
+that fixes the inference argument to Array(UInt64). The baseline fails at the
+same cast; the corrected source passes. Public constructor/empty-buffer and
+ownership controls also run in this isolated consumer graph. Public numeric/
+String constructors alone passed on baseline and were not a discriminating
+falsifier. A broad all-type spec compilation must not substitute for the exact
+specialization or unchanged stock-oracle consumer.
+
+DoD: isolated DEBUG/RELEASE probe, affected numeric/Bool/identifier/temporal and
+ownership specs, unchanged Tuple stock oracle, full non-release suite and
+exact-path format/diff checks pass. Strongest counterexample: changing nominal
+identifier dispatch or masking the cast defect by expanding the consumer
+graph. Guard: keep the standalone UInt64 specialization isolated and rerun
+positive exact UUID/IPv4/IPv6 plus descriptor/ownership rejection controls.
+
+Executed final-source evidence (macOS AArch64, Crystal 1.21 / LLVM 22):
+
+- Baseline isolated UInt64 seam: qualified compile failure at the original
+  impossible cast. Corrected standalone probe: DEBUG and RELEASE exit 0,
+  with exact declarations/values, empty buffers and detached array controls.
+- Affected focused specs: 118 DEBUG and 118 RELEASE examples, no failures or
+  errors. Includes exact/empty identifier, numeric, Bool, temporal, descriptor
+  and ownership cases plus compositional/identifier writer regressions.
+- Full non-release suite: 2,146 examples, no failures/errors.
+- Unchanged compositional Tuple stock oracle: all seven 1/2/3/9-field profiles
+  passed both directions on ClickHouse 26.7.1.1315. Actual ATTACH/CHECK,
+  exact full/ranged RowBinary, physical inventories, window/candidate scans
+  and catalog payload values passed, including all-empty Strings.
+- Unchanged base writer stock oracle: all four UInt64, Nullable(UInt64), mixed
+  String and all-empty String cases passed on the final source, including
+  actual CHECK success and one-byte corruption rejection.
+- Exact-path format and diff checks passed. All heavy jobs ran serially with
+  the 50% free-memory guard; sandbox-aborted guard launches were not treated
+  as code falsifiers or runtime evidence.
+
+Replay the standalone probe with `crystal run --single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace scripts/probe_tuple_leaf_sparse_consumer.cr`
+(add `--release`). The focused spec inputs under `spec/` are
+`wide_tuple_column_data_ownership_spec.cr`, `wide_tuple_numeric_model_w96_spec.cr`,
+`wide_tuple_numeric_w96_spec.cr`, `wide_tuple_bool_model_w97_spec.cr`,
+`wide_tuple_bool_w97_spec.cr`, `wide_tuple_identifier_w99_spec.cr`,
+`wide_tuple_temporal_model_spec.cr`, `wide_tuple_temporal_spec.cr`,
+`wide_tuple_parameterized_ownership_spec.cr`,
+`wide_part_writer_identifier_tuple_w99_spec.cr` and
+`wide_part_writer_compositional_tuple_spec.cr`. Use `crystal spec` with the same
+flags; the full suite additionally used `--no-debug`. Run the unchanged
+`scripts/check_compositional_tuple_oracle.sh` against its pinned executable.
+Ephemeral local evidence is in
+`/private/tmp/crystal-click-refactor-root.KjBrat/{baseline-sparse-seam,fixed-sparse-debug,fixed-sparse-release,fixed-focused-debug,fixed-focused-release,fixed-full,fixed-stock-tuple,fixed-stock-writer}.log`.
+
+Root's scoped adverse verdict is ROBUST: original-consumer and exact-seam RED
+controls discriminate the correction, while independent runtime gates preserve
+the admitted nominal/ownership behavior. Luna's static review is correlated
+support, not an independent runtime certificate. This does not close all
+possible consumer graphs, general Tuple types/layouts, full RELEASE or a
+current-master executable. Refresh on changes to inference, carrier aliases,
+constructor/copy paths, compiler/platform or pinned-runtime profiles; rerun
+the isolated specialization and affected stock/spec gates.
