@@ -1289,3 +1289,57 @@ The current 31d2addb source snapshot is not the stock executable's provenance.
 Refresh this certificate when a moved body, delegation, limits, consumer,
 require graph, toolchain or tested runtime changes. Source continuity does not
 widen admission: re-run focused/full/oracle gates before reusing that claim.
+
+## Dynamic discriminator and schedule owners (W121, 2026-10-02)
+
+Status: VERIFIED within the normalized discriminator/schedule profile and
+executed gates below, over `2e9e0c4`; no whole-Dynamic/JSON admission.
+CAUTION: paired discriminator serialization and sparse row coordinates.
+Rollback is this slice's exact four-owner/import/spec/oracle/documentation diff;
+existing reader/writer/table facades and their admission are unchanged.
+
+Each new concrete owner has one responsibility and its own file:
+
+- `dynamic_discriminator_mark.cr`: absolute decompressed offset and row count.
+- `dynamic_discriminator_stream.cr`: detached complete bytes and normalized mark
+  grid, plus non-copying size/index access needed for bounded codec preflight.
+- `dynamic_mark_schedule.cr`: owned selected tags, local sparse ranks, per-arm
+  counts, original mark/outer-row coordinates and selected-window arm offsets.
+- `dynamic_discriminator_codec.cr`: paired BASIC/COMPACT grammar, complete-grid
+  validation, selected-body parsing and shared logical-budget accounting.
+
+The aggregate `src/crystal_click.cr` adds only four imports. No legacy facade
+consumer is rerouted. Physical frame/mark mapping, Dynamic child values and
+cardinality, Object document assembly and staged publication remain separate
+future responsibilities, rather than being folded into this grammar owner.
+See `JSON_GENERAL_STORAGE_FRONTIER.md` for the source/runtime anchors, precise
+admission, limits and compatibility DoD.
+
+Ownership caveat: `DynamicDiscriminatorStream.borrowed_slice` is a mutable view
+used read-only by convention inside the codec. Detached constructors/getters
+do not enforce read-only access through that public convention-internal method.
+Do not claim an immutable public stream or concurrent-mutation safety.
+
+This responsibility split is not completion of the large facade decomposition,
+or evidence of allocation/throughput improvements. The active return pointer
+is paired Dynamic child-lane/cardinality integration after W121 qualification;
+general JSON remains refused until complete selected child/shared validation
+and paired document assembly have their own executed gates.
+
+Root executed 77 focused DEBUG and 77 RELEASE examples, then 1,996 full
+non-release DEBUG examples with symbolic debug information disabled after the
+original symbolic compilation hit the unchanged 50% memory-pressure floor.
+All executed positives have zero failures/errors/pending. The new stock oracle
+qualified fourteen retained streams and four production-encoded BASIC/COMPACT
+copied-part ATTACH/actual CHECK=1 cases; unchanged W116-W120 regressions passed.
+The seeded removed VarUInt guard was detected and restored before final gates.
+Final format/syntax/diff checks passed. Full RELEASE was not executed.
+
+Owners total 553 lines (11/49/43/450); the existing reader/writer/table remain
+15,976/26,034/7,080. Their larger decomposition is still open. The executed
+certificate, replay commands, temporary evidence roots and coordinate/budget
+falsifiers are in the W121 section of `JSON_GENERAL_STORAGE_FRONTIER.md`.
+Root's scoped adversary verdict is ROBUST for this codec path; Luna's static
+review is correlated, and the mutable borrowed-view caveat remains explicit.
+Refresh on owner/import/API, budget/coordinate, consumer, toolchain/runtime or
+comparator changes; these tests do not prove future child-lane integration.

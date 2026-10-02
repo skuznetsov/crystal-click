@@ -1,0 +1,450 @@
+module CrystalClick
+  # Paired complete-stream encoder/decoder for the bounded Dynamic V3
+  # discriminator profile. This owns decompressed bytes and normalized marks;
+  # physical compressed frames and child lanes remain outside this codec.
+  class DynamicDiscriminatorCodec
+    DEFAULT_MODE   = 1_u64
+    DEFAULT_LIMITS = BinaryCodecLimits.new(
+      max_depth: 1,
+      max_nodes: 1_000_000,
+      max_elements: 3_000_000,
+      max_bytes: 64 * 1024 * 1024
+    )
+
+    BASIC_MODE    =  0_u64
+    COMPACT_MODE  =  1_u64
+    NULL_TAG      = 255_u8
+    HEADER_BYTES  =  8_u64
+    MAX_MARK_ROWS = Int32::MAX.to_u64
+
+    def self.encode(
+      structure : DynamicStructure,
+      tags : Array(Array(UInt8)),
+      mode : UInt64 = DEFAULT_MODE,
+      limits : BinaryCodecLimits = DEFAULT_LIMITS,
+    ) : DynamicDiscriminatorStream
+      budget = BinaryCodecBudget.new(limits, true)
+      encode_with_budget(structure, tags, budget, mode: mode)
+    end
+
+    # Convention-internal entry point for a parent operation that owns the
+    # aggregate budget. It never resets or replaces the supplied budget.
+    def self.encode_with_budget(
+      structure : DynamicStructure,
+      tags : Array(Array(UInt8)),
+      budget : BinaryCodecBudget,
+      mode : UInt64 = DEFAULT_MODE,
+    ) : DynamicDiscriminatorStream
+      unless budget.writing?
+        raise ArgumentError.new("Dynamic discriminator encode requires a writing budget")
+      end
+      unless mode == BASIC_MODE || mode == COMPACT_MODE
+        raise ArgumentError.new("unsupported Dynamic discriminator write mode")
+      end
+
+      budget.ensure_depth(1)
+      real_marks = tags.size.to_u64
+      mark_records = real_marks + 1_u64
+      variant_count = structure.canonical_variant_count.to_u64
+
+      minimum_nodes = 1_u64 + mark_records
+      minimum_elements = mark_records + ((2_u64 * real_marks + 1_u64) * variant_count)
+      budget.ensure_future_nodes(minimum_nodes)
+      budget.ensure_future_elements(minimum_elements)
+
+      total_rows = 0_u64
+      tags.each do |granule|
+        if granule.empty?
+          raise ArgumentError.new("Dynamic discriminator real granules must contain rows")
+        end
+        total_rows += granule.size.to_u64
+      end
+
+      total_nodes = 1_u64 + mark_records + total_rows
+      total_elements = mark_records + (2_u64 * total_rows) + ((2_u64 * real_marks + 1_u64) * variant_count)
+      budget.ensure_future_nodes(total_nodes)
+      budget.ensure_future_elements(total_elements)
+
+      body_bytes = 0_u64
+      tags.each do |granule|
+        first_tag = granule[0]
+        uniform = true
+        granule.each do |tag|
+          unless valid_tag?(tag, variant_count)
+            raise ArgumentError.new("Dynamic discriminator tag is outside the canonical roster")
+          end
+          uniform = false if tag != first_tag
+        end
+
+        bytes_for_granule = if mode == BASIC_MODE
+                              granule.size.to_u64
+                            else
+                              var_uint_size(granule.size.to_u64) + 1_u64 + (uniform ? 1_u64 : granule.size.to_u64)
+                            end
+        body_bytes += bytes_for_granule
+      end
+
+      output_bytes = HEADER_BYTES + body_bytes
+      if output_bytes > Int32::MAX.to_u64
+        raise UnsupportedFormatError.new("Dynamic discriminator output exceeds supported byte domain")
+      end
+      budget.ensure_wire_bytes(output_bytes)
+
+      charge_work(budget, mark_records, total_rows, total_elements)
+      budget.charge_wire_bytes(output_bytes)
+
+      wire = Bytes.new(output_bytes.to_i32) { 0_u8 }
+      wire[0] = mode.to_u8
+      cursor = HEADER_BYTES.to_i32
+      offset = HEADER_BYTES
+      marks = Array(DynamicDiscriminatorMark).new(mark_records.to_i32)
+
+      tags.each do |granule|
+        marks << DynamicDiscriminatorMark.new(offset, granule.size.to_u64)
+        first_tag = granule[0]
+        uniform = true
+        granule.each { |tag| uniform = false if tag != first_tag }
+
+        if mode == BASIC_MODE
+          granule.each do |tag|
+            wire[cursor] = tag
+            cursor += 1
+          end
+        else
+          cursor = write_var_uint(wire, cursor, granule.size.to_u64)
+          if uniform
+            wire[cursor] = 1_u8
+            wire[cursor + 1] = first_tag
+            cursor += 2
+          else
+            wire[cursor] = 0_u8
+            cursor += 1
+            granule.each do |tag|
+              wire[cursor] = tag
+              cursor += 1
+            end
+          end
+        end
+        offset = cursor.to_u64
+      end
+      marks << DynamicDiscriminatorMark.new(offset, 0_u64)
+
+      DynamicDiscriminatorStream.new(wire, marks)
+    end
+
+    def self.decode(
+      structure : DynamicStructure,
+      stream : DynamicDiscriminatorStream,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+      limits : BinaryCodecLimits = DEFAULT_LIMITS,
+    ) : Array(DynamicMarkSchedule)
+      budget = BinaryCodecBudget.new(limits)
+      decode_with_budget(structure, stream, budget, first_mark: first_mark, mark_count: mark_count)
+    end
+
+    # Convention-internal entry point for a parent operation that owns the
+    # aggregate budget. All selected schedules are validated before return.
+    def self.decode_with_budget(
+      structure : DynamicStructure,
+      stream : DynamicDiscriminatorStream,
+      budget : BinaryCodecBudget,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+    ) : Array(DynamicMarkSchedule)
+      if budget.writing?
+        raise ArgumentError.new("Dynamic discriminator decode requires a reading budget")
+      end
+      budget.ensure_depth(1)
+
+      mark_records = stream.mark_count.to_u64
+      if mark_records == 0_u64
+        corrupt!("Dynamic discriminator mark grid has no terminal mark")
+      end
+      real_marks = mark_records - 1_u64
+      selected_first = validate_selection(first_mark, mark_count, real_marks)
+      selected_marks = if count = mark_count
+                         count.to_u64
+                       else
+                         real_marks - selected_first
+                       end
+      variant_count = structure.canonical_variant_count.to_u64
+
+      # This lower bound depends only on scalar collection sizes. It must run
+      # before a mark traversal or any detached bytes/grid accessor.
+      minimum_nodes = 1_u64 + mark_records
+      minimum_elements = mark_records + ((2_u64 * selected_marks + 1_u64) * variant_count)
+      budget.ensure_future_nodes(minimum_nodes)
+      budget.ensure_future_elements(minimum_elements)
+
+      budget.ensure_wire_bytes(HEADER_BYTES)
+      if stream.byte_size < HEADER_BYTES.to_i
+        corrupt!("Dynamic discriminator stream is shorter than its mode header")
+      end
+      mode = 0_u64
+      8.times do |index|
+        mode |= stream.byte_at(index).to_u64 << (index * 8)
+      end
+      unless mode == BASIC_MODE || mode == COMPACT_MODE
+        corrupt!("unknown Dynamic discriminator mode")
+      end
+
+      selected_rows, first_row = validate_grid(stream, real_marks, selected_first, selected_marks)
+      total_nodes = 1_u64 + mark_records + selected_rows
+      total_elements = mark_records + (2_u64 * selected_rows) + ((2_u64 * selected_marks + 1_u64) * variant_count)
+      budget.ensure_future_nodes(total_nodes)
+      budget.ensure_future_elements(total_elements)
+
+      selected_extent = if selected_marks == 0_u64
+                          0_u64
+                        else
+                          first_offset = stream.mark_at(selected_first.to_i32).offset
+                          after_offset = stream.mark_at((selected_first + selected_marks).to_i32).offset
+                          after_offset - first_offset
+                        end
+      selected_wire_bytes = HEADER_BYTES + selected_extent
+      budget.ensure_wire_bytes(selected_wire_bytes)
+
+      charge_work(budget, mark_records, selected_rows, total_elements)
+      budget.charge_wire_bytes(selected_wire_bytes)
+
+      schedules = Array(DynamicMarkSchedule).new(selected_marks.to_i32)
+      running_offsets = Array(UInt64).new(variant_count.to_i32, 0_u64)
+      selected_end = selected_first + selected_marks
+      mark_index = selected_first
+      selected_row_offset = 0_u64
+      while mark_index < selected_end
+        mark = stream.mark_at(mark_index.to_i32)
+        following = stream.mark_at((mark_index + 1_u64).to_i32)
+        body_offset = mark.offset.to_i32
+        body_size = (following.offset - mark.offset).to_i32
+        body = stream.borrowed_slice(body_offset, body_size)
+        tags = decode_body(mode, body, mark.rows, variant_count)
+
+        ranks = Array(Int32?).new(tags.size, nil)
+        arm_counts = Array(UInt64).new(variant_count.to_i32, 0_u64)
+        tags.each_with_index do |tag, row_index|
+          next if tag == NULL_TAG
+          arm_index = tag.to_i32
+          ranks[row_index] = arm_counts[arm_index].to_i32
+          arm_counts[arm_index] += 1_u64
+        end
+
+        schedules << DynamicMarkSchedule.new(
+          mark_index.to_i32,
+          first_row + selected_row_offset,
+          tags,
+          ranks,
+          arm_counts,
+          running_offsets
+        )
+        arm_counts.each_with_index do |count, arm_index|
+          running_offsets[arm_index] += count
+        end
+        selected_row_offset += mark.rows
+        mark_index += 1_u64
+      end
+
+      schedules
+    end
+
+    private def self.validate_selection(first_mark : Int, mark_count : Int?, real_marks : UInt64) : UInt64
+      if first_mark < 0 || first_mark > real_marks.to_i64
+        raise ArgumentError.new("Dynamic discriminator first mark is outside the real grid")
+      end
+      first = first_mark.to_u64
+      if count = mark_count
+        remaining_marks = (real_marks - first).to_i64
+        if count < 0 || count > remaining_marks
+          raise ArgumentError.new("Dynamic discriminator mark count is outside the real grid")
+        end
+      end
+      first
+    end
+
+    private def self.validate_grid(
+      stream : DynamicDiscriminatorStream,
+      real_marks : UInt64,
+      selected_first : UInt64,
+      selected_marks : UInt64,
+    ) : Tuple(UInt64, UInt64)
+      byte_size = stream.byte_size.to_u64
+      selected_end = selected_first + selected_marks
+      total_rows = 0_u64
+      selected_rows = 0_u64
+      first_row = 0_u64
+      previous_offset = HEADER_BYTES
+      mark_index = 0_u64
+
+      while mark_index <= real_marks
+        mark = stream.mark_at(mark_index.to_i32)
+        if mark_index == real_marks
+          unless mark.rows == 0_u64 && mark.offset == byte_size
+            corrupt!("Dynamic discriminator terminal mark does not match stream end")
+          end
+          if real_marks == 0_u64 && mark.offset != HEADER_BYTES
+            corrupt!("empty Dynamic discriminator stream contains bytes after its header")
+          end
+          if real_marks > 0_u64 && mark.offset <= previous_offset
+            corrupt!("Dynamic discriminator terminal mark has no positive byte extent")
+          end
+          if selected_first == real_marks
+            first_row = total_rows
+          end
+          break
+        end
+
+        if mark.rows == 0_u64 || mark.rows > MAX_MARK_ROWS
+          corrupt!("Dynamic discriminator real mark row count is outside its supported domain")
+        end
+        if mark_index == 0_u64
+          unless mark.offset == HEADER_BYTES
+            corrupt!("Dynamic discriminator first mark does not begin after its header")
+          end
+        elsif mark.offset <= previous_offset
+          corrupt!("Dynamic discriminator marks are not strictly increasing")
+        end
+
+        if mark_index == selected_first
+          first_row = total_rows
+        end
+        if mark_index >= selected_first && mark_index < selected_end
+          selected_rows += mark.rows
+        end
+        total_rows += mark.rows
+        previous_offset = mark.offset
+        mark_index += 1_u64
+      end
+
+      {selected_rows, first_row}
+    end
+
+    private def self.decode_body(mode : UInt64, body : Bytes, expected_rows : UInt64, variant_count : UInt64) : Array(UInt8)
+      if mode == BASIC_MODE
+        unless body.size.to_u64 == expected_rows
+          corrupt!("Dynamic BASIC body extent does not equal its mark rows")
+        end
+        tags = Array(UInt8).new(expected_rows.to_i32)
+        body.each do |tag|
+          unless valid_tag?(tag, variant_count)
+            corrupt!("Dynamic discriminator tag is outside the canonical roster")
+          end
+          tags << tag
+        end
+        return tags
+      end
+
+      cursor = 0
+      inner_rows, cursor = read_var_uint(body, cursor)
+      unless inner_rows == expected_rows
+        corrupt!("Dynamic COMPACT row count does not equal its outer mark")
+      end
+      if cursor >= body.size
+        corrupt!("Dynamic COMPACT body is missing its format")
+      end
+      format = body[cursor]
+      cursor += 1
+      case format
+      when 0_u8
+        remaining = body.size - cursor
+        unless remaining.to_u64 == expected_rows
+          corrupt!("Dynamic COMPACT row-tag body has an inexact extent")
+        end
+        tags = Array(UInt8).new(expected_rows.to_i32)
+        while cursor < body.size
+          tag = body[cursor]
+          unless valid_tag?(tag, variant_count)
+            corrupt!("Dynamic discriminator tag is outside the canonical roster")
+          end
+          tags << tag
+          cursor += 1
+        end
+        tags
+      when 1_u8
+        unless body.size - cursor == 1
+          corrupt!("Dynamic COMPACT uniform body has an inexact extent")
+        end
+        tag = body[cursor]
+        unless valid_tag?(tag, variant_count)
+          corrupt!("Dynamic discriminator tag is outside the canonical roster")
+        end
+        Array(UInt8).new(expected_rows.to_i32, tag)
+      else
+        corrupt!("unknown Dynamic COMPACT granule format")
+      end
+    end
+
+    private def self.read_var_uint(bytes : Bytes, cursor : Int32) : Tuple(UInt64, Int32)
+      value = 0_u64
+      10.times do |index|
+        if cursor >= bytes.size
+          corrupt!("Dynamic COMPACT row count is truncated")
+        end
+        byte = bytes[cursor]
+        cursor += 1
+        payload = (byte & 0x7f_u8).to_u64
+        if index == 9 && payload > 1_u64
+          corrupt!("Dynamic COMPACT row count overflows UInt64")
+        end
+        value |= payload << (index * 7)
+        continuing = (byte & 0x80_u8) != 0_u8
+        unless continuing
+          if index > 0 && payload == 0_u64
+            corrupt!("Dynamic COMPACT row count is nonminimal")
+          end
+          return {value, cursor}
+        end
+        if index == 9
+          corrupt!("Dynamic COMPACT row count is too long")
+        end
+      end
+      corrupt!("Dynamic COMPACT row count is too long")
+    end
+
+    private def self.write_var_uint(bytes : Bytes, cursor : Int32, original : UInt64) : Int32
+      value = original
+      loop do
+        byte = (value & 0x7f_u64).to_u8
+        value >>= 7
+        byte |= 0x80_u8 if value > 0_u64
+        bytes[cursor] = byte
+        cursor += 1
+        break if value == 0_u64
+      end
+      cursor
+    end
+
+    private def self.var_uint_size(value : UInt64) : UInt64
+      count = 1_u64
+      remaining = value
+      while remaining >= 0x80_u64
+        remaining >>= 7
+        count += 1_u64
+      end
+      count
+    end
+
+    private def self.valid_tag?(tag : UInt8, variant_count : UInt64) : Bool
+      tag == NULL_TAG || tag.to_u64 < variant_count
+    end
+
+    private def self.charge_work(
+      budget : BinaryCodecBudget,
+      mark_records : UInt64,
+      rows : UInt64,
+      elements : UInt64,
+    ) : Nil
+      budget.visit_node(1)
+      index = 0_u64
+      while index < mark_records + rows
+        budget.charge_node
+        index += 1_u64
+      end
+      budget.charge_elements(elements)
+    end
+
+    private def self.corrupt!(message : String) : NoReturn
+      raise CorruptPartError.new(message)
+    end
+  end
+end

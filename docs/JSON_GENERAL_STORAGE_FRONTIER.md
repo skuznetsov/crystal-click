@@ -10,26 +10,32 @@ RED is qualified, not resolved. General JSON
 document reading/writing is not admitted. W24/W72 declared scalar projections
 remain the only paired JSON capability; see `JSON_TYPED_PATH_FRONTIER.md`.
 W120's paired complete decompressed structure-metadata codecs are VERIFIED
-within the source/local and V3 MAP stock gates below. Dynamic value lanes,
-sparse ranks and physical mark schedules remain the next owner boundary;
-structure metadata does not admit whole-document JSON.
+within the source/local and V3 MAP stock gates below. W121's paired normalized
+Dynamic discriminator streams and selected sparse schedules are VERIFIED within
+their strict captured-writer profile below. Dynamic child value lanes,
+cardinality and compressed physical mark mapping remain the next owner boundary;
+metadata and discriminator schedules do not admit whole-document JSON.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
 
 ## Source anchor and compatibility boundary
 
 The current separate shallow reference checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-0c68f01a`, revision
-`0c68f01a75a913b1aa5e132b41a80642260c3009`. Its source informs the design; it
+`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-31d2addb`, revision
+`31d2addbabda0d8e14ffd325fc0a9106528aa1c7`. Its source informs the design; it
 is not the build provenance of the runtime oracle. The initial runtime is
 ClickHouse 26.10.1.1201, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`,
 Mach-O SHA-256
 `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
 Its measured outputs must not be described as current-master executable evidence.
-It was compared on October 2 to the initial capture/literal-source baseline,
+The earlier `0c68f01a75a913b1aa5e132b41a80642260c3009` reference
+was compared on October 2 to the initial capture/literal-source baseline,
 `/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1-935de744`, revision
 `935de7442d7890eb5631372e4ad6f66faaf35f90`; the relevant serializers, binary
 encoding, Columns and Formats are unchanged. See `CLICKHOUSE_SOURCE_REFERENCE.md`.
+The current reference's DataTypes, Columns and MergeTree directories are
+byte-for-byte equal to that earlier reference; the serializer anchors below
+remain applicable. This is source comparison, not a new executable qualification.
 Keep the initial capture/literal source and runtime identities intact.
 
 Source anchors, relative to that reference checkout:
@@ -1298,3 +1304,294 @@ Refresh the certificate after producer/build, serializer settings, type
 encoding, mark/codec layout, instrument/comparator or relevant implementation
 changes. RSS, crash/concurrent-filesystem guarantees and speed are not inferred
 from this capture checkpoint.
+
+## W121 paired Dynamic discriminator and sparse schedules
+
+Status: VERIFIED within the strict normalized discriminator/schedule profile
+and executed source/local/stock gates below; no whole-Dynamic/JSON admission.
+The design was sealed over `74a8752`.
+Execution resumed over `2e9e0c4` after the behavior-neutral LC extraction.
+The prior turn was progress: commits `0626874`/`2e9e0c4`, full DEBUG 1,973
+examples and the unchanged LC stock oracle passed. There is no current blocker.
+Risk: CAUTION for paired serialization and selected-row coordinates. Rollback:
+this slice's exact paths, without changing existing facade admission or stores.
+W120 was already committed with executed gates; the full
+all-types/MV/projection/performance goal remains active, not achieved.
+
+### Boundary and design laws
+
+The next reusable owner handles the complete decompressed discriminator stream
+and its normalized absolute decompressed mark grid. It is paired: encode produces
+both bytes and marks; decode validates selected marks and returns owned sparse
+schedules. This is a prerequisite for actual Dynamic lane assembly, not another
+schema-specific Dynamic table API. W120 supplies the immutable roster; sorted
+full SQL names, including implicit SharedVariant, define global wire tag order.
+Descriptor wire order and in-memory local discriminators do not define that order.
+NULL=255 consumes no arm occurrence; SharedVariant is an ordinary counted arm.
+
+Source anchors in the pinned `0c68f01a` checkout:
+`SerializationVariant.h:28-47,57-77,178-182`,
+`SerializationVariant.cpp:199-229,343-523,537-683,749-770`,
+`DataTypeVariant.cpp:46-64`, and `ColumnVariant.h:18-36,67-68`.
+Root checked the mode prefix, granule grammar and name sorting directly.
+Source inference is separate from the pinned executable's measured behavior.
+The current source reference is `31d2addbabda0d8e14ffd325fc0a9106528aa1c7`
+in `/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-31d2addb`.
+Root verified `src/DataTypes`, `src/Columns` and `src/Storages/MergeTree`
+byte-for-byte equal to `0c68f01a`; the anchors above remain source-valid.
+This does not change the pinned runtime identity or widen physical admission.
+
+- Admit BASIC mode 0 and COMPACT mode 1. The complete stream starts with its
+  eight-byte little-endian mode. BASIC bodies have one global tag per row;
+  COMPACT bodies have minimal VarUInt row count, format 0 (row tags) or 1
+  (uniform tag). Uniform NULL is valid. Unknown modes/formats are corruption.
+  The writer uses COMPACT uniform format whenever all tags agree, otherwise
+  row format; valid noncanonical uniform-as-row-format input may re-emit differently.
+  Minimal VarUInt and positive, exactly aligned real-mark bodies are strict
+  captured-writer profile restrictions, not equivalence to the generic CH
+  decoder: `VarInt.h:86-105,165-195` accepts some nonminimal representations,
+  and `SerializationVariant.cpp:680-718` can skip zero-row granule starts.
+  W121 deliberately rejects those inputs; relaxing this later requires its
+  own source/runtime falsifiers and an explicit admission change.
+- Marks are normalized decompressed byte offsets, not ClickHouse compressed
+  frame coordinates. The first data mark begins at byte 8, every real mark
+  has positive rows and a positive byte extent, and exactly one terminal
+  mark has zero rows and offset equal to byte size. An empty stream has only
+  the terminal mark at 8. Real mark rows are capped at Int32::MAX for the
+  owned schedule profile. Physical `.mrk2` conversion, decompression and
+  filesystem lifetime policy remain outside these owners.
+- Validate the complete grid and range without copying it; parse only selected
+  bodies. Selection is contiguous `first_mark`/`mark_count`, with zero count
+  permitted at any in-range boundary, including the terminal position.
+  Inner COMPACT row counts must equal
+  their selected mark's rows, and each selected body must be exactly consumed.
+  A valid grid does not attest unselected payload tags or actual child lanes.
+- Each output mark keeps its original mark index and absolute outer `first_row`
+  derived from the grid, detached tags, per-arm counts, mark-local sparse ranks
+  (`nil` for NULL), and per-arm selected-window offsets before that mark.
+  Selected-window offsets start at zero at the first selected mark. They are
+  not absolute part-wide sparse ranks or child byte offsets. Consumers must
+  use each child lane's own physical mark coordinates and validate cardinality
+  separately before document callbacks.
+- All selected schedules are validated before return; there is no callback
+  API exposing an earlier schedule while a later selected mark can still fail.
+  Inputs and getters detach mutable arrays/bytes. Model construction is outside
+  the measured codec budget, as in W120; the codec must not copy full bytes/grid
+  through accessors before preflight. `DynamicDiscriminatorStream.borrowed_slice`
+  is a convention-internal mutable view used read-only by the codec; Crystal's
+  public method does not enforce read-only ownership for other callers. The
+  detached public getters do not make this borrowed view immutable.
+- Reuse BinaryCodecLimits/BinaryCodecBudget, with convention-internal borrowed
+  budget entry points in both directions. No fresh budget per selected mark or
+  Dynamic child. Depth is 1. For M complete grid records (including terminal),
+  K selected real marks, R selected rows and V canonical arms: nodes are
+  `1 + M + R`, elements are `M + 2*R + (2*K + 1)*V`, and wire bytes are
+  `8 + sum(selected body extents)`. Full encode uses all real marks and the
+  same accounting. The counters cover grid scanning, row tags/ranks, each
+  counts/offsets array and the V-entry running offset state.
+- Preflight metadata before grid traversal/copies, row work before tag expansion,
+  and complete selected wire bytes before selected slices. Encoder preflights
+  row work before scanning caller arrays and exact output bytes before building
+  the stream. Default schedule limits are depth 1, 1,000,000 nodes, 3,000,000
+  elements and 64 MiB wire bytes, rather than silently reusing the recursive
+  descriptor kernel's 4,096-node default for ordinary 8,192-row CH granules.
+  Limits are logical-work bounds, not RSS or speed guarantees.
+- Malformed input/grid, truncation, tag outside `[0,V)` other than 255,
+  inner/outer row mismatch and read budget exhaustion raise CorruptPartError.
+  Invalid caller write mode, empty real granule or tag outside the roster raises
+  ArgumentError; write budget exhaustion raises UnsupportedFormatError.
+  Invalid caller selection/direction raises ArgumentError before output.
+
+Rejected/guard-only: Native/specialized-prefix and Compact-part layouts,
+compressed physical mark mapping, child lane value/cardinality validation,
+Object shared merging, general JSON assembly, table/facade admission, staged
+part publication, MV/projections and performance. BASIC is not treated as
+unsupported merely because the retained W115 capture used COMPACT. Legacy
+Dynamic metadata remains governed by W120, not changed by this slice.
+
+### Owners, execution and falsifiers
+
+New production files under `src/crystal_click/`:
+`dynamic_discriminator_mark.cr` (immutable offset/rows record),
+`dynamic_discriminator_stream.cr` (detached bytes/grid, size/index accessors),
+`dynamic_mark_schedule.cr` (owned selected tag/rank/count/offset record),
+and `dynamic_discriminator_codec.cr` (paired grammar and shared-budget schedules).
+Only the aggregate `src/crystal_click.cr` adds imports. Implemented API:
+`DynamicDiscriminatorCodec.encode(structure, Array(Array(UInt8)), mode: 1_u64, limits: ...)`
+returns DynamicDiscriminatorStream; `.decode(structure, stream, first_mark: 0,
+mark_count: nil, limits: ...)` returns Array(DynamicMarkSchedule).
+Internal `.encode_with_budget`/`.decode_with_budget` borrow a correctly directed
+BinaryCodecBudget for eventual aggregate Object/Dynamic integration.
+
+Consumer inventory: `rg -l 'VariantDiscriminatorDecoder|DynamicStructureCodec|ObjectDynamicStructureCodec|read_dynamic_.*mark_range' src spec scripts --glob '*.cr'`
+found W74/W75 facade/reader/writer consumers, the existing private Variant
+decoder, W120's metadata codec and its specs/oracle, and no consumer of these
+new owners. Do not modify or route legacy facades during this feature.
+Root owns docs, independent budget spec, all compiler/CH/Git processes and
+the final claim. Luna workers own disjoint new source/spec and script paths;
+they are not alone and must preserve each other's work.
+
+Execution plan:
+
+1. Author `spec/dynamic_discriminator_w121_spec.cr` only and let root retain a
+   missing-API RED. Root then authorizes the four owners/imports.
+2. Add literal BASIC/COMPACT, mixed/uniform/NULL, empty stream, selection,
+   canonical order, ownership, malformed-grid/body and exact/minus-one tests.
+   Root owns `spec/dynamic_discriminator_w121_budget_spec.cr`, including an
+   8,192-row default-limit positive and compact expansion/copy preflight guards.
+3. Author separate `scripts/w121_discriminator_vectors.cr` and
+   `scripts/check_dynamic_discriminator_w121.cr/.sh`, keeping W116-W120 unchanged.
+   Literal rows define expected tags/ranks and normalized offsets, not captured
+   bytes or production decoder output. Read all seven streams from both source
+   and attached W115 parts: fourteen exact streams, full and selected windows.
+4. Encode authored tags into two isolated copied profiles in each mode, replacing
+   only discriminator `.bin`/marks and rebuilding test-only frames/checksums.
+   Require four actual ATTACH/CHECK=1 results and independently expected full
+   documents plus selected `pk 3..8`, which covers both spilled Int64 and Bool.
+   RowBinary source/copy equality is supplementary, not a literal binary oracle.
+5. Execute focused DEBUG/RELEASE, full DEBUG, the new stock oracle and unchanged
+   W116-W120 regressions serially through the established resource guard;
+   inspect hostile findings, update this seal and modularity evidence, then
+   exact-path local commit. No push. Reuse the existing SDK/pinned runtime.
+
+DoD: add the two W121 specs to W120's six focused inputs; DEBUG and RELEASE
+must pass. Full DEBUG is guarded `crystal spec --single-module
+--link-flags=-fuse-ld=ld --error-trace` (600s/32768MiB). The stock wrapper uses
+the pinned CH executable and retained W115 root under 600s/8192MiB. Expected
+oracle signal is fourteen source/attached streams plus four new CHECK=1 copies,
+literal full/nonzero-origin schedules and semantic windows, with seeded wrong
+tag/rank/byte comparator controls. Format, shell syntax and diff checks remain.
+The full non-release replay may omit symbolic debug information with `--no-debug`
+to fit the unchanged guard; this does not disable overflow checks or substitute
+a dry run. Record both the failed resource gate and the actual executed replay.
+
+Decisive stock-backed falsifier: typed_mixed.s canonical arms are
+SharedVariant=0 and String=1, NULL=255. Select marks 1..3 (pk3..8):
+`[1,255] [0,255] [1,0]` means String, NULL, spilled Int64, NULL, String,
+spilled Bool. Its normalized mark begins are 11,15,19; selected String ranks
+and SharedVariant ranks each begin at zero despite earlier String rows.
+Source literals and marks are already independently authored in
+`scripts/w116_json_physical_vectors.cr:612-768`; root rechecked the tags.
+Also distinguish an empty Array's outer arm occurrence from zero flattened
+elements, without claiming to decode or validate the Array child here.
+
+Strongest failure: confusing outer rows, per-mark ranks, selected-window offsets
+and physical child offsets, or resetting budget per mark. Use different mark
+patterns, exact/minus-one aggregate limits and a last-selected-mark corruption
+after earlier marks are valid. A same-size wrong-rank comparator must reject.
+Unselected-body corruption is intentionally not claimed checked by a selection;
+an explicit test must distinguish that from full decoding. Any source/runtime,
+mode/mark grammar, limits, coordinate contract or instrument change reopens its
+dependent evidence. Whole-JSON refusal remains the capability guard.
+
+### W121 executed certificate and continuation
+
+Executed on October 2 over `2e9e0c4`, with only the four new owners, aggregate
+imports, two specs, three oracle files and these two frontier documents changed.
+The finalized production owners are 11/49/43/450 lines respectively (553 total);
+these are navigation counts, not coupling or performance measurements.
+Existing WidePart, writer and table implementations are unchanged.
+
+Root-executed evidence on the restored production source:
+
+- Missing-API RED: the authored spec failed for the absent
+  `DynamicDiscriminatorMark`, before production authorization.
+- Focused DEBUG and RELEASE: 77 examples each, no failures/errors/pending.
+  Full non-release DEBUG with `--no-debug` (no symbolic debug information):
+  1,996 examples, no failures/errors/pending. Runtime overflow checks and
+  non-release semantics were not disabled. Full RELEASE was not executed.
+- The original full DEBUG compilation was killed by the existing guard at
+  system free memory 50% after about 85 seconds; it produced no test result.
+  The successful no-symbols replay retained the same 50% floor and resource
+  limits. No foreign process was stopped and the guard was not weakened.
+- Root's independent exact/minus-one and instrumented preflight tests cover
+  borrowed aggregate budgets, wrong budget direction, Int128 selection bounds,
+  255 canonical arms (SharedVariant=254 versus NULL=255), an interior empty
+  window, an 8,192-row default-limit positive, an 8 MiB unselected body and
+  compact uniform expansion refusal before slicing/materialization. Logical
+  budget counters do not account for owned model construction/getter copies.
+- Hostile falsifiers exposed an incorrect test literal offset, an empty-stream
+  trailing-byte acceptance, and selection narrowing that raised OverflowError
+  for Int128::MAX. The literal and production bounds were repaired. A root
+  qualified RED retained 76 examples/two failures before the final 77 positives.
+- Root temporarily disabled the private VarUInt minimality guard. The W121
+  specs failed (23 examples, one failure: expected CorruptPartError, none raised).
+  The original guard was restored before the final focused/full/stock gates.
+- The new stock oracle compares fourteen retained source/attached discriminator
+  streams with independent byte/mark/tag/rank/count/offset expectations. It
+  decodes full and nonzero-origin selected windows, including the spilled
+  Int64/Bool and empty-Array outer-occurrence cases. This does not decode the
+  child value lanes.
+- Four fresh isolated copies (two schemas, BASIC and COMPACT) receive the
+  production encoder's actual bytes and mark grid. Test-only LZ4/checksum surgery
+  does not modify retained W115 parts. Each actual stock ATTACH and exact-part
+  CHECK result is 1. Independent full documents and selected pk3..8 match;
+  source/copy RowBinary equality remains a supplementary differential.
+- Wrong-tag, wrong-rank, one-byte and CHECK=0 controls invoke the actual
+  comparators and are rejected. Root found and qualified two script defects
+  before CH ran: Array#to_slice did not compile, and a `.try` block's Nil
+  iteration result falsely signaled an absent profile. Owned byte copies and
+  explicit lookup repaired them without weakening expected vectors or controls.
+- Unchanged W116-W120 stock regressions all exit 0. W116 preserves the exact
+  whole-JSON missing-capability RED and its actual CHECK/literal negative
+  controls. W118 remains a retained-lane oracle, not a new part writer.
+- Final nine-file Crystal format check, wrapper syntax and diff hygiene pass.
+
+Compiler: Crystal 1.21.0/LLVM 22.1.8/AArch64 at `/opt/homebrew/bin/crystal`;
+`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`,
+`TMPDIR=/private/tmp`, isolated compiler caches. All compiler/CH workloads are
+serial under `/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh`,
+50% minimum free memory, 600 seconds, focused/oracles 8,192 MiB, full 32,768 MiB.
+The current source reference remains 31d2addb; the executable remains the
+separately pinned 26.10.1.1201/d9bcb5ab/SHA-256 identity above. Forced Wide/LZ4,
+plain adaptive marks, Object V3 and shared MAP are measured settings, not
+qualification of current-master default bucketed/advanced layouts.
+
+Replay commands, under that guard and environment:
+
+```sh
+crystal spec spec/binary_value_codec_w117_spec.cr spec/object_shared_map_w118_spec.cr spec/binary_parameter_owners_w119_spec.cr spec/binary_scalar_types_w119_spec.cr spec/object_dynamic_structure_w120_spec.cr spec/object_dynamic_structure_w120_budget_spec.cr spec/dynamic_discriminator_w121_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr --single-module --link-flags=-fuse-ld=ld --error-trace
+# Repeat the focused command with --release.
+crystal spec --no-debug --single-module --link-flags=-fuse-ld=ld --error-trace
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse CRYSTAL_BIN=/opt/homebrew/bin/crystal W121_KEEP_TMP=1 bash scripts/check_dynamic_discriminator_w121.sh
+# Same pinned environment; execute these unchanged regressions serially:
+bash scripts/check_json_w116.sh
+bash scripts/check_binary_w117.sh
+bash scripts/check_object_shared_map_w118.sh
+bash scripts/check_binary_w119.sh
+bash scripts/check_object_dynamic_structure_w120.sh
+```
+
+Logs: `/private/tmp/crystal-click-w121-root.aytqug/`, specifically
+`missing-api-red.log`, `focused-int128-red.log`, `seed-nonminimal-red.log`,
+`focused-debug.log`, `focused-release.log`, `full-debug.log` (guard kill),
+`full-debug-no-symbols.log` (positive), `stock-w121.log` (compile RED),
+`stock-w121-repaired.log` (lookup RED), `stock-w121-formatted.log` (final positive),
+`regression-w116.log` through `regression-w120.log`, `format-check-final.log`.
+Final retained W121 store root:
+`/private/tmp/crystal-click-json-w121.KJ4njM`, cache
+`/private/tmp/crystal-click-json-w121-cache.NJuYVV`. These temporary paths may
+decay; replay the independent vectors against a fresh retained W115 capture if
+they disappear rather than treating an old log as a new runtime observation.
+
+Luna's static adversary result is correlated, not an independent runtime oracle.
+Root's scoped verdict is ROBUST for the sealed codec path, supported by the
+owned falsifiers, restored-guard seed, executed suites and actual stock copies.
+Residual: the convention-internal public borrowed slice is mutable; concurrent
+or external mutation safety is not claimed. Strict minimal/positive/aligned
+inputs are a captured-writer restriction, not full generic-CH decode equivalence.
+No physical compressed mark conversion, child cardinality, whole JSON,
+production part publication, MV/projection, RSS or speed claim follows.
+
+Active return pointer: reusable paired Dynamic child-lane/cardinality owners,
+then Object/shared document assembly and staged writer integration. The next
+discriminator is a nonzero-origin mixed/spilled lane window whose child counts
+must agree with W121 schedules; corrupt the last selected child mark and require
+failure before any document callback. Preserve one aggregate logical budget
+across metadata, discriminators, child/shared values and assembly. Confirm the
+physical lane mark axes instead of treating selected-window offsets as part-wide
+ranks. General JSON refusal stays in force until its own paired public and
+stock gates pass. Current implementation/oracle/toolchain, producer/build,
+serializer settings, limits, coordinates or comparator changes reopen dependent
+evidence. The all-types/MV/projection/performance goal remains active; the prior
+turn and this slice are progress, not consecutive blocked goal turns.
