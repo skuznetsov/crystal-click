@@ -1,5 +1,10 @@
 # CrystalClick Modularization Frontier
 
+Current transition (2026-10-02): behavior-preserving extraction of shared
+writer infrastructure over `9ca6a6b`. No type, layout, catalog, JSON publication,
+MV/projection or performance admission changes. The bounded contract and
+verification plan are at the end of this document.
+
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Public
 type/path binding and whole-JSON part admission remain unchanged.
@@ -1645,3 +1650,96 @@ borrowed metadata, then facade/catalog integration. General JSON layouts,
 all-type admission, wider MV/projection execution and full RELEASE remain
 open; optimization stays parked. One file per cohesive owner, not one class per
 type combination, is the maintained architecture boundary.
+
+## Shared writer infrastructure extraction (2026-10-02)
+
+Status: VERIFIED within the unchanged shared-writer contract below.
+Risk: CAUTION (persisted checksum bytes and atomic publication).
+Anchor: `wide_part_writer.cr` owns stage allocation, UInt64 primary-index and
+metadata file writing, checksums serialization and Darwin exclusive rename.
+The existing Tuple/QBit/Geometry adapters reach the same private helpers.
+Rollback: revert only this extraction's exact-path commit/diff over `9ca6a6b`.
+
+Admitted behavior stays unchanged: same filename roster, checksum ordering and
+wire bytes, UInt64 primary-index EOF entry, LZ4 frame limits, private facade
+signatures, stage prefix/retries, failpoint names/timing, exclusive rename and
+caller-owned cleanup. New owners are private, with one cohesive responsibility
+per file. This is not a new generic part writer, Linux publication support,
+crash/power-loss durability or the complete facade refactor.
+
+Concrete owners: `PartChecksumsWriter` owns the v4 checksum envelope,
+`PrimaryIndexWriter` owns the existing UInt64 index bytes, and
+`PartDirectoryPublisher` owns stage allocation and exclusive rename. Each
+private class has its own source file under `wide_part_writer/`. The existing
+`StreamEncoding` owns the one shared VarUInt implementation; both the old
+facade helper and checksum owner delegate to it. Caller cleanup and specialized
+metadata/validation remain unmoved.
+
+Execution plan:
+
+1. Root adds private-helper/public-writer characterization tests and runs them
+   against the existing implementation before moving production code.
+2. Luna extracts narrowly scoped shared owners, retaining delegation from the
+   facade and existing infrastructure adapters. Schema-specific metadata and
+   staged validation stay with their current owners.
+3. Root independently reviews the diff, executes literal checksum/index and
+   existing-target/symlink/failed-publication controls, focused DEBUG/RELEASE,
+   failpoint crash-window specs, the unchanged stock writer oracle, and the
+   broader non-release suite serially under the 50% free-memory guard.
+
+DoD: all declared commands pass, exact-path formatting and `git diff --check`
+pass, no unrelated changes, and the resulting diff preserves the contract.
+Strongest failure mode: moving a private helper changes exception/errno or
+failpoint timing, or rewrites persisted bytes while roundtrip tests still pass.
+Guard: independent literal bytes plus destination collision and SIGKILL windows;
+no production refactor before the baseline characterization is green.
+
+Architecture direction after this slice: shared schema/physical planning,
+leaf stream codecs, staged validation/publication orchestration, then table and
+catalog materialization. Keep facade compatibility while removing ownership,
+not merely reopening the same giant module across many files. The existing
+JSON capability return pointer remains fresh schema sidecars and normalized
+whole-part staging, followed by facade/catalog integration.
+
+Executed final-source certificate (macOS AArch64, Crystal 1.21 / LLVM 22):
+
+- Focused DEBUG and RELEASE: 50 examples each, no failures/errors. The six
+  root-owned characterizations include literal checksum bytes, UInt64 VarUInt
+  boundaries, primary-index EOF bytes, stage isolation, destination collision
+  and dangling-symlink rejection. The original five characterizations also
+  passed before the extraction.
+- Explicit failpoint/cleanup/lifetime set: 53 examples, no failures/errors,
+  with `-Dcrystal_click_test_failpoints`; includes SIGKILL publication windows.
+- Full non-release suite: 2,146 examples, no failures/errors.
+- Unchanged `scripts/check_wide_part_writer_oracle.sh`: four cases passed on
+  pinned ClickHouse 26.7.1.1315, including exact full/PK reads, actual
+  `CHECK TABLE` success and one-byte corruption rejection.
+- Exact-path `crystal tool format --check` and `git diff --check` passed.
+
+Replay: `crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld
+--error-trace` for the full suite (add `--release` for the focused set). The
+focused inputs are `writer_infrastructure_refactor_root_spec.cr`,
+`wide_part_writer_spec.cr`, `wide_part_writer_compositional_tuple_spec.cr`,
+`qbit_writer_w103_spec.cr`, `geometry_w114_writer_spec.cr` and
+`part_checksums_spec.cr` under `spec/`. The failpoint set adds
+`embedded_merge_tree_fault_spec.cr`, `embedded_merge_tree_table_spec.cr`,
+`staged_stream_file_set_w113_spec.cr` and `point_w109_writer_spec.cr` to the
+root/geometry inputs. All heavy jobs ran serially with the 50% free-memory
+guard. Local ephemeral evidence is in
+`/private/tmp/crystal-click-refactor-root.KjBrat/final-{debug,release,failpoints,full,stock-writer}.log`.
+
+Additional adverse probe: the unchanged compositional Tuple stock oracle
+failed compilation at `wide_tuple_leaf_column.cr:690` (impossible identifier
+buffer cast for an UInt64 consumer). An isolated `git archive 9ca6a6b` replay
+failed identically; the affected source was unchanged by this extraction.
+This preexisting sparse-consumer defect remains a separate fix, not a green
+Tuple stock certificate. Evidence: `final-stock-tuple.log` and
+`baseline-stock-tuple.log` in the same temporary root.
+
+Root verdict: ROBUST for the moved infrastructure contract, with literal and
+stock checks independent of Luna's correlated static review. It does not
+qualify Linux publication, every type-specific consumer graph, full RELEASE,
+latest-master runtime compatibility or the complete architectural refactor.
+Refresh this certificate when the helpers, their callers, publication flags,
+compiler/platform or pinned runtime change; rerun the affected guards rather
+than inheriting the claim from file layout.

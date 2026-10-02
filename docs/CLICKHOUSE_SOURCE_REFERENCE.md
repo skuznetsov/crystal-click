@@ -4,6 +4,23 @@
 
 Use this separate checkout for new source comparisons:
 
+`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-101871ba`
+
+- Upstream: `https://github.com/ClickHouse/ClickHouse.git`, branch `master`.
+- Revision: `101871ba6da8221c7cf30ac3a04bc1063106f412`.
+- Commit timestamp: `2026-10-02T15:23:23Z`.
+- Cloned with `--depth 1 --single-branch`.
+- Root observed shallow repository `true`, reachable commit count `1`, and a
+  clean working tree. Post-clone `git ls-remote` returned the same upstream HEAD.
+- Existing source checkouts were not modified. Submodules were not initialized.
+
+This checkout is a source reference, not a newly built executable. Retain the
+runtime identities and executed compatibility certificates below.
+
+## Previous October 2 snapshot
+
+Retain this checkout for the existing W121-W127 source certificates:
+
 `/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-31d2addb`
 
 - Upstream: `https://github.com/ClickHouse/ClickHouse.git`, branch `master`.
@@ -16,8 +33,7 @@ Use this separate checkout for new source comparisons:
   renamed to match the revision actually downloaded, not the earlier lookup.
 - Existing source checkouts were not modified. Submodules were not initialized.
 
-This checkout is a source reference, not a newly built executable. Retain the
-runtime identities and executed compatibility certificates below.
+Those certificates remain tied to their original source/runtime identities.
 
 ## Earlier October 2 snapshot
 
@@ -41,6 +57,25 @@ The retained W115-W120 oracle is ClickHouse `26.10.1.1201`, build
 their original source/runtime identities in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 
 ## Latest snapshot comparison
+
+Root executed recursive `git diff --no-index --stat` comparisons of the
+`31d2addb` and `101871ba` source trees:
+
+- `src/DataTypes/Serializations`: identical contents (exit 0, no diff output).
+- `src/DataTypes`: five added fuzzer files, 521 added lines; this does not widen
+  this library's physical type profiles.
+- `src/Columns`: seven changed files, including a batch-serialization signature
+  change from `VectorWithMemoryTracking<char *> &` to `std::span<char *>` and
+  fuzzers. Root inspected the `ColumnString.cpp` and `IColumn.h` diffs.
+- `src/Storages/MergeTree`: three changed files. Root inspected the changes:
+  settings/documentation comments and removal of a derived-query-context
+  fallback for pinned storage snapshots in `MergeTreeData.cpp`. Do not infer
+  execution or MV behavior continuity from unchanged serializers.
+
+The source reference is fresh as of the recorded lookup, not a claim about
+future upstream HEAD. No executable from `101871ba` was built or qualified.
+
+## Earlier October 2 comparison
 
 Root executed recursive `git diff --no-index --stat` comparisons of the
 `0c68f01a` and `31d2addb` source trees. `src/DataTypes` (including all its

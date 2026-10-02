@@ -44,13 +44,6 @@ module CrystalClick
       UInt64Values
     end
 
-    {% if flag?(:darwin) %}
-      @[Link("c")]
-      lib LibWidePartWriterAtomicPublish
-        fun renamex_np(old_path : UInt8*, new_path : UInt8*, flags : UInt32) : Int32
-      end
-    {% end %}
-
     # Write one immutable part at `destination`. The parent directory must
     # already exist. Publication is a same-filesystem atomic exclusive rename;
     # an existing path is never replaced.
@@ -12097,20 +12090,7 @@ module CrystalClick
     end
 
     private def self.create_stage(parent : String) : String
-      8.times do
-        candidate = File.tempname(".crystal-click-wide-writer-", nil, dir: parent)
-        next if File.exists?(candidate) || File.symlink?(candidate)
-        begin
-          Dir.mkdir(candidate)
-          {% if flag?(:crystal_click_test_failpoints) %}
-            TestFailpoint.hit("writer_stage_created")
-          {% end %}
-          return candidate
-        rescue ex : File::Error
-          raise ex unless Errno.value == Errno::EEXIST
-        end
-      end
-      raise IO::Error.new("cannot allocate a unique Wide-part staging directory")
+      PartDirectoryPublisher.create_stage(parent)
     end
 
     private def self.write_uint64_stream(
@@ -19421,17 +19401,7 @@ module CrystalClick
     end
 
     private def self.write_primary_index(stage : String, keys : Slice(UInt64), rows_per_mark : Int32) : ChecksumRecord
-      bytes = IO::Memory.new
-      row = 0
-      while row < keys.size
-        write_uint64_le(bytes, keys[row])
-        row += rows_per_mark
-      end
-      write_uint64_le(bytes, keys.last)
-      raw = bytes.to_slice
-      raise ArgumentError.new("primary index exceeds reader limit") if raw.size.to_i64 > MAX_PRIMARY_INDEX_BYTES
-      File.write(File.join(stage, "primary.idx"), raw)
-      ChecksumRecord.new("primary.idx", raw.size.to_u64, CityHashV1.file_hash(raw), false)
+      PrimaryIndexWriter.write(stage, keys, rows_per_mark)
     end
 
     private def self.write_checksummed_file(stage : String, name : String, content : String) : ChecksumRecord
@@ -19446,29 +19416,7 @@ module CrystalClick
     end
 
     private def self.write_checksums(stage : String, records : Array(ChecksumRecord)) : Nil
-      sorted_records = records.sort_by(&.name)
-      payload = IO::Memory.new
-      write_var_uint(payload, sorted_records.size.to_u64)
-      sorted_records.each do |record|
-        name = record.name.to_slice
-        write_var_uint(payload, name.size.to_u64)
-        payload.write(name)
-        write_var_uint(payload, record.physical_size)
-        write_hash128_le(payload, record.file_hash)
-        if record.compressed
-          payload.write_byte(1_u8)
-          write_var_uint(payload, record.uncompressed_size || raise "compressed checksum has no raw size")
-          write_hash128_le(payload, record.uncompressed_hash || raise "compressed checksum has no raw hash")
-        else
-          payload.write_byte(0_u8)
-        end
-      end
-
-      frame = encode_lz4_frame(payload.to_slice)
-      File.open(File.join(stage, "checksums.txt"), "wb") do |file|
-        file << PartChecksums::CHECKSUMS_HEADER
-        file.write(frame)
-      end
+      PartChecksumsWriter.write(stage, records)
     end
 
     private def self.validate_staged_part(
@@ -25451,19 +25399,7 @@ module CrystalClick
     end
 
     private def self.publish_exclusively(stage : String, target : String) : Nil
-      {% if flag?(:darwin) %}
-        result = LibWidePartWriterAtomicPublish.renamex_np(stage.to_unsafe, target.to_unsafe, RENAME_EXCL)
-        if result != 0
-          raise ArgumentError.new("destination already exists") if Errno.value == Errno::EEXIST
-          raise IO::Error.from_errno("atomic Wide-part publish failed")
-        end
-      {% else %}
-        raise UnsupportedFormatError.new("atomic exclusive Wide-part publication is unsupported on this platform")
-      {% end %}
-      {% if flag?(:crystal_click_test_failpoints) %}
-        TestFailpoint.hit("part_published")
-      {% end %}
-      nil
+      PartDirectoryPublisher.publish_exclusively(stage, target)
     end
 
     private def self.columns_metadata(key_name : String, value_name : String) : String
@@ -25987,12 +25923,7 @@ module CrystalClick
     end
 
     private def self.write_var_uint(io : IO, value : UInt64) : Nil
-      remaining = value
-      while remaining >= 0x80_u64
-        io.write_byte(((remaining & 0x7f_u64) | 0x80_u64).to_u8)
-        remaining >>= 7
-      end
-      io.write_byte(remaining.to_u8)
+      StreamEncoding.write_var_uint(io, value)
     end
 
     private def self.write_hash128_le(io : IO, hash : {UInt64, UInt64}) : Nil

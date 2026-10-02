@@ -37,7 +37,7 @@ Its explicit profile is not general JSON layout or catalog/facade admission.
 
 ## Source anchor and compatibility boundary
 
-The current separate shallow reference checkout is
+The separate shallow source reference for the certificates below is
 `/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-31d2addb`, revision
 `31d2addbabda0d8e14ffd325fc0a9106528aa1c7`. Its source informs the design; it
 is not the build provenance of the runtime oracle. The initial runtime is
@@ -50,10 +50,12 @@ was compared on October 2 to the initial capture/literal-source baseline,
 `/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1-935de744`, revision
 `935de7442d7890eb5631372e4ad6f66faaf35f90`; the relevant serializers, binary
 encoding, Columns and Formats are unchanged. See `CLICKHOUSE_SOURCE_REFERENCE.md`.
-The current reference's DataTypes, Columns and MergeTree directories are
+That reference's DataTypes, Columns and MergeTree directories are
 byte-for-byte equal to that earlier reference; the serializer anchors below
 remain applicable. This is source comparison, not a new executable qualification.
 Keep the initial capture/literal source and runtime identities intact.
+See `CLICKHOUSE_SOURCE_REFERENCE.md` for newer source-only comparisons; they
+do not retarget these executed certificates to a different source or runtime.
 
 Source anchors, relative to that reference checkout:
 

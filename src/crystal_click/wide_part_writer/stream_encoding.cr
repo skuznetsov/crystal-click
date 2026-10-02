@@ -50,6 +50,15 @@ module CrystalClick
         8.times { |index| io.write_byte(((value >> (index * 8)) & 0xff_u64).to_u8) }
       end
 
+      def self.write_var_uint(io : IO, value : UInt64) : Nil
+        remaining = value
+        while remaining >= 0x80_u64
+          io.write_byte(((remaining & 0x7f_u64) | 0x80_u64).to_u8)
+          remaining >>= 7
+        end
+        io.write_byte(remaining.to_u8)
+      end
+
       def self.write_uint64_le(bytes : Bytes, offset : Int, value : UInt64) : Nil
         8.times { |index| bytes[offset + index] = ((value >> (index * 8)) & 0xff_u64).to_u8 }
       end
