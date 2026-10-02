@@ -16,6 +16,8 @@ data and row-handle files. Its model-only certificate is in
 `GEO_TYPES_FRONTIER.md`: focused DEBUG/RELEASE each passed 64 examples, full
 DEBUG passed 1,848, and the stock production-refusal RED remains closed.
 This does not admit Geometry decoding/writing or finish the facade refactor.
+The October 1 private Variant discriminator extraction is verified below;
+physical I/O, limits, marks and type admission remain with their prior owners.
 W96 adds one closed numeric identity/width owner and extends the existing
 Tuple owners; its compatibility certificate is separate in
 `NUMERIC_TUPLE_FRONTIER.md`. It does not close the larger facade refactor.
@@ -153,6 +155,96 @@ staging, and table/materializer orchestration are still the relevant seams;
 adding a separate class for every container/leaf combination is not the goal.
 Any widening from today's exact plans needs its own storage-profile falsifier
 and paired reader/writer evidence, not a name-only registration check.
+
+## Variant discriminator owner extraction (2026-10-01)
+
+Status: VERIFIED within the behavior-neutral extraction and executed gates
+below over `fea5047`; no new type or storage-profile admission.
+The user-requested facade decomposition starts with one bounded responsibility:
+decoding an already-bounded Variant discriminator payload and canonical VarUInt.
+Keep filesystem access, LZ4/mmap policy, mode-prefix validation, physical marks,
+selected byte/row limits, child cardinalities and publication in their existing
+owners. Geometry physical I/O remains the capability return pointer in
+`GEO_TYPES_FRONTIER.md`, not an admitted consequence of sharing this decoder.
+
+Plan (CAUTION; rollback is the isolated owner/require/delegation diff):
+
+1. Characterize the existing VarUInt helper before source movement using
+   `spec/wide_variant_discriminator_varuint_spec.cr`. Preserve its canonical,
+   overflow, truncation and offset behavior, including existing error labels.
+2. Add one private `WidePart::VariantDiscriminatorDecoder` owner in
+   `src/crystal_click/wide_part/variant_discriminator_decoder.cr`. Move the
+   existing bounded-payload tag decoding and VarUInt method bodies without
+   policy changes. Keep the old facade helpers as delegation seams; the
+   compatibility entry point must load the new owner itself.
+3. Add a standalone owner-import test with only its declared prerequisites,
+   so the aggregate library import cannot hide a missing dependency. Check
+   BASIC, COMPACT mixed/uniform/NULL tags and malformed framing. Compare the
+   moved bodies against the anchor in addition to behavioral checks.
+4. Run focused DEBUG/RELEASE, full DEBUG and the unchanged W56/W57/W74/W75
+   stock oracles serially through the existing memory guard, then inspect
+   the frozen diff before one atomic local commit. No push is authorized.
+
+Consumer inventory: `rg -n 'variant_read_var_uint|read_variant_discriminator_mark|variant_discriminator_mode' src spec scripts`
+finds two Variant family consumers and fourteen Dynamic structure/mark
+VarUInt call sites in `wide_part.cr`. The latter remain on their existing
+COMPACT-only Dynamic policies; no generic Variant or Geometry admission is
+implied. The strongest failure is a changed canonical VarUInt/error or tag
+policy masked by valid fixture reads; standalone malformed-byte checks and
+the existing checksum-consistent corruption tests are the guard.
+
+DoD: the four `wide_part_reader_w{56,57,74,75}_spec.cr` inputs plus the new
+characterization and standalone owner specs in DEBUG and RELEASE; full DEBUG;
+`check_wide_variant_w{56,57}_oracle.sh` and `check_dynamic_w{74,75}_oracle.sh`;
+formatter, exact-body reconstruction and diff checks. Focused/stock gates use
+600 seconds / 8 GiB, full DEBUG 600 seconds / 32 GiB, always retaining the
+50% free-memory floor. Success means unchanged values, rejection policies,
+physical profiles and callback boundaries, not lower RSS, higher speed or
+completion of the architecture refactor. Refresh after owner bodies,
+prerequisites, facade delegation, admission or compiler changes.
+
+### Executed discriminator checkpoint (2026-10-01)
+
+Luna implemented the owner and standalone spec; root reviewed the frozen diff
+and ran the gates independently. Before production movement, the four reader
+inputs passed 36 examples in both DEBUG and RELEASE, and the new facade VarUInt
+characterization passed five DEBUG examples against the unchanged anchor.
+
+Observed after extraction, using Crystal 1.21.0 / LLVM 22.1.8 on arm64 macOS:
+
+- The six focused inputs named above passed 50 examples in DEBUG and 50 in
+  RELEASE, no failures/errors/pending.
+- The standalone entrypoint alone passed nine examples in each mode. It
+  imports only `spec` and the new owner, not the aggregate library.
+- Full DEBUG passed 1,862 examples, no failures/errors/pending. Non-fatal
+  duplicate-library and deprecated `blocking` test-hook warnings were observed.
+- All four unchanged stock oracles exited 0 on pinned ClickHouse
+  26.7.1.1315: W56/W57 Variant and W74/W75 Dynamic, with asserted ATTACH/CHECK,
+  independent full/selected RowBinary, and each script's physical-profile
+  checks. The scripts, predecessor reader specs and type-plan file remain
+  unchanged against `fea5047`; these results do not upgrade the executable
+  certificate to the fresh master source.
+- Exact facade reconstruction matched `fea5047` after restoring the two old
+  helpers and removing the new require. Moved bodies matched after normalizing
+  indentation/blank lines and the one internal VarUInt method rename. A seeded
+  error-label mutation was rejected by the comparison. All fourteen Dynamic
+  call sites still use their original facade helper.
+- Root's formatter and diff checks passed. The frozen four-file fingerprint is
+  `7a7550ee2e81a22115c8975f17f0f847276d44f43bcbf445c283cca636789e81`:
+  SHA-256 of ordered `shasum -a 256` output for `src/crystal_click/wide_part.cr`,
+  `src/crystal_click/wide_part/variant_discriminator_decoder.cr`,
+  `spec/wide_variant_discriminator_varuint_spec.cr`, then
+  `spec/wide_variant_discriminator_decoder_entrypoint_spec.cr`.
+
+Root's scoped hostile verdict is ROBUST: the existing canonical integer,
+tag/framing errors, physical prefix/mark/row limits and publication/callback
+boundaries are preserved by the reconstruction and executed tests. Direct
+private-decoder calls assume already-bounded input and validated mode; the
+facade remains that authority, not a new public decoder API. Full RELEASE,
+peak RSS, throughput, all-type compatibility and the complete facade refactor
+are not certified. The next capability frontier remains physical Geometry;
+remaining architecture seams include bounded stream lifetimes, codec dispatch,
+writer preflight/staging/publication and table/materializer orchestration.
 
 ## Active type-plan owner extraction (2026-10-01)
 

@@ -5,27 +5,51 @@
 The user requested a fresh, separate depth-1 checkout, refreshed on
 2026-10-01. The reference source for new comparisons is now:
 
-- Checkout: `/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1`
+- Checkout: `/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1-935de744`
 - Repository: `https://github.com/ClickHouse/ClickHouse.git`
 - Branch: `master`
-- Commit: `b762d6d7fe4b201147bdce1bd49b8fc87a8049d3`
-- Commit time: `2026-10-01T11:09:44Z`
+- Commit: `935de7442d7890eb5631372e4ad6f66faaf35f90`
+- Commit time: `2026-10-01T21:25:16Z`
 
 It was created with:
 
 ```sh
-git clone --depth 1 --single-branch https://github.com/ClickHouse/ClickHouse.git /Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1
+git clone --depth 1 --single-branch --branch master https://github.com/ClickHouse/ClickHouse.git /Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1-935de744
 ```
 
 Observed checks: `git rev-parse --is-shallow-repository` returned `true`,
 `git rev-list --count HEAD` returned `1`, and `git status --porcelain=v1`
-returned no changes. The September 29 snapshot at
+returned no changes. The earlier October 1 snapshot at
+`/Users/sergey/SrcArchives/clickhouse-2026-10-01-depth1`, revision
+`b762d6d7fe4b201147bdce1bd49b8fc87a8049d3`, remains unchanged. The September 29 snapshot at
 `/Users/sergey/SrcArchives/clickhouse-2026-09-29-depth1`, revision
 `a9581941254d6113f3740a8ec125ee7519cb1bda`, and the older checkout at
 `/Users/sergey/SrcArchives/clickhouse` were not changed. The latter's previously
 inspected June snapshot must not be described as current master.
 
-## October 1 comparison with September 29
+## October 1 evening refresh
+
+Root observed `935de7442d7890eb5631372e4ad6f66faaf35f90` as the remote master
+head, cloned into the separate path above, and confirmed that exact clean,
+single-commit shallow checkout. Relative to the earlier October 1 snapshot,
+`diff -qr` under `src/DataTypes` reports only `DataTypeObject.cpp` and
+`Native.cpp`. The former removes beta wording from the embedded Lazy Type
+Hints documentation; the latter adds a Decimal scale-lifting comment. Neither
+diff changes executable code. Registration and serialization files in that
+directory are otherwise identical. Focused comparisons also found unchanged
+`MergeTreeDataPartWriterWide.cpp`, `MergedBlockOutputStream.cpp` and
+`checkDataPart.cpp` under `src/Storages/MergeTree`.
+
+This refresh does not widen Crystal admission or requalify the pinned binary.
+The observed Geometry/Variant/Dynamic/JSON source profiles are unchanged within
+this comparison; whole-server compatibility and a current-source executable
+are not certified. Older source and executable certificates retain their
+original revisions and tested profiles.
+
+## Earlier October 1 comparison with September 29
+
+This section compares `b762d6d7fe4b201147bdce1bd49b8fc87a8049d3` with
+`a9581941254d6113f3740a8ec125ee7519cb1bda`, not the evening refresh directly.
 
 Both snapshots have 68 distinct literal registrations using the extraction
 below, with identical sorted name sets. This includes custom Geo registration;
