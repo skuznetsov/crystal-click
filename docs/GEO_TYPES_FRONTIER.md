@@ -1,14 +1,156 @@
 # Geo types frontier
 
-## Active W114: Geometry qualification before paired implementation
+## Active W114: Geometry qualification and owned model
 
-Status: VERIFIED stock qualification and exact production-refusal RED within
-the seven-arm W114 fixture profile below; paired implementation is next.
+Status: VERIFIED stock qualification, exact production-refusal RED and the
+owned-model checkpoint below. Paired physical implementation is next;
 Geometry remains rejected by production.
 The full all-types and MV/projection goal remains active, followed by memory
 and performance work. This slice must not turn fixed Geometry storage into
 generic Variant admission or treat the W112 MultiPoint certificate as proof
 of Geometry's sparse arm cardinalities.
+
+### Owned-model implementation transition (2026-10-01)
+
+Anchor: clean `05ce67b`, with the qualified seven-arm stock RED preserved
+below. This transition implements the value model only; production typed
+admission, physical decoding and writing remain closed until their paired
+gates pass. Risk is CAUTION for ownership/API semantics; rollback is the
+isolated model/import/spec/documentation diff over this anchor.
+
+Exact owners, one declaration per file:
+
+- `wide_geometry_arm.cr`: fixed UInt8 global tags0-6, exact nominal arm
+  names/depths, and a checked tag lookup. NULL255 is not an enum arm.
+- `geometry_column_type.cr`: exact `Geometry` descriptor, all25 ordered
+  physical streams including the discriminator, widths, and checked aggregate
+  logical charge. No generic Variant or wrapper admission follows.
+- `wide_geometry_column_data.cr`: detached tags and a window-local arm-rank
+  map; copied Point values; six immutable nominal Geo Array owners, including
+  explicitly empty absent arms. Reuse `WideGeoArrayColumnData` rather than
+  invent a second topology codec. Constructor validation precedes its copies.
+- `wide_geometry_row.cr`: immutable owner/index handle with `tag`, nullable `arm`,
+  `null?`, `arm_index`, `point` and `geo_array` access. Point and array access
+  reject the wrong arm; array access returns the existing depth-aware handle.
+
+Constructor contract: tags, a dense Point lane, and exactly the six Geo Array
+owners keyed by their nominal arm. Every owner row count must equal the tag
+histogram; Point-keyed, missing, extra or same-depth-but-renamed lanes fail.
+The retained shape uses fixed arm slots, not a mutable public lane dictionary.
+Tag/rank exports are detached, immutable child owners may be shared, and row
+handles retain the common owner without copying topology. NULL, tagged empty
+arrays and nested empty arrays remain distinct. Raw IEEE Point bits survive.
+
+Logical accounting counts outer tags/ranks, Point storage and all six retained
+Geo owners once per slot, plus explicitly supplied concurrently-live schedule
+and scratch. Outer rows, arm occurrences, every nested record axis and every
+Point axis are each capped at65,536; the complete aggregate is capped at64MiB.
+This is deterministic logical storage accounting, not allocator/RSS or a
+performance certificate. Reader peak accounting remains a later obligation.
+
+Falsifiers precede model implementation: exact stream/tag order; interleaved
+arm ranks; NULL versus empty/nested-empty; same-depth nominal lane mismatch;
+invalid tags and lane cardinalities; detached mutable inputs/exports; NaN and
+negative-zero bits; native-axis limits, checked UInt64 addition, and exact
+64MiB/minus-one aggregate boundaries. Missing-model compiler output is an API
+availability signal, not a replacement for the qualified stock production RED.
+DoD: guarded focused DEBUG and RELEASE model/affected Geo specs, followed by
+full DEBUG under the established32GiB compiler guard, formatting/diff checks
+and root hostile review. Expected signal is all executed examples passing;
+no full RELEASE, physical Geometry reader/writer or performance claim follows.
+Root owns imports/specification, serial execution and Git; Luna owns assigned
+model/spec files. Refresh after owner/API/charge/tag changes. Return pointer:
+implement sparse-arm schedule/reader and paired writer after model gates.
+
+### Executed owned-model checkpoint (2026-10-01)
+
+The isolated change extends `05ce67b` with the four owners above and aggregate
+imports; existing reader, writer, table and catalog bodies are unchanged.
+Root independently added `geometry_w114_charge_delta_spec.cr`, reviewed the
+frozen owners and executed all gates serially after Luna's implementation.
+The pre-implementation specs failed on missing `GeometryColumnType` and
+`WideGeometryArm`; these are model API signals, not physical-feature REDs.
+
+Observed results on the frozen source:
+
+- The two new model specs passed nine DEBUG examples.
+- Focused DEBUG and RELEASE each passed 64 examples, no failures/errors/pending.
+- Full DEBUG passed 1,848 examples, no failures/errors/pending, under the
+  established 600-second/32-GiB compiler guard and 50% free-memory floor.
+  Duplicate `-lc` and the existing deprecated `blocking` test-hook argument
+  produced non-fatal warnings. Compiler memory is not reader memory.
+- The unchanged stock `red` wrapper repeated all six qualified source/fresh
+  ATTACH profiles: 12 actual CHECK=1 results, literal full/selected RowBinary,
+  all 312 ordered streams and the named comparator sensitivity controls.
+  Every attached Geometry profile still raised exactly `unsupported exact
+  typed column`. The final `EXPECTED RED W114: all stock profiles qualified;
+  exact typed Geometry guard remains closed` marker preceded expected exit1.
+  The retained store is `/private/tmp/crystal-click-w114.F6k7TN/store`.
+- Formatter and diff checks passed. The seven-file fingerprint is
+  `cc8122f1afd9847f93859e402a4663e3fe864dc9f97ce3e50f0fe2d58a8c24af`:
+  SHA-256 of ordered `shasum -a 256` output for `src/crystal_click.cr`, the
+  four owner paths under `src/crystal_click/` in the order listed above, then
+  `spec/geometry_w114_model_spec.cr` and
+  `spec/geometry_w114_charge_delta_spec.cr`.
+
+The focused inputs, used together in both modes, are:
+
+```text
+spec/geometry_w114_model_spec.cr
+spec/geometry_w114_charge_delta_spec.cr
+spec/point_w109_writer_spec.cr
+spec/point_w109_admission_spec.cr
+spec/point_w109_reader_spec.cr
+spec/point_w109_hostile_spec.cr
+spec/point_w109_consumers_spec.cr
+spec/geo_array_w111_writer_spec.cr
+spec/geo_array_w111_framing_spec.cr
+spec/geo_array_w111_consumers_spec.cr
+spec/geo_array_w111_model_spec.cr
+spec/geo_array_w111_admission_spec.cr
+spec/geo_array_w111_reader_spec.cr
+spec/geo_array_w111_hostile_spec.cr
+spec/multipoint_w112_consumers_spec.cr
+spec/multipoint_w112_writer_spec.cr
+spec/multipoint_w112_admission_spec.cr
+spec/multipoint_w112_reader_spec.cr
+```
+
+Replay with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`,
+`TMPDIR=/private/tmp`, a fresh private `CRYSTAL_CACHE_DIR` and
+`COGNI_RUN_SAFE_MIN_FREE_PCT=50`. The executed guard is
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh`, compiler
+`/opt/homebrew/bin/crystal`. Focused suffix is `600 8192 spec --single-module
+--link-flags=-fuse-ld=ld` followed by the listed inputs; repeat with `--release`.
+Full DEBUG suffix is `600 32768 spec --single-module --link-flags=-fuse-ld=ld`
+without input paths. Stock RED uses the unchanged guarded wrapper command in
+the strict qualification section below. Expected signals are exit0/zero failed
+examples for compiler gates and the exact final marker plus exit1 for stock RED.
+
+Local disposable logs are under
+`/private/tmp/crystal-click-w114-model-gates.IbC2cF/`: `model-debug.log`,
+`focused-debug.log`, `focused-release.log`, `full-debug.log` and
+`stock-red-regression.log`. Their SHA-256 digests, in that order, are:
+
+```text
+3b5c633bb5ffb9d638c7b5a0689fb4e230b78ad07e3f74900d1fa39f267b9db7
+cbde02aed7ca9a75a277596a11c9a909be3160ffda5eeac689b1d99af1820290
+d5f078c8db93b31a35eaf600109c49946d6a6aa10a2a77870b218e46a6ee0810
+f0aaf646ed010d0ba12784ab9b3cd9bd308d046677549fc79ea7ea4b56699fb6
+1b95204d85b8f93c5756418a45f463a5fd636ec35c332a56bad1832cc56a9d6b
+```
+
+Root's scoped hostile verdict is ROBUST for the synchronous owned-model
+contract: literal tags/streams, sparse local ranks, exact nominal child lanes,
+NULL versus tagged/nested empty values, raw IEEE bits, detached exports,
+negative bounds/forged arms, per-axis limits, UInt64 overflow and one aggregate
+logical cap are covered. Concurrent input mutation is not a snapshot contract.
+No physical Geometry read/write, full RELEASE, legacy six-arm bulk admission,
+arbitrary compositions/layouts, selected-reader peak memory, lower coupling or
+throughput claim follows. Refresh on owner/import/API/charge changes, compiler,
+reference/peer or fixture changes. The next falsifier is a selected sparse-arm
+schedule that preserves outer physical mark rows independently of arm counts;
+paired reader/writer and public consumers must pass before typed admission.
 
 Anchors: clean `3e36d5c`, shallow ClickHouse source
 `b762d6d7fe4b201147bdce1bd49b8fc87a8049d3`, and the isolated W112 executed

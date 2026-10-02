@@ -11,6 +11,11 @@ existing API and behavior, not a completed responsibility-level architecture.
 W113's private staged-stream lifetime owner is verified below for two existing
 writer validators; it fixes qualified partial-acquisition leaks without moving
 codec or publication policy into the new owner.
+W114's owned Geometry model now has separate arm, exact column descriptor,
+data and row-handle files. Its model-only certificate is in
+`GEO_TYPES_FRONTIER.md`: focused DEBUG/RELEASE each passed 64 examples, full
+DEBUG passed 1,848, and the stock production-refusal RED remains closed.
+This does not admit Geometry decoding/writing or finish the facade refactor.
 W96 adds one closed numeric identity/width owner and extends the existing
 Tuple owners; its compatibility certificate is separate in
 `NUMERIC_TUPLE_FRONTIER.md`. It does not close the larger facade refactor.
