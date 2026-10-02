@@ -31,7 +31,16 @@ module CrystalClick
                      BinaryDataType::TAG_INT32, BinaryDataType::TAG_INT64,
                      BinaryDataType::TAG_INT128, BinaryDataType::TAG_INT256,
                      BinaryDataType::TAG_FLOAT32, BinaryDataType::TAG_FLOAT64,
-                     BinaryDataType::TAG_BFLOAT16, BinaryDataType::TAG_FIXED_STRING
+                     BinaryDataType::TAG_BFLOAT16, BinaryDataType::TAG_FIXED_STRING,
+                     BinaryDataType::TAG_DATE, BinaryDataType::TAG_DATE32,
+                     BinaryDataType::TAG_DATETIME, BinaryDataType::TAG_DATETIME_ZONE,
+                     BinaryDataType::TAG_DATETIME64, BinaryDataType::TAG_DATETIME64_ZONE,
+                     BinaryDataType::TAG_ENUM8, BinaryDataType::TAG_ENUM16,
+                     BinaryDataType::TAG_DECIMAL32, BinaryDataType::TAG_DECIMAL64,
+                     BinaryDataType::TAG_DECIMAL128, BinaryDataType::TAG_DECIMAL256,
+                     BinaryDataType::TAG_UUID, BinaryDataType::TAG_IPV4,
+                     BinaryDataType::TAG_IPV6, BinaryDataType::TAG_TIME,
+                     BinaryDataType::TAG_TIME64
                   true
                 else
                   false

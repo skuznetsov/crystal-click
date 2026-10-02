@@ -78,12 +78,56 @@ module CrystalClick
       @budget.charge_elements(count)
     end
 
+    # Preflight count-derived metadata collections before allocation. Metadata
+    # entries consume aggregate node and edge budgets, but they are owned by a
+    # scalar descriptor and therefore do not increase recursive depth.
+    def preflight_metadata(
+      count : UInt64,
+      minimum_wire_bytes_per_entry : UInt64 = 0_u64,
+      maximum_count : UInt64 = Int32::MAX.to_u64,
+      label : String = "metadata count",
+    ) : Int32
+      if count > maximum_count
+        corrupt!("#{label} exceeds its supported domain")
+      end
+      checked = checked_count(count, label)
+      preflight_children(count) unless count == 0_u64
+      if !@writing && minimum_wire_bytes_per_entry > 0_u64 && count > 0_u64
+        if count > UInt64::MAX // minimum_wire_bytes_per_entry
+          corrupt!("#{label} minimum wire size overflows UInt64")
+        end
+        ensure_remaining_input_bytes(count * minimum_wire_bytes_per_entry)
+      end
+      checked
+    end
+
+    def visit_metadata_nodes(count : UInt64, depth : Int) : Nil
+      count.times { visit_node(depth) }
+      nil
+    end
+
+    def remaining_input_bytes : UInt64
+      source = @input || raise CorruptPartError.new("binary codec has no input")
+      (source.size - @input_offset).to_u64
+    end
+
+    def ensure_remaining_input_bytes(count : UInt64) : Nil
+      if count > remaining_input_bytes
+        corrupt!("binary codec input is too short for declared metadata count")
+      end
+    end
+
     def validate_type_tree(type : BinaryDataType, depth : Int = 1) : Nil
       visit_node(depth)
       count = type.child_count.to_u64
       preflight_children(count) unless count == 0
       count.to_i.times do |index|
         validate_type_tree(type.child_at(index), depth + 1)
+      end
+      metadata_count = type.metadata_entry_count.to_u64
+      if metadata_count > 0_u64
+        preflight_children(metadata_count)
+        visit_metadata_nodes(metadata_count, depth)
       end
     end
 

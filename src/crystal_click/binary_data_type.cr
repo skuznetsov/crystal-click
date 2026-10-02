@@ -1,36 +1,53 @@
 require "set"
 
 module CrystalClick
-  # Immutable, nominal ClickHouse binary data-type descriptor. Only the scalar
-  # grammar used by W117 is admitted here; a familiar display name is not
-  # enough to admit an otherwise unsupported type.
+  # Immutable, nominal ClickHouse binary data-type descriptor for the bounded
+  # W117-W119 descriptor/value kernel. A familiar display name is not enough
+  # to admit an otherwise unsupported type or imply broader part support.
   class BinaryDataType
-    TAG_NOTHING       =     0x00_u8
-    TAG_UINT8         =     0x01_u8
-    TAG_UINT16        =     0x02_u8
-    TAG_UINT32        =     0x03_u8
-    TAG_UINT64        =     0x04_u8
-    TAG_UINT128       =     0x05_u8
-    TAG_UINT256       =     0x06_u8
-    TAG_INT8          =     0x07_u8
-    TAG_INT16         =     0x08_u8
-    TAG_INT32         =     0x09_u8
-    TAG_INT64         =     0x0a_u8
-    TAG_INT128        =     0x0b_u8
-    TAG_INT256        =     0x0c_u8
-    TAG_FLOAT32       =     0x0d_u8
-    TAG_FLOAT64       =     0x0e_u8
-    TAG_STRING        =     0x15_u8
-    TAG_FIXED_STRING  =     0x16_u8
-    TAG_ARRAY         =     0x1e_u8
-    TAG_UNNAMED_TUPLE =     0x1f_u8
-    TAG_NAMED_TUPLE   =     0x20_u8
-    TAG_NULLABLE      =     0x23_u8
-    TAG_MAP           =     0x27_u8
-    TAG_BOOL          =     0x2d_u8
-    TAG_BFLOAT16      =     0x31_u8
-    MAX_FIXED_STRING  = 0x00ff_ffff
-    MAX_TUPLE_ARITY   =   1_000_000
+    TAG_NOTHING         =     0x00_u8
+    TAG_UINT8           =     0x01_u8
+    TAG_UINT16          =     0x02_u8
+    TAG_UINT32          =     0x03_u8
+    TAG_UINT64          =     0x04_u8
+    TAG_UINT128         =     0x05_u8
+    TAG_UINT256         =     0x06_u8
+    TAG_INT8            =     0x07_u8
+    TAG_INT16           =     0x08_u8
+    TAG_INT32           =     0x09_u8
+    TAG_INT64           =     0x0a_u8
+    TAG_INT128          =     0x0b_u8
+    TAG_INT256          =     0x0c_u8
+    TAG_FLOAT32         =     0x0d_u8
+    TAG_FLOAT64         =     0x0e_u8
+    TAG_DATE            =     0x0f_u8
+    TAG_DATE32          =     0x10_u8
+    TAG_DATETIME        =     0x11_u8
+    TAG_DATETIME_ZONE   =     0x12_u8
+    TAG_DATETIME64      =     0x13_u8
+    TAG_DATETIME64_ZONE =     0x14_u8
+    TAG_STRING          =     0x15_u8
+    TAG_FIXED_STRING    =     0x16_u8
+    TAG_ENUM8           =     0x17_u8
+    TAG_ENUM16          =     0x18_u8
+    TAG_DECIMAL32       =     0x19_u8
+    TAG_DECIMAL64       =     0x1a_u8
+    TAG_DECIMAL128      =     0x1b_u8
+    TAG_DECIMAL256      =     0x1c_u8
+    TAG_UUID            =     0x1d_u8
+    TAG_ARRAY           =     0x1e_u8
+    TAG_UNNAMED_TUPLE   =     0x1f_u8
+    TAG_NAMED_TUPLE     =     0x20_u8
+    TAG_NULLABLE        =     0x23_u8
+    TAG_MAP             =     0x27_u8
+    TAG_IPV4            =     0x28_u8
+    TAG_IPV6            =     0x29_u8
+    TAG_BOOL            =     0x2d_u8
+    TAG_BFLOAT16        =     0x31_u8
+    TAG_TIME            =     0x32_u8
+    TAG_TIME64          =     0x34_u8
+    MAX_FIXED_STRING    = 0x00ff_ffff
+    MAX_TUPLE_ARITY     =   1_000_000
 
     getter tag : UInt8
     getter fixed_size : Int32?
@@ -38,6 +55,9 @@ module CrystalClick
     @primitive_name : String?
     @children : Array(BinaryDataType)
     @field_names : Array(String)
+    @temporal_type : BinaryTemporalType?
+    @decimal_type : BinaryDecimalType?
+    @enum_definition : BinaryEnumDefinition?
 
     private def initialize(
       @tag : UInt8,
@@ -45,6 +65,9 @@ module CrystalClick
       children : Array(BinaryDataType),
       field_names : Array(String),
       @fixed_size : Int32?,
+      @temporal_type : BinaryTemporalType? = nil,
+      @decimal_type : BinaryDecimalType? = nil,
+      @enum_definition : BinaryEnumDefinition? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
@@ -68,6 +91,12 @@ module CrystalClick
             when "Int256"   then TAG_INT256
             when "Float32"  then TAG_FLOAT32
             when "Float64"  then TAG_FLOAT64
+            when "Date"     then TAG_DATE
+            when "Date32"   then TAG_DATE32
+            when "Time"     then TAG_TIME
+            when "UUID"     then TAG_UUID
+            when "IPv4"     then TAG_IPV4
+            when "IPv6"     then TAG_IPV6
             when "BFloat16" then TAG_BFLOAT16
             when "String"   then TAG_STRING
             when "Bool"     then TAG_BOOL
@@ -75,6 +104,44 @@ module CrystalClick
               raise ArgumentError.new("unsupported binary primitive type")
             end
       new(tag, detached, [] of BinaryDataType, [] of String, nil)
+    end
+
+    def self.datetime(time_zone : String? = nil) : BinaryDataType
+      parameters = BinaryTemporalType.datetime(time_zone)
+      tag = parameters.explicit_time_zone? ? TAG_DATETIME_ZONE : TAG_DATETIME
+      new(tag, nil, [] of BinaryDataType, [] of String, nil, parameters)
+    end
+
+    def self.datetime64(scale : Int, time_zone : String? = nil) : BinaryDataType
+      parameters = BinaryTemporalType.datetime64(scale, time_zone)
+      tag = parameters.explicit_time_zone? ? TAG_DATETIME64_ZONE : TAG_DATETIME64
+      new(tag, nil, [] of BinaryDataType, [] of String, nil, parameters)
+    end
+
+    def self.time64(scale : Int) : BinaryDataType
+      parameters = BinaryTemporalType.time64(scale)
+      new(TAG_TIME64, nil, [] of BinaryDataType, [] of String, nil, parameters)
+    end
+
+    def self.decimal(width_bits : Int, precision : Int, scale : Int) : BinaryDataType
+      parameters = BinaryDecimalType.new(width_bits, precision, scale)
+      tag = case parameters.width_bits
+            when  32 then TAG_DECIMAL32
+            when  64 then TAG_DECIMAL64
+            when 128 then TAG_DECIMAL128
+            else          TAG_DECIMAL256
+            end
+      new(tag, nil, [] of BinaryDataType, [] of String, nil, nil, parameters)
+    end
+
+    def self.enum8(entries : Array(BinaryEnumDefinition::Entry)) : BinaryDataType
+      definition = BinaryEnumDefinition.new(8, entries)
+      new(TAG_ENUM8, nil, [] of BinaryDataType, [] of String, nil, nil, nil, definition)
+    end
+
+    def self.enum16(entries : Array(BinaryEnumDefinition::Entry)) : BinaryDataType
+      definition = BinaryEnumDefinition.new(16, entries)
+      new(TAG_ENUM16, nil, [] of BinaryDataType, [] of String, nil, nil, nil, definition)
     end
 
     def self.fixed_string(size : Int) : BinaryDataType
@@ -154,6 +221,24 @@ module CrystalClick
       @field_names[index].to_slice[byte_index]
     end
 
+    def temporal_type : BinaryTemporalType?
+      @temporal_type
+    end
+
+    def decimal_type : BinaryDecimalType?
+      @decimal_type
+    end
+
+    def enum_definition : BinaryEnumDefinition?
+      @enum_definition
+    end
+
+    # Enum declarations are metadata edges/nodes in the binary budget, not
+    # recursive DataType children and therefore do not increase tree depth.
+    def metadata_entry_count : Int32
+      @enum_definition.try(&.size) || 0
+    end
+
     def named_tuple? : Bool
       @tag == TAG_NAMED_TUPLE
     end
@@ -166,6 +251,14 @@ module CrystalClick
       case @tag
       when TAG_FIXED_STRING
         "FixedString(#{@fixed_size})"
+      when TAG_DATETIME, TAG_DATETIME_ZONE, TAG_DATETIME64, TAG_DATETIME64_ZONE, TAG_TIME64
+        @temporal_type.not_nil!.type_name
+      when TAG_DECIMAL32, TAG_DECIMAL64, TAG_DECIMAL128, TAG_DECIMAL256
+        @decimal_type.not_nil!.type_name
+      when TAG_ENUM8
+        @enum_definition.not_nil!.type_name
+      when TAG_ENUM16
+        @enum_definition.not_nil!.type_name
       when TAG_ARRAY
         "Array(#{@children[0].name})"
       when TAG_NULLABLE
@@ -215,6 +308,24 @@ module CrystalClick
         32
       when TAG_FIXED_STRING
         @fixed_size
+      when TAG_ENUM8
+        1
+      when TAG_DATE, TAG_ENUM16
+        2
+      when TAG_DATE32, TAG_DATETIME, TAG_DATETIME_ZONE, TAG_IPV4, TAG_TIME
+        4
+      when TAG_DATETIME64, TAG_DATETIME64_ZONE, TAG_TIME64
+        8
+      when TAG_DECIMAL64
+        8
+      when TAG_UUID, TAG_IPV6
+        16
+      when TAG_DECIMAL32
+        4
+      when TAG_DECIMAL128
+        16
+      when TAG_DECIMAL256
+        32
       else
         nil
       end
@@ -223,6 +334,9 @@ module CrystalClick
     def ==(other : BinaryDataType) : Bool
       return false unless @tag == other.tag && @fixed_size == other.fixed_size
       return false unless @primitive_name == other.@primitive_name
+      return false unless @temporal_type == other.@temporal_type
+      return false unless @decimal_type == other.@decimal_type
+      return false unless @enum_definition == other.@enum_definition
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
 
@@ -232,7 +346,7 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @children, @field_names
 
     private def format_field_name(value : String) : String
       bytes = value.to_slice

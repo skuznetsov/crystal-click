@@ -1,8 +1,9 @@
 # General JSON Storage Frontier
 
 Status: W115 stock capture, W116 independent physical/type qualification,
-W117's reusable paired binary type/value kernel and W118's decompressed
-shared-MAP block codec were executed on 2026-10-02. W117 and W118 are VERIFIED
+W117's reusable paired binary type/value kernel, W118's decompressed
+shared-MAP block codec and W119's fixed-width scalar extension were executed
+on 2026-10-02. W117, W118 and W119 are VERIFIED
 within their scalar/block profiles and gates below, not as a general
 Object/Dynamic/MergeTree codec. The precise whole-document missing-capability
 RED is qualified, not resolved. General JSON
@@ -742,6 +743,218 @@ budget plumbing or owner changes invalidate dependent evidence; rerun these
 gates before reusing it. Next frontier: expand the reusable scalar repertoire
 and add separately qualified Object/Dynamic structure and lane schedule owners
 before exposing whole-document reading or staged writing.
+
+### W119 fixed-width scalar repertoire seal (2026-10-02)
+
+Status: VERIFIED within the bounded descriptor/single-value profile and
+executed certificate below; whole-column and whole-part admission is unchanged.
+This extends W117's descriptor/single-value grammar and W118's typed MAP
+envelopes toward the remaining Object/Dynamic values. It does not admit a new
+WidePart dispatch, bulk serializer, whole-document JSON reader or part writer.
+Risk is CAUTION (serialization/API); rollback is the exact atomic feature
+commit on the clean `a5e34ab` baseline. Root owns process execution, docs and
+Git; Luna supplies implementation and independently authored oracle candidates.
+
+Source is the separate `0c68f01a75a913b1aa5e132b41a80642260c3009` checkout,
+not the pinned executable's build provenance. Relevant source owners:
+`DataTypesBinaryEncoding.{h,cpp}` (tags/parameters),
+`DataTypeDecimalBase.h` (width-specific constructor), `EnumValues.cpp`
+(nonempty bijection sorted by signed numeric code), `SerializationEnum.h`
+(inherits raw numeric binary grammar), `SerializationDecimalBase.cpp`,
+`SerializationUUID.cpp`, and `SerializationIPv4andIPv6.cpp` (scalar payloads).
+
+Admit paired descriptors and raw scalar payloads for Date, Date32, implicit
+and explicit-zone DateTime/DateTime64, Time/Time64, all four Decimal widths,
+UUID, IPv4/IPv6, Enum8/16. Reuse the recursive Array/Nullable/Tuple/Map model;
+there is no special class per combination. Keep the fixed payload in its exact
+ClickHouse wire order, not a generic host-integer interpretation: UUID halves
+and IPv6 bytes are especially not licensed by a width match.
+
+Design laws:
+
+- Preserve implicit-versus-explicit DateTime tags, including explicit UTC.
+  A timezone-bearing descriptor with an empty zone normalizes to the implicit
+  type, as the upstream constructor does; canonical re-emission changes its tag.
+  DateTime64 and Time64 scales are 0..9. Time/Time64 have no timezone tags;
+  0x33/0x35 remain reserved corruption.
+- Temporal parameters have an immutable owner. Explicit zones use the existing
+  `TimezoneName` profile (597 pinned names plus 114 canonical fixed offsets).
+  Unknown catalog names are deliberately unsupported, not silently implicit
+  UTC. This is not fresh-server timezone-catalog or alias completeness;
+  refreshing/extending that profile remains required compatibility work.
+- Decimal parameters have a separate immutable owner retaining width, precision
+  and scale. Each width admits precision 1..its maximum and scale 0..its
+  maximum (9/18/38/76). Source binary construction does not require scale <=
+  precision or the narrowest width for that precision. Do not reuse the SQL
+  `DecimalType` owner, which deliberately derives width and checks scale <= P.
+  Equality/hash include wire tag and all parameters, even when `name` matches.
+- Enum definitions own detached opaque label bytes and signed codes. Reject
+  empty tables, duplicate labels/codes and out-of-width codes; empty labels
+  are not empty tables. Canonical writer order is increasing signed code;
+  reader accepts a valid unsorted table and normalizes it like the source.
+  Raw scalar codes are not checked for membership: the upstream binary
+  numeric serializer does not impose its text lookup rule here.
+- Count enum entries against aggregate nodes and element charges, including
+  known-type scalar APIs and borrowed MAP envelopes. Entry metadata nodes do
+  not deepen the recursive type tree. Before any count-derived allocation,
+  enforce the signed-code cardinality, logical budget and minimum remaining
+  wire bound (one length byte plus code width per entry); a zero-byte label
+  is permitted. Full byte/depth/exhaustion checks remain unchanged.
+- Bad supported descriptor parameters are corruption, unknown/reserved tags
+  are corruption, recognized unadmitted types remain unsupported. Model
+  construction errors are ArgumentError. Do not call a valid-but-unadmitted
+  timezone corrupt merely because it lies outside the pinned local catalog.
+
+Ownership and propagation: `BinaryDataType` owns nominal composition;
+new temporal, decimal and enum parameter owners each occupy one file;
+a scalar-descriptor codec owner keeps leaf parameter grammar out of recursive
+orchestration. `BinaryValue.fixed` and the scalar codec admit these fixed
+leaves without importing SQL/text validation. `BinaryCodecContext` exposes
+only the bounded remaining-input/preflight seam needed by enum decoding and
+known-type metadata accounting. Before widening, root's bounded
+`rg -l 'BinaryDataType|BinaryValueCodec' src spec scripts --glob '*.cr'`
+enumerated ten consumers: the six existing model/context/codec/block source
+owners, W117/W118 specs and their two oracle instruments. Their paired and
+aggregate gates must remain green; no table/catalog facade consumer was found.
+
+Plan and DoD (serial existing resource guard, isolated cache):
+
+1. Add `spec/binary_scalar_types_w119_spec.cr` and execute missing-API RED
+   before production edits. Include authored descriptor/payload literals,
+   nominal tag/P/S/zone identity, ownership and every-prefix/trailing controls.
+2. Implement the separate parameter/leaf owners and exact generic seams.
+   Run W119 plus W117/W118 specs in DEBUG and RELEASE, then full DEBUG.
+   Migrate only predecessor refusal controls whose scalar tags W119 now
+   deliberately admits; retain distinct unsupported and corruption assertions.
+   Expected signal is zero failures/errors/pending, not a throughput claim.
+3. Add `scripts/check_binary_w119.{cr,sh}`. Qualify pinned-runtime stock output
+   against authored literals, then make stock read library-produced bytes and
+   re-emit them. Include every new family, explicit/implicit zones, scale
+   boundaries, signed enum ordering and UUID/IP order. Unusual width-specific
+   Decimal descriptors must have direct binary-reader evidence or be clearly
+   local/source-only; do not replace an inaccessible stock case by self-roundtrip.
+4. Preserve W117/W118 stock regressions. Qualify new metadata/allocation guards
+   with a targeted seeded defect when practical; require a one-byte oracle
+   comparator negative control. Root independently inspects candidates and
+   executes gates before a scoped hostile verdict and the feature commit.
+
+Strongest likely failure: canonical SQL names collapse a distinct binary tag or
+parameter identity, or enum metadata bypasses the borrowed aggregate budget.
+Falsifiers include same-name/different-width Decimal descriptors, S>P binary
+parameters, explicit UTC versus implicit DateTime, unsorted/duplicate/empty
+Enum tables, undeclared raw Enum codes, a raised-budget huge count with tiny
+input, nested enum metadata at exact/minus-one thresholds, truncated timezone
+and scale data, reserved tags, and seeded stock/comparator mismatches.
+Rejected residual: LowCardinality and custom/aggregate descriptors, general
+Variant/Dynamic/JSON dispatch, Object dictionaries and stream schedules, physical
+marks, whole-document and whole-part integration, catalog completeness,
+native-stack/RSS/performance guarantees. These remain part of the original goal.
+
+Oracle route falsifier: root's pinned-runtime two-argument
+`format('RowBinaryWithNamesAndTypes', data)` probe used the literal one-row
+header/body `0101781b090201000000000000000000000000000000`. Instead of
+retaining Decimal128(P=9,S=2), stock inferred `Decimal(9, 2)` and emitted four
+Decimal32 rows. In fresh source, `BinaryRowInputFormat.cpp:112` converts the
+decoded descriptor to `getName()`; `RowInputFormatWithNamesAndTypes.cpp:483`
+reconstructs it through the SQL factory. This route loses width before value
+reading and cannot qualify noncanonical binary Decimal identities. The actual
+probe is retained in `/private/tmp/crystal-click-scalar-w119.vlGxM0/decimal-infer-probe.log`.
+Use explicit schemas for canonical stock families. Descriptor canonicalization
+and unusual width/P/S profiles remain local/source-only unless a distinct
+direct descriptor-consuming runtime route is actually qualified.
+
+### Executed W119 certificate (2026-10-02)
+
+Subject: clean `a5e34ab` plus the four parameter/leaf owners and exact generic,
+test and instrument seams described above. Root inspected the delegated
+candidates and executed all commands; same-lineage source review is
+supplementary, not independent runtime replication. The ordered sixteen-path
+non-document source manifest, hashed with `shasum -a256 <paths> | shasum -a256`,
+is `89c2fa65aa514b485e8473832f4c84f784aaedf11c5a57b90d60806b41d873ae`:
+`src/crystal_click.cr`, `binary_temporal_type`, `binary_decimal_type`,
+`binary_enum_definition`, `binary_scalar_type_codec`, `binary_data_type`,
+`binary_data_type_codec`, `binary_codec_context`, `binary_value` (the eight
+short names are `.cr` files in `src/crystal_click/`),
+`spec/binary_parameter_owners_w119_spec.cr`,
+`spec/binary_scalar_types_w119_spec.cr`,
+`spec/binary_value_codec_w117_spec.cr`, `spec/object_shared_map_w118_spec.cr`,
+`scripts/check_binary_w117.cr`, `scripts/check_binary_w119.cr` and
+`scripts/check_binary_w119.sh`.
+
+Observed gates and qualified attacks:
+
+- Baseline W117/W118 DEBUG passed 24 examples. Spec-only W119 RED failed
+  precisely on missing `BinaryDataType.datetime`, before production changes.
+  A temporal return-type compile error and a test-only read-only String-slice
+  mutation were repaired; the isolated three-owner spec then passed 3 examples.
+  Only two predecessor refusals were migrated: newly admitted DateTime and
+  Time64 tags. Recognized unsupported LowCardinality and truncated descriptor
+  corruption remain separately asserted; positive predecessor vectors stay intact.
+- Final focused W119/W117/W118 DEBUG and RELEASE each passed 36 examples.
+  Final full DEBUG passed 1,943 examples, zero failures/errors/pending, exit 0.
+  Existing duplicate-library and deprecated `blocking` warnings are non-fatal.
+  Full RELEASE was not executed.
+- Final W119 oracle passed 23 independently authored local type/value vectors,
+  three local canonicalizations, twelve corruption controls and both one-byte
+  comparator controls (descriptor parameter and UUID payload, each offset 4).
+  Stock output matched literals for 22 vectors; stock separately read
+  library-produced bytes with explicit schemas and re-emitted those 22 vectors.
+  Quoted UTC/Enum schemas and escaped query names have renderer controls.
+  The first stock reader run exposed an unescaped SQL type literal; only the
+  W119 renderer was repaired, then the complete oracle passed twice.
+- Empty-zone and unsorted-Enum normalization, undeclared raw Enum codes and
+  Decimal256(P=1,S=9) remain local/source-only. Stock timezone evidence covers
+  UTC and America/New_York, not the complete catalog. The independently
+  observed Decimal inference falsifier above remains an explicit limitation.
+- Three separately seeded preallocation defects were caught by the same
+  allocation test, each with an otherwise discriminating input: removing
+  code-domain preflight allocated 16,001,680 bytes; removing minimum-wire
+  preflight allocated 1,049,424; removing aggregate-budget preflight allocated
+  800,896. Each exceeded the 131,072-byte assertion and exited 1. All guards
+  were restored before the final passing DEBUG/RELEASE/full gates. This proves
+  those tested allocation barriers, not a general RSS or performance bound.
+- Unchanged stock regressions passed: W117 36 writer and 36 reader vectors;
+  W118 three profiles, six retained parts, twelve full/selected windows and
+  eighteen independent lanes; W116 six actual CHECK=1 results, twelve negative
+  CHECK controls and twelve semantic windows, with copied-part mutations.
+  Those CHECKs concern retained stock source/attached parts, not W119-authored
+  parts. W116 still qualifies the exact whole-JSON refusal.
+
+Reproduction uses Crystal 1.21.0/LLVM 22.1.8, arm64, SDKROOT
+`/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`, TMPDIR `/private/tmp`,
+isolated `CRYSTAL_CACHE_DIR`, and `COGNI_RUN_SAFE_MIN_FREE_PCT=50
+RUN_SAFE_PASSTHROUGH_STDIO=1`. Invoke
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh` serially with
+`/opt/homebrew/bin/crystal 600 8192 spec` followed by the four spec paths in
+the manifest and `--single-module --link-flags=-fuse-ld=ld`; repeat with
+`--release`. Full DEBUG uses `600 32768 spec` and the same flags. The oracle
+uses the guard with `/bin/bash 600 8192 scripts/check_binary_w119.sh`,
+`W119_KEEP_TMP=1`, `CRYSTAL_BIN=/opt/homebrew/bin/crystal`, and the pinned
+`CLICKHOUSE_BIN` above. W117/W118/W116 retain their documented runner contracts.
+Crystal formatting, `bash -n scripts/check_binary_w119.sh` and
+`git diff --check` passed on the final candidate.
+
+Logs are retained under `/private/tmp/crystal-click-scalar-w119.vlGxM0`;
+`full-debug-final.log` SHA-256 is
+`b13c96b0e01aceb9ae93615d3bd00c9c3b9b402d5fe89f47935b1414ae9fb55f`.
+Final oracle artifacts are `/private/tmp/crystal-click-binary-w119.coflJ4`;
+the task log root's `stock-w119-qualified.log` SHA-256 is
+`4e92e008a002c4744d229a2e80d6b19c7298986d9bcc937d8f2c7d8a16febf17`.
+Regression roots are `/private/tmp/crystal-click-binary-w117.rvI63g`,
+`/private/tmp/crystal-click-object-shared-map-w118.Czbhm6`, and
+`/private/tmp/crystal-click-json-w116.pxqH84`. Temporary artifacts are evidence
+pointers, not shipped fixtures; rerun gates if unavailable.
+
+Root hostile verdict: ROBUST for this bounded paired binary kernel, based on
+executed stock, nominal-identity, budget and seeded-defect checks, not model
+agreement. It does not certify bulk streams, whole JSON, library-generated
+parts, all server timezone names, caller-raised stack limits, RSS or speed.
+Changes to source/runtime, scalar grammar, ownership, budget propagation,
+oracle schema rendering or comparison invalidate the corresponding evidence;
+rerun its positive and negative gates before reuse. Next frontier: separately
+qualified Object/Dynamic structure and physical lane/mark schedule owners,
+with remaining recursive leaf grammars kept explicitly closed until qualified.
+Large facade decomposition, MV/projections and performance remain open.
 
 ### Subsequent Object/Dynamic integration
 

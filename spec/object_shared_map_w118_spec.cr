@@ -547,7 +547,13 @@ describe "W118 Object shared MAP block codec" do
     typed_nullable_null[0].entry_at(0).value.is_null?.should be_true
     CrystalClick::ObjectSharedMapCodec.encode(typed_nullable_null).values.should eq(typed_nullable_null_values)
 
-    unsupported_values = w118_frame_lane([Bytes[0x34_u8]] of Bytes)
+    # W119 admits Time64, so an absent scale is corruption rather than an
+    # unsupported type. LowCardinality remains outside the envelope profile.
+    truncated_time64_values = w118_frame_lane([Bytes[0x34_u8]] of Bytes)
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::ObjectSharedMapCodec.decode(sizes, paths, truncated_time64_values, 1)
+    end
+    unsupported_values = w118_frame_lane([Bytes[0x26_u8, 0x01_u8]] of Bytes)
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::ObjectSharedMapCodec.decode(sizes, paths, unsupported_values, 1)
     end

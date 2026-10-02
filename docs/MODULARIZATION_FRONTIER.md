@@ -204,6 +204,21 @@ Whole-document JSON, physical I/O, Object/Dynamic metadata and publication
 remain outside these owners. The large facades and their line counts above
 are unchanged; this is not completion of the requested architecture refactor.
 
+W119 adds four concrete owners, each in its own file: immutable temporal
+parameters, width-preserving Decimal parameters, detached Enum definitions,
+and the scalar leaf descriptor codec. They range from 53 to 167 lines.
+Recursive composition stays in `BinaryDataType`/`BinaryDataTypeCodec`; the
+shared context owns preallocation and aggregate-budget checks. No owner is
+created per container/leaf combination, and SQL-name normalization does not
+replace binary nominal identity. Root executed 36 focused DEBUG and RELEASE
+examples, 1,943 full DEBUG examples, 22 stock vectors in each direction and
+the unchanged W117/W118/W116 gates. Three separately seeded allocation-guard
+defects were detected and restored before final gates. The bounded certificate,
+noncanonical Decimal inference falsifier and residual compatibility boundaries
+are in `JSON_GENERAL_STORAGE_FRONTIER.md`. These owners extend only the binary
+kernel, not table dispatch or whole-part writing. The large facade decomposition
+is still open; file counts alone do not establish lower coupling or speed.
+
 ## Variant discriminator owner extraction (2026-10-01)
 
 Status: VERIFIED within the behavior-neutral extraction and executed gates

@@ -53,5 +53,5 @@ separate admission boundaries. Keep the pinned source SHA and the tested
 runtime identity distinct in new evidence.
 
 Refresh this reference when upstream moves or a relevant source file changes.
-Source continuity alone does not widen W117's admitted scalar types or promote
-the proposed W118 MAP block into whole-JSON part support.
+Source continuity alone does not widen admitted types or promote the
+W117-W119 binary kernel and W118 MAP block into whole-JSON part support.

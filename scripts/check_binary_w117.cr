@@ -566,4 +566,6 @@ def w117_main : Nil
   puts "PASS W117 bounded pair: type descriptors, scalar bodies and one-column RowBinaryWithNamesAndTypes"
 end
 
-w117_main
+{% unless flag?(:w117_library) %}
+  w117_main
+{% end %}

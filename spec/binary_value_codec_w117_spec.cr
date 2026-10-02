@@ -691,8 +691,11 @@ describe "W117 binary DataType and scalar value codec" do
       ])
     end
 
+    # W119 admits DateTime; keep the refusal control on a valid descriptor
+    # outside this binary kernel, not on a newly supported scalar leaf.
+    CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x11_u8]).should eq(CrystalClick::BinaryDataType.datetime)
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x11_u8])
+      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x26_u8, 0x01_u8]) # LowCardinality(UInt8)
     end
     expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryDataTypeCodec.decode(Bytes[0xff_u8])

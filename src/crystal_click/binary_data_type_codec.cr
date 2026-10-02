@@ -52,7 +52,9 @@ module CrystalClick
         write_to(type.child_at(0), context, depth + 1)
         write_to(type.child_at(1), context, depth + 1)
       else
-        # Primitive descriptors are represented solely by their tag.
+        # Legacy primitive descriptors have no parameters; W119 parameterized
+        # leaves emit their narrow parameter suffix through this owner.
+        BinaryScalarTypeCodec.write_parameters(type, context, depth)
       end
     end
 
@@ -73,6 +75,16 @@ module CrystalClick
            BinaryDataType::TAG_STRING, BinaryDataType::TAG_BOOL,
            BinaryDataType::TAG_BFLOAT16
         BinaryDataType.primitive(primitive_name(tag))
+      when BinaryDataType::TAG_DATE, BinaryDataType::TAG_DATE32,
+           BinaryDataType::TAG_DATETIME, BinaryDataType::TAG_DATETIME_ZONE,
+           BinaryDataType::TAG_DATETIME64, BinaryDataType::TAG_DATETIME64_ZONE,
+           BinaryDataType::TAG_ENUM8, BinaryDataType::TAG_ENUM16,
+           BinaryDataType::TAG_DECIMAL32, BinaryDataType::TAG_DECIMAL64,
+           BinaryDataType::TAG_DECIMAL128, BinaryDataType::TAG_DECIMAL256,
+           BinaryDataType::TAG_UUID, BinaryDataType::TAG_IPV4,
+           BinaryDataType::TAG_IPV6, BinaryDataType::TAG_TIME,
+           BinaryDataType::TAG_TIME64
+        BinaryScalarTypeCodec.read_type(tag, context, depth)
       when BinaryDataType::TAG_FIXED_STRING
         size = context.read_var_uint
         if size == 0_u64 || size > BinaryDataType::MAX_FIXED_STRING.to_u64
