@@ -1,7 +1,8 @@
 # CrystalClick Modularization Frontier
 
-W123's flattened Object document composition is verified below with five
-separate owners/files. Public physical part admission remains unchanged.
+W124's explicit-path compressed mark transport is verified below with eight
+separate owners/files; W123's flattened Object composition has five. Public
+type/path binding and whole-JSON part admission remain unchanged.
 
 The October 2 LowCardinality binary grammar extraction is verified below:
 one private concrete owner/file, unchanged physical admission and facade API.
@@ -1458,3 +1459,42 @@ Full RELEASE was not run. The scoped hostile verdict is ROBUST; replay, exact
 profiles, source/runtime identities, exclusions, lineage and decay triggers are
 recorded in the capability frontier. Public whole-JSON read/write, complete
 type/MV/projection coverage and the large-facade refactor remain open.
+
+## Compressed mark transport owners (W124, 2026-10-02)
+
+Status: VERIFIED within the explicit-path/plain-adaptive-mark profile recorded
+in `JSON_GENERAL_STORAGE_FRONTIER.md`. CAUTION: frame/mark coordinate grammar
+and mapped-file lifetime over `80ab0c2`; rollback is the isolated eight-owner,
+import, spec, oracle/wrapper and living-document diff. No old facade dispatch
+or publication policy changes.
+
+Each concrete responsibility has one production file:
+
+- `compressed_stream_limits.cr`: immutable transport limit configuration.
+- `compressed_stream_budget.cr`: direction-checked consumptive operation counts.
+- `compressed_frame_descriptor.cr`: immutable outer frame coordinate/value.
+- `compressed_frame_index.cr`: bounded header indexing and logical mark lookup.
+- `compressed_mark_window.cr`: detached selected bytes/grid and window identity.
+- `compressed_mark_files.cr`: detached unpublished data/mark output pair.
+- `compressed_mark_reader.cr`: mapped acquisition, full-grid validation,
+  selected-frame checksum/decode and owned result assembly.
+- `compressed_mark_writer.cr`: preflight sizing, literal-LZ4 frame encoding and
+  paired physical mark emission, without filesystem publication.
+
+The eight files total 1,099 lines (56/75/28/112/44/20/452/312). Existing
+reader/writer/table/catalog/offline-table remain unchanged at
+15,976/26,034/7,080/1,560/3,657 lines. These are navigation counts, not a claim
+that the requested architectural decomposition is complete. New codecs keep
+physical lifetime, normalized document composition and publication separate;
+legacy shared type/substream planning, leaf dispatch, stage orchestration and
+table/catalog materialization still need responsibility-level extraction.
+One class per combination would not close that coupling boundary.
+
+Root executed 201 focused DEBUG and RELEASE examples, 2,081 full non-release
+examples, four production-reframed stock ATTACH/actual CHECK=1/readback cases,
+and the unchanged W123 oracle. The first full run hit the unchanged FD guard;
+single-thread/single-module replay passed without weakening guards. Root's
+independent literal falsifiers and scoped ROBUST verdict are recorded in the
+capability frontier, together with exact identities, replay and exclusions.
+Full RELEASE, general JSON part binding/writing, all layouts/types, expanded
+MV/projection coverage, allocator/RSS and performance remain unclaimed.

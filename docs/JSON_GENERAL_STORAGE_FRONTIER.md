@@ -16,9 +16,11 @@ their strict captured-writer profile below. W122's reusable recursive bulk and
 Dynamic logical-value codecs are VERIFIED within their normalized profile and
 two retained-stock gates below. W123's paired flattened Object document
 composition is VERIFIED within its normalized V3/one-bucket MAP profile and
-two captured-stock profiles below. Compressed physical adapters, public part
-integration and staged writer publication remain the next owner boundary;
-logical document streams are not a public whole-JSON part capability.
+two captured-stock profiles below. W124's paired compressed-file/plain-adaptive-
+mark transport is VERIFIED within the explicit-path/profile gates below.
+Public type/path binding, fresh metadata/statistics and staged writer publication
+remain the next owner boundary; file-backed normalized document streams are not
+a public whole-JSON part capability.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
 
@@ -2069,3 +2071,235 @@ MV/projection coverage remain open. Large-facade extraction is also unfinished.
 No performance work or push is authorized by this checkpoint. Owner/profile,
 producer/build, toolchain, budget, comparator or relevant source changes reopen
 this certificate; lost temporary artifacts require replay, not citation alone.
+
+## W124 design seal: paired compressed mark transport (2026-10-02)
+
+Status: design-sealed over `80ab0c2`. Risk: CAUTION (file-format transport and
+mapping lifetime). Rollback: only the new transport owners/imports/specs/oracle
+and these two living frontier documents. Legacy part facades remain unchanged.
+W123 assembles normalized documents but its oracle still acquires lanes using
+whole-file decompression. This transport removes that prerequisite; it does not
+replace the pending metadata/schema/path-binding and staged-publication work.
+
+Source anchors at shallow `31d2addbabda0d8e14ffd325fc0a9106528aa1c7`:
+`MergeTreeDataPartWriterWide.cpp:466-476` writes compressed offset, in-frame
+offset and adaptive outer rows; `:508-511` obtains the two byte coordinates;
+`:847-865` writes serialization suffixes before the final mark.
+`SerializationVariant.cpp:199-212` writes the eight-byte discriminator mode
+prefix before row values. W116 independently pins repeated empty-arm marks and
+metadata prefix/suffix marks. Row fields never infer arm occurrences or bytes.
+
+Admitted implementation target:
+
+- Explicit `.bin` and plain adaptive `.mrk2` paths and expected file sizes.
+  A complete K+1 grid ends in rows=0; every real mark has positive outer rows
+  within Int32. Repeated lane positions are legal, including all-empty lanes.
+  Compressed marks, non-adaptive marks and missing terminal inference remain
+  rejected. Whole-24-byte-record input is interpreted as the requested plain
+  grid; header-shaped row-count bytes do not authorize a format switch.
+  Non-grid-sized compressed candidates are recognized with bounded header
+  work and rejected. Ambiguous/divisible malformed content is rejected by
+  complete plain-grid validation, not claimed to be perfectly format-detected.
+  This is not automatic part/profile discovery.
+- Reader maps one bounded regular, non-symlink file at a time using the
+  existing callback-scoped MMapDataSource. Empty `.bin` is valid only when the
+  complete grid is at (0,0) and prefix size is zero. No mapping/workspace slice
+  may escape the operation. Returned windows own their bytes and grids.
+  A zero-domain grid (only its terminal) requires exact empty data. The unpaired
+  `read_all`/`encode_all` operations reject empty input because they have no grid
+  to certify the empty lane; an empty requested window over real marks is valid.
+- Whole-stream header indexing establishes real frame boundaries, sizes and
+  absolute logical positions without decompressing unselected frames. Validate
+  every mark, even for an empty selection: exact first (0,prefix), monotonic
+  absolute positions and terminal at true logical EOF. Both last-frame-end and
+  physical-EOF coordinates denote the same terminal. Frame-end/next-frame-zero
+  aliases are compared in logical coordinates, never by unrelated lane counts.
+  Real marks may also name physical EOF when an arm's last occurrence precedes
+  the remaining outer granules. Wide.cpp:502-512 flushes before mark capture;
+  :646-676 records that position with positive outer rows, while Variant.cpp
+  :326-339,377-382,406-411,512-517 invokes zero-occurrence arm serializers.
+- Only frames intersecting the prefix or selected body are checksum-verified
+  and decompressed. An end coordinate at the next frame's zero does not touch
+  that frame. An unselected payload checksum is not whole-file integrity proof.
+  Existing LZ4/ZSTD/Multiple decoder profiles remain the method authority;
+  unknown methods are unsupported, malformed headers/checksums are corrupt.
+- A selected window retains original first-mark identity, selected outer rows,
+  prefix bytes and local Kselected+1 offsets starting at prefix size. No fake
+  complete-part grid or arm-count synthesis. The parent creates local W123
+  streams and preserves caller window identity separately. Metadata streams
+  have a bounded all-bytes reader because their suffix is globally required.
+- Paired writer takes exact raw bytes, K+1 offsets and K outer row counts,
+  with explicit prefix size. It produces owned literal-LZ4 `.bin` and plain
+  `.mrk2` bytes, framing independently of marks. Terminal is canonical physical
+  EOF. Empty lanes, repeated marks and frame crossings are preserved; no files
+  are published. The selected frame size must contain the complete prefix in
+  frame zero. The first real mark remains (0,prefix), even for a prefix-only
+  lane, while the terminal uses canonical physical EOF. Metadata prefix/suffix
+  semantics remain the caller's authority.
+- A direction-checked CompressedStreamBudget is shared across all lanes of an
+  operation, not reset per role. It bounds aggregate file bytes, mark/header
+  records, decoded-frame work and retained results separately. Preflight known
+  counts and sizes before allocating grids, mappings or decode workspaces;
+  reserve each touched frame once, including prefix/body overlap, before any
+  selected decode. These are logical transport bounds, not allocator/RSS or
+  live-filesystem snapshot guarantees. Expected sizes do not prevent same-size
+  concurrent mutation; admitted input is a quiescent trusted part tree.
+  The admitted Multiple(Delta width=8/skip=0, ZSTD) chain also preflights its
+  visible nested ZSTD header: intermediate output must equal final output plus
+  the nine-byte Delta header and two parameter bytes. Decoded work includes
+  both intermediate and final output, preventing a small outer size from
+  authorizing a larger hidden workspace. Other nested codec lists are unsupported.
+
+Production API/ownership (one concrete owner per file under `src/crystal_click`):
+CompressedStreamLimits, CompressedStreamBudget, CompressedFrameDescriptor,
+CompressedFrameIndex, CompressedMarkWindow, CompressedMarkFiles,
+CompressedMarkReader and CompressedMarkWriter. Public entry points:
+
+```
+CompressedMarkReader.read(data_path, marks_path,
+  expected_data_size: Int64, expected_mark_size: Int64,
+  first_mark: Int = 0, mark_count: Int? = nil, prefix_size: Int = 0,
+  budget: CompressedStreamBudget = <read budget>) -> CompressedMarkWindow
+CompressedMarkReader.read_all(path, expected_size: Int64,
+  budget: CompressedStreamBudget = <read budget>) -> Bytes
+CompressedMarkWriter.encode(bytes, offsets, rows_per_mark,
+  prefix_size: Int = 0, frame_bytes: Int = 4096,
+  budget: CompressedStreamBudget = <write budget>) -> CompressedMarkFiles
+CompressedMarkWriter.encode_all(bytes, frame_bytes: Int = 4096,
+  budget: CompressedStreamBudget = <write budget>) -> Bytes
+```
+
+Limits default to file bytes 256 MiB, mark bytes 64 MiB, compressed/decompressed
+frame bytes 64 MiB each, aggregate records 1,000,000, decoded bytes 64 MiB and
+result bytes 64 MiB. All constructor limits are nonnegative, supported size
+domains are checked, and budgets are consumptive even on a failed operation.
+Reader selection errors are ArgumentError; malformed transport is
+CorruptPartError; recognized unadmitted formats/resource write limits are
+UnsupportedFormatError. Wrong budget direction is ArgumentError.
+
+Consumer inventory: `rg` over src/spec/scripts finds no current owner with
+these eight names. New imports and W124 tests/oracle are the only consumers;
+existing W123 APIs, String profile split, grammar and standalone budgets do
+not change. Integration uses explicit existing W122/W123 role vectors, not
+production-inferred source expectations.
+
+Plan/falsifiers:
+
+1. Root's independent missing-writer RED has executed: undefined
+   CompressedMarkWriter, not an unrelated toolchain error. Add literal multi-
+   frame/nonzero-window and corrupt-boundary controls before trusting roundtrip.
+2. Luna implements the eight new transport owners; root owns imports and all
+   compiler/stock processes. A separate Luna owns W124 specs/oracle. No worker
+   runs compilers, stock binaries, Git writes or additional agents.
+3. Guard full grids outside selection, equivalent frame boundaries, empty
+   lanes, prefix/body overlap, selected-only decompression, terminal/trailing
+   data, checksum corruption, detached result lifetime, expected size/symlink
+   refusal and aggregate limits across multiple roles. Strongest failure:
+   a mark points into a payload or a touched frame allocates before reservation.
+4. Stock oracle composes W123 documents from production file-backed full and
+   nonzero windows for retained profiles. Reframe every JSON lane with the
+   production writer in fresh isolated copies and assert actual ATTACH/CHECK=1,
+   independent raw bytes/marks and full/pk3..6 readback. Borrowed metadata
+   statistics/sidecars are explicit; no fresh complete part writer claim.
+
+DoD: serial guarded W117-W124 focused debug/release, guarded full non-release
+spec suite, W124 stock oracle and unchanged W123 regression, exact-path Crystal
+format, shell syntax and diff hygiene; root hostile review before atomic commit.
+Use W123's pinned toolchain/runtime and unchanged 50% free-memory floor.
+Do not promote all JSON layouts/types/MV/projections or performance from this
+transport certificate. Next frontier remains library-owned physical bindings,
+fresh Object/Dynamic statistics/schema metadata and staged whole-part writing.
+
+### W124 executed certificate and continuation
+
+Executed on October 2 over `80ab0c2`, with eight new production owners, eight
+aggregate imports, two specs, one oracle/wrapper and the two living frontier
+documents. The new owners total 1,099 lines (56/75/28/112/44/20/452/312 in the
+API inventory order above); this is a navigation count, not a coupling or
+performance measurement. No existing part/table/catalog facade was rerouted.
+The design seal remains the admitted boundary, not an all-format certificate.
+
+Root executed these gates on the finalized production source:
+
+- Independent missing-writer RED: undefined `CompressedMarkWriter`, before
+  production implementation. Root's literal multi-frame tests then detected
+  three real contract defects: a valid plain mark grid with a header-shaped
+  row count was misclassified as compressed; a short final frame was charged
+  as an unused full frame; and a prefix-only first mark used physical EOF
+  instead of `(0,prefix)`. Each was repaired and retained as a regression.
+- Focused W117-W124 plus compression/mmap/checksum DEBUG and RELEASE:
+  201 examples each, no failures/errors/pending. Final-source DEBUG was replayed
+  after the independent oracle repair. The 31 new transport examples include
+  22 root-authored cases with independent frame/mark literals.
+- Full non-release: 2,081 examples, no failures/errors/pending, with
+  `--no-debug --threads 1 --single-module`. Only symbolic debug information is
+  disabled; non-release checks remain enabled. Full RELEASE was not executed.
+  The first default multi-module run was stopped by the unchanged guard after
+  its process-tree FD counter reached 4,025; it produced no test result. The
+  successful replay retained the 50% free-memory floor and all guard limits.
+  No foreign process was stopped or guard weakened. One pre-existing deprecated
+  File argument warning remains in the full suite.
+- W124 stock oracle: retained W115 source/fresh-ATTACH parts decode into exact
+  independent flattened documents, for both full and nonzero mark windows.
+  Four newly isolated part copies, `dynamic_paths`/`typed_mixed` times
+  BASIC/COMPACT, have every JSON lane reframed by the production writer.
+  Actual stock ATTACH, exact `CHECK TABLE` result=1, full reads and PK3..6
+  semantic readback all passed. Independent frame walks and logical-coordinate
+  mapping supplement roundtrips; wrong bytes, altered Object statistics,
+  wrong frame offsets and CHECK=0 comparator controls all reject.
+- The unchanged W123 oracle passed all four authored-stream copied-part
+  ATTACH/CHECK=1 cases and retained-source document checks on this source state.
+- Exact-path Crystal formatting, shell syntax and diff hygiene passed.
+
+The stock gate initially failed because the oracle required canonical byte
+ordering of retained Object shared-path statistics. Current source stores
+those entries in `UnorderedMapWithMemoryTracking` (`ColumnObject.h:29`) and
+iterates them unsorted (`SerializationObject.cpp:452-458`). The repaired oracle
+uses W116's independent semantic roster/statistics parser only for retained
+Object/Dynamic metadata; duplicate/trailing entries and altered values still
+reject. Transport output must independently match the captured decompressed
+bytes exactly. All scalar/data lanes and writer-authored canonical metadata
+retain exact literal-byte checks. No production parser was loosened to satisfy
+this oracle. Root also caught and repaired missing profile plumbing in that
+oracle before the positive execution.
+
+The runtime/toolchain identities are those recorded above: separate shallow
+source `31d2addb`, pinned 26.10.1.1201 build `d9bcb5ab`, Crystal 1.21.0/LLVM
+22.1.8 on AArch64 and MacOSX26.5 SDK. Stock execution is not a build of the
+fresh reference checkout. Evidence is indexed under
+`/private/tmp/crystal-click-w124-root.mg98sP`: `missing-api-red.log`,
+`root-focused-types-fixed.log`, `transport-counterexamples.log`,
+`transport-debug.log`, `focused-debug-final.log`, `focused-release.log`,
+`full-nonrelease.log` (guard stop), `full-nonrelease-single.log`,
+`stock-w124.log` (oracle RED), `stock-w124-final.log` and
+`stock-w123-regression.log`. Final W124 part/cache roots are
+`/private/tmp/crystal-click-json-w124.vyVOd1` and
+`/private/tmp/crystal-click-json-w124-cache.mKEx1T`; unchanged W123 replay roots
+are `/private/tmp/crystal-click-json-w123.2mIjTY` and
+`/private/tmp/crystal-click-json-w123-cache.uEEUto`. Retained source input is
+`/private/tmp/crystal-click-json-w115.6qs6Kq`. These temporary artifacts are an
+evidence index, not durable proof if they disappear; replay the guarded specs
+and `scripts/check_compressed_mark_transport_w124.sh` plus the unchanged
+`scripts/check_object_documents_w123.sh` with the pinned identities.
+
+Root's scoped hostile verdict is ROBUST for detached explicit-path transport,
+complete-grid validation, selected-only checksum/decode and consumptive logical
+limits within the declared codec profile. Independent literals, source anchors,
+negative controls and executed stock cases supplement correlated Luna work.
+Constructors/getter copies and jointly live document/transport allocations are
+not an RSS certificate. Files must remain quiescent; expected sizes do not
+defend against same-size concurrent mutation. Unselected payload hashes are
+deliberately not verified. The writer emits literal LZ4, not a compression-ratio
+or speed improvement. Sidecars/schema/count/statistics are borrowed in copied
+part oracles, not freshly synthesized or published by a complete writer.
+
+Continuation: the overall all-types/MV/projection goal remains active, with
+performance parked. Next is library-owned type/path/role binding over these
+physical adapters, then fresh Object/Dynamic metadata/statistics and staged
+whole-part publication. First falsifier: a general library-owned full/nonzero
+window without an oracle-authored role map, followed by fresh writer output
+without borrowed statistics/sidecars. Legacy/bucketed/advanced shared layouts,
+remaining recursive compositions, Compact parts, broader MV/projection support
+and large-facade responsibility extraction remain open. Owner/profile,
+coordinate/budget, producer/build, toolchain or comparator changes reopen this
+certificate. No push or performance promotion follows from this checkpoint.
