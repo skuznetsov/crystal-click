@@ -47,6 +47,118 @@ module CrystalClick
       CompressedMarkFiles.new(data, marks)
     end
 
+    # Encodes Object/Dynamic structure metadata whose repeated real marks name
+    # the position immediately before its suffix statistics flag. Unlike the
+    # ordinary lane API, this permits that prefix coordinate to cross frames.
+    # The full metadata stream still receives a terminal physical-EOF record.
+    def self.encode_metadata(
+      bytes : Bytes,
+      statistics_offset : Int,
+      rows_per_mark : Array(UInt64),
+      frame_bytes : Int = 4096,
+      budget : CompressedStreamBudget = CompressedStreamBudget.write_default,
+    ) : CompressedMarkFiles
+      budget.ensure_direction(true)
+      validate_frame_bytes(frame_bytes)
+      unless statistics_offset >= 0 && statistics_offset < bytes.size
+        raise ArgumentError.new("statistics offset must name a byte within the metadata stream")
+      end
+      if bytes.size > Int32::MAX
+        raise UnsupportedFormatError.new("compressed input exceeds supported in-memory domain")
+      end
+      if rows_per_mark.empty?
+        raise ArgumentError.new("metadata marks require at least one real outer row count")
+      end
+      if rows_per_mark.size > Int32::MAX - 1
+        raise UnsupportedFormatError.new("adaptive metadata mark grid exceeds supported in-memory domain")
+      end
+
+      # Reserve header/mark work before traversing row counts or allocating a
+      # repeated-offset collection. This is intentionally consumptive on a
+      # later row-count validation failure.
+      mark_count = rows_per_mark.size.to_i64 + 1_i64
+      frame_count = frame_count_for(bytes.size.to_i64, frame_bytes.to_i64)
+      budget.reserve_records(frame_count + mark_count)
+      rows_per_mark.each do |rows|
+        if rows == 0_u64 || rows > Int32::MAX.to_u64
+          raise ArgumentError.new("real mark rows must be positive Int32 values")
+        end
+      end
+      budget.reserve_decoded_bytes(bytes.size.to_i64)
+
+      _measured_frame_count, data_size, full_frame_size = measure_frames(bytes.size.to_i64, frame_bytes.to_i64, budget.limits)
+      mark_size = mark_count * MARK_RECORD_SIZE
+      total_size = data_size + mark_size
+      if mark_size > budget.limits.max_mark_bytes
+        raise UnsupportedFormatError.new("adaptive marks exceed configured mark-size limit")
+      end
+      ensure_output_domain(data_size, "compressed data")
+      ensure_output_domain(mark_size, "adaptive marks")
+      ensure_output_domain(total_size, "paired output")
+      budget.reserve_file_bytes(total_size)
+      budget.reserve_result_bytes(total_size)
+
+      data = encode_data(bytes, frame_bytes.to_i64, data_size, budget.limits)
+      marks = encode_metadata_marks(
+        rows_per_mark,
+        bytes.size.to_i64,
+        statistics_offset.to_i64,
+        frame_bytes.to_i64,
+        full_frame_size,
+        data_size,
+        mark_size.to_i
+      )
+      CompressedMarkFiles.new(data, marks)
+    end
+
+    # A side-effect-free aggregate guard used by a multi-lane owner before it
+    # requests byte/offset snapshots. Each lane has the same outer mark count.
+    def self.preflight_batch(
+      raw_sizes : Array(Int32),
+      mark_count : Int,
+      frame_bytes : Int,
+      budget : CompressedStreamBudget,
+    ) : Nil
+      budget.ensure_direction(true)
+      validate_frame_bytes(frame_bytes)
+      unless mark_count >= 2 && mark_count <= Int32::MAX
+        raise ArgumentError.new("paired output requires at least one real mark and one terminal")
+      end
+      if raw_sizes.empty?
+        raise ArgumentError.new("paired output requires at least one physical lane")
+      end
+
+      total_records = 0_i64
+      total_decoded_bytes = 0_i64
+      total_output_bytes = 0_i64
+      mark_bytes = mark_count.to_i64 * MARK_RECORD_SIZE
+      if mark_bytes > budget.limits.max_mark_bytes
+        raise UnsupportedFormatError.new("adaptive marks exceed configured mark-size limit")
+      end
+
+      raw_sizes.each do |raw_size|
+        if raw_size < 0
+          raise ArgumentError.new("negative paired lane size")
+        end
+        frame_count = frame_count_for(raw_size.to_i64, frame_bytes.to_i64)
+        _measured_frame_count, data_size, _full_frame_size = measure_frames(raw_size.to_i64, frame_bytes.to_i64, budget.limits)
+        if total_records > Int64::MAX - frame_count - mark_count.to_i64 ||
+           total_decoded_bytes > Int64::MAX - raw_size.to_i64 ||
+           total_output_bytes > Int64::MAX - data_size - mark_bytes
+          raise UnsupportedFormatError.new("paired output aggregate size overflows")
+        end
+        total_records += frame_count + mark_count.to_i64
+        total_decoded_bytes += raw_size.to_i64
+        total_output_bytes += data_size + mark_bytes
+      end
+
+      budget.preflight_records(total_records)
+      budget.preflight_decoded_bytes(total_decoded_bytes)
+      budget.preflight_file_bytes(total_output_bytes)
+      budget.preflight_result_bytes(total_output_bytes)
+      nil
+    end
+
     # Encodes a complete unmarked stream. Empty input is ambiguous without a
     # paired grid and therefore remains a caller error.
     def self.encode_all(
@@ -278,6 +390,36 @@ module CrystalClick
         write_u64_le(marks, record_offset + 8, decompressed_offset.to_u64)
         write_u64_le(marks, record_offset + 16, row_count)
       end
+      marks
+    end
+
+    private def self.encode_metadata_marks(
+      rows_per_mark : Array(UInt64),
+      byte_size : Int64,
+      statistics_offset : Int64,
+      frame_bytes : Int64,
+      full_frame_size : Int64,
+      data_size : Int64,
+      mark_size : Int,
+    ) : Bytes
+      marks = Bytes.new(mark_size, 0_u8)
+      compressed_offset, decompressed_offset = physical_position(
+        statistics_offset,
+        byte_size,
+        frame_bytes,
+        full_frame_size,
+        data_size
+      )
+      rows_per_mark.each_with_index do |rows, index|
+        record_offset = index * MARK_RECORD_SIZE
+        write_u64_le(marks, record_offset, compressed_offset.to_u64)
+        write_u64_le(marks, record_offset + 8, decompressed_offset.to_u64)
+        write_u64_le(marks, record_offset + 16, rows)
+      end
+      terminal_offset = rows_per_mark.size * MARK_RECORD_SIZE
+      write_u64_le(marks, terminal_offset, data_size.to_u64)
+      write_u64_le(marks, terminal_offset + 8, 0_u64)
+      write_u64_le(marks, terminal_offset + 16, 0_u64)
       marks
     end
 

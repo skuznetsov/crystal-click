@@ -35,26 +35,49 @@ module CrystalClick
 
     def reserve_file_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_file_bytes - @file_byte_count, "file-byte")
+      preflight_file_bytes(count)
       @file_byte_count += count
     end
 
     def reserve_records(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_records - @record_count, "header-record")
+      preflight_records(count)
       @record_count += count
     end
 
     def reserve_decoded_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_decoded_bytes - @decoded_byte_count, "decoded-byte")
+      preflight_decoded_bytes(count)
       @decoded_byte_count += count
     end
 
     def reserve_result_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_result_bytes - @result_byte_count, "result-byte")
+      preflight_result_bytes(count)
       @result_byte_count += count
+    end
+
+    # Non-mutating whole-operation checks let a column writer prove every
+    # aggregate bound before it asks lane owners for detached data or marks.
+    # Individual encoders still consume these counters as they produce files.
+    def preflight_file_bytes(count : Int64) : Nil
+      ensure_nonnegative(count)
+      ensure_capacity(count, @limits.max_file_bytes - @file_byte_count, "file-byte")
+    end
+
+    def preflight_records(count : Int64) : Nil
+      ensure_nonnegative(count)
+      ensure_capacity(count, @limits.max_records - @record_count, "header-record")
+    end
+
+    def preflight_decoded_bytes(count : Int64) : Nil
+      ensure_nonnegative(count)
+      ensure_capacity(count, @limits.max_decoded_bytes - @decoded_byte_count, "decoded-byte")
+    end
+
+    def preflight_result_bytes(count : Int64) : Nil
+      ensure_nonnegative(count)
+      ensure_capacity(count, @limits.max_result_bytes - @result_byte_count, "result-byte")
     end
 
     private def ensure_nonnegative(count : Int64) : Nil

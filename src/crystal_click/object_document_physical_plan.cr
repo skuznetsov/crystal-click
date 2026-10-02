@@ -8,6 +8,7 @@ module CrystalClick
     @typed_plans : Hash(String, BinaryBulkPhysicalPlan)
     @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
     @shared_plan : BinaryBulkPhysicalPlan
+    @stream_count : Int32
 
     def initialize(
       column_name : String,
@@ -101,6 +102,7 @@ module CrystalClick
       shared_prefix = PhysicalStreamName.append_literal(column_prefix, ".object_shared_data", context)
       @shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(shared_type, shared_prefix, shared_profile, limits, context)
       collect_plan_names!(@shared_plan, seen_names)
+      @stream_count = seen_names.size.to_i32
     end
 
     def object_structure_stream : String
@@ -128,6 +130,12 @@ module CrystalClick
 
     def shared : BinaryBulkPhysicalPlan
       @shared_plan
+    end
+
+    # Scalar count from the collision-checked construction roster. This lets
+    # callers enforce entry caps before materializing the detached name list.
+    def stream_count : Int32
+      @stream_count
     end
 
     # The roster is detached and sorted; Object plans deliberately expose

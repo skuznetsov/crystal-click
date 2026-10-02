@@ -22,19 +22,20 @@ module CrystalClick
 
       limits = budget.limits
       object_context = BinaryCodecContext.new(limits, nil, true, budget)
-      ObjectStructureCodec.write_to(structure_set.object, object_context)
+      object_statistics_offset = ObjectStructureCodec.write_with_statistics_offset(structure_set.object, object_context)
       object_bytes = object_context.finish_bytes
 
       dynamic_bytes = Hash(String, Bytes).new
+      dynamic_statistics_offsets = Hash(String, Int32).new
       object = structure_set.object
       object.dynamic_path_count.times do |index|
         path = object.dynamic_path_at(index)
         context = BinaryCodecContext.new(limits, nil, true, budget)
-        DynamicStructureCodec.write_to(structure_set.dynamic_for(path), context)
+        dynamic_statistics_offsets[path] = DynamicStructureCodec.write_with_statistics_offset(structure_set.dynamic_for(path), context)
         dynamic_bytes[path] = context.finish_bytes
       end
 
-      ObjectDynamicStructureStreams.new(object_bytes, dynamic_bytes)
+      ObjectDynamicStructureStreams.new(object_bytes, dynamic_bytes, object_statistics_offset, dynamic_statistics_offsets)
     end
 
     def self.decode(

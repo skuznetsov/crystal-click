@@ -23,6 +23,14 @@ module CrystalClick
 
     # Internal shared-budget entry point for a paired Object + Dynamic batch.
     def self.write_to(structure : ObjectStructure, context : BinaryCodecContext) : Nil
+      write_with_statistics_offset(structure, context)
+      nil
+    end
+
+    # Writes the complete metadata and returns the relative position immediately
+    # before its statistics suffix/flag, without finishing or copying the blob.
+    def self.write_with_statistics_offset(structure : ObjectStructure, context : BinaryCodecContext) : Int32
+      parse_start = context.output_size
       context.visit_node(1)
       write_u64_le(context, structure.version)
 
@@ -52,11 +60,13 @@ module CrystalClick
         end
       end
 
+      statistics_offset = 0_i32
       if structure.version == 4_u64
         context.write_var_uint(structure.shared_data_version)
         if structure.shared_data_version != 0_u64
           context.write_var_uint(structure.bucket_count)
         end
+        statistics_offset = context.output_size - parse_start
         if statistics = structure.statistics
           context.write_byte(1_u8)
           StructureStatisticsCodec.write(statistics, context, path_count, path_order)
@@ -65,9 +75,10 @@ module CrystalClick
         end
       else
         statistics = structure.statistics || raise ArgumentError.new("Object V1/V2 requires complete legacy statistics")
+        statistics_offset = context.output_size - parse_start
         StructureStatisticsCodec.write(statistics, context, path_count, path_order)
       end
-      nil
+      statistics_offset
     end
 
     # Internal shared-budget entry point for a paired Object + Dynamic batch.

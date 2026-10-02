@@ -1596,3 +1596,52 @@ are in `JSON_GENERAL_STORAGE_FRONTIER.md`. Next are fresh paired metadata and
 schema sidecars, then staged publication without borrowed metadata. Catalog/
 facade routing, older or advanced JSON layouts, broader type/MV/projection
 coverage, full RELEASE and performance remain open.
+
+## Fresh Object statistics and column-file owners (W127, 2026-10-02)
+
+Status: VERIFIED within the unpublished Wide/V3/one-bucket MAP contract in
+`JSON_GENERAL_STORAGE_FRONTIER.md`. CAUTION: fresh metadata identity and
+complete file-pair composition over `4632f59`. Rollback is the isolated owner,
+transport/metadata extension, import, spec, oracle and living-document diff.
+No legacy facade admission, filesystem publication or catalog route changed.
+
+Five cohesive responsibilities have their own files:
+
+- `binary_type_name_budget.cr`: recursive descriptor/name sizing before SQL
+  display-name materialization, including escaped metadata.
+- `object_document_statistics.cr`: fresh counts over an explicit plan and
+  flattened documents; no roster inference or serialized-file ownership.
+- `object_document_column_writer.cr`: logical-to-physical lane composition,
+  aggregate preflight and compressed-pair orchestration; no part publication.
+- `object_document_column_lane.cr`: internal borrowed generated-lane adapter,
+  not an additional public format/profile dispatcher.
+- `object_document_column_files.cr`: owned exact unpublished filename/pair
+  roster and detached bytes, not an on-disk part or table.
+
+These owners total 931 lines (134/413/228/75/81). W125's physical plan now
+caches the collision-checked scalar stream count; paired metadata codecs expose
+writer-measured before-statistics offsets. W124's transport has a separate
+multi-frame metadata grammar and aggregate nonmutating preflight; its ordinary
+prefix grammar remains unchanged. The Dynamic encoder and fresh statistics
+share nominal routing while retaining the old encoder accounting contract.
+Sizing and copy work use the same consumptive logical ledger. Limits bound
+logical work/retained bytes, not total transient copies or allocator/RSS.
+
+Root's thirteen independent examples plus six owner/probe examples passed:
+248 focused DEBUG and RELEASE examples each, 2,140 full non-release examples,
+four fresh matching-shell W127 stock ATTACH/actual CHECK=1/full+PK cases with
+W126 full/middle/zero reads, and unchanged W125/W126 regressions. Qualified RED
+probes forced correction of uncharged sizing and late roster admission; the
+restored guards pass. Root's scoped hostile verdict is ROBUST, with correlated
+Luna review only supporting it. Exact identities, repairs, scheduling caveat,
+replay, evidence paths and decay triggers are in the capability frontier.
+
+The existing legacy owners remain 15,976 reader, 26,034 writer, 7,080 table,
+1,560 catalog and 3,657 offline-table lines. This does not complete the large-
+facade refactor or prove less coupling, memory or time. Shared facade planning,
+leaf dispatch, staging and table/catalog materialization still need extraction.
+Next are fresh schema sidecars and normalized whole-part staging without any
+borrowed metadata, then facade/catalog integration. General JSON layouts,
+all-type admission, wider MV/projection execution and full RELEASE remain
+open; optimization stays parked. One file per cohesive owner, not one class per
+type combination, is the maintained architecture boundary.

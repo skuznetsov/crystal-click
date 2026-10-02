@@ -24,6 +24,14 @@ module CrystalClick
     # Internal shared-budget entry point. Descriptor trees begin at depth one;
     # this structure envelope does not add a recursive descriptor level.
     def self.write_to(structure : DynamicStructure, context : BinaryCodecContext) : Nil
+      write_with_statistics_offset(structure, context)
+      nil
+    end
+
+    # Writes the complete metadata and returns the relative position before its
+    # statistics flag without finishing or copying the encoded blob.
+    def self.write_with_statistics_offset(structure : DynamicStructure, context : BinaryCodecContext) : Int32
+      parse_start = context.output_size
       context.visit_node(1)
       write_u64_le(context, 4_u64)
 
@@ -38,13 +46,14 @@ module CrystalClick
         BinaryDataTypeCodec.write_to(structure.type_at(index), context, 1)
       end
 
+      statistics_offset = context.output_size - parse_start
       if statistics = structure.statistics
         context.write_byte(1_u8)
         StructureStatisticsCodec.write(statistics, context, structure.canonical_variant_count)
       else
         context.write_byte(0_u8)
       end
-      nil
+      statistics_offset
     end
 
     # Internal shared-budget entry point for a paired structure operation.

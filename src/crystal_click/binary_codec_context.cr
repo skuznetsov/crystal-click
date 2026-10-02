@@ -221,6 +221,12 @@ module CrystalClick
       Bytes.new(@output.size) { |index| @output[index] }
     end
 
+    # Scalar output position for paired metadata encoders. This avoids a
+    # finish_bytes copy/reparse just to capture the statistics-suffix offset.
+    def output_size : Int32
+      @output.size
+    end
+
     def checked_count(value : UInt64, label : String) : Int32
       if value > Int32::MAX.to_u64
         corrupt!("#{label} exceeds supported in-memory count")

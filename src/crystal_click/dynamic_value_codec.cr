@@ -45,7 +45,6 @@ module CrystalClick
       mark_records = real_marks + 1_u64
       budget.ensure_depth(1)
       validate_descriptor_trees(structure, budget)
-
       total_rows = 0_u64
       granules.each do |granule|
         if granule.empty?
@@ -61,9 +60,9 @@ module CrystalClick
         total_rows += rows
       end
 
-      # A spilled input descriptor is not necessarily in the retained roster.
-      # Bound its recursive work before the name-based routing below asks it to
-      # materialize a potentially deep SQL display name.
+      # Validate value and roster descriptors before name-based routing. The
+      # encoder's historical budget contract charges descriptor traversal but
+      # not SQL display-name materialization.
       validate_value_descriptor_trees(granules, budget)
 
       # The discriminator will charge these same logical records and edges.
@@ -72,18 +71,18 @@ module CrystalClick
       preflight_discriminator_work(budget, mark_records, real_marks, total_rows, variant_count)
 
       variant_names = structure.canonical_variant_names
+      routes = Hash(String, Tuple(BinaryDataType, UInt8)).new
+      structure.type_count.times do |index|
+        type = structure.type_at(index)
+        name = type.name
+        canonical_index = variant_names.index(name) || raise UnsupportedFormatError.new("Dynamic type is absent from its canonical roster")
+        routes[name] = {type, canonical_index.to_u8}
+      end
       shared_index = structure.shared_index
       ordinary_types = Array(BinaryDataType?).new(variant_names.size, nil)
-      ordinary_by_name = Hash(String, Tuple(BinaryDataType, UInt8)).new
-      structure.type_count.times do |type_index|
-        type = structure.type_at(type_index)
-        name = type.name
-        canonical_index = variant_names.index(name)
-        unless canonical_index
-          raise UnsupportedFormatError.new("Dynamic type is absent from its canonical roster")
-        end
+      routes.each_value do |route|
+        type, canonical_index = route
         ordinary_types[canonical_index] = type
-        ordinary_by_name[name] = {type, canonical_index.to_u8}
       end
 
       tags = Array(Array(UInt8)).new(granules.size)
@@ -100,15 +99,7 @@ module CrystalClick
             raise UnsupportedFormatError.new("top-level Nullable is outside the Dynamic V3 canonical profile")
           else
             name = type.name
-            if candidate = ordinary_by_name[name]?
-              if candidate[0] == type
-                mark_tags << candidate[1]
-              else
-                mark_tags << shared_index.to_u8
-              end
-            else
-              mark_tags << shared_index.to_u8
-            end
+            mark_tags << route_index(type, name, routes, shared_index.to_u8)
           end
         end
         tags << mark_tags
@@ -396,6 +387,21 @@ module CrystalClick
         return type if type.name == name
       end
       nil
+    end
+
+    # Shared route decision used by encoding and fresh Object/Dynamic
+    # statistics. The caller renders the name under its own accounting policy.
+    def self.route_index(
+      type : BinaryDataType,
+      name : String,
+      routes : Hash(String, Tuple(BinaryDataType, UInt8)),
+      shared_index : UInt8,
+    ) : UInt8
+      if route = routes[name]?
+        route[0] == type ? route[1] : shared_index
+      else
+        shared_index
+      end
     end
 
     private def self.validate_descriptor_trees(structure : DynamicStructure, budget : BinaryCodecBudget) : Nil

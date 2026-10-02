@@ -21,8 +21,10 @@ mark transport is VERIFIED within the explicit-path/profile gates below.
 W125's generic type/path/role binding is VERIFIED within its explicit profile
 and focused/full/stock gates below. W126's explicit-schema/profile file-backed
 Object reader is VERIFIED within its Wide/SUFFIX V3/one-bucket MAP gates below.
-Fresh metadata/statistics and staged writer publication remain the next owner
-boundary. The legacy part facade still has no general whole-JSON admission.
+W127's fresh statistics and complete unpublished column file pairs are VERIFIED
+within the explicit V3/MAP gates below. Schema-sidecar synthesis and staged
+whole-part publication remain the next owner boundary. The legacy part facade
+still has no general whole-JSON admission.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
 
@@ -2761,3 +2763,199 @@ master executable claim is admitted. Changes to source/owners/imports, metadata
 offsets, grid/budget/naming semantics, source/runtime/toolchain, oracle inputs or
 comparators reopen the corresponding gates. Trusted quiescent part directories
 remain a premise; no active-set or concurrent-mutation snapshot is established.
+
+## W127 design seal: fresh document statistics and unpublished column files
+
+Design-sealed on October 2 over `4632f59`. W126 discovers paired metadata and
+reads normalized Wide JSON files; W123 still serializes caller-provided counts.
+The next bounded move derives fresh counts from the explicit plan and documents
+and composes every JSON file pair in production. This is CAUTION: wire formats,
+metadata identity and aggregate budget ownership cross several owners. Rollback
+is the parent revision; no source part or public catalog is mutated by the API.
+
+Admitted contract:
+
+- `ObjectDocumentStatistics.recompute(plan, granules, limits)` and
+  `recompute_with_budget(plan, granules, budget)` return a fresh
+  `ObjectDocumentPlan`. Explicit typed/path/type rosters are preserved; every
+  preexisting statistic is ignored. No path/type admission or JSON text parsing
+  is inferred. Object V3 wire version 4, shared MAP version 0, one bucket only.
+- Object dynamic counts exclude absent fields and Nothing/NULL. Dynamic counts
+  use canonical ordinary-plus-SharedVariant positions, exact descriptor routing
+  as in the value encoder, and exclude NULL. Shared Dynamic type-name counts
+  retain the first 256 distinct names; Object shared-path counts retain the first
+  10,000 non-NULL unknown paths. Previously retained names continue counting
+  after saturation. These are suffix/direct statistics, not merge top-K.
+  Granule/row order and document raw-byte path order define encounter order.
+- Traversal, descriptor metadata, path/type names and proportional counters are
+  checked before corresponding copies or rendered SQL-name allocations. A
+  single writing `BinaryCodecBudget` covers statistics and subsequent logical
+  encoding. Repeated traversal is charged honestly, not called fused work.
+- `ObjectDocumentColumnWriter.encode(column_name, plan, granules, mode:,
+  profile:, shared_profile:, hashed:, frame_bytes:, limits:,
+  transport_limits:)` returns an owned `ObjectDocumentColumnFiles`, exposing
+  the fresh plan, physical bindings, complete filename roster and detached file
+  bytes. It has no input part/filesystem source and performs no publication.
+  It uses W125 role bindings and W123 value encoding, never fixture bindings.
+- Complete Object/Dynamic metadata, discriminators, typed/ordinary/shared lanes
+  receive K real adaptive marks plus terminal EOF. Every lane's row fields use
+  outer document counts even for sparse alternatives. Metadata real marks repeat
+  the exact position BEFORE the statistics flag; terminal includes all counts.
+  Empty real granules and a zero-granule physical column are rejected.
+- An explicit `CompressedMarkWriter.encode_metadata` accepts a prefix spanning
+  frames and translates all real positions through the frame layout. Ordinary
+  `encode` and its stricter frame-zero prefix grammar remain unchanged.
+  One consumptive transport budget covers all file pairs. Profiles, naming and
+  bounds remain explicit; no memory/performance improvement is claimed.
+
+Source anchors in shallow `31d2addbabda0d8e14ffd325fc0a9106528aa1c7`:
+`SerializationObject.cpp:927-997`, `ColumnObject.cpp:2160-2177`,
+`SerializationDynamic.cpp:529-553,594-646`, `ColumnDynamic.cpp:1700-1722`,
+`ColumnObject.h` (10,000 retained shared names), and `ColumnDynamic.h` (256).
+The pinned oracle executable remains build `d9bcb5a`, not current master.
+
+DoD: root literal statistics/grid/budget tests must first reject the old surface;
+focused DEBUG/RELEASE and unchanged W123-W126 tests pass; a fresh stock-created
+same-schema/rows Wide shell has EVERY JSON data/mark pair replaced by this
+production writer, checksums regenerated, then actual ATTACH/CHECK=1, full and
+PK-window stock readback, and W126 full/nonzero/zero-window reads agree with
+independently authored documents/counts. Run the complete non-release suite
+serially under the unchanged 50% free-memory guard. Hostile guards cover poisoned
+old counts, descriptor-name collisions, cap continuation, multi-frame metadata,
+sparse outer-row marks, aggregate limits and detached ownership.
+
+Fresh shell schema/count/PK/index/column-statistics sidecars are borrowed from
+that newly stock-created matching shell, not W115/W125 captures. Schema-sidecar
+synthesis, automatic roster selection, whole-part staging/atomic publication,
+catalog/facade integration, legacy/bucketed JSON, Compact parts, other profiles,
+MV/projection execution and optimization remain open. A successful column oracle
+does not imply those capabilities. Changes to routing, names, counts, profiles,
+budgets, metadata marks, runtime/source/toolchain or comparators reopen this gate.
+
+## W127 executed checkpoint (2026-10-02)
+
+Status: VERIFIED within the unpublished-column contract above. Root's scoped
+hostile verdict is ROBUST after the recorded budget-order failures were closed;
+Luna static review is correlated supporting evidence, not independent proof.
+The source parent is `4632f59`; the current shallow source and pinned runtime
+identities at the top of this document remain distinct.
+
+The production API now derives fresh Object/Dynamic counts from an explicit
+plan and flattened documents, then emits every normalized JSON column file
+pair. No preexisting statistics or fixture metadata is consumed. Metadata real
+marks repeat the before-statistics position across compression frames; sparse
+lanes retain outer document row counts. Statistics and logical encoding share
+one consumptive budget; all compressed pairs share one transport budget.
+Filename count is checked through the cached collision-checked scalar before
+requesting a detached roster. Sizing and copy passes are charged separately.
+These are logical work/retained-output bounds, not allocator or RSS guarantees.
+
+Root authored thirteen independent literal/negative examples, supplemented by
+six owned statistics/file-roster examples. They cover poisoned old counts,
+same-SQL-name/different nominal descriptors, the first-256/first-10,000 caps
+with retained-name continuation, early huge-name rejection, literal frame/mark
+coordinates, sparse outer rows, detached output, aggregate budgets and filename
+limits. Test discrimination was qualified, not inferred from a green run:
+
+- `root-red.log`: missing statistics API, compiler exit 1. The original tee
+  pipeline's outer shell status was zero; it is not the RED signal.
+- `seed-nominal-route-final.log`: removing nominal descriptor equality fails
+  the independent Decimal32/Decimal64 count expectation, not a compiler check.
+- `seed-codec-budget-reset-latest.log`: resetting the codec ledger before
+  logical encoding makes the aggregate-limit test fail with no expected error.
+- `red-sizing-work.log`: a zero-node grid probe reaches the forbidden document
+  getter before rejection. The sizing pass now admits and charges traversal.
+- `red-file-roster.log`: a poisoned oversized scalar roster reaches the
+  detached-name getter. The writer now checks cached count before that getter.
+- `red-roster-sizing-work.log`: both zero-node and zero-element roster probes
+  reach the forbidden size getter. Known sizing work is now admitted before
+  either size loop, charged on visits, and followed by separate copy admission.
+
+All injected production faults were restored before final gates. Review first
+returned VULNERABLE on uncharged sizing and late roster checks; the extra
+roster-size challenge found the same defect in a second traversal after an
+initial scoped ROBUST review. The corrected ordering passes the literal probes
+and the final shared-budget test. Model agreement alone did not close the gate.
+
+Two oracle comparator errors were repaired, not attributed to production:
+later discriminator marks need not repeat the first prefix coordinate, and
+the short typed-mixed Object prefix need not cross a frame. The final instrument
+derives the exact Object pre-statistics coordinate independently from its
+authored raw path roster and fixed literal-frame layout, including frame-zero
+and cross-frame cases. The root literal EOF expectation was corrected from
+76 to 77 bytes: a full 16-byte literal frame is 43 bytes, the final 8-byte frame
+34. Historical failed frontend/comparator probes are not compatibility passes.
+
+Final-source gates, executed by root:
+
+- Focused DEBUG and RELEASE: 248 examples each, zero failures/errors/pending.
+- W127 fresh shell oracle: four isolated dynamic-paths/typed-mixed ×
+  BASIC/COMPACT-discriminator cases. EVERY JSON `.bin`/`.mrk2` pair is from
+  the production writer; fresh matching schema/count/PK/index/column-statistics
+  sidecars remain borrowed. Checksums are regenerated, stock ATTACH succeeds,
+  the actual CHECK result is asserted as 1, and full plus PK `3..6` stock
+  documents agree with independent expectations. W126 separately agrees on
+  full, nonzero-origin middle and terminal-zero windows over all four stores.
+  Wrong-document, wrong-grid and CHECK=0 controls reject their intended faults.
+  All parts are Wide; BASIC/COMPACT are discriminator encodings, not part layout.
+- Unchanged W125 oracle: four fresh copied-part ATTACH/actual CHECK=1/full+PK
+  cases. Unchanged W126 oracle: reader full/middle/zero windows over those same
+  newly generated stores plus stock CHECK=1/full/PK readback.
+- Full non-release: 2,140 examples, zero failures/errors/pending, symbolic
+  debug information disabled. The unchanged W113 deprecated `File.new`
+  argument warning and the linker's duplicate `-lc` warning remain.
+  Neither is a test failure. No full RELEASE run or performance result.
+- Exact nineteen-path Crystal format, wrapper shell syntax and diff hygiene
+  pass. No source fixture, installed server store or public facade is mutated.
+
+Evidence root: `/private/tmp/crystal-click-w127-root.rjYfTn`. Final logs are
+`focused-debug.log`, `focused-release.log`, `stock-w127.log`,
+`w125-stock-final.log`, `w126-stock-final.log`, and `full-nonrelease.log`.
+Final W127 stores: `/private/tmp/crystal-click-json-w127.qzUcHw`.
+Final W125 regression stores: `/private/tmp/crystal-click-json-w125.x0Xq8A`,
+derived from `/private/tmp/crystal-click-json-w115.6qs6Kq`.
+An earlier 2,138-example full run preceded the last roster fix; its tail briefly
+overlapped a short RED probe due to a scheduling error. It is retained as
+`full-nonrelease-before-roster-fix.log`, not final evidence. All final compiler/
+runtime commands were strictly serial under the unchanged 50% free-memory
+floor. Removing the temporary roots decays replay availability.
+
+Replay uses Crystal 1.21.0/LLVM 22.1.8, the SDK and pinned CH binary above,
+`COGNI_RUN_SAFE_MIN_FREE_PCT=50`, `RUN_SAFE_PASSTHROUGH_STDIO=1`, and the
+same `cogni-ml/scripts/run_safe.sh`. Compiler guard limits are 600s/32768 MiB;
+stock wrappers use 900s/32768 MiB with `/bin/bash` as guarded executable.
+Focused specs are the W126 26-file roster plus
+`spec/object_column_writer_w127_root_spec.cr`,
+`spec/object_statistics_w127_spec.cr`, and
+`spec/object_column_writer_w127_spec.cr`, with
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`.
+RELEASE adds `--release`; full non-release adds `--no-debug` instead.
+Stock replay, each separately through that same parent guard:
+
+```sh
+W127_KEEP_TMP=1 CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse \
+  bash scripts/check_object_column_writer_w127.sh
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  W125_KEEP_TMP=1 CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse \
+  bash scripts/check_physical_stream_plans_w125.sh
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  W125_OUTPUT_ROOT=/private/tmp/crystal-click-json-w125.x0Xq8A \
+  CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse \
+  bash scripts/check_object_file_reader_w126.sh
+```
+
+The whole goal remains active with optimization parked. Confirmed next:
+schema-sidecar synthesis and normalized whole-part staging without borrowed
+metadata, followed by the public facade/catalog boundary. Its next falsifier
+must stock-ATTACH/CHECK=1/read both the fresh metadata and data, and independently
+read them through W126. Automatic path/type roster selection, legacy/bucketed/
+advanced JSON, Compact parts, other recursive/type profiles, broader MV/
+projection execution and the legacy-facade refactor remain open. No all-type,
+full JSON-facade, current-master executable, allocator/RSS or speed claim is
+admitted. Source/owner/import, routing/count/name/profile/budget/mark, toolchain,
+runtime/source or oracle-input/comparator changes reopen the dependent gate.
+Trusted quiescent input directories remain a premise, not an active-set or
+concurrent-mutation snapshot certificate.
