@@ -166,6 +166,13 @@ adding a separate class for every container/leaf combination is not the goal.
 Any widening from today's exact plans needs its own storage-profile falsifier
 and paired reader/writer evidence, not a name-only registration check.
 
+W115 begins a general Object/Dynamic/shared-data track in
+`JSON_GENERAL_STORAGE_FRONTIER.md`. The capture-only checkpoint changes no
+production admission. Its proposed responsibility owners separate metadata,
+binary type/value decoding, lane schedules, shared layouts and document
+reader/staged writer orchestration; the larger facade decomposition is still
+open and must not be replaced with one class per JSON declaration.
+
 ## Variant discriminator owner extraction (2026-10-01)
 
 Status: VERIFIED within the behavior-neutral extraction and executed gates

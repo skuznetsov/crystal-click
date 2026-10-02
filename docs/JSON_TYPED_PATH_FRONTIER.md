@@ -5,6 +5,10 @@ pinned ClickHouse 26.7.1.1315. W24's exact two-path writer remains supported;
 W72 adds arbitrary nonempty lists of the reader's simple scalar typed paths.
 General JSON document reading and writing are not claimed.
 
+The next reusable Object/Dynamic/shared-data track is recorded separately in
+`JSON_GENERAL_STORAGE_FRONTIER.md`. Its initial physical capture does not widen
+the W24/W72 admission or certify whole-document reader/writer compatibility.
+
 Current frontier: expose only explicitly declared, scalar typed paths of a
 top-level ClickHouse `JSON` column as virtual columns in the existing offline
 Wide-part scanner. This is a projection, not a JSON document reader.
