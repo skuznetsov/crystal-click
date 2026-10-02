@@ -9,7 +9,7 @@ describe "W109 exact Point admission" do
 
   it "does not silently admit unqualified Geo or Point container shapes" do
     ["point", "POINT", "Point()", "Point ", "Nullable(Point)", "Array(Point)",
-     "Geometry"].each do |type|
+     "Nullable(Geometry)"].each do |type|
       CrystalClick::WidePart.supports_typed_type?(type).should be_false
     end
   end

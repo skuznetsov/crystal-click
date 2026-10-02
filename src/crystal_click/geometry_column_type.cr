@@ -115,6 +115,151 @@ module CrystalClick
       total
     end
 
+    # Logical storage retained by the Geometry reader's compact per-mark
+    # shape summaries and aggregate decoded axis vectors. This helper is shared
+    # with the staged writer so its full-range readback reservation accounts
+    # for the same summary before any child payload is read.
+    def reader_summary_charge(outer_rows_by_mark : Array(UInt64)) : UInt64?
+      return nil if outer_rows_by_mark.empty?
+      return nil if outer_rows_by_mark.size > Int32::MAX
+
+      mark_count = outer_rows_by_mark.size.to_u64
+      total = instance_sizeof(Array(StaticArray(UInt64, 16))).to_u64
+      total = checked_product(
+        total, mark_count, sizeof(StaticArray(UInt64, 16)).to_u64
+      ) || return nil
+
+      # Aggregate output keeps seven size-vector slots (Point is empty), ten
+      # total size values, and a separate seven-value Point-count vector.
+      total = checked_add(total, instance_sizeof(Array(Array(UInt64))).to_u64) || return nil
+      total = checked_add(total, 7_u64 * sizeof(Pointer(Array(UInt64))).to_u64) || return nil
+      total = checked_add(total, 7_u64 * instance_sizeof(Array(UInt64)).to_u64) || return nil
+      total = checked_add(total, 10_u64 * sizeof(UInt64).to_u64) || return nil
+      total = checked_add(total, instance_sizeof(Array(UInt64)).to_u64) || return nil
+      total = checked_add(total, 7_u64 * sizeof(UInt64).to_u64) || return nil
+      # Per-mark callback counts can coexist with the retained summary.
+      total = checked_add(total, instance_sizeof(Array(UInt64)).to_u64) || return nil
+      total = checked_add(total, 3_u64 * sizeof(UInt64).to_u64) || return nil
+      return nil if total > MAX_MATERIALIZED_BYTES
+      total
+    end
+
+    # Scratch live while the reader turns selected discriminator frames into
+    # per-mark tag arrays, builds a schedule that copies those tags, and then
+    # flattens the original tags for the returned owner. The input outer-row
+    # vector remains live during schedule construction, as does one decoded
+    # frame view while its current-mark tag vector is materialized.
+    def reader_tag_scratch_charge(outer_rows_by_mark : Array(UInt64)) : UInt64?
+      return nil if outer_rows_by_mark.empty?
+      return nil if outer_rows_by_mark.size > Int32::MAX
+
+      mark_count = outer_rows_by_mark.size.to_u64
+      outer_rows = 0_u64
+      max_mark_rows = 0_u64
+      outer_rows_by_mark.each do |rows|
+        return nil if rows > UInt64::MAX - outer_rows
+        outer_rows += rows
+        max_mark_rows = rows if rows > max_mark_rows
+      end
+      return nil if outer_rows > MAX_LOGICAL_ELEMENTS || max_mark_rows > MAX_LOGICAL_ELEMENTS
+
+      # The reader's own row grid remains live while it copies tags into its
+      # schedule. A staged writer may separately retain its input mark grid.
+      total = instance_sizeof(Array(UInt64)).to_u64
+      total = checked_product(total, mark_count, sizeof(UInt64).to_u64) || return nil
+
+      total = checked_add(total, instance_sizeof(Array(Array(UInt8))).to_u64) || return nil
+      total = checked_product(total, mark_count, sizeof(Pointer(Array(UInt8))).to_u64) || return nil
+      total = checked_product(total, mark_count, instance_sizeof(Array(UInt8)).to_u64) || return nil
+      total = checked_add(total, outer_rows) || return nil
+
+      total = checked_add(total, instance_sizeof(Array(UInt8)).to_u64) || return nil
+      total = checked_add(total, outer_rows) || return nil
+      total = checked_add(total, instance_sizeof(Array(UInt8)).to_u64) || return nil
+      total = checked_add(total, max_mark_rows) || return nil
+
+      # Conservative logical allowance for the six-entry child-owner Hash
+      # assembled immediately before WideGeometryColumnData construction.
+      # This is a bounded directory reserve, not an allocator or RSS estimate.
+      total = checked_add(total, 4_096_u64) || return nil
+
+      total = checked_add(total, sizeof(Bytes).to_u64) || return nil
+      frame_view_bytes = checked_add(max_mark_rows, 19_u64) || return nil
+      total = checked_add(total, frame_view_bytes) || return nil
+      return nil if total > MAX_MATERIALIZED_BYTES
+      total
+    end
+
+    # Conservative full-window reader peak shared by the Geometry reader and
+    # paired writer readback preflight. Child reader charges include each
+    # nominal Geo Array lane's decoded result plus its full-range discovery
+    # schedule/scratch. Summing all six child peaks intentionally over-reserves
+    # compared with sequential lane processing, while avoiding a writer-side
+    # estimate that can miss discriminator and sparse-mark schedule costs.
+    # `summary_charge` and `scratch_bytes` are the Geometry reader's bounded
+    # per-mark summaries and other concurrently-live buffers. This is logical
+    # accounting, not an estimate of allocator overhead or process RSS.
+    def reader_materialization_charge(
+      outer_rows_by_mark : Array(UInt64),
+      arm_level_counts : Array(Array(UInt64)),
+      arm_point_counts : Array(UInt64),
+      summary_charge : UInt64 = 0_u64,
+      scratch_bytes : UInt64 = 0_u64,
+    ) : UInt64?
+      return nil if outer_rows_by_mark.empty?
+      return nil if outer_rows_by_mark.size > Int32::MAX
+      return nil unless arm_level_counts.size == 7
+      return nil unless arm_point_counts.size == 7
+
+      outer_rows = 0_u64
+      outer_rows_by_mark.each do |rows|
+        return nil if rows > UInt64::MAX - outer_rows
+        outer_rows += rows
+      end
+      return nil if outer_rows > MAX_LOGICAL_ELEMENTS
+
+      mark_count = outer_rows_by_mark.size
+      geometry_schedule_charge = WideGeometryMarkSchedule.logical_charge_for_shape(outer_rows_by_mark) || return nil
+      total = materialization_charge(outer_rows, arm_level_counts, arm_point_counts) || return nil
+      total = checked_add(total, geometry_schedule_charge) || return nil
+
+      arm_index = 0
+      {
+        WideGeometryArm::LineString,
+        WideGeometryArm::MultiLineString,
+        WideGeometryArm::MultiPolygon,
+        WideGeometryArm::Point,
+        WideGeometryArm::Polygon,
+        WideGeometryArm::Ring,
+        WideGeometryArm::MultiPoint,
+      }.each do |arm|
+        point_count = arm_point_counts[arm_index]
+        lane_charge = if arm == WideGeometryArm::Point
+                        point_schedule = checked_product(
+                          instance_sizeof(Array(UInt64)).to_u64,
+                          mark_count.to_u64,
+                          sizeof(UInt64).to_u64
+                        ) || return nil
+                        point_plan = PointColumnType.for_type(arm.type_name) || return nil
+                        point_plan.materialization_charge(point_count, point_schedule)
+                      else
+                        geo_plan = GeoArrayColumnType.for_type(arm.type_name) || return nil
+                        geo_plan.reader_materialization_charge(
+                          arm_level_counts[arm_index], point_count, mark_count
+                        ) || return nil
+                      end
+        total = checked_add(total, lane_charge) || return nil
+        arm_index += 1
+      end
+
+      total = checked_add(total, summary_charge) || return nil
+      total = checked_add(total, scratch_bytes) || return nil
+      return nil if total > MAX_MATERIALIZED_BYTES
+      total
+    rescue ArgumentError
+      nil
+    end
+
     private def checked_add(total : UInt64, amount : UInt64) : UInt64?
       return nil if amount > UInt64::MAX - total
       total + amount

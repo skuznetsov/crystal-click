@@ -1,14 +1,207 @@
 # Geo types frontier
 
-## Active W114: Geometry qualification and owned model
+## Active W114: paired Geometry storage
 
-Status: VERIFIED stock qualification, exact production-refusal RED and the
-owned-model checkpoint below. Paired physical implementation is next;
-Geometry remains rejected by production.
+Status: VERIFIED within the seven-arm Wide/LZ4/plain-mark profile in the
+executed certificate below. Exact Geometry now has paired physical reading,
+writing, typed-table batches and offline catalog values. The original stock
+qualification and production-refusal RED are preserved as predecessor evidence.
 The full all-types and MV/projection goal remains active, followed by memory
 and performance work. This slice must not turn fixed Geometry storage into
 generic Variant admission or treat the W112 MultiPoint certificate as proof
 of Geometry's sparse arm cardinalities.
+
+### Paired physical design seal (2026-10-01)
+
+Anchor: clean `3fd644f`. Fresh source reference is shallow
+`935de7442d7890eb5631372e4ad6f66faaf35f90`; the capable executable remains
+the separately pinned 26.10.1.1201 peer below, not a build of that source.
+The qualified seven-arm production RED is preserved unchanged. This was a
+CAUTION implementation transition; the later execution certificate governs
+admission, not this design alone.
+Rollback is the isolated feature diff; no existing data, source snapshot or
+installed executable is changed. Production admission is committed only after
+the paired reader/writer and consumer gates pass.
+
+Caller-level APIs within the certified profile:
+
+- `WidePart#read_geometry_mark_range`, `#each_geometry_mark_range`,
+  `#geometry_mark_range_materialization_charge` and
+  `#validate_geometry_mark_range_structure`, using exact `Geometry`, absolute
+  outer mark indexes and the existing 64MiB logical budget.
+- `WidePartWriter.write_uint64_geometry_pair`, taking an immutable
+  `WideGeometryColumnData` beside a nondecreasing UInt64 key slice. Emit BASIC
+  discriminators initially; read BASIC and COMPACT independently from stock.
+- Typed batches expose `geometry_rows_for`; offline column `.values` retains
+  `WideGeometryRow` handles. These are not SQL geometry functions.
+
+New responsibilities have one class per file:
+`wide_geometry_mark_schedule.cr`, `wide_part/geometry_reader.cr`,
+`wide_part/geometry_serialization_profile.cr`,
+`wide_part_writer/geometry_part_write_input.cr`,
+`wide_part_writer/geometry_part_write_schedule.cr`,
+`wide_part_writer/geometry_part_writer.cr`,
+`wide_part_table/geometry_column_adapter.cr` and
+`offline_table/geometry_values_materializer.cr`. Reuse the Variant
+discriminator decoder privately through a fixed
+Geometry descriptor, without changing the generic Variant admission list.
+Reuse Geo Array readers through sparse logical row callbacks and translate
+their physical I/O callbacks back to the real outer table-grid rows. Check all
+25 physical streams' real row grids first. The common range reader may classify
+Geometry child streams as zero-byte payloads, including each arm's size0;
+the discriminator is never an empty child stream. Existing callers retain
+their previous classification and validation rules.
+One additive internal `GeoArrayReader#logical_shape` summary may return checked
+level counts and the Point count from its existing bounded discovery path.
+It does not export topology, change codecs or alter existing reader methods;
+the caller charges the live summary and discovery scratch.
+A callback overload may emit compact per-mark count summaries from that same
+single discovery pass. Reserve summaries before allocation, discard them before
+external lazy callbacks, and separately charge whole-window discovery versus
+one-mark output peaks; these are not interchangeable phases.
+An additive `GeometryColumnType` reader-charge helper may own the conservative
+full-window upper shared by the direct reader and writer's staged readback.
+The existing retained-model charge stays unchanged. The writer reserves this
+upper together with its live input/schedules/metadata before requesting a stage
+and passes only its reserved readback budget to the reader. Reserving a retained
+result alone is not a certificate for the readback discovery/copy peak.
+The shared reader summary/tag-scratch helpers reserve a compact 16-UInt64
+per-mark shape summary, its aggregate seven-arm count vectors, one transient
+Geo callback vector and concurrently-live discriminator input/copies. They
+must describe the reader's actual allocation shape, not a separately drifting
+writer estimate. The existing retained-model helper is not widened to absorb
+these phase-specific costs.
+
+Whole selected-window tags, child structure, axis limits and aggregate logical
+charge pass before the first lazy callback. Preflight child topology is
+transient; lazy output materializes all seven lanes for only one outer mark,
+not seven whole-window outputs. Charge simultaneously live schedule, output,
+copies and scratch, with checked arithmetic and exact budget/minus-one tests.
+Direct range reads may own the full window. Window-local sparse lane indexes
+must not be confused with absolute file marks or original lane prefixes.
+The common compressed codec workspace retains its separate existing frame
+limits; this logical materialization budget does not certify combined decoder
+peak memory or process RSS.
+
+Falsifiers: nonzero selected origins with every sparse arm; unequal outer,
+arm and nested cardinalities; NULL versus tagged/nested empty; all-NULL with
+zero-byte child files; malformed absent-arm boundaries and a later-mark fault
+with zero callbacks; invalid global tags/COMPACT framing; raw NaN/negative-zero
+bits; same-depth nominal identity; checksum-valid stage mutations rejected
+before publication with absent target and clean temporary stage. Legacy
+six-arm parts, wrappers, generic Variant/Array composition, Sparse/Compact
+layouts and arbitrary key/schema profiles remain rejected.
+
+Ownership: root owns specification/imports, serial guard execution, independent
+review and Git. Luna owns the assigned reader, writer and consumer/instrument
+implementation files; bounded facade transfers were explicit. Workers must
+preserve each other's edits. Frozen `probe_geometry_w114.{cr,sh}` is not
+edited to turn RED into GREEN; the paired oracle is separate.
+
+DoD, serial under the established 50% free-memory floor: pre-change focused
+falsifier failure at the missing API (the separately qualified stock refusal
+remains the physical RED); focused DEBUG and RELEASE with affected Geo/Variant
+regressions; full DEBUG under the 600-second/32GiB compiler guard; a separate
+capable-peer oracle asserting actual source/fresh ATTACH CHECK=1, literal full
+and nonzero-key-selected stock RowBinary, writer-only fresh ATTACH and hostile
+staged rejection; unchanged predecessor Geo/Variant oracles; formatter/diff
+checks and root hostile review. No full RELEASE or reader RSS/throughput claim
+follows. Refresh on any affected source, fixtures, metadata, codec, settings,
+executable or callback/accounting change. The executed checkpoint below closes
+this paired physical transition; remaining type and MV/projection compatibility
+precedes memory/performance optimization.
+
+### Paired physical execution certificate (2026-10-02)
+
+Source anchor: `3fd644f` plus this isolated feature diff. The source fingerprint
+over sorted `src`, `spec` and `scripts` files is
+`7cb7f64390ef40da62e9c814b677b76cd3efe1bd6f573d690fad3d33ef424d61`, obtained with
+`rg --files src spec scripts | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256`.
+Documentation-only checkpoint edits are outside that fingerprint.
+
+Admitted scope is exact seven-arm Geometry with fixed global tags0-6 and
+NULL255, 25 payload streams, plain adaptive `.mrk2`, LZ4 and an ordinary
+UInt64 key. Reader discriminator profiles are BASIC and COMPACT; the writer
+emits BASIC only. Legacy six-arm Geometry, wrappers, the GEOMETRY alias,
+generic seven-arm Variant, arbitrary schemas/keys and Compact part layout
+remain rejected. COMPACT discriminator encoding is not Compact part layout.
+
+The eight physical owners listed above each have their own file. Sparse child
+lanes use window-local ranks while every physical child mark still shares the
+real outer-table row grid. Direct reads, mark-lazy callbacks, typed batches and
+offline values preserve nominal arm identity, NULL versus tagged/nested empty
+arrays, and raw IEEE coordinate bits. Selected-window structure and logical
+charge are checked before any external lazy callback. This is not generic
+Variant admission or SQL geometry execution.
+
+Writer input is detached before staging, including key, tag, size and raw
+coordinate snapshots. Reserved readback charge includes live input/schedules,
+metadata and scratch; the complete checksum-file snapshot has an 8KiB reserve
+and an explicit staged wire-size/symlink guard. Exact semantic readback and the
+unchanged checksum manifest are required before exclusive publication. These
+are quiescent local source/stage guarantees, not concurrent filesystem mutation,
+power-loss durability, combined codec-workspace peak or process RSS guarantees.
+The reader's logical tag/directory scratch includes a 4KiB directory reserve;
+the existing compressed decoder retains its separately bounded workspace.
+
+Root executed, serially, with Crystal 1.21/LLVM 22 on Darwin arm64, SDK 26.5,
+`--single-module --link-flags=-fuse-ld=ld --error-trace`, and the unchanged
+`cogni-ml/scripts/run_safe.sh` 50% free-memory floor:
+
+- Focused DEBUG and RELEASE: each passed 138 examples, zero failures/errors,
+  under the 600-second/8GiB guard. Inputs were the seven
+  `geo_array_w111_*_spec.cr`, nine `geometry_w114_*_spec.cr`, four
+  `multipoint_w112_*_spec.cr`, five `point_w109_*_spec.cr`, W56/W57/W74/W75
+  reader specs and both private Variant discriminator specs. The RELEASE run
+  adds `--release`; no full RELEASE certificate follows.
+- Full DEBUG: passed 1,886 examples, zero failures/errors, under the
+  600-second/32GiB guard. Only the existing staged-stream deprecated-argument
+  and duplicate-library linker warnings were reported.
+- `scripts/check_geometry_w114_oracle.sh`, with
+  `CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse`
+  and `W114_KEEP_TMP=1`, passed under the 600-second/8GiB guard. The unchanged
+  predecessor probe ran in `qualify` mode, never a rewritten RED expectation.
+  Six BASIC/COMPACT profiles produced 12 stock source/fresh-ATTACH parts:
+  all actual CHECK rows equaled the exact part-name/CHECK=1 result, and full
+  plus nonzero-key-selected RowBinary equaled independent literal bytes.
+  Direct, selected and lazy Crystal reads passed for all 12 parts. One entirely
+  Crystal-written part independently passed fresh stock ATTACH, exact schema,
+  CHECK=1, literal full/selected RowBinary and Crystal readback.
+- Ten unchanged regression phases passed with actual CHECK comparators and
+  RowBinary: W109 Point reader/writer, W111 Geo Array reader/writer, W112
+  MultiPoint reader/writer, W56/W57 Variant and W74/W75 Dynamic. W112 used the
+  pinned 26.10 executable; the others used the pinned 26.7.1.1315 peer. Each
+  phase had its own fresh temporary store and 600-second/8GiB guard.
+- Exact changed Crystal paths passed `crystal tool format --check`, the new
+  wrapper passed `bash -n`, and `git diff --check` passed. The source
+  fingerprint and frozen RED hashes were rechecked after the serial gates.
+
+The Geometry GREEN root is retained at
+`/private/tmp/crystal-click-w114-green.7OMPlM`, including the independent writer
+part and its fresh stock attachment. The executed 26.10 executable SHA-256 is
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`,
+build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`; it was not built from the fresh
+`935de744` source reference. Frozen RED instrument hashes remain
+`86c4e50cbb8415bdb7dc80a46cb89d8ca91cd165186003b845d5894354065b09`
+for `.cr` and
+`1c31e6e23218c9190bc2ca2fe13ae045ea47bc95a4fc3fd6cfd8c0f66b63b1c7`
+for `.sh`.
+
+Root's bounded adversarial verdict is ROBUST for this declared profile, not
+an independence claim about same-lineage model reviews. Executed falsifiers
+cover exact charge/minus-one refusal, nonzero sparse origins, empty EOF lanes,
+invalid global tag, truncated child marks, later-mark corruption with zero
+callbacks, stage cleanup/absent target, detached keys and checksum-valid raw
+coordinate mutation. A checksum-raw-hash-only mutation is rejected without
+changing physical file hashes/sizes. Initial failures exposed a copied nested
+StaticArray schedule assignment and invalid empty-stream fixture refreshes;
+both were corrected before these final-source gates. The common compressed
+decoder was not relaxed to make empty fixture refreshes pass.
+
+Refresh this certificate on any affected source, fixture, metadata, executable,
+codec or callback/accounting change. Full type/serializer parity, arbitrary
+recursive composition, MV/projection widening and the large facade refactor
+remain open; no throughput, RSS or <=10% ClickHouse gap claim follows.
 
 ### Owned-model implementation transition (2026-10-01)
 

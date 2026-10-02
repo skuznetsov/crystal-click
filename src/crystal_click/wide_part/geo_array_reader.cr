@@ -137,6 +137,46 @@ module CrystalClick
         charge
       end
 
+      # Geometry composes the same six nominal Geo Array lanes under one
+      # discriminator. Return only the selected aggregate shape, while the
+      # callback receives compact per-mark counts from this single existing
+      # size-discovery pass. No child topology or Point buffers escape.
+      def logical_shape(
+        first_mark : Int32,
+        mark_count : Int32,
+        max_materialized_bytes : UInt64,
+      ) : {Array(UInt64), UInt64}
+        logical_shape(first_mark, mark_count, max_materialized_bytes) do |_mark_offset, _level_counts, _point_count|
+          nil
+        end
+      end
+
+      def logical_shape(
+        first_mark : Int32,
+        mark_count : Int32,
+        max_materialized_bytes : UInt64,
+        &block : Int32, Array(UInt64), UInt64 -> Nil
+      ) : {Array(UInt64), UInt64}
+        validate_budget(max_materialized_bytes)
+        checked_first, checked_count = checked_range(first_mark, mark_count)
+        schedule, levels_by_mark, level_counts, point_count = discover_sizes(
+          checked_first,
+          checked_count,
+          max_materialized_bytes
+        )
+        charge = full_range_charge(level_counts, point_count, schedule.mark_count, level_counts, point_count)
+        ensure_charge!(charge, max_materialized_bytes, "Geo Array range materialization charge exceeds per-range limit")
+        validate_coordinate_structure!(schedule, checked_first)
+
+        checked_count.times do |mark_offset|
+          per_mark_counts = Array(UInt64).new(@plan.depth) do |level|
+            levels_by_mark[mark_offset][level].size.to_u64
+          end
+          yield mark_offset.to_i32, per_mark_counts, schedule.point_count_at(mark_offset)
+        end
+        {level_counts, point_count}
+      end
+
       def validate_selected_structure(
         first_mark : Int32,
         mark_count : Int32,

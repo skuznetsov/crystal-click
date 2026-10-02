@@ -80,7 +80,7 @@ describe CrystalClick::GeometryColumnType do
     CrystalClick::GeometryColumnType.for_type("Point").should be_nil
     CrystalClick::GeometryColumnType.for_type("Variant").should be_nil
     CrystalClick::GeometryColumnType.for_type("geometry").should be_nil
-    CrystalClick::WidePart.supports_typed_type?("Geometry").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Geometry").should be_true
 
     expected = [
       {"shape.variant_discr", 1},

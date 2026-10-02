@@ -11,11 +11,21 @@ existing API and behavior, not a completed responsibility-level architecture.
 W113's private staged-stream lifetime owner is verified below for two existing
 writer validators; it fixes qualified partial-acquisition leaks without moving
 codec or publication policy into the new owner.
-W114's owned Geometry model now has separate arm, exact column descriptor,
-data and row-handle files. Its model-only certificate is in
-`GEO_TYPES_FRONTIER.md`: focused DEBUG/RELEASE each passed 64 examples, full
-DEBUG passed 1,848, and the stock production-refusal RED remains closed.
-This does not admit Geometry decoding/writing or finish the facade refactor.
+W114's Geometry model has separate arm, exact column descriptor, data and
+row-handle files. Its later paired physical checkpoint adds eight concrete
+owners, each in its own file, for the mark schedule, reader, serialization
+profile, writer input/schedule/orchestrator and table/catalog adapters.
+The final-source certificate is in `GEO_TYPES_FRONTIER.md`: focused DEBUG and
+RELEASE each passed 138 examples, full DEBUG passed 1,886, the independent
+stock/Crystal Geometry oracle and ten unchanged regression phases passed.
+Exact seven-arm Geometry is now admitted within that profile; wrappers and
+generic Variant widening remain rejected. The larger facade refactor remains
+open. Source files alone do not prove lower coupling or performance.
+Current navigation counts are 16,029 reader lines, 26,034 writer lines, 7,080
+table lines, 1,560 catalog lines and 3,657 offline-table lines. The next cohesive
+architectural boundaries remain shared type/substream planning, physical-stream
+lifetime/validation, leaf codecs, staging orchestration and table/catalog
+materialization; do not replace these with a Cartesian set of type combinations.
 The October 1 private Variant discriminator extraction is verified below;
 physical I/O, limits, marks and type admission remain with their prior owners.
 W96 adds one closed numeric identity/width owner and extends the existing

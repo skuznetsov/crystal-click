@@ -572,6 +572,42 @@ module CrystalClick
       )
     end
 
+    # Write a bounded paired Geometry owner and sorted UInt64 primary key.
+    # Geometry's seven physical lanes use sparse schedules on the outer table
+    # mark grid; this is an exact profile, not generic Variant admission.
+    def self.write_uint64_geometry_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      data : WideGeometryColumnData,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      write_geometry_pair_with_hooks(
+        destination, key_name, keys, value_name, data, rows_per_mark,
+        ->(parent : String) { create_stage(parent) }, ->(_stage : String) { nil }
+      )
+    end
+
+    private def self.write_geometry_pair_with_hooks(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      data : WideGeometryColumnData,
+      rows_per_mark : Int32,
+      stage_factory : Proc(String, String),
+      before_validation_hook : Proc(String, Nil),
+    ) : String
+      infrastructure = build_tuple_part_infrastructure(
+        stage_factory, ->(column : WideTupleLeafColumn) { column.string_values }
+      )
+      GeometryPartWriter.write(
+        destination, key_name, keys, value_name, data, rows_per_mark,
+        infrastructure, before_validation_hook
+      )
+    end
+
     private def self.write_uint64_tuple_pair_with_stage_factory(
       destination : String,
       key_name : String,

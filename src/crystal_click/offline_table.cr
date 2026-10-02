@@ -103,6 +103,9 @@ module CrystalClick
       if GeoArrayColumnType.for_type(selected_type)
         return GeoArrayValuesMaterializer.materialize(self, candidates, column_name, selected_type, expected_rows)
       end
+      if GeometryColumnType.for_type(selected_type)
+        return GeometryValuesMaterializer.materialize(self, candidates, column_name, selected_type, expected_rows)
+      end
       values = Array(OfflineColumnValue).new(expected_rows.to_i)
       observed_rows = 0_u64
       string_bytes = 0_u64
