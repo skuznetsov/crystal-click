@@ -1,8 +1,28 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-02)
+## Current source snapshot (2026-10-02, refreshed)
 
 Use this separate checkout for new source comparisons:
+
+`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-31d2addb`
+
+- Upstream: `https://github.com/ClickHouse/ClickHouse.git`, branch `master`.
+- Revision: `31d2addbabda0d8e14ffd325fc0a9106528aa1c7`.
+- Commit timestamp: `2026-10-02T12:39:11Z`.
+- Cloned with `--depth 1 --single-branch --branch master --no-tags`.
+- Root observed shallow repository `true`, reachable commit count `1`, and a
+  clean working tree. Post-clone `git ls-remote` returned the same upstream HEAD.
+- Upstream moved between the initial remote lookup and cloning; the folder was
+  renamed to match the revision actually downloaded, not the earlier lookup.
+- Existing source checkouts were not modified. Submodules were not initialized.
+
+This checkout is a source reference, not a newly built executable. Retain the
+runtime identities and executed compatibility certificates below.
+
+## Earlier October 2 snapshot
+
+Retain this separate checkout as the source reference for the W117-W120
+certificates:
 
 `/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-0c68f01a`
 
@@ -16,9 +36,27 @@ Use this separate checkout for new source comparisons:
 - Existing source checkouts were not modified. Submodules were not initialized.
 
 This is a source reference, not the build provenance of the executable oracle.
-The retained W115-W117 oracle is ClickHouse `26.10.1.1201`, build
+The retained W115-W120 oracle is ClickHouse `26.10.1.1201`, build
 `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Its executed certificates keep
 their original source/runtime identities in `JSON_GENERAL_STORAGE_FRONTIER.md`.
+
+## Latest snapshot comparison
+
+Root executed recursive `git diff --no-index --stat` comparisons of the
+`0c68f01a` and `31d2addb` source trees. `src/DataTypes` (including all its
+serializers), `src/Columns`, and `src/Storages/MergeTree` have identical file
+contents: each comparison returned exit 0 and no diff output. This establishes
+continuity only in those scopes between these two snapshots; no current-master
+binary was built or qualified.
+
+The latest source still separates Object structure versions from shared-data
+layout selection (`SerializationObject.cpp:302-311,413-430` and
+`SerializationObjectSharedData.h:29-71`), and Dynamic has its own structure
+version grammar (`SerializationDynamic.cpp:145-153`). Shared layouts determine
+different streams, marks and Wide/Compact chunk ordering. Projection reads use
+their own part granularity and indexes (`MergeTreeDataSelectExecutor.cpp:3102-3126`).
+Adding or retaining a logical type does not establish all these physical
+profiles. These are source observations, not executable qualification.
 
 ## Comparison to the previous reference
 
@@ -54,4 +92,5 @@ runtime identity distinct in new evidence.
 
 Refresh this reference when upstream moves or a relevant source file changes.
 Source continuity alone does not widen admitted types or promote the
-W117-W119 binary kernel and W118 MAP block into whole-JSON part support.
+W117-W119 binary kernel, W118 MAP block or W120 structure metadata into
+whole-JSON part support.
