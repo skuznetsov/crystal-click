@@ -173,6 +173,23 @@ binary type/value decoding, lane schedules, shared layouts and document
 reader/staged writer orchestration; the larger facade decomposition is still
 open and must not be replaced with one class per JSON declaration.
 
+W117 implements the first reusable binary descriptor/scalar kernel under
+that frontier. Six concrete owners each have their own file: nominal
+type, owned value, limits, bounded codec context, descriptor codec and value
+codec. Recursive Array/Nullable/Tuple/Map dispatch uses those owners rather than
+one owner per type combination. Bulk streams, Dynamic schedules, Object shared
+layouts, part admission and writer publication stay outside this kernel.
+The owners range from 39 to 290 lines; recursive combinations share the same
+dispatch rather than multiplying classes. Root executed 14 focused examples
+in each of DEBUG/RELEASE, 1,921 full DEBUG examples, 36 pinned stock-writer and
+36 stock-reader/re-emission vectors, and the unchanged six-part W116 regression
+gate. All passed. The scoped hostile verdict is ROBUST for the default-bounded
+scalar profile; full RELEASE, arbitrary type parameters, whole JSON/MergeTree,
+RSS/performance and caller-raised stack limits remain unqualified. Exact
+provenance, REDs, commands and certificate decay are in
+`JSON_GENERAL_STORAGE_FRONTIER.md`. This implementation does not claim that
+the large facades have been decomposed.
+
 ## Variant discriminator owner extraction (2026-10-01)
 
 Status: VERIFIED within the behavior-neutral extraction and executed gates

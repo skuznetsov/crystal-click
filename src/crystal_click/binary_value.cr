@@ -1,0 +1,247 @@
+module CrystalClick
+  # Immutable owned value for the W117 scalar/container grammar. Numeric leaves
+  # retain their exact-width little-endian bytes; Float values never pass
+  # through host floating-point conversion.
+  class BinaryValue
+    getter type : BinaryDataType
+
+    @payload : Bytes?
+    @elements : Array(BinaryValue)
+    @null : Bool
+
+    private def initialize(
+      @type : BinaryDataType,
+      payload : Bytes? = nil,
+      elements : Array(BinaryValue) = [] of BinaryValue,
+      @null : Bool = false,
+    )
+      @payload = payload.try { |bytes| Bytes.new(bytes.size) { |index| bytes[index] } }
+      @elements = elements.dup
+    end
+
+    # Construct raw bytes for a fixed-width numeric/float leaf or FixedString.
+    # String, Bool, Nothing, and recursive types have separate constructors.
+    def self.fixed(type : BinaryDataType, bytes : Bytes) : BinaryValue
+      width = type.fixed_width || raise ArgumentError.new("type does not have a fixed-width binary payload")
+      allowed = case type.tag
+                when BinaryDataType::TAG_UINT8, BinaryDataType::TAG_UINT16,
+                     BinaryDataType::TAG_UINT32, BinaryDataType::TAG_UINT64,
+                     BinaryDataType::TAG_UINT128, BinaryDataType::TAG_UINT256,
+                     BinaryDataType::TAG_INT8, BinaryDataType::TAG_INT16,
+                     BinaryDataType::TAG_INT32, BinaryDataType::TAG_INT64,
+                     BinaryDataType::TAG_INT128, BinaryDataType::TAG_INT256,
+                     BinaryDataType::TAG_FLOAT32, BinaryDataType::TAG_FLOAT64,
+                     BinaryDataType::TAG_BFLOAT16, BinaryDataType::TAG_FIXED_STRING
+                  true
+                else
+                  false
+                end
+      unless allowed
+        raise ArgumentError.new("fixed binary value requires a fixed-width numeric or FixedString type")
+      end
+      unless bytes.size == width
+        raise ArgumentError.new("fixed binary payload width does not match its type")
+      end
+      new(type, bytes)
+    end
+
+    def self.string(value : String) : BinaryValue
+      new(BinaryDataType.primitive("String"), value.to_slice)
+    end
+
+    def self.bool(value : Bool) : BinaryValue
+      new(BinaryDataType.primitive("Bool"), Bytes[BoolValueCodec.encode(value)])
+    end
+
+    def self.int64(value : Int64) : BinaryValue
+      bits = value.unsafe_as(UInt64)
+      new(BinaryDataType.primitive("Int64"), little_endian(bits, 8))
+    end
+
+    def self.uint64(value : UInt64) : BinaryValue
+      new(BinaryDataType.primitive("UInt64"), little_endian(value, 8))
+    end
+
+    def self.float32_bits(bits : UInt32) : BinaryValue
+      new(BinaryDataType.primitive("Float32"), little_endian(bits.to_u64, 4))
+    end
+
+    def self.float64_bits(bits : UInt64) : BinaryValue
+      new(BinaryDataType.primitive("Float64"), little_endian(bits, 8))
+    end
+
+    def self.null(type : BinaryDataType = BinaryDataType.primitive("Nothing")) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE
+        raise ArgumentError.new("NULL value requires Nothing or Nullable type")
+      end
+      new(type, nil, [] of BinaryValue, true)
+    end
+
+    def self.array(type : BinaryDataType, elements : Array(BinaryValue)) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_ARRAY
+        raise ArgumentError.new("array value requires Array type")
+      end
+      validate_children(type.child_at(0), elements)
+      new(type, nil, elements)
+    end
+
+    # A NULL Nullable has no child. A non-NULL value contains exactly its
+    # wrapped child as elements[0], while retaining the Nullable nominal type.
+    def self.nullable(type : BinaryDataType, child : BinaryValue? = nil) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_NULLABLE
+        raise ArgumentError.new("nullable value requires Nullable type")
+      end
+      if child
+        unless child.type == type.child_at(0)
+          raise ArgumentError.new("Nullable child type does not match its descriptor")
+        end
+        if child.type.tag == BinaryDataType::TAG_NOTHING && child.is_null?
+          raise ArgumentError.new("Nullable(Nothing) cannot wrap the dynamic Nothing NULL sentinel")
+        end
+        new(type, nil, [child] of BinaryValue, false)
+      else
+        new(type, nil, [] of BinaryValue, true)
+      end
+    end
+
+    def self.tuple(type : BinaryDataType, fields : Array(BinaryValue)) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_UNNAMED_TUPLE || type.tag == BinaryDataType::TAG_NAMED_TUPLE
+        raise ArgumentError.new("tuple value requires Tuple type")
+      end
+      unless fields.size == type.child_count
+        raise ArgumentError.new("Tuple field count does not match its descriptor")
+      end
+      fields.each_with_index do |field, index|
+        unless field.type == type.child_at(index)
+          raise ArgumentError.new("Tuple field type does not match its descriptor")
+        end
+      end
+      new(type, nil, fields)
+    end
+
+    # Maps preserve wire/order semantics as a flat alternating key/value list.
+    def self.map(type : BinaryDataType, flat_values : Array(BinaryValue)) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_MAP
+        raise ArgumentError.new("map value requires Map type")
+      end
+      unless flat_values.size.even?
+        raise ArgumentError.new("Map values must contain complete key/value pairs")
+      end
+      flat_values.each_with_index do |value, index|
+        expected = type.child_at(index.even? ? 0 : 1)
+        unless value.type == expected
+          raise ArgumentError.new("Map entry type does not match its descriptor")
+        end
+      end
+      new(type, nil, flat_values)
+    end
+
+    # A detached payload snapshot. Container values have no scalar payload.
+    def bytes : Bytes
+      payload = @payload || raise ArgumentError.new("value has no scalar byte payload")
+      Bytes.new(payload.size) { |index| payload[index] }
+    end
+
+    # Cheap size for preflight checks. It excludes any VarUInt/string header.
+    def byte_size : Int32
+      @payload.try(&.size) || 0
+    end
+
+    def byte_at(index : Int) : UInt8
+      (@payload || raise ArgumentError.new("value has no scalar byte payload"))[index]
+    end
+
+    def elements : Array(BinaryValue)
+      @elements.dup
+    end
+
+    def element_count : Int32
+      @elements.size
+    end
+
+    def child_count : Int32
+      @elements.size
+    end
+
+    def element_at(index : Int) : BinaryValue
+      @elements[index]
+    end
+
+    def child_at(index : Int) : BinaryValue
+      @elements[index]
+    end
+
+    def is_null? : Bool
+      @null
+    end
+
+    def as_string : String
+      require_tag(BinaryDataType::TAG_STRING, "String")
+      payload = @payload.not_nil!
+      String.new(Bytes.new(payload.size) { |index| payload[index] })
+    end
+
+    def as_bool : Bool
+      require_tag(BinaryDataType::TAG_BOOL, "Bool")
+      BoolValueCodec.decode(@payload.not_nil![0])
+    end
+
+    def as_int64 : Int64
+      require_tag(BinaryDataType::TAG_INT64, "Int64")
+      read_le_u64.unsafe_as(Int64)
+    end
+
+    def as_uint64 : UInt64
+      require_tag(BinaryDataType::TAG_UINT64, "UInt64")
+      read_le_u64
+    end
+
+    def as_float32_bits : UInt32
+      require_tag(BinaryDataType::TAG_FLOAT32, "Float32")
+      read_le_u32
+    end
+
+    def as_float64_bits : UInt64
+      require_tag(BinaryDataType::TAG_FLOAT64, "Float64")
+      read_le_u64
+    end
+
+    private def read_le_u32 : UInt32
+      payload = @payload.not_nil!
+      value = 0_u32
+      4.times do |index|
+        value |= payload[index].to_u32 << (index * 8)
+      end
+      value
+    end
+
+    private def read_le_u64 : UInt64
+      payload = @payload.not_nil!
+      value = 0_u64
+      8.times do |index|
+        value |= payload[index].to_u64 << (index * 8)
+      end
+      value
+    end
+
+    private def require_tag(tag : UInt8, expected : String) : Nil
+      unless @type.tag == tag
+        raise ArgumentError.new("value is not #{expected}")
+      end
+    end
+
+    private def self.validate_children(expected : BinaryDataType, values : Array(BinaryValue)) : Nil
+      values.each do |value|
+        unless value.type == expected
+          raise ArgumentError.new("container child type does not match its descriptor")
+        end
+      end
+    end
+
+    private def self.little_endian(value : UInt64, width : Int) : Bytes
+      Bytes.new(width) do |index|
+        ((value >> (index * 8)) & 0xff_u64).to_u8
+      end
+    end
+  end
+end

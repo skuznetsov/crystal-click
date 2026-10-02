@@ -1,8 +1,10 @@
 # General JSON Storage Frontier
 
-Status: W115 stock capture and W116 independent physical/type qualification
-executed on 2026-10-02. The precise missing-capability RED is qualified, not
-resolved. General JSON
+Status: W115 stock capture, W116 independent physical/type qualification and
+W117's reusable paired binary type/value kernel were executed on 2026-10-02.
+W117 is VERIFIED within the scalar profile and gates below, not as a general
+Object/Dynamic/MergeTree codec. The precise whole-document missing-capability
+RED is qualified, not resolved. General JSON
 document reading/writing is not admitted. W24/W72 declared scalar projections
 remain the only paired JSON capability; see `JSON_TYPED_PATH_FRONTIER.md`.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
@@ -346,6 +348,182 @@ The producer/build, settings, encoding/layout, comparator or relevant code
 changes invalidate this certificate; re-run the stated commands before reuse.
 
 ## Implementation direction after qualification
+
+### W117 paired scalar kernel: seal and executed result
+
+Risk: CAUTION (new binary-format API). Rollback is one isolated local feature
+commit; no existing part admission, dependencies, filesystem publication,
+stored data, or performance behavior may change. This kernel is a prerequisite,
+not closure of the general JSON/MergeTree requirement.
+
+Admitted paired surface: Nothing descriptors; all signed/unsigned integer
+widths through 256 bits; Float32/64, BFloat16, Bool, String, FixedString; recursive
+Array, Nullable, named/unnamed Tuple and Map. A typed envelope contains the type
+descriptor and one scalar value; a known-type scalar API omits the descriptor.
+Nothing is the Dynamic NULL envelope, not an ordinary non-null scalar. Distinct
+empty array types, field names, map pair order/duplicates, fixed-width raw bytes
+and floating-point raw bits remain nominally distinct. String lengths count
+bytes, including embedded NULs. Nullable scalar serialization carries a flag
+and, only when non-null, its nested value; it is not the bulk null-map layout.
+
+Source at `935de744`: `DataTypesBinaryEncoding.{h,cpp}` defines descriptors;
+`SerializationNumber.cpp:299`, `SerializationArray.cpp:57`,
+`SerializationNullable.cpp:184`, `SerializationTuple.cpp:56` and
+`SerializationMap.cpp:70` define the separate scalar grammar. This snapshot
+allows Nullable(Tuple), and Map keys are rejected only for Nullable or
+LowCardinality(Nullable) (`DataTypeTuple.h:38`, `DataTypeMap.cpp:149`). Older
+scalar-only Map-key assumptions must not become guards. Named Tuple fields
+must be nonempty and unique and cannot be exactly `null`
+(`DataTypeTuple.cpp:checkTupleNames`). Tags 0x33/0x35 are reserved former
+Time/Time64 timezone encodings, not reusable additions: schema evolution is
+not proof that every wire format is unchanged.
+
+Ownership: `binary_data_type.cr` owns immutable nominal descriptors;
+`binary_value.cr` owns detached values; `binary_codec_limits.cr` and
+`binary_codec_context.cr` own aggregate logical limits and bounded wire access;
+`binary_data_type_codec.cr` owns descriptor serialization;
+`binary_value_codec.cr` owns scalar/envelope serialization. One concrete owner
+per file, no special class per type combination. `src/crystal_click.cr` imports
+these owners; no existing facade dispatch is widened. Before the change,
+`rg 'Binary(DataType|Value|Codec)' src spec scripts` found no existing consumer.
+
+Limits: maximum recursion depth, combined descriptor/value node visits,
+descriptor-child/container-element charges, and total input/output wire bytes.
+Check announced counts and byte lengths before allocation, and output sizes
+before growth. Defaults are depth 64, 4,096 combined node visits, 1,000,000
+child/container edge charges and 64 MiB of input/output wire bytes. These are
+logical bounds, not an RSS guarantee. The recursive implementation does not
+promise native-stack safety if a caller raises these limits. Both scalar and
+descriptor decoding require exact consumption. VarUInt decoding deliberately
+admits only minimal, non-overflowing encodings; this is a stricter profile than
+ClickHouse's permissive stored-data reader. Structural Nullable flags are 0/1;
+Bool values follow the existing nonzero-is-true policy and encode canonically.
+Malformed supported encodings are corruption; unadmitted tags/types are
+unsupported, never silently interpreted as another type.
+
+Recognized but unadmitted tags are refused at the tag; their parameter/body
+grammar is not validated by this checkpoint. Unknown and reserved tags are
+corruption. Nullable(Nothing) admits only its NULL flag: a non-NULL flag is a
+contradictory value and corruption here, not a claim of upstream exception-class
+parity. A non-NULL Nullable child charges one container edge; a NULL charges
+none. Child depth is preflighted before declared child-array allocation.
+
+Rejected at this checkpoint: temporal/decimal/Enum/custom/aggregate descriptor
+parameters, LowCardinality, general Variant/Dynamic/JSON scalar dispatch, Object
+dictionaries, Dynamic lane schedules, shared layout orchestration and general
+part/document reading/writing. They remain required later capabilities, not
+removed goals. Nothing inside an empty container can be described but has no
+non-null scalar payload. Unknown tags, malformed schemas and exhausted limits
+must fail before callbacks or publication (neither exists in this kernel).
+
+Execution order and DoD:
+
+1. Write `spec/binary_value_codec_w117_spec.cr`; execute its missing-API RED
+   before production changes.
+2. Implement the paired generic owners. Run the focused spec in DEBUG and
+   RELEASE and the production regression suite with bounded compiler guards.
+3. `scripts/check_binary_w117.sh` qualifies hand-authored descriptor/scalar
+   literals against the pinned stock runtime, then sends library-produced bytes
+   to the independent stock reader. `RowBinaryWithNamesAndTypes` uses
+   `output_format_binary_encode_types_in_binary_format=1` and reverse
+   `input_format_binary_decode_types_in_binary_format=1`; this is scalar codec
+   evidence, not a MergeTree part/ATTACH certificate.
+4. Attack truncation at every point, trailing bytes, tenth-byte VarUInt overflow,
+   nonminimal lengths, inconsistent nominal children, detached ownership,
+   exact/minus-one budgets, signed zero/NaN bits, typed empty arrays, named Tuple
+   metadata and composite Map keys. Seed a byte defect to qualify the independent
+   comparator. Recheck whole-JSON refusal; it must remain closed.
+
+Root executed the test-first checkpoint on 2026-10-02 with Crystal 1.21.0:
+`crystal spec --single-module --link-flags=-fuse-ld=ld
+spec/binary_value_codec_w117_spec.cr` under the serial resource guard. It exited
+1 at the spec's first `CrystalClick::BinaryDataType` annotation with
+`undefined constant CrystalClick::BinaryDataType`; the missing-API RED is
+qualified. The guarded log is
+`/private/tmp/crystal-click-binary-w117.GKKkIV/red.log` (reproduce if lost).
+This does not establish that later test branches are correct: root separately
+corrected test-instrument integer narrowing and alternating Map-accessor
+assumptions before the implementation gate.
+
+Root executed the final gates against the six frozen production owners:
+
+- Focused DEBUG and RELEASE each passed 14 examples with zero failures/errors/
+  pending. The full DEBUG suite passed 1,921 examples with the same result.
+  Full RELEASE was not run. Logs are under
+  `/private/tmp/crystal-click-binary-w117.GKKkIV`: `debug-final.log`,
+  `release-final.log` and `full-debug-final.log`.
+- The independent stock oracle passed 37 hand-authored local type/value vectors,
+  36 stock-writer comparisons and 36 stock-reader/re-emission comparisons of
+  library-produced bytes. Nothing's NULL envelope is local-only in this oracle.
+  Its retained root is `/private/tmp/crystal-click-binary-w117.kCl1vR`.
+  Runtime identity is the separately pinned 26.10.1.1201 build above, not an
+  executable compiled from `935de744`. These are authored scalar vectors, not
+  every possible value, nested combination, type parameter or physical part.
+- The unchanged W116 gate passed against six retained source/attached parts:
+  six actual CHECK=1 results, twelve CHECK negative controls, twelve independent
+  full/selected document checks and the existing raw/type/mark/schema controls.
+  It also confirmed exact typed whole-JSON refusal. Its new check root is
+  `/private/tmp/crystal-click-json-w116.aDRAiG`; it reuses the W115 capture,
+  not new W117-generated or newly attached parts.
+- Crystal format, shell syntax and `git diff --check` passed. Root independently
+  inspected the owners, exact scope and adversarial results. The bounded hostile
+  verdict is ROBUST for this default-bounded scalar kernel; it does not certify
+  general JSON, allocator/RSS bounds, raised-limit stack safety or performance.
+
+Two targeted regressions distinguish the guards from a self-round-trip. The
+Nothing-container factory test failed before the overly broad factory guard
+was narrowed; ordinary nonempty Nothing payloads still fail scalar admission.
+The depth-before-allocation test announced one million Tuple children with a
+depth limit of one. Temporarily removing only that preflight guard produced
+8,000,832 allocated bytes and failed the 2,097,152-byte ceiling. Restoring the
+guard passed both final focused modes. This is a pinned Crystal 1.21.0/Boehm
+allocation discriminator, not a throughput or RSS benchmark. The actual seeded
+RED is `depth-seeded-red-qualified.log`; an earlier selector ran zero examples
+and is not evidence. The temporary defect is absent from the production owners.
+
+The first reverse oracle failure was instrument-only: ClickHouse's default
+`print_pretty_type_names=1` made named Tuple type names multiline in TSVRaw.
+The instrument explicitly sets it to zero to retain one-line canonical names;
+it does not strip or normalize payload bytes. Raw oracle output is retained.
+The one-byte mutation control still fails the exact row comparator.
+
+Reproduction commands, from the repository root, use the same serial resource
+guard and toolchain (one command at a time; recreate the cache root if lost):
+
+```sh
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+export TMPDIR=/private/tmp
+export COGNI_RUN_SAFE_MIN_FREE_PCT=50
+
+env CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-binary-w117.GKKkIV/cache-debug \
+  /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /opt/homebrew/bin/crystal 600 8192 spec --single-module --link-flags=-fuse-ld=ld \
+  spec/binary_value_codec_w117_spec.cr
+env CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-binary-w117.GKKkIV/cache-release \
+  /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /opt/homebrew/bin/crystal 600 8192 spec --release --single-module --link-flags=-fuse-ld=ld \
+  spec/binary_value_codec_w117_spec.cr
+env CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-binary-w117.GKKkIV/cache-full \
+  /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /opt/homebrew/bin/crystal 600 32768 spec --single-module --link-flags=-fuse-ld=ld
+env CRYSTAL_BIN=/opt/homebrew/bin/crystal W117_KEEP_TMP=1 \
+  /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /bin/bash 600 8192 scripts/check_binary_w117.sh
+env CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq W116_KEEP_TMP=1 \
+  /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /bin/bash 600 8192 scripts/check_json_w116.sh
+```
+
+Pre-mortem: a self-round-trip can agree with the same wrong grammar, or erase
+nominal distinctions. Independent literal bytes plus stock producer/consumer
+checks and adversarial raw-bit/type identity tests are the guard. Source/runtime
+identities, settings, comparator or owner changes invalidate the certificate;
+rerun the stated gates before reusing it. This result is over `2bb91f9` plus the
+W117 feature's six owners, entry imports, spec and oracle, not a promotion of
+older facade admissions to arbitrary composition.
+
+### Subsequent Object/Dynamic integration
 
 Use one concrete owner per file for distinct responsibilities, not per schema
 combination. Reuse bounded frame/mark access and primitive leaf codecs; keep
