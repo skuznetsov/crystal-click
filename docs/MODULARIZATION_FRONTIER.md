@@ -1343,3 +1343,70 @@ Root's scoped adversary verdict is ROBUST for this codec path; Luna's static
 review is correlated, and the mutable borrowed-view caveat remains explicit.
 Refresh on owner/import/API, budget/coordinate, consumer, toolchain/runtime or
 comparator changes; these tests do not prove future child-lane integration.
+
+## Recursive bulk and Dynamic logical-value owners (W122, 2026-10-02)
+
+Status: VERIFIED within the normalized codec and captured stock profile;
+see `JSON_GENERAL_STORAGE_FRONTIER.md`. CAUTION: paired recursive bulk
+serialization and sparse Dynamic child cardinalities, over `e71a967`.
+Rollback is this slice's exact ten-owner/import/spec/oracle/documentation diff,
+plus the additive schedule index queries and borrowed-envelope reservation.
+Existing facade behavior and public part admission remain unchanged.
+
+The new responsibilities have separate concrete-owner files:
+
+- `binary_bulk_profile.cr`: explicit uniform String layout selector. Its enum
+  is part of this owner's closed profile contract, not another service.
+- `binary_bulk_stream.cr`: detached bytes and a decompressed-byte offset grid;
+  convention-internal borrowed range access avoids whole-lane copies.
+- `binary_bulk_streams.cr`: complete role-to-stream set and outer mark count.
+- `binary_bulk_type_plan.cr`: recursive role names and allocation-free role
+  counts, called only after bounded descriptor validation by codecs.
+- `binary_bulk_default_value.cr`: canonical hidden-NULL defaults and their
+  logical cost; its nested cost record remains cohesive with that policy.
+- `binary_bulk_encoder.cr`: paired recursive columnar emission and shared
+  logical-budget preflight, without legacy facade dispatch.
+- `binary_bulk_decoder.cr`: complete grid/role validation and selected-body
+  parsing, including empty lanes and exact child-cardinality exhaustion.
+- `binary_bulk_codec.cr`: the small paired entry facade, including borrowed
+  budget entry points; it does not own a part filesystem/publication policy.
+- `dynamic_value_streams.cr`: the discriminator plus complete arm owners.
+- `dynamic_value_codec.cr`: nominal arm routing, shared typed envelopes,
+  selected W121-derived child counts, and bounded logical-row assembly.
+
+`DynamicMarkSchedule` gains scalar/index accessors rather than exposing its
+mutable arrays or creating detached snapshots for every arm/row.
+`BinaryValueCodec.encode_borrowed` gains an optional reserved-wire allowance;
+its existing callers retain the zero-reservation behavior. Direction is checked
+before budget use. The aggregate library file adds ten imports. No legacy
+reader/writer/table consumer is silently rerouted to a wider format profile.
+
+At qualification time the ten new owner files total 1,716 lines
+(45/61/56/97/95/399/369/72/45/477). The existing schedule becomes 69 lines;
+reader/writer/table remain 15,976/26,034/7,080. These are navigation counts,
+not coupling, allocation or throughput measurements. The large-facade
+decomposition is still open; physical mark adapters, Object document assembly
+and staged publication must retain separate responsibilities.
+
+Borrowed byte slices remain mutable by convention. Public detached model
+construction/getters are outside codec budgets, and logical node/edge/wire
+limits are not RSS limits. Decoder NULL normalization discards hidden nested
+bytes, although all selected hidden payloads are validated first. No physical
+losslessness, all-CH-type admission, whole-JSON, or speed claim follows.
+
+The source/runtime anchors, exact profiles, falsifiers, DoD and replay evidence
+belong to the W122 section of `JSON_GENERAL_STORAGE_FRONTIER.md`. Refresh on
+owner/import/API, profile/coordinate/budget, consumer, toolchain/runtime or
+comparator changes, not merely when a SQL type name changes.
+
+Root's executed gates: 111 focused DEBUG and 111 focused RELEASE examples;
+2,030 full non-release examples with symbolic debug information disabled;
+four isolated production-stream copied-part ATTACH/actual CHECK=1 profiles
+with full and PK3..6 readback; unchanged W116-W121 stock regressions. All final
+positive gates exited0 with no test failures/errors/pending. Full RELEASE was
+not executed. A removed final child-consumption guard was detected and restored
+before the positives. The new stock comparator's unordered Object-statistics
+assumption was corrected without changing production code; independent semantic
+qualification plus exact retained bytes remain required. Root's scoped verdict
+is ROBUST; Luna's static review is correlated. Full details and temporary
+evidence pointers are in the capability frontier rather than duplicated here.

@@ -12,9 +12,11 @@ remain the only paired JSON capability; see `JSON_TYPED_PATH_FRONTIER.md`.
 W120's paired complete decompressed structure-metadata codecs are VERIFIED
 within the source/local and V3 MAP stock gates below. W121's paired normalized
 Dynamic discriminator streams and selected sparse schedules are VERIFIED within
-their strict captured-writer profile below. Dynamic child value lanes,
-cardinality and compressed physical mark mapping remain the next owner boundary;
-metadata and discriminator schedules do not admit whole-document JSON.
+their strict captured-writer profile below. W122's reusable recursive bulk and
+Dynamic logical-value codecs are VERIFIED within their normalized profile and
+two retained-stock gates below. Compressed physical adapters, Object document
+assembly and staged writer publication remain the next owner boundary;
+metadata, schedules and standalone child codecs do not admit whole-document JSON.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
 declaration registered in the existing facades. Performance work remains parked.
 
@@ -1595,3 +1597,275 @@ stock gates pass. Current implementation/oracle/toolchain, producer/build,
 serializer settings, limits, coordinates or comparator changes reopen dependent
 evidence. The all-types/MV/projection/performance goal remains active; the prior
 turn and this slice are progress, not consecutive blocked goal turns.
+
+## W122 design seal: reusable bulk children and Dynamic logical values
+
+Status: VERIFIED within the normalized codec and executed gates below, over
+`e71a967`; not all ClickHouse bulk layouts. This is a CAUTION serialization
+change, not public whole-JSON admission or a performance change. Existing
+facades/refusals remain unchanged. Root owns compiler/CH/Git processes; Luna
+owns disjoint production, test and oracle paths. Rollback is the exact new
+owners/specs/scripts and aggregate imports in one local atomic commit. Do not
+push or touch the retained source/capture/runtime.
+
+### Source anchor and admitted profile
+
+Reference: shallow current source 31d2addbabda0d8e14ffd325fc0a9106528aa1c7,
+in the separately retained 2026-10-02 checkout. Runtime remains independently
+pinned 26.10.1.1201/d9bcb5ab; current-source agreement is not runtime identity.
+The primary-source counterexamples to scalar-envelope reuse are:
+
+- SerializationArray.cpp:156-199,352-394: position-independent UInt64 LE lengths
+  per array occurrence, then a distinct flattened-child cardinality.
+- SerializationNullable.cpp:114-177: explicit null map and nested payload of
+  equal cardinality, including NULL rows. ColumnNullable.cpp:257-270,294-303
+  and applyNullMap preserve the possibility of nondefault hidden payloads.
+- SerializationNothing.cpp:33-48 and SerializationTuple.cpp bulk empty-tuple
+  branches: one ASCII `0` byte per occurrence, not an absent/zero-width stream.
+- SerializationVariant.cpp child loop: zero-occurrence arms still visit their
+  nested serializers. Per-stream Wide marks are byte coordinates; adaptive
+  mark row fields remain outer-table rows, not sparse child counts.
+- SerializationDynamic.cpp shared statistics and ColumnDynamic.cpp:720-733:
+  SharedVariant is a bulk String lane of typed single-value envelopes. Ordinary
+  arm payloads do not repeat their type per row.
+
+The normalized profile admits every currently constructible BinaryDataType
+shape: fixed raw nominal leaves, String, Bool, Nothing, Array, Nullable, named
+and unnamed Tuple (including empty), and Map, recursively. BinaryBulkProfile
+explicitly chooses uniform String single-stream length+bytes or the retained
+stock WITH_SIZE_STREAM layout: UInt64 LE raw byte lengths on `.string_sizes`
+and concatenated raw bytes on `.data`, with no terminator. Empty sizes are legal;
+embedded NULs remain data. Each stream has its own grid. Array uses
+position-independent lengths; explicit
+Nullable null map with canonical 0/1 flags; canonical ASCII `0` placeholders.
+Active fixed leaves retain exact bytes, including float/identifier bits.
+Nothing and empty-Tuple decoders intentionally restrict placeholders to this
+writer profile; generic CH readers merely ignore their bytes. Nonminimal
+VarUInt, noncanonical null flags, implicit-null-map, sparse/custom serialization,
+mixed per-leaf String profiles, cumulative network offsets and missing physical-stream
+inference are outside this profile. Physical adapters must establish the
+profile rather than guess it from SQL type names.
+
+Logical NULL does not retain hidden nested bytes. Encoding it writes a
+canonical nested default: zero fixed bytes, empty String/containers, false
+Bool, NULL Nullable, and the per-occurrence Nothing/empty-Tuple placeholder.
+This matches a logical-value rewrite, not a physical-lossless rewrite. Decoder
+still validates selected hidden nested payloads and their cardinality before
+discarding them. Nullable(Nothing) permits only logical NULL; a selected zero
+null flag cannot manufacture a non-null Nothing value.
+
+### Owners, coordinates and laws
+
+- BinaryBulkStream owns detached bytes and one offset grid, with initial 0 and
+  a terminal byte-size offset. Repeated offsets are legal. The grid has K+1
+  records for K outer marks; each recursive child stream has the same grid
+  length, even when its occurrence count is zero. Offsets are decompressed
+  bytes, not compressed marks, outer rows, ranks or element counts.
+- BinaryBulkStreams owns K and an exact role-to-stream set. Roles are internal
+  structural paths: `root.data`, `.sizes`, `.elements`, `.nulls`, `.nested`,
+  `.string_sizes`, `.field.N`. Map uses sizes plus key/value child roles under elements.field.0
+  and elements.field.1. Tuple fields use ordinal roles, never escaped SQL names.
+- BinaryBulkCodec encodes Array(Array(BinaryValue)) granules and decodes using
+  explicit per-mark root occurrence counts. Those counts are supplied by the
+  parent, never copied from physical adaptive mark row fields. Whole grids,
+  role sets and range/count domains are validated; only selected body extents
+  are read. Selected zero-count bodies must be empty. No range getter copies
+  an unselected lane.
+- DynamicValueStreams owns the W121 discriminator stream and a complete set
+  of canonical ordinary-arm bulk stream owners plus SharedVariant bulk String.
+  DynamicValueCodec derives child counts from selected W121 schedules, parses
+  all selected children/shared envelopes before returning any logical rows,
+  and gathers by per-mark ranks. Selected-window arm offsets are never used as
+  part-wide physical positions. Encoder routes exact nominal roster matches
+  to ordinary arms and other admitted non-Nullable/non-Nothing values to shared
+  envelopes. Top-level Nothing NULL becomes tag255 and consumes no child.
+- Strict SharedVariant envelope admission rejects top-level Nothing/Nullable.
+  This is our normalized producer restriction, not a claim that every CH
+  insertion path rejects such envelopes. Nested Nullable remains admitted.
+  A shared envelope whose nominal type also occurs in the ordinary roster is
+  accepted: merges can retain it there. A logical rewrite may reroute it to an
+  ordinary arm. Equal display names are not equal nominal descriptors; Decimal
+  width is retained even when the SQL name omits it.
+- Every codec supports a correctly directed borrowed BinaryCodecBudget. One
+  parent budget spans discriminator, descriptor, stream/grid metadata, recursive
+  child values, shared envelopes and assembly; no reset per mark/arm. Preflight
+  count-derived collections before allocating, reject overflow/domain errors
+  as typed failures, and charge selected physical bytes exactly once. Logical
+  node/edge work can include canonical default materialization and assembly.
+  Detached public model construction/getters are caller-owned and outside
+  codec budgets; these are not RSS/allocation/performance certificates.
+  Input value descriptor trees are validated before computing their names,
+  including descriptors that will spill. Every assembled output row, including
+  tag255 NULL, is charged. Temporary shared envelopes reserve previously pending
+  frames and minimum outer framing through `encode_borrowed`'s additive
+  `reserved_wire_bytes` parameter; exact framing is checked before the String
+  copy and final bulk emission charges its wire bytes once. A growing VarUInt
+  prefix can consume up to nine extra temporary bytes before rejection, still
+  within the remaining logical byte ceiling; this is not an RSS guarantee.
+  Invalid Dynamic caller selection retains W121's ArgumentError, while malformed
+  selected bytes are CorruptPartError. Bulk count/range domain failures are
+  CorruptPartError on read and UnsupportedFormatError on write.
+
+### Falsifiers, plan and Definition of Done
+
+First execute a missing-API RED with independent Array(Nullable(String)) literal
+lanes, empty arrays, hidden NULL default, and nonzero-origin selection. Then
+implement disjoint bulk and Dynamic owners, one class per file; helpers may be
+split further instead of growing legacy reader/writer/table facades.
+
+Required independent tests: literal columnar Tuple/Map order; all fixed nominal
+widths/raw bits; Nothing/Nullable(Nothing)/Tuple() placeholders; repeated marks
+and zero-arm granules; empty Array versus empty child lane; malformed final
+selected child fails before return; unselected malformed body is not parsed;
+extra/missing roles, malformed terminal/grid, impossible counts/overflow,
+ownership mutation, strict shared envelope admission, direction/cross-call
+budget exhaustion and exact/minus-one budget thresholds. Use a seeded removed
+cardinality guard and restore it before positive gates.
+
+DoD commands (same serial guard/toolchain/50% floor as W121): focused W117-W122
+specs in non-release and RELEASE; full non-release `crystal spec --no-debug
+--single-module --link-flags=-fuse-ld=ld --error-trace`; new W122 retained-stock
+oracle and unchanged W116-W121 oracles, format, shell syntax and diff hygiene.
+The stock oracle must use independently literal logical rows, real child marks
+normalized from compressed/decompressed coordinates, full and nonzero-origin
+windows, and production-encoded child/discriminator bytes+marks in isolated
+copied parts with actual ATTACH/CHECK=1 and full/PK-selected semantic readback.
+Wrong literal values, child counts, marks/bytes and CHECK=0 controls must be
+observably rejected. Paired local roundtrip alone is insufficient.
+
+Fail closed or narrow the evidence if retained stock profiles are different
+from the admitted normalized profile; do not silently synthesize physical
+marks from discriminator counts. Entire document assembly, general Object
+layout, staged writer publication, remaining type families, MV/projections and
+the final speed target remain open. Refresh on owner/API/profile/producer/
+runtime/toolchain/coordinate/budget/comparator changes.
+
+### Executed W122 evidence and replay (2026-10-02)
+
+Root independently executed the final frozen owners/specs/oracle under the
+same serial guard, 50% minimum-free-memory floor and pinned toolchain as W121.
+Compiler: Crystal 1.21.0 / LLVM 22.1.8 / AArch64, SDK MacOSX26.5, TMPDIR
+`/private/tmp`, isolated caches. Limits: 600 seconds; focused/oracle 8,192 MiB,
+full suite 32,768 MiB. Source anchor is the separate shallow 31d2addb checkout;
+runtime is the independently pinned 26.10.1.1201/d9bcb5ab build, not that HEAD.
+
+Observed signals:
+
+- Qualified missing-API REDs: undefined BinaryBulkStream, BinaryBulkProfile and
+  DynamicValueCodec against independently authored lane/value tests. An earlier
+  incorrectly ordered guard invocation (exit127) was not counted as a RED.
+- Model checkpoint: two examples passed; this did not admit physical formats.
+- Initial implementation compile RED exposed a Crystal suffix-assignment scope
+  error in default construction; the regular-if repair was tested. Root's first
+  runtime pass had two reference-identity assertions, an incorrect expected
+  Dynamic selection exception, and a read-only String-slice mutation in the test
+  itself. Only those test assumptions changed. The later >127-byte envelope
+  control first reversed COMPACT count/format fields in its literal; correction
+  follows the independently established W121 grammar, not a serializer change.
+- Final focused DEBUG and RELEASE: 111 examples each, zero failures, errors or
+  pending. This includes fixed nominal/raw widths, recursive roles, both String
+  profiles, hidden NULL validation/defaults, empty/repeated marks, ownership,
+  late selected corruption, unselected bad bodies and direction/domain checks.
+- The exact aggregate read ledger for a Shared Bool plus NULL is 16 nodes,
+  15 edges, 15 wire bytes; write is 14/12/15. Each minus-one axis rejects.
+  A 128-byte typed String envelope after a pending Bool frame exercises the
+  two-byte outer VarUInt: 144 total bytes passes; 143 rejects on read/write.
+  Same-name Decimal32/Decimal64 values retain their nominal backing width and
+  route the non-roster width to SharedVariant.
+- Seeded removal of the decoder's final per-lane consumption check made the
+  independent Array-cardinality test fail (one example, one failure: expected
+  CorruptPartError but nothing raised). The original check was restored before
+  all final positive gates.
+- Full non-release suite with symbolic debug info disabled: 2,030 examples,
+  zero failures/errors/pending; guard exit0 after approximately 176 seconds.
+  The existing test-only deprecated `blocking` warning remains. Full RELEASE
+  was not executed; focused RELEASE was.
+- Final W122 stock oracle: both retained source/fresh-ATTACH profiles decoded
+  every dynamic path over full and nonzero-origin marks1..2. Four isolated
+  copied parts (dynamic_paths and typed_mixed, each BASIC/COMPACT) replaced
+  production discriminator and every ordinary/shared child stream plus its
+  real physical marks. Every copy passed actual ATTACH and exact CHECK=1,
+  independently literal full and PK3..6 semantic readback, inventory/schema,
+  unchanged metadata, exact mode-dependent discriminator bytes/marks and
+  unchanged child bytes/marks. Selected counts come from W121 schedules, not
+  adaptive physical mark row fields.
+- The first W122 stock attempt rejected typed_mixed's unordered shared-path
+  statistics because the new oracle incorrectly demanded sorted literal bytes.
+  No production code changed. The repaired comparator uses W116's existing
+  independently authored complete-statistics semantic check and additionally
+  requires byte equality with the independently qualified retained fresh-ATTACH
+  stream. Wrong Object-statistic, byte, value, count, mark and CHECK=0 controls
+  reject. These are comparator controls, not stock-server corrupted-part tests.
+- Unchanged W116-W121 stock regressions all exited0. W116 still qualifies the
+  public whole-JSON refusal; W117/W119 qualify their own typed scalar vectors,
+  W118 its own MAP lanes, and W120/W121 their own isolated authored copies.
+  None widens W122 to every physical shape merely by passing.
+- Final exact-path Crystal format check, W122 shell syntax and diff hygiene
+  exited0. The root-owned seed is restored; no scratch, generated part, cache
+  or downloaded runtime is included in the repository change.
+
+Core replay commands, wrapped serially in the existing `run_safe.sh` guard:
+
+```sh
+crystal spec spec/binary_value_codec_w117_spec.cr spec/object_shared_map_w118_spec.cr \
+  spec/binary_parameter_owners_w119_spec.cr spec/binary_scalar_types_w119_spec.cr \
+  spec/object_dynamic_structure_w120_spec.cr spec/object_dynamic_structure_w120_budget_spec.cr \
+  spec/dynamic_discriminator_w121_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr \
+  spec/*w122*_spec.cr --single-module --link-flags=-fuse-ld=ld --error-trace
+# Repeat this focused command with --release.
+crystal spec --no-debug --single-module --link-flags=-fuse-ld=ld --error-trace
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse \
+  CRYSTAL_BIN=/opt/homebrew/bin/crystal W122_KEEP_TMP=1 \
+  bash scripts/check_dynamic_values_w122.sh
+```
+
+Run unchanged `check_json_w116.sh`, `check_binary_w117.sh`,
+`check_object_shared_map_w118.sh`, `check_binary_w119.sh`,
+`check_object_dynamic_structure_w120.sh`, and
+`check_dynamic_discriminator_w121.sh` under the same guard/environment.
+Format all changed Crystal files, `bash -n scripts/check_dynamic_values_w122.sh`
+and `git diff --check` are the hygiene gates; these cannot replace runtime tests.
+
+Logs: `/private/tmp/crystal-click-w122-root.zfnNGq/`: missing-API REDs,
+`models-checkpoint.log`, `bulk-focused-debug.log`, `focused-debug-first.log`,
+`focused-debug-repaired.log`, `focused-debug-budget.log`,
+`seed-cardinality-red.log`, `focused-debug-final.log` (literal correction RED),
+`focused-debug-final-restored.log`, `focused-release-final.log`,
+`full-debug-no-symbols.log`, `stock-w122.log` (statistics-order comparator RED),
+`stock-w122-repaired.log` (positive), `regression-w116.log` through
+`regression-w121.log`, `format-check-final.log`. Final retained W122 store:
+`/private/tmp/crystal-click-json-w122.mqUlrW`; cache:
+`/private/tmp/crystal-click-json-w122-cache.Pv71UP`. Temporary evidence can decay;
+refresh from the independent literals and a qualified W115 capture if absent.
+
+Final stock oracle SHA-256:
+`2323939f5b770ce8c36c60d99568ae170cf704340a38db86d52a30abccd04ffd`
+(`check_dynamic_values_w122.cr`),
+`84f3195e6308c73c0421a346c218ce21714cd6c1cf35978e9469aa756dd426d3`
+(`check_dynamic_values_w122.sh`),
+`8bbc2685b2f9ff3d970ac24d0f3904f9fe456312c1aa782feb81e6b4839f9119`
+(`w122_bulk_vectors.cr`). Git supplies the exact owner/spec lineage and rollback.
+
+Luna's static adversary result is correlated, not independent runtime evidence.
+Root's scoped verdict is ROBUST for the declared normalized codec and captured
+stock profiles, backed by owned literals, boundary tests, the restored guard
+seed and real stock copies. Residuals: borrowed slices are publicly mutable by
+convention; caller-owned detached construction is outside budgets; hidden NULL
+bytes are normalized rather than losslessly preserved; pending frame reservation
+is a bounded logical allowance rather than an allocation/RSS certificate.
+No general Object/JSON document, arbitrary Dynamic/LC/Variant nested kernel,
+public part-writer, all physical serializer profiles, MV/projection or speed
+claim follows.
+
+Active return pointer: bind typed paths, Dynamic lanes and shared-MAP rows into
+bounded Object document assembly, then pair compressed physical adapters and
+staged writer integration. Next falsifier: mixed typed/dynamic/shared documents
+over a nonzero-origin window with a malformed last selected path; reject before
+publishing any document. One budget must span metadata, paths, discriminators,
+children, shared envelopes and document assembly. MAP_WITH_BUCKETS and advanced
+shared layouts need their own paired stock gates rather than a MAP alias.
+Remaining recursive/type families and MV/projection coverage precede memory
+and throughput optimization. The overall goal is active, not completed or
+blocked. Owner/API/profile/runtime/toolchain/coordinate/budget/comparator
+changes reopen dependent evidence.

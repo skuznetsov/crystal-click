@@ -10,9 +10,14 @@ module CrystalClick
 
     # Internal bounded path for one typed envelope inside a larger operation.
     # Recursive visits share the aggregate budget, while temporary envelope
-    # bytes are capped by the budget's remaining final-wire allowance and are
-    # charged only when the owning block appends the framed envelope.
-    def self.encode_borrowed(value : BinaryValue, budget : BinaryCodecBudget) : Bytes
+    # bytes are capped by the remaining final-wire allowance less the owner's
+    # pending frames and framing reserve. They are charged only when the owner
+    # appends the final framed envelope, never twice for temporary output.
+    def self.encode_borrowed(value : BinaryValue, budget : BinaryCodecBudget, reserved_wire_bytes : UInt64 = 0_u64) : Bytes
+      unless budget.writing?
+        raise ArgumentError.new("binary borrowed encoder requires a write-direction budget")
+      end
+      budget.ensure_wire_bytes(reserved_wire_bytes)
       context = BinaryCodecContext.new(
         budget.limits,
         nil,
@@ -20,7 +25,7 @@ module CrystalClick
         budget,
         false,
         false,
-        budget.remaining_wire_bytes
+        budget.remaining_wire_bytes - reserved_wire_bytes
       )
       encode_in_context(value, context)
     end

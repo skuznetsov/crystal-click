@@ -39,5 +39,31 @@ module CrystalClick
     def arm_offsets : Array(UInt64)
       @arm_offsets.dup
     end
+
+    # Scalar/index queries let aggregate codecs consume the schedule without
+    # allocating detached row/roster snapshots for every arm or row.
+    def row_count : Int32
+      @tags.size
+    end
+
+    def rank_count : Int32
+      @ranks.size
+    end
+
+    def variant_count : Int32
+      @arm_counts.size
+    end
+
+    def tag_at(index : Int) : UInt8
+      @tags[index]
+    end
+
+    def rank_at(index : Int) : Int32?
+      @ranks[index]
+    end
+
+    def arm_count_at(index : Int) : UInt64
+      @arm_counts[index]
+    end
   end
 end
