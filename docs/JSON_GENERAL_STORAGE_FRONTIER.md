@@ -1,6 +1,8 @@
 # General JSON Storage Frontier
 
-Status: W115 stock capture and normalized semantic checks executed. General JSON
+Status: W115 stock capture and W116 independent physical/type qualification
+executed on 2026-10-02. The precise missing-capability RED is qualified, not
+resolved. General JSON
 document reading/writing is not admitted. W24/W72 declared scalar projections
 remain the only paired JSON capability; see `JSON_TYPED_PATH_FRONTIER.md`.
 The target is a reusable Object/Dynamic/shared-data engine, not another exact
@@ -37,6 +39,29 @@ Source anchors, relative to that reference checkout:
   stores binary type descriptors and optional statistics. A shared Dynamic
   payload contains binary DataType encoding followed by that type's value,
   not just a discriminator of the existing String/UInt64 profile.
+- `src/Formats/JSONExtractTree.cpp:2199` and `src/Columns/ColumnObject.cpp:511`:
+  initial JSONEachRow insertion visits fields in input order and claims new
+  dynamic paths until the cap is full. In the mixed literal input, typed `a`
+  is followed by `s`, so `s` fills the one-path budget. Frequency-based path
+  selection during merges must not be substituted for this insertion rule.
+- `src/DataTypes/DataTypeObject.cpp:900`: MAP shared data is
+  `Array(Tuple(paths String, values String))`; each value String carries its
+  binary nominal type descriptor and value, not a bulk Dynamic column.
+- `src/DataTypes/Serializations/SerializationString.cpp:145` and `:630`:
+  the default bulk String stream carries VarUInt byte length plus bytes;
+  StringWithSizes uses a separate UInt64 size stream. Neither convention
+  licenses adding a trailing NUL. An embedded input NUL is ordinary data.
+- `src/DataTypes/DataTypesBinaryEncoding.cpp:383` and `:432`: scalar Array
+  values require the complete recursive binary type
+  descriptor before their VarUInt count and nullable element values.
+- `src/DataTypes/DataTypeObject.cpp:240` and
+  `src/Storages/ColumnsDescription.cpp:170`: persisted type names are canonical;
+  changed JSON budgets precede sorted typed paths. Original DDL argument order
+  is not the expected `columns.txt` order or a separate nominal type.
+- `src/Storages/MergeTree/MergeTreeSettings.cpp:296` and
+  `src/DataTypes/Serializations/SerializationVariant.cpp:211`: the default
+  compact-discriminator setting writes mode 1, followed by granule formats;
+  the W115 settings do not override it. BASIC mode 0 is not this capture.
 - `src/DataTypes/Serializations/SerializationObject.cpp:1184`: default whole
   JSON RowBinary is flattened path/value encoding, with dynamic type tags;
   it is not a length-prefixed JSON string. Typed/dynamic path iteration is
@@ -172,6 +197,154 @@ invocation does not establish artifact-root freshness, and early shell root
 validation failures can leave a temporary directory behind. Concurrent hostile
 filesystem replacement is outside this checkpoint's guarantees.
 
+## W116 independent physical/type qualification
+
+The previous checkpoint changed authoritative state and produced discriminating
+stock evidence, but left a false-pass route: the document comparator could
+accept a changed effective JSON profile. W116 must close that route before any
+whole-document production admission. This is a compatibility CAUTION step;
+rollback is its isolated local commit, and all runtime probes remain inside
+isolated temporary stores. Source queries target the retained W115 capture;
+new artifacts and seeded mutation copies belong to a fresh W116 root.
+
+Execution ownership and order:
+
+1. `scripts/w116_json_physical_vectors.cr`: derive expected schema/options,
+   nominal types, every payload stream and full/selected mark schedules from
+   literal inputs and pinned source rules. Existing compression/hash helpers
+   are transport dependencies, not a future production JSON oracle. Do not
+   copy observed stream hex into expected vectors or require incidental
+   unordered statistics-map order.
+2. `scripts/check_json_w116.cr` and `.sh`: re-query actual part identities,
+   schemas and exact CHECK=1 for source/fresh-ATTACH pairs; compare the physical
+   artifacts through the independent helper. The shell runner requires an
+   explicit isolated `W115_CAPTURE_ROOT`, not an ephemeral hardcoded default.
+3. Only after positive stock qualification, exercise the existing public
+   whole-document read API and require its precise current unsupported-type
+   refusal. A transport error, missing fixture, arbitrary exception, or
+   source-shape check is not the missing-capability RED signal.
+4. Attack the same comparator with seeded wrong effective schema/type,
+   same-size payload/discriminator changes and mark-axis corruption. Failures
+   must identify the intended mismatch rather than an unrelated setup error.
+
+DoD: run `scripts/check_json_w116.sh` with `W115_CAPTURE_ROOT` under the serial
+600-second, 8-GiB, 50%-free guard; run focused comparator specs in DEBUG and
+RELEASE plus Crystal formatting, shell syntax and diff checks. Expected signal:
+all three physical profiles qualify against independently constructed
+expectations, fresh CHECK=1 remains exact, all seeded violations are detected,
+and the precise whole-document capability refusal is observed afterwards.
+If an encoding remains uncertain, name it and keep qualification in progress;
+do not weaken the expected profile or turn observations into a literal oracle.
+
+This step does not reduce the goal to three declarations. It supplies the
+stock-backed format falsifier for a reusable Object/Dynamic/shared-data engine.
+General JSON reader/writer, other Object/shared versions, Compact layouts,
+recursive compositions, MV/projections and the eventual speed target remain
+required, not silently removed. The next production move must implement a
+reusable owner and its failing behavioral test, not another registration branch.
+
+## Executed W116 evidence (2026-10-02)
+
+Root executed the final frozen qualifier under the serial guard against the
+same pinned executable and retained W115 source/fresh-ATTACH pairs. W116
+re-queries those independently attached stores; it does not claim another
+ATTACH operation occurred in this command. Reproduction:
+
+```sh
+env SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
+  TMPDIR=/private/tmp COGNI_RUN_SAFE_MIN_FREE_PCT=50 \
+  W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  W116_KEEP_TMP=1 CRYSTAL_BIN=/opt/homebrew/bin/crystal \
+  /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /bin/bash 600 8192 \
+  /Users/sergey/Projects/Crystal/crystal-click/scripts/check_json_w116.sh
+```
+
+Observed exit 0; the final retained W116 root is
+`/private/tmp/crystal-click-json-w116.GzWn7N`. Actual part identities and
+canonical schemas were queried, not inferred from labels. Each of the three
+profiles has eight rows in one source and one attached Wide part. All six
+physical parts passed the independently derived schema, file inventory,
+nominal type/lane model, decompressed stream, complete mark-grid and semantic
+serialization-metadata checks. Stream inventories including `pk` contain
+41, 5 and 12 streams for dynamic-path, shared-only and mixed profiles.
+Unordered structure statistics are compared as decoded maps; their incidental
+byte order is intentionally not pinned. Ordinary payload streams and all marks
+are compared exactly. Actual CHECK=1 passed for all six exact parts; all 12
+literal full/selected document checks passed, including keys 3 through 6.
+
+Negative controls passed through the same comparators: 12 invalid CHECK
+records, five in-memory raw changes, and 12 copied-part changes (three each
+for payload, nominal discriminator/type, decompressed mark offset and schema).
+Copied mutations preserve logical payload length and regenerate valid frame
+and manifest checksums. Each failure must match the intended diagnostic;
+an unrelated setup error cannot pass. Only after these positive and negative
+checks did public `WidePart.open_typed(part, "payload")` produce the exact
+`UnsupportedFormatError("unsupported exact typed column")`. This is the
+qualified missing whole-document capability, not a new reader admission.
+
+Root also executed `spec/w116_json_physical_vectors_spec.cr` in DEBUG and
+RELEASE, with the Crystal executable as the resource guard's binary argument:
+
+```sh
+env SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
+  TMPDIR=/private/tmp \
+  CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-json-w116-spec.Nv8DeH/cache-debug \
+  COGNI_RUN_SAFE_MIN_FREE_PCT=50 \
+  /bin/bash /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh \
+  /opt/homebrew/bin/crystal 600 8192 \
+  spec --single-module --link-flags=-fuse-ld=ld \
+  spec/w116_json_physical_vectors_spec.cr
+```
+
+For RELEASE add `--release` and use a separate cache. Each final run passed
+13 examples, zero failures/errors/pending. Tests cover unordered Object and
+Dynamic statistics, duplicate/trailing entries, selected nonzero-origin marks,
+singleton String discriminator order, nominal empty-array types and canonical
+VarUInt/truncation/overflow rejection. Before the VarUInt fix, root observed
+the intended RED: 13 examples, exactly one failure because a nonminimal
+encoding raised no mismatch. `IO/VarInt.h` in the source reference shows the
+stock writer emits minimal encodings while its reader is more permissive.
+This qualifier's canonical producer contract is not an assertion that every
+server-accepted encoding is canonical.
+
+Root's source review corrected independent-model mistakes before the passing
+stock run: recursive Array/Nullable type tags, String byte lengths without an
+added NUL, implicit SharedVariant statistics, and lexicographic global Variant
+tags. In particular, `SharedVariant` sorts before a singleton `String`.
+Structure data marks follow their prefix, but the terminal mark follows the
+suffix (`MergeTreeDataPartWriterWide.cpp:859`); a mark-mutator setup assumption
+that the initial decompressed offset was zero was also corrected. The initial
+stock failures were instrument/model failures, not production regressions or
+missing-capability RED signals. Captured stream hex was not substituted for
+the independently modeled expectations.
+
+Final SHA-256 evidence pointers (temporary logs must be reproduced if lost):
+
+- `scripts/w116_json_physical_vectors.cr`: `880c4ae3251e288ae38835469ae3361b272f21c26dfe17c6edc0704e77033b2a`
+- `scripts/check_json_w116.cr`: `2d2e7f1018d1903bef62cb21a18b207f8ed2c358c31e3d9bab668c4dc4c0669e`
+- `scripts/check_json_w116.sh`: `4bf2ea7946dae219580c3fa32b214187b83383fb49bc36264ceebc662bc76ee8`
+- `spec/w116_json_physical_vectors_spec.cr`: `13a0fd49cfa291511900015e49de5a166b412825a0f3379233a8624d5203c601`
+- Final W116 `check.log`: `6d5a1f2a43d29ce1c4fd874c4382141610a28c745cb82945053232730b3d4804`
+- Spec-root `debug-final.log`: `9d736cfb66cf13b79d1cbade790944b2a2d694941b5aa751038b62d758cef5f8`
+- Spec-root `release-final.log`: `7333d9bab3973084eeea1a2d76d88ca7e4eeb7de1c5bc7ef9ed5a251e0359bb1`
+- Spec-root `debug-varuint-red.log`: `f0c93495878ad31b32a765753bd05e9031ab255a186ef803f9209b10ae91dd32`
+
+Scoped root adversary verdict: ROBUST for these executed fixed-profile
+qualification/refusal checks, not for general JSON compatibility. Luna's
+candidate implementation and same-lineage read-only review were supplemented
+by root source inspection and actual positive/negative execution. The review
+bounded two further exclusions: `serialization.json` equality is semantic JSON,
+not canonical text or duplicate-key rejection, and helper reads do not provide
+hostile child-file symlink containment. The capture stores are trusted,
+quiescent isolated artifacts, not an untrusted-input security boundary.
+The attached-role inventory requires `invalidated_system_columns.txt`, but its
+contents and all other non-stream sidecar contents are not independent literal
+compatibility assertions. No production source changed; the full production
+suite was not rerun. Crystal format, shell syntax and diff checks passed.
+The producer/build, settings, encoding/layout, comparator or relevant code
+changes invalidate this certificate; re-run the stated commands before reuse.
+
 ## Implementation direction after qualification
 
 Use one concrete owner per file for distinct responsibilities, not per schema
@@ -181,6 +354,16 @@ binary DataType/value decoding, Dynamic lane schedules, shared-data layout,
 owned nominal document values, document reader, and staged writer orchestration.
 Schema parsing must preserve JSON parameters and typed declarations; admitting
 only a spelling of bare `JSON` is not a substitute for these physical profiles.
+
+The first production codec must handle the binary DataType descriptor followed
+by that type's single-value serialization, shared by Dynamic SharedVariant and
+Object MAP values. Bulk column serializers are not substitutes for that scalar
+grammar. Require bounded recursive decoding, exact cursor consumption, nominal
+type identity and floating-point raw-bit preservation. Its first falsifiers
+include indistinguishable JSON text for differently typed empty arrays,
+truncated or noncanonical type/value encodings, trailing bytes and exhausted
+depth/element/byte limits. This codec alone will not admit whole-document JSON;
+dictionary, lane/rank, mark and shared-data schedule owners remain necessary.
 
 Preserve stored ClickHouse semantics, including typed defaults and dynamic
 null/path normalization, rather than promising preservation of original input
