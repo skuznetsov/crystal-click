@@ -190,6 +190,20 @@ provenance, REDs, commands and certificate decay are in
 `JSON_GENERAL_STORAGE_FRONTIER.md`. This implementation does not claim that
 the large facades have been decomposed.
 
+W118 adds five concrete responsibility owners, each in its own file: aggregate
+binary-codec budget, detached MAP entry, ordered MAP row, three-lane snapshot
+and paired decompressed shared-MAP codec. They range from 24 to 200 lines.
+W117 delegates its logical counters to the shared budget and provides a narrow,
+convention-internal borrowed-envelope seam; the ordinary APIs retain their
+contract. There is no new owner per JSON declaration or nested combination.
+Root executed 24 focused DEBUG and 24 RELEASE examples, 1,931 full DEBUG
+examples, a three-profile/six-part exact stock lane comparison, and unchanged
+W117/W116 regression gates. The scoped certificate and qualified budget,
+allocation and comparator attacks are in `JSON_GENERAL_STORAGE_FRONTIER.md`.
+Whole-document JSON, physical I/O, Object/Dynamic metadata and publication
+remain outside these owners. The large facades and their line counts above
+are unchanged; this is not completion of the requested architecture refactor.
+
 ## Variant discriminator owner extraction (2026-10-01)
 
 Status: VERIFIED within the behavior-neutral extraction and executed gates

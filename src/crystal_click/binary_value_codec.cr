@@ -5,6 +5,27 @@ module CrystalClick
   module BinaryValueCodec
     def self.encode(value : BinaryValue, limits : BinaryCodecLimits = BinaryCodecLimits.default) : Bytes
       context = BinaryCodecContext.new(limits, nil, true)
+      encode_in_context(value, context)
+    end
+
+    # Internal bounded path for one typed envelope inside a larger operation.
+    # Recursive visits share the aggregate budget, while temporary envelope
+    # bytes are capped by the budget's remaining final-wire allowance and are
+    # charged only when the owning block appends the framed envelope.
+    def self.encode_borrowed(value : BinaryValue, budget : BinaryCodecBudget) : Bytes
+      context = BinaryCodecContext.new(
+        budget.limits,
+        nil,
+        true,
+        budget,
+        false,
+        false,
+        budget.remaining_wire_bytes
+      )
+      encode_in_context(value, context)
+    end
+
+    private def self.encode_in_context(value : BinaryValue, context : BinaryCodecContext) : Bytes
       BinaryDataTypeCodec.write_to(value.type, context)
       if value.type.tag == BinaryDataType::TAG_NOTHING
         unless value.is_null?
@@ -19,6 +40,17 @@ module CrystalClick
 
     def self.decode(bytes : Bytes, limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryValue
       context = BinaryCodecContext.new(limits, bytes)
+      decode_in_context(context)
+    end
+
+    # Internal exact-consumption path for a borrowed frame in a block whose
+    # caller has already charged all physical input lanes to the shared budget.
+    def self.decode_borrowed(bytes : Bytes, budget : BinaryCodecBudget) : BinaryValue
+      context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
+      decode_in_context(context)
+    end
+
+    private def self.decode_in_context(context : BinaryCodecContext) : BinaryValue
       type = BinaryDataTypeCodec.read_from(context)
       if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(1)

@@ -3,52 +3,79 @@ module CrystalClick
   # operation. Input slices are borrowed; output grows only after byte checks.
   class BinaryCodecContext
     getter limits : BinaryCodecLimits
-    getter node_count : Int64
-    getter element_count : Int64
     getter input_offset : Int32
 
     @input : Bytes?
     @output : Array(UInt8)
     @writing : Bool
+    @budget : BinaryCodecBudget
+    @account_output_bytes : Bool
+    @output_byte_limit : UInt64
 
-    def initialize(@limits : BinaryCodecLimits, input : Bytes? = nil, @writing : Bool = false)
+    # The borrowed/prepaid switches are internal-only plumbing. A caller may
+    # disable input charging only after an enclosing owner charged the complete
+    # physical input lanes, and may disable output charging only for a
+    # temporary envelope whose final framed bytes will be charged by that
+    # owner. Public codec entry points deliberately expose neither switch.
+    def initialize(
+      @limits : BinaryCodecLimits,
+      input : Bytes? = nil,
+      @writing : Bool = false,
+      budget : BinaryCodecBudget? = nil,
+      account_input_bytes : Bool = true,
+      account_output_bytes : Bool = true,
+      output_byte_limit : UInt64? = nil,
+    )
       @input = input
       @output = [] of UInt8
-      @node_count = 0_i64
-      @element_count = 0_i64
       @input_offset = 0_i32
+      @budget = budget || BinaryCodecBudget.new(@limits, @writing)
+      @account_output_bytes = account_output_bytes
+      @output_byte_limit = output_byte_limit || @limits.max_bytes.to_u64
+      if @output_byte_limit > @limits.max_bytes.to_u64
+        raise ArgumentError.new("binary codec context output bound exceeds its limits")
+      end
+      unless @budget.limits.max_depth == @limits.max_depth &&
+             @budget.limits.max_nodes == @limits.max_nodes &&
+             @budget.limits.max_elements == @limits.max_elements &&
+             @budget.limits.max_bytes == @limits.max_bytes
+        raise ArgumentError.new("binary codec context and shared budget limits differ")
+      end
+      unless @budget.writing? == @writing
+        raise ArgumentError.new("binary codec context and shared budget direction differs")
+      end
       if source = @input
         if source.size.to_i64 > @limits.max_bytes
           raise CorruptPartError.new("binary codec input exceeds byte limit")
         end
+        @budget.charge_wire_bytes(source.size.to_u64) if account_input_bytes
       end
+    end
+
+    def node_count : Int64
+      @budget.node_count
+    end
+
+    def element_count : Int64
+      @budget.element_count
     end
 
     def visit_node(depth : Int) : Nil
-      ensure_depth(depth)
-      if @node_count >= @limits.max_nodes
-        fail_budget("node")
-      end
-      @node_count += 1
+      @budget.visit_node(depth)
     end
 
     def ensure_depth(depth : Int) : Nil
-      if depth <= 0 || depth > @limits.max_depth
-        fail_budget("depth")
-      end
+      @budget.ensure_depth(depth)
     end
 
     # Verify a lower bound before allocating a declared child array. This does
     # not charge visits; normal recursive traversal charges each node once.
     def ensure_future_nodes(count : UInt64) : Nil
-      remaining = (@limits.max_nodes - @node_count).to_u64
-      fail_budget("node") if count > remaining
+      @budget.ensure_future_nodes(count)
     end
 
     def charge_elements(count : UInt64) : Nil
-      remaining = (@limits.max_elements - @element_count).to_u64
-      fail_budget("element") if count > remaining
-      @element_count += count.to_i64
+      @budget.charge_elements(count)
     end
 
     def validate_type_tree(type : BinaryDataType, depth : Int = 1) : Nil
@@ -122,6 +149,7 @@ module CrystalClick
 
     def write_byte(byte : UInt8) : Nil
       check_output_growth(1_u64)
+      @budget.charge_wire_bytes(1_u64) if @account_output_bytes
       @output << byte
     end
 
@@ -137,6 +165,7 @@ module CrystalClick
 
     def write_slice(bytes : Bytes) : Nil
       ensure_output_bytes(bytes.size.to_u64)
+      @budget.charge_wire_bytes(bytes.size.to_u64) if @account_output_bytes
       bytes.each { |byte| @output << byte }
     end
 
@@ -164,14 +193,15 @@ module CrystalClick
     end
 
     private def check_output_growth(additional : UInt64) : Nil
-      current = @output.size.to_i64
-      if additional > (@limits.max_bytes - current).to_u64
-        fail_budget("byte")
+      current = @output.size.to_u64
+      if current > @output_byte_limit || additional > (@output_byte_limit - current)
+        fail_local_output_limit
       end
+      @budget.ensure_wire_bytes(additional) if @account_output_bytes
     end
 
-    private def fail_budget(kind : String) : NoReturn
-      message = "binary codec #{kind} limit exceeded"
+    private def fail_local_output_limit : NoReturn
+      message = "binary codec byte limit exceeded"
       if @writing
         raise UnsupportedFormatError.new(message)
       else

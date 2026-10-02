@@ -1,8 +1,9 @@
 # General JSON Storage Frontier
 
-Status: W115 stock capture, W116 independent physical/type qualification and
-W117's reusable paired binary type/value kernel were executed on 2026-10-02.
-W117 is VERIFIED within the scalar profile and gates below, not as a general
+Status: W115 stock capture, W116 independent physical/type qualification,
+W117's reusable paired binary type/value kernel and W118's decompressed
+shared-MAP block codec were executed on 2026-10-02. W117 and W118 are VERIFIED
+within their scalar/block profiles and gates below, not as a general
 Object/Dynamic/MergeTree codec. The precise whole-document missing-capability
 RED is qualified, not resolved. General JSON
 document reading/writing is not admitted. W24/W72 declared scalar projections
@@ -20,6 +21,10 @@ ClickHouse 26.10.1.1201, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`,
 Mach-O SHA-256
 `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
 Its measured outputs must not be described as current-master executable evidence.
+The newer separate source reference at `0c68f01a75a913b1aa5e132b41a80642260c3009`
+was compared to this baseline on October 2; the relevant serializers, binary
+encoding, Columns and Formats are unchanged. See `CLICKHOUSE_SOURCE_REFERENCE.md`.
+Keep the initial capture/literal source and runtime identities intact.
 
 Source anchors, relative to that reference checkout:
 
@@ -522,6 +527,221 @@ identities, settings, comparator or owner changes invalidate the certificate;
 rerun the stated gates before reusing it. This result is over `2bb91f9` plus the
 W117 feature's six owners, entry imports, spec and oracle, not a promotion of
 older facade admissions to arbitrary composition.
+
+### W118 MAP shared-data block: design seal
+
+Risk: CAUTION (paired physical codec and aggregate budget reuse). Over the
+W117 production state at `b906394` plus source-reference commit `1d07d28`,
+add the next necessary Object boundary: a reusable
+three-stream MAP block codec, not another exact JSON declaration or a raw
+WidePart bypass. Rollback is one isolated feature commit. Whole-JSON reader,
+part admission, staging/publication and existing filesystem policies remain
+unchanged. Performance is not the target of this change.
+
+Admit only caller-bounded, fully decompressed MAP streams: `sizes` is exactly
+one LE UInt64 local pair count per outer row; `paths` and `values` are separate
+concatenations of canonical VarUInt byte length plus bytes. Each value body is
+one W117 binary type/scalar envelope with exact consumption. This count lane is
+the captured Wide profile's position-independent encoding. With that setting
+false the upstream bulk writer emits absolute offsets; stream enumeration's
+sizes-column view is not proof of emitted count bytes
+(`SerializationArray.cpp:156-175,255-279,329-367`). MAP is shared version 0,
+delegated to Array(Tuple(paths String, values String)); bucketed, advanced and
+chunked orchestration are not admitted by this codec.
+
+API: `ObjectSharedMapCodec.decode(sizes, paths, values, row_count, limits)`
+returns owned `Array(ObjectSharedMapRow)`; `encode(rows, limits)` returns
+`ObjectSharedMapStreams` with detached sizes/paths/values snapshots. The rows
+own ordered `ObjectSharedMapEntry` values and detached path bytes. Keep each
+concrete owner in its own file: `object_shared_map_entry.cr`,
+`object_shared_map_row.cr`, `object_shared_map_streams.cr`,
+`object_shared_map_codec.cr`. No class per nested type combination.
+
+Paths must be strictly sorted and unique per row using raw-byte comparison;
+do not split, unescape or normalize dotted/NUL/invalid-UTF8 path bytes.
+Normal Object insertion omits missing/NULL dynamic paths
+(`ColumnObject.cpp:976-989`), but the physical shared-data codec must preserve
+a root Nothing NULL envelope. Upstream explicitly handles such entries in
+display, hashing and duplicate repair (`ColumnObject.cpp:397,1314-1323,2613`).
+The initial proposed rejection was refuted by that source counterexample:
+canonical document insertion policy is not the raw MAP wire grammar. Preserve
+both Nothing NULL and independently typed Nullable values without silently
+omitting them; future document orchestration owns that semantic policy.
+A selected nonzero-origin range
+uses exact caller-provided local slices and row counts; global origin, physical
+marks, frame lifetimes and Object structure/statistics are not codec inputs.
+
+Introduce one reusable `BinaryCodecBudget` owner for shared logical counters.
+W117's ordinary entry points keep fresh independent budgets and their existing
+contract; narrowly documented internal borrowed-envelope entry points allow
+W118 to share recursive node/element charges. For this block, nodes include
+outer rows, entries and every descriptor/scalar visit. Elements include outer
+row edges, entry edges and W117 descriptor/container edges. Depth applies to
+each envelope's recursive type/value tree. Decode charges the sum of all three
+wire lanes once before copying or materializing; borrowed envelope slices are
+not charged twice. Encode charges the combined final lanes before growth;
+temporary envelope output must be bounded by the remaining wire allowance.
+These remain logical bounds, not allocator/RSS or raised-limit stack guarantees.
+The borrowed methods and context charging switches are convention-internal but
+language-public Crystal plumbing, not a capability-enforced boundary. Their
+preconditions require the enclosing owner to charge complete input lanes and
+final framed output. The admitted ordinary codec APIs expose neither switch;
+direct misuse of the plumbing is outside this certificate.
+
+Before row/entry-array allocation, validate row_count and exact sizes-lane
+length, scan checked per-row counts/sum, and prove the known minimum aggregate
+node/element budget (at least rows + three nodes per entry, and row/entry
+edges). Also prove the minimum lane cardinality: each path needs at least its
+length byte and each value needs at least its outer length and descriptor byte.
+This prevents tiny lanes with huge declared counts from allocating entry arrays
+even when callers raise logical node/element limits. Reject overflow, counts outside the in-memory domain and
+exhausted limits before declared-count allocation. Decode all entries and
+validate ordering plus exact exhaustion of all three lanes before returning;
+there are no partial callbacks. Corrupt input/budgets raise corruption;
+unadmitted W117 envelope types remain Unsupported; invalid model construction
+is ArgumentError and encode budget failures are Unsupported.
+
+Consumer inventory: `rg 'BinaryCodecContext|BinaryValueCodec|ObjectSharedMap'
+src spec scripts` finds the W117 owners/spec/oracle and no existing MAP block
+consumer. Current JSON virtual-path admission retains only its selected typed
+streams. Existing JSON writer methods hardcode empty shared streams/statistics.
+Do not wire nonempty MAP bytes into those facades without later structure,
+dictionary, mark/rank and publication owners.
+
+Execution and DoD:
+
+1. Write `spec/object_shared_map_w118_spec.cr` only; root executes a genuine
+   missing-API RED before authorizing production edits.
+2. Implement the paired owners and narrow shared-budget seam. Focused W118
+   plus unchanged W117 specs must pass DEBUG/RELEASE; full DEBUG must pass.
+3. `scripts/check_object_shared_map_w118.sh` must independently compare real
+   retained W115/W116 stock streams to source-derived literals, decode them to
+   authored nominal rows and encode those rows back to exact physical bytes.
+   Check full and nonzero-origin selections, including empty rows/lanes,
+   nominal empty arrays and embedded NUL strings. This is raw codec evidence,
+   not production whole-JSON part-writer admission.
+4. If practical, a test-only copied-part patch uses library-produced MAP streams
+   in a fresh isolated store with regenerated framing/checksums, changes an
+   existing Bool value without changing path/type statistics, then requires
+   actual stock ATTACH/CHECK=1 and independent full/selected document results.
+   Never mutate the retained capture; never call the copied metadata a new
+   production whole-part writer.
+5. Attack each lane's truncation/trailing/count mismatch, unsorted/duplicate
+   paths, Nothing/typed NULL preservation, unsupported envelope types, raw path/value ownership,
+   aggregate exact/minus-one nodes/elements/bytes across multiple envelopes,
+   and huge count/row pre-allocation. Qualify the comparator with a byte defect.
+   Re-run the unchanged W117 oracle and W116 whole-JSON refusal gate.
+
+Pre-mortem: resetting the budget per envelope admits an unbounded block despite
+small per-value limits; counting nested envelope bytes twice rejects valid
+exact-boundary blocks. Independently constructed aggregate thresholds and
+stock raw-byte comparisons are the discriminators. Source/runtime identities,
+MAP/count encoding, stream framing, comparator or codec changes invalidate
+later evidence. This seal proposes implementation, not completed capability.
+
+### Executed W118 certificate (2026-10-02)
+
+Status: VERIFIED for the caller-bounded, decompressed, position-independent
+MAP/count profile sealed above. Subject: `1d07d28` plus the five new W118
+owners, W117 context/value seams, entry imports, spec and two oracle files in
+this feature commit. The existing WidePart, writer, table and catalog facade
+admissions were not changed. Luna implemented the candidate and oracle; root
+inspected the source/diff, corrected fixture/Crystal issues, and executed all
+gates independently. The same-lineage review is correlated, not an independent
+replication. Root's scoped adversarial verdict is ROBUST.
+
+Observed evidence:
+
+- Before production edits, the new spec produced genuine missing-API RED:
+  undefined `CrystalClick::ObjectSharedMapCodec`, exit 1.
+- Final focused W118 plus unchanged W117 DEBUG and RELEASE each passed
+  24 examples with zero failures/errors/pending. Full DEBUG passed 1,931
+  examples with zero failures/errors/pending. Existing non-fatal duplicate
+  library/deprecated test-hook warnings remain. No full RELEASE was run.
+- Temporarily resetting the borrowed envelope's recursive budget produced a
+  qualified RED at the nested aggregate threshold: expected corruption was
+  not raised with 15 nodes instead of the exact 16. Outer lower-bound
+  preflight still passed, so the test distinguishes shared accounting from
+  per-envelope resets. The first failed assertion ended that example; the
+  seeded run does not independently certify its later edge assertion.
+  Restoring the shared owner passed both exact/minus-one node and edge checks
+  against the exact 16-node/12-edge aggregate.
+- Temporarily removing the two minimum wire-cardinality guards produced a
+  qualified RED: a tiny input declaring one million entries allocated
+  8,004,112 bytes against the test's 2,097,152-byte ceiling. Node/element
+  limits were deliberately raised to admit the outer lower bound. Both
+  guards were restored before the final DEBUG/RELEASE/full gates. This is
+  one allocation-path test, not a general RSS certificate.
+- The first stock run correctly rejected an authored nominal expectation for
+  `typed_mixed` pk=2: empty `arr` was written in the oracle model as
+  `Array(Nullable(Int64))`, but its independent W116 literal descriptor and
+  retained W115 path-type observation require `Array(Nullable(String))`.
+  W116's `shared_typed_rows` explicitly uses tag `0x15` for that row. Original
+  input is `arr: []`; source incomplete-type inference explains the String
+  fallback, while the effective nullable identity is also measured. Only
+  this authored expectation changed; production and the nominal comparator
+  did not. The real oracle reproduction then passed.
+- Final W118 stock qualification passed three profiles, six retained source
+  and previously attached parts, twelve full/selected local windows and
+  eighteen independent literal lanes. Decode matched independently authored
+  nominal rows; encode of those authored rows and decoded re-emission matched
+  the stock bytes. Selected pk 3..6 uses caller-local stream slices, not a new
+  production granule reader. Empty rows/lanes, typed empty arrays and embedded
+  NUL strings were included. A hand-literal root Nothing NULL envelope passed.
+- The oracle rejected a seeded writer values-lane byte and a child symlink.
+  The child guard executes before the W116 metadata helper and raw-stream
+  reads. Its filesystem precondition is a quiescent trusted capture; path
+  checks are not protection against concurrent renames/symlink swaps.
+- The unchanged W117 stock oracle again passed 36 stock-writer vectors and
+  36 stock-reader/re-emission vectors, plus its literal, raw-bit, NULL,
+  corruption, snapshot and negative-comparator controls.
+- The unchanged W116 qualifier again asserted six actual CHECK=1 results,
+  twelve independent full/selected document checks and all its comparator
+  controls. The existing exact whole-JSON refusal remains qualified RED.
+  W118 itself executed no new ATTACH/CHECK. The optional test-only copied-part
+  Bool patch from the seal was not run; no production whole-part JSON writer
+  is claimed from raw lane equality.
+- Crystal formatting, shell syntax and `git diff --check` passed. Root also
+  reviewed exact exhaustion, strict raw-byte path order, ownership, aggregate
+  wire charging and the convention-internal borrowed API preconditions.
+
+Retained evidence index (not proof by presence):
+`/private/tmp/crystal-click-map-w118.jsLcFw/{red,debug-final,release-final,full-debug-final,reset-seeded-red,cardinality-seeded-red,stock-w118,stock-w118-final,regression-w117,regression-w116}.log`.
+Final W118 artifacts: `/private/tmp/crystal-click-object-shared-map-w118.wBvhko`;
+failed nominal fixture reproduction: `crystal-click-object-shared-map-w118.vJ04yi`;
+W117 regression: `crystal-click-binary-w117.B0L5yf`; W116 regression:
+`crystal-click-json-w116.aKRtTr`, all under `/private/tmp`. The retained capture
+remains `/private/tmp/crystal-click-json-w115.6qs6Kq` and was not mutated.
+
+Reproduce with Crystal 1.21.0 / LLVM 22.1.8 on arm64 macOS, the pinned stock
+runtime identified above, and an isolated cache. Root used the existing serial
+`run_safe.sh` guard with 600 seconds / 8 GiB for focused and stock phases,
+600 seconds / 32 GiB for full DEBUG, and the 50% free-memory floor. These are
+correctness gates, not quiet-host performance measurements.
+
+```sh
+crystal spec --single-module --link-flags=-fuse-ld=ld \
+  spec/object_shared_map_w118_spec.cr spec/binary_value_codec_w117_spec.cr
+crystal spec --release --single-module --link-flags=-fuse-ld=ld \
+  spec/object_shared_map_w118_spec.cr spec/binary_value_codec_w117_spec.cr
+crystal spec --single-module --link-flags=-fuse-ld=ld
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  W118_KEEP_TMP=1 bash scripts/check_object_shared_map_w118.sh
+W117_KEEP_TMP=1 bash scripts/check_binary_w117.sh
+W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+  W116_KEEP_TMP=1 bash scripts/check_json_w116.sh
+```
+
+The default bounded scalar/block model survives the applicable attacks. It
+does not certify arbitrary binary DataTypes, Object metadata/dictionaries,
+Dynamic lane schedules, absolute-offset MAP mode, bucketed/advanced/chunked
+layouts, physical marks/I/O, whole-document JSON integration, general Variant,
+part publication, concurrent filesystem safety, caller-raised stack limits,
+RSS or throughput. Source/runtime/settings, frame interpretation, comparator,
+budget plumbing or owner changes invalidate dependent evidence; rerun these
+gates before reusing it. Next frontier: expand the reusable scalar repertoire
+and add separately qualified Object/Dynamic structure and lane schedule owners
+before exposing whole-document reading or staged writing.
 
 ### Subsequent Object/Dynamic integration
 
