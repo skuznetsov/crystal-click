@@ -205,18 +205,14 @@ module CrystalClick
       unsupported!("Object JSON typed path must be followed by one supported type") unless had_separator && cursor < after
 
       type_first = cursor
-      while cursor < after && !whitespace?(@bytes[cursor])
-        unsupported!("unexpected backtick in Object JSON type") if @bytes[cursor] == '`'.ord.to_u8
-        cursor += 1
-      end
-      type_after = cursor
-      trailing_first, trailing_after = trim(cursor, after)
-      unsupported!("extra tokens in Object JSON typed field") unless trailing_first == trailing_after
 
       budget.charge_wire_bytes((path_after - path_first).to_u64)
       path = String.new(@bytes[path_first, path_after - path_first])
       validate_path_spelling!(path, quoted)
-      resolution = ObjectTypedFieldType.resolve_slice(@bytes, type_first, type_after) ||
+      # Resolve the complete type tail. Decimal's canonical spelling contains
+      # one internal space, while exact whole-tail matching still rejects
+      # extra tokens and nested/general type syntax.
+      resolution = ObjectTypedFieldType.resolve_slice(@bytes, type_first, after) ||
                    unsupported!("typed Object JSON fields admit only supported nominal scalar types")
       budget.charge_wire_bytes((resolution.byte_size + 1).to_u64)
       type = resolution.materialize

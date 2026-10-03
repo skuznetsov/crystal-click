@@ -36,13 +36,24 @@ module CrystalClick
 
       @tag : UInt8
       @parameter : Int32
+      @scale : Int32
 
-      def initialize(@tag : UInt8, @parameter : Int32, @byte_size : Int32)
+      def initialize(@tag : UInt8, @parameter : Int32, @byte_size : Int32, @scale : Int32 = 0)
       end
 
       def materialize : BinaryDataType
         if @tag == BinaryDataType::TAG_FIXED_STRING
           BinaryDataType.fixed_string(@parameter)
+        elsif ObjectTypedFieldType.decimal_tag?(@tag)
+          width_bits = case @tag
+                       when BinaryDataType::TAG_DECIMAL32  then 32
+                       when BinaryDataType::TAG_DECIMAL64  then 64
+                       when BinaryDataType::TAG_DECIMAL128 then 128
+                       when BinaryDataType::TAG_DECIMAL256 then 256
+                       else
+                         raise ArgumentError.new("typed Object field resolution has an unknown Decimal tag")
+                       end
+          BinaryDataType.decimal(width_bits, @parameter, @scale)
         else
           name = ObjectTypedFieldType.name_for_tag(@tag) ||
                  raise ArgumentError.new("typed Object field resolution has an unknown primitive tag")
@@ -60,11 +71,16 @@ module CrystalClick
     def self.byte_size_for(type : BinaryDataType) : Int32?
       if name = name_for(type)
         return name.bytesize
+      elsif type.tag == BinaryDataType::TAG_FIXED_STRING
+        width = type.fixed_size
+        return nil unless width && width > 0 && width <= BinaryDataType::MAX_FIXED_STRING
+        fixed_string_byte_size(width)
+      elsif decimal_tag?(type.tag)
+        decimal = canonical_decimal_for_binary_type(type) || return nil
+        decimal_byte_size(decimal.precision, decimal.scale)
+      else
+        nil
       end
-      return nil unless type.tag == BinaryDataType::TAG_FIXED_STRING
-      width = type.fixed_size
-      return nil unless width && width > 0 && width <= BinaryDataType::MAX_FIXED_STRING
-      fixed_string_byte_size(width)
     end
 
     # Render a type only after its complete declaration passed byte-budget
@@ -75,6 +91,12 @@ module CrystalClick
         return nil
       end
       unless type.tag == BinaryDataType::TAG_FIXED_STRING
+        if decimal_tag?(type.tag)
+          decimal = canonical_decimal_for_binary_type(type) ||
+                    raise ArgumentError.new("typed JSON schema has a noncanonical Decimal descriptor")
+          io << "Decimal(" << decimal.precision << ", " << decimal.scale << ')'
+          return nil
+        end
         raise ArgumentError.new("typed JSON schema admits only supported nominal scalar types")
       end
       width = type.fixed_size
@@ -105,9 +127,9 @@ module CrystalClick
     end
 
     # Resolve exactly the bounded nominal grammar used by Object typed fields:
-    # a static primitive name or canonical FixedString(positive-decimal-N).
-    # The returned stack value carries the byte charge and is materialized
-    # only after the parser has admitted that charge.
+    # a static primitive name, canonical FixedString(N), or canonical
+    # Decimal(P, S). The returned stack value carries the byte charge and is
+    # materialized only after the parser has admitted that charge.
     def self.resolve_slice(bytes : Bytes, first : Int32, after : Int32) : Resolution?
       return nil if first < 0 || after < first || after > bytes.size
 
@@ -119,8 +141,94 @@ module CrystalClick
       end
 
       width = fixed_string_width_for_slice(bytes, first, after)
-      return nil unless width
-      Resolution.new(BinaryDataType::TAG_FIXED_STRING, width, fixed_string_byte_size(width))
+      if width
+        return Resolution.new(BinaryDataType::TAG_FIXED_STRING, width, fixed_string_byte_size(width))
+      end
+
+      decimal = decimal_type_for_slice(bytes, first, after) || return nil
+      tag = decimal_tag_for_storage_width(decimal.storage_width)
+      Resolution.new(tag, decimal.precision, decimal_byte_size(decimal.precision, decimal.scale), decimal.scale)
+    end
+
+    def self.decimal_tag?(tag : UInt8) : Bool
+      tag == BinaryDataType::TAG_DECIMAL32 || tag == BinaryDataType::TAG_DECIMAL64 ||
+        tag == BinaryDataType::TAG_DECIMAL128 || tag == BinaryDataType::TAG_DECIMAL256
+    end
+
+    private def self.canonical_decimal_for_binary_type(type : BinaryDataType) : DecimalType?
+      return nil unless decimal_tag?(type.tag)
+      binary = type.decimal_type || return nil
+      decimal = DecimalType.new(binary.precision, binary.scale)
+      return nil unless binary.width_bits == decimal.storage_width * 8
+      return nil unless type.tag == decimal_tag_for_storage_width(decimal.storage_width)
+      decimal
+    rescue ArgumentError
+      nil
+    end
+
+    private def self.decimal_type_for_slice(bytes : Bytes, first : Int32, after : Int32) : DecimalType?
+      prefix = "Decimal("
+      return nil if after - first < prefix.bytesize + 5
+      return nil unless slice_equals?(bytes, first, first + prefix.bytesize, prefix)
+      return nil unless bytes[after - 1] == ')'.ord.to_u8
+
+      precision_first = first + prefix.bytesize
+      comma = precision_first
+      while comma < after - 1 && bytes[comma] != ','.ord.to_u8
+        comma += 1
+      end
+      return nil if comma >= after - 1
+      return nil if comma + 2 >= after - 1
+      return nil unless bytes[comma + 1] == ' '.ord.to_u8
+
+      precision = canonical_decimal_number(bytes, precision_first, comma, allow_zero: false) || return nil
+      scale = canonical_decimal_number(bytes, comma + 2, after - 1, allow_zero: true) || return nil
+      DecimalType.new(precision, scale)
+    rescue ArgumentError
+      nil
+    end
+
+    private def self.canonical_decimal_number(bytes : Bytes, first : Int32, after : Int32, allow_zero : Bool) : Int32?
+      return nil if first >= after
+      return nil if after - first > 1 && bytes[first] == '0'.ord.to_u8
+
+      value = 0
+      index = first
+      while index < after
+        byte = bytes[index]
+        return nil if byte < '0'.ord.to_u8 || byte > '9'.ord.to_u8
+        digit = (byte - '0'.ord.to_u8).to_i
+        return nil if value > (76 - digit) // 10
+        value = value * 10 + digit
+        index += 1
+      end
+      return nil if !allow_zero && value == 0
+      value
+    end
+
+    private def self.decimal_tag_for_storage_width(width : Int32) : UInt8
+      case width
+      when  4 then BinaryDataType::TAG_DECIMAL32
+      when  8 then BinaryDataType::TAG_DECIMAL64
+      when 16 then BinaryDataType::TAG_DECIMAL128
+      when 32 then BinaryDataType::TAG_DECIMAL256
+      else
+        raise ArgumentError.new("Decimal storage width is outside the supported range")
+      end
+    end
+
+    private def self.decimal_byte_size(precision : Int32, scale : Int32) : Int32
+      "Decimal(".bytesize + decimal_digits(precision) + 2 + decimal_digits(scale) + 1
+    end
+
+    private def self.decimal_digits(value : Int32) : Int32
+      digits = 1
+      remaining = value
+      while remaining >= 10
+        remaining //= 10
+        digits += 1
+      end
+      digits
     end
 
     private def self.fixed_string_width_for_slice(bytes : Bytes, first : Int32, after : Int32) : Int32?

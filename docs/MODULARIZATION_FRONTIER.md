@@ -9,8 +9,8 @@ W133 paired bare Date/Date32 Object fields over W132 `e043be7`; its bounded
 capability certificate remains in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 Catalog Object dispatch has a private materialization owner; W130 separately
 owns normalized table admission/accounting. W132 extracts one shared closed
-typed-field policy; W133, W135 and W136 extend that policy without a new codec or
-class per declaration. W135 reuses fixed-value/bulk and existing Object
+typed-field policy; W133, W135, W136 and W137 extend that policy without a new
+codec or class per declaration. W135 reuses fixed-value/bulk and existing Object
 writer/consumer owners for bare UUID/IPv4/IPv6; its capability evidence remains
 in the JSON frontier, not an architecture-completion claim. W136 adds
 bounded FixedString(N) resolution, preflight byte sizing and rendering to the
@@ -18,7 +18,15 @@ same policy. Its nested stack-value Resolution carries tag/N/byte count until
 the parser charges the budget; the immutable descriptor is constructed only
 after that charge. Schema construction similarly preflights before rendering.
 There is no new codec, per-width class or physical facade branch. The paired
-stock and regression certificate remains in the JSON frontier. No
+stock and regression certificate remains in the JSON frontier. W137 adds
+canonical Decimal(P, S) resolution and rendering to this same owner; its
+stack Resolution carries precision/scale/byte charge before descriptor
+materialization. The existing DecimalType selects width and validates SQL
+parameters; the wider global BinaryDecimalType transport grammar is not
+narrowed. Reader, writer and consumers reuse their existing fixed-value/bulk
+owners, without a new per-width codec, class or facade dispatch branch.
+W137's schema and stock qualification remain a capability certificate in the
+JSON frontier, not completion of the architecture refactor. No
 MV/projection or performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight

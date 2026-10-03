@@ -11,7 +11,11 @@ bare declared UUID/IPv4/IPv6 through the existing fixed-value/bulk owners,
 qualified for the same eight native/library profile cells with independent
 nominal/text/byte-order evidence. W136 adds canonical bare declared
 FixedString(N) with nominal width identity and paired exact-byte evidence at
-six sampled widths; maximum-N admission is schema-only. The exact
+six sampled widths; maximum-N admission is schema-only. W137 adds canonical
+bare declared Decimal(P, S) through the same shared schema and fixed-value/bulk
+owners. All legal P/S pairs have schema checks; stock part evidence covers
+nine witnesses across all four wire widths, with exact nominal parameters,
+scale-preserving text and signed literal bytes. The exact
 admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
@@ -4636,3 +4640,265 @@ ceilings, full facade modularity or stock-reader speed. Performance is parked.
 Decay on changes to policy/schema/bulk/adapters, profile/limits, comparators,
 publication, source/runtime/toolchain or loss of retained evidence; rerun the
 affected positive/negative gates before reuse. The overarching goal is active.
+
+## W137 declared Decimal Object fields — pre-implementation seal
+
+Anchor: clean W136 `700d5b8`. Previous goal turn made authoritative progress
+with paired FixedString and its executed certificate, not a status-only wait.
+This slice extends the shared declared-field policy to the complete canonical
+bare Decimal(P, S) family: P=1..76, S=0..P, width derived from precision at
+9/18/38/76. Global BinaryDecimalType deliberately supports wider binary
+descriptor combinations; do not narrow that transport grammar. Object schema
+construction must refuse width/P mismatch and S>P because its canonical SQL
+name cannot preserve such a descriptor. Exact persisted P/S and tag identity
+remain part of our owned schema contract. That is not a claim that stock
+DataTypeDecimal::equals compares precision: it compares scale within a width.
+
+Fresh source `f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`:
+DataTypesDecimal.cpp:29-40 preserves P/S in names but not P in equals;
+DataTypeDecimalBase.h:180-195 derives SQL width and enforces P/S ranges;
+SerializationDecimalBase.cpp:14-69 transports signed fixed-width little-endian
+values. The source is unbuilt, separate from pinned runtime 26.10.1.1201,
+build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+Root's pre-production native probe at
+`/private/tmp/crystal-click-w137-root.8M9Qeu/probe-decimal.log` passes four
+widths with independently literal signed raw RowBinary, nominal type/text,
+actual CHECK=1, invalid P/S refusal and Decimal/default/width-alias
+normalization to canonical Decimal(P, S). This is a producer anchor, not
+paired library qualification.
+
+Design: reuse DecimalType's allocation-free P/S/width authority and the
+existing fixed-value, bulk, reader, writer and public consumer owners.
+ObjectTypedFieldType owns non-allocating canonical size/resolution/rendering;
+resolution retains P/S until the parser charges bytes before descriptor
+materialization. Constructor charges before declaration rendering. The parser
+must consume the complete bounded type tail rather than one whitespace-free
+token, admitting exactly the canonical comma-space in Decimal(P, S). It must
+continue refusing extra tokens, malformed/unbalanced/nested grammar and
+noncanonical FixedString. The bounded consumer search `rg -n
+'ObjectTypedFieldType' src spec` finds only schema/parser production callers
+and the policy's own implementation. No leaf decoder or Cartesian facade
+branch is needed.
+
+Rejected: Decimal aliases/default spellings at the persisted parser boundary,
+Enum, parameterized temporal fields, wrappers and recursive declared fields;
+new Object layouts, arbitrary schemas/multi-Object writer, whole-Object
+projections, MV transformations and performance changes. Aliases normalize
+in stock persisted metadata; their catalog/source-DDL admission is a separate
+boundary, not a reason to weaken canonical physical metadata.
+
+Risk: CAUTION (persisted declaration/parser admission). Rollback: one scoped
+atomic commit over `700d5b8`. Likeliest failure: same-byte Decimal scale,
+precision or integer aliases pass a self-consistent round-trip, or whitespace
+tail scanning admits extra/nested syntax. Guard with mismatched descriptors,
+all legal P/S schema combinations and digit/width/budget boundaries, one-byte
+short budget refusal, publication refusal and later valid-part P/S drift
+before callbacks even for an unselected part.
+
+Execution plan: Luna owns `object_typed_field_type.cr`, bounded parser changes,
+test-only `object_document_schema_w137_spec.cr` and
+`object_decimal_w137_root_spec.cr`, and replacement of obsolete Decimal
+refusal cases with still-unsupported Enum/temporal/recursive cases. Root
+qualifies schema RED on unchanged production before implementation. Another
+Luna owns only `check_object_decimal_w137.cr/.sh`; root owns docs and serial
+guarded compiler/runtime execution. DoD: focused DEBUG, adjacent RELEASE,
+complete unique sorted spec inventory in disjoint non-release groups; four
+fresh native and four library-owned String 0/1 x BASIC/COMPACT stock cells,
+actual CHECK/ATTACH, independent decimal text and exact RowBinary, public
+file/column/catalog/table/window/PK candidate plus residual checks; seeded
+nominal/byte/grid/serializer/CHECK/truncation controls; fresh unchanged
+W136/W135/W133/W132 regressions, formatter, shell syntax and diff hygiene.
+Expected signal: completed zero-failure commands and sensitive comparators,
+not present evidence fields. Root performs hostile self-review before closure.
+Enum investigation proceeds read-only for the next type lane. The full
+paired-types/MV/projections goal remains active; performance stays parked.
+
+## W137 declared Decimal Object fields — executed certificate (2026-10-03)
+
+VERIFIED within the profile below over W136 `700d5b8`; this does not complete
+the overarching paired-types/MV/projections goal. Canonical bare Decimal(P, S)
+now uses the same owned schema, fixed-value/bulk, writer and public consumers
+as the preceding fields. No new leaf codec, per-width class or facade branch
+was introduced. DecimalType remains the SQL P/S/width authority; the global
+BinaryDecimalType descriptor transport grammar remains wider and unchanged.
+The persisted Object schema retains exact width/P/S identity, deliberately
+stricter than stock DataTypeDecimal::equals, which ignores P within a width.
+
+Schema constructor/parser tests cover all 3,002 legal P=1..76, S=0..P pairs.
+The parser resolves the entire bounded type tail so canonical comma-space is
+admitted, but aliases/default spellings, leading zeros, extra tokens, nested
+types, bad P/S, overflows and malformed FixedString tails remain refused.
+The stack Resolution carries P/S and canonical byte size before the parser
+charges the descriptor; schema construction similarly preflights rendering.
+Tests admit exact byte budgets and reject one byte less. Wire-valid width/P
+or S>P mismatches remain constructible globally and are refused locally by
+Object schema admission; that is not a malformed-stock-part qualification.
+Only obsolete Decimal refusal cases changed in the earlier schema specs.
+
+Physical qualification is narrower than exhaustive schema coverage: nine
+independently authored P/S witnesses (1/0, 8/2, 9/9, 10/4, 18/18, 19/6,
+38/38, 39/8, 76/76), all four wire widths, seven rows each (zero, signed,
+least-scaled unit, asymmetric coefficients and positive/negative maximum-P
+coefficients). Native JSONEachRow decimal strings and library raw signed
+little-endian fixtures are separate literals, not production conversions.
+Root's independent Ruby BigInt checker confirms all 63 text/coefficient/
+width/P/S fixtures and native JSON strings agree. It caught and corrected a
+test-only negative Decimal256 maximum literal before the final gates.
+
+Eight fresh cells cover native/library x ordinary String 0/1 x Dynamic
+BASIC/COMPACT: hashed Wide, LZ4, Object V3/Dynamic V3, one shared MAP bucket,
+Default serializers, plain adaptive .mrk2 and primary.idx, physical grid
+[2,2,2,1] and primary boundary keys [1,3,5,7,7]. Each cell includes declared
+String, Dynamic Int64 and a shared String spill on rows 1/7; actual stock SQL
+checks shared spill identity/bytes and absence on other rows. Every cell
+passes real CHECK=1; the four library-owned parts additionally pass ATTACH.
+Full and PK-selected SQL compare nominal P/S and scale-preserving decimal
+text. Full and selected RowBinary compare literal signed coefficients,
+String framing and the Dynamic nominal descriptor, without a library
+round-trip as their expected byte authority.
+
+All eight cells pass file/column full/middle/zero windows, catalog owned
+values and reread, table full/windows and physical/logical offsets. UInt64 PK
+6 yields whole candidate granule keys [5,6], followed by an explicit residual
+predicate selecting only 6. Root consumer specs also reject nominal mismatch
+before publication, and later independently valid-part P/S drift before any
+callback even when that part has no selected marks. Malformed persisted
+Decimal metadata is refused by the physical Object reader.
+
+Ten seeded controls execute on the first native cell: flipped sign bit,
+reversed endian, altered coefficient, same-width Int32 alias, precision-only
+alias, scale-only alias, Sparse serializer, wrong grid, wrong CHECK row and
+truncated RowBinary. Value mutations retain all seven rows and their order;
+their rejection is not merely a row-count mismatch. These test comparator
+sensitivity, not corrupted-part admission by stock ClickHouse.
+
+Source reference: separate unbuilt shallow checkout
+`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-f86ca42b`, revision
+`f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`; Decimal anchors are in the seal
+above. Runtime is pinned ClickHouse local 26.10.1.1201, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, executable SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The oracle hashes the executable before its first stock execution and checks
+version/build. This is not executable qualification of source `f86ca42b`.
+
+Root executed these serial gates on frozen, formatted production/spec source:
+
+- Qualified RED on unchanged W136: five schema examples, zero failures and
+  four expected unsupported-Decimal/internal-space errors, guard exit 1.
+- Focused DEBUG: 61 examples, zero failures/errors/pending, guard exit 0.
+- Adjacent RELEASE: 186 examples, zero failures/errors/pending, guard exit 0.
+- Complete inventory: 359 unique sorted spec files, 15 consecutive disjoint
+  non-release groups, 2,269 examples, every group zero failures/errors/pending
+  and guard exit 0. Not a combined-process or complete RELEASE certificate.
+- Corrected fresh eight-cell W137 stock matrix: all cells and ten seeded
+  controls pass, guard exit 0. Retained root:
+  `/private/tmp/crystal-click-object-decimal-w137.BR7shS`.
+- Fresh unchanged W136/W135/W133/W132 stock regressions, serial parent guard
+  exit 0. Retained roots under /private/tmp: respectively
+  `crystal-click-object-fixed-string-w136.boApZd`,
+  `crystal-click-object-identifiers-w135.QfviE7`,
+  `crystal-click-object-dates-w133.syaS6l` and
+  `crystal-click-object-numeric-w132.NC2AWn`.
+- Independent literal check, final formatter --check, shell syntax,
+  source fingerprint verification and git diff --check pass.
+
+The first stock matrix attempt failed before any library write: toString
+removed trailing fractional zeros while the independent text fixtures
+preserved scale. Root's retained native-part probe separates toString's
+output from native Decimal formatting. Fresh source
+SerializationDecimal.cpp:72-78 uses decimal_trailing_zeros. The oracle now
+selects native Decimal values with output_format_decimal_trailing_zeros=1;
+literal text/bytes/JSON and exact comparators are unchanged. The complete
+corrected matrix ran from a new root. The first log/root are diagnostic
+evidence, not a passing certificate. Earlier test-only canonical field order
+and physical-mark row-offset expectations were corrected before final spec
+gates; no production guard was relaxed.
+
+Evidence directory: `/private/tmp/crystal-click-w137-root.8M9Qeu`.
+The repository/package has no evidence-packet template or graph validator;
+this existing Frontier certificate is the fallback evidence index. Hashes
+bind retained artifacts, not substantive truth by themselves.
+
+Final production/spec/oracle fingerprints:
+
+```text
+35b180af432d22382ee6c0446830a0e1f556bc5e0fb135c2c26e916484bb6667  src/crystal_click/object_typed_field_type.cr
+2f81ce7aacdafa72d1d7c7efb0dcd1d5b62b5a068ae5d94b88a5866ffb05424b  src/crystal_click/object_document_schema_parser.cr
+806255dfb5e0c574273f71789ff1050ceb3b04cf30a943303f32ce6014882393  spec/object_document_schema_w137_spec.cr
+303abcbad7d7c86df57b9ee29a3e69bd91e009f2caa574d04d73f316ab29611f  spec/object_decimal_w137_root_spec.cr
+2cb22ba979dede28ae5404871c3165c405816b5e2d56c2c6e4ff1c7faffd7f70  spec/object_document_schema_w132_spec.cr
+1d2235a775f471f32343f7e5eddc060ddc54cda3fa76111b68b73501a2383e72  spec/object_document_schema_w135_spec.cr
+e632d7688ecba323e9b243cf257b8b17c1c47038b72d0175f633277bbd99d8d1  spec/object_document_schema_w136_spec.cr
+80c736514736809a38960faf5e37e152220b45ad89c04d81398b88fb11820b58  scripts/check_object_decimal_w137.cr
+7110a1b961507aed2b686b830ef4e20f57b84b672bd0c259fc2e9a5c9f52b8f5  scripts/check_object_decimal_w137.sh
+```
+
+Evidence fingerprints relative to that directory:
+
+```text
+7d05d442a06dd950dfae18771b3eb159806c8c34b2e6e51da97d3d7a0eb4d794  schema-red.log
+9c92c6c3325fa849a8ccdddd735fdebd84d412875338c7dbb3f00eb3040b1cc4  focused-debug-final.log
+1a8e80faa121a48888c2a4e4bd3df95b53fbcb88b847d115c14da1e052c395f1  adjacent-release-final.log
+fbd0daf29954bfa112762487009338782c0fa90432d1fc3c81d3dd380345dafb  full-nonrelease-shards.log
+54352b7a774438428a5ffb3be53f35f0b161d70372bf17ad891e656625d6191d  stock-w137-first-oracle.log
+0881bdbcb2d84b0b6589c21f373609620805c6327af4e8cd8f81966c23c07fdd  stock-w137.log
+85d41e78999c78db37b2eb09fab6d02e7ce1e18bed27fac73d399a12ed97dc37  stock-w136-regression.log
+65e7da15f9162800af09e8b915aca8b261626832a7fdfeaf4269f0e0c68fae85  stock-w135-regression.log
+1a0aa9ca7384fea8195be01b8206c06b09c8f4300b021258ee707f672741deef  stock-w133-regression.log
+9e923476abaad0349ef908e27e3ad33c8ce585df031d7400d7b80f2417e05ae4  stock-w132-regression.log
+29af5921d2aa74908a4c65cea4fdfadb5fd7b697925393777e372a742af0ebc9  regressions.log
+e5da9bf43f870207a3e9b5840deec6eceeb4ccf5119f9a62927522cb67a3340d  format-final.log
+351f2cd31a44b178f1e00df211f974d547989e48e5ee75d0605bc281b40450b3  literals-final.log
+597aa23047501fd4528ae1bcc1684d37c2500a4cd472d296a995d76b49033bc1  probe-decimal.log
+a1048d5fc63261e055f8c6161ca9494cd001b87f526c7edff36f50487cdc50bf  probe-decimal-render.log
+c6d62a2d9af9b1ac64918bbb1723009410c1cccf458599c07ad640c2da34427d  probe-shared-sql.log
+808167d743780444b33d6a60ab7d80928a449776900a007df40aa56c9bd22ec2  run_full_shards.sh
+d2a06d810ac3972e6bdabd86ea61000b7a2aff53c17eb1fed1d451588e76e9c2  run_regressions.sh
+5f7fa4b51998c9b2e638b146117ee141c2ef3ce63697c693ae0a9399c4d1a538  check_decimal_literals.rb
+14ad47bf747a06f0a39b1a16958c052fa38a236092c15d1f179ffc115aa985e5  source.sha256
+```
+
+Replay environment: Crystal 1.21.0, LLVM 22.1.8 AArch64,
+/opt/homebrew/bin/crystal; SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk,
+TMPDIR=/private/tmp and isolated CRYSTAL_CACHE_DIR. Root uses
+/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh with
+COGNI_RUN_SAFE_MIN_FREE_PCT=50 and RUN_SAFE_PASSTHROUGH_STDIO=1.
+Specs use 600-second/32768-MiB guards and
+--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace;
+RELEASE additionally uses --release. Focused selection is the W137/W136/
+W135/W133/W132/W131 schema/root pairs plus W128 schema (13 files).
+Adjacent RELEASE adds W130 table/offline/root, W129 catalog/column/root,
+W128 writer/root, offline catalog, lazy window and W87 table/catalog
+projection specs (25 files). Retained run_full_shards.sh asserts the unique
+359-file sorted inventory and complete 15-group selection, adding --no-debug
+under a 900-second guard. Under the same guard, set CRYSTAL_BIN and
+CLICKHOUSE_BIN to the pinned binaries and run W137_KEEP_TMP=1 bash
+scripts/check_object_decimal_w137.sh. Retained run_regressions.sh serially
+runs the unchanged W136/W135/W133/W132 wrappers with KEEP_TMP=1 and pipefail.
+
+Root scoped hostile verdict: ROBUST. Root inspected the shared authority,
+nominal/budget/parser guards and fixed source, independently checked literals,
+then executed the native/library positive and seeded-negative gates. Luna's
+implementation and static adversary reviews are correlated support, not an
+independent runtime certificate. Schema coverage does not promote untested
+Decimal physical combinations; library round-trips do not establish native
+decimal interpretation. No arithmetic, conversion, rounding, aggregate-state,
+RSS, allocation or performance result is claimed.
+
+Continuation: Enum remains the next proposed Object lane, not admitted here.
+Reuse BinaryEnumDefinition's full signed-width map/opaque-label authority,
+not the bounded Tuple parser's smaller map limit. Before implementation,
+seal SQL single-quote/escape-aware outer scanning, canonical map spelling,
+exact nominal map identity and pre-allocation byte/node budgets; use native
+and library parts with delimiter/escape labels and same-byte changed maps
+as falsifiers. Parameterized temporal and recursive declared fields follow.
+Additional Object versions/layouts, Compact/Sparse parts, wrappers, BFloat16,
+arbitrary-schema/multi-Object writers, whole-Object projections and broader
+MV transformations remain open or refused. Legacy facade decomposition is
+unfinished; performance remains parked. Offline candidates do not prove
+server Active state or snapshot consistency. Logical limits do not certify
+transient/RSS/caller-retention ceilings or payload authentication.
+Decay on policy/schema/bulk/adapter, profile/limit/comparator/publication,
+source/runtime/toolchain changes or loss of retained evidence. Rerun affected
+positive/negative gates before reuse. The overarching goal remains active.

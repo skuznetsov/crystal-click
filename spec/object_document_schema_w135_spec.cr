@@ -104,10 +104,9 @@ describe "W135 declared UUID and IP Object schema" do
     uuid_value.type.should_not eq(uint128_value.type)
   end
 
-  it "keeps Decimal, Enum, wrappers, containers, BFloat16, and malformed identifier tokens refused" do
+  it "keeps Enum, wrappers, containers, BFloat16, and malformed identifier tokens refused" do
     unsupported_types = [
       w135_schema_type("BFloat16"),
-      CrystalClick::BinaryDataType.decimal(32, 9, 2),
       CrystalClick::BinaryDataType.enum8([{"neg", -1_i16}]),
       CrystalClick::BinaryDataType.nullable(w135_schema_type("UUID")),
       CrystalClick::BinaryDataType.array(w135_schema_type("IPv4")),
@@ -122,7 +121,6 @@ describe "W135 declared UUID and IP Object schema" do
 
     [
       "JSON(n BFloat16)",
-      "JSON(n Decimal(9, 2))",
       "JSON(n Enum8('neg' = -1))",
       "JSON(n Nullable(UUID))",
       "JSON(n Array(IPv4))",
