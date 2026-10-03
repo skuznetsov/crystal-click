@@ -9,8 +9,10 @@ W133 paired bare Date/Date32 Object fields over W132 `e043be7`; its bounded
 capability certificate remains in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 Catalog Object dispatch has a private materialization owner; W130 separately
 owns normalized table admission/accounting. W132 extracts one shared closed
-typed-field policy; W133 extends that policy without a new codec or class per
-declaration. No MV/projection or
+typed-field policy; W133 and W135 extend that policy without a new codec or
+class per declaration. W135 reuses fixed-value/bulk and existing Object
+writer/consumer owners for bare UUID/IPv4/IPv6; its capability evidence remains
+in the JSON frontier, not an architecture-completion claim. No MV/projection or
 performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight

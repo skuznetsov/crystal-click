@@ -20,6 +20,9 @@ module CrystalClick
       {BinaryDataType::TAG_FLOAT64, "Float64"},
       {BinaryDataType::TAG_DATE, "Date"},
       {BinaryDataType::TAG_DATE32, "Date32"},
+      {BinaryDataType::TAG_UUID, "UUID"},
+      {BinaryDataType::TAG_IPV4, "IPv4"},
+      {BinaryDataType::TAG_IPV6, "IPv6"},
       {BinaryDataType::TAG_BOOL, "Bool"},
       {BinaryDataType::TAG_STRING, "String"},
     }

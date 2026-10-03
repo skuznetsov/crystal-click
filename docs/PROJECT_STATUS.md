@@ -4,7 +4,8 @@ Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
 the W129 bounded Object catalog integration, W130 mixed table delivery
 `4b18812`, W131 declared Int64 `02dd99f`, W132 paired numeric declared
-fields `e043be7`, and W133 paired declared Date/Date32 `2e150f4` in
+fields `e043be7`, W133 paired declared Date/Date32 `2e150f4`, and W135
+paired bare declared UUID/IPv4/IPv6 over W134 `7bc4051` in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 W134 extracts nine existing Array/Map row/slice owners to separate files,
 preserving their exact bodies and API. Root passed 22 focused DEBUG, 37 adjacent
@@ -13,6 +14,10 @@ non-release groups), plus a fresh unchanged W133 stock regression. This is
 bounded behavior-preserving extraction, not full facade modularization.
 The executed certificate and responsibility-level owner boundaries are in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+W135 root gates pass 43 focused DEBUG, 168 adjacent RELEASE and 2,251
+complete-inventory examples (355 unique specs in 15 disjoint non-release
+groups), plus the eight-cell UUID/IP stock oracle and fresh unchanged numeric
+and Date regressions. Its scoped hostile verdict is ROBUST in the JSON frontier.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -49,7 +54,14 @@ source/runtime identities and executed evidence.
   writer and public consumers: eight fresh native/library matrix cells pass
   calendar/day-code/type/byte checks, actual CHECK and exact RowBinary; two
   separate raw Date32 extrema cases qualify transport only, not calendar range.
-  The shared declared-field policy now admits 18 nominal types. See
+  W135 adds bare declared UUID/IPv4/IPv6 through the same fixed-value and
+  bulk owners. Eight fresh native/library cells pass actual CHECK (and
+  ATTACH for library-owned parts), canonical text, nominal SQL types,
+  independent literal RowBinary and public file/column/catalog/table consumers.
+  Twelve seeded comparator
+  controls reject byte/order, same-width nominal, serializer, grid and CHECK
+  mismatches. UUID remains distinct from UInt128/IPv6, and IPv4 from UInt32.
+  The shared declared-field policy now admits 21 nominal types. See
   [the example](../examples/write_object_document_part.cr) and
   [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
@@ -82,7 +94,7 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W133 provide
+1. **General JSON compatibility.** W117-W135 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
@@ -92,10 +104,11 @@ source/runtime identities and executed evidence.
    mixed `WidePartTable` batches/windows and UInt64 PK candidates. W132 admits
    the numeric primitive family, Bool and String declared fields with paired
    stock evidence; W133 adds bare Date/Date32 with independent calendar and
-   signed raw-carrier checks. Other temporal/identifier, FixedString, Decimal, Enum and recursive
-   declared-field families remain open within Object, even where standalone
-   part support exists. The older
-   scalar typed-path behavior is unchanged. Neither adapter implies arbitrary
+   signed raw-carrier checks; W135 adds bare UUID/IPv4/IPv6 with independent
+   text, nominal and byte-order evidence. Other temporal, FixedString,
+   Decimal, Enum and recursive declared-field families remain open within
+   Object, even where standalone part support exists. The older scalar
+   typed-path behavior is unchanged. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required, and whole-Object projection child reads remain refused. See
    [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
@@ -133,10 +146,12 @@ source/runtime identities and executed evidence.
    Next remain legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
-2. Extend paired Object declared fields beyond numeric primitives/Bool/String
-   and bare Date/Date32. Parameterless UUID/IPv4/IPv6 are a proposed next lane,
-   not newly qualified Object support. Require independent native and library
-   parts, nominal identity, asymmetric bytes/RowBinary and actual stock CHECK.
+2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
+   bare Date/Date32 and UUID/IPv4/IPv6. FixedString(N) is the next proposed
+   parameterized lane, not admitted Object support: existing exact-width bulk
+   storage is reusable only after bounded declaration parsing, nominal N
+   identity and independent physical qualification. Require independent
+   native and library parts, asymmetric bytes/RowBinary and actual stock CHECK.
    Address parameterized/recursive field grammar and semantic identity, then
    widen layouts with their own stock-generated and library-owned evidence.
    Object declarations retain the stock maximum of 1,000 typed paths.

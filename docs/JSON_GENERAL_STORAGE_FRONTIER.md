@@ -6,8 +6,11 @@ materialization; W130 adds mixed Object/scalar typed-table batches, physical
 windows and bounded UInt64-PK candidate delivery. W132 extends W131 `02dd99f`
 to paired declared integer widths, Float32/64 and Bool alongside String,
 qualified in both directions for String 0/1 × BASIC/COMPACT. W133 adds bare
-declared Date/Date32 with separate calendar and raw-carrier evidence. The exact
-admitted profiles and executed gates are in their sections below. Neither widens
+declared Date/Date32 with separate calendar and raw-carrier evidence. W135 adds
+bare declared UUID/IPv4/IPv6 through the existing fixed-value/bulk owners,
+qualified for the same eight native/library profile cells with independent
+nominal/text/byte-order evidence. The exact
+admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
 table integration. Older scalar JSON projections retain their existing
@@ -4224,3 +4227,185 @@ payload authentication, decoder/transient/RSS/caller-retention limits, complete
 facade modularity or stock-reader speed. Decay on policy/schema/bulk/adapter,
 profile/limits, comparator/publication, runtime/source/toolchain or loss of
 retained evidence; rerun the affected positives and negatives before reuse.
+
+## W135 declared UUID/IPv4/IPv6 Object fields — pre-implementation seal
+
+Anchor: clean W134 `7bc4051`. The closed Object field policy currently admits
+18 nominal types; this slice proposes three bare identifier types, not
+recursive declarations or an unrestricted scalar whitelist. Shared policy
+consumers are the schema constructor and parser (`rg -n
+'ObjectTypedFieldType' src spec scripts examples -g '*.cr'`); existing fixed
+`BinaryValue` and bulk codecs already preserve their nominal descriptors and
+raw payloads. Reusing those codecs is conditional on independent physical
+qualification, not their width alone.
+
+Root inspected the isolated depth-1 source `f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`:
+`Formats/JSONExtractTree.cpp:614-655,1257-1339,2692-2697` admits UUID/IP JSON
+strings, `IO/ReadHelpers.cpp:73-135` and `Core/UUID.h` define UUID's two
+little-endian UInt64 halves, and the UUID/IP serializers define UUID bulk
+bytes, little-endian IPv4 and raw network-order IPv6. Object typed fields
+delegate to those nested serializers. The independently pinned runtime is
+still 26.10.1.1201/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`;
+the fresh source was not built.
+
+Pre-production root probe `/private/tmp/crystal-click-w135-root.HTBUPE/probe-identifiers.log`
+passes native declared-field admission, zero/asymmetric/max text and nominal
+types, independently authored RowBinary and actual CHECK=1. In field order
+IPv4, IPv6, UUID the asymmetric bytes are `04030201`,
+`20010db81234567890abcdef11223344`, and
+`7766554433221100ffeeddccbbaa9988`. These are physical witnesses, not a
+universal text-parser certificate or proof for new part layouts.
+
+Design-sealed: canonical constructor/parser and exact budgets; nominal
+UUID/UInt128/IPv6 and IPv4/UInt32 separation; paired declared streams and
+whole-part publication; full/middle/zero file/column, owned catalog values,
+table windows and UInt64-PK candidates with application residuals. Retain
+Object V3/Dynamic V3/MAP/one bucket, String 0/1 and BASIC/COMPACT discriminators,
+Default serialization metadata and the existing bounded quiescent-local
+profile. Sparse/Compact parts, parameterized/recursive fields, broader MV or
+projection execution, arbitrary schemas and performance remain rejected or
+parked. No weakening of preflight, ownership, roster or serialization guards.
+
+Risk: CAUTION (persistent-format admission). Rollback: one exact-scope atomic
+commit from `7bc4051`; do not include unrelated changes. Strongest failure:
+a self-consistent round-trip hiding UUID half order or IPv6 endian errors.
+Guard: independent literal bytes and stock SQL/RowBinary in both directions,
+plus seeded same-width alias, byte/order, serialization, grid, CHECK and
+comparator mismatches that must fail.
+
+Execution: test-only W135 schema/root specs and replace the obsolete W132 UUID
+refusal sentinel with a still-rejected type; root executes a qualified RED.
+Then admit only the three policy entries, with focused DEBUG and adjacent
+RELEASE. Root runs the W135 stock wrapper's eight native/library cells and
+negative controls, fresh W133/W132 regressions and the complete unique spec
+inventory in serial non-release groups of at most 24. DoD commands are
+`crystal spec` on those files with single-module/one-thread/system-linker
+flags, `W135_KEEP_TMP=1 bash scripts/check_object_identifiers_w135.sh`, unchanged
+W133/W132 wrappers, formatter, `bash -n` and `git diff --check`, all under the
+existing resource guard. Expected signal: zero failures and actual CHECK=1,
+not merely a present output or attestation field. This slice leaves the
+overarching paired-types/MV/projections goal active.
+
+## W135 declared UUID/IPv4/IPv6 Object fields — executed certificate
+
+Executed on 2026-10-03 over W134 `7bc4051`. The production delta is exactly
+three entries in `ObjectTypedFieldType`; constructor/parser, fixed values,
+bulk codecs, imports, writer publication, file/column readers and table/catalog
+owners are unchanged. The closed policy now admits 21 nominal types. No
+per-identifier or per-combination codec class was added. Library inputs remain
+raw, nominal `BinaryValue.fixed` values with a complete declared-field roster;
+this is not a text UUID/IP parser or automatic default synthesis.
+
+Qualified profile: bare declared UUID/IPv4/IPv6 alongside String, one Int64
+Dynamic path and shared String spill, hashed Wide, Object V3/Dynamic V3,
+one-bucket shared MAP, Default serialization metadata, LZ4 and plain adaptive
+marks/index. Seven independent rows include zero, asymmetric and maximum
+identifiers, IPv4 numeric/text witnesses, canonical IPv6/UUID text, embedded
+NUL/UTF-8/empty Strings, four physical marks `[2,2,2,1]` and a verified primary
+index sentinel. String 0/1 × BASIC/COMPACT is tested in both directions. Source
+`f86ca42b6e90eadb97f7481638ff04ca1ee8e71f` and the pinned stock executable have
+the distinct identities in the seal above; the current source was not built.
+
+Root evidence: `/private/tmp/crystal-click-w135-root.HTBUPE`. Crystal 1.21.0,
+LLVM 22.1.8, AArch64; SDK
+`/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`, TMPDIR `/private/tmp`,
+isolated caches. Compiler/stock jobs ran serially under
+`cogni-ml/scripts/run_safe.sh`, minimum free memory 50%, 32,768 MiB and the
+existing FD guard. These host guards are not library memory/leak certificates.
+
+- `probe-identifiers.log`: root's pre-production native JSON probe passes
+  nominal/canonical text, independent asymmetric bytes and actual CHECK=1.
+- `red.log`: the unchanged policy produces three qualified errors in four
+  schema examples; the unsupported-type guard passes, outer exit 1.
+- `schema-green.log`: the same four examples pass after the three entries,
+  outer exit 0.
+- `focused-debug.log`: nine files, 43 examples, zero failures/errors, exit 0.
+- `adjacent-release.log`: 21 files, 168 examples, zero failures/errors, exit 0.
+- `full-nonrelease-shards.log`: all 355 unique sorted spec files, 15 disjoint
+  groups of at most 24, 2,251 examples, zero failures/errors, outer exit 0 in
+  one completed invocation. Root independently summed all 15 result rows.
+  Not a combined-process or full RELEASE suite. Existing duplicate `-lc` and
+  deprecated `blocking` warnings remain.
+- `stock-w135.log`: four fresh native identifier-JSON cells and four complete
+  library-owned cells pass actual CHECK=1 (ATTACH for library parts), full/PK
+  nominal/canonical SQL, IPv4 numeric witnesses and independently authored
+  exact RowBinary. File/column full/middle/zero reads, independently copied
+  catalog ownership/reread, table windows, offsets and whole-granule PK
+  candidates with exact application residuals pass; outer exit 0.
+  Twelve seeded comparator controls reject wrong bytes, five same-byte
+  nominal aliases, Sparse metadata, mark grid, CHECK output, IPv4 RowBinary,
+  swapped UUID halves and reversed IPv6 bytes. They prove comparator
+  sensitivity, not arbitrary malformed-part rejection.
+- Fresh unchanged `stock-w133-regression.log` and
+  `stock-w132-regression.log`: both eight-cell matrices and their 7/6 negative
+  controls pass; W133's separate stock/library raw Date32 extrema also pass.
+  The enclosing `regressions.log` has outer exit 0.
+- Final formatter check, wrapper/runner `bash -n` and `git diff --check` pass.
+
+Retained oracle roots: W135
+`/private/tmp/crystal-click-object-identifiers-w135.7vOT3F`, W133
+`/private/tmp/crystal-click-object-dates-w133.Khl0fY`, W132
+`/private/tmp/crystal-click-object-numeric-w132.Rg6vGR`.
+The final production/spec/oracle fingerprints are:
+
+```text
+0cb0d76d0a3844bd55665496f24d98507e3101966293173a6f3668d86d3586b3  src/crystal_click/object_typed_field_type.cr
+1353587a48dfa715c652342a2b8459bf1ad08a8f69929aff515a4f904b2c392d  spec/object_document_schema_w132_spec.cr
+b0a571dd320c63a45e63d25f20fcd57fa4c70858090576d0be388a4c2b8ba2c9  spec/object_document_schema_w135_spec.cr
+9d72fde785bbcf28ab7db7478aa6b262a2b38c842aabe9f6fcedf04f2d4e1428  spec/object_identifiers_w135_root_spec.cr
+b47b48235206c8e4fe11556f59bba5dcfed93138f139a852632cd9a229b5cd4a  scripts/check_object_identifiers_w135.cr
+da53c97d676d975fe3801289ee7f8824ed8f7cf3fac3d50d53d1899c07a96d3e  scripts/check_object_identifiers_w135.sh
+```
+
+Evidence fingerprints (relative to the root evidence directory):
+
+```text
+d16ca8e605c9c8cec7e9b3ee019dfc48cbae4e7a48a905559b6ff66faa22e84b  probe-identifiers.log
+12bea9ab7cb7fdbf6789af4b99457f7d6c91eb0d3e33ea27b94c61eaaa110300  red.log
+f7d2685dedccc1c589a23d09d3bddd6593552bf59d7dab76560fcf0bff0790b0  schema-green.log
+40eeff935240a647e97089d1490c7f39a32a361a1dae9ca1ddd466a36ba3c6a1  focused-debug.log
+c13beb68462724e3958e87c690c50d0d44a77bf6346c4ecca2401b1fc5d9e8ac  adjacent-release.log
+e0f114dfb0919c1814157e09734f4874577cae7dd751cef4a744e7bb3a6f947b  full-nonrelease-shards.log
+7ef4beff336d2fef9b136595693824714bd1d7a4dd32637c4ba0b17b8a1cdf91  stock-w135.log
+6e94ad8b1cdda95da2adbf7065391af17cec736d849707e3db0ed5288a67f61e  stock-w133-regression.log
+7f3c45ebab726e8ac2e858b815f34584ea9cfc1d23465f784c745a61fc2f4178  stock-w132-regression.log
+833ddbe4befc02d23b8892e7e71c13920d8a83feadc16e90313ac5bc3137e0c9  regressions.log
+756dc4d23b0d2249529cb42565a52105b01bc136b563ed738b47eb1ae5b782fb  run_full_shards.sh
+e43779f890bf2bab5dd9a9aa91473e086208e780aa2e28464c862717b6bb4f5b  probe_identifiers.sh
+```
+
+Replay uses the guard/toolchain environment above, single-module/one-thread/
+system-linker/error-trace flags, 600-second spec and 900-second wrapper/full
+guards. Focused DEBUG files are W135 schema/root, W133 schema/root, W132
+schema/root, W131 schema/root and W128 schema. Adjacent RELEASE adds the
+W130 table/offline/root, W129 catalog/column/root, W128 writer/root, offline
+catalog, lazy window and W87 table/catalog projection specs. The retained
+`run_full_shards.sh` asserts 355 unique inputs, selects consecutive disjoint
+groups of 24 from `rg --files spec -g '*_spec.cr' | LC_ALL=C sort`, runs
+`crystal spec --no-debug` with those flags and asserts 15 completed groups.
+Run `W135_KEEP_TMP=1 bash scripts/check_object_identifiers_w135.sh`, then the
+unchanged W133 Date and W132 numeric wrappers with their KEEP_TMP variables.
+This frontier is a curated evidence index, not proof by recorded fields.
+
+Root hostile verdict: ROBUST within the declared profile. Root inspected the
+three-entry production diff, schema/codec identity boundaries, latest stock
+source, literal fixtures and comparators, executed the independent pre-probe
+and final gates, and challenged aliases, byte/half order, exact declaration
+budget cutoffs, ownership, publication and candidate/residual semantics.
+The consumer helper was strengthened to assert exact mark/row counts before
+the final runs, and drift uses two valid library-created parts with UUID versus
+IPv6, not a forged metadata-only mismatch; admission rejects before callbacks
+even when the later part is unselected. Luna's implementation/static review
+is correlated support, not an independent runtime certificate.
+
+Residuals: FixedString/Decimal/Enum, other temporal and recursive declared-field
+grammars, wrappers, BFloat16, new Object layouts/versions, Compact/Sparse parts,
+arbitrary-schema or multi-Object writer, whole-Object projections and broader
+MV execution remain open or refused. Quiescent local inputs, logical budgets
+and existing metadata/checksum validation do not prove Active status, snapshot
+consistency, payload authentication, transient/RSS/caller-retention ceilings,
+complete facade modularity or stock-reader speed. Performance remains parked.
+Decay on policy/schema/bulk/adapter, profile/limits, comparator/publication,
+source/runtime/toolchain or loss of retained evidence; refresh the affected
+positive and negative gates before reuse. The overarching goal remains active.
