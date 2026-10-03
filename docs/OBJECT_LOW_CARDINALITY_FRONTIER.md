@@ -226,10 +226,10 @@ the final run must report all nine cells and descriptor/name negative controls.
 Executed commands (with the common resource guard and SDK environment):
 
 ```sh
-W141_EXECUTE_AS_ROOT=YES scripts/probe_object_low_cardinality_w141.sh
+W141_EXECUTE_AS_ROOT=YES /bin/bash scripts/probe_object_low_cardinality_w141.sh
 W141_EXECUTE_AS_ROOT=YES \
   W141_PROBE_ROOT=/private/tmp/crystal-click-object-low-cardinality-w141.tmcuJP \
-  scripts/check_binary_low_cardinality_w141.sh
+  /bin/bash scripts/check_binary_low_cardinality_w141.sh
 ruby /private/tmp/crystal-click-w141.yzOYgD/verify_native_bytes.rb \
   /private/tmp/crystal-click-object-low-cardinality-w141.tmcuJP
 ```
