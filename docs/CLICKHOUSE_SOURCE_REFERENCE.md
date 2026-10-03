@@ -1,6 +1,57 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-03, refreshed)
+## Current source snapshot (2026-10-03, second refresh)
+
+Use this separate checkout for new source comparisons:
+
+`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-9007d227`
+
+- Upstream: `https://github.com/ClickHouse/ClickHouse.git`, branch `master`.
+- Revision: `9007d227b64a3f8b667fc5258ceb2923f3cf477d`.
+- Committer timestamp: `2026-10-03T08:25:05Z`.
+- Cloned with `git clone --depth 1 --single-branch --branch master --no-tags`.
+  Root's pre-clone and post-clone `git ls-remote` lookups both returned this
+  revision for `refs/heads/master`.
+- Root observed shallow repository `true`, one reachable commit, branch
+  `master`, and a clean working tree. All 154 recorded submodules were
+  uninitialized; none were fetched.
+- Existing checkouts were not changed. No executable from this revision was
+  built or qualified; retained runtime certificates keep their original
+  executable identities.
+
+### Source comparison: 9007d227 vs f86ca42b
+
+Root executed recursive `git diff --no-index --stat` comparisons against the
+earlier October 3 snapshot below and inspected the changed DataTypes and
+MergeTree hunks:
+
+| Directory | Observed result |
+| --- | --- |
+| `src/DataTypes/Serializations` | Exit 0; identical contents. |
+| `src/DataTypes` | One new test file, 42 insertions; exit 1. |
+| `src/Columns` | Exit 0; identical contents. |
+| `src/Formats` | Exit 0; identical contents. |
+| `src/Storages/MergeTree` | Two changed files, 24 insertions, 14 deletions; exit 1. |
+| `src/Compression` | Two changed files, 13 insertions; exit 1. |
+
+`DataTypes/tests/gtest_data_type_fixed_size_value.cpp` checks that a registered
+type claiming an unambiguous fixed-size representation supplies its memory
+size. It adds a test, not a new type or serializer.
+`MergeTreeDataPartWriterWide.cpp` now rounds compression-buffer sizes to whole
+fixed-size values when the stream provides a type. This can change compressed
+block boundaries; unchanged scalar serialization does not imply identical
+physical framing. The new helper in `CompressionFactory.cpp:343-350` and its
+header declaration comprise the Compression diff: the helper rounds down to a
+multiple of the fixed value size, with a minimum of one whole value. The other
+changed MergeTree file, `MergeTreeSettings.cpp`, changes
+setting descriptions, not their values.
+
+These observations establish continuity only in the compared directories and
+between the stated revisions. They do not admit new Object schemas/layouts,
+qualify the current-master executable, or establish performance. Refresh this
+record when relevant sources or upstream HEAD change.
+
+## Earlier October 3 source snapshot (f86ca42b)
 
 Use this separate checkout for new source comparisons:
 
