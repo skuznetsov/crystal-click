@@ -104,32 +104,29 @@ describe "W132 declared numeric Object schema" do
     end
   end
 
-  it "rejects Nothing, BFloat16, Nullable, and container declarations" do
-    unsupported_types = [
-      w132_schema_type("Nothing"),
-      w132_schema_type("BFloat16"),
-      CrystalClick::BinaryDataType.nullable(w132_schema_type("Int64")),
-      CrystalClick::BinaryDataType.array(w132_schema_type("Int64")),
-      CrystalClick::BinaryDataType.map(w132_schema_type("String"), w132_schema_type("Int64")),
-      CrystalClick::BinaryDataType.tuple([w132_schema_type("Int64"), w132_schema_type("String")]),
-    ]
-    unsupported_types.each do |type|
+  it "rejects unsupported leaves and admits legal recursive numeric declarations" do
+    [w132_schema_type("Nothing"), w132_schema_type("BFloat16")].each do |type|
       expect_raises(ArgumentError) do
         CrystalClick::ObjectDocumentSchema.new({"n" => type})
       end
     end
 
-    [
-      "JSON(n Nothing)",
-      "JSON(n BFloat16)",
-      "JSON(n Nullable(Int64))",
-      "JSON(n Array(Int64))",
-      "JSON(n Map(String, Int64))",
-      "JSON(n Tuple(Int64, String))",
-    ].each do |declaration|
+    ["JSON(n Nothing)", "JSON(n BFloat16)"].each do |declaration|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
       end
     end
+
+    int64 = w132_schema_type("Int64")
+    string = w132_schema_type("String")
+    types = {
+      "array"    => CrystalClick::BinaryDataType.array(int64),
+      "map"      => CrystalClick::BinaryDataType.map(string, int64),
+      "nullable" => CrystalClick::BinaryDataType.nullable(int64),
+      "tuple"    => CrystalClick::BinaryDataType.tuple([int64, string]),
+    } of String => CrystalClick::BinaryDataType
+    schema = CrystalClick::ObjectDocumentSchema.new(types)
+    schema.declaration.should eq("JSON(array Array(Int64), map Map(String, Int64), nullable Nullable(Int64), tuple Tuple(Int64, String))")
+    CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration).typed_paths.should eq(types)
   end
 end

@@ -92,18 +92,9 @@ describe "W133 declared Date and Date32 Object schema" do
     date32_value.bytes.should eq(int32_value.bytes)
   end
 
-  it "retains refusals for malformed Date spellings, wrappers, containers, and BFloat16" do
-    unsupported_types = [
-      w133_schema_type("BFloat16"),
-      CrystalClick::BinaryDataType.nullable(w133_schema_type("Int64")),
-      CrystalClick::BinaryDataType.array(w133_schema_type("Int64")),
-      CrystalClick::BinaryDataType.map(w133_schema_type("String"), w133_schema_type("Int64")),
-      CrystalClick::BinaryDataType.tuple([w133_schema_type("Int64"), w133_schema_type("String")]),
-    ]
-    unsupported_types.each do |type|
-      expect_raises(ArgumentError) do
-        CrystalClick::ObjectDocumentSchema.new({"n" => type})
-      end
+  it "retains refusals for malformed Date spellings and unsupported BFloat16" do
+    expect_raises(ArgumentError) do
+      CrystalClick::ObjectDocumentSchema.new({"n" => w133_schema_type("BFloat16")})
     end
 
     [
@@ -113,14 +104,23 @@ describe "W133 declared Date and Date32 Object schema" do
       "JSON(n Date32junk)",
       "JSON(n Date Int32)",
       "JSON(n BFloat16)",
-      "JSON(n Nullable(Int64))",
-      "JSON(n Array(Int64))",
-      "JSON(n Map(String, Int64))",
-      "JSON(n Tuple(Int64, String))",
     ].each do |declaration|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
       end
     end
+
+    date = w133_schema_type("Date")
+    date32 = w133_schema_type("Date32")
+    string = w133_schema_type("String")
+    types = {
+      "array"    => CrystalClick::BinaryDataType.array(date),
+      "map"      => CrystalClick::BinaryDataType.map(string, date32),
+      "nullable" => CrystalClick::BinaryDataType.nullable(date),
+      "tuple"    => CrystalClick::BinaryDataType.tuple([date, date32]),
+    } of String => CrystalClick::BinaryDataType
+    schema = CrystalClick::ObjectDocumentSchema.new(types)
+    schema.declaration.should eq("JSON(array Array(Date), map Map(String, Date32), nullable Nullable(Date), tuple Tuple(Date, Date32))")
+    CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration).typed_paths.should eq(types)
   end
 end

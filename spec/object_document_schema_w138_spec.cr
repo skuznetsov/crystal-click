@@ -307,7 +307,7 @@ describe "W138 canonical Enum Object schema" do
     end
   end
 
-  it "rejects noncanonical, out-of-range, duplicate, aliased, and wrapped enum declarations" do
+  it "rejects noncanonical, out-of-range, duplicate, and aliased enum declarations" do
     [
       "JSON(v Enum8)",
       "JSON(v Enum8())",
@@ -327,8 +327,6 @@ describe "W138 canonical Enum Object schema" do
       "JSON(v Enum8('unterminated = 1))",
       "JSON(v Enum8('a' = 1) UInt8)",
       "JSON(v Enum('a' = 1))",
-      "JSON(v Nullable(Enum8('a' = 1)))",
-      "JSON(v Array(Enum8('a' = 1)))",
       "JSON(v Enum16('a' = 32768))",
       "JSON(v Enum16('a' = -32769))",
     ].each do |malformed|
@@ -336,5 +334,25 @@ describe "W138 canonical Enum Object schema" do
         CrystalClick::ObjectDocumentSchema.parse_declaration(malformed)
       end
     end
+  end
+
+  it "admits canonical recursive wrappers around Enum leaves" do
+    enum_type = w138_enum8_type
+    string_type = CrystalClick::BinaryDataType.primitive("String")
+    types = {
+      "array"    => CrystalClick::BinaryDataType.array(enum_type),
+      "map"      => CrystalClick::BinaryDataType.map(string_type, enum_type),
+      "nullable" => CrystalClick::BinaryDataType.nullable(enum_type),
+      "tuple"    => CrystalClick::BinaryDataType.tuple([enum_type]),
+    } of String => CrystalClick::BinaryDataType
+    declaration = "JSON(array Array(#{enum_type.name}), map Map(String, #{enum_type.name}), nullable Nullable(#{enum_type.name}), tuple Tuple(#{enum_type.name}))"
+
+    constructed = CrystalClick::ObjectDocumentSchema.new(types)
+    constructed.declaration.should eq(declaration)
+    constructed.typed_paths.should eq(types)
+
+    parsed = CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
+    parsed.declaration.should eq(declaration)
+    parsed.typed_paths.should eq(types)
   end
 end

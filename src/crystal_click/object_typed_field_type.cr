@@ -32,12 +32,12 @@ module CrystalClick
     # and its rendered byte count without constructing a BinaryDataType before
     # the caller charges its codec budget.
     struct Resolution
+      getter tag : UInt8
       getter byte_size : Int32
       getter enum_entry_count : UInt64
       getter decoded_label_bytes : UInt64
       getter explicit_zone_bytes : UInt64
 
-      @tag : UInt8
       @parameter : Int32
       @scale : Int32
       @enum_preflight : ObjectEnumDeclaration::Preflight?
@@ -94,7 +94,7 @@ module CrystalClick
 
     # Return the canonical rendered byte count without allocating a
     # parameterized type name. This is used during declaration preflight.
-    def self.byte_size_for(type : BinaryDataType) : UInt64?
+    def self.leaf_byte_size_for(type : BinaryDataType) : UInt64?
       if ObjectTemporalDeclaration.handles_type?(type)
         ObjectTemporalDeclaration.byte_size_for(type)
       elsif name = name_for(type)
@@ -116,7 +116,7 @@ module CrystalClick
 
     # Render a type only after its complete declaration passed byte-budget
     # admission. FixedString's numeric width is written directly to the IO.
-    def self.append_name(io : IO, type : BinaryDataType) : Nil
+    def self.append_leaf_name(io : IO, type : BinaryDataType) : Nil
       if ObjectTemporalDeclaration.handles_type?(type)
         return ObjectTemporalDeclaration.append_name(io, type)
       end
@@ -212,6 +212,32 @@ module CrystalClick
         decoded_label_bytes: enum_preflight.decoded_label_bytes,
         enum_preflight: enum_preflight,
       )
+    end
+
+    # Explicit leaf alias used by the recursive Object declaration owner. The
+    # legacy resolve_slice remains scalar-only for callers that depend on the
+    # W139 leaf-resolution metadata type.
+    def self.resolve_leaf_slice(bytes : Bytes, first : Int32, after : Int32) : Resolution?
+      resolve_slice(bytes, first, after)
+    end
+
+    # Public Object typed-field admission delegates recursive policy and
+    # bounded traversal to one owner while keeping the scalar codec general.
+    def self.byte_size_for(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      root_depth : Int = 1,
+    ) : UInt64?
+      ObjectRecursiveDeclaration.byte_size_for(type, limits, root_depth)
+    end
+
+    def self.append_name(
+      io : IO,
+      type : BinaryDataType,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      root_depth : Int = 1,
+    ) : Nil
+      ObjectRecursiveDeclaration.append_name(io, type, limits, root_depth)
     end
 
     def self.decimal_tag?(tag : UInt8) : Bool

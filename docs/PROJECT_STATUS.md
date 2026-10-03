@@ -8,8 +8,10 @@ fields `e043be7`, W133 paired declared Date/Date32 `2e150f4`, W135
 paired bare declared UUID/IPv4/IPv6 `ffa5730`, W136 paired bare
 declared FixedString(N) `700d5b8`, W137 canonical bare declared
 Decimal(P, S) `73914c8`, W138 canonical bare declared Enum8/Enum16 `0c63c32`,
-and W139 paired declared DateTime/DateTime64/Time/Time64 over that checkpoint in
+W139 paired declared DateTime/DateTime64/Time/Time64 `281b0d6` in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
+W140 adds recursive Object declared fields over W139; its scoped certificate
+is in [OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md](OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md).
 W134 extracts nine existing Array/Map row/slice owners to separate files,
 preserving their exact bodies and API. Root passed 22 focused DEBUG, 37 adjacent
 RELEASE and 2,242 complete-inventory examples (353 unique specs, 15 disjoint
@@ -44,6 +46,15 @@ CHECK and four library ATTACH operations pass. An independent arithmetic/Ruby
 checker rechecks all eight stores, and six unchanged neighboring stock oracles
 pass. This is a bounded temporal Object certificate, not all-zone/recursive
 or current-master executable qualification.
+W140 root gates pass 109 focused DEBUG, 496 adjacent RELEASE and 2,317
+complete-inventory examples (367 unique specs, 16 disjoint non-release groups).
+Eight fresh cells qualify 13 Array/Map(String,V)/Tuple/Nullable field witnesses,
+with all actual CHECK results and four library ATTACH operations. A manual
+Ruby checker independently rechecks all eight live stores and 4,496 RowBinary
+bytes; seven unchanged neighboring stock oracles pass. Schema admission over
+W139 leaves is broader than this finite physical sample. Separate grammar,
+descriptor, Tuple-name and catalog-accounting owners leave legacy facades
+unchanged; this is not all types, all layouts or completed modularization.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -111,7 +122,12 @@ source/runtime identities and executed evidence.
   DateTime64/Time/Time64 through one declaration owner and the same paired
   transport/consumer paths. Scale and exact implicit/explicit/alias/fixed zone
   identity are retained; eight cells qualify every scale and sampled zones.
-  Default-scale aliases, wrappers and recursive declared fields remain refused.
+  Default-scale aliases remain refused. W140 adds canonical recursive Array,
+  Map(String,V), named/unnamed Tuple (including Tuple()) and legal Nullable
+  fields over the W139 leaves through the same paired writer/reader/consumer
+  paths. Nested Maps require exact String keys; Nullable cannot immediately
+  wrap Array, Map or Nullable. Thirteen recursive witnesses are physically
+  qualified across the eight cells; every recursive leaf/product is not.
   The inherited timezone manifest still lacks runtime-added America/Coyhaique.
   See
   [the example](../examples/write_object_document_part.cr) and
@@ -146,7 +162,7 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W139 provide
+1. **General JSON compatibility.** W117-W140 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
@@ -163,13 +179,17 @@ source/runtime identities and executed evidence.
    identity and independent signed coefficients; W138 adds canonical bare
    Enum8/Enum16 with nominal full-map and independent label/signed-byte checks.
    W139 adds canonical DateTime/DateTime64/Time/Time64 with exact scale/zone
-   identity and independent ticks/text checks. Recursive declared-field
-   families and the inherited timezone-profile gap remain open within Object,
+   identity and independent ticks/text checks. W140 adds recursively bounded
+   Array/Map/Tuple/Nullable declared fields and catalog descriptor-tree charging.
+   Declared LowCardinality/Variant/Dynamic, unqualified recursive products and
+   the inherited timezone-profile gap remain open within Object,
    even where standalone part support exists. The older scalar typed-path behavior is
    unchanged. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required, and whole-Object projection child reads remain refused. See
    [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
+   W140's finite physical profile and executed gates are in
+   [OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md](OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md).
 2. **Additional physical profiles and recursive composition.** Normalized
    Wide/SUFFIX Object V3 with explicit rosters and one-bucket MAP is not general
    JSON/Dynamic compatibility. Bucketed/advanced layouts, other structure
@@ -206,9 +226,11 @@ source/runtime identities and executed evidence.
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
-   and canonical DateTime/DateTime64/Time/Time64.
-   The next proposed lanes are recursive declared fields and the timezone
-   profile gap, not yet admitted Object support. Reuse existing leaf owners only
+   and canonical DateTime/DateTime64/Time/Time64. W140 now admits canonical
+   recursive Array/Map(String,V)/Tuple/legal Nullable schemas, with separately
+   bounded physical witnesses. The next proposed lanes are declared
+   LowCardinality/Variant/Dynamic and the timezone profile gap, not yet admitted
+   Object support. Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary

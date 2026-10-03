@@ -159,8 +159,6 @@ describe "W137 canonical Decimal Object schema" do
       "JSON(n Decimal(999999999999999999999999999999999999999999, 0))",
       "JSON(n Decimal(9, 999999999999999999999999999999999999999999))",
       "JSON(n Decimal(9, 2) UInt8)",
-      "JSON(n Nullable(Decimal(9, 2)))",
-      "JSON(n Array(Decimal(9, 2)))",
       "JSON(n Decimal(9, (2)))",
       "JSON(n FixedString)",
       "JSON(n FixedString(01))",
@@ -169,11 +167,31 @@ describe "W137 canonical Decimal Object schema" do
       "JSON(n FixedString( 3))",
       "JSON(n FixedString(3 ))",
       "JSON(n FixedString(3) UInt8)",
-      "JSON(n Nullable(FixedString(3)))",
     ].each do |malformed|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::ObjectDocumentSchema.parse_declaration(malformed)
       end
     end
+  end
+
+  it "admits canonical recursive wrappers around Decimal and FixedString leaves" do
+    decimal = w137_decimal_type(9, 2)
+    fixed = CrystalClick::BinaryDataType.fixed_string(3)
+    types = {
+      "array"    => CrystalClick::BinaryDataType.array(decimal),
+      "fixed"    => CrystalClick::BinaryDataType.nullable(fixed),
+      "map"      => CrystalClick::BinaryDataType.map(CrystalClick::BinaryDataType.primitive("String"), decimal),
+      "nullable" => CrystalClick::BinaryDataType.nullable(decimal),
+      "tuple"    => CrystalClick::BinaryDataType.tuple([decimal]),
+    } of String => CrystalClick::BinaryDataType
+    declaration = "JSON(array Array(Decimal(9, 2)), fixed Nullable(FixedString(3)), map Map(String, Decimal(9, 2)), nullable Nullable(Decimal(9, 2)), tuple Tuple(Decimal(9, 2)))"
+
+    constructed = CrystalClick::ObjectDocumentSchema.new(types)
+    constructed.declaration.should eq(declaration)
+    constructed.typed_paths.should eq(types)
+
+    parsed = CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
+    parsed.declaration.should eq(declaration)
+    parsed.typed_paths.should eq(types)
   end
 end

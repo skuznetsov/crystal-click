@@ -29,7 +29,7 @@ module CrystalClick
         raise CorruptPartError.new("Object catalog candidate count differs from preflight row count") unless candidate_rows == expected_rows
 
         schema_fields = schema.typed_paths
-        schema_bytes = schema_logical_charge(schema, schema_fields)
+        schema_usage = ObjectSchemaLogicalUsage.measure(schema, schema_fields)
         max_workspace = 0_u64
 
         # First pass opens and validates every part, including zero-row cases,
@@ -43,15 +43,12 @@ module CrystalClick
           max_string_bytes: max_string_bytes,
           max_tuple_cells: max_tuple_cells,
         )
-        schema_field_count = schema_fields.size.to_u64
-        descriptor_nodes = checked_add(1_u64, checked_multiply(schema_field_count, 2_u64))
-        descriptor_elements = checked_multiply(schema_field_count, 2_u64)
         budget.reserve_base(
           expected_rows,
-          schema_bytes,
+          schema_usage.bytes,
           max_workspace,
-          descriptor_nodes: descriptor_nodes,
-          descriptor_elements: descriptor_elements,
+          descriptor_nodes: schema_usage.nodes,
+          descriptor_elements: schema_usage.elements,
         )
         values = Array(OfflineColumnValue).new(expected_rows.to_i)
         observed_rows = 0_u64
@@ -132,32 +129,6 @@ module CrystalClick
           raise CorruptPartError.new("Object catalog part count exceeds table preflight")
         end
         nil
-      end
-
-      private def self.schema_logical_charge(schema : ObjectDocumentSchema, fields : Hash(String, BinaryDataType)) : UInt64
-        bytes = instance_sizeof(ObjectDocumentSchema).to_u64
-        bytes = checked_add(bytes, instance_sizeof(Hash(String, BinaryDataType)).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(String).to_u64 + schema.declaration_byte_size.to_u64 + 1_u64)
-        bytes = checked_add(bytes, checked_multiply(fields.size.to_u64, sizeof(Pointer(String)).to_u64))
-        bytes = checked_add(bytes, checked_multiply(fields.size.to_u64, sizeof(Pointer(String)).to_u64 + sizeof(Pointer(BinaryDataType)).to_u64 + 8_u64))
-        fields.each do |path, type|
-          bytes = checked_add(bytes, instance_sizeof(String).to_u64 + path.bytesize.to_u64 + 1_u64)
-          bytes = checked_add(bytes, instance_sizeof(BinaryDataType).to_u64)
-          bytes = checked_add(bytes, instance_sizeof(Array(BinaryDataType)).to_u64)
-          bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
-          name = type.name
-          bytes = checked_add(bytes, instance_sizeof(String).to_u64 + name.bytesize.to_u64 + 1_u64)
-          if temporal = type.temporal_type
-            bytes = checked_add(bytes, instance_sizeof(BinaryTemporalType).to_u64)
-            if zone = temporal.time_zone?
-              bytes = checked_add(bytes, zone.logical_charge)
-            end
-          end
-        end
-        # Include the detached typed-path snapshot used above while estimating;
-        # the schema itself remains the single retained descriptor owner.
-        checked_multiply(bytes, 2_u64)
       end
 
       private def self.reader_workspace_bytes(reader : ObjectColumnReader, mark_rows : Array(UInt64)) : UInt64

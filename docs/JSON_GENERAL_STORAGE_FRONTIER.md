@@ -24,6 +24,12 @@ W139 adds canonical DateTime/DateTime64/Time/Time64 declared fields through
 the same paired owners, retaining scale and exact timezone identity. Its eight
 fresh native/library cells cover all scales and sampled zones, not every zone
 or recursive composition.
+W140 adds canonical recursive Array/Map(String,V)/Tuple/legal Nullable
+declared fields over W139 leaves, with bounded preflight and recursive catalog
+accounting. Its fresh eight-cell physical matrix covers 13 witness fields,
+not every admitted recursive product. The new capability certificate and
+continuation boundary are in
+[OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md](OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md).
 The exact admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
@@ -53,7 +59,9 @@ recursive fields, new physical layouts, enum arithmetic or broader MV/projection
 W139 transition: canonical DateTime/DateTime64/Time/Time64 declared fields are
 verified within the executed profile below over W138 `0c63c32`. Existing raw
 fixed-value and bulk codecs preserve scale and explicit timezone identity;
-recursive fields and broader physical layouts remain refused.
+recursive fields and broader physical layouts were refused in that W139
+checkpoint. W140 supersedes the recursive-schema refusal only within its
+separately tested scope; the historical W139 certificate below is not widened.
 
 ### W139 implementation seal
 

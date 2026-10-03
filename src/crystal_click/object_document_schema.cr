@@ -60,13 +60,9 @@ module CrystalClick
       typed_paths.each do |path, type|
         budget.visit_node(2)
         validate_path!(path)
-        metadata_count = type.metadata_entry_count.to_u64
-        if metadata_count > 0_u64
-          budget.preflight_children(metadata_count)
-          metadata_count.times { budget.visit_node(2) }
-        end
-        type_bytes = ObjectTypedFieldType.byte_size_for(type) ||
-                     raise ArgumentError.new("typed JSON schema admits only supported nominal scalar types")
+        metrics = ObjectRecursiveDeclaration.account_descriptor(type, budget, @limits, 2) ||
+                  raise ArgumentError.new("typed JSON schema admits only supported Object recursive types")
+        type_bytes = metrics.byte_size
         if rendered_entry_count > 0_u64
           declaration_bytes = checked_add(declaration_bytes, 2_u64)
         end
@@ -218,7 +214,7 @@ module CrystalClick
             io << path
           end
           io << ' '
-          ObjectTypedFieldType.append_name(io, @typed_types[path])
+          ObjectTypedFieldType.append_name(io, @typed_types[path], @limits, 2)
           first = false
         end
         io << ')' unless first

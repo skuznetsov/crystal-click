@@ -51,6 +51,23 @@ logical-budget caveats remain in the JSON frontier. The current facade counts
 below remain unchanged; one new owner does not complete their decomposition. No
 MV/projection or performance admission changes are made here.
 
+W140 adds separate cohesive module owners/files for recursive descriptor
+measurement/rendering/preflight, borrowed recursive text grammar, Tuple field
+name spelling and catalog schema logical usage. Stack metadata stays with its
+owner; the scanner's mutable accumulator is a reference class because Crystal
+copies structs at method boundaries. The shared Object policy delegates its
+leaves/containers to these owners. The outer JSON parser accounts all pending
+fields before descriptor-tree construction; the private catalog materializer
+uses recursive usage without allocating type.name. Existing bulk/physical
+codecs, writer publication and reader/table facades retain their boundaries:
+no new facade branch or class per type combination. Root passes 109 focused
+DEBUG, 496 adjacent RELEASE, 2,317 complete-inventory examples, the eight-cell
+stock matrix, independent live checks and seven unchanged neighboring stock
+regressions. The bounded compatibility/budget certificate is in
+[OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md](OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md).
+These extractions do not complete the large legacy facade decomposition or
+prove lower allocation, coupling or improved throughput.
+
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Their
 historical admission boundaries are recorded in their respective sections.

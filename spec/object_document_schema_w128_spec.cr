@@ -60,13 +60,15 @@ describe "W128 ObjectDocumentSchema" do
     end
   end
 
-  it "rejects typed descriptors outside the sealed nominal scalar whitelist" do
+  it "rejects unsupported leaves and admits recursive wrappers around supported leaves" do
     expect_raises(ArgumentError) do
       CrystalClick::ObjectDocumentSchema.new({"t" => w128_schema_type("BFloat16")})
     end
-    expect_raises(ArgumentError) do
-      CrystalClick::ObjectDocumentSchema.new({"t" => CrystalClick::BinaryDataType.array(w128_schema_type("UInt64"))})
-    end
+
+    array = CrystalClick::BinaryDataType.array(w128_schema_type("UInt64"))
+    schema = CrystalClick::ObjectDocumentSchema.new({"t" => array})
+    schema.declaration.should eq("JSON(t Array(UInt64))")
+    CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration).typed_paths.should eq({"t" => array})
   end
 
   it "checks nonnegative and protocol-bounded dynamic capacities" do

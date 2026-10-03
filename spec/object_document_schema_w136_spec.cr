@@ -118,20 +118,12 @@ describe "W136 declared FixedString(N) Object schema" do
     expect_raises(ArgumentError) { CrystalClick::BinaryValue.fixed(fixed3, Bytes[0x00_u8, 0xc3_u8, 0xa9_u8, 0x00_u8]) }
   end
 
-  it "rejects out-of-range widths, aliases, wrappers, and malformed parameter grammar" do
+  it "rejects out-of-range widths, aliases, unsupported leaves, and malformed parameter grammar" do
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.fixed_string(0) }
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.fixed_string(0x0100_0000) }
 
-    unsupported_types = [
-      CrystalClick::BinaryDataType.nullable(w136_fixed_type(3)),
-      CrystalClick::BinaryDataType.array(w136_fixed_type(3)),
-      CrystalClick::BinaryDataType.map(CrystalClick::BinaryDataType.primitive("String"), w136_fixed_type(3)),
-      CrystalClick::BinaryDataType.tuple([w136_fixed_type(3)]),
-    ]
-    unsupported_types.each do |type|
-      expect_raises(ArgumentError) do
-        CrystalClick::ObjectDocumentSchema.new({"n" => type})
-      end
+    expect_raises(ArgumentError) do
+      CrystalClick::ObjectDocumentSchema.new({"n" => CrystalClick::BinaryDataType.primitive("BFloat16")})
     end
 
     [
@@ -153,8 +145,6 @@ describe "W136 declared FixedString(N) Object schema" do
       "JSON(n FixedString (3))",
       "JSON(n FixedString( 3))",
       "JSON(n FixedString(3 ))",
-      "JSON(n Nullable(FixedString(3)))",
-      "JSON(n Array(FixedString(3)))",
       "JSON(n FixedString(2147483648))",
       "JSON(n FixedString(3)))",
       "JSON(n FixedString(3)",
@@ -163,5 +153,17 @@ describe "W136 declared FixedString(N) Object schema" do
         CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
       end
     end
+
+    fixed3 = w136_fixed_type(3)
+    string = CrystalClick::BinaryDataType.primitive("String")
+    types = {
+      "array"    => CrystalClick::BinaryDataType.array(fixed3),
+      "map"      => CrystalClick::BinaryDataType.map(string, fixed3),
+      "nullable" => CrystalClick::BinaryDataType.nullable(fixed3),
+      "tuple"    => CrystalClick::BinaryDataType.tuple([fixed3]),
+    } of String => CrystalClick::BinaryDataType
+    schema = CrystalClick::ObjectDocumentSchema.new(types)
+    schema.declaration.should eq("JSON(array Array(FixedString(3)), map Map(String, FixedString(3)), nullable Nullable(FixedString(3)), tuple Tuple(FixedString(3)))")
+    CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration).typed_paths.should eq(types)
   end
 end

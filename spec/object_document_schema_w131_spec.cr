@@ -75,26 +75,21 @@ describe "W131 declared Int64 Object schema" do
     end
   end
 
-  it "rejects BFloat16, Nullable(Int64), and Array(Int64) declarations" do
-    unsupported_types = [
-      w131_schema_type("BFloat16"),
-      CrystalClick::BinaryDataType.nullable(w131_schema_type("Int64")),
-      CrystalClick::BinaryDataType.array(w131_schema_type("Int64")),
-    ]
-    unsupported_types.each do |type|
-      expect_raises(ArgumentError) do
-        CrystalClick::ObjectDocumentSchema.new({"n" => type})
-      end
+  it "rejects BFloat16 while admitting legal Nullable and Array Int64 declarations" do
+    expect_raises(ArgumentError) do
+      CrystalClick::ObjectDocumentSchema.new({"n" => w131_schema_type("BFloat16")})
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(n BFloat16)")
     end
 
-    [
-      "JSON(n BFloat16)",
-      "JSON(n Nullable(Int64))",
-      "JSON(n Array(Int64))",
-    ].each do |declaration|
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
-      end
-    end
+    types = {
+      "array"    => CrystalClick::BinaryDataType.array(w131_schema_type("Int64")),
+      "nullable" => CrystalClick::BinaryDataType.nullable(w131_schema_type("Int64")),
+    } of String => CrystalClick::BinaryDataType
+    schema = CrystalClick::ObjectDocumentSchema.new(types)
+    schema.declaration.should eq("JSON(array Array(Int64), nullable Nullable(Int64))")
+    parsed = CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration)
+    parsed.typed_paths.should eq(types)
   end
 end

@@ -16,9 +16,9 @@ module CrystalClick
 
     private struct ParsedField
       getter path : String
-      getter type : BinaryDataType
+      getter preflight : ObjectRecursiveDeclaration::Preflight
 
-      def initialize(@path : String, @type : BinaryDataType)
+      def initialize(@path : String, @preflight : ObjectRecursiveDeclaration::Preflight)
       end
     end
 
@@ -53,7 +53,7 @@ module CrystalClick
 
       argument_count = count_arguments(inner_first, inner_after)
       budget.preflight_children(argument_count.to_u64)
-      fields = Hash(String, BinaryDataType).new
+      pending_fields = Array(ParsedField).new
       seen_paths = Set(String).new
       seen_max_dynamic_paths = false
       seen_max_dynamic_types = false
@@ -76,12 +76,19 @@ module CrystalClick
             unsupported!("unsupported Object JSON capacity option")
           end
         else
-          unsupported!("JSON schema exceeds the maximum of #{ObjectDocumentSchema::MAX_TYPED_PATHS} typed paths") if fields.size >= ObjectDocumentSchema::MAX_TYPED_PATHS
+          unsupported!("JSON schema exceeds the maximum of #{ObjectDocumentSchema::MAX_TYPED_PATHS} typed paths") if pending_fields.size >= ObjectDocumentSchema::MAX_TYPED_PATHS
           field = parse_field(argument, budget)
           unsupported!("duplicate JSON typed path") if seen_paths.includes?(field.path)
           seen_paths << field.path
-          fields[field.path] = field.type
+          pending_fields << field
         end
+      end
+
+      # Every recursive declaration and aggregate metadata charge is admitted
+      # before constructing any descriptor tree.
+      fields = Hash(String, BinaryDataType).new(initial_capacity: pending_fields.size)
+      pending_fields.each do |field|
+        fields[field.path] = field.preflight.materialize
       end
 
       retained_path_bytes = 0_u64
@@ -115,6 +122,7 @@ module CrystalClick
     # opaque Enum labels so their commas/parentheses never split outer fields.
     private def scan_arguments(first : Int32, after : Int32, &block : Range -> Nil) : Int32
       backtick_quoted = false
+      backtick_escape = false
       label_quoted = false
       label_escape = false
       depth = 0
@@ -132,7 +140,13 @@ module CrystalClick
             label_quoted = false
           end
         elsif backtick_quoted
-          backtick_quoted = false if byte == '`'.ord.to_u8
+          if backtick_escape
+            backtick_escape = false
+          elsif byte == '\\'.ord.to_u8
+            backtick_escape = true
+          elsif byte == '`'.ord.to_u8
+            backtick_quoted = false
+          end
         else
           case byte
           when '`'.ord.to_u8
@@ -141,7 +155,6 @@ module CrystalClick
             label_quoted = true
           when '('.ord.to_u8
             depth += 1
-            unsupported!("nested parentheses are unsupported in Object JSON declarations") if depth > 1
           when ')'.ord.to_u8
             depth -= 1
             unsupported!("unbalanced parentheses in Object JSON declaration") if depth < 0
@@ -155,7 +168,7 @@ module CrystalClick
         end
         index += 1
       end
-      unsupported!("unterminated backtick path") if backtick_quoted
+      unsupported!("unterminated backtick path") if backtick_quoted || backtick_escape
       unsupported!("unterminated quoted Enum label") if label_quoted
       unsupported!("unbalanced parentheses in Object JSON declaration") unless depth == 0
       yield Range.new(argument_first, after)
@@ -222,24 +235,16 @@ module CrystalClick
 
       type_first = cursor
 
+      # Resolve the complete type tail before allocating its descriptor tree.
+      # Recursive leaf resolution still delegates existing scalar grammar.
+      resolution = ObjectRecursiveDeclaration.preflight_slice(@bytes, type_first, after, @limits, 2) ||
+                   unsupported!("typed Object JSON fields admit only supported Object recursive types")
+      resolution.account(budget)
+
       budget.charge_wire_bytes((path_after - path_first).to_u64)
       path = String.new(@bytes[path_first, path_after - path_first])
       validate_path_spelling!(path, quoted)
-      # Resolve the complete type tail. Decimal's canonical spelling contains
-      # one internal space, while exact whole-tail matching still rejects
-      # extra tokens and nested/general type syntax.
-      resolution = ObjectTypedFieldType.resolve_slice(@bytes, type_first, after) ||
-                   unsupported!("typed Object JSON fields admit only supported nominal scalar types")
-      budget.charge_wire_bytes((resolution.byte_size + 1).to_u64)
-      budget.charge_wire_bytes(checked_multiply(resolution.explicit_zone_bytes, 2_u64))
-      if resolution.enum_entry_count > 0_u64
-        budget.preflight_children(resolution.enum_entry_count)
-        budget.charge_wire_bytes(checked_multiply(resolution.decoded_label_bytes, 2_u64))
-        resolution.enum_entry_count.times { budget.visit_node(2) }
-      end
-      type = resolution.materialize
-
-      ParsedField.new(path, type)
+      ParsedField.new(path, resolution)
     end
 
     private def canonical_declaration_bytes(fields : Hash(String, BinaryDataType), max_dynamic_paths : Int32, max_dynamic_types : Int32) : UInt64
@@ -260,7 +265,7 @@ module CrystalClick
         size = checked_add(size, 2_u64) if argument_count > 0_u64
         size = checked_add(size, path.bytesize.to_u64)
         size = checked_add(size, 2_u64) if path.includes?('.') || reserved_path?(path)
-        type_bytes = ObjectTypedFieldType.byte_size_for(type) || unsupported!("unsupported Object JSON typed field type")
+        type_bytes = ObjectTypedFieldType.byte_size_for(type, @limits, 2) || unsupported!("unsupported Object JSON typed field type")
         size = checked_add(size, checked_add(1_u64, type_bytes))
         argument_count += 1_u64
       end

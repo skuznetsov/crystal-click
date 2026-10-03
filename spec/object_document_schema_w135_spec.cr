@@ -104,26 +104,12 @@ describe "W135 declared UUID and IP Object schema" do
     uuid_value.type.should_not eq(uint128_value.type)
   end
 
-  it "keeps wrappers, containers, BFloat16, and malformed identifier tokens refused" do
-    unsupported_types = [
-      w135_schema_type("BFloat16"),
-      CrystalClick::BinaryDataType.nullable(w135_schema_type("UUID")),
-      CrystalClick::BinaryDataType.array(w135_schema_type("IPv4")),
-      CrystalClick::BinaryDataType.map(w135_schema_type("String"), w135_schema_type("IPv6")),
-      CrystalClick::BinaryDataType.tuple([w135_schema_type("UUID"), w135_schema_type("IPv4")]),
-    ]
-    unsupported_types.each do |type|
-      expect_raises(ArgumentError) do
-        CrystalClick::ObjectDocumentSchema.new({"n" => type})
-      end
+  it "keeps BFloat16 and malformed identifier tokens refused" do
+    expect_raises(ArgumentError) do
+      CrystalClick::ObjectDocumentSchema.new({"n" => w135_schema_type("BFloat16")})
     end
-
     [
       "JSON(n BFloat16)",
-      "JSON(n Nullable(UUID))",
-      "JSON(n Array(IPv4))",
-      "JSON(n Map(String, IPv6))",
-      "JSON(n Tuple(UUID, IPv4))",
       "JSON(n uuid)",
       "JSON(n IPv4junk)",
       "JSON(n IPv6 UUID)",
@@ -133,5 +119,19 @@ describe "W135 declared UUID and IP Object schema" do
         CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
       end
     end
+
+    ipv4 = w135_schema_type("IPv4")
+    ipv6 = w135_schema_type("IPv6")
+    uuid = w135_schema_type("UUID")
+    string = w135_schema_type("String")
+    types = {
+      "array"    => CrystalClick::BinaryDataType.array(ipv4),
+      "map"      => CrystalClick::BinaryDataType.map(string, ipv6),
+      "nullable" => CrystalClick::BinaryDataType.nullable(uuid),
+      "tuple"    => CrystalClick::BinaryDataType.tuple([uuid, ipv4]),
+    } of String => CrystalClick::BinaryDataType
+    schema = CrystalClick::ObjectDocumentSchema.new(types)
+    schema.declaration.should eq("JSON(array Array(IPv4), map Map(String, IPv6), nullable Nullable(UUID), tuple Tuple(UUID, IPv4))")
+    CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration).typed_paths.should eq(types)
   end
 end
