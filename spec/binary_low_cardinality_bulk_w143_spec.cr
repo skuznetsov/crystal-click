@@ -597,33 +597,43 @@ describe "W143 recursive BinaryBulk LowCardinality integration" do
     end
   end
 
-  it "keeps LC Float32, Float64, and BFloat16 sites guarded even for a zero-row grid" do
+  it "admits LC Float32, Float64, and BFloat16 on zero and empty grids" do
     ["Float32", "Float64", "BFloat16"].each do |name|
       low = CrystalClick::BinaryDataType.low_cardinality(CrystalClick::BinaryDataType.primitive(name))
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkCodec.encode(low, [] of Array(CrystalClick::BinaryValue))
-      end
-      empty = w143_bulk_streams(0, {
-        "root.dictionary" => {w143_bulk_u64(1_u64), [8_u64]},
-        "root.indexes"    => {Bytes.empty, [0_u64]},
-      } of String => Tuple(Bytes, Array(UInt64)))
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkCodec.decode(low, empty, [] of UInt64)
-      end
+      zero_grid = CrystalClick::BinaryBulkCodec.encode(low, [] of Array(CrystalClick::BinaryValue))
+      zero_grid.roles.should eq(["root.dictionary", "root.indexes"])
+      zero_grid.stream("root.dictionary").bytes.should eq(w143_bulk_u64(1_u64))
+      zero_grid.stream("root.dictionary").offsets.should eq([8_u64])
+      zero_grid.stream("root.indexes").bytes.should be_empty
+      zero_grid.stream("root.indexes").offsets.should eq([0_u64])
+      CrystalClick::BinaryBulkCodec.decode(low, zero_grid, [] of UInt64).should be_empty
+
+      empty_marks = [
+        [] of CrystalClick::BinaryValue,
+        [] of CrystalClick::BinaryValue,
+      ] of Array(CrystalClick::BinaryValue)
+      all_empty = CrystalClick::BinaryBulkCodec.encode(low, empty_marks)
+      all_empty.stream("root.dictionary").bytes.should eq(w143_bulk_u64(1_u64))
+      all_empty.stream("root.dictionary").offsets.should eq([8_u64, 8_u64, 8_u64])
+      all_empty.stream("root.indexes").bytes.should be_empty
+      all_empty.stream("root.indexes").offsets.should eq([0_u64, 0_u64, 0_u64])
+      decoded_empty_marks = CrystalClick::BinaryBulkCodec.decode(low, all_empty, [0_u64, 0_u64])
+      decoded_empty_marks.size.should eq(2)
+      decoded_empty_marks.each { |mark| mark.should be_empty }
 
       nested = CrystalClick::BinaryDataType.array(low)
       empty_array = CrystalClick::BinaryValue.array(nested, [] of CrystalClick::BinaryValue)
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkCodec.encode(nested, [[empty_array]] of Array(CrystalClick::BinaryValue))
-      end
-      empty_nested = w143_bulk_streams(1, {
-        "root.elements.dictionary" => {w143_bulk_u64(1_u64), [8_u64, 8_u64]},
-        "root.elements.indexes"    => {Bytes.empty, [0_u64, 0_u64]},
-        "root.sizes"               => {w143_bulk_u64(0_u64), [0_u64, 8_u64]},
-      } of String => Tuple(Bytes, Array(UInt64)))
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkCodec.decode(nested, empty_nested, [1_u64])
-      end
+      nested_streams = CrystalClick::BinaryBulkCodec.encode(nested, [[empty_array]] of Array(CrystalClick::BinaryValue))
+      nested_streams.stream("root.sizes").bytes.should eq(w143_bulk_u64(0_u64))
+      nested_streams.stream("root.sizes").offsets.should eq([0_u64, 8_u64])
+      nested_streams.stream("root.elements.dictionary").bytes.should eq(w143_bulk_u64(1_u64))
+      nested_streams.stream("root.elements.dictionary").offsets.should eq([8_u64, 8_u64])
+      nested_streams.stream("root.elements.indexes").bytes.should be_empty
+      nested_streams.stream("root.elements.indexes").offsets.should eq([0_u64, 0_u64])
+      decoded_nested = CrystalClick::BinaryBulkCodec.decode(nested, nested_streams, [1_u64])
+      decoded_nested.size.should eq(1)
+      decoded_nested[0].size.should eq(1)
+      decoded_nested[0][0].element_count.should eq(0)
     end
   end
 

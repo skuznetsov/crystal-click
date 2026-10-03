@@ -6,6 +6,13 @@ The active objective remains paired ClickHouse type coverage, MV/projection
 inspection and interoperability, followed by memory/performance work. This
 slice does not close that objective or assert complete-part compatibility.
 
+Later transition: W144 supersedes only W143's Float bulk guard after measuring
+INSERT normalization separately from raw persisted dictionary reading. See
+[LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md](LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md).
+The W143 certificate below remains historical and non-floating; its
+Object/Dynamic/physical-part guards are still current. Do not retroactively
+widen its native witnesses or reinterpret them as whole-part qualification.
+
 ## Current boundary and intended transition
 
 W142 provides the bounded standalone dictionary/index codec described in
@@ -305,8 +312,10 @@ Ruby comparator supply the discriminating evidence. An all-operation
 allocation preflight, complete part, arbitrary Object/Dynamic, Float insertion
 identity or performance closure claim remains VULNERABLE and is not made.
 
-Next after this slice: qualify stock Float LC insertion identity, then integrate
-the recursive LC owner into persisted normalized Object and complete parts;
-continue remaining types/layouts and MV/projection inspection before speed
+The next transition recorded at W143 was stock Float LC identity qualification;
+W144 now supplies that bounded discriminator and admits raw Float bulk
+transport. The remaining frontier is integration of the shared recursive LC
+owner into persisted normalized Object and independently owned complete parts,
+then remaining types/layouts and MV/projection inspection before speed
 optimization. User-requested modularity remains a responsibility-level rule,
 not a count of generated files.

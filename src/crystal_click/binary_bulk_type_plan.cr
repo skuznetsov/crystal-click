@@ -92,7 +92,6 @@ module CrystalClick
       when BinaryDataType::TAG_MAP
         checked_role_add(1_u64, checked_role_add(count_roles(type.child_at(0)), count_roles(type.child_at(1))))
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
         2_u64
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         1_u64
@@ -108,7 +107,6 @@ module CrystalClick
     private def count_ordinary_roles(type : BinaryDataType) : UInt64
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
         0_u64
       when BinaryDataType::TAG_STRING
         @profile.with_size_stream? ? 2_u64 : 1_u64
@@ -140,7 +138,6 @@ module CrystalClick
     private def count_sites(type : BinaryDataType) : UInt64
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
         1_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
         count_sites(type.child_at(0))
@@ -158,7 +155,6 @@ module CrystalClick
     private def count_ancestor_size_roles(type : BinaryDataType) : NamedTuple(contains: Bool, count: UInt64)
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
         {contains: true, count: 0_u64}
       when BinaryDataType::TAG_ARRAY
         child = count_ancestor_size_roles(type.child_at(0))
@@ -216,7 +212,6 @@ module CrystalClick
         append_roles(type.child_at(0), "#{path}.elements.field.0", roles)
         append_roles(type.child_at(1), "#{path}.elements.field.1", roles)
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
         roles << "#{path}.dictionary"
         roles << "#{path}.indexes"
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
@@ -234,7 +229,7 @@ module CrystalClick
     private def append_ordinary_roles(type : BinaryDataType, path : String, roles : Array(String)) : Nil
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
+        nil
       when BinaryDataType::TAG_STRING
         roles << "#{path}.data"
         roles << "#{path}.string_sizes" if @profile.with_size_stream?
@@ -271,7 +266,6 @@ module CrystalClick
     private def append_sites(type : BinaryDataType, path : String, sites : Array(LowCardinalitySite)) : Nil
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
         sites << LowCardinalitySite.new(type, path)
       when BinaryDataType::TAG_ARRAY
         append_sites(type.child_at(0), "#{path}.elements", sites)
@@ -291,7 +285,6 @@ module CrystalClick
     private def append_ancestor_size_roles(type : BinaryDataType, path : String, roles : Array(String)) : Bool
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
-        ensure_bulk_low_cardinality_child(type)
         true
       when BinaryDataType::TAG_ARRAY
         child_has_site = append_ancestor_size_roles(type.child_at(0), "#{path}.elements", roles)
@@ -315,15 +308,6 @@ module CrystalClick
       else
         false
       end
-    end
-
-    private def ensure_bulk_low_cardinality_child(type : BinaryDataType) : Nil
-      child = type.child_at(0)
-      scalar = child.tag == BinaryDataType::TAG_NULLABLE ? child.child_at(0) : child
-      if scalar.tag == BinaryDataType::TAG_FLOAT32 || scalar.tag == BinaryDataType::TAG_FLOAT64 || scalar.tag == BinaryDataType::TAG_BFLOAT16
-        raise UnsupportedFormatError.new("LowCardinality Float32, Float64, and BFloat16 bulk sites are not admitted")
-      end
-      nil
     end
   end
 end

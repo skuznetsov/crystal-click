@@ -1,7 +1,15 @@
 # CrystalClick Modularization Frontier
 
-Current architecture checkpoint (2026-10-03): W134 behavior-preserving Array/Map row-owner
-extraction over W133 `2e150f4`, verified within the executed scope below.
+Current architecture checkpoint (2026-10-03): W143's shared recursive LC
+site owners, reused unchanged by W144's raw Float admission. The planner,
+site encoder and site decoder are 313/273/210 lines respectively, with one
+cohesive top-level owner per file. The large legacy reader/writer/table/catalog
+facades remain 15,985/25,991/6,786/1,560 lines; their responsibility-level
+decomposition is unfinished. Codec compatibility does not prove lower
+coupling, fewer allocations or better throughput.
+
+Earlier W134 checkpoint: behavior-preserving Array/Map row-owner extraction
+over W133 `2e150f4`, verified within the executed scope below.
 Nine existing classes now have one file each; no API, type, codec, limit or
 physical-profile admission changed. This is a navigation improvement, not
 completion of the larger responsibility-level architecture.
@@ -116,6 +124,15 @@ phase-local allocation-preflight residual are in
 [LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md](LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md).
 This qualifies an ownership seam, not full facade decomposition, lower RSS,
 faster reads, persisted Object/Dynamic LC or complete-part interoperability.
+
+W144 removes only the Float-specific planner veto and reuses the existing
+site/physical owners for exact raw-byte LC identity. No production class,
+per-leaf codec or legacy facade branch is added. Root's 91 focused DEBUG,
+266 affected RELEASE and 2,386 disjoint full-inventory examples, fresh stock
+identity/part probes and separate literal integer checker qualify this narrow
+codec seam; borrowed stock part envelopes do not establish a general writer.
+The execution lineage and remaining persisted guards are in
+[LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md](LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md).
 
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Their

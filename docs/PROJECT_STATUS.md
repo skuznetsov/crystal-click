@@ -1,5 +1,24 @@
 # CrystalClick project status
 
+Current capability checkpoint (2026-10-03): W144 admits raw Float32/Float64/
+BFloat16 LowCardinality transport in ordinary recursive `BinaryBulkCodec`,
+including its legal container compositions. Root passes 91 focused DEBUG,
+266 affected RELEASE and 2,386 full-inventory examples (371 unique spec files,
+16 serial disjoint non-release groups). Fresh stock probes distinguish INSERT
+canonicalization from exact persisted global-dictionary reading; the latter
+has six raw/seeded type/order witnesses and actual ATTACH/CHECK. These parts
+borrow stock envelopes and do not qualify an independently owned whole-part
+writer. Object/Dynamic and generic persisted LC binding remain closed.
+The scope and execution lineage are in
+[LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md](LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md).
+
+The overall objective is still open: paired type/layout coverage and
+MV/projection interoperability first, memory/performance afterward. Shared
+codec/planner owners have separate files, but the large legacy facades have
+not yet been fully decomposed. No stock-reader speed-parity claim is made.
+
+## Earlier checkpoint lineage
+
 Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
 the W129 bounded Object catalog integration, W130 mixed table delivery
@@ -81,8 +100,10 @@ seven stock Native consumers including a valid wrong-output control. A separate
 Ruby comparator checks all 63 stock rows against literal types/RowBinary.
 The executed certificate is in
 [LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md](LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md).
-Float LC composition and persisted Object/Dynamic/physical-part binding remain
-explicitly closed. Generic bulk support is not new standalone part ATTACH/CHECK.
+In W143, Float LC composition and persisted Object/Dynamic/physical-part
+binding remained explicitly closed. W144 supersedes only that Float bulk
+guard; the persisted guards remain closed. Generic bulk support is not new
+standalone part ATTACH/CHECK.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -263,9 +284,10 @@ source/runtime identities and executed evidence.
    Object support. W141 establishes the logical LowCardinality prerequisite;
    W142 adds the separately qualified standalone dictionary/index codec.
    W143 qualifies recursive non-floating bulk role binding, flattened
-   occurrence schedules and dictionary state integration. Stock Float LC
-   insertion identity is the next discriminator, followed by declared Object
-   LC and complete independently qualified parts. Reuse existing leaf owners only
+   occurrence schedules and dictionary state integration. W144 qualifies
+   raw Float LC transport and measures the distinct INSERT normalization
+   boundary. Next are shared persisted LC role binding, paired declared Object
+   LC and complete independently owned qualified parts. Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary
