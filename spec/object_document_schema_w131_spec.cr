@@ -75,9 +75,9 @@ describe "W131 declared Int64 Object schema" do
     end
   end
 
-  it "rejects Float64, Nullable(Int64), and Array(Int64) declarations" do
+  it "rejects BFloat16, Nullable(Int64), and Array(Int64) declarations" do
     unsupported_types = [
-      w131_schema_type("Float64"),
+      w131_schema_type("BFloat16"),
       CrystalClick::BinaryDataType.nullable(w131_schema_type("Int64")),
       CrystalClick::BinaryDataType.array(w131_schema_type("Int64")),
     ]
@@ -88,7 +88,7 @@ describe "W131 declared Int64 Object schema" do
     end
 
     [
-      "JSON(n Float64)",
+      "JSON(n BFloat16)",
       "JSON(n Nullable(Int64))",
       "JSON(n Array(Int64))",
     ].each do |declaration|

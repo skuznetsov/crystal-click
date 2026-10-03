@@ -62,7 +62,7 @@ describe "W128 ObjectDocumentSchema" do
 
   it "rejects typed descriptors outside the sealed nominal scalar whitelist" do
     expect_raises(ArgumentError) do
-      CrystalClick::ObjectDocumentSchema.new({"t" => w128_schema_type("UInt32")})
+      CrystalClick::ObjectDocumentSchema.new({"t" => w128_schema_type("BFloat16")})
     end
     expect_raises(ArgumentError) do
       CrystalClick::ObjectDocumentSchema.new({"t" => CrystalClick::BinaryDataType.array(w128_schema_type("UInt64"))})

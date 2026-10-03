@@ -627,7 +627,7 @@ def w130_assert_unselected_object_schema(catalog_root : String, label : String) 
     parts.each do |part|
       path = File.join(part.path, "columns.txt")
       original = File.read(path)
-      mutated = original.gsub("flag UInt64", "flag Float64")
+      mutated = original.gsub("flag UInt64", "flag BFloat16")
       w130_require(mutated != original, "#{label}: unrelated-schema control did not mutate metadata")
       originals[path] = original
       File.write(path, mutated)

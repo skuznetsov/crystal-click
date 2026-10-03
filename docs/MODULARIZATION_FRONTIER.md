@@ -1,12 +1,12 @@
 # CrystalClick Modularization Frontier
 
-Current transition (2026-10-02): W131 paired declared Int64 Object fields over
-W130 `4b18812`, following the verified shared writer, catalog and table owners
+Current transition (2026-10-03): W132 paired numeric Object fields over W131
+`02dd99f`, following the verified shared writer, catalog and table owners
 below.
 The bounded capability certificate is in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 Catalog Object dispatch has a private materialization owner; W130 separately
-owns normalized table admission/accounting. W131 extends the existing two
-schema owners, not a new codec or a class per declaration. No MV/projection or
+owns normalized table admission/accounting. W132 extracts one shared closed
+typed-field policy, not a new codec or a class per declaration. No MV/projection or
 performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight
@@ -1908,4 +1908,36 @@ Large facades are unchanged at 15,985 reader / 25,991 writer / 7,171 table /
 leaf dispatch and thin adapters still need responsibility-level extraction.
 Other declared typed families/layouts and broader MV/projection compatibility
 remain open; performance stays parked. Refresh after schema, bulk, dispatch,
+profile, limit, runtime, source or toolchain changes.
+
+## Shared Object typed-field policy (W132, 2026-10-03)
+
+Status: VERIFIED only for the paired numeric declared-field profile in
+`JSON_GENERAL_STORAGE_FRONTIER.md`, over W131 `02dd99f`.
+`object_typed_field_type.cr` contains one stateless cohesive module with a
+closed tuple of nominal tags and canonical static names. Schema construction,
+parser token resolution and canonical declaration sizing consume that same
+policy. Token resolution compares a bounded byte slice without allocating a
+general type/name before the existing budget charge. Unsupported tags have no
+sizing fallback. Numeric field admission does not add a bulk codec or another
+conditional branch to the legacy reader/writer/table facades.
+
+Root executed 26 focused DEBUG and 151 adjacent RELEASE examples and all 350
+spec files in 15 designated disjoint non-release groups (2,228 examples).
+An interrupted guarded inventory was recovered by stopping only its validated
+orphan process group and resuming from group 6; the capability certificate
+records which completed groups count. It is not a combined-process certificate.
+Eight fresh W132 stock matrix cells and fresh W131/W130/W129/W128 regressions
+passed. The oracle's unquoted synthetic metadata fixture was corrected to
+match stock's quoted column definitions; production catalog grammar was not
+widened. Root's bounded hostile verdict is ROBUST; Luna's static work is
+correlated support, not the runtime certificate.
+
+The remaining large facades are unchanged at 15,985 / 25,991 / 7,171 / 3,692
+lines (reader, writer, table and offline table). These are navigation counts,
+not coupling or performance metrics. Legacy schema/substream planning,
+I/O/validation, leaf dispatch and thin adapters still need decomposition.
+Other Object typed families, recursive/physical profiles and broader
+MV/projection compatibility remain open. Optimization stays parked. Refresh
+the affected positives and negatives after policy, schema, bulk, dispatch,
 profile, limit, runtime, source or toolchain changes.

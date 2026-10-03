@@ -143,7 +143,7 @@ describe "W129 independently authored catalog contract" do
       selected = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"]
       w129_root_values_equal(selected.values)
 
-      File.write(columns_path, original.gsub(canonical, "JSON(t Float64)"))
+      File.write(columns_path, original.gsub(canonical, "JSON(t BFloat16)"))
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"].values
       end
@@ -207,7 +207,7 @@ describe "W129 independently authored catalog contract" do
 
   it "validates an unsupported JSON declaration even when no part exists" do
     with_w129_root do |root|
-      w129_root_catalog(root, "JSON(t Float64)")
+      w129_root_catalog(root, "JSON(t BFloat16)")
       expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"].values }
     end
   end

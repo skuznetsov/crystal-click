@@ -132,7 +132,7 @@ describe "W130 independently authored Object table contract" do
     with_w130_root do |root|
       part = w130_root_write(File.join(root, "all_1_1_0"))
       path = File.join(part, "columns.txt")
-      File.write(path, File.read(path).gsub(w130_root_schema.declaration, "JSON(t Float64)"))
+      File.write(path, File.read(path).gsub(w130_root_schema.declaration, "JSON(t BFloat16)"))
       table = CrystalClick::WidePartTable.open_selected_typed([part], ["pk"])
       keys = [] of UInt64
       table.scan_typed { |batch| keys.concat(batch.values_for("pk")); nil }

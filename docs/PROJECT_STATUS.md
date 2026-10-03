@@ -3,11 +3,12 @@
 Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
 the W129 bounded Object catalog integration, W130 mixed table delivery
-`4b18812`, and W131 paired declared Int64 fields over that checkpoint in
+`4b18812`, W131 declared Int64 `02dd99f`, and W132 paired numeric declared
+fields over that checkpoint in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 Responsibility-level owner boundaries are documented in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
-Reviewed on 2026-10-02. This is a navigation summary, not a new compatibility
+Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
 
@@ -31,11 +32,15 @@ source/runtime identities and executed evidence.
   stock ATTACH/CHECK=1/full/PK SQL and explicit file-reader full/middle/zero windows.
   W129 adds bounded catalog Object materialization; W130 adds the separately
   qualified mixed typed-table reader. Neither widens the writer to multiple
-  Object columns or arbitrary schemas. W131 adds nominal Int64 through those
-  same owners: four fresh native and four library-owned parts pass actual
-  CHECK/full/PK SQL, independent signed RowBinary, and file/column/catalog/
-  table consumer checks. String 0/1 × BASIC/COMPACT is qualified in both
-  directions; it is still normalized Object V3/MAP, not arbitrary JSON. See
+  Object columns or arbitrary schemas. W132 admits declared UInt8/16/32/64/128/256,
+  Int8/16/32/64/128/256, Float32/64, Bool and String through those same owners.
+  Four fresh native and four library-owned parts pass actual CHECK/full/PK SQL,
+  independent numeric RowBinary and file/column/catalog/table consumer checks,
+  including float signed zero, infinity and NaN payloads. Bool is nominally
+  distinct from UInt8; logical writes canonicalize true to byte 1. BFloat16 is
+  excluded by the measured stock Object schema gate. String 0/1 × BASIC/COMPACT
+  is qualified in both directions; this is still normalized Object V3/MAP,
+  not arbitrary JSON. See
   [the example](../examples/write_object_document_part.cr) and
   [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
@@ -68,15 +73,18 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W131 provide
+1. **General JSON compatibility.** W117-W132 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
    qualification; W127's older shell-based oracle is not the whole-part
    certificate. The catalog now dispatches whole normalized JSON through
    `ObjectColumnReader`, and W130 integrates that bounded profile into public
-   mixed `WidePartTable` batches/windows and UInt64 PK candidates. W131 admits
-   Int64/UInt64/String declared fields with paired stock evidence. The older
+   mixed `WidePartTable` batches/windows and UInt64 PK candidates. W132 admits
+   the numeric primitive family, Bool and String declared fields with paired
+   stock evidence. Temporal/identifier, FixedString, Decimal, Enum and recursive
+   declared-field families remain open within Object, even where standalone
+   part support exists. The older
    scalar typed-path behavior is unchanged. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required, and whole-Object projection child reads remain refused. See
@@ -111,11 +119,15 @@ source/runtime identities and executed evidence.
    Next are legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
-2. Extend paired Object declared typed fields beyond Int64/UInt64/String. The
-   next proposed lane is Float64 with raw signed-zero/NaN/infinity evidence,
-   not promotion from existing Dynamic/shared or logical-codec support.
-   Then widen layouts and recursive composition with their own stock-generated and library-owned
-   evidence. Object declarations retain the stock maximum of 1,000 typed paths.
+2. Extend paired Object declared fields beyond numeric primitives/Bool/String.
+   The next proposed lane is Date/Date32: the fresh source admits both through
+   its DateNode and existing Crystal fixed-width carriers are available. This
+   is a source-backed proposal, not Object compatibility evidence; require
+   native and library parts with asymmetric day codes and negative Date32,
+   exact bytes/RowBinary, calendar interpretation and actual stock CHECK.
+   Address parameterized/recursive field grammar and semantic identity, then
+   widen layouts with their own stock-generated and library-owned evidence.
+   Object declarations retain the stock maximum of 1,000 typed paths.
 3. Expand remaining paired type/profile and MV/projection frontiers.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.

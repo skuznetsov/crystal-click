@@ -201,15 +201,8 @@ module CrystalClick
       budget.charge_wire_bytes((path_after - path_first).to_u64)
       path = String.new(@bytes[path_first, path_after - path_first])
       validate_path_spelling!(path, quoted)
-      type_name = if slice_equals?(type_first, type_after, "UInt64")
-                    "UInt64"
-                  elsif slice_equals?(type_first, type_after, "Int64")
-                    "Int64"
-                  elsif slice_equals?(type_first, type_after, "String")
-                    "String"
-                  else
-                    unsupported!("typed Object JSON fields admit only Int64, UInt64, and String")
-                  end
+      type_name = ObjectTypedFieldType.name_for_slice(@bytes, type_first, type_after) ||
+                  unsupported!("typed Object JSON fields admit only supported nominal scalar types")
       budget.charge_wire_bytes((type_name.bytesize + 1).to_u64)
       type = BinaryDataType.primitive(type_name)
 
@@ -234,16 +227,8 @@ module CrystalClick
         size = checked_add(size, 2_u64) if argument_count > 0_u64
         size = checked_add(size, path.bytesize.to_u64)
         size = checked_add(size, 2_u64) if path.includes?('.') || reserved_path?(path)
-        type_bytes = case type.tag
-                     when BinaryDataType::TAG_INT64
-                       "Int64".bytesize
-                     when BinaryDataType::TAG_UINT64
-                       "UInt64".bytesize
-                     when BinaryDataType::TAG_STRING
-                       "String".bytesize
-                     else
-                       unsupported!("unsupported Object JSON typed field type")
-                     end
+        type_name = ObjectTypedFieldType.name_for(type) || unsupported!("unsupported Object JSON typed field type")
+        type_bytes = type_name.bytesize
         size = checked_add(size, checked_add(1_u64, type_bytes.to_u64))
         argument_count += 1_u64
       end

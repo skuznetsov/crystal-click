@@ -22,7 +22,7 @@ describe "W130 OfflineTable Object schema admission" do
     callbacks.should eq(0)
 
     invalid = w130_offline_empty_table([
-      CrystalClick::OfflineColumn.new("payload", "JSON(t Float64)"),
+      CrystalClick::OfflineColumn.new("payload", "JSON(t BFloat16)"),
     ])
     expect_raises(CrystalClick::UnsupportedFormatError) do
       invalid.scan_typed(["payload"]) { |_batch| callbacks += 1; nil }
@@ -35,7 +35,7 @@ describe "W130 OfflineTable Object schema admission" do
       CrystalClick::OfflineColumn.new("pk", "UInt64"),
       CrystalClick::OfflineColumn.new("payload", "JSON(t UInt64, max_dynamic_paths=1, max_dynamic_types=1)"),
       CrystalClick::OfflineColumn.new("unused", "UnsupportedScalarType"),
-      CrystalClick::OfflineColumn.new("other", "JSON(t Float64)"),
+      CrystalClick::OfflineColumn.new("other", "JSON(t BFloat16)"),
     ], "pk")
 
     callbacks = 0

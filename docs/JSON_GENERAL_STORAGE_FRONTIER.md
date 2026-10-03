@@ -1,13 +1,13 @@
 # General JSON Storage Frontier
 
-Current frontier (2026-10-02): W128 checkpoint `1c5bab4` qualifies complete
+Current frontier (2026-10-03): W128 checkpoint `1c5bab4` qualifies complete
 library-owned normalized Object parts; W129 adds bounded whole-Object catalog
 materialization; W130 adds mixed Object/scalar typed-table batches, physical
-windows and bounded UInt64-PK candidate delivery. W131 adds paired nominal
-Int64 declared typed fields through the same schema and bulk owners, qualified
-in both directions for String 0/1 × BASIC/COMPACT. The exact admitted profiles
-and executed gates are in their sections below. W131 does not widen physical
-layouts, the one-Object writer or projection reads.
+windows and bounded UInt64-PK candidate delivery. W132 extends W131 `02dd99f`
+to paired declared integer widths, Float32/64 and Bool alongside String,
+qualified in both directions for String 0/1 × BASIC/COMPACT. The exact admitted
+profiles and executed gates are in their sections below. W132 does not widen
+physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
 table integration. Older scalar JSON projections retain their existing
 contract; see `JSON_TYPED_PATH_FRONTIER.md`.
@@ -3797,3 +3797,240 @@ limits, comparator, runtime/source/toolchain or publication changes; refresh
 the affected positives and negatives. Next typed-lane falsifier: paired
 Float64 with independently expected raw bits for signed zero, NaN and infinity,
 not a textual JSON-number round-trip. This is a proposed next test, not support.
+
+## W132 declared numeric Object family — pre-implementation design seal
+
+Anchor: clean W131 `02dd99f`. Current normalized schema/parser admit nominal
+Int64, UInt64 and String; the existing fixed-width binary/bulk owners already
+represent the other numeric widths. Logical representation is not sufficient
+evidence for public Object part admission. Fresh shallow source `101871ba`
+uses nested typed serializers (`SerializationObject.cpp:1333-1376`), whose
+numeric column binary path reads/writes raw little-endian words
+(`SerializationNumber.cpp:316-327`). `JSONExtractTree.cpp:2656-2690` admits
+the integer widths, Float32/64 and Bool's nominal UInt8-backed JSON node.
+
+Requested transition: paired declared UInt8/16/32/64/128/256,
+Int8/16/32/64/128/256, Float32/64 and Bool, plus existing String, through the
+same normalized whole-part, file/column, catalog and table owners. Add one
+cohesive `ObjectTypedFieldType` policy file, shared by constructor/parser,
+instead of per-type codecs/classes or repeated whitelists. Preserve nominal
+identity, exact declaration-byte preflight, roster/capacity limits, ownership
+and existing fail-closed admission. No wrapper, identifier, temporal, Decimal,
+Enum, container, new layout, Compact part, projection or MV widening.
+
+Measured rejection before implementation: stock CREATE refuses a declared
+BFloat16 field with code 43, `JSON serialization doesn't support the return
+type schema: BFloat16`. `DataTypeObject.cpp:199-232` calls the JSON extraction
+tree builder; that builder has no BFloat16 branch and throws at
+`JSONExtractTree.cpp:2828-2834`. Standalone BFloat16 support does not override
+this Object schema gate. BFloat16 remains a negative admission test.
+
+Root's isolated pinned-runtime probe passed Float32/64 +/-0, +/-infinity,
+quiet and signaling NaN payloads through raw Object RowBinary INSERT,
+independent exact RowBinary comparison and CHECK=1. Evidence:
+`/private/tmp/crystal-click-w132-root.LJh1iC/probe-float-final.log` (exit 0).
+Earlier logs retain the BFloat16 rejection, clickhouse-local stdin schema
+inference refusal and stale generated-file tail. The corrected probe uses
+an exact isolated `FROM INFILE` path and truncates generated binary output;
+none of those attempts changed production code or established part support.
+
+Risk: CAUTION (serialization admission). Rollback: one atomic local commit
+over `02dd99f`, with no remote push. Strongest failure: local raw-bit symmetry
+or UInt8/Bool coercion masks a stock nominal/wire mismatch; broader names also
+break canonical byte accounting. Guard with independently authored boundary
+bytes, exact stock type labels, actual CHECK/full/PK SQL and raw RowBinary,
+constructor/parser byte cutoffs, wrong-nominal values and drift-before-callbacks.
+
+Ownership: Luna owns new schema/root consumer specs; another Luna owns the
+single policy owner, two schema owners, require wiring and necessary old
+negative-test sentinel replacements, only after root executes qualified RED.
+A separate Luna owns `scripts/check_object_numeric_w132.cr` and `.sh`; root
+reviews, runs every compiler/stock job serially under the resource guard,
+updates certificates/navigation and commits exact relevant paths.
+
+DoD: focused DEBUG and adjacent RELEASE tests; complete non-release spec
+inventory in disjoint guarded groups (not a combined-process certificate);
+four native and four fully library-owned whole parts covering the complete
+String 0/1 x BASIC/COMPACT matrix in both directions; actual profile/grid,
+CHECK=1, full/PK SQL, exact raw numeric RowBinary and type labels;
+file/column full/middle/zero reads, independently copied catalog provenance,
+mixed-table windows and UInt64-PK whole-granule candidates with residuals.
+Author each integer width's signed/unsigned limits without production codecs;
+include float signed-zero/infinity/NaN words and Bool false/true distinct from
+UInt8. Seed numeric-byte/type/CHECK/grid/document/Sparse comparator failures.
+Format/shell/diff checks and root hostile verdict must pass before the new
+roster is admitted or committed. General paired types/MV/projections remains
+the active goal; optimization and stock speed parity remain unclaimed.
+
+## W132 declared numeric Object family — executed certificate (2026-10-03)
+
+Status: VERIFIED only for this bounded normalized profile over W131 `02dd99f`.
+Admitted declared fields are UInt8/16/32/64/128/256, Int8/16/32/64/128/256,
+Float32/64, Bool and String. These are 16 nominal types, 13 newly admitted in
+Object beyond Int64/UInt64/String. BFloat16 remains refused by the independently
+measured stock schema gate in the design seal; standalone scalar support does
+not override that gate. General paired types/MV/projections remains active.
+
+Production adds one `ObjectTypedFieldType` module/file, consumed by schema
+construction, parser token resolution and canonical declaration sizing. Its
+static names are resolved before the existing byte charge without allocating
+a general type name. Constructor/parser share the closed nominal policy;
+there is no sizing fallback for an unsupported tag. Fixed-width bulk owners,
+writer, file/column readers and catalog/table adapters are reused unchanged.
+Old rejection sentinels for newly admitted numeric types now use BFloat16;
+this is not removal of the unsupported-type guard.
+
+The qualified profile remains one Object root beside one sorted UInt64 key,
+hashed Wide, Object V3 (wire version 4)/Dynamic V3, explicit rosters, one-bucket
+shared MAP, LZ4, plain adaptive `.mrk2` and `primary.idx`, Default metadata.
+Both native and fully library-owned parts cover ordinary String 0/1 ×
+BASIC/COMPACT discriminators; COMPACT here is not a Compact part. Shared MAP
+Strings retain the existing single-stream profile. The independently authored
+seven rows include every integer width's unsigned/signed boundaries and
+asymmetric words, Float32/64 positive/negative zero and infinity, quiet and
+signaling NaN payloads, NUL/Unicode Strings, Dynamic Int64 and shared String
+spill. Actual grids `[2,2,2,1]`, primary keys/sentinel `[1,3,5,7,7]` and PK=6
+candidate mark `[2]` are inspected.
+
+Stock accepts Bool input bytes 0/1/2/128/255 as false/nonzero-true and preserves
+their raw codes in native RowBinary. Crystal's logical Bool reader accepts
+the same truth values; its writer canonicalizes true to byte 1. The oracle
+therefore compares native raw codes separately from canonical library output,
+not a false whole-input byte-identity claim. Bool and UInt8 remain nominally
+distinct. Floats are compared by raw words, not Float equality or JSON text.
+
+Source reference: clean shallow `101871ba6da8221c7cf30ac3a04bc1063106f412` in
+`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-101871ba`. Qualification
+uses the separate pinned Mach-O runtime
+`/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse`, version
+`26.10.1.1201`, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+No executable from the new shallow source has been built or qualified.
+Crystal is 1.21.0, LLVM 22.1.8/AArch64 with the macOS 26.5 SDK.
+
+Root-owned evidence directory: `/private/tmp/crystal-click-w132-root.LJh1iC`.
+Each compiler/stock job ran serially under `cogni-ml/scripts/run_safe.sh` with
+minimum free memory 50%, maximum RSS 32,768 MiB and its existing FD guard.
+That guard is not a no-leak/RSS bound for the library.
+
+- `red.log`: four new schema examples; three expected old-whitelist errors
+  before production edits, one unsupported-type guard passes.
+- `focused-debug.log`: the first consumer run exposed two fixture/API errors:
+  a bulk role must be `root.data`, and table `max_rows=0` is an existing refusal,
+  not an empty-read API. Fixtures were corrected, with EOF emptiness tested
+  separately; production APIs were not widened.
+- `focused-debug-corrected.log`: 26 DEBUG examples, zero failures/errors, exit 0.
+- `adjacent-release.log`: 151 examples in the 17 selected adjacent spec files,
+  zero failures/errors, exit 0.
+- Full inventory: 350 unique sorted spec files in 15 designated disjoint groups,
+  2,228 examples, zero failures/errors. Count groups 1..5 (750 examples) from
+  `full-nonrelease-shards.log`, completed before interruption, and groups 6..15
+  (1,478 examples) from `full-nonrelease-resumed.log` (exit 0). The interrupted
+  invocation did not finish: root validated and stopped only its orphan process
+  group 16606 after the guard parent was lost, then conservatively resumed at
+  group 6. Original groups 6..8 are retained but not counted. This is not a
+  successful combined-process suite or a successful entire first invocation.
+- `stock-w132.log`: first oracle exits 1 at its synthetic Atomic metadata's
+  unquoted column definitions. Actual stock metadata uses backticks; only the
+  oracle fixture was corrected. No catalog grammar or production code changed.
+- `stock-w132-corrected.log`: all four native and four library-owned matrix
+  cells, actual CHECK=1/full/PK SQL, exact numeric RowBinary/type labels,
+  file/column full/middle/zero reads, independently copied catalog values and
+  ownership/reread, table windows and candidate provenance/residuals pass.
+  Six seeded comparator failures (document byte, nominal type, Sparse metadata,
+  grid, CHECK result and numeric RowBinary) are rejected; outer exit 0.
+- Fresh `stock-w131-regression.log`, `stock-w130-regression.log`,
+  `stock-w129-regression.log` and `stock-w128-regression.log`: 8/5/8/5 existing
+  matrix cells pass, all outer exits 0. W130's obsolete Float64 negative
+  sentinel was replaced by BFloat16; the other three scripts are unchanged.
+
+Retained fresh oracle roots: W132
+`/private/tmp/crystal-click-object-numeric-w132.vkbvGo`; W131
+`/private/tmp/crystal-click-object-int64-w131.pvozsH`; W130
+`/private/tmp/crystal-click-object-table-w130.5k5h2G`; W129
+`/private/tmp/crystal-click-object-catalog-w129.XlBhfn`; W128
+`/private/tmp/crystal-click-json-w128.zcLwVJ`. The failed W132 fixture root
+`/private/tmp/crystal-click-object-numeric-w132.hRPovW` is retained separately.
+Raw output is evidence, not instructions. This existing frontier is the curated
+evidence index; the optional packet template/graph validator is absent in this
+checkout, so no structural-validator pass is asserted.
+
+DoD command forms (run through the serial resource guard, 600 seconds for
+focused specs and 900 seconds for wrapper/full-inventory runners; isolated
+caches):
+
+```sh
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk TMPDIR=/private/tmp
+export CRYSTAL_BIN=/opt/homebrew/bin/crystal
+export CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse
+export COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1
+# Prefix compiler commands with:
+# /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh "$CRYSTAL_BIN" 600 32768
+# Prefix wrapper commands with the same guard and /bin/bash 900 32768.
+crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace \
+  spec/object_document_schema_w132_spec.cr spec/object_numeric_w132_root_spec.cr \
+  spec/object_document_schema_w131_spec.cr spec/object_int64_w131_root_spec.cr \
+  spec/object_document_schema_w128_spec.cr
+# Adjacent RELEASE: the five files above plus object_table_w130_spec.cr,
+# object_offline_table_w130_spec.cr, object_table_w130_root_spec.cr,
+# object_catalog_w129_spec.cr, object_column_reader_w129_spec.cr,
+# object_catalog_w129_root_spec.cr, object_part_writer_w128_spec.cr,
+# object_part_writer_w128_root_spec.cr, offline_catalog_spec.cr,
+# lazy_window_reader_spec.cr, wide_part_table_projection_w87_spec.cr,
+# offline_catalog_projection_w87_spec.cr. All under spec/; add --release.
+# Inventory: rg --files spec -g '*_spec.cr' | LC_ALL=C sort;
+# consecutive disjoint groups of at most 24 with the same flags + --no-debug.
+W132_KEEP_TMP=1 bash scripts/check_object_numeric_w132.sh
+W131_KEEP_TMP=1 bash scripts/check_object_int64_w131.sh
+W130_KEEP_TMP=1 bash scripts/check_object_table_w130.sh
+W129_KEEP_TMP=1 bash scripts/check_object_catalog_w129.sh
+W128_KEEP_TMP=1 bash scripts/check_object_part_writer_w128.sh
+crystal tool format --check src/crystal_click.cr \
+  src/crystal_click/object_typed_field_type.cr \
+  src/crystal_click/object_document_schema.cr \
+  src/crystal_click/object_document_schema_parser.cr \
+  spec/object_document_schema_w132_spec.cr spec/object_numeric_w132_root_spec.cr \
+  spec/object_document_schema_w128_spec.cr spec/object_document_schema_w131_spec.cr \
+  spec/object_catalog_w129_spec.cr spec/object_catalog_w129_root_spec.cr \
+  spec/object_offline_table_w130_spec.cr spec/object_table_w130_root_spec.cr \
+  scripts/check_object_numeric_w132.cr scripts/check_object_table_w130.cr
+bash -n scripts/check_object_numeric_w132.sh
+git diff --check
+```
+
+Frozen production, new spec and final oracle SHA-256 fingerprints:
+
+```text
+5bfbfc8e9c3d260d9a826c09e6a901512cb70aa715870251586402706ed4c70c  src/crystal_click.cr
+cc66086d6d98c83cdc22416f0d0316841e25fcc7c256ff88b21aa8a6bd7e656a  src/crystal_click/object_typed_field_type.cr
+b0d343a2fcf3979c2be0d4362e885475aa9e6b1a706a586a8e23ee3069e07b2e  src/crystal_click/object_document_schema.cr
+0145f148ca50f952cd05e59faa67a3dc72ba72d42361cc989839a92539377e50  src/crystal_click/object_document_schema_parser.cr
+803fb20ddecae8b91f809aa11da830cdf590b36f61a69c300ae02ff1119f9d8f  spec/object_document_schema_w132_spec.cr
+e08c8604d18918aa2ff519461388e7782cc91c021b966bb9c82d3fee4ad978fa  spec/object_numeric_w132_root_spec.cr
+3a4257b4b6dd275a11d6563670d64afb2bb8bb0ac5a95e2b826cd3eedce30a40  scripts/check_object_numeric_w132.cr
+686afa88faec55de9ef9ac19e5a6a6e2ec8eaef9880f26ea5279c2e194d83eae  scripts/check_object_numeric_w132.sh
+```
+
+Root's hostile verdict: ROBUST within the declared profile. Attacks include
+every admitted type's exact canonical budget cutoffs, unsupported-wrapper
+refusal, Bool/UInt8 and signed/unsigned plan/value mismatch, wrong-nominal
+writer refusal before publication, later-part nominal drift before callbacks,
+native versus canonical Bool bytes, exact float payloads and all six comparator
+controls. Root reviewed the owner/oracle diff and ran the real compiler/stock
+checks; Luna's implementation and static inventory are correlated support.
+
+Residuals: no temporal/identifier/FixedString/Decimal/Enum/wrapper/container
+Object widening, new layouts, Compact/Sparse parts, arbitrary table/multi-Object
+writing, whole-Object projection reads or broader MV/projection execution.
+Quiescent inputs and existing metadata/checksum-roster validation remain the
+boundary, not server Active/snapshot proof or whole-part payload authentication.
+No decode-workspace/transient/RSS/caller-retention bound, facade-refactor closure
+or stock-speed claim follows. Decay on policy/schema/bulk/adapter admission,
+profile/limits, comparator, publication, runtime/source/toolchain or loss of
+retained evidence; refresh the affected positives and negatives.
+
+Next proposed falsifier: declared Date/Date32 in both native and library-owned
+Object parts, asymmetric raw day codes including negative Date32, exact
+bytes/RowBinary, calendar interpretation and stock CHECK. Fresh source admits
+both at `JSONExtractTree.cpp:2698-2701`; existing fixed-width carriers alone do
+not establish Object compatibility. No W133 production change is admitted here.

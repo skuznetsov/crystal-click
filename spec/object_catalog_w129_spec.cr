@@ -55,7 +55,7 @@ describe "W129 Object catalog schema declaration" do
 
   it "rejects unsupported typed scalar types, malformed paths, and out-of-range capacities" do
     [
-      "JSON(t UInt32)",
+      "JSON(t BFloat16)",
       "JSON(`a..b` String)",
       "JSON(a.b String)",
       "JSON(max_dynamic_paths=10001)",
