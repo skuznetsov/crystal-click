@@ -185,7 +185,34 @@ read, including nested bytes under NULL rows. Larger reads should use
 `max_string_bytes:` to `.values` to request a smaller budget; values above
 the hard ceilings are rejected.
 Values follow the offline resolved-part and mark order, not SQL `ORDER BY`.
-Whole JSON objects and computed `ALIAS` columns are not materialized.
+Computed `ALIAS` columns are not materialized. Whole normalized JSON columns
+have the separately bounded Object path below, not arbitrary JSON admission.
+
+Read normalized whole-JSON documents from an offline Atomic catalog:
+
+```sh
+crystal run examples/read_object_catalog.cr -- /var/lib/clickhouse lab events payload
+```
+
+```crystal
+document = catalog["lab"]["events"]["payload"].values.first.as(CrystalClick::ObjectDocument)
+document.paths.each { |path| puts "#{path}: #{document.value_for(path).type.name}" }
+```
+
+The result owns immutable flattened path/value documents, including typed,
+Dynamic and shared-MAP values. W129 admits UInt64/String declared typed paths,
+normalized hashed Wide Object V3/Dynamic V3, one shared MAP bucket, LZ4 and
+plain adaptive marks. Ordinary String versions 0/1 are supported; selected
+compressed marks and other JSON layouts are rejected. The example requests
+1,000 rows, 16 MiB of String payload and 100,000 recursive cells. The Object
+materializer additionally applies a 64 MiB aggregate logical accounting limit,
+covering retained owners and accounted reader workspace across parts. This
+is neither an RSS limit nor a pre-decode transient-memory ceiling: a complete
+decoded mark is measured and admitted before any of its documents are retained.
+Use a quiescent input directory; no concurrent snapshot or server Active-state
+claim is made. Mixed Object/scalar typed batches and PK-window delivery remain
+the next adapter boundary. See the
+[general JSON frontier](../docs/JSON_GENERAL_STORAGE_FRONTIER.md).
 
 Admitted recursively named, nonempty `Tuple` columns also use this example.
 Their scalar and Nullable-scalar terminal surface is described in the

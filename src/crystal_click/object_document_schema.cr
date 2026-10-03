@@ -7,6 +7,7 @@ module CrystalClick
     DEFAULT_MAX_DYNAMIC_TYPES =     32
     MAX_DYNAMIC_PATHS         = 10_000
     MAX_DYNAMIC_TYPES         =    254
+    MAX_TYPED_PATHS           =  1_000
     DEFAULT_LIMITS            = ObjectDocumentCodec::DEFAULT_LIMITS
 
     getter max_dynamic_paths : Int32
@@ -28,6 +29,9 @@ module CrystalClick
       end
       unless 0 <= max_dynamic_types <= MAX_DYNAMIC_TYPES
         raise ArgumentError.new("JSON max_dynamic_types is outside the admitted range")
+      end
+      if typed_paths.size > MAX_TYPED_PATHS
+        raise ArgumentError.new("JSON schema exceeds the maximum of #{MAX_TYPED_PATHS} typed paths")
       end
 
       @max_dynamic_paths = max_dynamic_paths.to_i32
@@ -120,6 +124,13 @@ module CrystalClick
 
     def declaration_byte_size : Int32
       @declaration.bytesize
+    end
+
+    # Parse the bounded canonical Object JSON declaration subset accepted by
+    # the current normalized Object V3 writer. This deliberately is not a
+    # general ClickHouse type parser.
+    def self.parse_declaration(type : String, limits : BinaryCodecLimits = DEFAULT_LIMITS) : ObjectDocumentSchema
+      ObjectDocumentSchemaParser.parse(type, limits)
     end
 
     # Validate exact typed-path/type identity and declared dynamic capacities

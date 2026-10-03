@@ -31,6 +31,70 @@ module CrystalClick
       end
     end
 
+    private struct PreparedRead
+      getter source : PartStreamSource
+      getter schema_snapshot : Hash(String, BinaryDataType)
+      getter object_bytes : Bytes
+      getter dynamic_bytes : Hash(String, Bytes)
+      getter outer_rows : Array(UInt64)
+      getter first_mark : Int32
+      getter selected_count : Int32
+      getter profile : BinaryBulkProfile
+      getter shared_profile : BinaryBulkProfile
+      getter bulk_bindings : Array(BulkBinding)
+      getter discriminator_bindings : Array(DiscriminatorBinding)
+      getter codec_budget : BinaryCodecBudget
+      getter transport_budget : CompressedStreamBudget
+      getter descriptor : ObjectDocumentFileDescriptor?
+
+      def initialize(
+        @source : PartStreamSource,
+        @schema_snapshot : Hash(String, BinaryDataType),
+        @object_bytes : Bytes,
+        @dynamic_bytes : Hash(String, Bytes),
+        @outer_rows : Array(UInt64),
+        @first_mark : Int32,
+        @selected_count : Int32,
+        @profile : BinaryBulkProfile,
+        @shared_profile : BinaryBulkProfile,
+        @bulk_bindings : Array(BulkBinding),
+        @discriminator_bindings : Array(DiscriminatorBinding),
+        @codec_budget : BinaryCodecBudget,
+        @transport_budget : CompressedStreamBudget,
+        @descriptor : ObjectDocumentFileDescriptor?,
+      )
+      end
+    end
+
+    # Inspect all Object metadata and all physical grids without reading any
+    # selected value windows. The typed schema and profiles remain explicit in
+    # this low-level API; ObjectColumnReader binds them from part metadata.
+    def self.inspect(
+      part_path : String,
+      column_name : String,
+      typed_schema : Hash(String, BinaryDataType),
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : ObjectDocumentFileDescriptor
+      prepared = prepare_read(
+        part_path,
+        column_name,
+        typed_schema,
+        0,
+        0,
+        profile,
+        shared_profile,
+        hashed,
+        limits,
+        transport_limits,
+        true,
+      )
+      prepared.descriptor.not_nil!
+    end
+
     def self.read(
       part_path : String,
       column_name : String,
@@ -43,8 +107,36 @@ module CrystalClick
       limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
     ) : Array(Array(ObjectDocument))
-      validate_selection_arguments!(first_mark, mark_count)
+      prepared = prepare_read(
+        part_path,
+        column_name,
+        typed_schema,
+        first_mark,
+        mark_count,
+        profile,
+        shared_profile,
+        hashed,
+        limits,
+        transport_limits,
+        false,
+      )
+      read_prepared(prepared)
+    end
 
+    private def self.prepare_read(
+      part_path : String,
+      column_name : String,
+      typed_schema : Hash(String, BinaryDataType),
+      first_mark : Int,
+      mark_count : Int?,
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      hashed : Bool,
+      limits : BinaryCodecLimits,
+      transport_limits : CompressedStreamLimits,
+      build_descriptor : Bool,
+    ) : PreparedRead
+      validate_selection_arguments!(first_mark, mark_count)
       codec_budget = BinaryCodecBudget.new(limits)
       transport_budget = CompressedStreamBudget.new(transport_limits)
       column_prefix = preflight_column_name!(column_name, hashed, limits)
@@ -100,6 +192,7 @@ module CrystalClick
       bulk_bindings = collect_bulk_bindings(document_plan, physical_plan, hashed)
       discriminator_bindings = collect_discriminator_bindings(object, physical_plan, hashed)
       selected_wire_bytes = 0_u64
+      logical_lane_bytes = 0_u64
       validate_all_value_grids!(
         source,
         bulk_bindings,
@@ -107,6 +200,7 @@ module CrystalClick
         outer_rows,
         transport_budget
       ) do |grid, prefix|
+        logical_lane_bytes = checked_add_u64(logical_lane_bytes, grid.logical_size.to_u64)
         selected_wire_bytes = checked_add_u64(
           selected_wire_bytes,
           selected_extent(grid, first_mark, selected_count, prefix)
@@ -116,6 +210,57 @@ module CrystalClick
       metadata_size = metadata_total_size(object_bytes, dynamic_bytes)
       codec_budget.ensure_wire_bytes(checked_add_u64(metadata_size, selected_wire_bytes))
 
+      logical_read_bytes = checked_add_u64(metadata_size, logical_lane_bytes)
+      descriptor = nil.as(ObjectDocumentFileDescriptor?)
+      if build_descriptor
+        logical_names, checksum_names = descriptor_stream_names!(
+          physical_plan,
+          hashed,
+          limits,
+          codec_budget,
+        )
+        descriptor = ObjectDocumentFileDescriptor.new(
+          document_plan,
+          outer_rows,
+          logical_names,
+          checksum_names,
+          logical_read_bytes,
+        )
+      end
+
+      # Selection validation bounded both indices to outer_rows.size before narrowing.
+      PreparedRead.new(
+        source,
+        schema_snapshot,
+        object_bytes,
+        dynamic_bytes,
+        outer_rows,
+        first_mark.to_i32,
+        selected_count.to_i32,
+        profile,
+        shared_profile,
+        bulk_bindings,
+        discriminator_bindings,
+        codec_budget,
+        transport_budget,
+        descriptor,
+      )
+    end
+
+    private def self.read_prepared(prepared : PreparedRead) : Array(Array(ObjectDocument))
+      source = prepared.source
+      schema_snapshot = prepared.schema_snapshot
+      object_bytes = prepared.object_bytes
+      dynamic_bytes = prepared.dynamic_bytes
+      outer_rows = prepared.outer_rows
+      first_mark = prepared.first_mark
+      selected_count = prepared.selected_count
+      profile = prepared.profile
+      shared_profile = prepared.shared_profile
+      bulk_bindings = prepared.bulk_bindings
+      discriminator_bindings = prepared.discriminator_bindings
+      codec_budget = prepared.codec_budget
+      transport_budget = prepared.transport_budget
       typed_roles = Hash(String, Hash(String, BinaryBulkStream)).new
       dynamic_roles = Hash(String, Hash(String, Hash(String, BinaryBulkStream))).new
       shared_roles = Hash(String, BinaryBulkStream).new
@@ -504,6 +649,44 @@ module CrystalClick
       total = object_bytes.size.to_u64
       dynamics.each_value { |bytes| total = checked_add_u64(total, bytes.size.to_u64) }
       total
+    end
+
+    private def self.descriptor_stream_names!(
+      physical : ObjectDocumentPhysicalPlan,
+      hashed : Bool,
+      limits : BinaryCodecLimits,
+      budget : BinaryCodecBudget,
+    ) : Tuple(Array(String), Array(String))
+      count = physical.stream_count.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      logical_names = physical.stream_names
+      unless logical_names.size.to_u64 == count
+        raise CorruptPartError.new("Object descriptor stream roster changed after physical planning")
+      end
+
+      checksum_names = Array(String).new(logical_names.size * 2)
+      seen_files = Hash(String, Bool).new(initial_capacity: logical_names.size * 2)
+      output_bytes = 0_u64
+      logical_names.each do |logical_name|
+        budget.charge_node
+        ensure_name_size!(logical_name.bytesize.to_u64, limits)
+        output_bytes = checked_add_u64(output_bytes, logical_name.bytesize.to_u64)
+        data_name, marks_name = file_pair(logical_name, hashed)
+        {data_name, marks_name}.each do |name|
+          validate_physical_name!(name)
+          ensure_name_size!(name.bytesize.to_u64, limits)
+          if seen_files.has_key?(name)
+            raise CorruptPartError.new("Object descriptor physical filenames collide")
+          end
+          seen_files[name] = true
+          checksum_names << name
+          output_bytes = checked_add_u64(output_bytes, name.bytesize.to_u64)
+        end
+      end
+      checksum_names.sort!
+      budget.ensure_wire_bytes(output_bytes)
+      budget.charge_wire_bytes(output_bytes)
+      {logical_names, checksum_names}
     end
 
     private def self.file_pair(logical_name : String, hashed : Bool) : Tuple(String, String)

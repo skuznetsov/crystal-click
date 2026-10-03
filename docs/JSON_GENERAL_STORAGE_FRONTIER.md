@@ -1,39 +1,29 @@
 # General JSON Storage Frontier
 
-Status: W115 stock capture, W116 independent physical/type qualification,
-W117's reusable paired binary type/value kernel, W118's decompressed
-shared-MAP block codec and W119's fixed-width scalar extension were executed
-on 2026-10-02. W117, W118 and W119 are VERIFIED
-within their scalar/block profiles and gates below, not as a general
-Object/Dynamic/MergeTree codec. The precise whole-document missing-capability
-RED is qualified, not resolved in the public part facade. General JSON
-part reading/writing is not admitted. W24/W72 declared scalar projections
-remain the paired JSON capability in that facade; see `JSON_TYPED_PATH_FRONTIER.md`.
-W120's paired complete decompressed structure-metadata codecs are VERIFIED
-within the source/local and V3 MAP stock gates below. W121's paired normalized
-Dynamic discriminator streams and selected sparse schedules are VERIFIED within
-their strict captured-writer profile below. W122's reusable recursive bulk and
-Dynamic logical-value codecs are VERIFIED within their normalized profile and
-two retained-stock gates below. W123's paired flattened Object document
-composition is VERIFIED within its normalized V3/one-bucket MAP profile and
-two captured-stock profiles below. W124's paired compressed-file/plain-adaptive-
-mark transport is VERIFIED within the explicit-path/profile gates below.
-W125's generic type/path/role binding is VERIFIED within its explicit profile
-and focused/full/stock gates below. W126's explicit-schema/profile file-backed
-Object reader is VERIFIED within its Wide/SUFFIX V3/one-bucket MAP gates below.
-W127's fresh statistics and complete unpublished column file pairs are VERIFIED
-within the explicit V3/MAP gates below. Schema-sidecar synthesis and staged
-whole-part publication remain the next owner boundary. The legacy part facade
-still has no general whole-JSON admission.
-The target is a reusable Object/Dynamic/shared-data engine, not another exact
-declaration registered in the existing facades. Performance work remains parked.
+Current frontier (2026-10-02): W128 checkpoint `1c5bab4` qualifies complete
+library-owned normalized Object parts; W129 adds bounded whole-Object catalog
+materialization. The exact admitted profile and executed gates are in their
+sections below. Mixed Object/scalar `WidePartTable` batches, windows and PK
+candidate delivery remain the next separately qualified adapter boundary.
+This is not general JSON schema/layout compatibility or completed public
+table integration. Older scalar JSON projections retain their existing
+contract; see `JSON_TYPED_PATH_FRONTIER.md`.
 
-W125 is design-sealed and verified below for generic descriptor/path binding.
-It deliberately separates that reusable owner from the subsequent complete
-file-backed Object reader, metadata discovery, and whole-part publisher.
+W115-W127's retained historical certificates cover stock capture and physical
+qualification, the reusable type/value kernel, shared-MAP and recursive bulk
+codecs, Object/Dynamic structure and sparse schedules, flattened documents,
+compressed transport/plain marks, stream binding, file-backed reading and
+fresh unpublished column files. Each certificate is scoped to its own source,
+runtime, profile and executed gates; a logical codec does not independently
+admit a whole part. W128 closes normalized schema-sidecar synthesis and staged
+whole-part publication without borrowing stock files. W129 is the separate
+catalog adapter, not an inherited W128 runtime certificate.
 
-W126 is design-sealed and verified below for a normalized file-backed reader.
-Its explicit profile is not general JSON layout or catalog/facade admission.
+The target is a reusable Object/Dynamic/shared-data engine with cohesive
+owners, not another exact declaration registered in the existing facades.
+General layouts, additional declared typed-field families and compositions,
+mixed table delivery and broader MV/projection support remain open.
+Performance work remains parked.
 
 ## Source anchor and compatibility boundary
 
@@ -3159,3 +3149,223 @@ name/profile/default/count/mark/budget, oracle comparator/input, toolchain,
 source/runtime or publication-policy changes. Optimization stays parked and
 the whole goal remains active; the next capability falsifier is explicit
 public table/catalog dispatch without silent layout or schema widening.
+
+## W129: normalized Object catalog materialization (2026-10-02)
+
+Status: VERIFIED only within the sealed profile and executed certificate below;
+no runtime certificate is inherited from W128.
+This admitted slice makes `catalog[db][table][column].values` consume
+normalized Object documents. Mixed `WidePartTable` typed batches/windows and
+PK candidate delivery are the following separately qualified adapter boundary.
+The full all-types, MV/projection and eventual stock-speed objective remains
+active; this slice does not replace it.
+
+Admitted: the W128 schema subset (UInt64/String typed paths, declared Dynamic
+capacities, canonical ASCII dotted/quoted paths), normalized hashed Wide
+Object V3/Dynamic V3, one shared MAP bucket, LZ4, plain adaptive marks,
+ordinary String versions 0/1 and independent shared SINGLE_STREAM Strings.
+The new schema parser canonicalizes option order but rejects duplicate options
+or raw paths, unknown options, SKIP clauses and other typed declarations.
+The old scalar JSON virtual-path grammar remains unchanged.
+Both the existing writer schema constructor and the new parser enforce the
+stock maximum of 1,000 typed paths, independently of caller codec limits.
+That declaration ceiling does not waive the existing codec/transport limits.
+
+`ObjectDocumentFileReader.inspect` must share the existing metadata and
+complete physical-grid validation, without payload-window reads or document
+decode. An immutable descriptor exposes its plan, row count and detached grid
+and stream-name copies. A separate `ObjectColumnReader` binds actual part
+declarations, count, selected substream roster, codec and serialization profile
+to a supplied schema; it applies schema capacity checks even for an empty
+selection. The catalog parses its own DDL and opens every candidate before
+allocating the result. Returned documents own immutable recursive values.
+Retained rows, bytes, recursive cells and String payload have aggregate bounds
+across marks and parts. Limits are logical-work/construction bounds, not RSS.
+Each complete decoded mark is measured and admitted atomically before any of
+its documents are appended to the retained result. A failed admission leaves
+all budget counters unchanged. The aggregate logical peak combines retained
+owners with an accounted reader workspace; it is not an allocation-before-
+decode guard, a decoder-transient heap ceiling or a process-memory limit.
+Reader/codec limits still apply independently while decoding the current mark.
+Recognized selected hashed `.cmrk2` marks are explicitly unsupported, without
+fallback; a missing admitted `.mrk2` file remains corruption. Compressed marks
+on unrelated columns do not choose the selected Object profile.
+
+Rejected: unqualified JSON schemas/layouts, Compact parts, advanced/bucketed
+shared data, implicit stream/profile fallback, server Active-state claims,
+concurrent-input snapshots and stronger checksum/hash claims. Inputs must be
+quiescent. Per-mark reads may repeat metadata/grid parsing; optimization stays
+parked. No decoding of unrelated scalar payloads or PK inference is admitted.
+
+Risk: CAUTION (shared reader refactor plus catalog admission). Rollback is the
+clean `1c5bab4` checkpoint plus the exact-path atomic feature commit; no user
+changes, source checkout or installed data store are modified. Likeliest
+failure: schema/profile/capacity or a later part's grid is trusted rather than
+checked, or per-mark budget resets admit an oversized retained result.
+
+Plan and ownership:
+
+1. Root: qualified missing-API RED, independent root specs, exact imports,
+   thin catalog dispatch/closed value union and evidence/status updates.
+2. Luna reader: shared preflight in `object_document_file_reader.cr`, new
+   descriptor and `object_column_reader.cr` owners plus reader specs.
+3. Luna catalog: separate `object_document_schema_parser.cr`, thin schema
+   factory, `offline_table/object_values_materializer.cr` and catalog specs.
+4. Luna oracle: `scripts/check_object_catalog_w129.{cr,sh}` and small example;
+   fresh isolated stock/library data only. Root alone runs heavy jobs serially.
+
+Consumer inventory: `rg` over `ObjectDocumentFileReader`, `OfflineColumnValue`,
+`materialize_selected_values` and JSON schema helpers identified the explicit
+file-reader callers, the catalog's single materialization entry, closed value
+union and old virtual-path dispatcher. No general WidePart type admission is
+widened by this slice.
+
+DoD: focused DEBUG/RELEASE specs (including existing W126-W128 readers/writers),
+full non-release suite, actual pinned stock CHECK=1/read interoperability in
+fresh isolated roots, exact-path format, shell syntax and `git diff --check`.
+Guards: malformed/duplicate/unknown schema; semantic DDL/part disagreement;
+count, selected roster, profile and capacity mismatch; corrupted later-part
+grid; inspect without payload decode; retained ownership and aggregate
+cross-mark/cross-part String/cell/byte budget. Empty tables must validate DDL,
+not silently return an empty unsupported result. Root hostile review must
+test the strongest applicable counterexamples before a scoped VERIFIED claim.
+
+### W129 executed bounded certificate
+
+Lineage: final W129 source over clean W128 checkpoint `1c5bab4`, with frozen
+Luna production/oracle changes independently inspected and exercised by root.
+All heavy jobs ran serially under
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh`, with the 50%
+free-memory preflight and a 32,768 MiB process-tree ceiling. Crystal jobs used
+600-second timeouts; fresh stock wrappers used 900 seconds. Crystal 1.21.0,
+LLVM 22.1.8, AArch64, SDK MacOSX26.5, `--single-module --threads 1` and the
+system linker were used. No production input or existing ClickHouse checkout
+was modified.
+
+Root evidence directory: `/private/tmp/crystal-click-w129-root.7pIM6S`.
+Fresh W129 stock/library/catalog root:
+`/private/tmp/crystal-click-object-catalog-w129.9IgpCQ`.
+Fresh W128 regression root: `/private/tmp/crystal-click-json-w128.C3SsNn`.
+These temporary roots were deliberately retained as local evidence, not
+committed fixtures or durable availability guarantees.
+
+The source reference is the separate clean depth-1 checkout
+`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-101871ba`, revision
+`101871ba6da8221c7cf30ac3a04bc1063106f412`. The runtime oracle is separately
+pinned to ClickHouse 26.10.1.1201, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, Mach-O SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The source checkout is not that executable's provenance and no executable
+from current master has been built or qualified.
+
+Root observed:
+
+- The initial missing-API probe failed at `parse_declaration`, before any new
+  catalog capability claim (`red.log`). Later root tests qualified two actual
+  typed-path-ceiling failures: constructor and parser accepted 1,001 fields
+  while the 1,000-field positives passed (`typed-path-limit-red.log`). The
+  shared constructor and parser now both enforce the stock ceiling, even
+  with larger caller codec limits. An independent read-only stock CAST probe
+  accepted exactly 1,000 typed fields and rejected 1,001 with Code 36 and the
+  stock maximum message (`stock-typed-paths-gate.log` and its two child logs).
+  Source anchors are `DataTypeObject.h:20` and `DataTypeObject.cpp:874-875`.
+- A separate root pending-mark admission probe failed to compile because
+  `charge_documents` did not exist (`batch-admission-red.log`). Final code
+  measures the complete pending mark and commits counters only after all
+  limits pass. Root tests cover failed aggregate owner/workspace admission,
+  unchanged counters and a valid smaller retry, plus UInt64-overflow and
+  one-shot base-reservation controls.
+- Final focused DEBUG passed 86 examples (`focused-debug-final-2.log`),
+  covering all ten Object W126-W129 spec files listed below. Final focused
+  RELEASE added the complete offline catalog file and passed 133 examples
+  (`focused-release-final.log`). The separate legacy compressed-mark test
+  also passed. The earlier `focused-debug-final.log` ran only one example:
+  a `:line` filter on one input applied globally. It is not the 86-example
+  certificate; root reran the complete unfiltered inputs.
+- Final full non-release suite passed 2,194 examples, zero failures/errors/
+  pending (`full-nonrelease-final.log`, `--no-debug`). This is not full RELEASE.
+  The initial full run exposed the valid compressed `.cmrk2` legacy fixture,
+  not incomplete Object metadata. The final guard rejects that selected
+  profile explicitly as unsupported. Scalar virtual-path reads and dotted-
+  name ambiguity remain unchanged; a missing admitted plain `.mrk2` file is
+  separately tested as corruption.
+- Eight fresh bidirectional cases passed (`stock-w129-final.log`): native
+  INSERT and fully library-created parts, each across ordinary String 0/1
+  and BASIC/COMPACT discriminator serialization. Every case has seven rows
+  with mark grid `[2, 2, 2, 1]`, typed UInt64/String, Dynamic Int64 and shared
+  String/Int64/Bool spill values, including NUL and UTF-8. Actual stock
+  CHECK TABLE returned the exact successful part row, full SQL and `k` 3..6
+  SQL matched semantic documents and typed String bytes, and library parts
+  were actually ATTACHed. Production `ObjectColumnReader` full/middle/zero
+  selections and synthetic Atomic catalog `.values` matched those independent
+  expectations. Altered count, capacities, ordinary String profile, physical
+  row grid and catalog DDL were rejected as `CorruptPartError`; detached-byte
+  mutation controls did not alter rematerialized results.
+- The new example passed against the retained native catalog and printed
+  seven owned documents with raw leaf type/hex diagnostics
+  (`example-w129-final.log`). It reads an existing catalog; it creates no table.
+- The unchanged W128 writer oracle created five fresh fully library-owned
+  parts and passed actual stock ATTACH/CHECK=1/full/PK SQL and production
+  reader full/middle/zero checks (`stock-w128-regression-final.log`). The
+  unchanged W126 program also passed four retained-stock profiles and its
+  wrong-document, wrong-grid and CHECK=0 comparator controls
+  (`stock-w126-regression-final.log`). That latter gate is retained-part
+  reader evidence, not a fresh publication certificate.
+- Exact-path Crystal format checks, shell syntax and `git diff --check`
+  passed. The compiler emitted the existing deprecated `File.new` argument
+  warning in a staged-stream spec and duplicate-libc linker warning; there
+  were no compilation or test failures in the final gates.
+
+Executed spec inputs and replay commands (run serially with the guard and
+environment above; `CRYSTAL_BIN=/opt/homebrew/bin/crystal`,
+`CLICKHOUSE_BIN=/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse`):
+
+```sh
+crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace \
+  spec/object_catalog_w129_root_spec.cr spec/object_catalog_w129_spec.cr \
+  spec/object_column_reader_w129_spec.cr spec/object_file_reader_w126_root_spec.cr \
+  spec/object_column_writer_w127_root_spec.cr spec/object_column_writer_w127_spec.cr \
+  spec/object_statistics_w127_spec.cr spec/object_document_schema_w128_spec.cr \
+  spec/object_part_writer_w128_spec.cr spec/object_part_writer_w128_root_spec.cr
+# RELEASE used these ten files plus the whole spec/offline_catalog_spec.cr.
+crystal spec --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace
+W129_KEEP_TMP=1 bash scripts/check_object_catalog_w129.sh
+W128_KEEP_TMP=1 bash scripts/check_object_part_writer_w128.sh
+W126_W115_CAPTURE_ROOT=/private/tmp/crystal-click-json-w115.6qs6Kq \
+W126_W125_OUTPUT_ROOT=/private/tmp/crystal-click-json-w125.msh17X \
+  crystal run --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace \
+  scripts/check_object_file_reader_w126.cr
+crystal run --single-module --threads 1 --link-flags=-fuse-ld=ld \
+  examples/read_object_catalog.cr -- \
+  /private/tmp/crystal-click-object-catalog-w129.9IgpCQ/catalog/stock_single_stream_basic \
+  lab events payload
+bash -n scripts/check_object_catalog_w129.sh
+git diff --check
+```
+
+Root's scoped hostile-review verdict: ROBUST for normalized Object catalog
+admission and the explicit logical retention policy. The strongest attacks
+were later-part grid/capacity drift, cross-part String-budget reset, partially
+charged pending marks, empty-table unsupported schemas, same-byte-size unknown
+String versions, selected compressed marks, missing plain marks and false
+payload-authentication claims. Each relevant refusal or bounded positive has
+an executed test; whole-part interoperability uses actual stock CHECK/read
+output, not model agreement. Luna's static adversary review found no remaining
+blocking delta under this scope; it is correlated review, not a separate
+runtime certificate.
+
+Residual limits: quiescent source required; no server Active-state proof,
+hash authentication, concurrent snapshot, arbitrary JSON typed declarations,
+advanced/bucketed/legacy Object layouts, Compact parts, mixed table delivery,
+general MV/projection closure, complete facade decomposition, allocator/RSS,
+pre-decode transient-memory ceiling or throughput result. Complete-mark
+measurement occurs after that mark is decoded. Selected compressed marks are
+a guarded missing capability, not implemented support.
+
+This certificate decays on schema/parser/roster/default/profile/count/grid,
+transport, budget accounting, imports/dispatch, oracle comparator, toolchain,
+runtime/source or publication-policy changes. Rerun affected positive and
+negative gates before reuse; fail closed rather than inferring compatibility.
+The next capability falsifier is mixed normalized Object/scalar typed-batch
+delivery with windows and bounded UInt64 PK pruning. The all-types/MV/
+projection objective remains active and optimization stays parked.

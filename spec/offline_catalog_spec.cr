@@ -1235,7 +1235,7 @@ describe CrystalClick::OfflineCatalog do
     end
   end
 
-  it "selects scalar JSON typed paths while rejecting whole JSON and dotted-name ambiguity" do
+  it "selects scalar JSON typed paths while rejecting compressed whole-Object marks and dotted-name ambiguity" do
     with_offline_catalog_root do |root|
       offline_catalog_create_database(root)
       table_path = offline_catalog_create_table(root, columns: "    `seq` UInt64,\n    `j` JSON(a UInt64, b String)")
@@ -1244,7 +1244,10 @@ describe CrystalClick::OfflineCatalog do
 
       table["j.a"].values.map { |value| value.as(UInt64) }.should eq([10_u64, 0_u64, 30_u64])
       table["j.b"].values.map { |value| value.as(String) }.should eq(["x\0y", "", ""])
-      expect_raises(CrystalClick::UnsupportedFormatError) { table["j"].values }
+      # Legacy scalar typed-path reads admit this fixture's compressed marks;
+      # whole normalized Object reads currently require plain adaptive marks.
+      error = expect_raises(CrystalClick::UnsupportedFormatError) { table["j"].values }
+      error.message.not_nil!.should contain("compressed marks")
     end
 
     with_offline_catalog_root do |root|

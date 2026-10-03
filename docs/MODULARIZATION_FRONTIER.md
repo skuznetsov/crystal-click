@@ -1,14 +1,16 @@
 # CrystalClick Modularization Frontier
 
-Current transition (2026-10-02): W128 library-owned normalized Object whole
-parts over `9d87293`, following the verified shared writer extraction below.
+Current transition (2026-10-02): W129 bounded normalized Object catalog
+materialization over W128 checkpoint `1c5bab4`, following the verified shared
+writer extraction below.
 The bounded capability certificate is in `JSON_GENERAL_STORAGE_FRONTIER.md`.
-Public table/catalog Object dispatch is the next separate boundary; no
-MV/projection or performance admission changes are made here.
+Catalog Object dispatch now has a private materialization owner; mixed table
+batch/window/PK dispatch is the next separate boundary. No MV/projection or
+performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight
-separate owners/files; W123's flattened Object composition has five. Public
-type/path binding and whole-JSON part admission remain unchanged.
+separate owners/files; W123's flattened Object composition has five. Their
+historical admission boundaries are recorded in their respective sections.
 W126 adds three file-backed Object read owners below, keeping full-grid
 validation, physical file resolution and document composition separate from
 the unchanged legacy facades.
@@ -1782,3 +1784,52 @@ physical I/O/validation and leaf dispatch, then thin table/catalog adapters,
 remain the responsibility-level seams. Full Object facade dispatch, additional
 paired types/profiles and broader MV/projections remain open; optimization is
 still parked.
+
+## Normalized Object catalog owners (W129, 2026-10-02)
+
+Status: VERIFIED only for the W129 bounded admission/materialization contract
+and executed gates in `JSON_GENERAL_STORAGE_FRONTIER.md`, over `1c5bab4`.
+This is a CAUTION shared-reader refactor and a catalog capability addition,
+not completion of the larger architecture or general Object table dispatch.
+
+Five cohesive production owners each have one source file:
+
+- `object_document_schema_parser.cr`: bounded declaration parsing and semantic
+  canonicalization, independent of the old scalar virtual-path grammar.
+- `object_document_file_descriptor.cr`: immutable plan/grid/name/work-size
+  description, with detached arrays and String views.
+- `object_column_reader.cr`: selected-column DDL/count/roster/profile binding,
+  complete-grid inspection and bounded mark delivery. Recognized selected
+  compressed marks are refused rather than silently falling back.
+- `object_values_materialization_budget.cr`: shared logical accounting of
+  result owners and reader workspace, with atomic whole-mark admission and
+  independent String/cell/node/element limits.
+- `offline_table/object_values_materializer.cr`: private catalog orchestration;
+  validate every candidate first, reserve the aggregate base, then reopen and
+  consume one part at a time. The large `OfflineTable` retains only thin dispatch.
+
+`ObjectDocumentFileReader.inspect` and `read` now share their existing metadata
+and grid preflight through a private prepared-read struct. Inspection does not
+decode value windows; it does not authenticate value hashes. The existing
+schema owner exposes a bounded parser factory and enforces the stock 1,000-
+typed-path ceiling for writer inputs as well. No owner per JSON declaration
+or nested type combination is introduced.
+
+Root independently executed 86 focused DEBUG, 133 focused RELEASE and 2,194
+full non-release examples; eight fresh bidirectional native/library stock
+cases; five fresh whole-part writer regressions; four retained-stock reader
+profiles; the example; and format/syntax/diff checks. The bounded hostile
+verdict is ROBUST. Luna implementation and static review remain correlated
+supporting evidence, not independent runtime verification. Exact identities,
+commands, qualified REDs, failed-route corrections and decay conditions are
+recorded in the capability frontier.
+
+The accounting policy includes complete pending document owners before any
+are retained, but measures them after decoding the current mark. It does not
+establish allocator/RSS or decoder-transient peak bounds. Quiescent input is
+required; per-mark metadata/grid work may repeat. Performance stays parked.
+Mixed Object/scalar table batches, windows and PK candidate delivery remain
+the next adapter. Large legacy shared type/substream planning, physical I/O
+and leaf-codec responsibilities still need decomposition. Refresh the affected
+gates after owner/dispatch/profile/budget/runtime/toolchain changes rather
+than inferring behavior preservation from file count alone.
