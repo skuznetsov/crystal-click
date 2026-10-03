@@ -123,7 +123,6 @@ describe "W136 declared FixedString(N) Object schema" do
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.fixed_string(0x0100_0000) }
 
     unsupported_types = [
-      CrystalClick::BinaryDataType.enum8([{"neg", -1_i16}, {"pos", 1_i16}]),
       CrystalClick::BinaryDataType.nullable(w136_fixed_type(3)),
       CrystalClick::BinaryDataType.array(w136_fixed_type(3)),
       CrystalClick::BinaryDataType.map(CrystalClick::BinaryDataType.primitive("String"), w136_fixed_type(3)),
@@ -157,7 +156,6 @@ describe "W136 declared FixedString(N) Object schema" do
       "JSON(n Nullable(FixedString(3)))",
       "JSON(n Array(FixedString(3)))",
       "JSON(n FixedString(2147483648))",
-      "JSON(n Enum8('neg' = -1))",
       "JSON(n FixedString(3)))",
       "JSON(n FixedString(3)",
     ].each do |declaration|

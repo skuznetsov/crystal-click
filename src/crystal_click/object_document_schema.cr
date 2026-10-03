@@ -60,6 +60,11 @@ module CrystalClick
       typed_paths.each do |path, type|
         budget.visit_node(2)
         validate_path!(path)
+        metadata_count = type.metadata_entry_count.to_u64
+        if metadata_count > 0_u64
+          budget.preflight_children(metadata_count)
+          metadata_count.times { budget.visit_node(2) }
+        end
         type_bytes = ObjectTypedFieldType.byte_size_for(type) ||
                      raise ArgumentError.new("typed JSON schema admits only supported nominal scalar types")
         if rendered_entry_count > 0_u64
@@ -70,7 +75,7 @@ module CrystalClick
         rendered_path_bytes = path.bytesize.to_u64
         rendered_path_bytes = checked_add(rendered_path_bytes, 2_u64) if quoted
         declaration_bytes = checked_add(declaration_bytes, rendered_path_bytes)
-        declaration_bytes = checked_add(declaration_bytes, checked_add(1_u64, type_bytes.to_u64))
+        declaration_bytes = checked_add(declaration_bytes, checked_add(1_u64, type_bytes))
         raw_key_bytes = checked_add(raw_key_bytes, path.bytesize.to_u64)
       end
       declaration_bytes = checked_add(declaration_bytes, 1_u64) if argument_count > 0_u64 # closing parenthesis

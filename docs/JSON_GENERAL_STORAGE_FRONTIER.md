@@ -15,8 +15,12 @@ six sampled widths; maximum-N admission is schema-only. W137 adds canonical
 bare declared Decimal(P, S) through the same shared schema and fixed-value/bulk
 owners. All legal P/S pairs have schema checks; stock part evidence covers
 nine witnesses across all four wire widths, with exact nominal parameters,
-scale-preserving text and signed literal bytes. The exact
-admitted profiles and executed gates are in their sections below. These do not widen
+scale-preserving text and signed literal bytes. W138 adds canonical bare
+declared Enum8/Enum16, exact nominal maps and opaque label bytes through one
+cohesive declaration owner and the existing fixed-value/bulk owners. Eight
+fresh native/library cells pass label, signed-byte and public-consumer checks;
+full-width map admission is schema evidence, not exhaustive physical coverage.
+The exact admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
 table integration. Older scalar JSON projections retain their existing
@@ -37,6 +41,10 @@ owners, not another exact declaration registered in the existing facades.
 General layouts, additional declared typed-field families and compositions,
 and broader MV/projection support remain open.
 Performance work remains parked.
+
+W138 transition: canonical bare declared Enum8/Enum16 is verified within the
+executed profile below over W137 `73914c8`. This does not admit wrappers,
+recursive fields, new physical layouts, enum arithmetic or broader MV/projections.
 
 ## Source anchor and compatibility boundary
 
@@ -4902,3 +4910,242 @@ transient/RSS/caller-retention ceilings or payload authentication.
 Decay on policy/schema/bulk/adapter, profile/limit/comparator/publication,
 source/runtime/toolchain changes or loss of retained evidence. Rerun affected
 positive/negative gates before reuse. The overarching goal remains active.
+
+## W138 sealed transition: canonical bare declared Enum8/Enum16
+
+Status: the sealed design is retained here; the executed certificate below
+now qualifies its bounded admission. Risk: CAUTION
+(persistent nominal declarations and shared parser admission). Base: W137
+`73914c8`; rollback is the atomic local W138 commit, without discarding other
+work. Performance and broad facade refactoring remain separate.
+
+Source reference is the clean separate shallow checkout
+`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-f86ca42b`, revision
+`f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`. DataTypeEnum.cpp:49-78 renders
+the canonical quoted-label/signed-code map; EnumValues.cpp:37-63 sorts normal
+maps by numeric code. DataTypeEnum.cpp:119-122 compares exact nominal names;
+SerializationEnum.h:12 inherits numeric binary transport and
+SerializationEnum.cpp:20-28/:137-139 resolves labels for text/JSON.
+WriteHelpers.h:340-410 escapes NUL, backspace, tab, newline, form-feed, CR,
+apostrophe and backslash. These are source anchors, not the runtime's build
+provenance. BinaryEnumDefinition is the existing full signed-width, owned
+opaque-label authority; the smaller Tuple declaration parser is not reused.
+Inherited SerializationNumber.cpp:300-367 does raw little-endian binary
+transport without map-membership checks. This is distinct from Enum text
+input validation and is why W138 does not broaden the global raw-value codec.
+
+Root executed an isolated pinned-runtime discriminator before production:
+`/private/tmp/crystal-click-w138-root.RklO5g/probe_enum.sh`, exit 0. Stock
+accepted declared JSON Enum8/Enum16 labels containing comma, equals,
+parentheses, backtick, apostrophe, backslash and NUL, sorted field/code names
+canonically, produced literal signed extrema RowBinary
+`80008000ff7f7f0080`, exact label hex and actual CHECK=1. Runtime remains
+26.10.1.1201/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028` with the
+previously pinned SHA-256. This probe is not whole-consumer qualification.
+
+Intended admission:
+
+- Canonical bare Enum8/Enum16, signed-code ordered maps, exact spacing,
+  minimal signed decimals and canonical label escapes. Full legal maps up to
+  256/65536 entries remain eligible with adequate explicit logical limits.
+  Default-budget refusal is not a semantic smaller-map cap.
+- Preserve label bytes, signed code, width and the complete nominal map.
+  Constructors and declaration parsing share type admission; same raw bytes
+  with changed labels/codes or an Int8/Int16 alias do not become equal types.
+- One cohesive Enum declaration owner performs non-copying preflight and
+  owned materialization only after node/element/byte budget admission. Schema
+  sizing/rendering uses allocation-free immutable map accessors. The outer
+  JSON argument/option scanner respects single-quoted escapes and only treats
+  top-level equals as an option separator.
+- Existing fixed-value/bulk and normalized Object writer/reader/consumer
+  owners provide transport; no per-map/per-width facade branch or codec.
+
+Still rejected: SQL aliases/implicit values/relative-value sugar, noncanonical
+map spelling/order, malformed or duplicate labels/codes, wrappers and recursive
+fields. No new physical layouts, generic-schema or multi-Object writer,
+MV/projection surface, enum arithmetic or undeclared-code validation claim.
+
+Plan and discriminators:
+
+1. Add W138 schema/root specs; root runs schema RED on W137 before source edits.
+2. Extend ObjectTypedFieldType/ObjectDocumentSchema/Parser and one Enum owner.
+   Bounded consumer inventory `rg -n 'ObjectTypedFieldType|ObjectDocumentSchema'
+   src/crystal_click` identifies writer/schema validation, ObjectColumnReader,
+   table Object adapter and offline Object materializer/normalization.
+3. Run focused DEBUG, adjacent RELEASE and complete unique-spec inventory in
+   disjoint serial non-release groups with isolated cache/resource guards.
+4. Run four native plus four library-owned cells (String 0/1 × Dynamic
+   BASIC/COMPACT), exact type/label/literal-byte channels, actual CHECK for all,
+   ATTACH for library-owned parts, full/middle/zero file and column windows,
+   catalog owned reread, table windows and UInt64-PK candidate/residual checks.
+   Seed map/code/label/width/endian, serializer/grid/CHECK/truncation controls.
+5. Run fresh unchanged W137/W136/W135/W133/W132 stock regressions, root hostile
+   review and exact relevant-path atomic commit after the observed DoD.
+
+Likeliest failure: quoted delimiter/escape labels corrupt JSON splitting or
+nominal map identity silently collapses to signed integer storage. Guard:
+native escaped-label/raw-code witnesses plus same-byte map-drift refusal before
+publication/callbacks. Budget falsifiers include complete max-width maps with
+explicit sufficient limits and lower byte/node/element ceilings; logical limits
+are not an RSS/allocation/performance certificate. Declared schema-family
+coverage is not exhaustive physical-map/layout coverage. Verification and
+adversary evidence will be recorded below at the final source state.
+
+## W138 declared Enum Object fields — executed certificate (2026-10-03)
+
+VERIFIED within the profile below over W137 `73914c8`; the overall
+paired-types/MV/projections goal remains active. Canonical bare Enum8/Enum16
+now shares schema admission and the existing fixed-value/bulk, whole-part
+writer and public consumers. One ObjectEnumDeclaration owner/file owns map
+grammar, preflight and direct rendering; there is no new leaf codec,
+per-map/per-width class or physical facade branch. BinaryEnumDefinition
+remains the immutable full signed-width/opaque-label authority.
+
+Nominal identity includes width and the complete label/code map, not only raw
+Int8/Int16 storage. Canonical maps have strictly increasing signed codes,
+minimal signed decimal spelling, exact spacing and the eight stock escapes
+for NUL, BS, tab, LF, FF, CR, apostrophe and backslash. Labels are opaque
+bytes; delimiters, UTF-8, empty labels and invalid UTF-8 have schema checks.
+Both full 256-entry and 65,536-entry maps pass constructor/parser tests with
+sufficient explicit logical limits. No smaller semantic map cap is introduced;
+these full-domain and invalid-UTF-8 checks are not native physical-map evidence.
+Malformed, duplicate, aliased, noncanonical and wrapped declarations remain
+refused. The outer argument/option scanner respects quoted label escapes;
+label commas, parentheses, backticks and equals do not split Object fields.
+
+The parser preflights each map's nodes, edges and two known decoded-label
+buffers before proportional map materialization. Constructor sizing/rendering
+uses the immutable descriptor's byte accessors, not an intermediate cached
+type name. Exact and one-under byte/node/element tests cover individual maps
+and cumulative admission across two maps in both constructor and parser.
+This is per-map admission plus aggregate logical accounting, not a proof that
+all future fields are admitted before any allocation or an RSS/transient bound.
+Public Preflight metadata and its borrowed mutable bytes are rescanned for
+tag, count, decoded-label bytes and span before entry-array allocation, with
+a second metadata check after materialization. No concurrent-mutation or
+snapshot guarantee is added.
+
+Root reproduced a same-span escape-to-raw mutation: replacing `\\n` with two
+raw bytes kept tag/count/span but admitted more decoded bytes than the old
+preflight. The independent tiny probe failed before hardening and passes
+afterward; the spec also refuses forged span metadata. This was a public-helper
+boundary defect, not a demonstrated interleaving in synchronous schema parsing.
+Initial compiler/test failures (reserved local name, stale helper call, wrong
+expected plan exception) were corrected before final gates. The first stock
+attempt failed only on unquoted synthetic catalog identifiers; its fixture
+was corrected to the existing backtick convention without widening catalog
+parsing. The failed attempts are retained and are not final certificates.
+
+Eight fresh cells cover native/library × ordinary String 0/1 × Dynamic
+BASIC/COMPACT: hashed Wide, LZ4, Object V3/Dynamic V3, one shared MAP bucket,
+Default serializers, plain adaptive .mrk2 and primary.idx. Dynamic COMPACT
+does not mean Compact parts. Two separately authored seven-entry maps cover
+signed extrema, negative and positive asymmetric codes, zero, empty/UTF-8/
+punctuation labels and all eight escapes. Native JSONEachRow, canonical map
+declarations, row labels and signed little-endian fixtures are separate
+literals. Declared String, Dynamic Int64 and shared String spill remain
+neighbors; 16-byte frames force compressed-fragment boundaries.
+
+All eight cells pass actual stock CHECK=1; the four library-owned parts also
+pass ATTACH. Full and PK SQL compare nominal map/type, labels and independent
+RowBinary. File/column full/middle/zero windows, catalog owned values/reread,
+table full/windows and offsets pass. The physical grid is [2,2,2,1], primary
+keys [1,3,5,7,7]; PK=6 delivers whole candidate keys [5,6], and application
+residual filtering selects 6. Root consumer specs reject plan/value map drift
+before publication with no target/staging output, and later-part map drift
+before any callback even when that part's candidate selection is empty.
+
+Eleven seeded comparator controls reject changed Enum8 signed bytes,
+reversed Enum16 endian, Int8/Int16 nominal aliases, label-only/code-only map
+drift with unchanged raw bytes, wrong label output, Sparse metadata, wrong
+CHECK, truncated RowBinary and wrong grid with the same seven-row total.
+These establish comparator sensitivity, not stock corrupted-part admission.
+Root's separate Ruby checker decodes all fourteen literal signed-code
+witnesses without Crystal codecs and issues fresh stock raw/label/CHECK
+queries against every retained store. It passes all eight cells.
+
+Source is the separate unbuilt shallow f86ca42b checkout identified in the
+seal above. Runtime is ClickHouse local 26.10.1.1201, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, executable SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The oracle verifies hash/version/build before stock production. This is not
+executable qualification of current master or source f86ca42b. Inherited
+numeric binary transport remains raw little-endian storage without an Enum
+domain-membership check; text validation and arithmetic are distinct claims.
+
+Root executed the following serial final-source gates:
+
+- Schema RED on unchanged W137: five examples, four expected unsupported
+  errors, no failures, guard exit 1. Native discriminator passes, exit 0.
+- Independent mutable-preflight probe: observed RED, then GREEN, guard exit 0.
+- Focused DEBUG: 72 examples, zero failures/errors/pending, guard exit 0.
+- Adjacent RELEASE: 197 examples, zero failures/errors/pending, guard exit 0.
+- Complete inventory: 361 sorted unique specs in 16 disjoint non-release
+  groups, 2,280 examples; all groups and parent guard pass. Not a combined
+  process or complete RELEASE certificate.
+- Fresh eight-cell W138 stock matrix and eleven seeded controls pass, exit 0.
+  Retained root: `/private/tmp/crystal-click-object-enum-w138.632chP`.
+- Independent Ruby literal/live-stock checker passes, exit 0.
+- Fresh unchanged W137/W136/W135/W133/W132 stock regressions all pass under
+  the serial parent guard, exit 0. Retained roots, respectively:
+  `crystal-click-object-decimal-w137.EfBeLl`,
+  `crystal-click-object-fixed-string-w136.3aK6B0`,
+  `crystal-click-object-identifiers-w135.ODdvfS`,
+  `crystal-click-object-dates-w133.vkGuFZ` and
+  `crystal-click-object-numeric-w132.gDWHci`, all under `/private/tmp`.
+- Formatter --check, shell syntax, source fingerprint checks and diff checks pass.
+
+Retained root evidence: `/private/tmp/crystal-click-w138-root.RklO5g`.
+`run_specs.sh focused` selects fifteen schema/root specs: W128 schema,
+W131/W132/W133/W135/W136/W137/W138 schema/root pairs. `release` adds W130
+table/offline/root, W129 catalog/column/root, W128 writer/root, offline
+catalog, lazy window and W87 table/catalog projection specs (27 files).
+`full` asserts 361 unique files and complete sixteen-group selection.
+Replay uses Crystal 1.21.0, LLVM 22.1.8 AArch64, /opt/homebrew/bin/crystal,
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk,
+TMPDIR=/private/tmp and isolated CRYSTAL_CACHE_DIR. Root uses the cogni-ml
+run_safe.sh guard, COGNI_RUN_SAFE_MIN_FREE_PCT=50,
+RUN_SAFE_PASSTHROUGH_STDIO=1, --single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace. Specs use 600-second/32768-MiB
+guards; release adds --release. Full uses --no-debug and a 900-second guard.
+Stock replay uses CRYSTAL_BIN and CLICKHOUSE_BIN as pinned above,
+W138_KEEP_TMP=1 bash scripts/check_object_enum_w138.sh, also with a
+900-second/32768-MiB guard. `run_regressions.sh` runs the five unchanged
+wrappers serially with KEEP_TMP=1 and pipefail.
+
+SHA-256 evidence index (files under the retained root unless noted):
+
+```text
+8759cee8e95de2af2c39dfeb8835ef4d6abb9b01fef7d32c3e68f749285014d1  schema-red.log
+c33ea0e8fe6489139cf57300b6271d9f5bf83bce4f0556fbe9f4e54fdb7ff2b9  preflight-mutation-red.log
+8bc9c799ba4960fa38c76e6fef9519b35abf84c10bec00eb045cafd8d161480a  preflight-mutation-green.log
+4bbb8fd476ea55608b19532949e91ac28a0913e47a5f0047f2bd663ba3c41745  focused-debug-final.log
+653e4bc62f9fbc8918a8625f930410cbfe54b1eafc1cdb56073433e851b2310a  adjacent-release-final.log
+60bda6e2de0986881f3aec634769c5b45efc4b4ebd6c0e71510bf6fc3c48d77d  full-debug-final.log
+70ab922c18c10d1be6202e4f352ae2dc47b25369315eadd4ce0efec13041e466  stock-oracle-final.log
+8d66d49dc2a7341cde0802cfdca86bb898897564bdf3a66c799c6385ebde446e  literal-check-final.log
+885dfc8820d94533913144d4ea1cebcb16207a1e997c259fd9c3146d1593ea00  regressions-final.log
+b8a68a6685913b339ae35361f90928bc39a810519ca060013c96c9b061c52029  final-source-sha256.txt
+441623da493e37c79739c97c8bf9354ad68e70b2b941ee83eaddd03cbd0ab7e1  spec-inventory.txt
+533b821c35bee3dc4215928c0cc4d35fa7a150b4301047a80bd9b3e650a1e1c6  oracle-root/fixture_manifest.json
+```
+
+Root scoped hostile verdict: ROBUST. Root inspected final policy/parser,
+nominal/budget/publication boundaries, reproduced and rejected the strongest
+helper mutation counterexample, then independently executed positive,
+seeded-negative and neighboring stock gates. Luna implementation and static
+reviews are correlated support, not an independent runtime certificate.
+The packet indexes evidence; hashes and test counts alone do not prove the
+substantive compatibility claim.
+
+Continuation: parameterized temporal and recursive declared fields remain
+open. Other Object versions/layouts, Compact/Sparse parts, wrappers, BFloat16,
+arbitrary-schema/multi-Object writers, whole-Object projection reads and
+broader MV transformations are not admitted by W138. Legacy facade
+decomposition is unfinished; performance remains parked. Full schema domains
+do not promote untested physical maps or layouts. Offline candidates do not
+prove server Active state or snapshot consistency; logical budgets do not
+certify RSS, transient allocation, caller retention or authentication.
+Decay on schema/policy/bulk/adapter, limit/profile/comparator/publication,
+source/runtime/toolchain changes or loss of retained evidence. Reexecute
+affected positive and negative gates before reuse; the overall goal stays active.

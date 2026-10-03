@@ -33,16 +33,30 @@ module CrystalClick
     # the caller charges its codec budget.
     struct Resolution
       getter byte_size : Int32
+      getter enum_entry_count : UInt64
+      getter decoded_label_bytes : UInt64
 
       @tag : UInt8
       @parameter : Int32
       @scale : Int32
+      @enum_preflight : ObjectEnumDeclaration::Preflight?
 
-      def initialize(@tag : UInt8, @parameter : Int32, @byte_size : Int32, @scale : Int32 = 0)
+      def initialize(
+        @tag : UInt8,
+        @parameter : Int32,
+        @byte_size : Int32,
+        @scale : Int32 = 0,
+        @enum_entry_count : UInt64 = 0_u64,
+        @decoded_label_bytes : UInt64 = 0_u64,
+        @enum_preflight : ObjectEnumDeclaration::Preflight? = nil,
+      )
       end
 
       def materialize : BinaryDataType
-        if @tag == BinaryDataType::TAG_FIXED_STRING
+        if @tag == BinaryDataType::TAG_ENUM8 || @tag == BinaryDataType::TAG_ENUM16
+          entries = @enum_preflight.not_nil!.materialize_entries
+          @tag == BinaryDataType::TAG_ENUM8 ? BinaryDataType.enum8(entries) : BinaryDataType.enum16(entries)
+        elsif @tag == BinaryDataType::TAG_FIXED_STRING
           BinaryDataType.fixed_string(@parameter)
         elsif ObjectTypedFieldType.decimal_tag?(@tag)
           width_bits = case @tag
@@ -68,16 +82,19 @@ module CrystalClick
 
     # Return the canonical rendered byte count without allocating a
     # parameterized type name. This is used during declaration preflight.
-    def self.byte_size_for(type : BinaryDataType) : Int32?
+    def self.byte_size_for(type : BinaryDataType) : UInt64?
       if name = name_for(type)
-        return name.bytesize
+        return name.bytesize.to_u64
       elsif type.tag == BinaryDataType::TAG_FIXED_STRING
         width = type.fixed_size
         return nil unless width && width > 0 && width <= BinaryDataType::MAX_FIXED_STRING
-        fixed_string_byte_size(width)
+        fixed_string_byte_size(width).to_u64
       elsif decimal_tag?(type.tag)
         decimal = canonical_decimal_for_binary_type(type) || return nil
-        decimal_byte_size(decimal.precision, decimal.scale)
+        decimal_byte_size(decimal.precision, decimal.scale).to_u64
+      elsif type.tag == BinaryDataType::TAG_ENUM8 || type.tag == BinaryDataType::TAG_ENUM16
+        definition = canonical_enum_for_binary_type(type) || return nil
+        ObjectEnumDeclaration.byte_size_for(definition)
       else
         nil
       end
@@ -88,6 +105,12 @@ module CrystalClick
     def self.append_name(io : IO, type : BinaryDataType) : Nil
       if name = name_for(type)
         io << name
+        return nil
+      end
+      if type.tag == BinaryDataType::TAG_ENUM8 || type.tag == BinaryDataType::TAG_ENUM16
+        definition = canonical_enum_for_binary_type(type) ||
+                     raise ArgumentError.new("typed JSON schema has a noncanonical Enum descriptor")
+        ObjectEnumDeclaration.append_name(io, definition)
         return nil
       end
       unless type.tag == BinaryDataType::TAG_FIXED_STRING
@@ -127,9 +150,9 @@ module CrystalClick
     end
 
     # Resolve exactly the bounded nominal grammar used by Object typed fields:
-    # a static primitive name, canonical FixedString(N), or canonical
-    # Decimal(P, S). The returned stack value carries the byte charge and is
-    # materialized only after the parser has admitted that charge.
+    # a static primitive name, canonical FixedString(N), Decimal(P, S), or a
+    # canonical bare Enum8/Enum16 declaration. The returned stack value carries
+    # the byte and map-edge charges and is materialized only after admission.
     def self.resolve_slice(bytes : Bytes, first : Int32, after : Int32) : Resolution?
       return nil if first < 0 || after < first || after > bytes.size
 
@@ -145,9 +168,21 @@ module CrystalClick
         return Resolution.new(BinaryDataType::TAG_FIXED_STRING, width, fixed_string_byte_size(width))
       end
 
-      decimal = decimal_type_for_slice(bytes, first, after) || return nil
-      tag = decimal_tag_for_storage_width(decimal.storage_width)
-      Resolution.new(tag, decimal.precision, decimal_byte_size(decimal.precision, decimal.scale), decimal.scale)
+      if decimal = decimal_type_for_slice(bytes, first, after)
+        tag = decimal_tag_for_storage_width(decimal.storage_width)
+        return Resolution.new(tag, decimal.precision, decimal_byte_size(decimal.precision, decimal.scale), decimal.scale)
+      end
+
+      enum_preflight = ObjectEnumDeclaration.preflight_slice(bytes, first, after)
+      return nil unless enum_preflight
+      Resolution.new(
+        enum_preflight.tag,
+        0,
+        enum_preflight.byte_size,
+        enum_entry_count: enum_preflight.entry_count.to_u64,
+        decoded_label_bytes: enum_preflight.decoded_label_bytes,
+        enum_preflight: enum_preflight,
+      )
     end
 
     def self.decimal_tag?(tag : UInt8) : Bool
@@ -217,6 +252,13 @@ module CrystalClick
       end
     end
 
+    private def self.canonical_enum_for_binary_type(type : BinaryDataType) : BinaryEnumDefinition?
+      definition = type.enum_definition || return nil
+      return nil if type.tag == BinaryDataType::TAG_ENUM8 && definition.width_bits != 8
+      return nil if type.tag == BinaryDataType::TAG_ENUM16 && definition.width_bits != 16
+      definition
+    end
+
     private def self.decimal_byte_size(precision : Int32, scale : Int32) : Int32
       "Decimal(".bytesize + decimal_digits(precision) + 2 + decimal_digits(scale) + 1
     end
@@ -269,6 +311,7 @@ module CrystalClick
     end
 
     private def self.slice_equals?(bytes : Bytes, first : Int32, after : Int32, expected : String) : Bool
+      return false if first < 0 || after < first || after > bytes.size
       return false unless after - first == expected.bytesize
       expected_bytes = expected.to_slice
       expected_bytes.size.times do |index|

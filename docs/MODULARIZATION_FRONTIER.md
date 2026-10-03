@@ -9,8 +9,8 @@ W133 paired bare Date/Date32 Object fields over W132 `e043be7`; its bounded
 capability certificate remains in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 Catalog Object dispatch has a private materialization owner; W130 separately
 owns normalized table admission/accounting. W132 extracts one shared closed
-typed-field policy; W133, W135, W136 and W137 extend that policy without a new
-codec or class per declaration. W135 reuses fixed-value/bulk and existing Object
+typed-field policy; W133, W135, W136, W137 and W138 extend that policy without
+a new codec or class per declaration. W135 reuses fixed-value/bulk and existing Object
 writer/consumer owners for bare UUID/IPv4/IPv6; its capability evidence remains
 in the JSON frontier, not an architecture-completion claim. W136 adds
 bounded FixedString(N) resolution, preflight byte sizing and rendering to the
@@ -26,7 +26,18 @@ parameters; the wider global BinaryDecimalType transport grammar is not
 narrowed. Reader, writer and consumers reuse their existing fixed-value/bulk
 owners, without a new per-width codec, class or facade dispatch branch.
 W137's schema and stock qualification remain a capability certificate in the
-JSON frontier, not completion of the architecture refactor. No
+JSON frontier, not completion of the architecture refactor. W138 adds one
+cohesive ObjectEnumDeclaration owner/file for canonical Enum map scanning,
+budget preflight, materialization and direct name sizing/rendering. Its nested
+stack metadata borrows the declaration; the owner rescans tag/count/decoded
+bytes/span before entry-array allocation rather than trusting public preflight
+metadata. The shared policy dispatches to that owner; existing fixed-value/bulk,
+writer, reader and consumer owners remain unchanged. There is no per-map,
+per-width codec or new physical facade branch. Root passes 72 focused DEBUG,
+197 adjacent RELEASE and 2,280 complete-inventory examples, the eight-cell
+stock oracle and five unchanged stock regressions; scoped evidence and logical
+budget limitations remain in the JSON frontier. This is not completion of the
+legacy facade decomposition. No
 MV/projection or performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight

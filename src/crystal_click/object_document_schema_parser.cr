@@ -102,64 +102,79 @@ module CrystalClick
     end
 
     private def count_arguments(first : Int32, after : Int32) : Int32
-      count = 1
-      quoted = false
-      depth = 0
-      index = first
-      while index < after
-        byte = @bytes[index]
-        case byte
-        when '`'.ord.to_u8
-          quoted = !quoted
-        when ','.ord.to_u8
-          count += 1 if !quoted && depth == 0
-        when '('.ord.to_u8
-          unless quoted
-            depth += 1
-            unsupported!("nested parentheses are unsupported in Object JSON declarations") if depth > 1
-          end
-        when ')'.ord.to_u8
-          unless quoted
-            depth -= 1
-            unsupported!("unbalanced parentheses in Object JSON declaration") if depth < 0
-          end
-        end
-        index += 1
-      end
-      unsupported!("unterminated backtick path") if quoted
-      unsupported!("unbalanced parentheses in Object JSON declaration") unless depth == 0
-      count
+      scan_arguments(first, after) { |_argument| }
     end
 
     private def each_argument(first : Int32, after : Int32, &block : Range -> Nil) : Nil
-      quoted = false
+      scan_arguments(first, after) { |argument| yield argument }
+      nil
+    end
+
+    # Count and enumerate arguments through the same quote/depth state machine.
+    # Backticks protect Object paths; single quotes and backslash escapes protect
+    # opaque Enum labels so their commas/parentheses never split outer fields.
+    private def scan_arguments(first : Int32, after : Int32, &block : Range -> Nil) : Int32
+      backtick_quoted = false
+      label_quoted = false
+      label_escape = false
       depth = 0
+      count = 1
       argument_first = first
       index = first
       while index < after
         byte = @bytes[index]
-        if byte == '`'.ord.to_u8
-          quoted = !quoted
-        elsif !quoted && byte == '('.ord.to_u8
-          depth += 1
-        elsif !quoted && byte == ')'.ord.to_u8
-          depth -= 1
-        elsif !quoted && depth == 0 && byte == ','.ord.to_u8
-          yield Range.new(argument_first, index)
-          argument_first = index + 1
+        if label_quoted
+          if label_escape
+            label_escape = false
+          elsif byte == '\\'.ord.to_u8
+            label_escape = true
+          elsif byte == '\''.ord.to_u8
+            label_quoted = false
+          end
+        elsif backtick_quoted
+          backtick_quoted = false if byte == '`'.ord.to_u8
+        else
+          case byte
+          when '`'.ord.to_u8
+            backtick_quoted = true
+          when '\''.ord.to_u8
+            label_quoted = true
+          when '('.ord.to_u8
+            depth += 1
+            unsupported!("nested parentheses are unsupported in Object JSON declarations") if depth > 1
+          when ')'.ord.to_u8
+            depth -= 1
+            unsupported!("unbalanced parentheses in Object JSON declaration") if depth < 0
+          when ','.ord.to_u8
+            if depth == 0
+              yield Range.new(argument_first, index)
+              argument_first = index + 1
+              count += 1
+            end
+          end
         end
         index += 1
       end
+      unsupported!("unterminated backtick path") if backtick_quoted
+      unsupported!("unterminated quoted Enum label") if label_quoted
+      unsupported!("unbalanced parentheses in Object JSON declaration") unless depth == 0
       yield Range.new(argument_first, after)
+      count
     end
 
     private def parse_option(argument : Range) : {Symbol, Int32}?
       first, after = trim(argument.first, argument.after)
-      equal = find_byte(first, after, '='.ord.to_u8)
-      return nil unless equal
+      key_first = first
+      key_after = first
+      while key_after < after && !whitespace?(@bytes[key_after]) && @bytes[key_after] != '='.ord.to_u8
+        key_after += 1
+      end
+      cursor = key_after
+      while cursor < after && whitespace?(@bytes[cursor])
+        cursor += 1
+      end
+      return nil unless cursor < after && @bytes[cursor] == '='.ord.to_u8
 
-      key_first, key_after = trim(first, equal)
-      value_first, value_after = trim(equal + 1, after)
       key = if slice_equals?(key_first, key_after, "max_dynamic_paths")
               :max_dynamic_paths
             elsif slice_equals?(key_first, key_after, "max_dynamic_types")
@@ -167,6 +182,7 @@ module CrystalClick
             else
               unsupported!("unsupported Object JSON capacity option")
             end
+      value_first, value_after = trim(cursor + 1, after)
       value = parse_decimal(value_first, value_after)
       {key, value}
     end
@@ -215,6 +231,11 @@ module CrystalClick
       resolution = ObjectTypedFieldType.resolve_slice(@bytes, type_first, after) ||
                    unsupported!("typed Object JSON fields admit only supported nominal scalar types")
       budget.charge_wire_bytes((resolution.byte_size + 1).to_u64)
+      if resolution.enum_entry_count > 0_u64
+        budget.preflight_children(resolution.enum_entry_count)
+        budget.charge_wire_bytes(checked_multiply(resolution.decoded_label_bytes, 2_u64))
+        resolution.enum_entry_count.times { budget.visit_node(2) }
+      end
       type = resolution.materialize
 
       ParsedField.new(path, type)
@@ -239,7 +260,7 @@ module CrystalClick
         size = checked_add(size, path.bytesize.to_u64)
         size = checked_add(size, 2_u64) if path.includes?('.') || reserved_path?(path)
         type_bytes = ObjectTypedFieldType.byte_size_for(type) || unsupported!("unsupported Object JSON typed field type")
-        size = checked_add(size, checked_add(1_u64, type_bytes.to_u64))
+        size = checked_add(size, checked_add(1_u64, type_bytes))
         argument_count += 1_u64
       end
       if argument_count > 0_u64

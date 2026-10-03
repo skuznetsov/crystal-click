@@ -6,8 +6,9 @@ the W129 bounded Object catalog integration, W130 mixed table delivery
 `4b18812`, W131 declared Int64 `02dd99f`, W132 paired numeric declared
 fields `e043be7`, W133 paired declared Date/Date32 `2e150f4`, W135
 paired bare declared UUID/IPv4/IPv6 `ffa5730`, W136 paired bare
-declared FixedString(N) `700d5b8`, and W137 canonical bare declared
-Decimal(P, S) over that checkpoint in
+declared FixedString(N) `700d5b8`, W137 canonical bare declared
+Decimal(P, S) `73914c8`, and W138 canonical bare declared Enum8/Enum16 over
+that checkpoint in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 W134 extracts nine existing Array/Map row/slice owners to separate files,
 preserving their exact bodies and API. Root passed 22 focused DEBUG, 37 adjacent
@@ -28,6 +29,13 @@ types, scale-preserving text, independent RowBinary, actual CHECK for all
 cells and ATTACH for the four library-owned parts. The JSON frontier retains
 the complete gate record and residual scope; schema coverage of all 3,002
 legal precision/scale pairs is not exhaustive physical part qualification.
+W138 root gates pass 72 focused DEBUG, 197 adjacent RELEASE and 2,280
+complete-inventory examples (361 unique specs in 16 disjoint non-release
+groups). Eight fresh native/library Enum cells pass nominal maps, labels,
+literal signed RowBinary, actual CHECK and four library ATTACH operations;
+an independent Ruby checker rechecks all eight stores without Crystal codecs.
+Five fresh unchanged neighboring stock oracles pass. Full-width map admission
+(256/65,536 entries) is schema evidence, not exhaustive physical-map coverage.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -84,8 +92,14 @@ source/runtime identities and executed evidence.
   nine P/S witnesses across all four storage widths in eight fresh cells.
   Raw signed coefficients, precision, scale and width stay exact; this is
   storage interoperability, not Decimal arithmetic/conversion/rounding.
+  W138 adds canonical bare Enum8/Enum16 with exact width and complete
+  label/code-map identity, all eight canonical escapes and opaque label bytes.
+  Existing fixed-value/bulk owners provide paired writer/reader transport;
+  stock part evidence covers seven-entry maps with signed extrema across the
+  same eight cells. Same-width integer aliases and changed maps are not equal.
+  Full 256/65,536-entry maps remain eligible with sufficient logical budgets.
   The shared declared-field policy now admits 21 static nominal types plus
-  the FixedString and Decimal parameterized families. See
+  the FixedString, Decimal and Enum parameterized families. See
   [the example](../examples/write_object_document_part.cr) and
   [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
@@ -118,7 +132,7 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W137 provide
+1. **General JSON compatibility.** W117-W138 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
@@ -132,9 +146,10 @@ source/runtime identities and executed evidence.
    text, nominal and byte-order evidence; W136 adds canonical bare
    FixedString(N) with bounded parameter grammar and independent fixed-byte
    evidence; W137 adds canonical bare Decimal(P, S) with exact persisted P/S
-   identity and independent signed coefficients. Other temporal, Enum and
-   recursive declared-field families remain open within Object, even where
-   standalone part support exists. The older scalar typed-path behavior is
+   identity and independent signed coefficients; W138 adds canonical bare
+   Enum8/Enum16 with nominal full-map and independent label/signed-byte checks.
+   Other temporal and recursive declared-field families remain open within
+   Object, even where standalone part support exists. The older scalar typed-path behavior is
    unchanged. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required, and whole-Object projection child reads remain refused. See
@@ -174,10 +189,11 @@ source/runtime identities and executed evidence.
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
-   bare Date/Date32, UUID/IPv4/IPv6, FixedString(N) and Decimal(P, S). The next
-   proposed lanes are Enum and parameterized temporal fields, not yet admitted
-   Object support. Reuse existing leaf owners only after bounded declaration
-   parsing, semantic parameter identity and independent physical qualification.
+   bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S) and Enum8/Enum16.
+   The next proposed lanes are parameterized temporal and recursive declared
+   fields, not yet admitted Object support. Reuse existing leaf owners only
+   after bounded declaration parsing, semantic parameter identity and
+   independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary
    and actual stock CHECK.
    Address parameterized/recursive field grammar and semantic identity, then
