@@ -60,7 +60,8 @@ module CrystalClick
       typed_paths.each do |path, type|
         budget.visit_node(2)
         validate_path!(path)
-        type_name = typed_type_name(type)
+        type_bytes = ObjectTypedFieldType.byte_size_for(type) ||
+                     raise ArgumentError.new("typed JSON schema admits only supported nominal scalar types")
         if rendered_entry_count > 0_u64
           declaration_bytes = checked_add(declaration_bytes, 2_u64)
         end
@@ -69,7 +70,7 @@ module CrystalClick
         rendered_path_bytes = path.bytesize.to_u64
         rendered_path_bytes = checked_add(rendered_path_bytes, 2_u64) if quoted
         declaration_bytes = checked_add(declaration_bytes, rendered_path_bytes)
-        declaration_bytes = checked_add(declaration_bytes, checked_add(1_u64, type_name.bytesize.to_u64))
+        declaration_bytes = checked_add(declaration_bytes, checked_add(1_u64, type_bytes.to_u64))
         raw_key_bytes = checked_add(raw_key_bytes, path.bytesize.to_u64)
       end
       declaration_bytes = checked_add(declaration_bytes, 1_u64) if argument_count > 0_u64 # closing parenthesis
@@ -211,7 +212,8 @@ module CrystalClick
           else
             io << path
           end
-          io << ' ' << typed_type_name(@typed_types[path])
+          io << ' '
+          ObjectTypedFieldType.append_name(io, @typed_types[path])
           first = false
         end
         io << ')' unless first
@@ -238,10 +240,6 @@ module CrystalClick
                        "table", "select", "cube", "rollup", "recursive", "from", "top", "values",
                      }.any? { |word| ascii_case_equal?(path, word) }
       false
-    end
-
-    private def typed_type_name(type : BinaryDataType) : String
-      ObjectTypedFieldType.name_for(type) || raise ArgumentError.new("typed JSON schema admits only supported nominal scalar types")
     end
 
     private def validate_path!(path : String) : Nil

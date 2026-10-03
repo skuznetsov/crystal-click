@@ -9,7 +9,9 @@ qualified in both directions for String 0/1 × BASIC/COMPACT. W133 adds bare
 declared Date/Date32 with separate calendar and raw-carrier evidence. W135 adds
 bare declared UUID/IPv4/IPv6 through the existing fixed-value/bulk owners,
 qualified for the same eight native/library profile cells with independent
-nominal/text/byte-order evidence. The exact
+nominal/text/byte-order evidence. W136 adds canonical bare declared
+FixedString(N) with nominal width identity and paired exact-byte evidence at
+six sampled widths; maximum-N admission is schema-only. The exact
 admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
@@ -4409,3 +4411,228 @@ complete facade modularity or stock-reader speed. Performance remains parked.
 Decay on policy/schema/bulk/adapter, profile/limits, comparator/publication,
 source/runtime/toolchain or loss of retained evidence; refresh the affected
 positive and negative gates before reuse. The overarching goal remains active.
+
+## W136 declared FixedString(N) Object fields — pre-implementation seal
+
+Anchor: clean W135 `ffa5730`. This slice admits the parameterized bare
+FixedString family, not one fixture width or a general nested type parser.
+The descriptor already enforces `1 <= N <= 0xFFFFFF`; its equality includes N,
+and `BinaryValue.fixed` requires exactly N owned payload bytes. Existing bulk
+owners transport fixed-width leaves. The Object admission policy is the
+missing constructor/parser boundary. Root's consumer search identifies only
+ObjectDocumentSchema and ObjectDocumentSchemaParser as policy consumers.
+
+Root inspected fresh source `f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`:
+DataTypeFixedString.cpp:26-76 and its header enforce the same range and retain
+N in the type name/equality; SerializationFixedString.cpp:94-135 transports
+N bytes per value; ColumnFixedString.cpp:118-129 pads native short strings
+with NUL and rejects oversized ones. JSONExtractTree.cpp:487-529 delegates
+typed JSON strings to that column. Library raw inputs remain exactly N bytes;
+no implicit padding, text conversion or missing-field synthesis is added.
+The pinned 26.10.1.1201 executable is separate from this unbuilt source.
+Root's pre-production native probes in
+`/private/tmp/crystal-click-w136-root.gDmv2d/probe-fixed-string.log` and
+`probe-fixed-schema.log` pass widths 1/3/17 with empty/NUL/UTF-8 padding,
+literal raw RowBinary, actual CHECK=1 and oversized-input refusal. Native
+maximum-N schema admission passes with explicit
+`allow_suspicious_fixed_string_types=1`; N=0, 16777216 and 2147483648 are
+refused. This schema-only probe does not allocate a maximum-width payload.
+Source `validateDataType` requires the suspicious-type opt-in for N>256;
+the library descriptor range does not imply default server DDL admission.
+
+Design: one shared nominal policy owns admission, non-allocating declaration
+size, rendering and bounded token resolution. Keep static primitive names;
+render N only after output budget admission. Parse canonical unsigned decimal
+N (no sign, leading zero, zero, overflow or excess argument), with at most one
+parenthesis level at argument scanning and no recursive admission. Bare
+FixedString(N) uses the existing fixed payload/bulk/whole-part consumers.
+Wrappers, aliases, other parameterized families, containers and malformed
+grammar remain refused. Cover widths across digit and payload boundaries and
+the maximum schema N without allocating a maximum payload. Parameter-dependent
+byte budgets must admit the exact cutoff and refuse one byte less.
+
+Risk: CAUTION (persistent format and parser admission). Rollback is one
+exact-scope atomic commit over `ffa5730`. Strongest failure: N is lost or an
+argument scanner admits malformed/nested syntax while round-trips remain
+self-consistent. Guard with different-N nominal mismatches, independently
+authored native padding/raw RowBinary, constructor/parser budget cutoffs,
+publication refusal and later-part drift before callbacks.
+
+Execution: Luna owns test-first schema/consumer specs and the policy/schema/
+parser implementation; a separate Luna owns the stock oracle only. Root owns
+docs and serial guarded execution, first qualifying RED on unchanged
+production and a native stock probe before authorizing implementation. DoD:
+focused DEBUG and adjacent RELEASE `crystal spec` with single-module/one-thread/
+system linker; full unique sorted spec inventory in disjoint non-release
+groups; fresh W136 native/library String 0/1 x BASIC/COMPACT oracle with actual
+ATTACH/CHECK, literal RowBinary and file/column/catalog/table/PK consumers;
+unchanged W135/W133/W132 regressions; formatter, shell syntax and diff checks.
+Expected signals are zero failures and comparator controls that fail when
+seeded, not merely present evidence fields. Source/runtime identities and
+the executed command/output witnesses will be recorded after the gates.
+The paired-types/MV/projections goal remains active; performance is parked.
+
+## W136 declared FixedString(N) Object fields — executed certificate
+
+Executed on 2026-10-03 over W135 `ffa5730`. The shared policy, schema and
+parser admit canonical bare FixedString(N), N=1..16777215. Parameter width is
+nominal identity, not a String alias. The policy resolves tag/N/byte count
+without allocating a descriptor; the parser charges before materialization,
+and the constructor preflights retained paths and both declaration buffers
+before rendering. Argument scanning admits one parameter level, splits only
+top-level commas and refuses malformed, noncanonical or nested declarations.
+Existing fixed-value/bulk, physical reader, writer, table and catalog owners
+are reused without new per-width codecs or facade dispatch branches.
+
+Qualified physical profile: bare declared FixedString at literal widths
+1/3/16/17/31/257 alongside String, one Int64 Dynamic path and shared String
+spill; hashed Wide, Object V3/Dynamic V3, one-bucket shared MAP, Default
+serialization metadata, LZ4, plain adaptive marks and plain primary index.
+Seven independent native JSON/raw-byte rows cover empty input, NUL padding,
+embedded NUL, UTF-8 byte lengths and exact-width payloads. The physical grid is
+`[2,2,2,1]`, with index keys `[1,3,5,7,7]` including the final sentinel.
+String single-stream/with-size-stream x Dynamic BASIC/COMPACT is tested in
+both directions. Library raw values require exactly N bytes, with no implicit
+padding, text conversion or missing-field synthesis. N>256 stock DDL uses
+`allow_suspicious_fixed_string_types=1`; maximum-N evidence is schema-only,
+not a maximum-width payload or all-N physical qualification.
+
+The fresh source-only reference is
+`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-f86ca42b`, SHA
+`f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`, verified shallow/one reachable
+commit/clean. It has not been built. The independently pinned executable is
+ClickHouse 26.10.1.1201, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`,
+SHA-256 `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The oracle verifies this pin before running. These are distinct source and
+runtime identities, not current-master executable evidence.
+
+Root evidence directory: `/private/tmp/crystal-click-w136-root.gDmv2d`.
+Crystal 1.21.0 / LLVM 22.1.8 / AArch64, SDK
+`/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`, TMPDIR `/private/tmp`
+and isolated caches. All compiler/stock jobs ran serially under
+`/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh`, free-memory
+threshold 50%, 32768 MiB and the existing FD guard. These host guards do not
+certify library RSS or leak ceilings.
+
+- `red.log`: unchanged production refuses the new family in three of four
+  original schema examples; the negative guard passes, outer exit 1.
+- `probe-fixed-string.log`, `probe-fixed-schema.log` and
+  `probe-fixed-default.log`: independent native raw/padding/type/CHECK and
+  maximum-N schema probes pass; default N=257 is observed refused without
+  the opt-in. No maximum-width payload is allocated.
+- `schema-consumers-green.log`: nine final formatted schema/root-consumer
+  examples pass. `focused-debug-final.log`: all eleven focused files pass
+  52 examples, zero failures/errors/pending, outer exit 0.
+- `adjacent-release.log`: 23 files, 177 examples, zero failures/errors/pending,
+  outer exit 0. Production/spec source did not change after these final gates.
+- `full-nonrelease-shards.log`: 357 unique sorted spec files, 15 disjoint
+  serial groups of at most 24, 2260 examples, zero failures/errors/pending,
+  outer exit 0. Root independently counted all fifteen successful result
+  rows and summed their example counts. Not a combined-process or full
+  RELEASE certificate. Existing duplicate `-lc`/deprecated `blocking`
+  warnings remain.
+- `stock-w136.log`: four fresh native and four library-owned cells pass
+  actual CHECK=1 (ATTACH for library parts), nominal SQL type/hex/byte length,
+  full/PK SQL and independently authored exact full/selected RowBinary.
+  Public file/column full/middle/zero, separately copied catalog ownership
+  and reread, table windows/offsets, full-granule PK candidates and exact
+  application residuals pass, outer exit 0. Nine seeded comparator controls
+  reject changed bytes, padding, UTF-8 count, wrong N, same-byte String alias,
+  Sparse metadata, wrong grid, CHECK=0 and truncated RowBinary. These establish
+  comparator sensitivity, not arbitrary corrupt-physical-part rejection.
+- Fresh unchanged W135/W133/W132 stock regressions pass their eight-cell
+  matrices and 12/7/6 comparator controls; W133's two raw Date32 extrema
+  transport cases also pass. `regressions.log` has outer exit 0.
+- Final source manifest verification, formatter, wrapper/runner shell syntax
+  and `git diff --check` pass.
+
+The completed stock root is
+`/private/tmp/crystal-click-object-fixed-string-w136.ntVV7Y`; regression roots
+are `crystal-click-object-identifiers-w135.hea2bS`,
+`crystal-click-object-dates-w133.6Bfi0Y` and
+`crystal-click-object-numeric-w132.b2ibvX`, all under `/private/tmp`.
+
+Runtime debugging rejected three oracle mistakes before qualification:
+nonexistent schema `typed_path_count` became the existing `typed_paths.size`;
+literal expected Dynamic Int64 RowBinary gained the required `0a` nominal
+descriptor; synthetic catalog column names gained stock-persisted backticks.
+No production parser or comparison was weakened. Root's independent
+`probe-dynamic-rowbinary.log` observes Dynamic `0a0b00000000000000` versus
+cast Int64 `0b00000000000000`; fresh source
+SerializationDynamic.cpp:755-779 and DataTypesBinaryEncoding.h:21 explain
+the difference. Actual stock metadata establishes the quoted column spelling.
+The final oracle matrix was rerun from a new root after all three corrections.
+Failed attempt logs/roots remain diagnostic evidence, not passing certificates.
+
+Final production/spec/oracle fingerprints:
+
+```text
+62a8ea6e6ae34253d6c4200c5af14b1e90699ada50ac65fca496432fd4ae2ec5  src/crystal_click/object_typed_field_type.cr
+ca0ebeade5cfe8550e3b8d8e8c1755088e35befe8d885a34b30c6ca453a30234  src/crystal_click/object_document_schema.cr
+f00078291e5bf9bf06764ef661b0306bb67daea3aec8c31b0031e48afa4c8d33  src/crystal_click/object_document_schema_parser.cr
+de1e458edbc032dfcb9b6b84e0f1106492c0b8b028e6e738d765a82dc4b7a5cd  spec/object_document_schema_w132_spec.cr
+2e6cca704c4669085ce847592e21523f4665c4d2096787efecc888ad4b15c998  spec/object_document_schema_w135_spec.cr
+41f0996d77c8c22a2de8ad132d01cb226b9227eca7a16b01f732ff3c7236b234  spec/object_document_schema_w136_spec.cr
+1f452ca555c6b46f9b2794575fa0eee930242fcb0d817c384e50c9f1877ee6c9  spec/object_fixed_string_w136_root_spec.cr
+5cc1baa4486593edf2110cb287d6ae9b0a4bd759a67ca4dccffe50215bae92f9  scripts/check_object_fixed_string_w136.cr
+3a3d4c0867bac51c74c812155a1497878473ea2630348cc2a92f981dd9d1264c  scripts/check_object_fixed_string_w136.sh
+```
+
+Evidence fingerprints relative to the root evidence directory:
+
+```text
+91d3d832845496347735d522181ba6419e4000fbb8f76468173f86eb2a88c05f  red.log
+d5a49697458442971b4654b3fbd1322062466b38952f43350a3fd27b46855040  focused-debug-final.log
+6a536e757b3b987523ec7c5b9e50c524a6c92ae3a25fad49741a3e368b27dad2  schema-consumers-green.log
+265427d5d1477d328b0a341071a806428c6babb26c0e9ab50dee64c4a7bd1662  adjacent-release.log
+2339d6d9b13b8a6227d9f25e75b947ca01cf4ecc780ac157292680ef95ba1a82  full-nonrelease-shards.log
+44c7d4905710f186244a2ecb9ab00fc74d5b3b158cbe4a4456bd35ea2ba906e6  stock-w136.log
+44488c82ce785cff86eec7153e97dffc3314c11b0dc1976a17124dde5b47d069  stock-w135-regression.log
+a8ed53b39332262ff9dd18b352a95a898ca0347345bdfc24f07445436b6cf79e  stock-w133-regression.log
+82644d5d804125e6b9c056594eb3dae9e1451b13f3ec78596ef274b194446250  stock-w132-regression.log
+c857b8b382b704fd843062a635be0abb878dff1227d746d80033d2754549b7a6  regressions.log
+5e0070668b1540ec7a2606c09aa20018469cb4d98efe3803be8b2efd4514f6b2  run_full_shards.sh
+0546a9e69478b699d0503027d34b055f547ee1a2914ad12833c26a2fec2013b3  run_regressions.sh
+1a8940dadad2818bbf48b077093d559bb57148e2fc689b17e17659846e392a07  probe-fixed-string.log
+8dbca6103ebbcdd8e307e9656a41362b7bd9ec96a4c921c9398439865fb4c984  probe-fixed-schema.log
+21f7fd12bed005b20ae5c00cb98cce00081a2602df5191868c36154254d7a2d1  probe-fixed-default.log
+d272fed6b8964c2d155266cc3b6a8ea635ed12bb386fc77836dc8dd62ee38a90  probe-dynamic-rowbinary.log
+f73438457d098bd68e04677bc2b6bc390c646d942f97a3a2e814c51c3c705316  source.sha256
+```
+
+Replay: use the SDK/TMPDIR/toolchain above and guard environment
+`COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1`.
+Specs use `--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`
+under 600-second/32768-MiB guards; RELEASE additionally uses `--release`.
+Focused DEBUG selects W136/W135/W133/W132/W131 schema/root pairs plus W128
+schema. Adjacent RELEASE additionally selects W130 table/offline/root, W129
+catalog/column/root, W128 writer/root, offline catalog, lazy window and W87
+table/catalog projection specs. The retained `run_full_shards.sh` verifies
+357 unique inputs from `rg --files spec -g '*_spec.cr' | LC_ALL=C sort`, runs
+15 consecutive disjoint non-release groups with `--no-debug` and asserts
+complete selection. Run it under the 900-second guard. The same wrapper
+guard runs `W136_KEEP_TMP=1 bash scripts/check_object_fixed_string_w136.sh`
+with CRYSTAL_BIN and CLICKHOUSE_BIN set to the pinned executables. The retained
+`run_regressions.sh` serially runs the unchanged W135/W133/W132 wrappers with
+KEEP_TMP=1 and pipefail. Recorded fingerprints are an evidence index, not
+proof that a test command or substantive claim passed.
+
+Root scoped hostile verdict: ROBUST within this profile. Independent review
+and executed gates challenge nominal N/String drift, malformed/overflowing
+grammar, exact and one-byte-short budgets, owned results, refusal before
+publication and later valid-part N drift before callbacks even when unselected.
+The literal bytes and corrected Dynamic descriptor are independent of the
+production codec; native padding is not inferred from library round-trips.
+Luna's implementation and static reviews are correlated support, not the
+runtime certificate. Passing this slice does not finish the overall engine.
+
+Residuals: Object Decimal/Enum, parameterized temporal and recursive declared
+grammars, wrappers, BFloat16, additional Object versions/layouts, Compact/Sparse
+parts, arbitrary-schema/multi-Object writers, whole-Object projections and
+broader MV execution remain open or refused. Offline candidates do not prove
+server Active state or snapshot consistency. Logical budgets and existing
+checks do not certify payload authentication, transient/RSS/caller-retention
+ceilings, full facade modularity or stock-reader speed. Performance is parked.
+Decay on changes to policy/schema/bulk/adapters, profile/limits, comparators,
+publication, source/runtime/toolchain or loss of retained evidence; rerun the
+affected positive/negative gates before reuse. The overarching goal is active.

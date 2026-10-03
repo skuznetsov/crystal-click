@@ -104,6 +104,7 @@ module CrystalClick
     private def count_arguments(first : Int32, after : Int32) : Int32
       count = 1
       quoted = false
+      depth = 0
       index = first
       while index < after
         byte = @bytes[index]
@@ -111,25 +112,39 @@ module CrystalClick
         when '`'.ord.to_u8
           quoted = !quoted
         when ','.ord.to_u8
-          count += 1 unless quoted
-        when '('.ord.to_u8, ')'.ord.to_u8
-          unsupported!("nested parentheses are unsupported in Object JSON declarations") unless quoted
+          count += 1 if !quoted && depth == 0
+        when '('.ord.to_u8
+          unless quoted
+            depth += 1
+            unsupported!("nested parentheses are unsupported in Object JSON declarations") if depth > 1
+          end
+        when ')'.ord.to_u8
+          unless quoted
+            depth -= 1
+            unsupported!("unbalanced parentheses in Object JSON declaration") if depth < 0
+          end
         end
         index += 1
       end
       unsupported!("unterminated backtick path") if quoted
+      unsupported!("unbalanced parentheses in Object JSON declaration") unless depth == 0
       count
     end
 
     private def each_argument(first : Int32, after : Int32, &block : Range -> Nil) : Nil
       quoted = false
+      depth = 0
       argument_first = first
       index = first
       while index < after
         byte = @bytes[index]
         if byte == '`'.ord.to_u8
           quoted = !quoted
-        elsif byte == ','.ord.to_u8 && !quoted
+        elsif !quoted && byte == '('.ord.to_u8
+          depth += 1
+        elsif !quoted && byte == ')'.ord.to_u8
+          depth -= 1
+        elsif !quoted && depth == 0 && byte == ','.ord.to_u8
           yield Range.new(argument_first, index)
           argument_first = index + 1
         end
@@ -201,10 +216,10 @@ module CrystalClick
       budget.charge_wire_bytes((path_after - path_first).to_u64)
       path = String.new(@bytes[path_first, path_after - path_first])
       validate_path_spelling!(path, quoted)
-      type_name = ObjectTypedFieldType.name_for_slice(@bytes, type_first, type_after) ||
-                  unsupported!("typed Object JSON fields admit only supported nominal scalar types")
-      budget.charge_wire_bytes((type_name.bytesize + 1).to_u64)
-      type = BinaryDataType.primitive(type_name)
+      resolution = ObjectTypedFieldType.resolve_slice(@bytes, type_first, type_after) ||
+                   unsupported!("typed Object JSON fields admit only supported nominal scalar types")
+      budget.charge_wire_bytes((resolution.byte_size + 1).to_u64)
+      type = resolution.materialize
 
       ParsedField.new(path, type)
     end
@@ -227,8 +242,7 @@ module CrystalClick
         size = checked_add(size, 2_u64) if argument_count > 0_u64
         size = checked_add(size, path.bytesize.to_u64)
         size = checked_add(size, 2_u64) if path.includes?('.') || reserved_path?(path)
-        type_name = ObjectTypedFieldType.name_for(type) || unsupported!("unsupported Object JSON typed field type")
-        type_bytes = type_name.bytesize
+        type_bytes = ObjectTypedFieldType.byte_size_for(type) || unsupported!("unsupported Object JSON typed field type")
         size = checked_add(size, checked_add(1_u64, type_bytes.to_u64))
         argument_count += 1_u64
       end
