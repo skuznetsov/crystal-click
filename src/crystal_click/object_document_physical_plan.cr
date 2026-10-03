@@ -186,6 +186,14 @@ module CrystalClick
       if depth > maximum_depth
         raise UnsupportedFormatError.new("physical stream type depth exceeds configured limit")
       end
+      # The physical Dynamic plan has no LowCardinality dictionary/index
+      # roles. Refuse the descriptor during this bounded recursive walk,
+      # before this planner's display-name bound and rendering step.
+      if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+        raise UnsupportedFormatError.new(
+          "physical Object Dynamic LowCardinality alternatives are not admitted"
+        )
+      end
       metadata = type.metadata_entry_count
       children = type.child_count
       elements = metadata.to_u64 + children.to_u64

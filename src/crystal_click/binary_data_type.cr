@@ -38,6 +38,7 @@ module CrystalClick
     TAG_ARRAY           =     0x1e_u8
     TAG_UNNAMED_TUPLE   =     0x1f_u8
     TAG_NAMED_TUPLE     =     0x20_u8
+    TAG_LOW_CARDINALITY =     0x26_u8
     TAG_NULLABLE        =     0x23_u8
     TAG_MAP             =     0x27_u8
     TAG_IPV4            =     0x28_u8
@@ -156,10 +157,17 @@ module CrystalClick
     end
 
     def self.nullable(child : BinaryDataType) : BinaryDataType
-      if child.tag == TAG_ARRAY || child.tag == TAG_MAP || child.tag == TAG_NULLABLE
-        raise ArgumentError.new("Nullable cannot directly contain Array, Map, or Nullable")
+      if child.tag == TAG_ARRAY || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY
+        raise ArgumentError.new("Nullable cannot directly contain Array, Map, Nullable, or LowCardinality")
       end
       new(TAG_NULLABLE, nil, [child] of BinaryDataType, [] of String, nil)
+    end
+
+    def self.low_cardinality(child : BinaryDataType) : BinaryDataType
+      unless BinaryLowCardinalityTypePolicy.admitted_child?(child)
+        raise ArgumentError.new("LowCardinality child type is not admitted by ClickHouse")
+      end
+      new(TAG_LOW_CARDINALITY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
     def self.tuple(children : Array(BinaryDataType), names : Array(String)? = nil) : BinaryDataType
@@ -187,8 +195,8 @@ module CrystalClick
     end
 
     def self.map(key : BinaryDataType, value : BinaryDataType) : BinaryDataType
-      if key.tag == TAG_NULLABLE
-        raise ArgumentError.new("Map key type cannot be Nullable")
+      if BinaryLowCardinalityTypePolicy.nullable_map_key?(key)
+        raise ArgumentError.new("Map key type cannot be Nullable or LowCardinality(Nullable(...))")
       end
       new(TAG_MAP, nil, [key, value] of BinaryDataType, [] of String, nil)
     end
@@ -263,6 +271,8 @@ module CrystalClick
         "Array(#{@children[0].name})"
       when TAG_NULLABLE
         "Nullable(#{@children[0].name})"
+      when TAG_LOW_CARDINALITY
+        "LowCardinality(#{@children[0].name})"
       when TAG_MAP
         "Map(#{@children[0].name}, #{@children[1].name})"
       when TAG_UNNAMED_TUPLE

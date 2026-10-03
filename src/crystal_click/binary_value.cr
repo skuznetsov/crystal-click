@@ -113,6 +113,19 @@ module CrystalClick
       end
     end
 
+    # LowCardinality is nominal in this logical value tree, but its row-value
+    # payload is exactly one value of the declared nested type. Dictionary and
+    # index streams belong to a separate physical serializer owner.
+    def self.low_cardinality(type : BinaryDataType, child : BinaryValue) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+        raise ArgumentError.new("LowCardinality value requires LowCardinality type")
+      end
+      unless child.type == type.child_at(0)
+        raise ArgumentError.new("LowCardinality child type does not match its descriptor")
+      end
+      new(type, nil, [child] of BinaryValue)
+    end
+
     def self.tuple(type : BinaryDataType, fields : Array(BinaryValue)) : BinaryValue
       unless type.tag == BinaryDataType::TAG_UNNAMED_TUPLE || type.tag == BinaryDataType::TAG_NAMED_TUPLE
         raise ArgumentError.new("tuple value requires Tuple type")

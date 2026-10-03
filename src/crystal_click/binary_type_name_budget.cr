@@ -25,6 +25,11 @@ module CrystalClick
                  add(7_u64, children[0][0])
                when BinaryDataType::TAG_NULLABLE
                  add(10_u64, children[0][0])
+               when BinaryDataType::TAG_LOW_CARDINALITY
+                 # `LowCardinality(` is 15 bytes and the closing parenthesis
+                 # adds one more byte. Keep this recursive rather than
+                 # teaching each parent consumer about another wrapper.
+                 add(16_u64, children[0][0])
                when BinaryDataType::TAG_MAP
                  add(7_u64, add(children[0][0], children[1][0]))
                when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE

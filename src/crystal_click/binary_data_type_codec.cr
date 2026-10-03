@@ -25,7 +25,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_FIXED_STRING
         context.write_var_uint(type.fixed_size.not_nil!.to_u64)
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_LOW_CARDINALITY
         preflight_descriptor_children(type, context)
         context.ensure_depth(depth + 1)
         write_to(type.child_at(0), context, depth + 1)
@@ -102,6 +102,15 @@ module CrystalClick
           BinaryDataType.nullable(child)
         rescue ex : ArgumentError
           context.corrupt!("invalid Nullable child type: #{ex.message}")
+        end
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        child = read_from(context, depth + 1)
+        begin
+          BinaryDataType.low_cardinality(child)
+        rescue ex : ArgumentError
+          context.corrupt!("invalid LowCardinality child type: #{ex.message}")
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         read_tuple(context, tag, depth)

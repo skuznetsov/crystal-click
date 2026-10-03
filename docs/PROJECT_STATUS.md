@@ -55,6 +55,15 @@ bytes; seven unchanged neighboring stock oracles pass. Schema admission over
 W139 leaves is broader than this finite physical sample. Separate grammar,
 descriptor, Tuple-name and catalog-accounting owners leave legacy facades
 unchanged; this is not all types, all layouts or completed modularization.
+W141 adds the paired nominal LowCardinality descriptor/owned row-value kernel,
+including recursive containers and LC(Nullable(T)) over represented eligible
+leaves. It preserves the narrower persisted Object/bulk boundaries rather
+than treating RowBinary compatibility as dictionary/index part support.
+Root passes 98 focused DEBUG, 206 affected RELEASE and 2,332 complete-inventory
+examples (368 unique specs, 16 disjoint non-release groups), plus nine
+bidirectional nominal row witnesses and descriptor/name negative controls.
+The current transition and independent source/runtime evidence are in
+[OBJECT_LOW_CARDINALITY_FRONTIER.md](OBJECT_LOW_CARDINALITY_FRONTIER.md).
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -230,7 +239,9 @@ source/runtime identities and executed evidence.
    recursive Array/Map(String,V)/Tuple/legal Nullable schemas, with separately
    bounded physical witnesses. The next proposed lanes are declared
    LowCardinality/Variant/Dynamic and the timezone profile gap, not yet admitted
-   Object support. Reuse existing leaf owners only
+   Object support. W141 establishes the logical LowCardinality prerequisite;
+   dictionary/index roles, prefix state and mark scheduling are the next
+   physical transition. Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary

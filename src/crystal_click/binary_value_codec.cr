@@ -27,11 +27,16 @@ module CrystalClick
         false,
         budget.remaining_wire_bytes - reserved_wire_bytes
       )
-      encode_in_context(value, context)
+      encode_in_context(value, context, allow_low_cardinality: false)
     end
 
-    private def self.encode_in_context(value : BinaryValue, context : BinaryCodecContext) : Bytes
+    private def self.encode_in_context(
+      value : BinaryValue,
+      context : BinaryCodecContext,
+      allow_low_cardinality : Bool = true,
+    ) : Bytes
       BinaryDataTypeCodec.write_to(value.type, context)
+      reject_borrowed_low_cardinality!(value.type, context) unless allow_low_cardinality
       if value.type.tag == BinaryDataType::TAG_NOTHING
         unless value.is_null?
           context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
@@ -52,11 +57,15 @@ module CrystalClick
     # caller has already charged all physical input lanes to the shared budget.
     def self.decode_borrowed(bytes : Bytes, budget : BinaryCodecBudget) : BinaryValue
       context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
-      decode_in_context(context)
+      decode_in_context(context, allow_low_cardinality: false)
     end
 
-    private def self.decode_in_context(context : BinaryCodecContext) : BinaryValue
+    private def self.decode_in_context(
+      context : BinaryCodecContext,
+      allow_low_cardinality : Bool = true,
+    ) : BinaryValue
       type = BinaryDataTypeCodec.read_from(context)
+      reject_borrowed_low_cardinality!(type, context) unless allow_low_cardinality
       if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(1)
         value = BinaryValue.null(type)
@@ -135,6 +144,10 @@ module CrystalClick
           context.write_byte(0_u8)
           write_value(value.child_at(0), context, depth + 1)
         end
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        write_value(value.child_at(0), context, depth + 1)
       else
         width = type.fixed_width || context.unsupported!("unsupported scalar DataType")
         unless value.byte_size == width
@@ -206,10 +219,21 @@ module CrystalClick
         else
           context.corrupt!("Nullable structural flag must be zero or one")
         end
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        child = read_value(type.child_at(0), context, depth + 1)
+        BinaryValue.low_cardinality(type, child)
       else
         width = type.fixed_width || context.unsupported!("unsupported scalar DataType")
         raw = context.read_slice(width.to_u64)
         BinaryValue.fixed(type, raw)
+      end
+    end
+
+    private def self.reject_borrowed_low_cardinality!(type : BinaryDataType, context : BinaryCodecContext) : Nil
+      if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+        context.unsupported!("LowCardinality is outside the borrowed persisted-envelope profile")
       end
     end
   end

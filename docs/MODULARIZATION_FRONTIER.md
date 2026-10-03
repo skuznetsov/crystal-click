@@ -68,6 +68,18 @@ regressions. The bounded compatibility/budget certificate is in
 These extractions do not complete the large legacy facade decomposition or
 prove lower allocation, coupling or improved throughput.
 
+W141 introduces one shared BinaryLowCardinalityTypePolicy module/file for
+source-eligible represented children, nullable Map-key restrictions and
+recursive persisted-envelope refusal. Existing descriptor/value codecs
+transport the nominal wrapper and its nested logical row value; no per-leaf
+LC codec, per-container owner or new legacy facade dispatch is added.
+Object's existing physical planner explicitly refuses LC during its descriptor
+preflight, before that planner's display-name bound/render. DynamicStructure
+still constructs canonical names earlier; this is not a global allocation
+preflight or a physical LC admission. Capability and executed gates remain in
+[OBJECT_LOW_CARDINALITY_FRONTIER.md](OBJECT_LOW_CARDINALITY_FRONTIER.md).
+Large reader/writer/table decomposition remains unfinished.
+
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Their
 historical admission boundaries are recorded in their respective sections.

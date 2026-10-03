@@ -30,6 +30,11 @@ accounting. Its fresh eight-cell physical matrix covers 13 witness fields,
 not every admitted recursive product. The new capability certificate and
 continuation boundary are in
 [OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md](OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md).
+W141 establishes the separate nominal LowCardinality logical descriptor/value
+prerequisite in
+[OBJECT_LOW_CARDINALITY_FRONTIER.md](OBJECT_LOW_CARDINALITY_FRONTIER.md).
+Its RowBinary kernel does not admit Object declared LC or persisted
+dictionary/index streams; these remain the next physical transition.
 The exact admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
