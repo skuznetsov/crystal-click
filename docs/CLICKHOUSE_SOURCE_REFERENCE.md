@@ -1,8 +1,76 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-02, refreshed)
+## Current source snapshot (2026-10-03, refreshed)
 
 Use this separate checkout for new source comparisons:
+
+`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-f86ca42b`
+
+- Upstream: `https://github.com/ClickHouse/ClickHouse.git`, branch `master`.
+- Revision: `f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`.
+- Committer timestamp: `2026-10-03T04:32:37Z`.
+- Cloned with `git clone --depth 1 --single-branch --branch master --no-tags`.
+  Root's pre-clone lookup and the post-clone `git ls-remote` both returned
+  `f86ca42b6e90eadb97f7481638ff04ca1ee8e71f` for `refs/heads/master`.
+- Observed shallow repository `true`, reachable commit count `1`, branch
+  `master`, and clean working tree (`git status --short --branch` reported
+  `## master...origin/master`). `git submodule status --recursive` showed
+  uninitialized (`-`-prefixed) entries; submodules were not initialized.
+- Existing source checkouts were not modified. This is a source reference, not
+  a newly built executable or a replacement for any pinned runtime certificate.
+
+## Latest snapshot comparison (2026-10-03 vs 2026-10-02)
+
+Compared the October 3 checkout above against:
+
+`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-101871ba`
+
+Root repeated recursive `git diff --no-index --stat` comparisons for each
+source-directory pair after independently checking the checkout identity:
+
+| Directory | Result |
+| --- | --- |
+| `src/DataTypes/Serializations` | Exit 0; identical contents. |
+| `src/DataTypes` | Exit 0; identical contents. |
+| `src/Columns` | Exit 0; identical contents. |
+| `src/Storages/MergeTree` | Exit 1 because differences were found: 34 files, 699 insertions, 429 deletions. |
+
+The full `DataTypes/Serializations` and `DataTypes` trees are unchanged in this
+source window. Thus the Object/Dynamic type declarations, serializer source,
+structure-version handling, and shared-data layout code in those trees are
+identical; the `Columns` tree is identical too. This establishes source
+continuity only within those directories. It does not establish global parser,
+JSONExtract admission, reader/writer compatibility, or executable behavior.
+
+Inspected MergeTree differences relevant to type interpretation and part
+handling:
+
+- `src/Storages/MergeTree/MergeTreeIndexJSONSubcolumnHelper.cpp:15,51-66,158`
+  now collects JSON index argument types and declines to match a subcolumn
+  that reaches inside a declared typed path. This avoids using a path index
+  whose granule paths do not include values inside that typed path. It changes
+  index matching/pruning, not Object serialization or type admission.
+- `src/Storages/MergeTree/KeyCondition.cpp:6755-6778,6835,7288` and
+  `MergeTreeDataSelectExecutor.cpp:2399` add nested-NULL detection for Tuple,
+  Array, and Map key fields and widen affected bounds so a comparison-order
+  mismatch cannot make a matching granule appear empty. This is primary-key
+  range analysis, not a type or serializer change.
+- `MergeTreeData.cpp:6897-6901` now keeps UNIQUE KEY parts on Full storage
+  rather than selecting Packed storage; the source comment ties this to
+  `SSTIndexWriter` requiring Full parts. `IMergeTreeDataPart.cpp:2265` also
+  handles Compact-part default-codec detection through the shared data file.
+  `DataPartStorageOnDiskFull.cpp` and `DataPartStorageOnDiskPacked.cpp` add
+  transaction undo handling. These are part-storage/lifecycle changes; they do
+  not indicate a changed Object shared-data layout.
+
+These comparisons do not widen admitted Object/JSON types. They also do not
+qualify an executable from `f86ca42b`; the existing source and runtime
+certificates retain their original identities.
+
+## Previous October 2 source snapshot (2026-10-02; W128-W133)
+
+Retain this checkout for its existing W128-W133 source certificates and as the
+comparison baseline for the October 3 snapshot:
 
 `/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-101871ba`
 
@@ -56,7 +124,7 @@ The retained W115-W120 oracle is ClickHouse `26.10.1.1201`, build
 `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Its executed certificates keep
 their original source/runtime identities in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 
-## Latest snapshot comparison
+## Earlier October 2 snapshot comparison (31d2addb vs 101871ba)
 
 Root executed recursive `git diff --no-index --stat` comparisons of the
 `31d2addb` and `101871ba` source trees:
@@ -84,7 +152,7 @@ contents: each comparison returned exit 0 and no diff output. This establishes
 continuity only in those scopes between these two snapshots; no current-master
 binary was built or qualified.
 
-The latest source still separates Object structure versions from shared-data
+The October 2 `101871ba` source separates Object structure versions from shared-data
 layout selection (`SerializationObject.cpp:302-311,413-430` and
 `SerializationObjectSharedData.h:29-71`), and Dynamic has its own structure
 version grammar (`SerializationDynamic.cpp:145-153`). Shared layouts determine
