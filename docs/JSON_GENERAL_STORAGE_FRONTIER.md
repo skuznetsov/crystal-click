@@ -3,9 +3,11 @@
 Current frontier (2026-10-02): W128 checkpoint `1c5bab4` qualifies complete
 library-owned normalized Object parts; W129 adds bounded whole-Object catalog
 materialization; W130 adds mixed Object/scalar typed-table batches, physical
-windows and bounded UInt64-PK candidate delivery. The exact admitted profile
-and executed gates are in their sections below. W130 does not widen declared
-typed fields, physical layouts, the one-Object writer or projection reads.
+windows and bounded UInt64-PK candidate delivery. W131 adds paired nominal
+Int64 declared typed fields through the same schema and bulk owners, qualified
+in both directions for String 0/1 × BASIC/COMPACT. The exact admitted profiles
+and executed gates are in their sections below. W131 does not widen physical
+layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
 table integration. Older scalar JSON projections retain their existing
 contract; see `JSON_TYPED_PATH_FRONTIER.md`.
@@ -3611,3 +3613,187 @@ falsifier: separately pair a declared `Int64` Object lane with signed extremes
 in native and library-owned stock parts; Dynamic/shared Int64 evidence does
 not close that typed lane. Optimization remains parked; the overarching goal
 stays active.
+
+## W131 declared Int64 Object lane — pre-implementation design seal
+
+Anchor: clean W130 `4b18812`. The normalized schema constructor and parser
+admit UInt64/String only; the reusable binary and fixed-width bulk owners
+already represent signed Int64. Existing Dynamic/shared Int64 evidence is not
+a declared typed-field certificate. Fresh source reference `101871ba` delegates
+Object typed paths to their nested serializers (`DataTypeObject.cpp:184`,
+`SerializationObject.cpp:913`); `SerializationNumber.cpp:299` uses little-endian
+numeric binary encoding. Runtime qualification remains pinned separately.
+
+Requested transition: add nominal Int64 to the shared normalized Object schema
+owner and parser, paired for complete part writing and file/column/catalog/table
+reading. Retain exact nominal schema-plan identity, canonical declaration byte
+preflight, all W129/W130 admission/ownership guards and legacy virtual-path
+behavior. No Float64, wrapper, new layout, Compact part, projection or MV
+admission follows from this lane. General compatibility remains the objective;
+this is one implementation checkpoint, not a replacement completion criterion.
+
+Risk: CAUTION (serialization admission). Rollback: one atomic local commit over
+the clean anchor. Likeliest failure: signed extremes survive a local round-trip
+but fail stock interpretation, or the shorter `Int64` name invalidates exact
+canonical byte preflight. Guard with independently authored signed values and
+actual stock CHECK/full/PK SQL in both directions, not just codec symmetry.
+
+Execution order: root runs a new positive Int64 declaration test RED before
+production edits; Luna changes only the two schema owners and focused specs;
+a separate Luna owns the fresh bidirectional stock oracle. Root owns additional
+adversarial consumer specs, guarded serial execution, docs and the local commit.
+Consumer inventory: `rg -n 'ObjectDocumentSchema|TAG_INT64|int64|fixed_width'
+over `object_document*`, `object_column*`, `binary_bulk_physical_plan.cr` and
+`wide_part_writer/object_part_writer.cr` identifies the shared schema/parser,
+generic fixed-width bulk and complete writer consumers. W130 adapters reuse the
+schema parser and therefore require signed catalog/table integration checks.
+
+DoD: focused DEBUG and adjacent RELEASE tests; fresh native and fully owned
+writer parts covering signed minimum/maximum, negative/zero/positive values,
+multiple marks with short tail, full/middle/zero reads, catalog and typed-table
+windows/candidates; actual CHECK=1 and full/PK SQL; schema/type mismatch,
+unsupported Float64/wrapper, bad signed payload and comparator controls. Run
+the complete non-release spec inventory in disjoint guarded serial groups if
+the combined route remains resource-refused, explicitly without a combined
+process certificate. Format/shell/diff checks and root hostile verdict must
+pass before admission or commit. Optimization remains parked.
+
+## W131 declared Int64 Object lane — executed certificate (2026-10-02)
+
+Status: VERIFIED only for this bounded normalized Int64 contract over W130
+`4b18812`. The overarching paired-types/MV/projections goal remains active;
+this certificate is not general JSON compatibility or architecture completion.
+
+The only changed production owners are `object_document_schema.cr` and
+`object_document_schema_parser.cr`. Both admit nominal Int64 alongside
+UInt64/String. Canonical byte preflight now explicitly distinguishes the
+five-byte Int64 name from the six-byte UInt64/String names; unsupported tags
+have no sizing fallback. Exact schema/plan/value identity remains mandatory.
+The existing fixed-width bulk encoder/decoder supplies signed eight-byte
+little-endian transport. No per-declaration class, duplicate codec, new facade
+dispatch or unsupported wrapper admission was introduced.
+
+Qualified profile: one declared Int64/UInt64/String Object beside a sorted
+UInt64 key; hashed Wide, Object V3/Dynamic V3, explicit rosters, one-bucket
+shared MAP, LZ4, plain adaptive `.mrk2` and `primary.idx`, Default metadata.
+Native and fully library-owned parts each cover all four combinations of
+ordinary String 0/1 and BASIC/COMPACT discriminators. These modes do not mean
+Compact parts. The independent five-row input includes Int64 MIN/-1/0/1/MAX,
+NUL/non-ASCII String bytes, Dynamic Int64 and shared String spill. Actual
+mark counts `[2,2,1]`, primary keys/sentinel `[1,3,5,5]` and PK=4 candidate
+mark `[1]` are inspected before table delivery is checked.
+
+Every case executes stock CHECK=1 and exact full/PK SQL plus independently
+authored signed RowBinary bytes. File/column readers have explicit full,
+middle and zero windows. Synthetic Atomic catalog `.values` checks retained
+ownership; typed-table callbacks check the independently copied part path,
+mark/row provenance, physical window and complete candidate keys `[3,4]`
+with application residual keeping only `4`. Returned documents remain
+normalized values, not original JSON text.
+
+Source reference: fresh shallow `101871ba6da8221c7cf30ac3a04bc1063106f412`.
+Nested typed serializers and numeric LE anchors are recorded in the design
+seal above. This is source-only evidence, not a current-master binary build.
+Executed runtime remains 26.10.1.1201, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, executable SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The oracle actually verifies version, build and executable digest.
+
+Root-executed gates, serially under the unchanged resource guard:
+
+- Qualified RED before production edits: five independent consumer examples
+  failed only at the expected Int64 schema refusal (`red.log`).
+- Focused DEBUG: 18 examples, zero failures/errors (`focused-debug.log`).
+- Adjacent RELEASE: 143 examples, zero failures/errors (`adjacent-release.log`).
+- Complete non-release inventory: all 348 `_spec.cr` files, 15 disjoint groups
+  of at most 24, 2,220 examples, zero failures/errors and exit 0
+  (`full-nonrelease-shards.log`). This is not a combined-process or full
+  RELEASE certificate.
+- Fresh final W131: eight bidirectional matrix cells plus five deliberately
+  failing comparators; exit 0 (`stock-w131-matrix.log`). Parts are retained
+  under `/private/tmp/crystal-click-object-int64-w131.wWvdqH`.
+- Unchanged fresh stock regressions: W130 five cases, W129 eight and W128
+  five, each exit 0 (`stock-w130-regression.log`, `stock-w129-regression.log`,
+  `stock-w128-regression.log`). Their retained roots are respectively
+  `/private/tmp/crystal-click-object-table-w130.j6Qy1x`,
+  `/private/tmp/crystal-click-object-catalog-w129.WGcerk` and
+  `/private/tmp/crystal-click-json-w128.fJCjGe`.
+- Exact-path Crystal formatting, shell syntax and diff checks passed.
+
+Root logs live under `/private/tmp/crystal-click-w131-root.rAleXM`; they are
+temporary evidence, not committed artifacts or a substitute for replay.
+The existing frontier certificate is the durable fallback: this repository
+has neither `docs/landmark-evidence-packet-template.md` nor
+`scripts/validate-landmark-graph.sh`. No packet-shape validation is claimed.
+
+Measured failure and review corrections remain visible:
+
+- Initial stock run compiled and passed CHECK/full/PK/RowBinary and four
+  controls, then falsely rejected `serialization.json` with `columns: []`.
+  Fresh CH `SerializationInfo.cpp:432-442,506-510,551-568` confirms that
+  missing per-column information means Default. Only the oracle assertion
+  changed; production guards were not weakened. The final helper permits
+  empty records but its seeded Sparse control still fails. Failed evidence
+  remains in `stock-w131-final.log` and the retained `uDG0Uu` root.
+- Static review found callback path comparison used only resolver output.
+  The oracle now also checks it against the independently authored copy
+  destination before callbacks. Root reviewed and executed that path check.
+- The first corrected run passed six cases (`stock-w131-corrected.log`,
+  retained `Qm70ww` root), but writer coverage was diagonal. Root required
+  both remaining writer combinations; the final eight-case run supersedes
+  that narrower matrix claim without hiding it.
+
+Replay uses the W130 serial guard/environment: free-memory floor 50%, Crystal
+1.21.0/LLVM 22.1.8, SDKROOT MacOSX26.5.sdk, TMPDIR `/private/tmp`, isolated
+cache, single module/thread and `--link-flags=-fuse-ld=ld`. Crystal gates use
+600s/32768 MiB; shell oracles 900s/32768 MiB. Do not widen the guard to turn a
+refusal into a PASS.
+
+```sh
+crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace \
+  spec/object_document_schema_w131_spec.cr spec/object_int64_w131_root_spec.cr \
+  spec/object_document_schema_w128_spec.cr
+# RELEASE uses the same command plus --release and these twelve whole files:
+# object_table_w130_spec.cr, object_offline_table_w130_spec.cr,
+# object_table_w130_root_spec.cr, object_catalog_w129_spec.cr,
+# object_column_reader_w129_spec.cr, object_catalog_w129_root_spec.cr,
+# object_part_writer_w128_spec.cr, object_part_writer_w128_root_spec.cr,
+# offline_catalog_spec.cr, lazy_window_reader_spec.cr,
+# wide_part_table_projection_w87_spec.cr, offline_catalog_projection_w87_spec.cr
+# All are under spec/. Full inventory and grouped command are unchanged W130.
+W131_KEEP_TMP=1 bash scripts/check_object_int64_w131.sh
+W130_KEEP_TMP=1 bash scripts/check_object_table_w130.sh
+W129_KEEP_TMP=1 bash scripts/check_object_catalog_w129.sh
+W128_KEEP_TMP=1 bash scripts/check_object_part_writer_w128.sh
+bash -n scripts/check_object_int64_w131.sh
+git diff --check
+```
+
+Frozen SHA-256 identities for the changed owners and final oracle:
+
+```text
+66d8bde07a518b6872e8b977c9e4142f4bbf0905470312af17a4b9633ba3bfaa  src/crystal_click/object_document_schema.cr
+2eb8e0ccf0d2e6563378e5fddc46fc78ec55a9b03fab1cee0a788f1b57e0500b  src/crystal_click/object_document_schema_parser.cr
+22efb19f0fa72dd9efc15e515e7e508af19413a9ec94cd5865cf8e699e1dbec8  scripts/check_object_int64_w131.cr
+f4f821084cb6672af3cb7d62669461d93b2715b907c1c8cd332bdcd615e3a02d  scripts/check_object_int64_w131.sh
+```
+
+Root's scoped hostile verdict: ROBUST for this declared Int64 profile.
+Executed attacks include exact constructor/parser budget boundaries, signed
+versus unsigned schema/plan/value mismatch, refusal before writer publication,
+later-part signedness drift before callbacks, corrupt selected versus skipped
+signed frames, and wrong document/grid/CHECK/signed-byte/Sparse controls.
+Luna implementation and static review are correlated support, not independent
+runtime certification. Root inspected the owner diff and oracle and ran the
+compiler/stock evidence himself.
+
+Residuals: only Int64/UInt64/String declared fields; no Float64, typed wrappers,
+new Object/shared layouts, Compact/Sparse parts, whole-Object projection reads,
+arbitrary table/multi-Object writing, server Active/snapshot proof, whole-part
+payload-hash authentication or RSS/pre-decode/caller-retention bound. Broader
+types, MV/projections and the large-facade refactor remain open; optimization
+stays parked. Decay on schema/bulk/reader/writer/adapter admission, profile,
+limits, comparator, runtime/source/toolchain or publication changes; refresh
+the affected positives and negatives. Next typed-lane falsifier: paired
+Float64 with independently expected raw bits for signed zero, NaN and infinity,
+not a textual JSON-number round-trip. This is a proposed next test, not support.

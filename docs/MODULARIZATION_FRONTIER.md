@@ -1,11 +1,12 @@
 # CrystalClick Modularization Frontier
 
-Current transition (2026-10-02): W129 bounded normalized Object catalog
-materialization over W128 checkpoint `1c5bab4`, following the verified shared
-writer extraction below.
+Current transition (2026-10-02): W131 paired declared Int64 Object fields over
+W130 `4b18812`, following the verified shared writer, catalog and table owners
+below.
 The bounded capability certificate is in `JSON_GENERAL_STORAGE_FRONTIER.md`.
-Catalog Object dispatch now has a private materialization owner; mixed table
-batch/window/PK dispatch is the next separate boundary. No MV/projection or
+Catalog Object dispatch has a private materialization owner; W130 separately
+owns normalized table admission/accounting. W131 extends the existing two
+schema owners, not a new codec or a class per declaration. No MV/projection or
 performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight
@@ -1881,3 +1882,30 @@ metadata probing may repeat. Paired declared JSON typed-field expansion and
 broader MV/projections remain open; optimization stays parked. Refresh the
 affected gates after owner, dispatch, profile, budget, runtime or toolchain
 changes.
+
+## Reused normalized Object schema owners (W131, 2026-10-02)
+
+Status: VERIFIED only for the declared Int64 profile in
+`JSON_GENERAL_STORAGE_FRONTIER.md`, over W130 `4b18812`.
+`ObjectDocumentSchema` and `ObjectDocumentSchemaParser` retain one cohesive
+class/file each. Their nominal whitelist and exact canonical byte accounting
+now include Int64. The shared fixed-width bulk owners and existing writer,
+file/column reader, catalog materializer and table adapter are reused unchanged.
+No per-type/per-declaration production class or duplicated facade codec was
+introduced. Separate owners do not imply zero coupling or complete refactoring.
+
+Root executed 18 focused DEBUG and 143 adjacent RELEASE examples, all 348
+spec files in 15 disjoint non-release groups (2,220 examples), eight fresh
+bidirectional stock matrix cells and the unchanged W128/W129/W130 stock
+regressions. Root's scoped verdict is ROBUST. The initial oracle rejected
+implicit Default metadata, then required a provenance correction and two
+additional writer matrix cells; the measured route and final fingerprints
+are preserved in the capability frontier. Static Luna agreement is correlated,
+not the stock certificate. The grouped inventory is not a combined suite.
+
+Large facades are unchanged at 15,985 reader / 25,991 writer / 7,171 table /
+3,692 offline-table lines. Legacy schema/substream planning, I/O/validation,
+leaf dispatch and thin adapters still need responsibility-level extraction.
+Other declared typed families/layouts and broader MV/projection compatibility
+remain open; performance stays parked. Refresh after schema, bulk, dispatch,
+profile, limit, runtime, source or toolchain changes.

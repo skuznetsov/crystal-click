@@ -2,8 +2,8 @@
 
 Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
-the W129 bounded Object catalog integration and W130 mixed table delivery over
-`2097a88` in
+the W129 bounded Object catalog integration, W130 mixed table delivery
+`4b18812`, and W131 paired declared Int64 fields over that checkpoint in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 Responsibility-level owner boundaries are documented in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
@@ -27,11 +27,15 @@ source/runtime identities and executed evidence.
   JSON/Object part from library-owned keys, explicit schema/rosters and
   documents, without borrowed stock sidecars. W128 qualifies hashed Wide,
   Object V3/Dynamic V3, one-bucket shared MAP, LZ4 and plain adaptive marks;
-  declared typed fields are UInt64/String. Five fresh parts passed actual stock
-  ATTACH/CHECK=1/full/PK SQL and explicit file-reader full/middle/zero windows.
+  W128 declared typed fields are UInt64/String. Five fresh parts passed actual
+  stock ATTACH/CHECK=1/full/PK SQL and explicit file-reader full/middle/zero windows.
   W129 adds bounded catalog Object materialization; W130 adds the separately
   qualified mixed typed-table reader. Neither widens the writer to multiple
-  Object columns or arbitrary schemas. See
+  Object columns or arbitrary schemas. W131 adds nominal Int64 through those
+  same owners: four fresh native and four library-owned parts pass actual
+  CHECK/full/PK SQL, independent signed RowBinary, and file/column/catalog/
+  table consumer checks. String 0/1 × BASIC/COMPACT is qualified in both
+  directions; it is still normalized Object V3/MAP, not arbitrary JSON. See
   [the example](../examples/write_object_document_part.cr) and
   [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
@@ -64,14 +68,15 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W130 provide
+1. **General JSON compatibility.** W117-W131 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
    qualification; W127's older shell-based oracle is not the whole-part
    certificate. The catalog now dispatches whole normalized JSON through
    `ObjectColumnReader`, and W130 integrates that bounded profile into public
-   mixed `WidePartTable` batches/windows and UInt64 PK candidates. The older
+   mixed `WidePartTable` batches/windows and UInt64 PK candidates. W131 admits
+   Int64/UInt64/String declared fields with paired stock evidence. The older
    scalar typed-path behavior is unchanged. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required, and whole-Object projection child reads remain refused. See
@@ -106,10 +111,10 @@ source/runtime identities and executed evidence.
    Next are legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
-2. Extend paired Object declared typed fields beyond UInt64/String, starting
-   with a separately qualified `Int64` lane rather than promoting existing
-   Dynamic/shared Int64 values into typed-field support. Then widen layouts
-   and recursive composition with their own stock-generated and library-owned
+2. Extend paired Object declared typed fields beyond Int64/UInt64/String. The
+   next proposed lane is Float64 with raw signed-zero/NaN/infinity evidence,
+   not promotion from existing Dynamic/shared or logical-codec support.
+   Then widen layouts and recursive composition with their own stock-generated and library-owned
    evidence. Object declarations retain the stock maximum of 1,000 typed paths.
 3. Expand remaining paired type/profile and MV/projection frontiers.
    For MV/projections, prioritize declaration/dependency/TO-target inspection

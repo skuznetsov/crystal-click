@@ -111,7 +111,9 @@ The writer example reads the result through `ObjectDocumentFileReader`.
 The separately qualified catalog and typed-table readers are shown below.
 
 This profile is a hashed Wide part with a sorted UInt64 key, explicit typed
-UInt64/String JSON fields and explicit Dynamic path/type rosters. Object V3,
+UInt64/String JSON fields and explicit Dynamic path/type rosters. The same
+writer also admits nominal Int64 typed fields under the W131 paired profile;
+this example deliberately keeps its original fields. Object V3,
 Dynamic V3, one-bucket shared MAP, LZ4 and plain adaptive marks are required.
 The example includes a Dynamic type spill, a shared path, an absent path and
 a short final granule. Capacities are declared in `ObjectDocumentSchema`;
@@ -200,8 +202,9 @@ document.paths.each { |path| puts "#{path}: #{document.value_for(path).type.name
 ```
 
 The result owns immutable flattened path/value documents, including typed,
-Dynamic and shared-MAP values. W129 admits UInt64/String declared typed paths,
-normalized hashed Wide Object V3/Dynamic V3, one shared MAP bucket, LZ4 and
+Dynamic and shared-MAP values. W129 originally qualified UInt64/String;
+W131 also qualifies nominal Int64 declared typed paths through this API.
+The profile remains normalized hashed Wide Object V3/Dynamic V3, one shared MAP bucket, LZ4 and
 plain adaptive marks. Ordinary String versions 0/1 are supported; selected
 compressed marks and other JSON layouts are rejected. The example requests
 1,000 rows, 16 MiB of String payload and 100,000 recursive cells. The Object
@@ -237,8 +240,8 @@ Object roots remain separately bound and ordered. The example prints raw leaf
 type/hex values and labels candidate rows `keep` or `reject` using the exact
 application residual; a PK candidate is not an exact matching row.
 
-The Object profile remains W129's UInt64/String declared typed fields, hashed
-Wide Object V3/Dynamic V3, one-bucket MAP, Default serialization metadata, LZ4,
+The current Object profile admits W131's Int64/UInt64/String declared typed
+fields, hashed Wide Object V3/Dynamic V3, one-bucket MAP, Default serialization metadata, LZ4,
 ordinary String 0/1 and plain adaptive marks. BASIC/COMPACT discriminators do
 not mean Compact parts. Whole-Object projection reads remain rejected.
 Batch slices are callback-scoped; immutable document handles can be retained.

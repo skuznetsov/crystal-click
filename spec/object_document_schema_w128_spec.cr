@@ -60,7 +60,7 @@ describe "W128 ObjectDocumentSchema" do
     end
   end
 
-  it "admits only the two sealed nominal typed descriptors" do
+  it "rejects typed descriptors outside the sealed nominal scalar whitelist" do
     expect_raises(ArgumentError) do
       CrystalClick::ObjectDocumentSchema.new({"t" => w128_schema_type("UInt32")})
     end

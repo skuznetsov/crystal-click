@@ -1,7 +1,7 @@
 module CrystalClick
   # Immutable, explicit schema for the W128 normalized Object V3 part writer.
   # This is intentionally narrower than BinaryDataType: typed JSON fields are
-  # presently limited to nominal UInt64 and String declarations.
+  # presently limited to nominal Int64, UInt64, and String declarations.
   class ObjectDocumentSchema
     DEFAULT_MAX_DYNAMIC_PATHS =  1_024
     DEFAULT_MAX_DYNAMIC_TYPES =     32
@@ -244,10 +244,12 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_UINT64
         "UInt64"
+      when BinaryDataType::TAG_INT64
+        "Int64"
       when BinaryDataType::TAG_STRING
         "String"
       else
-        raise ArgumentError.new("typed JSON schema admits only nominal UInt64 and String")
+        raise ArgumentError.new("typed JSON schema admits only nominal Int64, UInt64, and String")
       end
     end
 
