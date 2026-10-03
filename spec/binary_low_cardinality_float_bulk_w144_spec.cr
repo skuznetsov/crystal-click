@@ -512,15 +512,17 @@ describe "W144 recursive LowCardinality Float transport" do
     end
   end
 
-  it "keeps Dynamic, Object, and physical-part Float envelopes outside ordinary bulk admission" do
+  it "keeps Dynamic and Object envelopes closed while binding ordinary Float LC names" do
     name = "Float32"
     low = CrystalClick::BinaryDataType.low_cardinality(CrystalClick::BinaryDataType.primitive(name))
     value = w144_float_lc(low, name, 0x7fc0_1234_u64)
 
     [CrystalClick::BinaryBulkProfile.single_stream, CrystalClick::BinaryBulkProfile.with_size_stream].each do |profile|
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkPhysicalPlan.new(low, "column", profile: profile)
-      end
+      physical = CrystalClick::BinaryBulkPhysicalPlan.new(low, "column", profile: profile)
+      physical.stream_names.should eq({
+        "root.dictionary" => "column.dict",
+        "root.indexes"    => "column",
+      })
     end
 
     dynamic = CrystalClick::DynamicStructure.new([low] of CrystalClick::BinaryDataType)

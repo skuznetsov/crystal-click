@@ -637,7 +637,7 @@ describe "W143 recursive BinaryBulk LowCardinality integration" do
     end
   end
 
-  it "caches structural LC membership and keeps Dynamic/Object/physical admission guards closed" do
+  it "caches structural LC membership while keeping Dynamic and Object admission guards closed" do
     string = CrystalClick::BinaryDataType.primitive("String")
     low = CrystalClick::BinaryDataType.low_cardinality(string)
     deep = CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.tuple([string, low] of CrystalClick::BinaryDataType))
@@ -653,9 +653,11 @@ describe "W143 recursive BinaryBulk LowCardinality integration" do
     end
 
     [CrystalClick::BinaryBulkProfile.single_stream, CrystalClick::BinaryBulkProfile.with_size_stream].each do |profile|
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkPhysicalPlan.new(low, "column", profile: profile)
-      end
+      physical = CrystalClick::BinaryBulkPhysicalPlan.new(low, "column", profile: profile)
+      physical.stream_names.should eq({
+        "root.dictionary" => "column.dict",
+        "root.indexes"    => "column",
+      })
     end
 
     dynamic = CrystalClick::DynamicStructure.new([low] of CrystalClick::BinaryDataType)

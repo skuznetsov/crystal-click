@@ -1,16 +1,19 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-03): W144 admits raw Float32/Float64/
-BFloat16 LowCardinality transport in ordinary recursive `BinaryBulkCodec`,
-including its legal container compositions. Root passes 91 focused DEBUG,
-266 affected RELEASE and 2,386 full-inventory examples (371 unique spec files,
-16 serial disjoint non-release groups). Fresh stock probes distinguish INSERT
-canonicalization from exact persisted global-dictionary reading; the latter
-has six raw/seeded type/order witnesses and actual ATTACH/CHECK. These parts
-borrow stock envelopes and do not qualify an independently owned whole-part
-writer. Object/Dynamic and generic persisted LC binding remain closed.
-The scope and execution lineage are in
-[LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md](LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md).
+Current capability checkpoint (2026-10-03): W145 binds ordinary recursive
+LowCardinality bulk roles to physical dictionary/index filenames, including
+W144's raw Float transport. Root passes 99 focused DEBUG, 324 affected RELEASE
+and 2,395 full-inventory examples (372 unique spec files, 16 serial disjoint
+non-release groups). Eight stock Wide parts and eight exchanges with
+library-emitted lanes pass roster/grid/value checks and actual stock
+ATTACH/CHECK/RowBinary; a separate literal Ruby oracle rechecks all sixteen
+tables and the LC-specific wrong-value control with 51 fresh stock queries.
+The exchanges borrow stock envelopes: this is not a new independently owned
+whole-part writer or public facade admission. Default LC and BASIC Map are
+explicit profile assumptions, not inferred settings. Object/Dynamic LC
+remains closed through consumer-owned guards. The scope and execution lineage
+are in
+[LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md](LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md).
 
 The overall objective is still open: paired type/layout coverage and
 MV/projection interoperability first, memory/performance afterward. Shared
@@ -102,8 +105,9 @@ The executed certificate is in
 [LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md](LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md).
 In W143, Float LC composition and persisted Object/Dynamic/physical-part
 binding remained explicitly closed. W144 supersedes only that Float bulk
-guard; the persisted guards remain closed. Generic bulk support is not new
-standalone part ATTACH/CHECK.
+guard. W145 subsequently admits generic physical role/name binding, while
+keeping Object/Dynamic and existing whole-part facade boundaries closed.
+Neither shared bulk nor filename binding qualifies a new standalone writer.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -286,8 +290,9 @@ source/runtime identities and executed evidence.
    W143 qualifies recursive non-floating bulk role binding, flattened
    occurrence schedules and dictionary state integration. W144 qualifies
    raw Float LC transport and measures the distinct INSERT normalization
-   boundary. Next are shared persisted LC role binding, paired declared Object
-   LC and complete independently owned qualified parts. Reuse existing leaf owners only
+   boundary. W145 now qualifies shared physical LC role binding under explicit
+   default-LC/BASIC-Map profiles. Next are paired declared Object LC and
+   complete independently owned qualified parts. Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary

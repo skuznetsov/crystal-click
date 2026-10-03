@@ -1,10 +1,13 @@
 # CrystalClick Modularization Frontier
 
-Current architecture checkpoint (2026-10-03): W143's shared recursive LC
-site owners, reused unchanged by W144's raw Float admission. The planner,
-site encoder and site decoder are 313/273/210 lines respectively, with one
-cohesive top-level owner per file. The large legacy reader/writer/table/catalog
-facades remain 15,985/25,991/6,786/1,560 lines; their responsibility-level
+Current architecture checkpoint (2026-10-03): W145 extends the existing
+BinaryBulkPhysicalPlan owner (302 lines) and keeps the typed Object consumer
+guard in ObjectDocumentPhysicalPlan (299 lines). W143's shared recursive LC
+planner/site encoder/site decoder remain 313/273/210 lines, reused by W144
+and W145, with one cohesive top-level owner per file. No per-type/container
+class family or new legacy facade branch is introduced. The large legacy
+reader/writer/table/catalog facades remain 15,985/25,991/6,786/1,560 lines;
+their responsibility-level
 decomposition is unfinished. Codec compatibility does not prove lower
 coupling, fewer allocations or better throughput.
 
@@ -133,6 +136,20 @@ identity/part probes and separate literal integer checker qualify this narrow
 codec seam; borrowed stock part envelopes do not establish a general writer.
 The execution lineage and remaining persisted guards are in
 [LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md](LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md).
+
+W145 adds dictionary/index stop-site measurement and physical naming to the
+existing generic planner, without visiting the LC logical child as ordinary
+lanes. Removing its common guard requires an explicit typed-Object guard:
+file inspection can consume a physical descriptor without invoking the codec.
+Dynamic retains its separate recursive guard. Root passes 99 focused DEBUG,
+324 affected RELEASE and 2,395 complete-inventory examples, a sixteen-table
+stock/borrowed-envelope exchange and a separate 51-query literal checker.
+Exact name budgets, shared accounting, collision and detached ownership tests
+qualify this shared responsibility seam. Its finite default-LC/BASIC-Map
+profile and borrowed sidecar limits are recorded in
+[LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md](LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md).
+This is not completed facade decomposition, new full-part writer admission,
+lower RSS or improved throughput.
 
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Their

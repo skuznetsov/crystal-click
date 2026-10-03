@@ -1,6 +1,7 @@
 module CrystalClick
-  # Binds the generic recursive binary bulk role grammar to ClickHouse's
-  # physical part-stream suffixes. It does not infer serializer specializations.
+  # Binds the recursive binary bulk role grammar to ClickHouse physical names.
+  # Default LowCardinality stop-sites and BASIC Map are explicit profiles;
+  # no serializer specialization is inferred.
   class BinaryBulkPhysicalPlan
     private struct EscapedPrefix
       getter value : String
@@ -46,9 +47,6 @@ module CrystalClick
 
     private def build_bindings(type : BinaryDataType, prefix : String) : Hash(String, String)
       validate_type(type, 0)
-      if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
-        raise UnsupportedFormatError.new("physical bulk LowCardinality bindings are not admitted")
-      end
       role_plan = BinaryBulkTypePlan.new(type, @profile)
       role_count = role_plan.role_count
       @context.record_elements(role_count)
@@ -192,6 +190,13 @@ module CrystalClick
         values_roles, values_names = measure_bindings(type.child_at(1), add_size(role_length, 17_u64), add_size(name_length, 9_u64), array_level + 1_u64)
         role_bytes = add_size(role_bytes, add_size(keys_roles, values_roles))
         name_bytes = add_size(name_bytes, add_size(keys_names, values_names))
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        # LC owns exactly two physical stop-sites. Its logical child is used
+        # by the dictionary codec, not recursively enumerated as ordinary lanes.
+        role_bytes = add_size(role_bytes, add_size(role_length, 11_u64)) # .dictionary
+        role_bytes = add_size(role_bytes, add_size(role_length, 8_u64))  # .indexes
+        name_bytes = add_size(name_bytes, add_size(name_length, 5_u64))  # .dict
+        name_bytes = add_size(name_bytes, name_length)                   # indexes own prefix
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         role_bytes = add_size(role_length, 5_u64)
         name_bytes = name_length
@@ -244,6 +249,11 @@ module CrystalClick
         values_prefix = PhysicalStreamName.append_escaped_field(prefix, "values")
         append_bindings(type.child_at(0), "#{role}.elements.field.0", keys_prefix, array_level + 1_u64, names)
         append_bindings(type.child_at(1), "#{role}.elements.field.1", values_prefix, array_level + 1_u64, names)
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        # Match the default LC serializer's physical names. Do not recurse into
+        # the dictionary type; LC's paired codec owns the complete lane grammar.
+        names["#{role}.dictionary"] = PhysicalStreamName.append_literal(prefix, ".dict")
+        names["#{role}.indexes"] = String.new(prefix.to_slice)
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         names["#{role}.data"] = String.new(prefix.to_slice)
       else

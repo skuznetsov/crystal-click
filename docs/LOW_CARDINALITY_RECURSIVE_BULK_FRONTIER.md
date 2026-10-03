@@ -9,9 +9,12 @@ slice does not close that objective or assert complete-part compatibility.
 Later transition: W144 supersedes only W143's Float bulk guard after measuring
 INSERT normalization separately from raw persisted dictionary reading. See
 [LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md](LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md).
-The W143 certificate below remains historical and non-floating; its
-Object/Dynamic/physical-part guards are still current. Do not retroactively
-widen its native witnesses or reinterpret them as whole-part qualification.
+W145 subsequently supersedes the generic physical role/name binding guard,
+without opening Object/Dynamic or complete-part facade dispatch. See
+[LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md](LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md).
+The W143 certificate below remains historical and non-floating. Do not
+retroactively widen its native witnesses or reinterpret them as whole-part
+qualification.
 
 ## Current boundary and intended transition
 

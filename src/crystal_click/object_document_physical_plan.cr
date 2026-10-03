@@ -86,8 +86,11 @@ module CrystalClick
       plan.typed_path_count.times do |index|
         preflight_typed_path(plan, index, column_prefix.bytesize.to_u64, context)
         raw_path = plan.typed_path_at(index)
-        path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, raw_path, context)
         type = plan.typed_type_for(raw_path)
+        if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+          raise UnsupportedFormatError.new("physical Object typed LowCardinality fields are not admitted")
+        end
+        path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, raw_path, context)
         typed_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(type, path_prefix, @profile, limits, context)
         @typed_plans[String.new(raw_path.to_slice)] = typed_plan
         collect_plan_names!(typed_plan, seen_names)

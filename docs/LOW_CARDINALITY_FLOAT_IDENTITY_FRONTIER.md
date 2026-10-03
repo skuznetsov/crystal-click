@@ -3,6 +3,13 @@
 Status: implemented and VERIFIED within the scope below, 2026-10-03.
 Baseline: `2060382`.
 
+Later transition: W145 admits ordinary physical LC role/name binding under
+explicit default-LC/BASIC-Map assumptions; Object/Dynamic and whole-part
+facade guards remain closed. See
+[LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md](LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md).
+The W144 execution certificate below remains historical and does not acquire
+new whole-part ownership or broader serializer profiles from that transition.
+
 ## Boundary
 
 W142's standalone LC codec transports exact scalar bytes. W143 admits
