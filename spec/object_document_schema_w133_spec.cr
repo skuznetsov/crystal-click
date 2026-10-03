@@ -92,12 +92,8 @@ describe "W133 declared Date and Date32 Object schema" do
     date32_value.bytes.should eq(int32_value.bytes)
   end
 
-  it "retains refusals for other temporal types, wrappers, containers, and BFloat16" do
+  it "retains refusals for malformed Date spellings, wrappers, containers, and BFloat16" do
     unsupported_types = [
-      CrystalClick::BinaryDataType.datetime,
-      CrystalClick::BinaryDataType.datetime64(3),
-      CrystalClick::BinaryDataType.primitive("Time"),
-      CrystalClick::BinaryDataType.time64(3),
       w133_schema_type("BFloat16"),
       CrystalClick::BinaryDataType.nullable(w133_schema_type("Int64")),
       CrystalClick::BinaryDataType.array(w133_schema_type("Int64")),
@@ -111,10 +107,6 @@ describe "W133 declared Date and Date32 Object schema" do
     end
 
     [
-      "JSON(n DateTime)",
-      "JSON(n DateTime64(3))",
-      "JSON(n Time)",
-      "JSON(n Time64(3))",
       "JSON(n Date(1))",
       "JSON(n Date32(1))",
       "JSON(n date)",

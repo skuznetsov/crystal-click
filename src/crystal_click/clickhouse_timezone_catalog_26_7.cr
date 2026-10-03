@@ -603,8 +603,37 @@ module CrystalClick
     TIMEZONE_NAMES
 
     def self.includes?(name : String) : Bool
-      return true if name == "Africa/Abidjan" || name == "Zulu"
-      PINNED_NAMES.includes?("\n#{name}\n")
+      includes_slice?(name.to_slice, 0, name.bytesize)
+    end
+
+    # Compare a borrowed candidate directly against line-delimited manifest
+    # entries without building a temporary lookup String.
+    def self.includes_slice?(bytes : Bytes, first : Int32, after : Int32) : Bool
+      return false if first < 0 || after < first || after > bytes.size
+      return false if first == after
+      manifest = PINNED_NAMES.to_slice
+      line_first = 0
+      while line_first <= manifest.size
+        line_after = line_first
+        while line_after < manifest.size && manifest[line_after] != '\n'.ord.to_u8
+          line_after += 1
+        end
+        if line_after - line_first == after - first
+          matches = true
+          index = 0
+          while index < after - first
+            unless manifest[line_first + index] == bytes[first + index]
+              matches = false
+              break
+            end
+            index += 1
+          end
+          return true if matches
+        end
+        break if line_after == manifest.size
+        line_first = line_after + 1
+      end
+      false
     end
   end
 end

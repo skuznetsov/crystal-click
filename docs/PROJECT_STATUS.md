@@ -7,8 +7,8 @@ the W129 bounded Object catalog integration, W130 mixed table delivery
 fields `e043be7`, W133 paired declared Date/Date32 `2e150f4`, W135
 paired bare declared UUID/IPv4/IPv6 `ffa5730`, W136 paired bare
 declared FixedString(N) `700d5b8`, W137 canonical bare declared
-Decimal(P, S) `73914c8`, and W138 canonical bare declared Enum8/Enum16 over
-that checkpoint in
+Decimal(P, S) `73914c8`, W138 canonical bare declared Enum8/Enum16 `0c63c32`,
+and W139 paired declared DateTime/DateTime64/Time/Time64 over that checkpoint in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 W134 extracts nine existing Array/Map row/slice owners to separate files,
 preserving their exact bodies and API. Root passed 22 focused DEBUG, 37 adjacent
@@ -36,6 +36,14 @@ literal signed RowBinary, actual CHECK and four library ATTACH operations;
 an independent Ruby checker rechecks all eight stores without Crystal codecs.
 Five fresh unchanged neighboring stock oracles pass. Full-width map admission
 (256/65,536 entries) is schema evidence, not exhaustive physical-map coverage.
+W139 root gates pass 83 focused DEBUG, 470 adjacent RELEASE and 2,291
+complete-inventory examples (363 unique specs in 16 disjoint non-release
+groups). Eight fresh native/library cells cover 37 temporal declarations,
+every scale 0..9 and sampled implicit/explicit/alias/fixed zones; all actual
+CHECK and four library ATTACH operations pass. An independent arithmetic/Ruby
+checker rechecks all eight stores, and six unchanged neighboring stock oracles
+pass. This is a bounded temporal Object certificate, not all-zone/recursive
+or current-master executable qualification.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -99,7 +107,13 @@ source/runtime identities and executed evidence.
   same eight cells. Same-width integer aliases and changed maps are not equal.
   Full 256/65,536-entry maps remain eligible with sufficient logical budgets.
   The shared declared-field policy now admits 21 static nominal types plus
-  the FixedString, Decimal and Enum parameterized families. See
+  the FixedString, Decimal and Enum families. W139 adds canonical DateTime/
+  DateTime64/Time/Time64 through one declaration owner and the same paired
+  transport/consumer paths. Scale and exact implicit/explicit/alias/fixed zone
+  identity are retained; eight cells qualify every scale and sampled zones.
+  Default-scale aliases, wrappers and recursive declared fields remain refused.
+  The inherited timezone manifest still lacks runtime-added America/Coyhaique.
+  See
   [the example](../examples/write_object_document_part.cr) and
   [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
@@ -132,7 +146,7 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W138 provide
+1. **General JSON compatibility.** W117-W139 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
@@ -148,8 +162,10 @@ source/runtime identities and executed evidence.
    evidence; W137 adds canonical bare Decimal(P, S) with exact persisted P/S
    identity and independent signed coefficients; W138 adds canonical bare
    Enum8/Enum16 with nominal full-map and independent label/signed-byte checks.
-   Other temporal and recursive declared-field families remain open within
-   Object, even where standalone part support exists. The older scalar typed-path behavior is
+   W139 adds canonical DateTime/DateTime64/Time/Time64 with exact scale/zone
+   identity and independent ticks/text checks. Recursive declared-field
+   families and the inherited timezone-profile gap remain open within Object,
+   even where standalone part support exists. The older scalar typed-path behavior is
    unchanged. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required, and whole-Object projection child reads remain refused. See
@@ -189,9 +205,10 @@ source/runtime identities and executed evidence.
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
-   bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S) and Enum8/Enum16.
-   The next proposed lanes are parameterized temporal and recursive declared
-   fields, not yet admitted Object support. Reuse existing leaf owners only
+   bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
+   and canonical DateTime/DateTime64/Time/Time64.
+   The next proposed lanes are recursive declared fields and the timezone
+   profile gap, not yet admitted Object support. Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary
@@ -208,13 +225,15 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-f86ca42b`, revision
-`f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`.
+`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-9007d227`, revision
+`9007d227b64a3f8b667fc5258ceb2923f3cf477d`.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Root's recursive comparisons against
-`101871ba` found identical DataTypes/Serializations, DataTypes and Columns;
-MergeTree differs in 34 files. No executable from
-this newest checkout has been built or qualified.
+comparison and earlier identities. Against the previous `f86ca42b` snapshot,
+Serializations, Columns and Formats are identical; DataTypes adds one test,
+and two MergeTree plus two Compression files differ. The Wide writer now
+aligns compressed-buffer sizing to whole fixed-width values, so unchanged
+leaf serializers do not imply unchanged compressed framing. This is source
+evidence only: no executable from this checkout has been built or qualified.
 
 This summary becomes stale when source admission, facade dispatch, the tested
 runtime/profile or the architecture boundary changes. Refresh it from the

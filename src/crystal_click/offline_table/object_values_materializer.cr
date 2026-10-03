@@ -148,6 +148,12 @@ module CrystalClick
           bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
           name = type.name
           bytes = checked_add(bytes, instance_sizeof(String).to_u64 + name.bytesize.to_u64 + 1_u64)
+          if temporal = type.temporal_type
+            bytes = checked_add(bytes, instance_sizeof(BinaryTemporalType).to_u64)
+            if zone = temporal.time_zone?
+              bytes = checked_add(bytes, zone.logical_charge)
+            end
+          end
         end
         # Include the detached typed-path snapshot used above while estimating;
         # the schema itself remains the single retained descriptor owner.

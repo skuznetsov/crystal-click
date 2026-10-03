@@ -20,6 +20,10 @@ declared Enum8/Enum16, exact nominal maps and opaque label bytes through one
 cohesive declaration owner and the existing fixed-value/bulk owners. Eight
 fresh native/library cells pass label, signed-byte and public-consumer checks;
 full-width map admission is schema evidence, not exhaustive physical coverage.
+W139 adds canonical DateTime/DateTime64/Time/Time64 declared fields through
+the same paired owners, retaining scale and exact timezone identity. Its eight
+fresh native/library cells cover all scales and sampled zones, not every zone
+or recursive composition.
 The exact admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
@@ -45,6 +49,77 @@ Performance work remains parked.
 W138 transition: canonical bare declared Enum8/Enum16 is verified within the
 executed profile below over W137 `73914c8`. This does not admit wrappers,
 recursive fields, new physical layouts, enum arithmetic or broader MV/projections.
+
+W139 transition: canonical DateTime/DateTime64/Time/Time64 declared fields are
+verified within the executed profile below over W138 `0c63c32`. Existing raw
+fixed-value and bulk codecs preserve scale and explicit timezone identity;
+recursive fields and broader physical layouts remain refused.
+
+### W139 implementation seal
+
+- Base: W138 `0c63c32`; source reference `9007d227b64a3f8b667fc5258ceb2923f3cf477d`.
+  The runtime remains 26.10.1.1201 / `d9bcb5ab007f0f6299f7f973f2642245bab3d028`,
+  not a build of that source. Root's isolated four-family probe admits ten
+  declarations and passes twenty literal scalar/Object RowBinary comparisons
+  plus actual `CHECK TABLE`=1. This is a small discriminator, not the paired
+  part matrix. Its initial query-file loader swallowed the following SELECT;
+  separate stdin insertion fixed that harness boundary. An additional unset-TZ
+  probe showed that bare Object text uses its ambient type timezone while
+  scalar text honors session_timezone; `TZ=UTC` is asserted for the producer.
+  Pooling was not the cause established by this probe. Explicit zone names
+  and the unchanged byte expectations pass together in one mixed Object.
+  A second root-run native gate passes 37 declarations across every scale
+  0..9, 74 scalar/Object nominal witnesses, literal RowBinary and zone-specific
+  text, with real CHECK=1. A separate Ruby arithmetic check validates all
+  twenty scaled vectors and zone-second offsets without Crystal codecs.
+  Runtime `system.time_zones` has 598 names: `America/Coyhaique` is added
+  relative to the inherited 597-name manifest. W139 does not silently widen
+  that pinned zone profile; this new zone remains a separate compatibility gap.
+- Admitted surface: `DateTime`, `DateTime('zone')`, `DateTime64(p)`,
+  `DateTime64(p, 'zone')`, `Time`, `Time64(p)`, p=0..9. Zones inherit the
+  exact existing TimezoneName catalog/fixed-offset profile. Bare versus
+  explicit UTC and aliases remain distinct local nominal identities;
+  no stock timezone-insensitive equality is imported.
+- Rejected: default-scale aliases, noncanonical parameter spacing/numbers,
+  empty zones, timezone parameters on Time/Time64, names outside the inherited
+  zone profile, wrappers/recursive declared fields, other Object/shared-data
+  versions/layouts, new projection/MV behavior or arbitrary-schema writing.
+- Owners: one cohesive Object temporal-declaration owner/file plus the shared
+  ObjectTypedFieldType policy; existing BinaryTemporalType/TimezoneName retain
+  immutable scalar identity. No per-width/zone/scale codec or facade branch.
+  Narrow read-only name sizing/rendering seams may avoid pre-budget name copies.
+- Risk: CAUTION (persisted schema admission). Rollback is the exact atomic
+  change over clean base 0c63c32; source-reference refresh is independent.
+  Main failure mode is silently erasing scale/zone identity or passing an
+  equal-width integer alias. Guards must reject schema/plan/value mismatches
+  before publication and zero-window/callback delivery.
+- Consumer inventory: root's bounded
+  `rg -n 'ObjectTypedFieldType|ObjectDocumentSchema' src/crystal_click` found
+  shared schema/parser, ObjectColumnReader, Object writer/metadata,
+  WidePartTable Object adapter, and OfflineTable Object materializer. These
+  reuse existing fixed-value/bulk ownership. Catalog retained accounting must
+  include temporal parameters and owned zones rather than treating them as
+  display-name bytes only; logical limits are not RSS limits.
+- Order: native value discriminator; new schema/root specs RED on base;
+  minimal declaration policy/owner; focused and adjacent RELEASE checks;
+  paired stock part matrix with literal RowBinary, retained names, actual
+  CHECK and public readers/catalog/table/windows/PK candidates; fresh
+  neighboring stock regressions; scoped hostile review; certificate and commit.
+- DoD: root-guarded serial Crystal specs and stock scripts, all expected cases
+  pass, exact type/scale/zone/raw carrier witnesses agree, seeded negative
+  comparators fail, library parts pass actual ATTACH/CHECK. Full inventory is
+  disjoint bounded spec groups, not combined-process/full RELEASE evidence.
+  Source comparison alone and empty-table CHECK output cannot close the slice.
+- Falsifiers: 0/9 scale bounds and malformed 10/negative/leading-zero aliases;
+  every admitted scale; implicit/UTC/alias/fixed identity; owned zone access;
+  exact/one-short aggregate schema and public document budgets, with
+  conservative catalog schema-owner inclusion; same-width integer,
+  scale and zone mismatch; same-wall versus same-instant zone witnesses;
+  signed raw-carrier extrema separate from calendar-formatting range;
+  changed mark distribution and altered CHECK result.
+- Stop: native family/scale admission failure must narrow or redesign the
+  seal, not be silently removed from the matrix. Execution failure or budget
+  ambiguity prevents a VERIFIED claim. Performance remains parked.
 
 ## Source anchor and compatibility boundary
 
@@ -5149,3 +5224,124 @@ certify RSS, transient allocation, caller retention or authentication.
 Decay on schema/policy/bulk/adapter, limit/profile/comparator/publication,
 source/runtime/toolchain changes or loss of retained evidence. Reexecute
 affected positive and negative gates before reuse; the overall goal stays active.
+
+## W139 declared temporal Object fields — executed certificate (2026-10-03)
+
+VERIFIED within this bounded profile over W138 `0c63c32` and the independent
+source-reference refresh `ee28a18`. The overall paired-types/MV/projections
+goal remains active. Canonical `DateTime`, `DateTime('zone')`, `DateTime64(p)`,
+`DateTime64(p, 'zone')`, `Time` and `Time64(p)` share the existing fixed-value/
+bulk, whole-part writer and public consumer owners, with p=0..9. The separate
+ObjectTemporalDeclaration module/file owns borrowed grammar, preflight and
+direct name rendering; it introduces no new codec or physical facade branch.
+
+Local nominal identity retains family, scale and exact timezone spelling:
+bare and explicit UTC, UTC aliases and signed fixed-zero names are distinct.
+Zones inherit the 597-name manifest and canonical quarter-hour fixed offsets;
+schema tests are not exhaustive stock qualification of all zones. The measured
+598-name runtime adds America/Coyhaique, which remains an explicit open gap.
+Default-scale aliases, noncanonical spacing/numbers, empty/unknown zones,
+timezone parameters on Time/Time64 and recursive declared fields are refused.
+Raw carrier interoperability does not implement calendar conversion or SQL
+temporal functions.
+
+The stack Preflight borrows the declaration and rescans bounds, tag, scale,
+byte count and exact zone span before proportional descriptor materialization.
+Forged metadata and stale invalid bytes are rejected. A valid same-size
+UTC-to-GMT edit is revalidated and retains the same charge; no snapshot or
+concurrent-mutation guarantee is claimed. Schema parsing charges both known
+zone buffers before allocation; constructor rendering sizes directly from
+immutable metadata. Timezone name access returns detached Strings, and its
+rendering seam does not hand a custom IO the owned mutable byte slice.
+
+Exact/one-short tests cover cumulative schema admission and the public
+document materialization budget, including zone-owner deltas. The private
+catalog schema estimate conservatively includes temporal/zone owners; its
+exact total threshold is not directly tested. These are logical admission
+limits, not RSS, transient-allocation or caller-retention bounds.
+
+Eight fresh cells cover native JSONEachRow/library ATTACH × ordinary String
+single_stream/with_size_stream × Dynamic BASIC/COMPACT. The physical corridor
+is hashed Wide, LZ4, Object V3/Dynamic V3, one shared MAP bucket, Default
+serializers, plain adaptive .mrk2 and primary.idx. Each cell has seven rows,
+37 temporal declarations plus explicit t String, d Dynamic(Int64) and shared
+String spill. Thirty-seven declarations sample bare/UTC DateTime64 and Time64
+at every scale, New York/US-Eastern identity, and Fixed/UTC+05:45:00.
+The producer asserts TZ=UTC, session_timezone=UTC and bare descriptor zones:
+the native probe showed ambient bare Object parsing and session-resolved
+scalar parsing can differ when TZ is unset. Pooling was not its cause.
+
+All cells pass actual CHECK=1; the four library-owned parts pass ATTACH.
+Full/selected RowBinary, nominal SQL types and all 37 scale-sensitive
+wall/instant text witnesses agree. File/column full/middle/zero reads,
+catalog owned materialization/reread, table batches/windows and offsets pass.
+The actual grid is [2,2,2,1]; PK=6 delivers mark 2's complete keys [5,6],
+and application residual filtering selects 6. Local consumer specs separately
+transport UInt32/Int32/Int64 carrier extrema without calendar formatting.
+Wrong zone/raw-type inputs fail before publication, and a changed later-part
+zone fails before any callback even when that part has no selected marks.
+
+Seven seeded controls reject raw-byte, scale, zone and Int64-alias drift,
+wrong CHECK, a changed grid with the same row total and truncated RowBinary.
+These are comparator-sensitivity checks, not corrupted-part qualification.
+Root's independent Ruby checker derives epoch/zone offsets and p=0..9 ticks
+with integer arithmetic, without Crystal codecs or the driver's hex vectors.
+Fresh queries against all eight stores pass 37 nominal types, 7x37 carriers
+and actual CHECK=1. The first stock attempt omitted explicit t String and
+therefore produced the wrong Dynamic roster; the fixture was corrected to
+38 declared paths without loosening the d-only roster or byte expectations.
+
+Root executed these serial gates on the final production/spec/script source:
+
+- RED on unchanged W138: nine examples, seven intended admission errors,
+  two passing existing-boundary checks, guard exit 1.
+- Focused DEBUG: 83 examples; adjacent RELEASE: 470 examples, including four
+  W104 timezone/temporal spec files; zero failures/errors/pending, exit 0.
+- Complete inventory: 363 sorted unique specs in 16 disjoint non-release
+  groups, 2,291 examples; all groups and parent guard pass. This is not a
+  combined-process or complete RELEASE certificate.
+- Fresh eight-cell W139 stock matrix and seven negative controls pass,
+  exit 0; retained root `/private/tmp/crystal-click-object-temporal-w139.x54vnT`.
+- Independent arithmetic/live-stock Ruby check passes, guard exit 0.
+- Fresh unchanged W138/W137/W136/W135/W133/W132 stock regressions all pass,
+  serial parent guard exit 0. Their retained roots under /private/tmp are,
+  respectively, `crystal-click-object-enum-w138.M7MCzh`,
+  `crystal-click-object-decimal-w137.Vc54To`,
+  `crystal-click-object-fixed-string-w136.KuWj7U`,
+  `crystal-click-object-identifiers-w135.PQ0RGV`,
+  `crystal-click-object-dates-w133.gmUR93` and
+  `crystal-click-object-numeric-w132.Y4c78J`.
+- Formatter --check, shell syntax and diff checks pass.
+
+Retained root evidence is `/private/tmp/crystal-click-w139-root.C36Gai`:
+`run_specs.sh focused|release|full`, focused-debug.log, adjacent-release.log,
+full-inventory.log, full-spec-inventory.txt, check_matrix.rb and the six
+stock-wNNN-regression.log files. Replay uses Crystal 1.21.0 / LLVM 22.1.8
+AArch64, SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk,
+TMPDIR=/private/tmp, isolated CRYSTAL_CACHE_DIR, --single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace; full adds --no-debug, release --release.
+Root's run_safe.sh guards use 32768 MiB, minimum free memory 50%, 900 seconds
+for full/matrix/regressions and 120 seconds for the independent Ruby check.
+Replay the committed matrix with W139_KEEP_TMP=1 and
+`bash scripts/check_object_temporal_w139.sh`; check_matrix.rb takes its retained
+root as the only argument. W139 stock processes receive TZ=UTC; the matrix
+also checks process/session and bare descriptor timezone witnesses.
+
+The source reference is the separate unbuilt 9007d227 shallow checkout in
+CLICKHOUSE_SOURCE_REFERENCE.md. Runtime remains ClickHouse local 26.10.1.1201,
+build d9bcb5ab007f0f6299f7f973f2642245bab3d028, executable SHA-256
+bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2.
+The matrix asserts version, hash and both GIT_HASH/VERSION_GITHASH before
+production. This is not executable qualification of current master.
+
+Root scoped hostile verdict: ROBUST. Root inspected declaration/ownership,
+budget, nominal and pre-publication/callback boundaries, then independently
+executed positive, seeded-negative, arithmetic and neighboring stock gates.
+Luna implementation/static review is correlated support, not the runtime
+certificate. Scope excludes recursive fields, additional Object versions/
+shared layouts, Compact/Sparse parts, arbitrary-schema writers, broader
+MV/projection behavior and performance. Legacy facade decomposition remains
+unfinished. Decay on owner/policy/codec/consumer/publication, limit/profile,
+comparator, source/runtime/toolchain changes or loss of retained evidence;
+rerun affected gates before reuse. Next frontier is separately sealed recursive
+declared fields and the inherited timezone-profile gap; performance stays parked.

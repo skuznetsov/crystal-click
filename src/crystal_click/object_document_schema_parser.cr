@@ -231,6 +231,7 @@ module CrystalClick
       resolution = ObjectTypedFieldType.resolve_slice(@bytes, type_first, after) ||
                    unsupported!("typed Object JSON fields admit only supported nominal scalar types")
       budget.charge_wire_bytes((resolution.byte_size + 1).to_u64)
+      budget.charge_wire_bytes(checked_multiply(resolution.explicit_zone_bytes, 2_u64))
       if resolution.enum_entry_count > 0_u64
         budget.preflight_children(resolution.enum_entry_count)
         budget.charge_wire_bytes(checked_multiply(resolution.decoded_label_bytes, 2_u64))

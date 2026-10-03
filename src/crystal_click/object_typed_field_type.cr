@@ -35,11 +35,13 @@ module CrystalClick
       getter byte_size : Int32
       getter enum_entry_count : UInt64
       getter decoded_label_bytes : UInt64
+      getter explicit_zone_bytes : UInt64
 
       @tag : UInt8
       @parameter : Int32
       @scale : Int32
       @enum_preflight : ObjectEnumDeclaration::Preflight?
+      @temporal_preflight : ObjectTemporalDeclaration::Preflight?
 
       def initialize(
         @tag : UInt8,
@@ -49,11 +51,21 @@ module CrystalClick
         @enum_entry_count : UInt64 = 0_u64,
         @decoded_label_bytes : UInt64 = 0_u64,
         @enum_preflight : ObjectEnumDeclaration::Preflight? = nil,
+        @temporal_preflight : ObjectTemporalDeclaration::Preflight? = nil,
+        @explicit_zone_bytes : UInt64 = 0_u64,
       )
       end
 
       def materialize : BinaryDataType
-        if @tag == BinaryDataType::TAG_ENUM8 || @tag == BinaryDataType::TAG_ENUM16
+        if temporal = @temporal_preflight
+          unless temporal.tag == @tag && temporal.scale == @scale &&
+                 temporal.byte_size == @byte_size && temporal.zone_byte_size == @explicit_zone_bytes &&
+                 @parameter == 0 && @enum_preflight.nil? && @enum_entry_count == 0_u64 &&
+                 @decoded_label_bytes == 0_u64
+            raise ArgumentError.new("temporal typed Object resolution metadata changed after preflight")
+          end
+          temporal.materialize
+        elsif @tag == BinaryDataType::TAG_ENUM8 || @tag == BinaryDataType::TAG_ENUM16
           entries = @enum_preflight.not_nil!.materialize_entries
           @tag == BinaryDataType::TAG_ENUM8 ? BinaryDataType.enum8(entries) : BinaryDataType.enum16(entries)
         elsif @tag == BinaryDataType::TAG_FIXED_STRING
@@ -77,13 +89,15 @@ module CrystalClick
     end
 
     def self.name_for(type : BinaryDataType) : String?
-      name_for_tag(type.tag)
+      ObjectTemporalDeclaration.name_for(type) || name_for_tag(type.tag)
     end
 
     # Return the canonical rendered byte count without allocating a
     # parameterized type name. This is used during declaration preflight.
     def self.byte_size_for(type : BinaryDataType) : UInt64?
-      if name = name_for(type)
+      if ObjectTemporalDeclaration.handles_type?(type)
+        ObjectTemporalDeclaration.byte_size_for(type)
+      elsif name = name_for(type)
         return name.bytesize.to_u64
       elsif type.tag == BinaryDataType::TAG_FIXED_STRING
         width = type.fixed_size
@@ -103,6 +117,9 @@ module CrystalClick
     # Render a type only after its complete declaration passed byte-budget
     # admission. FixedString's numeric width is written directly to the IO.
     def self.append_name(io : IO, type : BinaryDataType) : Nil
+      if ObjectTemporalDeclaration.handles_type?(type)
+        return ObjectTemporalDeclaration.append_name(io, type)
+      end
       if name = name_for(type)
         io << name
         return nil
@@ -150,11 +167,23 @@ module CrystalClick
     end
 
     # Resolve exactly the bounded nominal grammar used by Object typed fields:
-    # a static primitive name, canonical FixedString(N), Decimal(P, S), or a
-    # canonical bare Enum8/Enum16 declaration. The returned stack value carries
-    # the byte and map-edge charges and is materialized only after admission.
+    # a static primitive, temporal declaration, canonical FixedString(N),
+    # Decimal(P, S), or canonical bare Enum8/Enum16 declaration. The returned
+    # stack value carries the byte and map-edge charges and is materialized
+    # only after admission.
     def self.resolve_slice(bytes : Bytes, first : Int32, after : Int32) : Resolution?
       return nil if first < 0 || after < first || after > bytes.size
+
+      if temporal = ObjectTemporalDeclaration.resolve_slice(bytes, first, after)
+        return Resolution.new(
+          temporal.tag,
+          0,
+          temporal.byte_size,
+          temporal.scale,
+          temporal_preflight: temporal,
+          explicit_zone_bytes: temporal.zone_byte_size,
+        )
+      end
 
       TYPE_NAMES.each do |entry|
         name = entry[1]

@@ -1,6 +1,6 @@
 # CrystalClick Modularization Frontier
 
-Current transition (2026-10-03): W134 behavior-preserving Array/Map row-owner
+Current architecture checkpoint (2026-10-03): W134 behavior-preserving Array/Map row-owner
 extraction over W133 `2e150f4`, verified within the executed scope below.
 Nine existing classes now have one file each; no API, type, codec, limit or
 physical-profile admission changed. This is a navigation improvement, not
@@ -37,7 +37,18 @@ per-width codec or new physical facade branch. Root passes 72 focused DEBUG,
 197 adjacent RELEASE and 2,280 complete-inventory examples, the eight-cell
 stock oracle and five unchanged stock regressions; scoped evidence and logical
 budget limitations remain in the JSON frontier. This is not completion of the
-legacy facade decomposition. No
+legacy facade decomposition. W139 adds one cohesive ObjectTemporalDeclaration
+module/file for canonical temporal grammar, stack preflight and direct
+rendering, using BinaryTemporalType/TimezoneName rather than a new codec.
+The shared typed-field policy delegates to it, and the existing writer/reader/
+table facades do not grow temporal branches. Narrow borrowed-zone admission
+and read-only sizing/rendering seams preserve ownership and pre-budget sizing;
+the private catalog materializer includes retained temporal/zone owners.
+Root passes 83 focused DEBUG, 470 adjacent RELEASE and 2,291 complete-inventory
+examples, the fresh eight-cell stock matrix, independent arithmetic/stock
+checks and six unchanged neighboring stock regressions. Capability scope and
+logical-budget caveats remain in the JSON frontier. The current facade counts
+below remain unchanged; one new owner does not complete their decomposition. No
 MV/projection or performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight

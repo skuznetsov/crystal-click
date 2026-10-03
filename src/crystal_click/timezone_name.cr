@@ -27,6 +27,18 @@ module CrystalClick
       String.new(@name.to_slice)
     end
 
+    def name_byte_size : Int32
+      @name.bytesize
+    end
+
+    # Do not hand an IO the owned String's mutable byte slice. Apart from
+    # preserving ownership, the byte-at-a-time seam avoids a detached zone
+    # String during schema preflight/rendering.
+    def append_name(io : IO) : Nil
+      @name.to_slice.each { |byte| io.write_byte(byte) }
+      nil
+    end
+
     # Logical retained-object charge: this owner, the String object it owns,
     # and its exact UTF-8 bytes plus terminator.
     def logical_charge : UInt64
@@ -43,18 +55,17 @@ module CrystalClick
       @name.hash(hasher)
     end
 
-    private def self.canonical_fixed_offset?(name : String) : Bool
-      bytes = name.to_slice
-      return false unless bytes.size == 18
-      return false unless name.starts_with?("Fixed/UTC")
-      return false unless bytes[9] == '+'.ord.to_u8 || bytes[9] == '-'.ord.to_u8
-      return false unless bytes[12] == ':'.ord.to_u8 && bytes[15] == ':'.ord.to_u8
-      return false unless bytes[16] == '0'.ord.to_u8 && bytes[17] == '0'.ord.to_u8
-      return false unless digit?(bytes[10]) && digit?(bytes[11]) &&
-                          digit?(bytes[13]) && digit?(bytes[14])
+    private def self.canonical_fixed_offset?(bytes : Bytes, first : Int32, after : Int32) : Bool
+      return false unless after - first == 18
+      return false unless slice_equals?(bytes, first, first + 9, "Fixed/UTC")
+      return false unless bytes[first + 9] == '+'.ord.to_u8 || bytes[first + 9] == '-'.ord.to_u8
+      return false unless bytes[first + 12] == ':'.ord.to_u8 && bytes[first + 15] == ':'.ord.to_u8
+      return false unless bytes[first + 16] == '0'.ord.to_u8 && bytes[first + 17] == '0'.ord.to_u8
+      return false unless digit?(bytes[first + 10]) && digit?(bytes[first + 11]) &&
+                          digit?(bytes[first + 13]) && digit?(bytes[first + 14])
 
-      hours = (bytes[10] - '0'.ord.to_u8).to_i32 * 10 + (bytes[11] - '0'.ord.to_u8).to_i32
-      minutes = (bytes[13] - '0'.ord.to_u8).to_i32 * 10 + (bytes[14] - '0'.ord.to_u8).to_i32
+      hours = (bytes[first + 10] - '0'.ord.to_u8).to_i32 * 10 + (bytes[first + 11] - '0'.ord.to_u8).to_i32
+      minutes = (bytes[first + 13] - '0'.ord.to_u8).to_i32 * 10 + (bytes[first + 14] - '0'.ord.to_u8).to_i32
       hours <= 14 && (hours < 14 || minutes == 0) && minutes <= 59 && minutes % 15 == 0
     end
 
@@ -65,13 +76,29 @@ module CrystalClick
     # Public so direct construction enforces the same admission boundary as
     # parsing and factories; the mutable manifest itself remains private.
     def self.admitted?(name : String) : Bool
-      return false if name.empty? || name.bytesize > MAX_NAME_BYTES
-      # The catalog is line-delimited. Restrict names to visible ASCII so a
-      # caller cannot inject line boundaries into the membership probe.
-      name.to_slice.each do |byte|
+      admitted_slice?(name.to_slice, 0, name.bytesize)
+    end
+
+    # Nonallocating admission for a borrowed token range. The range is checked
+    # before either catalog or fixed-offset matching reads from it.
+    def self.admitted_slice?(bytes : Bytes, first : Int32, after : Int32) : Bool
+      return false if first < 0 || after < first || after > bytes.size
+      return false if after == first || after - first > MAX_NAME_BYTES
+      bytes[first, after - first].each do |byte|
         return false unless byte >= 0x21_u8 && byte <= 0x7e_u8
       end
-      ClickHouseTimezoneCatalog26_7_1_1315.includes?(name) || canonical_fixed_offset?(name)
+      ClickHouseTimezoneCatalog26_7_1_1315.includes_slice?(bytes, first, after) ||
+        canonical_fixed_offset?(bytes, first, after)
+    end
+
+    private def self.slice_equals?(bytes : Bytes, first : Int32, after : Int32, expected : String) : Bool
+      return false if first < 0 || after < first || after > bytes.size
+      return false unless after - first == expected.bytesize
+      expected_bytes = expected.to_slice
+      expected_bytes.size.times do |index|
+        return false unless bytes[first + index] == expected_bytes[index]
+      end
+      true
     end
   end
 end
