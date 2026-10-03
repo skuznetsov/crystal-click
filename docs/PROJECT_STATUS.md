@@ -64,6 +64,14 @@ examples (368 unique specs, 16 disjoint non-release groups), plus nine
 bidirectional nominal row witnesses and descriptor/name negative controls.
 The current transition and independent source/runtime evidence are in
 [OBJECT_LOW_CARDINALITY_FRONTIER.md](OBJECT_LOW_CARDINALITY_FRONTIER.md).
+W142 adds the standalone shared physical LC dictionary/index prerequisite in
+[LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md](LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md).
+Root passes 72 focused DEBUG, 241 affected RELEASE and 2,361 complete-inventory
+examples (369 unique specs in 16 disjoint non-release groups), plus nine exact
+native lane/grid witnesses, nine stock Native consumers and four cause-specific
+corruption/comparator controls. Stock consumption converts global framing to
+Native additional-only framing; this is not a new library-part ATTACH/CHECK.
+It does not widen recursive bulk, Object, Dynamic or complete-part admission.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -207,7 +215,9 @@ source/runtime identities and executed evidence.
    widen public part admission. Generic Variant arms, shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
-   interchangeable capabilities.
+   interchangeable capabilities. The general binary descriptor kernel still
+   lacks Interval descriptors; source eligibility for LC(Interval) is not
+   equivalent to represented values or qualified physical parts.
 3. **MV/projection coverage.** Offline declaration metadata and explicit reads
    of fully covered physical Wide projection child parts are available. The
    persisted MV materializer is one explicit-TO identity projection over
@@ -240,8 +250,10 @@ source/runtime identities and executed evidence.
    bounded physical witnesses. The next proposed lanes are declared
    LowCardinality/Variant/Dynamic and the timezone profile gap, not yet admitted
    Object support. W141 establishes the logical LowCardinality prerequisite;
-   dictionary/index roles, prefix state and mark scheduling are the next
-   physical transition. Reuse existing leaf owners only
+   W142 adds the separately qualified standalone dictionary/index codec.
+   Recursive bulk role binding, flattened occurrence schedules and dictionary
+   state integration are next, followed by declared Object LC and complete
+   independently qualified parts. Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary

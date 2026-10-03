@@ -287,12 +287,17 @@ the physical planner's narrowed early-render guard.
 
 ## Continuation
 
+The subsequent bounded standalone physical codec and executed W142 gates are in
+[LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md](LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md).
+They do not widen this historical Object declaration/part boundary.
+
 Previous goal turn made progress: W140 implementation and paired evidence were
 committed as `36720ba`; the working tree was clean before W141.
 Active return pointer: paired types, then MV/projections, then performance
 qualification against original ClickHouse with at most 10% speed deficit.
-Next physical signal: resolve and qualify LC dictionary/index roles, prefix
-state, index widths, null/default reservation and cross-mark dictionaries,
-then a library bulk RED and independent paired persisted parts. W141's nominal
-row kernel is the prerequisite, not closure of Object/LC storage or the broad
+W142 separately qualifies the standalone dictionary/index roles, prefix state,
+index widths, null/default reservation and cross-mark dictionaries within its
+mark-aligned profile. Next physical signal: a library recursive bulk RED,
+role/occurrence/state integration and independent paired persisted parts.
+W141's nominal row kernel is the prerequisite, not closure of Object/LC storage or the broad
 types/MV/projection objective. Performance remains parked.

@@ -80,6 +80,24 @@ preflight or a physical LC admission. Capability and executed gates remain in
 [OBJECT_LOW_CARDINALITY_FRONTIER.md](OBJECT_LOW_CARDINALITY_FRONTIER.md).
 Large reader/writer/table decomposition remains unfinished.
 
+W142 adds four cohesive module owners, each in its own file:
+`BinaryLowCardinalityStorageStreams` owns physical constants and scalar/size
+helpers; `BinaryLowCardinalityStorageEncoder` owns canonical dictionary/ID
+construction and write preflight; `BinaryLowCardinalityStorageDecoder` owns
+mark-state validation, budget preflight and selected output replay;
+`BinaryLowCardinalityStorageCodec` is the paired public facade. Private
+DictionaryRecord/IndexPlan stack metadata remains with its decoder owner.
+The loader imports each once. No class per leaf/container combination or new
+branch in the legacy physical reader/writer/table/catalog is introduced.
+Root passes 72 focused DEBUG, 241 affected RELEASE and 2,361 complete-inventory
+examples (369 unique specs, 16 serial disjoint non-release groups), plus the
+bounded nine-witness physical exchange and comparator negatives recorded in
+[LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md](LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md).
+These gates establish this ownership/profile seam, not lower RSS, faster
+reads, arbitrary LC record splitting or recursive bulk/Object integration.
+Legacy facades remain 15,985 reader / 25,991 writer / 6,786 table / 1,560
+catalog lines. Full responsibility-level decomposition remains open.
+
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Their
 historical admission boundaries are recorded in their respective sections.

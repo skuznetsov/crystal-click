@@ -34,7 +34,11 @@ W141 establishes the separate nominal LowCardinality logical descriptor/value
 prerequisite in
 [OBJECT_LOW_CARDINALITY_FRONTIER.md](OBJECT_LOW_CARDINALITY_FRONTIER.md).
 Its RowBinary kernel does not admit Object declared LC or persisted
-dictionary/index streams; these remain the next physical transition.
+dictionary/index streams. W142 separately qualifies the bounded standalone
+physical LC codec in
+[LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md](LOW_CARDINALITY_BULK_STORAGE_FRONTIER.md).
+This prerequisite does not change Object or ordinary recursive bulk admission;
+their role/occurrence/state wiring and complete-part qualification remain next.
 The exact admitted profiles and executed gates are in their sections below. These do not widen
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
