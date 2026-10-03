@@ -140,20 +140,24 @@ describe "W145 LowCardinality physical stream binding" do
 
   it "preflights the exact root LC roster budget and each descriptor axis" do
     type = w145_low(CrystalClick::BinaryDataType.primitive("String"))
-    # root.dictionary/root.indexes are 15+12 role bytes; x.dict/x are 6+1
-    # basename bytes. The descriptor contributes two nodes and one child edge;
-    # the two retained roles contribute two more elements.
-    exact = w145_physical_limits(max_depth: 1, max_nodes: 2, max_elements: 3, max_bytes: 34)
+    # The role keys and rendered basenames cost 34 bytes. The retained root
+    # site path plus dictionary-role prefix key add 19 bytes, and the planner
+    # keeps two LC-site role records in addition to the three roster elements.
+    exact = w145_physical_limits(max_depth: 1, max_nodes: 2, max_elements: 5, max_bytes: 53)
     CrystalClick::BinaryBulkPhysicalPlan.new(type, "x", limits: exact).stream_names.should eq({
       "root.dictionary" => "x.dict",
       "root.indexes"    => "x",
     })
+    plan = CrystalClick::BinaryBulkPhysicalPlan.new(type, "x", limits: exact)
+    plan.prefix_size_for("root.dictionary").should eq(8)
+    plan.prefix_size_for("root.indexes").should eq(0)
+    expect_raises(KeyError) { plan.prefix_size_for("root.data") }
 
     [
-      w145_physical_limits(max_depth: 0, max_nodes: 2, max_elements: 3, max_bytes: 34),
-      w145_physical_limits(max_depth: 1, max_nodes: 1, max_elements: 3, max_bytes: 34),
-      w145_physical_limits(max_depth: 1, max_nodes: 2, max_elements: 2, max_bytes: 34),
-      w145_physical_limits(max_depth: 1, max_nodes: 2, max_elements: 3, max_bytes: 33),
+      w145_physical_limits(max_depth: 0, max_nodes: 2, max_elements: 5, max_bytes: 53),
+      w145_physical_limits(max_depth: 1, max_nodes: 1, max_elements: 5, max_bytes: 53),
+      w145_physical_limits(max_depth: 1, max_nodes: 2, max_elements: 4, max_bytes: 53),
+      w145_physical_limits(max_depth: 1, max_nodes: 2, max_elements: 5, max_bytes: 52),
     ].each do |short|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::BinaryBulkPhysicalPlan.new(type, "x", limits: short)
@@ -165,27 +169,45 @@ describe "W145 LowCardinality physical stream binding" do
     type = w145_low(CrystalClick::BinaryDataType.primitive("String"))
 
     bytes_context = CrystalClick::PhysicalStreamPlanContext.new(
-      w145_physical_limits(max_bytes: 67)
+      w145_physical_limits(max_bytes: 106, max_nodes: 4, max_elements: 10)
     )
     CrystalClick::BinaryBulkPhysicalPlan.new(type, "a", context: bytes_context)
+    CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: bytes_context)
+
+    short_bytes_context = CrystalClick::PhysicalStreamPlanContext.new(
+      w145_physical_limits(max_bytes: 105, max_nodes: 4, max_elements: 10)
+    )
+    CrystalClick::BinaryBulkPhysicalPlan.new(type, "a", context: short_bytes_context)
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: bytes_context)
+      CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: short_bytes_context)
     end
 
     nodes_context = CrystalClick::PhysicalStreamPlanContext.new(
-      w145_physical_limits(max_nodes: 3)
+      w145_physical_limits(max_bytes: 106, max_nodes: 4, max_elements: 10)
     )
     CrystalClick::BinaryBulkPhysicalPlan.new(type, "a", context: nodes_context)
+    CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: nodes_context)
+
+    short_nodes_context = CrystalClick::PhysicalStreamPlanContext.new(
+      w145_physical_limits(max_bytes: 106, max_nodes: 3, max_elements: 10)
+    )
+    CrystalClick::BinaryBulkPhysicalPlan.new(type, "a", context: short_nodes_context)
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: nodes_context)
+      CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: short_nodes_context)
     end
 
     elements_context = CrystalClick::PhysicalStreamPlanContext.new(
-      w145_physical_limits(max_elements: 5)
+      w145_physical_limits(max_bytes: 106, max_nodes: 4, max_elements: 10)
     )
     CrystalClick::BinaryBulkPhysicalPlan.new(type, "a", context: elements_context)
+    CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: elements_context)
+
+    short_elements_context = CrystalClick::PhysicalStreamPlanContext.new(
+      w145_physical_limits(max_bytes: 106, max_nodes: 4, max_elements: 9)
+    )
+    CrystalClick::BinaryBulkPhysicalPlan.new(type, "a", context: short_elements_context)
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: elements_context)
+      CrystalClick::BinaryBulkPhysicalPlan.new(type, "b", context: short_elements_context)
     end
   end
 
@@ -215,7 +237,7 @@ describe "W145 LowCardinality physical stream binding" do
     end
   end
 
-  it "keeps typed Object and Dynamic physical LC consumers rejected at root and nested sites" do
+  it "admits typed Object physical LC sites but keeps Dynamic physical admission closed" do
     string = CrystalClick::BinaryDataType.primitive("String")
     low = w145_low(string)
     empty_structures = CrystalClick::ObjectDynamicStructureSet.new(
@@ -225,8 +247,14 @@ describe "W145 LowCardinality physical stream binding" do
 
     [low, CrystalClick::BinaryDataType.array(low)].each do |type|
       typed = CrystalClick::ObjectDocumentPlan.new(empty_structures, {"typed" => type})
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectDocumentPhysicalPlan.new("doc", typed)
+      physical = CrystalClick::ObjectDocumentPhysicalPlan.new("doc", typed)
+      typed_physical = physical.typed("typed")
+      if type.tag == CrystalClick::BinaryDataType::TAG_LOW_CARDINALITY
+        typed_physical.stream_name_for("root.dictionary").should eq("doc.typed.dict")
+        typed_physical.stream_name_for("root.indexes").should eq("doc.typed")
+      else
+        typed_physical.stream_name_for("root.elements.dictionary").should eq("doc.typed.dict")
+        typed_physical.stream_name_for("root.elements.indexes").should eq("doc.typed")
       end
 
       structures = CrystalClick::ObjectDynamicStructureSet.new(

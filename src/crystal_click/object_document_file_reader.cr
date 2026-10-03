@@ -10,6 +10,7 @@ module CrystalClick
       getter role : String
       getter data_name : String
       getter marks_name : String
+      getter prefix_size : Int32
 
       def initialize(
         @kind : Symbol,
@@ -18,6 +19,7 @@ module CrystalClick
         @role : String,
         @data_name : String,
         @marks_name : String,
+        @prefix_size : Int32,
       )
       end
     end
@@ -46,6 +48,7 @@ module CrystalClick
       getter codec_budget : BinaryCodecBudget
       getter transport_budget : CompressedStreamBudget
       getter descriptor : ObjectDocumentFileDescriptor?
+      getter replay_complete : Bool
 
       def initialize(
         @source : PartStreamSource,
@@ -62,6 +65,7 @@ module CrystalClick
         @codec_budget : BinaryCodecBudget,
         @transport_budget : CompressedStreamBudget,
         @descriptor : ObjectDocumentFileDescriptor?,
+        @replay_complete : Bool,
       )
       end
     end
@@ -141,6 +145,9 @@ module CrystalClick
       transport_budget = CompressedStreamBudget.new(transport_limits)
       column_prefix = preflight_column_name!(column_name, hashed, limits)
       schema_snapshot = preflight_and_copy_schema!(typed_schema, column_prefix, hashed, limits, codec_budget)
+      replay_complete = schema_snapshot.each_value.any? do |type|
+        BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+      end
       source = PartStreamSource.new(part_path)
 
       object_name = PhysicalStreamName.append_literal(column_prefix, ".object_structure")
@@ -201,10 +208,14 @@ module CrystalClick
         transport_budget
       ) do |grid, prefix|
         logical_lane_bytes = checked_add_u64(logical_lane_bytes, grid.logical_size.to_u64)
-        selected_wire_bytes = checked_add_u64(
-          selected_wire_bytes,
-          selected_extent(grid, first_mark, selected_count, prefix)
-        )
+        unless build_descriptor
+          first = replay_complete ? 0 : first_mark
+          count = replay_complete ? outer_rows.size : selected_count
+          selected_wire_bytes = checked_add_u64(
+            selected_wire_bytes,
+            selected_extent(grid, first, count, prefix)
+          )
+        end
       end
 
       metadata_size = metadata_total_size(object_bytes, dynamic_bytes)
@@ -244,6 +255,7 @@ module CrystalClick
         codec_budget,
         transport_budget,
         descriptor,
+        replay_complete,
       )
     end
 
@@ -261,6 +273,9 @@ module CrystalClick
       discriminator_bindings = prepared.discriminator_bindings
       codec_budget = prepared.codec_budget
       transport_budget = prepared.transport_budget
+      replay_complete = prepared.replay_complete
+      read_first = replay_complete ? 0 : first_mark
+      read_count = replay_complete ? outer_rows.size : selected_count
       typed_roles = Hash(String, Hash(String, BinaryBulkStream)).new
       dynamic_roles = Hash(String, Hash(String, Hash(String, BinaryBulkStream))).new
       shared_roles = Hash(String, BinaryBulkStream).new
@@ -268,9 +283,9 @@ module CrystalClick
         window = source.read_window(
           binding.data_name,
           binding.marks_name,
-          first_mark,
-          selected_count,
-          0,
+          read_first,
+          read_count,
+          binding.prefix_size,
           transport_budget
         )
         stream = BinaryBulkStream.new(window.bytes, window.offsets)
@@ -307,15 +322,15 @@ module CrystalClick
       end
 
       typed_streams = Hash(String, BinaryBulkStreams).new
-      typed_roles.each { |path, roles| typed_streams[path] = BinaryBulkStreams.new(selected_count, roles) }
+      typed_roles.each { |path, roles| typed_streams[path] = BinaryBulkStreams.new(read_count, roles) }
 
       dynamic_streams = Hash(String, DynamicValueStreams).new
       discriminator_bindings.each do |binding|
         window = source.read_window(
           binding.data_name,
           binding.marks_name,
-          first_mark,
-          selected_count,
+          read_first,
+          read_count,
           DynamicDiscriminatorCodec::HEADER_BYTES.to_i,
           transport_budget
         )
@@ -323,20 +338,21 @@ module CrystalClick
         arms = Hash(String, BinaryBulkStreams).new
         if arm_roles = dynamic_roles[binding.path]?
           arm_roles.each do |arm, roles|
-            arms[arm] = BinaryBulkStreams.new(selected_count, roles)
+            arms[arm] = BinaryBulkStreams.new(read_count, roles)
           end
         end
         dynamic_streams[binding.path] = DynamicValueStreams.new(discriminator, arms)
       end
 
-      shared_streams = BinaryBulkStreams.new(selected_count, shared_roles)
+      shared_streams = BinaryBulkStreams.new(read_count, shared_roles)
       selected_rows = Array(UInt64).new(selected_count)
       selected_count.times do |index|
         selected_rows << outer_rows[first_mark + index]
       end
+      stream_rows = replay_complete ? outer_rows : selected_rows
       streams = ObjectDocumentStreams.new(
         ObjectDynamicStructureStreams.new(object_bytes, dynamic_bytes),
-        selected_rows,
+        stream_rows,
         typed_streams,
         dynamic_streams,
         shared_streams
@@ -346,7 +362,7 @@ module CrystalClick
         schema_snapshot,
         streams,
         codec_budget,
-        first_mark: 0,
+        first_mark: replay_complete ? first_mark : 0,
         mark_count: selected_count,
         profile: profile,
         shared_profile: shared_profile
@@ -553,6 +569,7 @@ module CrystalClick
       hashed : Bool,
     ) : Nil
       physical.stream_names.each_key do |role|
+        prefix_size = physical.prefix_size_for(role)
         data_name = physical.data_file_for(role, hashed)
         marks_name = physical.marks_file_for(role, hashed)
         validate_physical_name!(data_name)
@@ -563,7 +580,8 @@ module CrystalClick
           String.new(arm.to_slice),
           String.new(role.to_slice),
           data_name,
-          marks_name
+          marks_name,
+          prefix_size
         )
       end
       nil
@@ -595,9 +613,9 @@ module CrystalClick
       &block : CompressedMarkGrid, Int32 ->
     ) : Nil
       bulk_bindings.each do |binding|
-        grid = source.inspect_grid(binding.data_name, binding.marks_name, 0, budget)
+        grid = source.inspect_grid(binding.data_name, binding.marks_name, binding.prefix_size, budget)
         validate_same_rows!(grid, outer_rows)
-        yield grid, 0
+        yield grid, binding.prefix_size
       end
       discriminator_bindings.each do |binding|
         grid = source.inspect_grid(

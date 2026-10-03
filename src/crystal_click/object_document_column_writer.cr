@@ -208,7 +208,14 @@ module CrystalClick
         end
         name = physical.stream_name_for(role)
         bytes = source.borrowed_slice(0, source.byte_size)
-        add_lane!(lanes, expected, ObjectDocumentColumnLane.new(name, bytes, nil, source))
+        add_lane!(lanes, expected, ObjectDocumentColumnLane.new(
+          name,
+          bytes,
+          nil,
+          source,
+          nil,
+          physical.prefix_size_for(role)
+        ))
       end
       nil
     end

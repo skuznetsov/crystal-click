@@ -637,7 +637,7 @@ describe "W143 recursive BinaryBulk LowCardinality integration" do
     end
   end
 
-  it "caches structural LC membership while keeping Dynamic and Object admission guards closed" do
+  it "caches structural LC membership, composes typed Object lanes, and keeps Dynamic closed" do
     string = CrystalClick::BinaryDataType.primitive("String")
     low = CrystalClick::BinaryDataType.low_cardinality(string)
     deep = CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.tuple([string, low] of CrystalClick::BinaryDataType))
@@ -687,9 +687,9 @@ describe "W143 recursive BinaryBulk LowCardinality integration" do
     )
     plan = CrystalClick::ObjectDocumentPlan.new(structures, {"typed" => low})
     document = CrystalClick::ObjectDocument.new({"typed" => value} of String => CrystalClick::BinaryValue)
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentCodec.encode(plan, [[document]] of Array(CrystalClick::ObjectDocument))
-    end
+    typed_object = CrystalClick::ObjectDocumentCodec.encode(plan, [[document]] of Array(CrystalClick::ObjectDocument))
+    typed_object.typed_for("typed").roles.should eq(["root.dictionary", "root.indexes"])
+    CrystalClick::ObjectDocumentCodec.decode({"typed" => low} of String => CrystalClick::BinaryDataType, typed_object)[0][0].value_for("typed").child_at(0).as_string.should eq("x")
     typed_streams = w143_bulk_streams(1, {
       "root.dictionary" => {w143_bulk_concat([w143_bulk_u64(1_u64), w143_bulk_u64(2_u64), w143_bulk_string(""), w143_bulk_string("x")] of Bytes), [8_u64, 19_u64]},
       "root.indexes"    => {w143_bulk_index_mark([1_u64], 0x500_u64), [0_u64, 17_u64]},
@@ -700,10 +700,12 @@ describe "W143 recursive BinaryBulk LowCardinality integration" do
       [1_u64],
       {"typed" => typed_streams} of String => CrystalClick::BinaryBulkStreams,
       {} of String => CrystalClick::DynamicValueStreams,
-      w143_bulk_streams(1, {} of String => Tuple(Bytes, Array(UInt64)))
+      typed_object.shared
     )
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentCodec.decode({"typed" => low} of String => CrystalClick::BinaryDataType, object_streams)
-    end
+    decoded_typed = CrystalClick::ObjectDocumentCodec.decode(
+      {"typed" => low} of String => CrystalClick::BinaryDataType,
+      object_streams,
+    )
+    decoded_typed[0][0].value_for("typed").child_at(0).as_string.should eq("x")
   end
 end

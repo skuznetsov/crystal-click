@@ -512,7 +512,7 @@ describe "W144 recursive LowCardinality Float transport" do
     end
   end
 
-  it "keeps Dynamic and Object envelopes closed while binding ordinary Float LC names" do
+  it "keeps Dynamic closed while composing raw Float LC through paired typed Object lanes" do
     name = "Float32"
     low = CrystalClick::BinaryDataType.low_cardinality(CrystalClick::BinaryDataType.primitive(name))
     value = w144_float_lc(low, name, 0x7fc0_1234_u64)
@@ -548,9 +548,9 @@ describe "W144 recursive LowCardinality Float transport" do
     )
     plan = CrystalClick::ObjectDocumentPlan.new(structures, {"typed" => low})
     document = CrystalClick::ObjectDocument.new({"typed" => value} of String => CrystalClick::BinaryValue)
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentCodec.encode(plan, [[document]] of Array(CrystalClick::ObjectDocument))
-    end
+    paired = CrystalClick::ObjectDocumentCodec.encode(plan, [[document]] of Array(CrystalClick::ObjectDocument))
+    paired_value = CrystalClick::ObjectDocumentCodec.decode({"typed" => low} of String => CrystalClick::BinaryDataType, paired)[0][0].value_for("typed")
+    paired_value.child_at(0).bytes.should eq(value.child_at(0).bytes)
 
     typed_dictionary = w144_float_dictionary(name, [0_u64, 0x3f80_0000_u64])
     typed_streams = w144_float_streams(1, typed_dictionary, [8_u64, 24_u64], w144_float_index_mark([1_u64], 0x500_u64), [0_u64, 17_u64])
@@ -560,10 +560,14 @@ describe "W144 recursive LowCardinality Float transport" do
       [1_u64],
       {"typed" => typed_streams} of String => CrystalClick::BinaryBulkStreams,
       {} of String => CrystalClick::DynamicValueStreams,
-      CrystalClick::BinaryBulkStreams.new(1, {} of String => CrystalClick::BinaryBulkStream)
+      paired.shared
     )
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentCodec.decode({"typed" => low} of String => CrystalClick::BinaryDataType, object_streams)
-    end
+    decoded_typed = CrystalClick::ObjectDocumentCodec.decode(
+      {"typed" => low} of String => CrystalClick::BinaryDataType,
+      object_streams,
+    )
+    decoded_typed[0][0].value_for("typed").child_at(0).bytes.should eq(
+      w144_float_scalar_bytes(name, 0x3f80_0000_u64)
+    )
   end
 end

@@ -1,19 +1,22 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-03): W145 binds ordinary recursive
-LowCardinality bulk roles to physical dictionary/index filenames, including
-W144's raw Float transport. Root passes 99 focused DEBUG, 324 affected RELEASE
-and 2,395 full-inventory examples (372 unique spec files, 16 serial disjoint
-non-release groups). Eight stock Wide parts and eight exchanges with
-library-emitted lanes pass roster/grid/value checks and actual stock
-ATTACH/CHECK/RowBinary; a separate literal Ruby oracle rechecks all sixteen
-tables and the LC-specific wrong-value control with 51 fresh stock queries.
-The exchanges borrow stock envelopes: this is not a new independently owned
-whole-part writer or public facade admission. Default LC and BASIC Map are
-explicit profile assumptions, not inferred settings. Object/Dynamic LC
-remains closed through consumer-owned guards. The scope and execution lineage
-are in
-[LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md](LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md).
+Current capability checkpoint (2026-10-03): W146 admits canonical declared
+LowCardinality fields in normalized Object/JSON, including legal recursive
+compositions and LC(Nullable(T)). The existing independent complete-part
+writer and file/column/table/catalog consumers share role-owned dictionary
+prefixes and complete-grid replay. Root passes 112 focused DEBUG, 406 affected
+RELEASE examples (52 unique files together) and 2,405 complete-inventory
+examples (374 unique files, sixteen serial disjoint non-release groups, not
+a combined-process run). Eight native/library cells pass actual CHECK,
+four independent library-part ATTACH operations, exact nominal types and
+full/middle ordered literal RowBinary under both ordinary String profiles
+and BASIC/COMPACT Dynamic modes. A separate Ruby checker rechecks all eight
+cells and a valid wrong-value store with 74 fresh stock queries. These are
+whole library-owned parts, not borrowed stock envelopes. The physical matrix
+qualifies seven declared witnesses, not every eligible leaf/product/profile.
+Dynamic/shared LC and Object BFloat16 remain refused. Scope and execution
+lineage are in
+[OBJECT_DECLARED_LOW_CARDINALITY_FRONTIER.md](OBJECT_DECLARED_LOW_CARDINALITY_FRONTIER.md).
 
 The overall objective is still open: paired type/layout coverage and
 MV/projection interoperability first, memory/performance afterward. Shared
@@ -21,6 +24,18 @@ codec/planner owners have separate files, but the large legacy facades have
 not yet been fully decomposed. No stock-reader speed-parity claim is made.
 
 ## Earlier checkpoint lineage
+
+W145 binds ordinary recursive LowCardinality bulk roles to physical
+dictionary/index filenames, including W144's raw Float transport. Root passes
+99 focused DEBUG, 324 affected RELEASE and 2,395 full-inventory examples
+(372 unique spec files, 16 disjoint non-release groups). Eight stock Wide parts
+and eight exchanges with library-emitted lanes pass roster/grid/value checks
+and actual stock ATTACH/CHECK/RowBinary; a separate literal Ruby oracle
+rechecks all sixteen tables and the wrong-value control with 51 fresh queries.
+Those exchanges borrow stock envelopes. They do not qualify an independent
+whole-part writer or public Object facade admission; W146 separately does so
+within its declared-field profile. See
+[LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md](LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md).
 
 Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
@@ -106,7 +121,8 @@ The executed certificate is in
 In W143, Float LC composition and persisted Object/Dynamic/physical-part
 binding remained explicitly closed. W144 supersedes only that Float bulk
 guard. W145 subsequently admits generic physical role/name binding, while
-keeping Object/Dynamic and existing whole-part facade boundaries closed.
+keeping Object/Dynamic and existing whole-part facade boundaries closed at
+that checkpoint. W146 supersedes only the bounded typed-Object LC refusal.
 Neither shared bulk nor filename binding qualifies a new standalone writer.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
@@ -181,6 +197,14 @@ source/runtime identities and executed evidence.
   paths. Nested Maps require exact String keys; Nullable cannot immediately
   wrap Array, Map or Nullable. Thirteen recursive witnesses are physically
   qualified across the eight cells; every recursive leaf/product is not.
+  W146 adds declared LC over the eligible represented Object leaf intersection,
+  including LC(Nullable(T)) within those compositions. Seven field witnesses
+  are physically qualified across eight native/library cells. Selected reads
+  replay all Object physical lanes if any typed field contains LC; only the
+  requested documents are materialized. Catalog `.values` may repeat replay
+  per mark. This is correctness admission, not selective I/O or a performance
+  certificate. Dynamic/shared LC remains outside the Object profile. See
+  [the declared LC frontier](OBJECT_DECLARED_LOW_CARDINALITY_FRONTIER.md).
   The inherited timezone manifest still lacks runtime-added America/Coyhaique.
   See
   [the example](../examples/write_object_document_part.cr) and
@@ -215,7 +239,7 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W140 provide
+1. **General JSON compatibility.** W117-W146 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
@@ -234,7 +258,9 @@ source/runtime identities and executed evidence.
    W139 adds canonical DateTime/DateTime64/Time/Time64 with exact scale/zone
    identity and independent ticks/text checks. W140 adds recursively bounded
    Array/Map/Tuple/Nullable declared fields and catalog descriptor-tree charging.
-   Declared LowCardinality/Variant/Dynamic, unqualified recursive products and
+   W146 adds bounded canonical declared LC with shared physical state replay
+   and an independent whole-part certificate. Declared Variant/Dynamic,
+   unqualified LC leaves/products, Map LC keys, and
    the inherited timezone-profile gap remain open within Object,
    even where standalone part support exists. The older scalar typed-path behavior is
    unchanged. Neither adapter implies arbitrary
@@ -284,15 +310,17 @@ source/runtime identities and executed evidence.
    and canonical DateTime/DateTime64/Time/Time64. W140 now admits canonical
    recursive Array/Map(String,V)/Tuple/legal Nullable schemas, with separately
    bounded physical witnesses. The next proposed lanes are declared
-   LowCardinality/Variant/Dynamic and the timezone profile gap, not yet admitted
-   Object support. W141 establishes the logical LowCardinality prerequisite;
+   Variant/Dynamic and the timezone profile gap. W141 establishes the logical
+   LowCardinality prerequisite;
    W142 adds the separately qualified standalone dictionary/index codec.
    W143 qualifies recursive non-floating bulk role binding, flattened
    occurrence schedules and dictionary state integration. W144 qualifies
    raw Float LC transport and measures the distinct INSERT normalization
    boundary. W145 now qualifies shared physical LC role binding under explicit
-   default-LC/BASIC-Map profiles. Next are paired declared Object LC and
-   complete independently owned qualified parts. Reuse existing leaf owners only
+   default-LC/BASIC-Map profiles. W146 admits declared Object LC with independent
+   complete parts and selected public consumers within its finite certificate.
+   Next remain declared Variant/Dynamic and broader layout/type products.
+   Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary

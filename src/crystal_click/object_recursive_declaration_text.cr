@@ -174,10 +174,21 @@ module CrystalClick
         child_after = after - 1
         return nil if child_first >= child_after
         child_tag = tag_for_slice(bytes, child_first, child_after) || return nil
-        return nil if child_tag == BinaryDataType::TAG_ARRAY || child_tag == BinaryDataType::TAG_MAP || child_tag == BinaryDataType::TAG_NULLABLE
+        return nil if child_tag == BinaryDataType::TAG_ARRAY || child_tag == BinaryDataType::TAG_MAP || child_tag == BinaryDataType::TAG_NULLABLE || child_tag == BinaryDataType::TAG_LOW_CARDINALITY
         totals.child_edge(limits)
         child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals) || return nil
         return ObjectRecursiveDeclaration.checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
+      end
+
+      if slice_equals?(bytes, first, first + "LowCardinality(".bytesize, "LowCardinality(") &&
+         after > first + "LowCardinality()".bytesize && bytes[after - 1] == ')'.ord.to_u8
+        child_first = first + "LowCardinality(".bytesize
+        child_after = after - 1
+        return nil if child_first >= child_after
+        return nil unless admitted_low_cardinality_child_slice?(bytes, child_first, child_after)
+        totals.child_edge(limits)
+        child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals) || return nil
+        return ObjectRecursiveDeclaration.checked_add("LowCardinality(".bytesize.to_u64 + 1_u64, child_size)
       end
 
       if slice_equals?(bytes, first, first + "Map(".bytesize, "Map(") &&
@@ -280,9 +291,14 @@ module CrystalClick
         leaf.enum_entry_count.times { budget.visit_node(depth) }
         return nil
       end
-      if slice_equals?(bytes, first, first + "Array(".bytesize, "Array(") ||
-         slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")
-        prefix = bytes[first] == 'A'.ord.to_u8 ? "Array(" : "Nullable("
+      if slice_equals?(bytes, first, first + "Array(".bytesize, "Array(")
+        prefix = "Array("
+        charge_slice_child(bytes, first + prefix.bytesize, after - 1, depth, budget)
+      elsif slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")
+        prefix = "Nullable("
+        charge_slice_child(bytes, first + prefix.bytesize, after - 1, depth, budget)
+      elsif slice_equals?(bytes, first, first + "LowCardinality(".bytesize, "LowCardinality(")
+        prefix = "LowCardinality("
         charge_slice_child(bytes, first + prefix.bytesize, after - 1, depth, budget)
       elsif slice_equals?(bytes, first, first + "Map(".bytesize, "Map(")
         body_first = first + "Map(".bytesize
@@ -326,9 +342,14 @@ module CrystalClick
       if depth > limits.max_depth
         raise UnsupportedFormatError.new("binary codec depth limit exceeded")
       end
-      if slice_equals?(bytes, first, first + "Array(".bytesize, "Array(") ||
-         slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")
-        prefix = bytes[first] == 'A'.ord.to_u8 ? "Array(" : "Nullable("
+      if slice_equals?(bytes, first, first + "Array(".bytesize, "Array(")
+        prefix = "Array("
+        validate_tuple_names_admitted(bytes, first + prefix.bytesize, after - 1, depth + 1, limits)
+      elsif slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")
+        prefix = "Nullable("
+        validate_tuple_names_admitted(bytes, first + prefix.bytesize, after - 1, depth + 1, limits)
+      elsif slice_equals?(bytes, first, first + "LowCardinality(".bytesize, "LowCardinality(")
+        prefix = "LowCardinality("
         validate_tuple_names_admitted(bytes, first + prefix.bytesize, after - 1, depth + 1, limits)
       elsif slice_equals?(bytes, first, first + "Map(".bytesize, "Map(")
         body_first = first + "Map(".bytesize
@@ -387,6 +408,8 @@ module CrystalClick
         BinaryDataType.array(materialize_admitted_slice(bytes, first + "Array(".bytesize, after - 1, depth + 1, limits))
       elsif slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")
         BinaryDataType.nullable(materialize_admitted_slice(bytes, first + "Nullable(".bytesize, after - 1, depth + 1, limits))
+      elsif slice_equals?(bytes, first, first + "LowCardinality(".bytesize, "LowCardinality(")
+        BinaryDataType.low_cardinality(materialize_admitted_slice(bytes, first + "LowCardinality(".bytesize, after - 1, depth + 1, limits))
       elsif slice_equals?(bytes, first, first + "Map(".bytesize, "Map(")
         body_first = first + "Map(".bytesize
         comma, _ = top_level_separator(bytes, body_first, after - 1).not_nil!
@@ -437,10 +460,29 @@ module CrystalClick
         BinaryDataType::TAG_MAP
       elsif slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")
         BinaryDataType::TAG_NULLABLE
+      elsif slice_equals?(bytes, first, first + "LowCardinality(".bytesize, "LowCardinality(")
+        BinaryDataType::TAG_LOW_CARDINALITY
       elsif slice_equals?(bytes, first, first + "Tuple(".bytesize, "Tuple(")
         BinaryDataType::TAG_UNNAMED_TUPLE
       else
         nil
+      end
+    end
+
+    # A LowCardinality declaration may wrap only one Object scalar leaf, or
+    # Nullable of that leaf. Resolve leaf metadata without materializing a
+    # descriptor so the whole borrowed declaration remains preflight-only.
+    private def self.admitted_low_cardinality_child_slice?(bytes : Bytes, first : Int32, after : Int32) : Bool
+      if slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(") &&
+         after > first + "Nullable()".bytesize && bytes[after - 1] == ')'.ord.to_u8
+        leaf_first = first + "Nullable(".bytesize
+        leaf_after = after - 1
+        return false if leaf_first >= leaf_after
+        leaf = ObjectTypedFieldType.resolve_leaf_slice(bytes, leaf_first, leaf_after) || return false
+        ObjectRecursiveDeclaration.low_cardinality_leaf_tag_admitted?(leaf.tag)
+      else
+        leaf = ObjectTypedFieldType.resolve_leaf_slice(bytes, first, after) || return false
+        ObjectRecursiveDeclaration.low_cardinality_leaf_tag_admitted?(leaf.tag)
       end
     end
 

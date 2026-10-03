@@ -236,6 +236,43 @@ module CrystalClick
       measure_descriptor(type, limits, root_depth).try(&.byte_size)
     end
 
+    # Object's declared LowCardinality intersection is narrower than either
+    # the general Object leaf grammar or the source LC grammar by itself.
+    # Keep the policy here so descriptor and borrowed-text paths share it.
+    def self.low_cardinality_child_admitted?(type : BinaryDataType) : Bool
+      return false unless type.tag == BinaryDataType::TAG_LOW_CARDINALITY && type.child_count == 1
+
+      child = type.child_at(0)
+      leaf = if child.tag == BinaryDataType::TAG_NULLABLE
+               return false unless child.child_count == 1
+               child.child_at(0)
+             else
+               child
+             end
+      return false unless leaf.child_count == 0 && low_cardinality_leaf_tag_admitted?(leaf.tag)
+      return false unless BinaryLowCardinalityTypePolicy.admitted_child?(child)
+
+      !ObjectTypedFieldType.leaf_byte_size_for(leaf).nil?
+    end
+
+    # The parser's scalar resolution carries a tag but deliberately does not
+    # materialize a BinaryDataType before aggregate budget admission.
+    def self.low_cardinality_leaf_tag_admitted?(tag : UInt8) : Bool
+      return true if tag >= BinaryDataType::TAG_UINT8 && tag <= BinaryDataType::TAG_FLOAT64
+
+      case tag
+      when BinaryDataType::TAG_DATE, BinaryDataType::TAG_DATE32,
+           BinaryDataType::TAG_DATETIME, BinaryDataType::TAG_DATETIME_ZONE,
+           BinaryDataType::TAG_STRING, BinaryDataType::TAG_FIXED_STRING,
+           BinaryDataType::TAG_UUID, BinaryDataType::TAG_IPV4,
+           BinaryDataType::TAG_IPV6, BinaryDataType::TAG_BOOL,
+           BinaryDataType::TAG_TIME
+        true
+      else
+        false
+      end
+    end
+
     # Validate the whole tree before writing anything. This matters for IOs
     # with observable side effects and keeps a rejected deep tree from leaving
     # a partial declaration behind.
@@ -279,10 +316,15 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         return nil unless type.child_count == 1
         child = type.child_at(0)
-        return nil if child.tag == BinaryDataType::TAG_ARRAY || child.tag == BinaryDataType::TAG_MAP || child.tag == BinaryDataType::TAG_NULLABLE
+        return nil if child.tag == BinaryDataType::TAG_ARRAY || child.tag == BinaryDataType::TAG_MAP || child.tag == BinaryDataType::TAG_NULLABLE || child.tag == BinaryDataType::TAG_LOW_CARDINALITY
         totals.child_edge(limits)
         child_size = measure_type(child, depth + 1, limits, totals) || return nil
         checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        return nil unless low_cardinality_child_admitted?(type)
+        totals.child_edge(limits)
+        child_size = measure_type(type.child_at(0), depth + 1, limits, totals) || return nil
+        checked_add("LowCardinality(".bytesize.to_u64 + 1_u64, child_size)
       when BinaryDataType::TAG_MAP
         return nil unless type.child_count == 2
         key = type.child_at(0)
@@ -358,6 +400,10 @@ module CrystalClick
         io << ')'
       when BinaryDataType::TAG_NULLABLE
         io << "Nullable("
+        append_type_name(io, type.child_at(0))
+        io << ')'
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        io << "LowCardinality("
         append_type_name(io, type.child_at(0))
         io << ')'
       when BinaryDataType::TAG_MAP

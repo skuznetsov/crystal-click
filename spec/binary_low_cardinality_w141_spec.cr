@@ -515,18 +515,19 @@ describe "W141 nominal LowCardinality binary value prerequisite" do
     end
   end
 
-  it "keeps Object declarations unadmitted while ordinary bulk accepts the scalar LC kernel" do
+  it "admits declared LC leaves while ordinary bulk accepts the scalar LC kernel" do
     descriptor = Bytes[0x26_u8, 0x15_u8]
     wire = Bytes[0x26_u8, 0x15_u8, 0x01_u8, 0x78_u8]
     type = CrystalClick::BinaryDataTypeCodec.decode(descriptor)
     value = CrystalClick::BinaryValueCodec.decode(wire)
 
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v LowCardinality(String))")
-    end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v LowCardinality(Nullable(String)))")
-    end
+    CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v LowCardinality(String))").declaration.should eq(
+      "JSON(v LowCardinality(String))"
+    )
+    CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v LowCardinality(Nullable(String)))").declaration.should eq(
+      "JSON(v LowCardinality(Nullable(String)))"
+    )
+    # Map keys are still constrained to String by the typed Object grammar.
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v Map(LowCardinality(Nullable(String)), String))")
     end

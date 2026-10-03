@@ -954,7 +954,7 @@ describe "W142 shared LowCardinality physical dictionary/index owner" do
     end
   end
 
-  it "keeps empty Dynamic and Object routes closed while LC storage is standalone" do
+  it "keeps Dynamic closed while binding an empty typed Object LC roster" do
     string_type = CrystalClick::BinaryDataType.primitive("String")
     type = CrystalClick::BinaryDataType.low_cardinality(string_type)
     dynamic = CrystalClick::DynamicStructure.new([type] of CrystalClick::BinaryDataType)
@@ -991,9 +991,11 @@ describe "W142 shared LowCardinality physical dictionary/index owner" do
       {} of String => CrystalClick::DynamicStructure
     )
     typed_plan = CrystalClick::ObjectDocumentPlan.new(structures, {"typed" => type})
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentPhysicalPlan.new("obj", typed_plan)
-    end
+    typed_physical = CrystalClick::ObjectDocumentPhysicalPlan.new("obj", typed_plan)
+    typed_physical.typed("typed").stream_names.should eq({
+      "root.dictionary" => "obj.typed.dict",
+      "root.indexes"    => "obj.typed",
+    })
 
     object_dynamic = CrystalClick::ObjectDynamicStructureSet.new(
       CrystalClick::ObjectStructure.new(["dynamic"] of String),

@@ -1,15 +1,17 @@
 # CrystalClick Modularization Frontier
 
-Current architecture checkpoint (2026-10-03): W145 extends the existing
-BinaryBulkPhysicalPlan owner (302 lines) and keeps the typed Object consumer
-guard in ObjectDocumentPhysicalPlan (299 lines). W143's shared recursive LC
-planner/site encoder/site decoder remain 313/273/210 lines, reused by W144
-and W145, with one cohesive top-level owner per file. No per-type/container
-class family or new legacy facade branch is introduced. The large legacy
-reader/writer/table/catalog facades remain 15,985/25,991/6,786/1,560 lines;
-their responsibility-level
-decomposition is unfinished. Codec compatibility does not prove lower
-coupling, fewer allocations or better throughput.
+Current architecture checkpoint (2026-10-03): W146 reuses the existing Object
+recursive descriptor/text owners (475/495 lines), generic physical binder
+(372 lines), Object physical plan (300 lines) and column writer/file reader
+(235/746 lines). Declared LC policy, role-owned dictionary prefixes and
+complete-grid replay stay with those existing responsibilities. W143's shared
+recursive LC planner/site encoder/site decoder remain 313/273/210 lines,
+without a per-leaf/container class family or a new legacy facade branch.
+One cohesive top-level responsibility remains in each owner file; private
+stack metadata stays nested with its owner. The large legacy reader/writer/
+table/catalog facades remain 15,985/25,991/6,786/1,560 lines, so their
+responsibility-level decomposition is unfinished. Codec compatibility does
+not prove lower coupling, fewer allocations or better throughput.
 
 Earlier W134 checkpoint: behavior-preserving Array/Map row-owner extraction
 over W133 `2e150f4`, verified within the executed scope below.
@@ -150,6 +152,28 @@ profile and borrowed sidecar limits are recorded in
 [LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md](LOW_CARDINALITY_PHYSICAL_BINDING_FRONTIER.md).
 This is not completed facade decomposition, new full-part writer admission,
 lower RSS or improved throughput.
+
+W146 supersedes W145's typed-Object LC refusal only within the canonical
+declared-field intersection. The descriptor and borrowed-text scanners share
+one Object leaf policy; the codec and physical planner separately gate direct
+plans. `BinaryBulkPhysicalPlan` owns each role's dictionary prefix and charges
+its LC-site/prefix lookup before materializing that metadata. The Object column
+writer passes those prefix sizes to the existing compressed-mark writer.
+The file reader keeps metadata/grid inspection separate from value delivery:
+when any declared field contains LC, it admits and reads all Object physical
+lanes on the complete grid, then materializes only selected documents. It does
+not infer prefixes from filename suffixes, add a facade method per LC leaf,
+or duplicate W142's dictionary/index grammar. Dynamic/shared LC remains closed.
+The complete independently owned part writer and public-consumer evidence is
+in [OBJECT_DECLARED_LOW_CARDINALITY_FRONTIER.md](OBJECT_DECLARED_LOW_CARDINALITY_FRONTIER.md).
+Root passes 112 focused DEBUG, 406 affected RELEASE examples in one process
+(52 files), and 2,405 complete-inventory examples over 374 unique files in
+sixteen serial disjoint non-release groups, plus the eight-cell native/library
+matrix, the 74-query separate literal checker and three unchanged neighboring
+native gates. The full-inventory gate is not a combined-process run.
+Logical prefix/name budgets are not allocator or peak-RSS bounds. Full replay
+and repeated catalog mark reads remain explicit later optimization targets;
+this ownership extension is not completed legacy decomposition.
 
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Their

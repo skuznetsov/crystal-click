@@ -87,7 +87,8 @@ module CrystalClick
         preflight_typed_path(plan, index, column_prefix.bytesize.to_u64, context)
         raw_path = plan.typed_path_at(index)
         type = plan.typed_type_for(raw_path)
-        if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+        if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type) &&
+           ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
           raise UnsupportedFormatError.new("physical Object typed LowCardinality fields are not admitted")
         end
         path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, raw_path, context)

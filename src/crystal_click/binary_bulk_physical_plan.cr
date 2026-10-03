@@ -18,6 +18,7 @@ module CrystalClick
 
     @profile : BinaryBulkProfile
     @names : Hash(String, String)
+    @prefix_sizes : Hash(String, Int32)
     @context : PhysicalStreamPlanContext
 
     def initialize(
@@ -28,6 +29,7 @@ module CrystalClick
       context : PhysicalStreamPlanContext? = nil,
     )
       @context = context || PhysicalStreamPlanContext.new(limits)
+      @prefix_sizes = Hash(String, Int32).new
       @context.preflight_name_bytes(PhysicalStreamName.escaped_size(column_name))
       prefix = PhysicalStreamName.escape(column_name)
       @names = build_bindings(type, prefix)
@@ -41,6 +43,7 @@ module CrystalClick
       context : PhysicalStreamPlanContext?,
     )
       @context = context || PhysicalStreamPlanContext.new(limits)
+      @prefix_sizes = Hash(String, Int32).new
       @context.preflight_name_bytes(escaped_prefix.value.bytesize.to_u64)
       @names = build_bindings(type, escaped_prefix.value)
     end
@@ -50,6 +53,22 @@ module CrystalClick
       role_plan = BinaryBulkTypePlan.new(type, @profile)
       role_count = role_plan.role_count
       @context.record_elements(role_count)
+      site_count, temporary_path_bytes, prefix_role_bytes = measure_dictionary_prefix_metadata(type, "root".bytesize.to_u64)
+      if site_count > 0_u64
+        # Admit both the temporary site roster and retained lookup before the
+        # role plan allocates paths or dictionary-role keys.
+        @context.record_elements(add_size(site_count, site_count))
+        @context.preflight_name_bytes(add_size(temporary_path_bytes, prefix_role_bytes))
+      end
+      role_plan.low_cardinality_sites.each do |site|
+        @prefix_sizes[site.dictionary_role] = 8
+      end
+      unless @prefix_sizes.size.to_u64 == site_count
+        raise UnsupportedFormatError.new("binary bulk LC dictionary prefix roster changed after preflight")
+      end
+      if site_count > 0_u64
+        @context.charge_name_bytes(add_size(temporary_path_bytes, prefix_role_bytes))
+      end
       role_bytes, rendered_name_bytes = measure_bindings(type, 4_u64, prefix.bytesize.to_u64, 0_u64)
       @context.preflight_name_bytes(add_size(role_bytes, rendered_name_bytes))
 
@@ -108,6 +127,15 @@ module CrystalClick
     def stream_name_for(role : String) : String
       name = @names[role]? || raise(KeyError.new("binary bulk role not found: #{role.inspect}"))
       String.new(name.to_slice)
+    end
+
+    # Dictionary prefix ownership follows the admitted recursive role plan;
+    # file basenames and suffixes are deliberately not used to infer it.
+    def prefix_size_for(role : String) : Int32
+      unless @names.has_key?(role)
+        raise KeyError.new("binary bulk role not found: #{role.inspect}")
+      end
+      @prefix_sizes[role]? || 0
     end
 
     def data_file_for(role : String, hashed : Bool = false) : String
@@ -272,6 +300,48 @@ module CrystalClick
         digits += 1_u64
       end
       digits
+    end
+
+    # Preflight retained dictionary-role prefix metadata without creating the
+    # path or role Strings produced by BinaryBulkTypePlan#low_cardinality_sites.
+    # The temporary path and the retained dictionary-role key are both bounded
+    # before the site roster is materialized.
+    private def measure_dictionary_prefix_metadata(
+      type : BinaryDataType,
+      path_length : UInt64,
+    ) : {UInt64, UInt64, UInt64}
+      case type.tag
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        {1_u64, path_length, add_size(path_length, 11_u64)}
+      when BinaryDataType::TAG_ARRAY
+        measure_dictionary_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
+      when BinaryDataType::TAG_NULLABLE
+        measure_dictionary_prefix_metadata(type.child_at(0), add_size(path_length, 7_u64))
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        count = 0_u64
+        paths = 0_u64
+        roles = 0_u64
+        type.child_count.times do |index|
+          child_count, child_paths, child_roles = measure_dictionary_prefix_metadata(
+            type.child_at(index),
+            add_size(path_length, add_size(7_u64, digit_count(index.to_u64)))
+          )
+          count = add_size(count, child_count)
+          paths = add_size(paths, child_paths)
+          roles = add_size(roles, child_roles)
+        end
+        {count, paths, roles}
+      when BinaryDataType::TAG_MAP
+        key_count, key_paths, key_roles = measure_dictionary_prefix_metadata(
+          type.child_at(0), add_size(path_length, 17_u64)
+        )
+        value_count, value_paths, value_roles = measure_dictionary_prefix_metadata(
+          type.child_at(1), add_size(path_length, 17_u64)
+        )
+        {add_size(key_count, value_count), add_size(key_paths, value_paths), add_size(key_roles, value_roles)}
+      else
+        {0_u64, 0_u64, 0_u64}
+      end
     end
 
     # Measure the fully escaped `%2E` + Tuple field without obtaining the
