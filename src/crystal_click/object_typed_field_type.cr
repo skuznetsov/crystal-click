@@ -18,6 +18,8 @@ module CrystalClick
       {BinaryDataType::TAG_INT256, "Int256"},
       {BinaryDataType::TAG_FLOAT32, "Float32"},
       {BinaryDataType::TAG_FLOAT64, "Float64"},
+      {BinaryDataType::TAG_DATE, "Date"},
+      {BinaryDataType::TAG_DATE32, "Date32"},
       {BinaryDataType::TAG_BOOL, "Bool"},
       {BinaryDataType::TAG_STRING, "String"},
     }

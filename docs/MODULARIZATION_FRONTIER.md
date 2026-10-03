@@ -1,12 +1,13 @@
 # CrystalClick Modularization Frontier
 
-Current transition (2026-10-03): W132 paired numeric Object fields over W131
-`02dd99f`, following the verified shared writer, catalog and table owners
+Current transition (2026-10-03): W133 paired bare Date/Date32 Object fields over
+W132 `e043be7`, following the verified shared writer, catalog and table owners
 below.
 The bounded capability certificate is in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 Catalog Object dispatch has a private materialization owner; W130 separately
 owns normalized table admission/accounting. W132 extracts one shared closed
-typed-field policy, not a new codec or a class per declaration. No MV/projection or
+typed-field policy; W133 extends that policy without a new codec or class per
+declaration. No MV/projection or
 performance admission changes are made here.
 
 W124's explicit-path compressed mark transport is verified below with eight
@@ -1941,3 +1942,38 @@ Other Object typed families, recursive/physical profiles and broader
 MV/projection compatibility remain open. Optimization stays parked. Refresh
 the affected positives and negatives after policy, schema, bulk, dispatch,
 profile, limit, runtime, source or toolchain changes.
+
+## Reused Object policy and owners (W133, 2026-10-03)
+
+Status: VERIFIED only for the bare Date/Date32 declared-field profile in
+`JSON_GENERAL_STORAGE_FRONTIER.md`, over W132 `e043be7`. Production adds two
+nominal entries to the existing shared policy. The fixed-width bulk, writer,
+file/column reader, catalog and table owners remain unchanged. Date is not
+UInt16 and Date32 is not Int32 despite identical carrier widths. No calendar
+API, parameterized temporal grammar or new physical layout is admitted.
+
+Root executed 34 focused DEBUG and 159 adjacent RELEASE examples; all 352
+unique spec files passed in 15 disjoint non-release groups (2,236 examples)
+in one completed runner invocation, not a combined-process suite. Eight fresh
+native/library stock matrix cells and two separate raw Date32 transport cases
+passed. Fresh unchanged W132/W130 stock regressions passed 8/5 cells. Root's
+bounded hostile verdict is ROBUST. The failed first oracle fixture, its direct
+typed-payload correction and final source/evidence fingerprints are retained
+in the capability frontier. Luna's static work is correlated support.
+
+The large facades remain unchanged at 15,985 / 25,991 / 7,171 / 3,692 lines
+(reader, writer, table and offline table). Shared schema/substream planning,
+I/O/validation, leaf dispatch and thin adapters still need decomposition.
+Other Object declarations/layouts and broader MV/projections remain open;
+performance stays parked. Refresh after policy, schema, bulk, dispatch,
+profile, limits, runtime, source or toolchain changes.
+
+The next proposed architecture slice extracts the nine existing Array/Map
+slice/row classes at `wide_part_table.cr:80-463` into nine files under
+`wide_part_table/`, with explicit aggregate imports. Preserve namespace,
+names, visibility, generics, comments, budgets and retained slice ownership;
+do not introduce new per-combination classes or change regular numeric Map
+helpers. Exact class-body comparison and existing W80-W85 table/catalog tests
+must guard against duplicate/omitted declarations and generic/lifetime drift.
+This would improve navigation, not close responsibility-level orchestration
+or prove lower coupling/performance. It remains PROPOSED until executed gates.

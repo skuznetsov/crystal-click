@@ -104,10 +104,10 @@ describe "W132 declared numeric Object schema" do
     end
   end
 
-  it "rejects Nothing, Date, UUID, BFloat16, Nullable, and container declarations" do
+  it "rejects Nothing, DateTime, UUID, BFloat16, Nullable, and container declarations" do
     unsupported_types = [
       w132_schema_type("Nothing"),
-      w132_schema_type("Date"),
+      CrystalClick::BinaryDataType.datetime,
       w132_schema_type("UUID"),
       w132_schema_type("BFloat16"),
       CrystalClick::BinaryDataType.nullable(w132_schema_type("Int64")),
@@ -123,7 +123,7 @@ describe "W132 declared numeric Object schema" do
 
     [
       "JSON(n Nothing)",
-      "JSON(n Date)",
+      "JSON(n DateTime)",
       "JSON(n UUID)",
       "JSON(n BFloat16)",
       "JSON(n Nullable(Int64))",

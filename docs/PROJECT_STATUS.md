@@ -3,8 +3,8 @@
 Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
 the W129 bounded Object catalog integration, W130 mixed table delivery
-`4b18812`, W131 declared Int64 `02dd99f`, and W132 paired numeric declared
-fields over that checkpoint in
+`4b18812`, W131 declared Int64 `02dd99f`, W132 paired numeric declared
+fields `e043be7`, and W133 paired declared Date/Date32 over that checkpoint in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 Responsibility-level owner boundaries are documented in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
@@ -40,7 +40,11 @@ source/runtime identities and executed evidence.
   distinct from UInt8; logical writes canonicalize true to byte 1. BFloat16 is
   excluded by the measured stock Object schema gate. String 0/1 × BASIC/COMPACT
   is qualified in both directions; this is still normalized Object V3/MAP,
-  not arbitrary JSON. See
+  not arbitrary JSON. W133 adds bare declared Date/Date32 through the same
+  writer and public consumers: eight fresh native/library matrix cells pass
+  calendar/day-code/type/byte checks, actual CHECK and exact RowBinary; two
+  separate raw Date32 extrema cases qualify transport only, not calendar range.
+  The shared declared-field policy now admits 18 nominal types. See
   [the example](../examples/write_object_document_part.cr) and
   [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
@@ -73,7 +77,7 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W132 provide
+1. **General JSON compatibility.** W117-W133 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
@@ -82,7 +86,8 @@ source/runtime identities and executed evidence.
    `ObjectColumnReader`, and W130 integrates that bounded profile into public
    mixed `WidePartTable` batches/windows and UInt64 PK candidates. W132 admits
    the numeric primitive family, Bool and String declared fields with paired
-   stock evidence. Temporal/identifier, FixedString, Decimal, Enum and recursive
+   stock evidence; W133 adds bare Date/Date32 with independent calendar and
+   signed raw-carrier checks. Other temporal/identifier, FixedString, Decimal, Enum and recursive
    declared-field families remain open within Object, even where standalone
    part support exists. The older
    scalar typed-path behavior is unchanged. Neither adapter implies arbitrary
@@ -116,15 +121,17 @@ source/runtime identities and executed evidence.
    primary index and staging/publication have separate owners; the new Object
    schema, metadata, whole-part orchestrator and catalog materialization
    owners also have separate files.
-   Next are legacy shared schema/substream planning, physical
+   The next bounded extraction moves the nine existing inline Array/Map
+   payload/row classes from `wide_part_table.cr` into nine separate files,
+   preserving public names, generic signatures, retained ownership and limits.
+   This is proposed, not a completed architectural change. Beyond it remain
+   legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
-2. Extend paired Object declared fields beyond numeric primitives/Bool/String.
-   The next proposed lane is Date/Date32: the fresh source admits both through
-   its DateNode and existing Crystal fixed-width carriers are available. This
-   is a source-backed proposal, not Object compatibility evidence; require
-   native and library parts with asymmetric day codes and negative Date32,
-   exact bytes/RowBinary, calendar interpretation and actual stock CHECK.
+2. Extend paired Object declared fields beyond numeric primitives/Bool/String
+   and bare Date/Date32. Parameterless UUID/IPv4/IPv6 are a proposed next lane,
+   not newly qualified Object support. Require independent native and library
+   parts, nominal identity, asymmetric bytes/RowBinary and actual stock CHECK.
    Address parameterized/recursive field grammar and semantic identity, then
    widen layouts with their own stock-generated and library-owned evidence.
    Object declarations retain the stock maximum of 1,000 typed paths.

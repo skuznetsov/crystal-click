@@ -112,7 +112,8 @@ The separately qualified catalog and typed-table readers are shown below.
 
 This profile is a hashed Wide part with a sorted UInt64 key, explicit typed
 UInt64/String JSON fields and explicit Dynamic path/type rosters. The same
-writer also admits the W132 paired integer widths, Float32/64 and Bool fields;
+writer also admits the W132 paired integer widths, Float32/64 and Bool fields
+and W133 bare Date/Date32 fields;
 this example deliberately keeps its original fields. Object V3,
 Dynamic V3, one-bucket shared MAP, LZ4 and plain adaptive marks are required.
 The example includes a Dynamic type spill, a shared path, an absent path and
@@ -203,7 +204,8 @@ document.paths.each { |path| puts "#{path}: #{document.value_for(path).type.name
 
 The result owns immutable flattened path/value documents, including typed,
 Dynamic and shared-MAP values. W129 originally qualified UInt64/String;
-W132 also qualifies declared integer widths, Float32/64 and Bool through this API.
+W132 also qualifies declared integer widths, Float32/64 and Bool through this API;
+W133 adds bare Date/Date32 with nominal identity and lossless raw day codes.
 The profile remains normalized hashed Wide Object V3/Dynamic V3, one shared MAP bucket, LZ4 and
 plain adaptive marks. Ordinary String versions 0/1 are supported; selected
 compressed marks and other JSON layouts are rejected. The example requests
@@ -241,7 +243,8 @@ type/hex values and labels candidate rows `keep` or `reject` using the exact
 application residual; a PK candidate is not an exact matching row.
 
 The current Object profile admits W132's declared integer widths, Float32/64,
-Bool and String, hashed Wide Object V3/Dynamic V3, one-bucket MAP, Default serialization metadata, LZ4,
+Bool and String plus W133 bare Date/Date32, hashed Wide Object V3/Dynamic V3,
+one-bucket MAP, Default serialization metadata, LZ4,
 ordinary String 0/1 and plain adaptive marks. BASIC/COMPACT discriminators do
 not mean Compact parts. Whole-Object projection reads remain rejected.
 Batch slices are callback-scoped; immutable document handles can be retained.

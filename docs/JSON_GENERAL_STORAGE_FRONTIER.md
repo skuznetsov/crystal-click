@@ -5,8 +5,9 @@ library-owned normalized Object parts; W129 adds bounded whole-Object catalog
 materialization; W130 adds mixed Object/scalar typed-table batches, physical
 windows and bounded UInt64-PK candidate delivery. W132 extends W131 `02dd99f`
 to paired declared integer widths, Float32/64 and Bool alongside String,
-qualified in both directions for String 0/1 × BASIC/COMPACT. The exact admitted
-profiles and executed gates are in their sections below. W132 does not widen
+qualified in both directions for String 0/1 × BASIC/COMPACT. W133 adds bare
+declared Date/Date32 with separate calendar and raw-carrier evidence. The exact
+admitted profiles and executed gates are in their sections below. Neither widens
 physical layouts, the one-Object writer or projection reads.
 This is not general JSON schema/layout compatibility or completed arbitrary
 table integration. Older scalar JSON projections retain their existing
@@ -99,13 +100,15 @@ Source anchors, relative to that reference checkout:
   not an independent canonical ordering contract. Text and binary observations
   must be captured and qualified separately.
 
-Current production anchors: `WidePart.json_typed_paths` parses simple declared
-scalar paths, not JSON settings or arbitrary paths; whole JSON fails exact typed
-admission. Existing typed-path reading validates the Object V3 prefix but does
+Legacy scalar-path production anchors: `WidePart.json_typed_paths` parses simple
+declared scalar paths, not JSON settings or arbitrary paths; that adapter does
+not admit whole JSON. Its typed-path reading validates the Object V3 prefix but does
 not decode the remaining shared structure. Its writer substitutes already
 normalized scalar defaults and emits empty dynamic/shared data. Existing Dynamic
 profiles require empty SharedVariant rows/statistics. None of these guards
-demonstrates general JSON support.
+demonstrates general JSON support. The separately qualified normalized whole-
+Object owners and public consumers are recorded in W128-W133 below; do not
+confuse either bounded path with arbitrary JSON compatibility.
 
 ## W115 capture checkpoint
 
@@ -4034,3 +4037,190 @@ Object parts, asymmetric raw day codes including negative Date32, exact
 bytes/RowBinary, calendar interpretation and stock CHECK. Fresh source admits
 both at `JSONExtractTree.cpp:2698-2701`; existing fixed-width carriers alone do
 not establish Object compatibility. No W133 production change is admitted here.
+
+## W133 declared Date/Date32 Object pair — pre-implementation design seal
+
+Anchor: clean W132 `e043be7`. Fresh source `101871ba` admits both through
+`DateNode` (`JSONExtractTree.cpp:2698-2701`); their binary serializers inherit
+`SerializationNumber<UInt16>` and `<Int32>`. Existing Crystal primitive/fixed
+bulk carriers preserve those raw words, but Date and UInt16, and Date32 and
+Int32, remain different nominal types. No calendar API or Crystal JSON-text
+ingestion is implied by raw Object storage support.
+
+Root's pinned-stock probe passed before production changes:
+`/private/tmp/crystal-click-w133-root.0hMLsY/probe-dates.log`, exit 0.
+Stock JSON date-string inputs produce independently expected calendar dates,
+nominal types and little-endian words, including day 513, -513 and -25567.
+An independent raw Object RowBinary probe also preserves Date32 Int32 MIN/MAX
+with CHECK=1. Those extremes are carrier transport evidence, not claims about
+meaningful calendar formatting outside the stock calendar domain. Both probes
+use isolated tables; runtime provenance remains separate from the shallow
+source reference.
+
+Transition: admit only bare Date/Date32 in the shared Object typed-field policy,
+paired across the existing whole-part, file/column, catalog and table owners.
+Retain exact declaration-byte budgets, schema/plan/value identity, immutable
+ownership and all current profile/publication guards. Refuse DateTime/Time,
+parameterized temporal declarations, wrappers, containers, BFloat16 and new
+layouts in this lane. The complete types/MV/projections goal stays active;
+performance is parked, not replaced by this smaller checkpoint.
+
+Risk: CAUTION (serialization admission). Rollback: one local atomic commit
+over `e043be7`, no push. Strongest failure: Date32 is treated as unsigned, or
+Date/Date32 silently lose nominal identity to UInt16/Int32; local byte symmetry
+would hide stock calendar disagreement. Guard with independent date-string
+native inputs, exact day/byte/type/RowBinary and calendar SQL expectations,
+raw signed extremes, wrong-nominal writer refusal and later-part drift before
+callbacks. Do not weaken the existing `max_rows=0` or metadata quotation API.
+
+Ownership/order: Luna owns two new schema/consumer spec files and the necessary
+W132 Date negative-sentinel replacement. Root runs qualified RED before extending
+that Luna's ownership to only `object_typed_field_type.cr`. A separate Luna owns the new
+W133 stock oracle/wrapper, reusing W132's bounded instrumentation but adapting
+all input/expected-value paths to dates. Root reviews all changes, runs every
+compiler/stock job serially under the resource guard, updates the frontier,
+project/modularization/example navigation and makes the scoped local commit.
+No agent may run a compiler/ClickHouse job, change dependencies or push.
+
+DoD: focused DEBUG and adjacent RELEASE; the complete unique non-release spec
+inventory in designated disjoint guarded groups; four fresh native and four
+fully library-owned String 0/1 × BASIC/COMPACT cells, actual CHECK/full/PK SQL,
+exact raw typed RowBinary/types/calendar values, file/column full/middle/zero,
+independently copied catalog ownership/reread, table windows and PK granule
+candidates/residuals. Add exact constructor/parser budget boundaries, nominal
+Date/numeric mismatches, prepublication and pre-callback guards, and seeded
+byte/type/grid/CHECK/Sparse comparator failures. Fresh W132 and W130 stock
+regressions, formatting/shell/diff hygiene and root hostile review must pass
+before admission/commit. If carrier and calendar behavior differ, state and
+test that boundary rather than changing date expectations to match output.
+
+## W133 declared Date/Date32 Object pair — executed certificate (2026-10-03)
+
+Status: VERIFIED within the design-sealed normalized profile over W132
+`e043be7`. The broader types/MV/projections goal remains active; optimization
+is parked. Production changes only the shared policy's two nominal entries.
+Existing primitive/fixed bulk, whole-part, file/column, catalog and table
+owners are reused; no new codec, facade branch or calendar API was added.
+The old Date rejection sentinel now tests still-refused DateTime.
+
+The admitted profile is one Object root beside a sorted UInt64 key, hashed
+Wide, Object V3 (wire version 4)/Dynamic V3, explicit rosters, one-bucket shared
+MAP, LZ4, plain adaptive `.mrk2`/`primary.idx`, Default metadata. Four native
+and four fully library-owned cells cover String 0/1 × BASIC/COMPACT. COMPACT
+is a discriminator profile, not a Compact part. Seven independently authored
+calendar fixtures include Date day codes 0, 1, 513, 65535, 256, 10000, 365 and
+Date32 -25567, -513, -1, 0, 1, 120529, 513, with asymmetric little-endian
+words, NUL/Unicode/empty String, Dynamic Int64 and shared String spill.
+Native JSONEachRow input uses independent calendar strings, not library bytes.
+Actual grids `[2,2,2,1]`, keys/sentinel `[1,3,5,7,7]` and PK=6 candidate mark
+`[2]` are checked; complete candidate rows 5/6 require the application residual.
+
+Date/UInt16 and Date32/Int32 remain nominally distinct in schema, plan, value,
+writer prepublication and later-part pre-callback checks. Separate native and
+library-origin raw Date32 Int32 MIN/MAX cases check CHECK=1, types, exact hex,
+typed RowBinary and Object reads. Those two cases are raw transport evidence,
+not the main consumer matrix or meaningful calendar-range qualification.
+The calendar witnesses do not establish a universal date-domain theorem.
+
+Source is the clean shallow `101871ba6da8221c7cf30ac3a04bc1063106f412`
+reference in `/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-101871ba`.
+Root compared DateNode, UInt16/Int32 serializers and direct declared Object
+binary delegation (`SerializationObject.cpp:1365-1376`). Runtime qualification
+uses the separate pinned `/private/tmp/crystal-click-w112-runtime.u0Jn1f/clickhouse`:
+26.10.1.1201, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+No executable from the newer source reference was built or qualified.
+Crystal 1.21.0, LLVM 22.1.8/AArch64 and macOS 26.5 SDK are the tested toolchain.
+
+Root-owned evidence: `/private/tmp/crystal-click-w133-root.0hMLsY`.
+Compiler/stock jobs ran serially under `cogni-ml/scripts/run_safe.sh` with
+minimum free memory 50%, 32,768 MiB guard and its existing FD guard; these are
+host checks, not a library memory/no-leak certificate.
+
+- `probe-dates.log`: independent calendar and raw-extrema stock probes pass,
+  outer exit 0, before production admission.
+- `red.log`: four schema examples, three expected old-whitelist errors and
+  one passing unsupported-type guard before the two policy entries were added.
+- `focused-debug.log`: 34 examples, zero failures/errors, outer exit 0.
+- `adjacent-release.log`: 159 examples in 19 adjacent files, zero failures/errors,
+  outer exit 0. These two runs precede whitespace-only consumer-spec formatting;
+  final-source inventory below includes that formatting.
+- `full-nonrelease-shards.log`: all 352 unique sorted spec files in 15 disjoint
+  groups of at most 24, 2,236 examples, zero failures/errors, outer exit 0 in
+  one completed runner invocation. Not a combined-process or full RELEASE suite.
+  Existing duplicate-library and deprecated `blocking` warnings remain.
+- `stock-w133.log`: first oracle exits 1 after the eight calendar cells and
+  seven negative controls pass; raw-extrema input wrongly included a Dynamic
+  descriptor before the direct declared-field payload. No production failure
+  or passing entire invocation is asserted. Only the fixture was corrected,
+  with an independent exact 40-byte input guard; root also corrected that
+  guard's hex letter-case mismatch before rerunning.
+- `stock-w133-corrected.log`: all eight calendar cells pass actual CHECK=1,
+  full/PK SQL, calendar/day-code/type/hex and exact typed RowBinary. File/column
+  full/middle/zero, independently copied catalog ownership/reread, table
+  windows and PK provenance/residuals pass. Seven seeded mismatches (date
+  byte, Date/UInt16, Date32/Int32, Sparse metadata, grid, CHECK, RowBinary)
+  are rejected. Both separate raw-extrema cases pass; outer exit 0.
+- Fresh unchanged `stock-w132-regression.log` and `stock-w130-regression.log`:
+  8/5 stock cells and their negative controls pass, both outer exits 0.
+
+Retained roots: corrected W133 `/private/tmp/crystal-click-object-dates-w133.HN7N59`;
+failed fixture `/private/tmp/crystal-click-object-dates-w133.ZTLH8B`; W132
+`/private/tmp/crystal-click-object-numeric-w132.9tGHIs`; W130
+`/private/tmp/crystal-click-object-table-w130.gUbVKV`. This frontier is the
+curated index, not proof by fields or a structural-validator pass.
+
+Replay: use the SDK/TMPDIR/toolchain/guard environment in W132's command block,
+isolated caches, 600 seconds for focused specs and 900 for wrappers/inventory.
+Focused files are W133 schema/root, W132 schema/root, W131 schema/root and
+W128 schema specs under `spec/`, with the same single-module/one-thread/linker
+flags. Adjacent RELEASE adds the W130 table/offline/root, W129 catalog/column/
+root, W128 writer/root, offline catalog, lazy window and W87 table/catalog
+projection specs. Complete inventory is `rg --files spec -g '*_spec.cr' |
+LC_ALL=C sort`, consecutive groups of at most 24 with `--no-debug`.
+Run `W133_KEEP_TMP=1 bash scripts/check_object_dates_w133.sh`, then unchanged
+W132 numeric and W130 table wrappers with their KEEP_TMP variables set to 1.
+Final formatting, wrapper `bash -n` and `git diff --check` must pass before commit.
+
+Frozen final production/spec/oracle SHA-256:
+
+```text
+2057f9b5df1288512f90915e140cfaca3bf32c7fe2be9dde6f09c27d486502ed  src/crystal_click/object_typed_field_type.cr
+af0c6592bfe19203b8cfeacb53448586d02fffc1ed36eda2bd6c5670e04363d3  spec/object_document_schema_w132_spec.cr
+b2a8d0c2e683463c9e0154dff2e36cb2a45c4505f644e2f389788266fe662bde  spec/object_document_schema_w133_spec.cr
+d50ed1ae28bebe083f1c72fcdedf8693d2ffb3aecaf1078b9cfd6794bc8aaaef  spec/object_dates_w133_root_spec.cr
+2c0dd6477b2a5addf1d29ca011a4d2cfc1adafbc2788e0f793a0d604d7603d61  scripts/check_object_dates_w133.cr
+73a35cf0d352d75f24efe3821e6c6ea8a5fb0ad5a7035c12b818848e031591a3  scripts/check_object_dates_w133.sh
+```
+
+Unchanged schema/parser/import and W132/W130 oracle fingerprints are those in
+their executed certificates. Evidence log SHA-256 in the order above:
+
+```text
+41663e528c68091f72e932a7627687674a9955eeb0b77fc6652a34652c06ab93  probe-dates.log
+475d1be423bfd7813dfe9504f1e4d986ebd212dad3660301604215c84d0a6808  red.log
+a40bde8a570e99123ad570f6e97d6b43b6a7163bc8db8529748705d4ef6bae6f  focused-debug.log
+c97837d426a9982ce6251d6782ad590200f2cf75aec1d2f8ce299cd3e2cbc6ac  adjacent-release.log
+1e83ff3336a9d7bb9750972e90e6a146fc4fab5dc23df9c4eb9fb0d23fd70f39  full-nonrelease-shards.log
+17731612b96d91440e9ef9e16e098f8eef76bd41bb15cf66549cdb0839e3f845  stock-w133.log
+5a3badaecb0f2e2039948a6930a8ee47b234cce93c9e10c9cd3da5e4ecb66114  stock-w133-corrected.log
+100f3ff5f0aebd6c1484dd1b38d909d9d25e4f4c5ada9a928e980c3342eeacea  stock-w132-regression.log
+c37494054605a7a63d846bc9ddde878caab3183e257ceb2774591a3441fd0120  stock-w130-regression.log
+```
+
+Root hostile verdict: ROBUST within the declared profile. Root reviewed the
+diff and independent stock source/probe, executed the compiler/stock gates,
+and challenged signed-carrier/calendar conflation, nominal aliases, exact
+budget cutoffs, wrong-nominal publication, later-part drift, ownership,
+candidate/residual semantics and comparator sensitivity. Luna's implementation
+and static inventory are correlated support, not independent runtime evidence.
+
+Residuals: no DateTime/Time, wrappers, containers, BFloat16, identifiers,
+FixedString/Decimal/Enum, new Object layouts, Compact/Sparse parts, arbitrary
+table/multi-Object writer, whole-Object projections or broader MV execution.
+Quiescent local inputs, existing checksums/metadata roster validation and
+logical admission budgets do not prove Active status/snapshot consistency,
+payload authentication, decoder/transient/RSS/caller-retention limits, complete
+facade modularity or stock-reader speed. Decay on policy/schema/bulk/adapter,
+profile/limits, comparator/publication, runtime/source/toolchain or loss of
+retained evidence; rerun the affected positives and negatives before reuse.
