@@ -1833,3 +1833,51 @@ the next adapter. Large legacy shared type/substream planning, physical I/O
 and leaf-codec responsibilities still need decomposition. Refresh the affected
 gates after owner/dispatch/profile/budget/runtime/toolchain changes rather
 than inferring behavior preservation from file count alone.
+
+## Normalized Object table owners (W130, 2026-10-02)
+
+Status: VERIFIED only for the W130 bounded table-delivery contract and executed
+gates in `JSON_GENERAL_STORAGE_FRONTIER.md`, over `2097a88`. This CAUTION
+dispatch/ownership addition does not complete the larger facade refactor.
+
+Two cohesive private class owners each have a separate source file:
+
+- `wide_part/selected_json_metadata_probe.cr` (153 lines): bounded metadata-only
+  literal-Object dispatch, preserving the old dotted-name/virtual-path guard.
+  It does not invoke unrelated physical codecs or semantically parse every
+  unselected JSON declaration. The legacy scalar parser was not widened.
+- `wide_part_table/object_column_adapter.cr` (60 lines): strict normalized
+  Object opening and current-mark document-owner accounting, reusing
+  `ObjectValuesMaterializationBudget` instead of a second recursive calculator.
+  Complete pending documents are measured atomically after decoding.
+
+The table facade retains the part/grid lifecycle, separate scalar/Object reader
+entries, caller ordering and borrowed batch views. Object owners participate
+in the existing shared remaining variable-sized mark budget; a whole-part
+descriptor is not charged as the current mark. Offline-table dispatch binds
+canonical whole-Object DDL without weakening the old virtual-path identity.
+Whole-Object projection child delivery is explicitly refused pending its own
+stock qualification. The native oracle covers two selected Object roots;
+the existing writer still authors only one Object root beside a UInt64 key.
+
+Root independently executed 16 final DEBUG, 133 focused RELEASE and all 2,210
+non-release examples in 15 disjoint serial groups covering 346 spec files;
+four fresh two-Object native profiles and one library-written stock ATTACH/
+CHECK/read route; eight W129 and five W128 fresh regressions; the example;
+and format/syntax/diff checks. Two combined-suite compilations were refused by
+the unchanged resource guard, so grouped execution is not a combined-process
+certificate. Root's bounded hostile verdict is ROBUST; Luna's static review
+is correlated support, and its missed oracle NamedTuple access was corrected
+from root's actual compiler failure. Exact commands and profile corrections
+are in the capability frontier.
+
+The remaining reader/writer/table/catalog facades have 15,985 / 25,991 / 7,171 /
+3,692 lines. These counts make the unfinished decomposition visible, not an
+architecture metric or a coupling/performance result. Shared legacy schema/
+substream planning, I/O/validation, leaf dispatch and thin table/catalog
+adapters still need responsibility-level extraction. Current-mark accounting
+does not bound decode workspace, transients, RSS or caller retention;
+metadata probing may repeat. Paired declared JSON typed-field expansion and
+broader MV/projections remain open; optimization stays parked. Refresh the
+affected gates after owner, dispatch, profile, budget, runtime or toolchain
+changes.

@@ -1337,6 +1337,7 @@ module CrystalClick
       raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
 
       selected = Set(String).new
+      expected_sources = Hash(String, {String, String, String, Bool}).new
       columns.each do |column_name|
         raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
         raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
@@ -1344,9 +1345,12 @@ module CrystalClick
 
         column = @columns.find { |entry| entry.name == column_name }
         raise UnsupportedFormatError.new("selected column is not declared by table DDL") unless column
-        unless column.type == "UInt64" || QBitColumnType.for_type(column.type)
-          raise UnsupportedFormatError.new("selected table column is neither UInt64 nor canonical QBit")
+        source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name)
+        object_root = !json_path && WidePart.json_type?(source_type)
+        unless object_root || (!json_path && (column.type == "UInt64" || QBitColumnType.for_type(column.type)))
+          raise UnsupportedFormatError.new("selected table column is neither UInt64, canonical QBit nor normalized Object")
         end
+        expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
       end
 
       key_column = @primary_key_column || raise(UnsupportedFormatError.new("table does not have a supported simple ascending UInt64 ORDER BY key"))
@@ -1357,9 +1361,16 @@ module CrystalClick
 
       reader = WidePartTable.open_selected_typed(candidates.map(&.path), columns)
       reader.column_types.each do |column_name, part_type|
-        ddl_column = @columns.find { |entry| entry.name == column_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
-        unless ddl_column.type == part_type
+        ddl_source = expected_sources[column_name]? || raise(CorruptPartError.new("selected column disappeared from table DDL"))
+        unless ddl_source[2] == part_type
           raise UnsupportedFormatError.new("table DDL and selected part column types differ")
+        end
+      end
+      reader.column_sources.each do |column_name, part_source_name, part_source_type|
+        ddl_source = expected_sources[column_name]? || raise(CorruptPartError.new("selected column disappeared from table DDL"))
+        next unless !ddl_source[3] && WidePart.json_type?(ddl_source[1])
+        unless part_source_name == ddl_source[0] && part_source_type == ddl_source[2]
+          raise UnsupportedFormatError.new("table DDL and selected Object schema differ")
         end
       end
 
@@ -1515,7 +1526,10 @@ module CrystalClick
         selected << column_name
 
         source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name)
-        raise UnsupportedFormatError.new("selected table column type is unsupported") unless WidePart.supports_typed_type?(selected_type)
+        object_root = !json_path && WidePart.json_type?(source_type)
+        unless object_root || WidePart.supports_typed_type?(selected_type)
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
         expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
       end
 
@@ -1528,6 +1542,10 @@ module CrystalClick
         if ddl_source[3]
           unless part_source_name == ddl_source[0] && part_source_type == ddl_source[1]
             raise UnsupportedFormatError.new("table DDL and selected JSON schema differ")
+          end
+        elsif WidePart.json_type?(ddl_source[1])
+          unless part_source_name == ddl_source[0] && part_source_type == ddl_source[2]
+            raise UnsupportedFormatError.new("table DDL and selected Object schema differ")
           end
         elsif part_source_name != ddl_source[0] || part_source_type != (WidePart.catalog_type(ddl_source[1]) || ddl_source[1])
           raise UnsupportedFormatError.new("table DDL and selected part column types differ")
@@ -3460,10 +3478,19 @@ module CrystalClick
         raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
       end
       if selected = exact
-        unless allow_unsupported_exact || WidePart.supports_typed_type?(selected.type) || WidePart.catalog_type(selected.type)
+        object_root = WidePart.json_type?(selected.type)
+        if object_root
+          selected_type = if allow_unsupported_exact
+                            selected.type
+                          else
+                            ObjectDocumentSchema.parse_declaration(selected.type).declaration
+                          end
+        else
+          selected_type = WidePart.catalog_type(selected.type) || selected.type
+        end
+        unless allow_unsupported_exact || object_root || WidePart.supports_typed_type?(selected_type)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
-        selected_type = WidePart.catalog_type(selected.type) || selected.type
         return {selected.name, selected.type, selected_type, false}
       end
       raise UnsupportedFormatError.new("selected column is not declared by table DDL") if virtual.empty?

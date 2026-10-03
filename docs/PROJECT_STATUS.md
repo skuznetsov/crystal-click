@@ -2,7 +2,8 @@
 
 Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
-the W129 bounded Object catalog integration in
+the W129 bounded Object catalog integration and W130 mixed table delivery over
+`2097a88` in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 Responsibility-level owner boundaries are documented in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
@@ -28,8 +29,9 @@ source/runtime identities and executed evidence.
   Object V3/Dynamic V3, one-bucket shared MAP, LZ4 and plain adaptive marks;
   declared typed fields are UInt64/String. Five fresh parts passed actual stock
   ATTACH/CHECK=1/full/PK SQL and explicit file-reader full/middle/zero windows.
-  W129 separately adds bounded catalog Object materialization, not mixed
-  table batch dispatch. See
+  W129 adds bounded catalog Object materialization; W130 adds the separately
+  qualified mixed typed-table reader. Neither widens the writer to multiple
+  Object columns or arbitrary schemas. See
   [the example](../examples/write_object_document_part.cr) and
   [the qualified frontier](JSON_GENERAL_STORAGE_FRONTIER.md).
 - `OfflineCatalog`: disk-based Atomic metadata discovery, database/table/
@@ -40,6 +42,12 @@ source/runtime identities and executed evidence.
   logical, row, String and recursive-cell limits. That accounting is not an
   RSS or pre-decode transient-memory ceiling. See
   [read_object_catalog.cr](../examples/read_object_catalog.cr).
+  W130 separately admits selected normalized Object roots, alone or mixed
+  with existing typed columns, through full batches, physical windows and
+  bounded UInt64-PK candidate delivery. More than one selected Object root
+  is kept separately bound. `batch.object_documents_for(column)` exposes
+  callback-scoped slices of immutable retainable document handles. See
+  [read_object_table.cr](../examples/read_object_table.cr).
   Synthetic `catalog["system"]["part_candidates"]["rows"].values` is supported;
   these are candidates, not server-proven Active parts or the real `system.*`
   tables. See [OFFLINE_CATALOG_FRONTIER.md](OFFLINE_CATALOG_FRONTIER.md) and
@@ -56,15 +64,17 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON table API integration.** W117-W129 provide
+1. **General JSON compatibility.** W117-W130 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
    qualification; W127's older shell-based oracle is not the whole-part
    certificate. The catalog now dispatches whole normalized JSON through
-   `ObjectColumnReader`; the public mixed `WidePartTable` batch/window/PK
-   adapter is still missing. Its older scalar typed-path behavior is unchanged.
-   Neither adapter implies arbitrary JSON schemas or physical layouts. See
+   `ObjectColumnReader`, and W130 integrates that bounded profile into public
+   mixed `WidePartTable` batches/windows and UInt64 PK candidates. The older
+   scalar typed-path behavior is unchanged. Neither adapter implies arbitrary
+   JSON schemas or physical layouts; Default serialization metadata is still
+   required, and whole-Object projection child reads remain refused. See
    [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
 2. **Additional physical profiles and recursive composition.** Normalized
    Wide/SUFFIX Object V3 with explicit rosters and one-bucket MAP is not general
@@ -96,10 +106,11 @@ source/runtime identities and executed evidence.
    Next are legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
-2. Extend the qualified normalized Object catalog read path into mixed table
-   batches, windows and PK candidate delivery, without silently widening
-   layout or schema discovery. Object declaration admission also enforces
-   the stock maximum of 1,000 typed paths regardless of caller codec limits.
+2. Extend paired Object declared typed fields beyond UInt64/String, starting
+   with a separately qualified `Int64` lane rather than promoting existing
+   Dynamic/shared Int64 values into typed-field support. Then widen layouts
+   and recursive composition with their own stock-generated and library-owned
+   evidence. Object declarations retain the stock maximum of 1,000 typed paths.
 3. Expand remaining paired type/profile and MV/projection frontiers.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.

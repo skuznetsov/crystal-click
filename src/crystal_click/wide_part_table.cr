@@ -737,6 +737,7 @@ module CrystalClick
     @point_values : Hash(String, Slice(WidePointValue))
     @geo_array_rows : Hash(String, Slice(WideGeoArrayRow)) = Hash(String, Slice(WideGeoArrayRow)).new
     @geometry_rows : Hash(String, Slice(WideGeometryRow)) = Hash(String, Slice(WideGeometryRow)).new
+    @object_documents : Hash(String, Slice(ObjectDocument)) = Hash(String, Slice(ObjectDocument)).new
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @string_values : Hash(String, Slice(String))
     @fixed_string_values : Hash(String, Slice(String))
@@ -1137,6 +1138,24 @@ module CrystalClick
       index = column_index(column)
       raise UnsupportedFormatError.new("Geometry accessor requires the exact Geometry column") unless GeometryColumnType.for_type(@column_types[index])
       @geometry_rows[column]? || raise(UnsupportedFormatError.new("Geometry column was not materialized in this batch"))
+    end
+
+    # Return Object document handles borrowed from this callback's mark owner.
+    # The handles are immutable and may be retained; the containing Slice is a
+    # callback-scoped view, like every other batch slice.
+    def object_documents_for(column : String) : Slice(ObjectDocument)
+      index = column_index(column)
+      raise UnsupportedFormatError.new("Object accessor requires an exact JSON column") unless WidePart.json_type?(@column_types[index])
+      @object_documents[column]? || raise(UnsupportedFormatError.new("Object column was not materialized in this batch"))
+    end
+
+    # Internal table-scan hook for one borrowed full-mark row slice.
+    def install_object_documents(column : String, values : Slice(ObjectDocument), expected_rows : Int) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Object materializer received a non-JSON column") unless WidePart.json_type?(@column_types[index])
+      raise CorruptPartError.new("Object batch slice row count mismatch") unless values.size == expected_rows
+      @object_documents[column] = values
+      nil
     end
 
     def install_geometry_rows(column : String, values : Slice(WideGeometryRow), expected_rows : Int) : Nil
@@ -2548,12 +2567,22 @@ module CrystalClick
       end
     end
 
+    private struct ObjectColumnReaderEntry
+      getter name : String
+      getter reader : ObjectColumnReader
+      getter column_type : String
+
+      def initialize(@name : String, @reader : ObjectColumnReader, @column_type : String)
+      end
+    end
+
     private struct PartEntry
       getter name : String
       getter path : String
       getter row_count : UInt64
       getter mark_row_counts : Array(UInt64)
       getter readers : Array(ColumnReader)
+      getter object_readers : Array(ObjectColumnReaderEntry)
       getter column_types : Array(String)
       getter column_sources : Array({String, String, String})
 
@@ -2563,6 +2592,7 @@ module CrystalClick
         @row_count : UInt64,
         @mark_row_counts : Array(UInt64),
         @readers : Array(ColumnReader),
+        @object_readers : Array(ObjectColumnReaderEntry),
         @column_types : Array(String),
         @column_sources : Array({String, String, String}),
       )
@@ -2599,15 +2629,20 @@ module CrystalClick
 
     def column_types : Array({String, String})
       return [] of {String, String} if @entries.empty?
-      @entries.first.readers.map { |selected| {selected.name, selected.column_type} }
+      types = @entries.first.column_types
+      selected = Array({String, String}).new(@columns.size)
+      @columns.each_with_index do |column, index|
+        selected << {column, types[index]}
+      end
+      selected
     end
 
     # Retain the physical source identity for virtual JSON typed paths so the
     # offline table can compare full JSON schemas before exposing callbacks.
     def column_sources : Array({String, String, String})
       return [] of {String, String, String} if @entries.empty?
-      @entries.first.readers.map do |selected|
-        {selected.name, selected.reader.source_column_name, selected.reader.source_column_type}
+      @entries.first.column_sources.map do |column, source_name, source_type|
+        {column.dup, source_name.dup, source_type.dup}
       end
     end
 
@@ -2620,7 +2655,7 @@ module CrystalClick
     # alias the current mark arrays and must not be retained past the callback.
     def scan(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 scan requires exact UInt64 columns")
       end
 
@@ -2631,7 +2666,7 @@ module CrystalClick
     # complete candidate granule; skipped marks still advance physical row
     # offsets and are never materialized.
     def scan_candidate_marks(mark_indices : Array(Array(Int32)), & : WidePartTableBatch -> Nil) : Nil
-      unless @entries.all? { |part| part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 candidate scan requires exact UInt64 columns")
       end
       raise BoundsError.new("candidate mark list does not match selected parts") unless mark_indices.size == @entries.size
@@ -2724,7 +2759,7 @@ module CrystalClick
     # retrieved from each batch with values_for(column, CrystalType).
     def scan_numeric(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
         raise UnsupportedFormatError.new("numeric scan requires exact primitive numeric columns")
       end
 
@@ -3288,6 +3323,11 @@ module CrystalClick
               end
               preflight_string_bytes += bytes
             end
+            part.object_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
+              bytes = ObjectColumnAdapter.preflight_owner(mark_rows, remaining_bytes)
+              preflight_string_bytes += bytes
+            end
 
             numeric_values = Hash(String, WidePartNumericArray).new
             string_values = Hash(String, Array(String)).new
@@ -3342,6 +3382,7 @@ module CrystalClick
             point_values = Hash(String, Array(WidePointValue)).new
             geo_array_rows = Hash(String, Array(WideGeoArrayRow)).new
             geometry_rows = Hash(String, Array(WideGeometryRow)).new
+            object_documents = Hash(String, Array(ObjectDocument)).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
               if GeometryColumnAdapter.type?(selected.column_type)
@@ -4836,6 +4877,20 @@ module CrystalClick
                 numeric_values[selected.name] = values
               end
             end
+            part.object_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+              values, charge = ObjectColumnAdapter.materialize_mark(
+                selected.reader,
+                mark_index.to_i32,
+                mark_rows,
+                remaining_bytes
+              )
+              if charge > remaining_bytes
+                raise CorruptPartError.new("selected Object mark exceeds aggregate materialization limit")
+              end
+              actual_string_bytes += charge
+              object_documents[selected.name] = values
+            end
 
             mark_row_offset = selected_mark_row_start
             first_whole_mark_batch = whole_marks
@@ -5103,6 +5158,12 @@ module CrystalClick
                   selected_values = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                   batch.install_nullable_qbit_values(selected.name, selected_values, size)
                 end
+              end
+              part.object_readers.each do |selected|
+                values = object_documents[selected.name]? ||
+                         raise(CorruptPartError.new("selected Object column was not materialized"))
+                selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                batch.install_object_documents(selected.name, selected_slice, size)
               end
               yield batch
               mark_row_offset &+= size.to_u64
@@ -6707,28 +6768,61 @@ module CrystalClick
         name = selected_part[1]
         path = selected_read_paths[part_index]
         readers = Array(ColumnReader).new(@columns.size)
+        object_readers = Array(ObjectColumnReaderEntry).new
         expected_mark_rows = nil.as(Array(UInt64)?)
         expected_row_count = nil.as(UInt64?)
+        current_column_types = Array(String).new(@columns.size)
+        current_column_sources = Array({String, String, String}).new(@columns.size)
         checksums = PartChecksums.open(path)
 
         @columns.each do |column|
-          reader = if @numeric_mode
-                     WidePart.open_numeric(path, column)
-                   elsif @typed_mode
-                     WidePart.open_typed(path, column)
-                   else
-                     WidePart.open(path, column)
-                   end
-          raise BoundsError.new("mark count exceeds per-reader limit") if reader.mark_count > MAX_MARKS_PER_READER
-          mark_rows = reader.mark_row_counts
+          object_declaration = nil.as(String?)
+          if @typed_mode && !@numeric_mode
+            object_declaration = WidePart.selected_json_declaration(path, column)
+            if projection_name && object_declaration
+              raise UnsupportedFormatError.new("Object columns are unsupported in typed projections")
+            end
+          end
+
+          mark_rows = [] of UInt64
+          column_type = ""
+          column_source = {"", "", ""}
+          column_row_count = 0_u64
+          selected_checksum_names = [] of String
+          if source_declaration = object_declaration
+            object_reader = ObjectColumnAdapter.open(path, column, source_declaration)
+            mark_rows = object_reader.mark_row_counts
+            raise BoundsError.new("mark count exceeds per-reader limit") if mark_rows.size > MAX_MARKS_PER_READER
+            column_row_count = object_reader.row_count
+            column_type = object_reader.schema_declaration
+            column_source = {column, column, object_reader.schema_declaration}
+            selected_checksum_names = object_reader.selected_checksum_names
+            object_readers << ObjectColumnReaderEntry.new(column, object_reader, column_type)
+          else
+            reader = if @numeric_mode
+                       WidePart.open_numeric(path, column)
+                     elsif @typed_mode
+                       WidePart.open_typed(path, column)
+                     else
+                       WidePart.open(path, column)
+                     end
+            raise BoundsError.new("mark count exceeds per-reader limit") if reader.mark_count > MAX_MARKS_PER_READER
+            mark_rows = reader.mark_row_counts
+            column_row_count = reader.row_count
+            column_type = reader.column_type
+            column_source = {column, reader.source_column_name, reader.source_column_type}
+            selected_checksum_names = reader.selected_checksum_names
+            readers << ColumnReader.new(column, reader)
+          end
+
           mark_rows.each do |rows|
             raise BoundsError.new("mark row count exceeds limit") if rows > MAX_MARK_ROWS
           end
 
           if current_rows = expected_row_count
-            raise CorruptPartError.new("selected columns have different row counts") unless reader.row_count == current_rows
+            raise CorruptPartError.new("selected columns have different row counts") unless column_row_count == current_rows
           else
-            expected_row_count = reader.row_count
+            expected_row_count = column_row_count
           end
 
           if current_marks = expected_mark_rows
@@ -6737,17 +6831,14 @@ module CrystalClick
             expected_mark_rows = mark_rows
           end
 
-          reader.selected_checksum_names.each do |checksum_name|
+          selected_checksum_names.each do |checksum_name|
             checksums.validate_selected_entries(path, checksum_name)
           end
-          readers << ColumnReader.new(column, reader)
-          total_marks = checked_total_marks(total_marks, reader.mark_count.to_u64)
+          current_column_types << column_type
+          current_column_sources << column_source
+          total_marks = checked_total_marks(total_marks, mark_rows.size.to_u64)
         end
 
-        current_column_types = readers.map(&.column_type)
-        current_column_sources = readers.map do |selected|
-          {selected.name, selected.reader.source_column_name, selected.reader.source_column_type}
-        end
         if current_types = expected_column_types
           raise CorruptPartError.new("selected columns have different types across parts") unless current_column_types == current_types
         else
@@ -6762,7 +6853,7 @@ module CrystalClick
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, current_column_types, current_column_sources)
+        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, object_readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32

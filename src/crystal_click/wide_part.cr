@@ -1493,6 +1493,15 @@ module CrystalClick
       type == "JSON" || type.starts_with?("JSON(")
     end
 
+    # Return the stored declaration only when the requested name is an exact
+    # literal JSON root. This is a metadata-only dispatch probe: it does not
+    # make whole JSON columns readable through WidePart's scalar codecs.
+    # Preserve the existing dotted-literal/virtual-path ambiguity guard before
+    # allowing a table adapter to route the exact column to ObjectColumnReader.
+    def self.selected_json_declaration(part_path : String, column_name : String) : String?
+      SelectedJsonMetadataProbe.read(part_path, column_name)
+    end
+
     # Parse the intentionally small JSON typed-path declaration grammar used
     # by this reader: simple top-level identifiers with exact primitive
     # numeric or String types. Unsupported declarations fail closed.

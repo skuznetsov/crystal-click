@@ -107,8 +107,8 @@ crystal run examples/write_object_document_part.cr -- /tmp/my-new-object-part
 The destination must not exist. This standalone writer creates the key and
 JSON data, marks, primary index, checksums and all pre-ATTACH sidecars itself;
 it does not borrow a stock-generated part or insert into a server data root.
-The example reads the result through `ObjectDocumentFileReader`, not the
-older table/catalog JSON facade.
+The writer example reads the result through `ObjectDocumentFileReader`.
+The separately qualified catalog and typed-table readers are shown below.
 
 This profile is a hashed Wide part with a sorted UInt64 key, explicit typed
 UInt64/String JSON fields and explicit Dynamic path/type rosters. Object V3,
@@ -210,11 +210,46 @@ covering retained owners and accounted reader workspace across parts. This
 is neither an RSS limit nor a pre-decode transient-memory ceiling: a complete
 decoded mark is measured and admitted before any of its documents are retained.
 Use a quiescent input directory; no concurrent snapshot or server Active-state
-claim is made. Mixed Object/scalar typed batches and PK-window delivery remain
-the next adapter boundary. See the
+claim is made. Mixed Object/scalar typed delivery has the separate W130
+contract below; neither path admits arbitrary JSON. See the
 [general JSON frontier](../docs/JSON_GENERAL_STORAGE_FRONTIER.md).
 
-Admitted recursively named, nonempty `Tuple` columns also use this example.
+Read a physical row window and inspect whole UInt64-PK candidate granules:
+
+```sh
+crystal run examples/read_object_table.cr -- \
+  /var/lib/clickhouse lab events pk payload 0 100 10 20
+```
+
+```crystal
+table = catalog["lab"]["events"]
+table.scan_typed(["pk", "payload"]) do |batch|
+  keys = batch.values_for("pk")
+  documents = batch.object_documents_for("payload")
+  keys.each_with_index { |key, index| puts "#{key}: #{documents[index].paths}" }
+  nil
+end
+```
+
+W130 routes selected literal normalized Object roots through full typed scans,
+physical-row windows and explicit whole candidate granules. Multiple selected
+Object roots remain separately bound and ordered. The example prints raw leaf
+type/hex values and labels candidate rows `keep` or `reject` using the exact
+application residual; a PK candidate is not an exact matching row.
+
+The Object profile remains W129's UInt64/String declared typed fields, hashed
+Wide Object V3/Dynamic V3, one-bucket MAP, Default serialization metadata, LZ4,
+ordinary String 0/1 and plain adaptive marks. BASIC/COMPACT discriminators do
+not mean Compact parts. Whole-Object projection reads remain rejected.
+Batch slices are callback-scoped; immutable document handles can be retained.
+The shared 64 MiB current-mark logical owner budget is measured after the
+complete selected Object mark is decoded. It does not bound decoder workspace,
+pre-decode transients, RSS, or caller retention. `.values` retains its separate
+aggregate cross-part materialization limits. Use an immutable local copy;
+no Active-state or snapshot guarantee follows.
+
+Admitted recursively named, nonempty `Tuple` columns use
+`read_offline_column_values.cr`, not the Object-specific example above.
 Their scalar and Nullable-scalar terminal surface is described in the
 [nested Tuple frontier](../docs/NESTED_TUPLE_FRONTIER.md). Additional field
 orders/arities return `WideTupleRow` values:
