@@ -98,6 +98,25 @@ reads, arbitrary LC record splitting or recursive bulk/Object integration.
 Legacy facades remain 15,985 reader / 25,991 writer / 6,786 table / 1,560
 catalog lines. Full responsibility-level decomposition remains open.
 
+W143 adds two cohesive per-operation owners, each in its own file:
+`BinaryBulkLowCardinalitySiteEncoder` owns path-specific occurrence census,
+borrowed-value staging and hidden-default preflight;
+`BinaryBulkLowCardinalitySiteDecoder` owns shared ancestor shape schedules
+and path-specific replay delegation. `BinaryBulkTypePlan` keeps syntactic
+role/site planning; W142 remains the sole LC dictionary/index grammar owner.
+The generic visitor no longer visits or charges the LC logical subtree twice.
+An immutable cached descriptor membership fact supports guards, but never
+replaces bounded descriptor validation. No per-container/leaf class family
+or new dispatch in the legacy facades is introduced.
+Root passes 80 focused DEBUG, 255 affected RELEASE, 2,375 complete-inventory
+examples (370 unique specs, 16 disjoint groups), three complete recursive native
+lane/grid witnesses and seven stock Native consumers. Separate Ruby literal
+checks cover all 63 returned rows. Scope, exact budget falsifiers and the
+phase-local allocation-preflight residual are in
+[LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md](LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md).
+This qualifies an ownership seam, not full facade decomposition, lower RSS,
+faster reads, persisted Object/Dynamic LC or complete-part interoperability.
+
 W124's explicit-path compressed mark transport is verified below with eight
 separate owners/files; W123's flattened Object composition has five. Their
 historical admission boundaries are recorded in their respective sections.

@@ -40,13 +40,39 @@ module CrystalClick
       first_mark : Int,
       mark_count : Int?,
     ) : Array(Array(BinaryValue))
+      decode_internal(type, streams, occurrences_per_mark, budget, first_mark, mark_count, false)
+    end
+
+    # Bulk integration has already validated the complete recursive type tree
+    # under its shared budget. This entrypoint preserves full LC state replay
+    # while avoiding a second descriptor-tree visit per path occurrence.
+    def self.decode_prevalidated(
+      type : BinaryDataType,
+      streams : BinaryBulkStreams,
+      occurrences_per_mark : Array(UInt64),
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+    ) : Array(Array(BinaryValue))
+      decode_internal(type, streams, occurrences_per_mark, budget, first_mark, mark_count, true)
+    end
+
+    private def self.decode_internal(
+      type : BinaryDataType,
+      streams : BinaryBulkStreams,
+      occurrences_per_mark : Array(UInt64),
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+      prevalidated_type : Bool,
+    ) : Array(Array(BinaryValue))
       unless !budget.writing?
         raise ArgumentError.new("LowCardinality storage decoder requires a read-direction budget")
       end
 
       traversal = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
       nullable, scalar_type = BinaryLowCardinalityStorageStreams.ensure_root_type(type, traversal)
-      traversal.validate_type_tree(type)
+      traversal.validate_type_tree(type) unless prevalidated_type
 
       real_marks = streams.mark_count
       if real_marks < 0 || occurrences_per_mark.size != real_marks

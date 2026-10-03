@@ -17,12 +17,11 @@ module CrystalClick
         (type.tag == BinaryDataType::TAG_LOW_CARDINALITY && type.child_at(0).tag == BinaryDataType::TAG_NULLABLE)
     end
 
-    # Call only after the full type tree has passed its bounded descriptor or
-    # value-tree traversal. Borrowed persisted-envelope owners use this to
-    # retain their narrower admission boundary without another unbounded walk.
+    # The descriptor caches this immutable composition fact at construction.
+    # Guards may query it before a bounded descriptor traversal, including for
+    # manually supplied Object schemas with no materialized row values.
     def self.contains_low_cardinality?(type : BinaryDataType) : Bool
-      return true if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
-      type.child_count.times.any? { |index| contains_low_cardinality?(type.child_at(index)) }
+      type.contains_low_cardinality?
     end
 
     private def self.admitted_leaf?(type : BinaryDataType) : Bool

@@ -17,25 +17,33 @@ module CrystalClick
       traversal = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
       traversal.validate_type_tree(type)
       plan = BinaryBulkTypePlan.new(type, profile)
+      planned_role_count = plan.role_count
+      ordinary_role_count = plan.ordinary_role_count
 
       # Every per-role offset record, plus each explicit mark row count, is
       # count-derived metadata. Preflight and charge it before allocating lane
       # buffers or the K+1 offset grids.
       mark_records = granules.size.to_u64
       offsets_per_role = checked_add(mark_records, 1_u64)
-      grid_records = checked_multiply(plan.role_count, offsets_per_role)
-      metadata_records = checked_add(grid_records, mark_records)
+      grid_records = checked_multiply(ordinary_role_count, offsets_per_role)
+      root_mark_records = type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : mark_records
+      metadata_records = checked_add(grid_records, root_mark_records)
       budget.ensure_future_nodes(metadata_records)
       budget.ensure_future_elements(metadata_records)
       budget.charge_elements(metadata_records)
       metadata_records.times { budget.charge_node }
 
-      roles = plan.roles
+      all_roles = plan.roles
+      unless all_roles.size.to_u64 == planned_role_count
+        raise UnsupportedFormatError.new("binary bulk role plan changed while it was materialized")
+      end
+      roles = plan.ordinary_roles
 
-      # Establish a complete write-side node/edge/wire lower bound before any
-      # role buffers or canonical hidden-NULL defaults are materialized.
+      # Preflight the ordinary visitor's node/edge/wire costs before its lane
+      # buffers and hidden-NULL defaults. LC subtrees are excluded here; their
+      # site owner preflights staging/default payloads and W142 costs later.
       total = zero_cost
-      default_costs = Hash(UInt64, BinaryBulkDefaultValue::Cost).new
+      default_costs = Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost).new
       granules.each do |rows|
         rows.each do |value|
           minimum = minimum_value_cost(type, value, profile, default_costs)
@@ -69,6 +77,12 @@ module CrystalClick
         bytes = Bytes.new(lane.size) { |index| lane[index] }
         streams[role] = BinaryBulkStream.new(bytes, offsets[role])
       end
+
+      low_cardinality_sites = plan.low_cardinality_sites
+      low_cardinality_streams = BinaryBulkLowCardinalitySiteEncoder.encode(type, low_cardinality_sites, granules, budget)
+      low_cardinality_streams.each do |role, stream|
+        streams[role] = stream
+      end
       BinaryBulkStreams.new(granules.size, streams)
     end
 
@@ -91,7 +105,7 @@ module CrystalClick
       type : BinaryDataType,
       value : BinaryValue,
       profile : BinaryBulkProfile,
-      default_costs : Hash(UInt64, BinaryBulkDefaultValue::Cost),
+      default_costs : Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost),
     ) : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64)
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -100,6 +114,8 @@ module CrystalClick
       edges = 0_u64
       wire_bytes = 0_u64
       case type.tag
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        return zero_cost
       when BinaryDataType::TAG_STRING
         size = value.byte_size.to_u64
         wire_bytes = profile.with_size_stream? ? checked_add(8_u64, size) : checked_add(var_uint_size(size), size)
@@ -107,7 +123,7 @@ module CrystalClick
         wire_bytes = 1_u64
       when BinaryDataType::TAG_ARRAY
         count = value.element_count.to_u64
-        child = BinaryBulkDefaultValue.measure(type.child_at(0), profile, default_costs)
+        child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs)
         nodes = checked_add(nodes, checked_multiply(count, child.nodes))
         edges = checked_add(count, checked_multiply(count, child.edges))
         wire_bytes = checked_add(8_u64, checked_multiply(count, child.wire_bytes))
@@ -121,7 +137,7 @@ module CrystalClick
         else
           edges = count.to_u64
           count.times do |index|
-            child = BinaryBulkDefaultValue.measure(type.child_at(index), profile, default_costs)
+            child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(index), profile, default_costs)
             nodes = checked_add(nodes, child.nodes)
             edges = checked_add(edges, child.edges)
             wire_bytes = checked_add(wire_bytes, child.wire_bytes)
@@ -136,13 +152,13 @@ module CrystalClick
         edges = flat_count
         wire_bytes = 8_u64
         pairs = flat_count // 2_u64
-        key = BinaryBulkDefaultValue.measure(type.child_at(0), profile, default_costs)
-        item = BinaryBulkDefaultValue.measure(type.child_at(1), profile, default_costs)
+        key = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs)
+        item = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(1), profile, default_costs)
         nodes = checked_add(nodes, checked_multiply(pairs, checked_add(key.nodes, item.nodes)))
         edges = checked_add(edges, checked_multiply(pairs, checked_add(key.edges, item.edges)))
         wire_bytes = checked_add(wire_bytes, checked_multiply(pairs, checked_add(key.wire_bytes, item.wire_bytes)))
       when BinaryDataType::TAG_NULLABLE
-        child = BinaryBulkDefaultValue.measure(type.child_at(0), profile, default_costs)
+        child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs)
         nodes = checked_add(nodes, child.nodes)
         edges = checked_add(1_u64, child.edges)
         wire_bytes = checked_add(1_u64, child.wire_bytes)
@@ -171,7 +187,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       budget : BinaryCodecBudget,
       base : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64),
-      default_costs : Hash(UInt64, BinaryBulkDefaultValue::Cost),
+      default_costs : Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost),
     ) : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64)
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -179,6 +195,7 @@ module CrystalClick
 
       minimum = minimum_value_cost(type, value, profile, default_costs)
       ensure_cost_fits(budget, add_cost(base, minimum))
+      return zero_cost if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
 
       nodes = 1_u64
       edges = 0_u64
@@ -233,7 +250,7 @@ module CrystalClick
         edges = 1_u64
         child_type = type.child_at(0)
         if value.is_null?
-          default = BinaryBulkDefaultValue.measure(child_type, profile, default_costs)
+          default = BinaryBulkDefaultValue.measure_excluding_low_cardinality(child_type, profile, default_costs)
           nodes = checked_add(nodes, default.nodes)
           edges = checked_add(edges, default.edges)
           wire_bytes = checked_add(wire_bytes, default.wire_bytes)
@@ -268,6 +285,10 @@ module CrystalClick
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
       end
+      if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+        traversal.ensure_depth(depth)
+        return nil
+      end
       traversal.visit_node(depth)
 
       case type.tag
@@ -290,7 +311,7 @@ module CrystalClick
         write_byte(lanes, "#{path}.data", 0x30_u8, budget)
       when BinaryDataType::TAG_ARRAY
         count = value.element_count
-        traversal.preflight_children(count.to_u64) unless count == 0
+        preflight_child_type(traversal, type.child_at(0), count.to_u64) unless count == 0
         traversal.ensure_depth(depth + 1) unless count == 0
         write_u64(lanes, "#{path}.sizes", count.to_u64, budget)
         count.times do |index|
@@ -301,7 +322,12 @@ module CrystalClick
         if count == 0
           write_byte(lanes, "#{path}.data", 0x30_u8, budget)
         else
-          traversal.preflight_children(count.to_u64)
+          traversal.charge_elements(count.to_u64)
+          ordinary_nodes = 0_u64
+          count.times do |index|
+            ordinary_nodes += 1_u64 unless type.child_at(index).tag == BinaryDataType::TAG_LOW_CARDINALITY
+          end
+          traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           count.times do |index|
             write_value(type.child_at(index), value.element_at(index), "#{path}.field.#{index}", depth + 1, traversal, budget, lanes, profile)
@@ -310,7 +336,15 @@ module CrystalClick
       when BinaryDataType::TAG_MAP
         flat_count = value.element_count
         pairs = flat_count // 2
-        traversal.preflight_children(flat_count.to_u64) unless flat_count == 0
+        unless flat_count == 0
+          traversal.charge_elements(flat_count.to_u64)
+          ordinary_nodes = 0_u64
+          flat_count.times do |index|
+            child_type = type.child_at(index.even? ? 0 : 1)
+            ordinary_nodes += 1_u64 unless child_type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+          end
+          traversal.ensure_future_nodes(ordinary_nodes)
+        end
         traversal.ensure_depth(depth + 1) unless flat_count == 0
         write_u64(lanes, "#{path}.sizes", pairs.to_u64, budget)
         flat_count.times do |index|
@@ -322,13 +356,12 @@ module CrystalClick
         child_type = type.child_at(0)
         if value.is_null?
           write_byte(lanes, "#{path}.nulls", 1_u8, budget)
-          traversal.preflight_children(1_u64)
+          preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          child = BinaryBulkDefaultValue.build(child_type)
-          write_value(child_type, child, "#{path}.nested", depth + 1, traversal, budget, lanes, profile)
+          write_default_value(child_type, "#{path}.nested", depth + 1, traversal, budget, lanes, profile)
         else
           write_byte(lanes, "#{path}.nulls", 0_u8, budget)
-          traversal.preflight_children(1_u64)
+          preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
           write_value(child_type, value.child_at(0), "#{path}.nested", depth + 1, traversal, budget, lanes, profile)
         end
@@ -341,6 +374,72 @@ module CrystalClick
           write_byte(lanes, "#{path}.data", value.byte_at(index), budget)
         end
       end
+      nil
+    end
+
+    private def self.write_default_value(
+      type : BinaryDataType,
+      path : String,
+      depth : Int,
+      traversal : BinaryCodecContext,
+      budget : BinaryCodecBudget,
+      lanes : Hash(String, Array(UInt8)),
+      profile : BinaryBulkProfile,
+    ) : Nil
+      if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+        traversal.ensure_depth(depth)
+        return nil
+      end
+      traversal.visit_node(depth)
+      case type.tag
+      when BinaryDataType::TAG_STRING
+        if profile.with_size_stream?
+          write_u64(lanes, "#{path}.string_sizes", 0_u64, budget)
+        else
+          write_var_uint(lanes, "#{path}.data", 0_u64, budget)
+        end
+      when BinaryDataType::TAG_BOOL
+        write_byte(lanes, "#{path}.data", BoolValueCodec.encode(false), budget)
+      when BinaryDataType::TAG_NOTHING
+        write_byte(lanes, "#{path}.data", 0x30_u8, budget)
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
+        write_u64(lanes, "#{path}.sizes", 0_u64, budget)
+      when BinaryDataType::TAG_NULLABLE
+        write_byte(lanes, "#{path}.nulls", 1_u8, budget)
+        child_type = type.child_at(0)
+        preflight_child_type(traversal, child_type, 1_u64)
+        traversal.ensure_depth(depth + 1)
+        write_default_value(child_type, "#{path}.nested", depth + 1, traversal, budget, lanes, profile)
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        if type.child_count == 0
+          write_byte(lanes, "#{path}.data", 0x30_u8, budget)
+        else
+          traversal.charge_elements(type.child_count.to_u64)
+          ordinary_nodes = 0_u64
+          type.child_count.times do |index|
+            ordinary_nodes += 1_u64 unless type.child_at(index).tag == BinaryDataType::TAG_LOW_CARDINALITY
+          end
+          traversal.ensure_future_nodes(ordinary_nodes)
+          traversal.ensure_depth(depth + 1)
+          type.child_count.times do |index|
+            write_default_value(type.child_at(index), "#{path}.field.#{index}", depth + 1, traversal, budget, lanes, profile)
+          end
+        end
+      else
+        width = type.fixed_width || raise UnsupportedFormatError.new("unsupported binary bulk default DataType")
+        width.times { write_byte(lanes, "#{path}.data", 0_u8, budget) }
+      end
+      nil
+    end
+
+    private def self.preflight_child_type(
+      traversal : BinaryCodecContext,
+      child_type : BinaryDataType,
+      count : UInt64,
+    ) : Nil
+      traversal.charge_elements(count)
+      ordinary_nodes = child_type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : count
+      traversal.ensure_future_nodes(ordinary_nodes)
       nil
     end
 

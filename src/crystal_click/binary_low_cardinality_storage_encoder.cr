@@ -10,6 +10,26 @@ module CrystalClick
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
     ) : BinaryBulkStreams
+      encode_internal(type, granules, budget, false)
+    end
+
+    # Bulk integration has already validated the complete recursive type tree
+    # under its shared budget. This entrypoint retains every value, lane, and
+    # budget check while avoiding a second descriptor-tree visit per site.
+    def self.encode_prevalidated(
+      type : BinaryDataType,
+      granules : Array(Array(BinaryValue)),
+      budget : BinaryCodecBudget,
+    ) : BinaryBulkStreams
+      encode_internal(type, granules, budget, true)
+    end
+
+    private def self.encode_internal(
+      type : BinaryDataType,
+      granules : Array(Array(BinaryValue)),
+      budget : BinaryCodecBudget,
+      prevalidated_type : Bool,
+    ) : BinaryBulkStreams
       unless budget.writing?
         raise ArgumentError.new("LowCardinality storage encoder requires a write-direction budget")
       end
@@ -19,7 +39,7 @@ module CrystalClick
 
       traversal = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
       nullable, scalar_type = BinaryLowCardinalityStorageStreams.ensure_root_type(type, traversal)
-      traversal.validate_type_tree(type)
+      traversal.validate_type_tree(type) unless prevalidated_type
 
       mark_count = granules.size
       total_rows = 0_u64

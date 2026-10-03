@@ -297,7 +297,11 @@ Active return pointer: paired types, then MV/projections, then performance
 qualification against original ClickHouse with at most 10% speed deficit.
 W142 separately qualifies the standalone dictionary/index roles, prefix state,
 index widths, null/default reservation and cross-mark dictionaries within its
-mark-aligned profile. Next physical signal: a library recursive bulk RED,
-role/occurrence/state integration and independent paired persisted parts.
+mark-aligned profile. W143 records that recursive bulk RED and qualifies
+non-floating role/occurrence/state integration in
+[LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md](LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md).
+Next physical signal: stock Float insertion identity, then independent paired
+persisted Object parts and public consumers. W143 does not widen this
+historical Object declaration/part certificate.
 W141's nominal row kernel is the prerequisite, not closure of Object/LC storage or the broad
 types/MV/projection objective. Performance remains parked.

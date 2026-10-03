@@ -46,6 +46,9 @@ module CrystalClick
 
     private def build_bindings(type : BinaryDataType, prefix : String) : Hash(String, String)
       validate_type(type, 0)
+      if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+        raise UnsupportedFormatError.new("physical bulk LowCardinality bindings are not admitted")
+      end
       role_plan = BinaryBulkTypePlan.new(type, @profile)
       role_count = role_plan.role_count
       @context.record_elements(role_count)

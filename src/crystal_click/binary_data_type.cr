@@ -52,6 +52,10 @@ module CrystalClick
 
     getter tag : UInt8
     getter fixed_size : Int32?
+    # Immutable composition invariant for admission guards. Computing it from
+    # immediate, already-immutable children avoids an unbounded recursive walk
+    # before an enclosing codec has validated a caller-supplied type tree.
+    getter? contains_low_cardinality : Bool
 
     @primitive_name : String?
     @children : Array(BinaryDataType)
@@ -72,6 +76,7 @@ module CrystalClick
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
+      @contains_low_cardinality = @tag == TAG_LOW_CARDINALITY || @children.any?(&.contains_low_cardinality?)
     end
 
     def self.primitive(name : String) : BinaryDataType

@@ -373,7 +373,7 @@ describe "W142 shared LowCardinality physical dictionary/index owner" do
     end
   end
 
-  it "returns an empty selected window without confusing it with a zero-occurrence type admission" do
+  it "returns an empty selected window through both the standalone and recursive bulk owners" do
     type = CrystalClick::BinaryDataType.low_cardinality(CrystalClick::BinaryDataType.primitive("String"))
     streams = w142_storage_native_streams
     selected = CrystalClick::BinaryLowCardinalityStorageCodec.decode(
@@ -385,12 +385,14 @@ describe "W142 shared LowCardinality physical dictionary/index owner" do
     )
     selected.should be_empty
 
-    # This storage owner does not implicitly admit the ordinary recursive
-    # bulk facade. Dynamic arm and Object physical callers remain separately
-    # guarded until their own projections are qualified.
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkCodec.decode(type, streams, [4_u64, 4_u64, 1_u64])
-    end
+    bulk_selected = CrystalClick::BinaryBulkCodec.decode(
+      type,
+      streams,
+      [4_u64, 4_u64, 1_u64],
+      first_mark: 3,
+      mark_count: 0
+    )
+    bulk_selected.should be_empty
   end
 
   it "encodes per-mark LC values and decodes them through the same shared state owner" do
@@ -753,15 +755,15 @@ describe "W142 shared LowCardinality physical dictionary/index owner" do
 
     zero_marks = w142_storage_streams(version_only, [8_u64], Bytes.empty, [0_u64], 0)
     CrystalClick::BinaryLowCardinalityStorageCodec.decode(type, zero_marks, [] of UInt64).should be_empty
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkCodec.decode(
-        type,
-        two_empty_marks,
-        [0_u64, 0_u64],
-        first_mark: 0,
-        mark_count: 2
-      )
-    end
+    bulk_empty = CrystalClick::BinaryBulkCodec.decode(
+      type,
+      two_empty_marks,
+      [0_u64, 0_u64],
+      first_mark: 0,
+      mark_count: 2
+    )
+    bulk_empty.size.should eq(2)
+    bulk_empty.each(&.should be_empty)
   end
 
   it "honors exact aggregate byte, node, and element budgets and rejects each one-short bound" do

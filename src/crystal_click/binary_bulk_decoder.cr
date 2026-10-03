@@ -23,18 +23,27 @@ module CrystalClick
       traversal = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
       traversal.validate_type_tree(type)
       plan = BinaryBulkTypePlan.new(type, profile)
+      planned_role_count = plan.role_count
+      ordinary_role_count = plan.ordinary_role_count
+      low_cardinality_sites = plan.low_cardinality_sites
+      ancestor_size_roles = plan.ancestor_size_roles
 
       # Offset records and parent-supplied per-mark row counts are metadata.
       # Charge and preflight these before allocating the role roster, contexts,
       # or any selected value collection.
       mark_records = real_marks.to_u64
       offsets_per_role = checked_add(mark_records, 1_u64)
-      grid_records = checked_multiply(plan.role_count, offsets_per_role)
-      metadata_records = checked_add(grid_records, mark_records)
+      grid_records = checked_multiply(ordinary_role_count, offsets_per_role)
+      root_mark_records = type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : mark_records
+      metadata_records = checked_add(grid_records, root_mark_records)
       traversal.preflight_children(metadata_records)
       metadata_records.times { budget.charge_node }
 
       roles = plan.roles
+      unless roles.size.to_u64 == planned_role_count
+        corrupt!("binary bulk role plan changed while it was materialized")
+      end
+      ordinary_roles = plan.ordinary_roles
       unless streams.role_count == roles.size && streams.mark_count == real_marks
         corrupt!("binary bulk role set or mark domain is incomplete")
       end
@@ -44,7 +53,7 @@ module CrystalClick
         end
       end
 
-      validate_grids(streams, roles, real_marks)
+      validate_grids(streams, ordinary_roles, real_marks)
 
       selected_rows = 0_u64
       rows_per_mark.each do |count|
@@ -57,13 +66,28 @@ module CrystalClick
         selected_rows = checked_add(selected_rows, count)
       end
 
-      minimum = BinaryBulkDefaultValue.measure(type, profile)
+      minimum = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile)
       minimum_nodes = checked_multiply(selected_rows, minimum.nodes)
       minimum_edges = checked_multiply(selected_rows, minimum.edges)
       budget.ensure_future_nodes(minimum_nodes)
       budget.ensure_future_elements(minimum_edges)
 
-      selected_wire_bytes = selected_byte_size(streams, roles, selected_first, selected_count)
+      low_cardinality_values = BinaryBulkLowCardinalitySiteDecoder.decode(
+        type,
+        low_cardinality_sites,
+        ancestor_size_roles,
+        streams,
+        rows_per_mark,
+        budget,
+        selected_first,
+        selected_count
+      )
+
+      if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+        return low_cardinality_values["root"]? || corrupt!("binary bulk root LowCardinality site is missing")
+      end
+
+      selected_wire_bytes = selected_byte_size(streams, ordinary_roles, ancestor_size_roles, selected_first, selected_count)
       budget.ensure_wire_bytes(selected_wire_bytes)
       budget.charge_wire_bytes(selected_wire_bytes)
 
@@ -71,15 +95,25 @@ module CrystalClick
       selected_count.times do |window_offset|
         mark = selected_first + window_offset
         root_count = rows_per_mark[mark].to_i32
-        contexts = selected_contexts(streams, roles, mark, budget)
+        contexts = selected_contexts(streams, ordinary_roles, mark, budget)
         ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts)
 
-        traversal.ensure_future_nodes(root_count.to_u64)
+        traversal.ensure_future_nodes(type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : root_count.to_u64)
         traversal.ensure_depth(1) if root_count > 0
+        lc_values_for_mark = Hash(String, Array(BinaryValue)).new
+        low_cardinality_values.each do |path, mark_values|
+          lc_values_for_mark[path] = mark_values[window_offset]
+        end
+        lc_cursors = Hash(String, Int32).new(0)
         values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile)
+          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors)
         end
         contexts.each_value(&.ensure_consumed)
+        lc_values_for_mark.each do |path, mark_values|
+          unless (lc_cursors[path]? || 0) == mark_values.size
+            corrupt!("binary bulk value traversal did not consume the complete LowCardinality occurrence schedule")
+          end
+        end
         result << values
       end
       result
@@ -128,12 +162,14 @@ module CrystalClick
     private def self.selected_byte_size(
       streams : BinaryBulkStreams,
       roles : Array(String),
+      prepaid_full_roles : Array(String),
       first_mark : Int32,
       mark_count : Int32,
     ) : UInt64
       total = 0_u64
       finish = first_mark + mark_count
       roles.each do |role|
+        next if prepaid_full_roles.includes?(role)
         stream = streams.stream(role)
         mark = first_mark
         while mark < finish
@@ -183,6 +219,8 @@ module CrystalClick
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
         ensure_role_minimum(contexts, "#{path}.sizes", count, 8_u64)
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        # The LC owner validates every mark and pays its full-state wire cost.
       when BinaryDataType::TAG_NULLABLE
         ensure_role_minimum(contexts, "#{path}.nulls", count, 1_u64)
         ensure_minimum_count(type.child_at(0), "#{path}.nested", count, profile, contexts)
@@ -224,7 +262,22 @@ module CrystalClick
       contexts : Hash(String, BinaryCodecContext),
       traversal : BinaryCodecContext,
       profile : BinaryBulkProfile,
+      low_cardinality_values : Hash(String, Array(BinaryValue)),
+      low_cardinality_cursors : Hash(String, Int32),
     ) : BinaryValue
+      if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+        traversal.ensure_depth(depth)
+        values = low_cardinality_values[path]? || corrupt!("binary bulk value addresses an unplanned LowCardinality site")
+        cursor = low_cardinality_cursors[path]?
+        unless cursor
+          cursor = 0
+        end
+        if cursor >= values.size
+          corrupt!("binary bulk value exceeds its LowCardinality occurrence schedule")
+        end
+        low_cardinality_cursors[path] = cursor + 1
+        return values[cursor]
+      end
       traversal.visit_node(depth)
 
       case type.tag
@@ -251,12 +304,12 @@ module CrystalClick
         sizes = context_for(contexts, "#{path}.sizes")
         raw_count = read_u64(sizes)
         count = checked_collection_count(raw_count, "Array element count")
-        traversal.preflight_children(raw_count) unless raw_count == 0_u64
+        preflight_child_type(traversal, type.child_at(0), raw_count) unless raw_count == 0_u64
         traversal.ensure_depth(depth + 1) unless raw_count == 0_u64
         ensure_minimum_count(type.child_at(0), "#{path}.elements", raw_count, profile, contexts)
         child_type = type.child_at(0)
         elements = Array(BinaryValue).new(count) do
-          decode_value(child_type, "#{path}.elements", depth + 1, contexts, traversal, profile)
+          decode_value(child_type, "#{path}.elements", depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
         end
         BinaryValue.array(type, elements)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
@@ -268,7 +321,12 @@ module CrystalClick
           end
           BinaryValue.tuple(type, [] of BinaryValue)
         else
-          traversal.preflight_children(count.to_u64)
+          traversal.charge_elements(count.to_u64)
+          ordinary_nodes = 0_u64
+          count.times do |index|
+            ordinary_nodes += 1_u64 unless type.child_at(index).tag == BinaryDataType::TAG_LOW_CARDINALITY
+          end
+          traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           count.times do |index|
             child_type = type.child_at(index)
@@ -278,7 +336,7 @@ module CrystalClick
           fields = Array(BinaryValue).new(count) do |index|
             child_type = type.child_at(index)
             child_path = "#{path}.field.#{index}"
-            decode_value(child_type, child_path, depth + 1, contexts, traversal, profile)
+            decode_value(child_type, child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
           end
           BinaryValue.tuple(type, fields)
         end
@@ -289,14 +347,22 @@ module CrystalClick
         end
         flat_count = raw_pairs * 2_u64
         count = checked_collection_count(flat_count, "Map value count")
-        traversal.preflight_children(flat_count) unless flat_count == 0_u64
+        unless flat_count == 0_u64
+          traversal.charge_elements(flat_count)
+          ordinary_nodes = 0_u64
+          flat_count.times do |index|
+            child_type = type.child_at(index.even? ? 0 : 1)
+            ordinary_nodes += 1_u64 unless child_type.tag == BinaryDataType::TAG_LOW_CARDINALITY
+          end
+          traversal.ensure_future_nodes(ordinary_nodes)
+        end
         traversal.ensure_depth(depth + 1) unless flat_count == 0_u64
         ensure_minimum_count(type.child_at(0), "#{path}.elements.field.0", raw_pairs, profile, contexts)
         ensure_minimum_count(type.child_at(1), "#{path}.elements.field.1", raw_pairs, profile, contexts)
         entries = Array(BinaryValue).new(count) do |index|
           child_index = index.even? ? 0 : 1
           child_path = "#{path}.elements.field.#{child_index}"
-          decode_value(type.child_at(child_index), child_path, depth + 1, contexts, traversal, profile)
+          decode_value(type.child_at(child_index), child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
         end
         BinaryValue.map(type, entries)
       when BinaryDataType::TAG_NULLABLE
@@ -304,12 +370,12 @@ module CrystalClick
         unless flag == 0_u8 || flag == 1_u8
           corrupt!("Nullable bulk null-map flag must be zero or one")
         end
-        traversal.preflight_children(1_u64)
+        preflight_child_type(traversal, type.child_at(0), 1_u64)
         traversal.ensure_depth(depth + 1)
         child_type = type.child_at(0)
         child_path = "#{path}.nested"
         ensure_minimum_count(child_type, child_path, 1_u64, profile, contexts)
-        child = decode_value(child_type, child_path, depth + 1, contexts, traversal, profile)
+        child = decode_value(child_type, child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
         if flag == 1_u8
           BinaryValue.null(type)
         elsif child_type.tag == BinaryDataType::TAG_NOTHING
@@ -322,6 +388,17 @@ module CrystalClick
         raw = context_for(contexts, "#{path}.data").read_slice(width.to_u64)
         BinaryValue.fixed(type, raw)
       end
+    end
+
+    private def self.preflight_child_type(
+      traversal : BinaryCodecContext,
+      child_type : BinaryDataType,
+      count : UInt64,
+    ) : Nil
+      traversal.charge_elements(count)
+      ordinary_nodes = child_type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : count
+      traversal.ensure_future_nodes(ordinary_nodes)
+      nil
     end
 
     private def self.context_for(contexts : Hash(String, BinaryCodecContext), role : String) : BinaryCodecContext

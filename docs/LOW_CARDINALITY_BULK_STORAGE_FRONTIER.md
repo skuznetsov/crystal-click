@@ -350,7 +350,16 @@ claims. Source inspection and the independently pinned stock runtime remain
 different certificates; shallow current-master source is not a current-master
 runtime certificate.
 
-Continuation capsule:
+The subsequent W143 transition integrates this physical owner into ordinary
+recursive bulk for non-floating LC sites, with its separate executed
+certificate in
+[LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md](LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md).
+It does not retroactively widen W142's standalone certificate to persisted
+Object/Dynamic or complete parts. The capsule below records the historical
+W142 return pointer; W143 now supersedes its recursive-bulk RED frontier.
+
+Historical W142 continuation capsule (as of `5bb9b83`, superseded by W143;
+not current admission or next-action guidance):
 
 - Active objective: paired types and general JSON storage, then MV/projections,
   then memory/performance qualification with at most a 10% CH speed deficit.

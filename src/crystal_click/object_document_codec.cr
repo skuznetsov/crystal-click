@@ -32,6 +32,9 @@ module CrystalClick
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
       end
       validate_write_structure(plan.structures)
+      plan.typed_path_count.times do |index|
+        reject_low_cardinality_typed_field!(plan.typed_type_for(plan.typed_path_at(index)))
+      end
 
       mark_count = granules.size
       if mark_count > Int32::MAX - 1
@@ -213,6 +216,7 @@ module CrystalClick
       end
       typed_schema.each_value do |type|
         schema_context.validate_type_tree(type)
+        reject_low_cardinality_typed_field!(type)
       end
 
       structure_set = ObjectDynamicStructureCodec.decode_with_budget(streams.structures, budget)
@@ -366,6 +370,13 @@ module CrystalClick
         result << documents
       end
       result
+    end
+
+    private def self.reject_low_cardinality_typed_field!(type : BinaryDataType) : Nil
+      if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+        raise UnsupportedFormatError.new("Object typed LowCardinality fields are not admitted")
+      end
+      nil
     end
 
     private def self.validate_write_structure(structure_set : ObjectDynamicStructureSet) : Nil

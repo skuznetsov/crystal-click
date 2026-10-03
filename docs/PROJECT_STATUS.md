@@ -72,6 +72,17 @@ native lane/grid witnesses, nine stock Native consumers and four cause-specific
 corruption/comparator controls. Stock consumption converts global framing to
 Native additional-only framing; this is not a new library-part ATTACH/CHECK.
 It does not widen recursive bulk, Object, Dynamic or complete-part admission.
+W143 integrates that shared owner into ordinary recursive `BinaryBulkCodec`
+for root LC and legal Array/Tuple/Map/Nullable compositions over eligible
+non-floating represented leaves. Root passes 80 focused DEBUG, 255 affected
+RELEASE and 2,375 complete-inventory examples (370 unique specs, 16 disjoint
+non-release groups), three complete native container lane/grid witnesses and
+seven stock Native consumers including a valid wrong-output control. A separate
+Ruby comparator checks all 63 stock rows against literal types/RowBinary.
+The executed certificate is in
+[LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md](LOW_CARDINALITY_RECURSIVE_BULK_FRONTIER.md).
+Float LC composition and persisted Object/Dynamic/physical-part binding remain
+explicitly closed. Generic bulk support is not new standalone part ATTACH/CHECK.
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
@@ -251,9 +262,10 @@ source/runtime identities and executed evidence.
    LowCardinality/Variant/Dynamic and the timezone profile gap, not yet admitted
    Object support. W141 establishes the logical LowCardinality prerequisite;
    W142 adds the separately qualified standalone dictionary/index codec.
-   Recursive bulk role binding, flattened occurrence schedules and dictionary
-   state integration are next, followed by declared Object LC and complete
-   independently qualified parts. Reuse existing leaf owners only
+   W143 qualifies recursive non-floating bulk role binding, flattened
+   occurrence schedules and dictionary state integration. Stock Float LC
+   insertion identity is the next discriminator, followed by declared Object
+   LC and complete independently qualified parts. Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.
    Require independent native and library parts, asymmetric bytes/RowBinary

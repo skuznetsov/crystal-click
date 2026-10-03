@@ -515,7 +515,7 @@ describe "W141 nominal LowCardinality binary value prerequisite" do
     end
   end
 
-  it "keeps Object declarations and generic bulk physical roles unadmitted after the row kernel" do
+  it "keeps Object declarations unadmitted while ordinary bulk accepts the scalar LC kernel" do
     descriptor = Bytes[0x26_u8, 0x15_u8]
     wire = Bytes[0x26_u8, 0x15_u8, 0x01_u8, 0x78_u8]
     type = CrystalClick::BinaryDataTypeCodec.decode(descriptor)
@@ -530,12 +530,10 @@ describe "W141 nominal LowCardinality binary value prerequisite" do
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v Map(LowCardinality(Nullable(String)), String))")
     end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkCodec.encode(
-        type,
-        [[value]] of Array(CrystalClick::BinaryValue),
-      )
-    end
+    encoded = CrystalClick::BinaryBulkCodec.encode(type, [[value]] of Array(CrystalClick::BinaryValue))
+    encoded.roles.should eq(["root.dictionary", "root.indexes"])
+    decoded = CrystalClick::BinaryBulkCodec.decode(type, encoded, [1_u64])
+    decoded[0][0].child_at(0).as_string.should eq("x")
   end
 
   it "refuses Dynamic physical LowCardinality during descriptor preflight, including nested and long nullable forms" do

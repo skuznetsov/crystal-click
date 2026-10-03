@@ -407,7 +407,11 @@ module CrystalClick
     private def self.validate_descriptor_trees(structure : DynamicStructure, budget : BinaryCodecBudget) : Nil
       context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
       structure.type_count.times do |index|
-        context.validate_type_tree(structure.type_at(index))
+        type = structure.type_at(index)
+        context.validate_type_tree(type)
+        if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+          raise UnsupportedFormatError.new("Dynamic ordinary LowCardinality alternatives are not admitted")
+        end
       end
       nil
     end
