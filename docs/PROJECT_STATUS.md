@@ -4,9 +4,14 @@ Source checkpoint: shared writer extraction `571dc3c`, sparse-consumer Tuple
 correction `9d87293`, W128 normalized whole-part checkpoint `1c5bab4`, and
 the W129 bounded Object catalog integration, W130 mixed table delivery
 `4b18812`, W131 declared Int64 `02dd99f`, W132 paired numeric declared
-fields `e043be7`, and W133 paired declared Date/Date32 over that checkpoint in
+fields `e043be7`, and W133 paired declared Date/Date32 `2e150f4` in
 [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
-Responsibility-level owner boundaries are documented in
+W134 extracts nine existing Array/Map row/slice owners to separate files,
+preserving their exact bodies and API. Root passed 22 focused DEBUG, 37 adjacent
+RELEASE and 2,242 complete-inventory examples (353 unique specs, 15 disjoint
+non-release groups), plus a fresh unchanged W133 stock regression. This is
+bounded behavior-preserving extraction, not full facade modularization.
+The executed certificate and responsibility-level owner boundaries are in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
 Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
@@ -121,11 +126,11 @@ source/runtime identities and executed evidence.
    primary index and staging/publication have separate owners; the new Object
    schema, metadata, whole-part orchestrator and catalog materialization
    owners also have separate files.
-   The next bounded extraction moves the nine existing inline Array/Map
-   payload/row classes from `wide_part_table.cr` into nine separate files,
-   preserving public names, generic signatures, retained ownership and limits.
-   This is proposed, not a completed architectural change. Beyond it remain
-   legacy shared schema/substream planning, physical
+   W134 moved the nine existing inline Array/Map payload/row classes from
+   `wide_part_table.cr` into nine separate files, preserving public names,
+   generic signatures, retained ownership and limits. The remaining facade
+   is 6,786 lines; the reader/writer remain 15,985/25,991 lines.
+   Next remain legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String
@@ -144,11 +149,12 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-02-depth1-101871ba`, revision
-`101871ba6da8221c7cf30ac3a04bc1063106f412`.
+`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-f86ca42b`, revision
+`f86ca42b6e90eadb97f7481638ff04ca1ee8e71f`.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. The serializer directory is unchanged
-against `31d2addb`; Columns and MergeTree are not identical. No executable from
+comparison and earlier identities. Root's recursive comparisons against
+`101871ba` found identical DataTypes/Serializations, DataTypes and Columns;
+MergeTree differs in 34 files. No executable from
 this newest checkout has been built or qualified.
 
 This summary becomes stale when source admission, facade dispatch, the tested

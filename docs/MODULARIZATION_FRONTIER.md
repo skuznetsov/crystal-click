@@ -1,9 +1,12 @@
 # CrystalClick Modularization Frontier
 
-Current transition (2026-10-03): W133 paired bare Date/Date32 Object fields over
-W132 `e043be7`, following the verified shared writer, catalog and table owners
-below.
-The bounded capability certificate is in `JSON_GENERAL_STORAGE_FRONTIER.md`.
+Current transition (2026-10-03): W134 behavior-preserving Array/Map row-owner
+extraction over W133 `2e150f4`, verified within the executed scope below.
+Nine existing classes now have one file each; no API, type, codec, limit or
+physical-profile admission changed. This is a navigation improvement, not
+completion of the larger responsibility-level architecture.
+W133 paired bare Date/Date32 Object fields over W132 `e043be7`; its bounded
+capability certificate remains in `JSON_GENERAL_STORAGE_FRONTIER.md`.
 Catalog Object dispatch has a private materialization owner; W130 separately
 owns normalized table admission/accounting. W132 extracts one shared closed
 typed-field policy; W133 extends that policy without a new codec or class per
@@ -41,9 +44,9 @@ stock/Crystal Geometry oracle and ten unchanged regression phases passed.
 Exact seven-arm Geometry is now admitted within that profile; wrappers and
 generic Variant widening remain rejected. The larger facade refactor remains
 open. Source files alone do not prove lower coupling or performance.
-Current navigation counts are 16,029 reader lines, 26,034 writer lines, 7,080
-table lines, 1,560 catalog lines and 3,657 offline-table lines at W120
-(`74a8752`, before the extraction below). The next cohesive
+Current navigation counts at W134 are 15,985 reader lines, 25,991 writer lines,
+6,786 table lines, 1,560 catalog lines and 3,692 offline-table lines. The table
+facade lost exactly 385 lines; code was moved, not eliminated. The next cohesive
 architectural boundaries remain shared type/substream planning, physical-stream
 lifetime/validation, leaf codecs, staging orchestration and table/catalog
 materialization; do not replace these with a Cartesian set of type combinations.
@@ -1968,7 +1971,8 @@ Other Object declarations/layouts and broader MV/projections remain open;
 performance stays parked. Refresh after policy, schema, bulk, dispatch,
 profile, limits, runtime, source or toolchain changes.
 
-The next proposed architecture slice extracts the nine existing Array/Map
+The historical next-slice proposal (executed and qualified as W134 below)
+extracts the nine existing Array/Map
 slice/row classes at `wide_part_table.cr:80-463` into nine files under
 `wide_part_table/`, with explicit aggregate imports. Preserve namespace,
 names, visibility, generics, comments, budgets and retained slice ownership;
@@ -1976,4 +1980,156 @@ do not introduce new per-combination classes or change regular numeric Map
 helpers. Exact class-body comparison and existing W80-W85 table/catalog tests
 must guard against duplicate/omitted declarations and generic/lifetime drift.
 This would improve navigation, not close responsibility-level orchestration
-or prove lower coupling/performance. It remains PROPOSED until executed gates.
+or prove lower coupling/performance. Its executed gates are recorded below.
+
+## Array/Map row-owner extraction (W134) — pre-implementation design seal
+
+Anchor: clean W133 `2e150f4`. Nine existing Array/Map slice/row classes occupy
+`wide_part_table.cr:80-463`, including their W82/W83/W84 accounting comments.
+The user requests readable, smaller class owners with one file per class.
+This slice moves those existing classes without changing their responsibilities
+or multiplying classes per type combination. Larger orchestration remains open.
+
+Risk: CAUTION (generic type loading and borrowed slice lifetime). Rollback is
+one atomic local commit over `2e150f4`, no push. Strongest failure: a declaration
+is omitted/duplicated, a generic signature/visibility changes, or retained
+array ownership/accounting diverges while shallow file-count checks pass.
+Keep namespace, names, generics, bodies, comments, errors and limits exact.
+Regular numeric Map helpers, aliases, adapters, codecs, type/profile admission,
+serialization, dependency files and performance policy are outside scope.
+
+Owners: Luna moves only the nine existing classes to separate
+`wide_part_table/wide_part_array_map_*.cr` files and adds nine explicit imports
+to `src/crystal_click.cr`; root owns the design/structural guard, all serial
+compiler/stock checks, hostile review, navigation and scoped local commit.
+No agent may execute compiler/ClickHouse jobs or stage/commit. Namespace
+forward references are not assumed to have a parse-time require-order rule.
+
+DoD: first `bash scripts/check_array_map_owner_extraction_w134.sh` must fail
+only because the new owner files do not yet exist. After extraction it must
+compare all nine class bodies/comments against the fixed checkpoint, verify
+one unique declaration/file and one import each, and compare the remaining
+facade and loader exactly. This structural check alone cannot prove runtime
+ownership, generic instantiation or part compatibility.
+
+Root then runs the six existing W80-W85 table specs in DEBUG and the same
+six plus W80-W85 catalog, W83/W84 reader and W79 table specs in RELEASE.
+A second Luna owns only a small direct public-owner W134 spec for independently
+expected counters/payload accounting and retained slice-owner identity after
+the row-owner's lexical scope ends and GC runs; include it in both focused
+gates. This guards lifetime/generic behavior, not a new ownership API.
+Use the recorded Crystal/macOS toolchain, isolated caches and single-module,
+one-thread, `--link-flags=-fuse-ld=ld --error-trace` flags under the serial
+resource guard (600 seconds, 32,768 MiB, minimum free memory 50%). These
+exercise numeric/nullable/String/Bool/nested Array leaves, batch/window reads,
+budgets and selected corruption guards; root reviews slice-owner retention.
+Finally run all unique non-release specs in disjoint groups of at most 24
+(`--no-debug`, guarded runner 900 seconds), a fresh unchanged W133 stock oracle,
+formatter check, wrapper shell syntax, exact intended diff and hostile review.
+Expected signals are zero failures/errors/outer exit 0, preserved rejection
+guards, exact structural equality and clean hygiene. No capability widening
+or performance inference follows from this refactor certificate.
+
+## W134 executed extraction certificate (2026-10-03)
+
+Status: VERIFIED only for the sealed behavior-preserving nine-class extraction.
+Root's bounded hostile verdict is ROBUST. The fixed production baseline is
+`2e150f4e4096d9a46e9f5654aa76390c9a139c70`; the intervening `de53620` commit
+updates only the isolated ClickHouse source-reference document. Luna's static
+implementation and spec work are correlated support, not the runtime evidence.
+
+The numeric slice/base, numeric rows/base, nullable numeric rows, String rows,
+Bool rows and nested Array rows/base each have a separate file under
+`src/crystal_click/wide_part_table/`. The aggregate loader adds exactly nine
+explicit imports. The structural guard compares every original class body and
+comment byte-for-byte against its sealed baseline span, then compares the
+entire remaining facade and loader. Names, generics, public visibility,
+retained backing arrays, budgets, errors and unrelated numeric Map helpers
+are unchanged. No class per newly admitted type combination was introduced.
+
+Root executed the following on frozen production/spec source:
+
+- Structural RED before extraction: exit 1 solely for the first missing owner.
+  Final `bash scripts/check_array_map_owner_extraction_w134.sh`: exit 0.
+  Two isolated-copy tamper controls rejected a changed row counter and an
+  unexpected tenth owner import; production files were not mutated for them.
+- Focused DEBUG: direct W134 owner spec plus six W80-W85 table specs,
+  **22 examples**, zero failures/errors, outer exit 0. An earlier table-only
+  exploratory check passed 16 examples but is not substituted for this gate.
+- Adjacent RELEASE: those seven files plus six W80-W85 catalog specs,
+  W83/W84 reader specs and W79 table spec: **37 examples**, zero failures/errors,
+  outer exit 0. Direct fixtures independently exercise numeric/nullable,
+  String/Bool and nested Array accounting, empty/NUL/Unicode/nil payloads and
+  concrete generic/base interfaces. A numeric slice retains its backing-array
+  identity and payload after the original row-owner scope ends and GC runs;
+  this is not a universal GC/lifetime or memory ceiling certificate.
+- Complete unique inventory: **353 spec files / 2,242 examples**, 15 disjoint
+  serial non-release groups of at most 24 files, one completed guarded runner
+  invocation, outer exit 0. Not a combined-process or full-RELEASE certificate.
+  Existing duplicate `-lc` and deprecated `blocking` warnings were emitted;
+  there were no failures/errors/pending examples.
+- Fresh unchanged `scripts/check_object_dates_w133.sh`: four native and four
+  fully library-owned String 0/1 × BASIC/COMPACT cells passed actual stock
+  ATTACH/CHECK=1, full/PK calendar SQL, nominal/day-code/exact RowBinary and
+  file/column/catalog/table consumers. Two separate raw Date32 Int32 extrema
+  transport cases and seven seeded comparator failures passed. Temporary
+  parts were fresh, retained at
+  `/private/tmp/crystal-click-object-dates-w133.yyiNeY`; no existing server root
+  or fixture part was modified. This rechecks W133's existing normalized
+  Wide Object V3/Dynamic V3/MAP profile, not new type/layout compatibility.
+- Formatter check for the loader/facade/nine owners/direct spec, shell syntax
+  for both guards and `git diff --check`: exit 0.
+
+Runtime gates use Crystal 1.21.0 / LLVM 22.1.8 on AArch64 macOS, SDK 26.5,
+isolated caches, `--single-module --threads 1 --link-flags=-fuse-ld=ld
+--error-trace`; inventory adds `--no-debug`, RELEASE adds `--release`.
+Root alone runs compiler/stock jobs serially under `cogni-ml/scripts/run_safe.sh`,
+minimum free memory 50%, 32,768 MiB, 600-second focused and 900-second
+inventory/stock wrappers. The guard's FD/resource controls do not prove library
+memory bounds or absence of leaks. Stock remains ClickHouse `26.10.1.1201`,
+build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, executable SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The new `f86ca42b` source checkout was not built or runtime-qualified.
+
+Evidence index: `/private/tmp/crystal-click-w134-root.UyqLjy/`.
+Temporary logs may expire; these hashes are identifiers, not substitute proof:
+
+| File | SHA-256 |
+| --- | --- |
+| `focused-debug.log` | `61d1e9459f03949e14506c6b352447856bd15363b7281fd05a9281ce5fe44266` |
+| `adjacent-release.log` | `83bdae6aaa61c24d57ce948a409f4b35df47732dfea743ca257db9d9fc9d7799` |
+| `full-nonrelease-shards.log` | `a4929eeb3bb4c1db9bc6709f90c34602cb251fa9db64e51510bd368f06c7c01c` |
+| `stock-w133-regression.log` | `ab1ae8747ec91e5bb0c4695c0f86d4b995cee102c22931a6c4ba4a5148651ec8` |
+| `structural-red.log` | `0613358a476bb3efc2b0e69bed099b3cb0058a937eef3de92dc419cbbb15a917` |
+| `structural-green-final.log` | `852fd4b02411b005eb6b6b8342c26eedb0ca4c2476b308ca03e2f88e6ebbb0f6` |
+| `structural-seeded-body-final.log` | `a2cc84714ad8f2e34aaff67c96ec595c417d2fb77fcb72a4a46d3ff008de608e` |
+| `structural-seeded-import-final.log` | `743880499dfee56fcdb8c1539d3681b394c3137ad78c501e239f1166bceb5d98` |
+| `run_full_shards.sh` | `19408b515c7981dc6f79e47fee41f683f0ca69868b773406dba740e3b2e98a99` |
+
+Frozen source fingerprints:
+
+| File | SHA-256 |
+| --- | --- |
+| `src/crystal_click.cr` | `a91a8491ab0338745c723175ba8fc7d75d42725c739274999dede44b6498fd36` |
+| `src/crystal_click/wide_part_table.cr` | `817050f5d8093c568e6cf494ee62357802f99157df3dfef0e13c8fe61062cd68` |
+| `spec/wide_part_array_map_owner_w134_spec.cr` | `b053958a2506459ee141a1a4e8b3bc4064b86ae57d4543daddc2f099965fa851` |
+| `scripts/check_array_map_owner_extraction_w134.sh` | `c2961f469cc18a2ee70fb947b705893797892d6973d00204918be94389f42e97` |
+
+Each of the nine owner bodies is reproducibly anchored to the fixed baseline
+by the guard's exact span comparisons. The unchanged stock driver fingerprints
+are `73a35cf0d352d75f24efe3821e6c6ea8a5fb0ad5a7035c12b818848e031591a3`
+(`check_object_dates_w133.sh`) and
+`2c0dd6477b2a5addf1d29ca011a4d2cfc1adafbc2788e0f793a0d604d7603d61`
+(`check_object_dates_w133.cr`). Reproduce focused gates with the selected files
+above and the recorded flags/guard; inventory uses all unique sorted
+`rg --files spec -g '*_spec.cr'` files in disjoint groups. Reproduce stock with
+`CRYSTAL_BIN=/opt/homebrew/bin/crystal`, the pinned `CLICKHOUSE_BIN`,
+`W133_KEEP_TMP=1` and `bash scripts/check_object_dates_w133.sh` under that guard.
+
+Residuals and decay: table orchestration is still 6,786 lines, the reader
+15,985 and writer 25,991. This does not establish lower coupling, speed parity,
+all generic instantiations, arbitrary type composition or full MV/projection
+support. Optimization remains parked. Refresh exact positives and tamper
+negatives after loader, owner, generic, accounting, adapter, limit, profile,
+runtime, baseline/source or toolchain changes. A missing or failed refresh
+reopens this bounded certificate; it does not silently widen admission.
