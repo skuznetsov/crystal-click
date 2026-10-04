@@ -9,6 +9,7 @@ module CrystalClick
       first_mark : Int,
       mark_count : Int?,
       profile : BinaryBulkProfile,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : Array(Array(BinaryValue))
       unless !budget.writing?
         raise ArgumentError.new("binary bulk decoder requires a read-direction budget")
@@ -22,7 +23,7 @@ module CrystalClick
 
       traversal = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
       traversal.validate_type_tree(type)
-      plan = BinaryBulkTypePlan.new(type, profile)
+      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan)
       planned_role_count = plan.role_count
       ordinary_role_count = plan.ordinary_role_count
       low_cardinality_sites = plan.low_cardinality_sites
@@ -66,7 +67,7 @@ module CrystalClick
         selected_rows = checked_add(selected_rows, count)
       end
 
-      minimum = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile)
+      minimum = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, nil, dynamic_plan)
       minimum_nodes = checked_multiply(selected_rows, minimum.nodes)
       minimum_edges = checked_multiply(selected_rows, minimum.edges)
       budget.ensure_future_nodes(minimum_nodes)
@@ -81,7 +82,8 @@ module CrystalClick
         rows_per_mark,
         budget,
         selected_first,
-        selected_count
+        selected_count,
+        dynamic_plan
       )
 
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
@@ -97,7 +99,7 @@ module CrystalClick
         mark = selected_first + window_offset
         root_count = rows_per_mark[mark].to_i32
         contexts = selected_contexts(streams, ordinary_roles, mark, budget)
-        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts)
+        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts, budget, dynamic_plan)
 
         traversal.ensure_future_nodes(type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : root_count.to_u64)
         traversal.ensure_depth(1) if root_count > 0
@@ -107,7 +109,7 @@ module CrystalClick
         end
         lc_cursors = Hash(String, Int32).new(0)
         values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors)
+          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan)
         end
         contexts.each_value(&.ensure_consumed)
         lc_values_for_mark.each do |path, mark_values|
@@ -210,36 +212,40 @@ module CrystalClick
       count : UInt64,
       profile : BinaryBulkProfile,
       contexts : Hash(String, BinaryCodecContext),
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
-          ensure_role_minimum(contexts, "#{path}.string_sizes", count, 8_u64)
+          ensure_role_minimum(contexts, child_path(path, ".string_sizes", nil, budget, dynamic_plan), count, 8_u64)
         else
-          ensure_role_minimum(contexts, "#{path}.data", count, 1_u64)
+          ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
-        ensure_role_minimum(contexts, "#{path}.sizes", count, 8_u64)
+        ensure_role_minimum(contexts, child_path(path, ".sizes", nil, budget, dynamic_plan), count, 8_u64)
       when BinaryDataType::TAG_VARIANT
-        ensure_role_minimum(contexts, "#{path}.discriminators", count, 1_u64)
+        ensure_role_minimum(contexts, child_path(path, ".discriminators", nil, budget, dynamic_plan), count, 1_u64)
+      when BinaryDataType::TAG_DYNAMIC
+        ensure_role_minimum(contexts, child_path(path, ".discriminators", nil, budget, dynamic_plan), count, 1_u64)
       when BinaryDataType::TAG_LOW_CARDINALITY
         # The LC owner validates every mark and pays its full-state wire cost.
       when BinaryDataType::TAG_NULLABLE
-        ensure_role_minimum(contexts, "#{path}.nulls", count, 1_u64)
-        ensure_minimum_count(type.child_at(0), "#{path}.nested", count, profile, contexts)
+        ensure_role_minimum(contexts, child_path(path, ".nulls", nil, budget, dynamic_plan), count, 1_u64)
+        ensure_minimum_count(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
-          ensure_role_minimum(contexts, "#{path}.data", count, 1_u64)
+          ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
         else
           type.child_count.times do |index|
-            ensure_minimum_count(type.child_at(index), "#{path}.field.#{index}", count, profile, contexts)
+            ensure_minimum_count(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan)
           end
         end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
-        ensure_role_minimum(contexts, "#{path}.data", count, 1_u64)
+        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
       else
         width = type.fixed_width || unsupported!("unsupported binary bulk DataType")
-        ensure_role_minimum(contexts, "#{path}.data", count, width.to_u64)
+        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, width.to_u64)
       end
       nil
     end
@@ -267,6 +273,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       low_cardinality_values : Hash(String, Array(BinaryValue)),
       low_cardinality_cursors : Hash(String, Int32),
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : BinaryValue
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
         traversal.ensure_depth(depth)
@@ -285,7 +292,7 @@ module CrystalClick
 
       case type.tag
       when BinaryDataType::TAG_VARIANT
-        discriminator = context_for(contexts, "#{path}.discriminators").read_byte
+        discriminator = context_for(contexts, child_path(path, ".discriminators", nil, traversal.budget, dynamic_plan)).read_byte
         if discriminator == 0xff_u8
           BinaryValue.variant_null(type)
         else
@@ -294,48 +301,96 @@ module CrystalClick
             corrupt!("Variant bulk discriminator is outside its arm roster")
           end
           child_type = type.child_at(index)
-          child_path = "#{path}.arm.#{discriminator}"
+          selected_path = child_path(path, ".arm.", discriminator.to_i, traversal.budget, dynamic_plan)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          ensure_minimum_count(child_type, child_path, 1_u64, profile, contexts)
-          child = decode_value(child_type, child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
+          ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
+          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
           BinaryValue.variant(type, discriminator.to_i, child)
+        end
+      when BinaryDataType::TAG_DYNAMIC
+        plan = dynamic_plan || corrupt!("binary Dynamic value has no structure plan")
+        discriminator = context_for(contexts, child_path(path, ".discriminators", nil, traversal.budget, dynamic_plan)).read_byte
+        if discriminator == 0xff_u8
+          BinaryValue.dynamic(type)
+        else
+          index = discriminator.to_i
+          if index >= plan.arm_count(path)
+            corrupt!("Dynamic bulk discriminator is outside its actual arm roster")
+          end
+          selected_path = child_path(path, ".arm.", index, traversal.budget, dynamic_plan)
+          if index == plan.shared_index(path)
+            # Preflight the Dynamic-to-envelope descriptor edge before even
+            # reading the selected String envelope. The helper owns the
+            # descriptor/value visits and, for non-Nothing, the descriptor's
+            # child edge.
+            traversal.preflight_children(1_u64)
+            data_context = context_for(contexts, child_path(selected_path, ".data", nil, traversal.budget, dynamic_plan))
+            envelope_size = if profile.with_size_stream?
+                              read_u64(context_for(contexts, child_path(selected_path, ".string_sizes", nil, traversal.budget, dynamic_plan)))
+                            else
+                              data_context.read_var_uint
+                            end
+            envelope = data_context.read_slice(envelope_size)
+            # The shared scalar visitor preflights the selected value's edge
+            # only after seeing a non-Nothing descriptor and before allocating
+            # it.
+            child_type, child_value = BinaryValueCodec.decode_dynamic_bulk_child(
+              envelope,
+              traversal.budget,
+              (depth + 1).to_i32,
+              true
+            )
+            if value = child_value
+              BinaryValue.dynamic(type, value)
+            else
+              BinaryValue.dynamic(type)
+            end
+          else
+            child_type = plan.arm_type(path, index)
+            traversal.preflight_children(1_u64)
+            traversal.ensure_depth(depth + 1)
+            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
+            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+            BinaryValue.dynamic(type, child)
+          end
         end
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
-          size = read_u64(context_for(contexts, "#{path}.string_sizes"))
-          raw = context_for(contexts, "#{path}.data").read_slice(size)
+          size = read_u64(context_for(contexts, child_path(path, ".string_sizes", nil, traversal.budget, dynamic_plan)))
+          raw = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_slice(size)
           BinaryValue.string(String.new(raw))
         else
-          context = context_for(contexts, "#{path}.data")
+          context = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan))
           size = context.read_var_uint
           raw = context.read_slice(size)
           BinaryValue.string(String.new(raw))
         end
       when BinaryDataType::TAG_BOOL
-        BinaryValue.bool(BoolValueCodec.decode(context_for(contexts, "#{path}.data").read_byte))
+        BinaryValue.bool(BoolValueCodec.decode(context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_byte))
       when BinaryDataType::TAG_NOTHING
-        byte = context_for(contexts, "#{path}.data").read_byte
+        byte = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_byte
         unless byte == 0x30_u8
           corrupt!("Nothing bulk placeholder is not canonical ASCII zero")
         end
         BinaryValue.null(type)
       when BinaryDataType::TAG_ARRAY
-        sizes = context_for(contexts, "#{path}.sizes")
+        sizes = context_for(contexts, child_path(path, ".sizes", nil, traversal.budget, dynamic_plan))
         raw_count = read_u64(sizes)
         count = checked_collection_count(raw_count, "Array element count")
         preflight_child_type(traversal, type.child_at(0), raw_count) unless raw_count == 0_u64
         traversal.ensure_depth(depth + 1) unless raw_count == 0_u64
-        ensure_minimum_count(type.child_at(0), "#{path}.elements", raw_count, profile, contexts)
+        elements_path = child_path(path, ".elements", nil, traversal.budget, dynamic_plan)
+        ensure_minimum_count(type.child_at(0), elements_path, raw_count, profile, contexts, traversal.budget, dynamic_plan)
         child_type = type.child_at(0)
         elements = Array(BinaryValue).new(count) do
-          decode_value(child_type, "#{path}.elements", depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
+          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
         end
         BinaryValue.array(type, elements)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = type.child_count
         if count == 0
-          byte = context_for(contexts, "#{path}.data").read_byte
+          byte = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_byte
           unless byte == 0x30_u8
             corrupt!("empty Tuple bulk placeholder is not canonical ASCII zero")
           end
@@ -350,18 +405,18 @@ module CrystalClick
           traversal.ensure_depth(depth + 1)
           count.times do |index|
             child_type = type.child_at(index)
-            child_path = "#{path}.field.#{index}"
-            ensure_minimum_count(child_type, child_path, 1_u64, profile, contexts)
+            selected_path = child_path(path, ".field.", index, traversal.budget, dynamic_plan)
+            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
           end
           fields = Array(BinaryValue).new(count) do |index|
             child_type = type.child_at(index)
-            child_path = "#{path}.field.#{index}"
-            decode_value(child_type, child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
+            selected_path = child_path(path, ".field.", index, traversal.budget, dynamic_plan)
+            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
           end
           BinaryValue.tuple(type, fields)
         end
       when BinaryDataType::TAG_MAP
-        raw_pairs = read_u64(context_for(contexts, "#{path}.sizes"))
+        raw_pairs = read_u64(context_for(contexts, child_path(path, ".sizes", nil, traversal.budget, dynamic_plan)))
         if raw_pairs > UInt64::MAX // 2_u64
           corrupt!("Map pair count overflows its flat element count")
         end
@@ -377,25 +432,27 @@ module CrystalClick
           traversal.ensure_future_nodes(ordinary_nodes)
         end
         traversal.ensure_depth(depth + 1) unless flat_count == 0_u64
-        ensure_minimum_count(type.child_at(0), "#{path}.elements.field.0", raw_pairs, profile, contexts)
-        ensure_minimum_count(type.child_at(1), "#{path}.elements.field.1", raw_pairs, profile, contexts)
+        key_path = child_path(path, ".elements.field.0", nil, traversal.budget, dynamic_plan)
+        value_path = child_path(path, ".elements.field.1", nil, traversal.budget, dynamic_plan)
+        ensure_minimum_count(type.child_at(0), key_path, raw_pairs, profile, contexts, traversal.budget, dynamic_plan)
+        ensure_minimum_count(type.child_at(1), value_path, raw_pairs, profile, contexts, traversal.budget, dynamic_plan)
         entries = Array(BinaryValue).new(count) do |index|
           child_index = index.even? ? 0 : 1
-          child_path = "#{path}.elements.field.#{child_index}"
-          decode_value(type.child_at(child_index), child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
+          selected_path = child_index == 0 ? key_path : value_path
+          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
         end
         BinaryValue.map(type, entries)
       when BinaryDataType::TAG_NULLABLE
-        flag = context_for(contexts, "#{path}.nulls").read_byte
+        flag = context_for(contexts, child_path(path, ".nulls", nil, traversal.budget, dynamic_plan)).read_byte
         unless flag == 0_u8 || flag == 1_u8
           corrupt!("Nullable bulk null-map flag must be zero or one")
         end
         preflight_child_type(traversal, type.child_at(0), 1_u64)
         traversal.ensure_depth(depth + 1)
         child_type = type.child_at(0)
-        child_path = "#{path}.nested"
-        ensure_minimum_count(child_type, child_path, 1_u64, profile, contexts)
-        child = decode_value(child_type, child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
+        selected_path = child_path(path, ".nested", nil, traversal.budget, dynamic_plan)
+        ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
+        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
         if flag == 1_u8
           BinaryValue.null(type)
         elsif child_type.tag == BinaryDataType::TAG_NOTHING
@@ -405,9 +462,54 @@ module CrystalClick
         end
       else
         width = type.fixed_width || unsupported!("unsupported binary bulk leaf")
-        raw = context_for(contexts, "#{path}.data").read_slice(width.to_u64)
+        raw = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_slice(width.to_u64)
         BinaryValue.fixed(type, raw)
       end
+    end
+
+    private def self.child_path(
+      path : String,
+      suffix : String,
+      index : Int32?,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+    ) : String
+      unless dynamic_plan
+        return index ? "#{path}#{suffix}#{index}" : "#{path}#{suffix}"
+      end
+
+      size = path.bytesize.to_u64
+      suffix_size = suffix.bytesize.to_u64
+      if suffix_size > UInt64::MAX - size
+        corrupt!("binary Dynamic value path size overflows UInt64")
+      end
+      size += suffix_size
+      if value = index
+        if value < 0
+          corrupt!("binary Dynamic value path index is negative")
+        end
+        digits = 1_u64
+        remaining = value
+        while remaining >= 10
+          remaining //= 10
+          digits += 1_u64
+        end
+        if digits > UInt64::MAX - size
+          corrupt!("binary Dynamic value path size overflows UInt64")
+        end
+        size += digits
+      end
+      if size > UInt64::MAX // 2_u64
+        corrupt!("binary Dynamic value path work size overflows UInt64")
+      end
+      work = size * 2_u64
+      budget.ensure_wire_bytes(work)
+      value = String.build do |builder|
+        builder << path << suffix
+        builder << index.to_s if index
+      end
+      budget.charge_wire_bytes(work)
+      value
     end
 
     private def self.preflight_child_type(

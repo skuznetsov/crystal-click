@@ -1,6 +1,30 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W154 adds paired occurrence-specific
+Current capability checkpoint (2026-10-04): W155 adds paired generic Dynamic
+normalized bulk values and complete per-role K+1 mark grids from explicit
+occurrence structures. Equal nominal sites keep distinct stored rosters;
+ordinary arms and SharedVariant typed envelopes remain separate. Recursive
+containers, unused sites, sparse LC schedules and selected windows share one
+operation budget. Root passes 120 focused DEBUG examples (16 unique files,
+two disjoint groups), 554 affected RELEASE examples (80 unique files, eight
+disjoint groups), and 2,569 complete-inventory examples (403 unique files,
+41 disjoint non-release groups with `--no-debug`). Every gate has zero
+failures/errors/pending and exit zero; root independently reconciles exact
+inventory membership, observed results, guard exits and current source/spec
+hashes. A finite stock fixture passes four typed columns, six rows, three
+marks and seven SQL probes. Its wire-valid 42-to-43 normalized mutation is
+accepted by the Crystal decoder and rejected by an independent value oracle,
+not CHECKed by ClickHouse. Stock evidence is single-stream/BASIC/Dynamic V3;
+other String/LC products have spec evidence only here. New paired owners have
+separate files; the actual-roster plan is 1,186 lines and the large facades
+remain unchanged. Scoped hostile verdict: ROBUST for normalized values/grids
+and retained legacy consumer fences. No new physical binder, declared Object
+Dynamic, complete-part, overall architecture or performance qualification
+follows. The source snapshot and pinned executable keep separate identities.
+Exact boundary, observed gates and refresh conditions are in
+[DYNAMIC_BULK_VALUE_FRONTIER.md](DYNAMIC_BULK_VALUE_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W154 adds paired occurrence-specific
 Dynamic V3 structure streams and actual-roster/site planning. Equal nominal
 Dynamic descriptors can retain different site rosters; empty children and
 unused arms retain their own structure prefixes. Ordinary String and implicit
@@ -25,9 +49,9 @@ ROBUST for metadata/site planning and retained legacy consumer fences only.
 Exact boundary, observed
 gates and refresh conditions are in
 [DYNAMIC_BULK_STRUCTURE_FRONTIER.md](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
-The 2,539-example total is the last complete-inventory capability checkpoint,
-before the neutral writer selector extraction below; it is not a fresh full
-inventory run of that subsequent refactor.
+The historical 2,539-example total predates the neutral writer selector
+extraction. W155's fresh 403-file complete gate above includes that refactor
+and supersedes this inventory count, without widening its compatibility scope.
 
 Previous capability checkpoint (2026-10-04): W153 adds paired generic Dynamic
 logical values. Root passes 116 focused DEBUG, 542 affected RELEASE examples
@@ -349,9 +373,16 @@ source/runtime identities and executed evidence.
   occurrence paths, including declared containers, static Variant arms and
   nested Dynamic inside actual arms. `BinaryDynamicStructureStreams` provides
   detached complete structure blobs. Paired structure decode/encode and
-  logical role rosters are available under shared operation budgets, not
-  generic bulk values or physical part binding. See
+  logical role rosters are available under shared operation budgets. See
   [the W154 frontier](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
+- `BinaryDynamicBulkCodec` and `BinaryDynamicBulkStreams` pair those structures
+  with normalized generic Dynamic values and complete per-role mark grids.
+  Exact stored-site rosters control ordinary versus SharedVariant selection;
+  actual LC-bearing arms keep full sparse schedules across selected windows.
+  Supplied statistics are preserved, not recomputed as a publication
+  certificate. No production physical Dynamic binder or new whole-part writer
+  is admitted by this API. See
+  [the W155 frontier](DYNAMIC_BULK_VALUE_FRONTIER.md).
 - `BinaryDataType.variant`, `BinaryValue.variant` and `variant_null` provide
   the shared canonical logical Variant kernel. Paired descriptor/value codecs
   retain nominal arm identity, recursive values and explicit NULL. W148 adds
@@ -523,9 +554,11 @@ source/runtime identities and executed evidence.
    W151 qualifies the separate declared-Object BASIC Variant profile, not
    every physical product admitted by its schema grammar.
    W152/W153 qualify nominal Dynamic descriptors and generic logical values;
-   W154 adds actual per-occurrence structure/roster planning, not generic
-   Dynamic bulk values, complete mark grids or new physical binding. Equal
-   nominal Dynamic types do not imply equal per-part or per-site state.
+   W154 adds actual per-occurrence structure/roster planning and W155 pairs it
+   with normalized bulk values and complete mark grids. Generic production
+   Dynamic physical binding and declared Object Dynamic remain separate open
+   frontiers. Equal nominal Dynamic types do not imply equal per-part or
+   per-site state.
    Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
@@ -607,9 +640,10 @@ source/runtime identities and executed evidence.
    frontier. W152 preserves the nominal `Dynamic(max_types=N)` cap; W153 adds
    the paired generic logical actual-type/value grammar. W154 adds paired
    actual per-occurrence structure streams and normalized role/site planning.
-   The next transition is generic Dynamic bulk values and complete mark-grid
-   scheduling over that actual state, then separately qualified physical
-   binding before declared Object Dynamic and complete-part tests.
+   W155 now pairs generic Dynamic normalized bulk values and complete mark-grid
+   scheduling over that actual state. The next transition is separately
+   qualified physical binding before declared Object Dynamic and complete-part
+   tests, not another logical-value or metadata-only transition.
    Neither the cap nor Object's inferred-path policy substitutes for that roster.
    Broader layout/type products remain separate.
    Reuse existing leaf owners only

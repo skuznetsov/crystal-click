@@ -6,6 +6,7 @@ module CrystalClick
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : BinaryBulkStreams
       unless budget.writing?
         raise ArgumentError.new("binary bulk encoder requires a write-direction budget")
@@ -16,7 +17,7 @@ module CrystalClick
 
       traversal = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
       traversal.validate_type_tree(type)
-      plan = BinaryBulkTypePlan.new(type, profile)
+      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan)
       planned_role_count = plan.role_count
       ordinary_role_count = plan.ordinary_role_count
 
@@ -46,9 +47,9 @@ module CrystalClick
       default_costs = Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost).new
       granules.each do |rows|
         rows.each do |value|
-          minimum = minimum_value_cost(type, value, profile, default_costs)
+          minimum = minimum_value_cost(type, value, profile, default_costs, dynamic_plan)
           ensure_cost_fits(budget, add_cost(total, minimum))
-          total = add_cost(total, value_cost(type, value, profile, budget, total, default_costs))
+          total = add_cost(total, value_cost(type, value, "root", profile, budget, total, default_costs, dynamic_plan))
         end
       end
       budget.ensure_future_nodes(total[:nodes])
@@ -64,7 +65,7 @@ module CrystalClick
 
       granules.each do |rows|
         rows.each do |value|
-          write_value(type, value, "root", 1, traversal, budget, lanes, profile)
+          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan)
         end
         roles.each do |role|
           offsets[role] << lanes[role].size.to_u64
@@ -79,7 +80,7 @@ module CrystalClick
       end
 
       low_cardinality_sites = plan.low_cardinality_sites
-      low_cardinality_streams = BinaryBulkLowCardinalitySiteEncoder.encode(type, low_cardinality_sites, granules, budget)
+      low_cardinality_streams = BinaryBulkLowCardinalitySiteEncoder.encode(type, low_cardinality_sites, granules, budget, dynamic_plan)
       low_cardinality_streams.each do |role, stream|
         streams[role] = stream
       end
@@ -106,6 +107,7 @@ module CrystalClick
       value : BinaryValue,
       profile : BinaryBulkProfile,
       default_costs : Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost),
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64)
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -121,7 +123,7 @@ module CrystalClick
         if index = value.variant_index?
           child_type = type.child_at(index.to_i)
           child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
-          child = minimum_value_cost(child_type, child_value, profile, default_costs)
+          child = minimum_value_cost(child_type, child_value, profile, default_costs, dynamic_plan)
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(1_u64, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -129,11 +131,15 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         size = value.byte_size.to_u64
         wire_bytes = profile.with_size_stream? ? checked_add(8_u64, size) : checked_add(var_uint_size(size), size)
+      when BinaryDataType::TAG_DYNAMIC
+        # Shared typed-envelope work is charged by the rebased scalar visitor
+        # during the write pass; this is the common node/discriminator floor.
+        wire_bytes = 1_u64
       when BinaryDataType::TAG_BOOL, BinaryDataType::TAG_NOTHING
         wire_bytes = 1_u64
       when BinaryDataType::TAG_ARRAY
         count = value.element_count.to_u64
-        child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs)
+        child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs, dynamic_plan)
         nodes = checked_add(nodes, checked_multiply(count, child.nodes))
         edges = checked_add(count, checked_multiply(count, child.edges))
         wire_bytes = checked_add(8_u64, checked_multiply(count, child.wire_bytes))
@@ -147,7 +153,7 @@ module CrystalClick
         else
           edges = count.to_u64
           count.times do |index|
-            child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(index), profile, default_costs)
+            child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(index), profile, default_costs, dynamic_plan)
             nodes = checked_add(nodes, child.nodes)
             edges = checked_add(edges, child.edges)
             wire_bytes = checked_add(wire_bytes, child.wire_bytes)
@@ -162,13 +168,13 @@ module CrystalClick
         edges = flat_count
         wire_bytes = 8_u64
         pairs = flat_count // 2_u64
-        key = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs)
-        item = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(1), profile, default_costs)
+        key = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs, dynamic_plan)
+        item = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(1), profile, default_costs, dynamic_plan)
         nodes = checked_add(nodes, checked_multiply(pairs, checked_add(key.nodes, item.nodes)))
         edges = checked_add(edges, checked_multiply(pairs, checked_add(key.edges, item.edges)))
         wire_bytes = checked_add(wire_bytes, checked_multiply(pairs, checked_add(key.wire_bytes, item.wire_bytes)))
       when BinaryDataType::TAG_NULLABLE
-        child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs)
+        child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs, dynamic_plan)
         nodes = checked_add(nodes, child.nodes)
         edges = checked_add(1_u64, child.edges)
         wire_bytes = checked_add(1_u64, child.wire_bytes)
@@ -194,16 +200,18 @@ module CrystalClick
     private def self.value_cost(
       type : BinaryDataType,
       value : BinaryValue,
+      path : String,
       profile : BinaryBulkProfile,
       budget : BinaryCodecBudget,
       base : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64),
       default_costs : Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost),
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64)
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
       end
 
-      minimum = minimum_value_cost(type, value, profile, default_costs)
+      minimum = minimum_value_cost(type, value, profile, default_costs, dynamic_plan)
       ensure_cost_fits(budget, add_cost(base, minimum))
       return zero_cost if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
 
@@ -220,14 +228,44 @@ module CrystalClick
           child = value_cost(
             child_type,
             child_value,
+            child_path(path, ".arm.", index.to_i, budget, dynamic_plan),
             profile,
             budget,
             add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
-            default_costs
+            default_costs,
+            dynamic_plan
           )
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
+        end
+      when BinaryDataType::TAG_DYNAMIC
+        wire_bytes = 1_u64
+        unless value.is_null?
+          child_value = value.child_at(0)
+          plan = dynamic_plan || raise UnsupportedFormatError.new("Dynamic bulk value has no structure plan")
+          selection = plan.select_arm(path, child_value.type)
+          if selection.shared
+            # The exact typed envelope is emitted and charged by the rebased
+            # scalar visitor in write_value; this pass preserves the common
+            # Dynamic node/discriminator lower bound without double-visiting.
+          else
+            child_type = plan.arm_type(path, selection.index)
+            edges = 1_u64
+            child = value_cost(
+              child_type,
+              child_value,
+              child_path(path, ".arm.", selection.index.to_i, budget, dynamic_plan),
+              profile,
+              budget,
+              add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
+              default_costs,
+              dynamic_plan
+            )
+            nodes = checked_add(nodes, child[:nodes])
+            edges = checked_add(edges, child[:edges])
+            wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
+          end
         end
       when BinaryDataType::TAG_STRING
         size = value.byte_size.to_u64
@@ -244,7 +282,7 @@ module CrystalClick
         count = value.element_count
         edges = count.to_u64
         count.times do |index|
-          child = value_cost(type.child_at(0), value.element_at(index), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs)
+          child = value_cost(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -256,7 +294,7 @@ module CrystalClick
         else
           edges = count.to_u64
           count.times do |index|
-            child = value_cost(type.child_at(index), value.element_at(index), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs)
+            child = value_cost(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
             nodes = checked_add(nodes, child[:nodes])
             edges = checked_add(edges, child[:edges])
             wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -268,7 +306,7 @@ module CrystalClick
         edges = flat_count.to_u64
         flat_count.times do |index|
           child_type = type.child_at(index.even? ? 0 : 1)
-          child = value_cost(child_type, value.element_at(index), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs)
+          child = value_cost(child_type, value.element_at(index), child_path(path, ".elements.field.", index.even? ? 0 : 1, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -278,12 +316,12 @@ module CrystalClick
         edges = 1_u64
         child_type = type.child_at(0)
         if value.is_null?
-          default = BinaryBulkDefaultValue.measure_excluding_low_cardinality(child_type, profile, default_costs)
+          default = BinaryBulkDefaultValue.measure_excluding_low_cardinality(child_type, profile, default_costs, dynamic_plan)
           nodes = checked_add(nodes, default.nodes)
           edges = checked_add(edges, default.edges)
           wire_bytes = checked_add(wire_bytes, default.wire_bytes)
         else
-          child = value_cost(child_type, value.child_at(0), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs)
+          child = value_cost(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -309,6 +347,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       lanes : Hash(String, Array(UInt8)),
       profile : BinaryBulkProfile,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -343,10 +382,38 @@ module CrystalClick
         if index
           child_type = type.child_at(index.to_i)
           child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
-          child_path = "#{path}.arm.#{index}"
+          selected_path = child_path(path, ".arm.", index.to_i, budget, dynamic_plan)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, child_value, child_path, depth + 1, traversal, budget, lanes, profile)
+          write_value(child_type, child_value, selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan)
+        end
+      when BinaryDataType::TAG_DYNAMIC
+        plan = dynamic_plan || raise UnsupportedFormatError.new("Dynamic bulk value has no structure plan")
+        if value.is_null?
+          write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)
+        else
+          child_value = value.child_at(0)
+          selection = plan.select_arm(path, child_value.type)
+          write_byte(lanes, "#{path}.discriminators", selection.index, budget)
+          arm_path = child_path(path, ".arm.", selection.index.to_i, budget, dynamic_plan)
+          if selection.shared
+            traversal.preflight_children(2_u64)
+            reserved_framing = profile.with_size_stream? ? 8_u64 : 1_u64
+            envelope = BinaryValueCodec.encode_dynamic_bulk_child(child_value, budget, depth + 1, reserved_framing)
+            framing_bytes = profile.with_size_stream? ? 8_u64 : var_uint_size(envelope.size.to_u64)
+            budget.ensure_wire_bytes(checked_add(framing_bytes, envelope.size.to_u64))
+            if profile.with_size_stream?
+              write_u64(lanes, "#{arm_path}.string_sizes", envelope.size.to_u64, budget)
+            else
+              write_var_uint(lanes, "#{arm_path}.data", envelope.size.to_u64, budget)
+            end
+            envelope.each { |byte| write_byte(lanes, "#{arm_path}.data", byte, budget) }
+          else
+            child_type = plan.arm_type(path, selection.index)
+            traversal.preflight_children(1_u64)
+            traversal.ensure_depth(depth + 1)
+            write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan)
+          end
         end
       when BinaryDataType::TAG_ARRAY
         count = value.element_count
@@ -354,7 +421,7 @@ module CrystalClick
         traversal.ensure_depth(depth + 1) unless count == 0
         write_u64(lanes, "#{path}.sizes", count.to_u64, budget)
         count.times do |index|
-          write_value(type.child_at(0), value.element_at(index), "#{path}.elements", depth + 1, traversal, budget, lanes, profile)
+          write_value(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = value.element_count
@@ -369,7 +436,7 @@ module CrystalClick
           traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           count.times do |index|
-            write_value(type.child_at(index), value.element_at(index), "#{path}.field.#{index}", depth + 1, traversal, budget, lanes, profile)
+            write_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
           end
         end
       when BinaryDataType::TAG_MAP
@@ -388,8 +455,8 @@ module CrystalClick
         write_u64(lanes, "#{path}.sizes", pairs.to_u64, budget)
         flat_count.times do |index|
           child_index = index.even? ? 0 : 1
-          child_path = "#{path}.elements.field.#{child_index}"
-          write_value(type.child_at(child_index), value.element_at(index), child_path, depth + 1, traversal, budget, lanes, profile)
+          selected_path = child_path(path, ".elements.field.", child_index, budget, dynamic_plan)
+          write_value(type.child_at(child_index), value.element_at(index), selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan)
         end
       when BinaryDataType::TAG_NULLABLE
         child_type = type.child_at(0)
@@ -397,12 +464,12 @@ module CrystalClick
           write_byte(lanes, "#{path}.nulls", 1_u8, budget)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_default_value(child_type, "#{path}.nested", depth + 1, traversal, budget, lanes, profile)
+          write_default_value(child_type, child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
         else
           write_byte(lanes, "#{path}.nulls", 0_u8, budget)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, value.child_at(0), "#{path}.nested", depth + 1, traversal, budget, lanes, profile)
+          write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
         end
       else
         width = type.fixed_width || raise UnsupportedFormatError.new("unsupported binary bulk leaf")
@@ -424,6 +491,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       lanes : Hash(String, Array(UInt8)),
       profile : BinaryBulkProfile,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
         traversal.ensure_depth(depth)
@@ -443,6 +511,8 @@ module CrystalClick
         write_byte(lanes, "#{path}.data", 0x30_u8, budget)
       when BinaryDataType::TAG_VARIANT
         write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)
+      when BinaryDataType::TAG_DYNAMIC
+        write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
         write_u64(lanes, "#{path}.sizes", 0_u64, budget)
       when BinaryDataType::TAG_NULLABLE
@@ -450,7 +520,7 @@ module CrystalClick
         child_type = type.child_at(0)
         preflight_child_type(traversal, child_type, 1_u64)
         traversal.ensure_depth(depth + 1)
-        write_default_value(child_type, "#{path}.nested", depth + 1, traversal, budget, lanes, profile)
+        write_default_value(child_type, child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           write_byte(lanes, "#{path}.data", 0x30_u8, budget)
@@ -463,7 +533,7 @@ module CrystalClick
           traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           type.child_count.times do |index|
-            write_default_value(type.child_at(index), "#{path}.field.#{index}", depth + 1, traversal, budget, lanes, profile)
+            write_default_value(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
           end
         end
       else
@@ -471,6 +541,51 @@ module CrystalClick
         width.times { write_byte(lanes, "#{path}.data", 0_u8, budget) }
       end
       nil
+    end
+
+    private def self.child_path(
+      path : String,
+      suffix : String,
+      index : Int32?,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+    ) : String
+      unless dynamic_plan
+        return index ? "#{path}#{suffix}#{index}" : "#{path}#{suffix}"
+      end
+
+      size = path.bytesize.to_u64
+      suffix_size = suffix.bytesize.to_u64
+      if suffix_size > UInt64::MAX - size
+        raise UnsupportedFormatError.new("binary Dynamic value path size overflows UInt64")
+      end
+      size += suffix_size
+      if value = index
+        if value < 0
+          raise UnsupportedFormatError.new("binary Dynamic value path index is negative")
+        end
+        digits = 1_u64
+        remaining = value
+        while remaining >= 10
+          remaining //= 10
+          digits += 1_u64
+        end
+        if digits > UInt64::MAX - size
+          raise UnsupportedFormatError.new("binary Dynamic value path size overflows UInt64")
+        end
+        size += digits
+      end
+      if size > UInt64::MAX // 2_u64
+        raise UnsupportedFormatError.new("binary Dynamic value path work size overflows UInt64")
+      end
+      work = size * 2_u64
+      budget.ensure_wire_bytes(work)
+      value = String.build do |builder|
+        builder << path << suffix
+        builder << index.to_s if index
+      end
+      budget.charge_wire_bytes(work)
+      value
     end
 
     private def self.preflight_child_type(

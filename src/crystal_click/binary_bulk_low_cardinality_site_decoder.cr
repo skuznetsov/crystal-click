@@ -12,6 +12,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       first_mark : Int32,
       mark_count : Int32,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : Hash(String, Array(Array(BinaryValue)))
       decoded = Hash(String, Array(Array(BinaryValue))).new
       return decoded if sites.empty?
@@ -22,7 +23,8 @@ module CrystalClick
         schedule_grid_count,
         streams,
         rows_per_mark,
-        budget
+        budget,
+        dynamic_plan
       )
 
       sites.each do |site|

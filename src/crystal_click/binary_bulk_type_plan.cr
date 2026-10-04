@@ -6,6 +6,7 @@ module CrystalClick
   class BinaryBulkTypePlan
     getter type : BinaryDataType
     getter profile : BinaryBulkProfile
+    @dynamic_plan : BinaryDynamicBulkPlan?
 
     struct LowCardinalitySite
       getter type : BinaryDataType
@@ -23,13 +24,22 @@ module CrystalClick
       end
     end
 
-    def initialize(@type : BinaryDataType, @profile : BinaryBulkProfile)
-      if @type.contains_dynamic?
+    def initialize(
+      @type : BinaryDataType,
+      @profile : BinaryBulkProfile,
+      @dynamic_plan : BinaryDynamicBulkPlan? = nil,
+    )
+      if dynamic_plan = @dynamic_plan
+        unless dynamic_plan.type == @type && dynamic_plan.profile == @profile
+          raise ArgumentError.new("binary Dynamic bulk type plan does not match its descriptor profile")
+        end
+      elsif @type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted bulk storage profile")
       end
     end
 
     def roles : Array(String)
+      return @dynamic_plan.not_nil!.data_roles if @dynamic_plan
       collected = [] of String
       append_roles(@type, "root", collected)
       collected.sort!
@@ -39,38 +49,45 @@ module CrystalClick
     # Count the exact role roster without allocating path Strings or a role
     # Array. Codecs use this for aggregate metadata preflight before `roles`.
     def role_count : UInt64
+      return @dynamic_plan.not_nil!.role_count if @dynamic_plan
       count_roles(@type)
     end
 
     # Roles traversed by the ordinary bulk visitor. LowCardinality roles and
     # its complete value subtree are owned by BinaryLowCardinalityStorageCodec.
     def ordinary_role_count : UInt64
+      return @dynamic_plan.not_nil!.ordinary_role_count if @dynamic_plan
       count_ordinary_roles(@type)
     end
 
     def low_cardinality_site_count : UInt64
+      return @dynamic_plan.not_nil!.low_cardinality_site_count if @dynamic_plan
       count_sites(@type)
     end
 
     # Array/Map size roles needed to census flattened LC occurrences. Nullable
     # flags do not affect physical child counts and are deliberately excluded.
     def ancestor_size_role_count : UInt64
+      return @dynamic_plan.not_nil!.ancestor_size_role_count if @dynamic_plan
       count_ancestor_size_roles(@type)[:count]
     end
 
     def ordinary_roles : Array(String)
+      return @dynamic_plan.not_nil!.ordinary_roles if @dynamic_plan
       collected = [] of String
       append_ordinary_roles(@type, "root", collected)
       collected.sort!
     end
 
     def low_cardinality_sites : Array(LowCardinalitySite)
+      return @dynamic_plan.not_nil!.low_cardinality_sites if @dynamic_plan
       collected = [] of LowCardinalitySite
       append_sites(@type, "root", collected)
       collected.sort_by!(&.path)
     end
 
     def ancestor_size_roles : Array(String)
+      return @dynamic_plan.not_nil!.ancestor_size_roles if @dynamic_plan
       collected = [] of String
       append_ancestor_size_roles(@type, "root", collected)
       collected.sort!
@@ -82,6 +99,7 @@ module CrystalClick
     # from the generated schedule-grid count below: a Variant has one shape
     # lane but one count grid for every LC-bearing arm.
     def low_cardinality_shape_roles : Array(String)
+      return @dynamic_plan.not_nil!.low_cardinality_shape_roles if @dynamic_plan
       collected = [] of String
       append_low_cardinality_shape_roles(@type, "root", collected)
       collected.sort!
@@ -91,6 +109,7 @@ module CrystalClick
     # census. Array/Map each generate one child-count grid; Variant generates
     # one histogram grid for each immediate arm whose subtree contains LC.
     def low_cardinality_schedule_grid_count : UInt64
+      return @dynamic_plan.not_nil!.low_cardinality_schedule_grid_count if @dynamic_plan
       low_cardinality_schedule_metrics(@type)[:grids]
     end
 

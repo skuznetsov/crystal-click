@@ -7,6 +7,7 @@ module CrystalClick
       sites : Array(BinaryBulkTypePlan::LowCardinalitySite),
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : Hash(String, BinaryBulkStream)
       encoded = Hash(String, BinaryBulkStream).new
       return encoded if sites.empty?
@@ -36,7 +37,7 @@ module CrystalClick
       has_default = Hash(String, Bool).new
       granules.each_with_index do |rows, mark|
         rows.each do |value|
-          count_value(type, value, "root", mark, counts, has_default)
+          count_value(type, value, "root", mark, counts, has_default, budget, dynamic_plan)
         end
       end
 
@@ -81,11 +82,11 @@ module CrystalClick
 
       default_values = Hash(String, BinaryValue).new
       nested_sites.each do |site|
-        default_values[site.path] = BinaryBulkDefaultValue.build(site.type) if has_default[site.path]?
+        default_values[site.path] = BinaryBulkDefaultValue.build(site.type, dynamic_plan) if has_default[site.path]?
       end
       granules.each_with_index do |rows, mark|
         rows.each do |value|
-          append_value(type, value, "root", mark, buckets, default_values)
+          append_value(type, value, "root", mark, buckets, default_values, budget, dynamic_plan)
         end
       end
 
@@ -104,6 +105,8 @@ module CrystalClick
       mark : Int32,
       counts : Hash(String, Array(UInt64)),
       has_default : Hash(String, Bool),
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -115,25 +118,25 @@ module CrystalClick
         if index = value.variant_index?
           child_type = type.child_at(index.to_i)
           child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
-          count_value(child_type, child_value, "#{path}.arm.#{index}", mark, counts, has_default)
+          count_value(child_type, child_value, child_path(path, ".arm.", index, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_ARRAY
         child_type = type.child_at(0)
         value.element_count.times do |index|
-          count_value(child_type, value.element_at(index), "#{path}.elements", mark, counts, has_default)
+          count_value(child_type, value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_NULLABLE
         if value.is_null?
-          count_default(type.child_at(0), "#{path}.nested", mark, counts, has_default)
+          count_default(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
         else
-          count_value(type.child_at(0), value.child_at(0), "#{path}.nested", mark, counts, has_default)
+          count_value(type.child_at(0), value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         unless value.element_count == type.child_count
           raise UnsupportedFormatError.new("Tuple bulk value does not match its descriptor")
         end
         type.child_count.times do |index|
-          count_value(type.child_at(index), value.element_at(index), "#{path}.field.#{index}", mark, counts, has_default)
+          count_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_MAP
         flat_count = value.element_count
@@ -142,8 +145,19 @@ module CrystalClick
         end
         flat_count.times do |index|
           child_index = index.even? ? 0 : 1
-          child_path = "#{path}.elements.field.#{child_index}"
-          count_value(type.child_at(child_index), value.element_at(index), child_path, mark, counts, has_default)
+          field_path = child_path(path, ".elements.field.", child_index, budget, dynamic_plan)
+          count_value(type.child_at(child_index), value.element_at(index), field_path, mark, counts, has_default, budget, dynamic_plan)
+        end
+      when BinaryDataType::TAG_DYNAMIC
+        unless value.is_null?
+          plan = dynamic_plan || raise(UnsupportedFormatError.new("Dynamic LowCardinality census has no structure plan"))
+          selected = value.child_at(0)
+          selection = plan.select_arm(path, selected.type)
+          unless selection.shared
+            child_type = plan.arm_type(path, selection.index)
+            child_path_value = child_path(path, ".arm.", selection.index.to_i, budget, dynamic_plan)
+            count_value(child_type, selected, child_path_value, mark, counts, has_default, budget, dynamic_plan)
+          end
         end
       end
       nil
@@ -155,16 +169,18 @@ module CrystalClick
       mark : Int32,
       counts : Hash(String, Array(UInt64)),
       has_default : Hash(String, Bool),
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         increment_count(counts, path, mark)
         has_default[path] = true
       when BinaryDataType::TAG_NULLABLE
-        count_default(type.child_at(0), "#{path}.nested", mark, counts, has_default)
+        count_default(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
-          count_default(type.child_at(index), "#{path}.field.#{index}", mark, counts, has_default)
+          count_default(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
         end
       end
       nil
@@ -177,6 +193,8 @@ module CrystalClick
       mark : Int32,
       buckets : Hash(String, Array(Array(BinaryValue))),
       default_values : Hash(String, BinaryValue),
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
@@ -185,28 +203,39 @@ module CrystalClick
         if index = value.variant_index?
           child_type = type.child_at(index.to_i)
           child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
-          append_value(child_type, child_value, "#{path}.arm.#{index}", mark, buckets, default_values)
+          append_value(child_type, child_value, child_path(path, ".arm.", index, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_ARRAY
         child_type = type.child_at(0)
         value.element_count.times do |index|
-          append_value(child_type, value.element_at(index), "#{path}.elements", mark, buckets, default_values)
+          append_value(child_type, value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_NULLABLE
         if value.is_null?
-          append_default(type.child_at(0), "#{path}.nested", mark, buckets, default_values)
+          append_default(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
         else
-          append_value(type.child_at(0), value.child_at(0), "#{path}.nested", mark, buckets, default_values)
+          append_value(type.child_at(0), value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
-          append_value(type.child_at(index), value.element_at(index), "#{path}.field.#{index}", mark, buckets, default_values)
+          append_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
         end
       when BinaryDataType::TAG_MAP
         value.element_count.times do |index|
           child_index = index.even? ? 0 : 1
-          child_path = "#{path}.elements.field.#{child_index}"
-          append_value(type.child_at(child_index), value.element_at(index), child_path, mark, buckets, default_values)
+          field_path = child_path(path, ".elements.field.", child_index, budget, dynamic_plan)
+          append_value(type.child_at(child_index), value.element_at(index), field_path, mark, buckets, default_values, budget, dynamic_plan)
+        end
+      when BinaryDataType::TAG_DYNAMIC
+        unless value.is_null?
+          plan = dynamic_plan || raise(UnsupportedFormatError.new("Dynamic LowCardinality staging has no structure plan"))
+          selected = value.child_at(0)
+          selection = plan.select_arm(path, selected.type)
+          unless selection.shared
+            child_type = plan.arm_type(path, selection.index)
+            child_path_value = child_path(path, ".arm.", selection.index.to_i, budget, dynamic_plan)
+            append_value(child_type, selected, child_path_value, mark, buckets, default_values, budget, dynamic_plan)
+          end
         end
       end
       nil
@@ -218,18 +247,41 @@ module CrystalClick
       mark : Int32,
       buckets : Hash(String, Array(Array(BinaryValue))),
       default_values : Hash(String, BinaryValue),
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         buckets[path][mark] << default_values[path]
       when BinaryDataType::TAG_NULLABLE
-        append_default(type.child_at(0), "#{path}.nested", mark, buckets, default_values)
+        append_default(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
-          append_default(type.child_at(index), "#{path}.field.#{index}", mark, buckets, default_values)
+          append_default(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
         end
       end
       nil
+    end
+
+    private def self.child_path(
+      path : String,
+      suffix : String,
+      index : Int32?,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+    ) : String
+      if dynamic_plan
+        size = path.bytesize.to_u64 + suffix.bytesize.to_u64
+        size += index.to_s.bytesize.to_u64 if index
+        if size > UInt64::MAX // 2_u64
+          raise UnsupportedFormatError.new("binary bulk LowCardinality path work size overflows UInt64")
+        end
+        budget.charge_wire_bytes(size * 2_u64)
+      end
+      String.build do |builder|
+        builder << path << suffix
+        builder << index.to_s if index
+      end
     end
 
     private def self.increment_count(counts : Hash(String, Array(UInt64)), path : String, mark : Int32) : Nil

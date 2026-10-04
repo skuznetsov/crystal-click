@@ -62,6 +62,65 @@ module CrystalClick
       decode_in_context(context, allow_dynamic: false, allow_low_cardinality: false)
     end
 
+    # Internal Dynamic bulk envelope path. The enclosing lane owner charges
+    # these returned bytes when it appends them; this temporary context shares
+    # recursive visits with that owner without charging the same wire bytes a
+    # second time. `reserved_wire_bytes` keeps pending framing/lane bytes out
+    # of this envelope's output bound.
+    def self.encode_dynamic_bulk_child(
+      value : BinaryValue,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+      reserved_wire_bytes : UInt64 = 0_u64,
+    ) : Bytes
+      unless budget.writing?
+        raise ArgumentError.new("Dynamic bulk child encoder requires a write-direction budget")
+      end
+      budget.ensure_wire_bytes(reserved_wire_bytes)
+      context = BinaryCodecContext.new(
+        budget.limits,
+        nil,
+        true,
+        budget,
+        false,
+        false,
+        budget.remaining_wire_bytes - reserved_wire_bytes,
+      )
+      BinaryDataTypeCodec.write_to(value.type, context, depth)
+      if value.type.tag == BinaryDataType::TAG_NOTHING
+        unless value.is_null?
+          context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
+        end
+        context.visit_node(depth)
+      else
+        write_value(value, context, depth)
+      end
+      context.finish_bytes
+    end
+
+    # The physical lane owner has already charged the complete input lane to
+    # the shared read budget. Decode one exact descriptor/value envelope at
+    # its containing occurrence depth; a Nothing descriptor is the
+    # descriptor-only NULL sentinel and still consumes one scalar node visit.
+    def self.decode_dynamic_bulk_child(
+      bytes : Bytes,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+      charge_parent_value_edge : Bool = false,
+    ) : Tuple(BinaryDataType, BinaryValue?)
+      context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
+      type = BinaryDataTypeCodec.read_from(context, depth)
+      value : BinaryValue? = if type.tag == BinaryDataType::TAG_NOTHING
+        context.visit_node(depth)
+        nil
+      else
+        context.preflight_children(1_u64) if charge_parent_value_edge
+        read_value(type, context, depth)
+      end
+      context.ensure_consumed
+      {type, value}
+    end
+
     private def self.decode_in_context(
       context : BinaryCodecContext,
       allow_dynamic : Bool = true,

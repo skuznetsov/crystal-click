@@ -16,8 +16,9 @@ module CrystalClick
       type : BinaryDataType,
       profile : BinaryBulkProfile,
       cache : Hash(UInt64, Cost)? = nil,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : Cost
-      reject_dynamic_type!(type)
+      reject_dynamic_type!(type, dynamic_plan)
       costs = cache || Hash(UInt64, Cost).new
       key = type.object_id
       if existing = costs[key]?
@@ -31,10 +32,13 @@ module CrystalClick
                # The sparse-bulk default is Variant NULL: one discriminator,
                # with no selected arm value or arm edge.
                Cost.new(1_u64, 0_u64, 1_u64)
+             when BinaryDataType::TAG_DYNAMIC
+               # A hidden Dynamic default is NULL: discriminator only.
+               Cost.new(1_u64, 0_u64, 1_u64)
              when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
                Cost.new(1_u64, 0_u64, 8_u64)
              when BinaryDataType::TAG_NULLABLE
-               child = measure(type.child_at(0), profile, costs)
+               child = measure(type.child_at(0), profile, costs, dynamic_plan)
                Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), add(1_u64, child.wire_bytes))
              when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
                if type.child_count == 0
@@ -44,7 +48,7 @@ module CrystalClick
                  edges = type.child_count.to_u64
                  wire_bytes = 0_u64
                  type.child_count.times do |index|
-                   child = measure(type.child_at(index), profile, costs)
+                   child = measure(type.child_at(index), profile, costs, dynamic_plan)
                    nodes = add(nodes, child.nodes)
                    edges = add(edges, child.edges)
                    wire_bytes = add(wire_bytes, child.wire_bytes)
@@ -72,8 +76,9 @@ module CrystalClick
       type : BinaryDataType,
       profile : BinaryBulkProfile,
       cache : Hash(Tuple(UInt64, Bool), Cost)? = nil,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : Cost
-      reject_dynamic_type!(type)
+      reject_dynamic_type!(type, dynamic_plan)
       costs = cache || Hash(Tuple(UInt64, Bool), Cost).new
       key = {type.object_id, true}
       if existing = costs[key]?
@@ -88,10 +93,12 @@ module CrystalClick
              when BinaryDataType::TAG_VARIANT
                # Variant NULL has no ordinary child subtree to exclude.
                Cost.new(1_u64, 0_u64, 1_u64)
+             when BinaryDataType::TAG_DYNAMIC
+               Cost.new(1_u64, 0_u64, 1_u64)
              when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
                Cost.new(1_u64, 0_u64, 8_u64)
              when BinaryDataType::TAG_NULLABLE
-               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs)
+               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan)
                Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), add(1_u64, child.wire_bytes))
              when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
                if type.child_count == 0
@@ -101,7 +108,7 @@ module CrystalClick
                  edges = type.child_count.to_u64
                  wire_bytes = 0_u64
                  type.child_count.times do |index|
-                   child = measure_excluding_low_cardinality(type.child_at(index), profile, costs)
+                   child = measure_excluding_low_cardinality(type.child_at(index), profile, costs, dynamic_plan)
                    nodes = add(nodes, child.nodes)
                    edges = add(edges, child.edges)
                    wire_bytes = add(wire_bytes, child.wire_bytes)
@@ -121,8 +128,8 @@ module CrystalClick
       cost
     end
 
-    def self.build(type : BinaryDataType) : BinaryValue
-      reject_dynamic_type!(type)
+    def self.build(type : BinaryDataType, dynamic_plan : BinaryDynamicBulkPlan? = nil) : BinaryValue
+      reject_dynamic_type!(type, dynamic_plan)
       case type.tag
       when BinaryDataType::TAG_STRING
         BinaryValue.string("")
@@ -135,12 +142,14 @@ module CrystalClick
       when BinaryDataType::TAG_MAP
         BinaryValue.map(type, [] of BinaryValue)
       when BinaryDataType::TAG_LOW_CARDINALITY
-        BinaryValue.low_cardinality(type, build(type.child_at(0)))
+        BinaryValue.low_cardinality(type, build(type.child_at(0), dynamic_plan))
       when BinaryDataType::TAG_VARIANT
         BinaryValue.variant_null(type)
+      when BinaryDataType::TAG_DYNAMIC
+        BinaryValue.dynamic(type)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         fields = Array(BinaryValue).new(type.child_count) do |index|
-          build(type.child_at(index))
+          build(type.child_at(index), dynamic_plan)
         end
         BinaryValue.tuple(type, fields)
       else
@@ -152,8 +161,8 @@ module CrystalClick
       end
     end
 
-    private def self.reject_dynamic_type!(type : BinaryDataType) : Nil
-      if type.contains_dynamic?
+    private def self.reject_dynamic_type!(type : BinaryDataType, dynamic_plan : BinaryDynamicBulkPlan?) : Nil
+      if type.contains_dynamic? && dynamic_plan.nil?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted bulk default-value profile")
       end
     end

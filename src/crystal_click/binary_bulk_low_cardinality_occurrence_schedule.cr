@@ -10,6 +10,7 @@ module CrystalClick
       streams : BinaryBulkStreams,
       rows_per_mark : Array(UInt64),
       budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : Hash(String, Array(UInt64))
       unless rows_per_mark.size == streams.mark_count
         corrupt!("binary bulk occurrence schedule does not match its mark domain")
@@ -19,7 +20,8 @@ module CrystalClick
       # profile. Recompute it rather than trusting the direct caller: an
       # understated grid count or missing shape role must fail before census
       # allocation or any budget charge, not only at the post-census check.
-      plan = BinaryBulkTypePlan.new(type, BinaryBulkProfile.single_stream)
+      schedule_profile = dynamic_plan.try(&.profile) || BinaryBulkProfile.single_stream
+      plan = BinaryBulkTypePlan.new(type, schedule_profile, dynamic_plan)
       unless schedule_grid_count == plan.low_cardinality_schedule_grid_count &&
              shape_roles.sort == plan.low_cardinality_shape_roles
         corrupt!("binary bulk occurrence metadata differs from its descriptor plan")
@@ -38,7 +40,8 @@ module CrystalClick
 
       occurrences = Hash(String, Array(UInt64)).new
       used_shape_roles = [] of String
-      created_grids = census_type(type, "root", rows_per_mark, streams, budget, occurrences, used_shape_roles, 0_u64)
+      traversal = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
+      created_grids = census_type(type, "root", rows_per_mark, streams, budget, occurrences, used_shape_roles, 0_u64, traversal, dynamic_plan)
 
       unless created_grids == schedule_grid_count
         corrupt!("binary bulk occurrence census did not create its planned schedule grids")
@@ -109,48 +112,110 @@ module CrystalClick
       occurrences : Hash(String, Array(UInt64)),
       used_shape_roles : Array(String),
       created_grids : UInt64,
+      traversal : BinaryCodecContext,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : UInt64
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         occurrences[path] = counts
         created_grids
+      when BinaryDataType::TAG_DYNAMIC
+        plan = dynamic_plan || corrupt!("binary Dynamic occurrence census has no structure plan")
+        arm_count = plan.arm_count(path)
+        if arm_count > 0
+          traversal.preflight_metadata(checked_multiply(arm_count.to_u64, 2_u64), maximum_count: Int32::MAX.to_u64, label: "Dynamic occurrence arm metadata")
+        end
+        arm_counts = Array(Array(UInt64)?).new(arm_count, nil)
+        arm_paths = Array(String?).new(arm_count, nil)
+        current = created_grids
+        arm_count.times do |index|
+          arm_type = plan.arm_type(path, index)
+          arm_path = child_path(traversal, path, ".arm.", index, dynamic_plan != nil)
+          arm_paths[index] = arm_path
+          if plan.contains_low_cardinality?(arm_type, arm_path, traversal)
+            arm_counts[index] = Array(UInt64).new(counts.size, 0_u64)
+            current = checked_add(current, 1_u64)
+          end
+        end
+        unless current == created_grids
+          role = lane_role(traversal, path, ".discriminators", dynamic_plan != nil)
+          used_shape_roles << role
+          lane = streams.stream(role)
+          counts.each_with_index do |parent_count, mark|
+            if parent_count > Int32::MAX.to_u64
+              corrupt!("binary bulk Dynamic row count exceeds its supported domain")
+            end
+            context = lane_context(lane, mark, budget)
+            context.ensure_remaining_input_bytes(parent_count)
+            parent_count.times do
+              discriminator = context.read_byte
+              next if discriminator == 0xff_u8
+              arm_index = discriminator.to_i
+              if arm_index >= arm_count
+                corrupt!("Dynamic bulk discriminator is outside its actual arm roster")
+              end
+              if selected_counts = arm_counts[arm_index]
+                count = selected_counts[mark]
+                if count == UInt64::MAX
+                  corrupt!("binary bulk Dynamic occurrence count overflows UInt64")
+                end
+                selected_counts[mark] = count + 1_u64
+              end
+            end
+            context.ensure_consumed
+          end
+        end
+        arm_count.times do |index|
+          next unless selected_counts = arm_counts[index]
+          arm_type = plan.arm_type(path, index)
+          arm_path = arm_paths[index] || corrupt!("binary bulk Dynamic arm path is missing")
+          current = census_type(arm_type, arm_path, selected_counts, streams, budget, occurrences, used_shape_roles, current, traversal, dynamic_plan)
+        end
+        current
       when BinaryDataType::TAG_ARRAY
         child_type = type.child_at(0)
-        return created_grids unless child_type.contains_low_cardinality?
-        role = "#{path}.sizes"
+        child_path_value = child_path(traversal, path, ".elements", nil, dynamic_plan != nil)
+        return created_grids unless contains_low_cardinality?(child_type, child_path_value, dynamic_plan, traversal)
+        role = lane_role(traversal, path, ".sizes", dynamic_plan != nil)
         used_shape_roles << role
         child_counts = array_child_counts(role, counts, streams, budget)
-        census_type(child_type, "#{path}.elements", child_counts, streams, budget, occurrences, used_shape_roles, checked_add(created_grids, 1_u64))
+        census_type(child_type, child_path_value, child_counts, streams, budget, occurrences, used_shape_roles, checked_add(created_grids, 1_u64), traversal, dynamic_plan)
       when BinaryDataType::TAG_NULLABLE
         child_type = type.child_at(0)
-        return created_grids unless child_type.contains_low_cardinality?
-        census_type(child_type, "#{path}.nested", counts, streams, budget, occurrences, used_shape_roles, created_grids)
+        child_path_value = child_path(traversal, path, ".nested", nil, dynamic_plan != nil)
+        return created_grids unless contains_low_cardinality?(child_type, child_path_value, dynamic_plan, traversal)
+        census_type(child_type, child_path_value, counts, streams, budget, occurrences, used_shape_roles, created_grids, traversal, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         current = created_grids
         type.child_count.times do |index|
           child_type = type.child_at(index)
-          next unless child_type.contains_low_cardinality?
-          current = census_type(child_type, "#{path}.field.#{index}", counts, streams, budget, occurrences, used_shape_roles, current)
+          child_path_value = child_path(traversal, path, ".field.", index, dynamic_plan != nil)
+          next unless contains_low_cardinality?(child_type, child_path_value, dynamic_plan, traversal)
+          current = census_type(child_type, child_path_value, counts, streams, budget, occurrences, used_shape_roles, current, traversal, dynamic_plan)
         end
         current
       when BinaryDataType::TAG_MAP
         key_type = type.child_at(0)
         value_type = type.child_at(1)
-        contains = key_type.contains_low_cardinality? || value_type.contains_low_cardinality?
+        key_path = child_path(traversal, path, ".elements.field.0", nil, dynamic_plan != nil)
+        value_path = child_path(traversal, path, ".elements.field.1", nil, dynamic_plan != nil)
+        key_contains = contains_low_cardinality?(key_type, key_path, dynamic_plan, traversal)
+        value_contains = contains_low_cardinality?(value_type, value_path, dynamic_plan, traversal)
+        contains = key_contains || value_contains
         return created_grids unless contains
-        role = "#{path}.sizes"
+        role = lane_role(traversal, path, ".sizes", dynamic_plan != nil)
         used_shape_roles << role
         child_counts = map_child_counts(role, counts, streams, budget)
         current = checked_add(created_grids, 1_u64)
-        if key_type.contains_low_cardinality?
-          current = census_type(key_type, "#{path}.elements.field.0", child_counts, streams, budget, occurrences, used_shape_roles, current)
+        if key_contains
+          current = census_type(key_type, key_path, child_counts, streams, budget, occurrences, used_shape_roles, current, traversal, dynamic_plan)
         end
-        if value_type.contains_low_cardinality?
-          current = census_type(value_type, "#{path}.elements.field.1", child_counts, streams, budget, occurrences, used_shape_roles, current)
+        if value_contains
+          current = census_type(value_type, value_path, child_counts, streams, budget, occurrences, used_shape_roles, current, traversal, dynamic_plan)
         end
         current
       when BinaryDataType::TAG_VARIANT
-        census_variant(type, path, counts, streams, budget, occurrences, used_shape_roles, created_grids)
+        census_variant(type, path, counts, streams, budget, occurrences, used_shape_roles, created_grids, traversal, dynamic_plan)
       else
         created_grids
       end
@@ -165,17 +230,20 @@ module CrystalClick
       occurrences : Hash(String, Array(UInt64)),
       used_shape_roles : Array(String),
       created_grids : UInt64,
+      traversal : BinaryCodecContext,
+      dynamic_plan : BinaryDynamicBulkPlan?,
     ) : UInt64
-      unless type.contains_low_cardinality?
+      unless contains_low_cardinality?(type, path, dynamic_plan, traversal)
         return created_grids
       end
 
-      role = "#{path}.discriminators"
+      role = lane_role(traversal, path, ".discriminators", dynamic_plan != nil)
       used_shape_roles << role
       arm_counts = Array(Array(UInt64)?).new(type.child_count, nil)
       current = created_grids
       type.child_count.times do |index|
-        next unless type.child_at(index).contains_low_cardinality?
+        child_path_value = child_path(traversal, path, ".arm.", index, dynamic_plan != nil)
+        next unless contains_low_cardinality?(type.child_at(index), child_path_value, dynamic_plan, traversal)
         arm_counts[index] = Array(UInt64).new(parent_counts.size, 0_u64)
         current = checked_add(current, 1_u64)
       end
@@ -207,9 +275,9 @@ module CrystalClick
 
       type.child_count.times do |index|
         child_type = type.child_at(index)
-        next unless child_type.contains_low_cardinality?
-        counts = arm_counts[index] || corrupt!("binary bulk Variant occurrence grid is missing")
-        current = census_type(child_type, "#{path}.arm.#{index}", counts, streams, budget, occurrences, used_shape_roles, current)
+        next unless counts_for_arm = arm_counts[index]
+        child_path_value = child_path(traversal, path, ".arm.", index, dynamic_plan != nil)
+        current = census_type(child_type, child_path_value, counts_for_arm, streams, budget, occurrences, used_shape_roles, current, traversal, dynamic_plan)
       end
       current
     end
@@ -302,6 +370,37 @@ module CrystalClick
         corrupt!("binary bulk occurrence census overflows UInt64")
       end
       left * right
+    end
+
+    private def self.contains_low_cardinality?(type : BinaryDataType, path : String, dynamic_plan : BinaryDynamicBulkPlan?, traversal : BinaryCodecContext) : Bool
+      if plan = dynamic_plan
+        plan.contains_low_cardinality?(type, path, traversal)
+      else
+        type.contains_low_cardinality?
+      end
+    end
+
+    private def self.child_path(context : BinaryCodecContext, path : String, suffix : String, index : Int32? = nil, charge_work : Bool = false) : String
+      generated_name(context, path, suffix, index, charge_work)
+    end
+
+    private def self.lane_role(context : BinaryCodecContext, path : String, suffix : String, charge_work : Bool = false) : String
+      generated_name(context, path, suffix, nil, charge_work)
+    end
+
+    private def self.generated_name(context : BinaryCodecContext, path : String, suffix : String, index : Int32? = nil, charge_work : Bool = false) : String
+      size = path.bytesize.to_u64 + suffix.bytesize.to_u64
+      size += index.to_s.bytesize.to_u64 if index
+      if charge_work
+        if size > UInt64::MAX // 2_u64
+          context.unsupported!("binary bulk occurrence path work size overflows UInt64")
+        end
+        context.budget.charge_wire_bytes(size * 2_u64)
+      end
+      String.build do |builder|
+        builder << path << suffix
+        builder << index.to_s if index
+      end
     end
 
     private def self.corrupt!(message : String) : NoReturn
