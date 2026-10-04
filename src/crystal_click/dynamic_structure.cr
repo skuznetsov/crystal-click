@@ -22,14 +22,17 @@ module CrystalClick
       seen = Set(String).new
       seen.add(names[0])
       @types.each do |type|
-        if type.contains_dynamic?
+        if type.tag == BinaryDataType::TAG_DYNAMIC
           raise ArgumentError.new("Dynamic alternatives are not admitted in Dynamic V3")
         end
-        if type.contains_variant?
+        if type.tag == BinaryDataType::TAG_VARIANT
           raise ArgumentError.new("Variant-containing alternatives are not admitted in Dynamic V3")
         end
         if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE
           raise ArgumentError.new("top-level Nothing and Nullable are not admitted in Dynamic V3")
+        end
+        if type.tag == BinaryDataType::TAG_LOW_CARDINALITY && type.child_at(0).tag == BinaryDataType::TAG_NULLABLE
+          raise ArgumentError.new("LowCardinality(Nullable) alternatives are not admitted in Dynamic V3")
         end
         name = String.new(type.name.to_slice)
         if seen.includes?(name)
@@ -67,6 +70,13 @@ module CrystalClick
 
     def canonical_variant_count : Int32
       @canonical_variant_names.size
+    end
+
+    # Canonical arm index for one ordinary descriptor. SharedVariant has no
+    # ordinary descriptor and is addressed by #shared_index instead.
+    def canonical_index_for(type : BinaryDataType) : Int32
+      name = type.name
+      @canonical_variant_names.index(name) || raise ArgumentError.new("Dynamic type is absent from its canonical roster")
     end
 
     def shared_index : Int32

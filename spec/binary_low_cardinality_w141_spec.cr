@@ -537,17 +537,22 @@ describe "W141 nominal LowCardinality binary value prerequisite" do
     decoded[0][0].child_at(0).as_string.should eq("x")
   end
 
-  it "refuses Dynamic physical LowCardinality during descriptor preflight, including nested and long nullable forms" do
+  it "separates LC Nullable metadata refusal from the unchanged Dynamic physical LowCardinality fence" do
     string_type = CrystalClick::BinaryDataType.primitive("String")
     low_cardinality_string = CrystalClick::BinaryDataType.low_cardinality(string_type)
     long_zone = "America/Argentina/Buenos_Aires"
     low_cardinality_nullable_datetime = CrystalClick::BinaryDataType.low_cardinality(
       CrystalClick::BinaryDataType.nullable(CrystalClick::BinaryDataType.datetime(long_zone))
     )
+    metadata_error = expect_raises(ArgumentError) do
+      CrystalClick::DynamicStructure.new([low_cardinality_nullable_datetime] of CrystalClick::BinaryDataType)
+    end
+    metadata_error.message.should eq("LowCardinality(Nullable) alternatives are not admitted in Dynamic V3")
+
     candidates = [
       low_cardinality_string,
       CrystalClick::BinaryDataType.array(low_cardinality_string),
-      low_cardinality_nullable_datetime,
+      CrystalClick::BinaryDataType.array(low_cardinality_nullable_datetime),
     ] of CrystalClick::BinaryDataType
 
     candidates.each do |type|

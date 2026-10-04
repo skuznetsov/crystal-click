@@ -13,6 +13,13 @@ W153 supersedes only this checkpoint's generic logical-value rejection; see
 descriptor identity and retained stored/bulk/physical/Object guards remain the
 boundary. Historical W152 execution results below are not rerun claims.
 
+W154 separately admits recursive Dynamic/Variant-containing ordinary roster
+metadata and occurrence-specific structure planning; see
+[DYNAMIC_BULK_STRUCTURE_FRONTIER.md](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
+It supersedes the historical blanket metadata refusal below, not the legacy
+value, bulk, physical or declared-Object fences. Direct Dynamic/Variant,
+Nothing, Nullable and LC(Nullable) ordinary arms remain refused.
+
 ## Admitted transition
 
 Represent `Dynamic(max_types=N)` as an immutable nominal BinaryDataType leaf,

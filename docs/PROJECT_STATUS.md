@@ -1,6 +1,32 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W153 adds paired generic Dynamic
+Current capability checkpoint (2026-10-04): W154 adds paired occurrence-specific
+Dynamic V3 structure streams and actual-roster/site planning. Equal nominal
+Dynamic descriptors can retain different site rosters; empty children and
+unused arms retain their own structure prefixes. Ordinary String and implicit
+SharedVariant have distinct canonical roles. Root passes 140 focused DEBUG
+examples (19 unique files, two serial disjoint groups) and 558 affected RELEASE
+examples (79 unique files, eight serial disjoint groups), and 2,539 complete-
+inventory examples (398 unique files, 40 serial disjoint non-release groups
+with `--no-debug`), all with zero failures/errors/pending. Root independently
+reconciles the current inventory paths, source/spec hashes, observed per-group
+results and guard exits. These are test gates, not performance measurements.
+Seven stock-produced structure streams round-trip byte-exactly, including
+two zero-type nested sites. A stock-valid swapped Tuple-site control decodes
+but fails the independent literal site/roster check as a semantic mismatch.
+One 574-line plan and one 53-line detached-stream owner have separate files;
+the large reader/writer/table facades are unchanged. Recursive Dynamic/Variant
+metadata no longer suffers blanket refusal, but legacy value/physical/Object
+consumers remain closed for it, including empty/zero-window operations.
+This is not generic Dynamic bulk values, physical binding, declared Object
+Dynamic, complete-part or performance qualification. The source snapshot
+and stock executable retain separate identities. Scoped hostile verdict:
+ROBUST for metadata/site planning and retained legacy consumer fences only.
+Exact boundary, observed
+gates and refresh conditions are in
+[DYNAMIC_BULK_STRUCTURE_FRONTIER.md](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W153 adds paired generic Dynamic
 logical values. Root passes 116 focused DEBUG, 542 affected RELEASE examples
 (76 unique files, eight serial disjoint groups), and 2,519 complete-inventory
 examples (394 unique files, 40 serial disjoint non-release groups with
@@ -300,6 +326,13 @@ source/runtime identities and executed evidence.
   borrowed persisted consumers and unqualified bulk/physical/Object lanes
   remain fenced. A logical envelope is not a ColumnDynamic slot/roster plan
   or a new complete-part writer.
+- `BinaryDynamicBulkPlan` pairs actual Dynamic rosters with immutable
+  occurrence paths, including declared containers, static Variant arms and
+  nested Dynamic inside actual arms. `BinaryDynamicStructureStreams` provides
+  detached complete structure blobs. Paired structure decode/encode and
+  logical role rosters are available under shared operation budgets, not
+  generic bulk values or physical part binding. See
+  [the W154 frontier](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
 - `BinaryDataType.variant`, `BinaryValue.variant` and `variant_null` provide
   the shared canonical logical Variant kernel. Paired descriptor/value codecs
   retain nominal arm identity, recursive values and explicit NULL. W148 adds
@@ -470,6 +503,10 @@ source/runtime identities and executed evidence.
    prefix streams and COMPACT Variant remain unqualified by that binder.
    W151 qualifies the separate declared-Object BASIC Variant profile, not
    every physical product admitted by its schema grammar.
+   W152/W153 qualify nominal Dynamic descriptors and generic logical values;
+   W154 adds actual per-occurrence structure/roster planning, not generic
+   Dynamic bulk values, complete mark grids or new physical binding. Equal
+   nominal Dynamic types do not imply equal per-part or per-site state.
    Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
@@ -550,10 +587,11 @@ source/runtime identities and executed evidence.
    qualifies declared Object Variant with independent complete parts and
    shared public consumers. Typed Dynamic remains the next distinct storage
    frontier. W152 preserves the nominal `Dynamic(max_types=N)` cap; W153 adds
-   the paired generic logical actual-type/value grammar. Physical planning
-   must still use the actual per-part roster/structure. The next transition
-   separately qualifies Dynamic structure/actual-roster bulk planning and
-   physical binding before declared Object Dynamic and complete-part tests.
+   the paired generic logical actual-type/value grammar. W154 adds paired
+   actual per-occurrence structure streams and normalized role/site planning.
+   The next transition is generic Dynamic bulk values and complete mark-grid
+   scheduling over that actual state, then separately qualified physical
+   binding before declared Object Dynamic and complete-part tests.
    Neither the cap nor Object's inferred-path policy substitutes for that roster.
    Broader layout/type products remain separate.
    Reuse existing leaf owners only

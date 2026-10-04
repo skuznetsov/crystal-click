@@ -231,7 +231,7 @@ describe "W149 generic Variant physical binding adversaries" do
     end
   end
 
-  it "admits canonical typed Object bindings but keeps Dynamic and unsupported Object declarations closed" do
+  it "admits recursive Dynamic metadata while preserving Dynamic value and Object physical fences" do
     variant = CrystalClick::BinaryDataType.variant([
       CrystalClick::BinaryDataType.primitive("String"),
       CrystalClick::BinaryDataType.primitive("UInt64"),
@@ -248,11 +248,21 @@ describe "W149 generic Variant physical binding adversaries" do
     )
     empty_streams = w149_adv_empty_object_streams
 
-    types.each do |type|
-      dynamic_error = expect_raises(ArgumentError) do
-        CrystalClick::DynamicStructure.new([type] of CrystalClick::BinaryDataType)
+    direct_dynamic_error = expect_raises(ArgumentError) do
+      CrystalClick::DynamicStructure.new([variant] of CrystalClick::BinaryDataType)
+    end
+    direct_dynamic_error.message.not_nil!.should contain("Variant")
+
+    # Recursive Variant descriptors are now legal Dynamic metadata. The value
+    # codec remains a separate, narrower consumer and must still reject them.
+    recursive_types = [types[1], types[2], types[3]] of CrystalClick::BinaryDataType
+    recursive_types.each do |type|
+      structure = CrystalClick::DynamicStructure.new([type] of CrystalClick::BinaryDataType)
+      structure.type_count.should eq(1)
+      value_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+        CrystalClick::DynamicValueCodec.encode(structure, [] of Array(CrystalClick::BinaryValue))
       end
-      dynamic_error.message.not_nil!.should contain("Variant")
+      value_error.message.not_nil!.should contain("Variant-containing alternatives")
     end
 
     direct_plan = CrystalClick::ObjectDocumentPlan.new(empty_structures, {"typed" => variant})

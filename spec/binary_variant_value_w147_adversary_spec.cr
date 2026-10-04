@@ -249,12 +249,32 @@ describe "W147 generic Variant adversarial boundaries" do
     tuple_variant = CrystalClick::BinaryDataType.tuple([variant] of CrystalClick::BinaryDataType)
     map_variant = CrystalClick::BinaryDataType.map(CrystalClick::BinaryDataType.primitive("UInt8"), variant)
 
-    [variant, array_variant, tuple_variant, map_variant].each do |type|
-      expect_raises(ArgumentError) do
-        CrystalClick::DynamicStructure.new([type] of CrystalClick::BinaryDataType)
-      end
+    expect_raises(ArgumentError) do
+      CrystalClick::DynamicStructure.new([variant] of CrystalClick::BinaryDataType)
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::DynamicStructureCodec.decode(w147_adv_dynamic_wire(CrystalClick::BinaryDataTypeCodec.encode(variant)))
+    end
+
+    # Recursive Variant descriptors are valid metadata arms, but remain
+    # outside DynamicValueCodec's ordinary value profile even with no rows.
+    [array_variant, tuple_variant, map_variant].each do |type|
+      structure = CrystalClick::DynamicStructure.new([type] of CrystalClick::BinaryDataType)
+      metadata_wire = w147_adv_dynamic_wire(CrystalClick::BinaryDataTypeCodec.encode(type))
+      CrystalClick::DynamicStructureCodec.decode(metadata_wire).should eq(structure)
+      CrystalClick::DynamicStructureCodec.encode(structure).should eq(metadata_wire)
+
       expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::DynamicStructureCodec.decode(w147_adv_dynamic_wire(CrystalClick::BinaryDataTypeCodec.encode(type)))
+        CrystalClick::DynamicValueCodec.encode(structure, [] of Array(CrystalClick::BinaryValue))
+      end
+
+      discriminator = CrystalClick::DynamicDiscriminatorCodec.encode(structure, [] of Array(UInt8))
+      no_arms = CrystalClick::DynamicValueStreams.new(
+        discriminator,
+        {} of String => CrystalClick::BinaryBulkStreams
+      )
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        CrystalClick::DynamicValueCodec.decode(structure, no_arms, first_mark: 0, mark_count: 0)
       end
     end
 

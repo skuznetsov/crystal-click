@@ -260,16 +260,15 @@ describe "W152 Dynamic descriptor consumer guards" do
     end
   end
 
-  it "keeps Dynamic out of stored rosters, Object schemas, and zero-row Object paths" do
+  it "admits recursive Dynamic metadata while keeping Object schema and data guards" do
     array_dynamic = w152_consumer_dynamic_types[0]
-    expect_raises(ArgumentError) do
-      CrystalClick::DynamicStructure.new([array_dynamic] of CrystalClick::BinaryDataType)
-    end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::DynamicStructureCodec.decode(
-        Bytes[4_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 1_u8, 0x1e_u8, 0x2b_u8, 0x20_u8, 0_u8]
-      )
-    end
+    dynamic_roster = CrystalClick::DynamicStructure.new([array_dynamic] of CrystalClick::BinaryDataType)
+    literal_dynamic_roster = Bytes[
+      4_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8,
+      1_u8, 0x1e_u8, 0x2b_u8, 0x20_u8, 0_u8,
+    ]
+    CrystalClick::DynamicStructureCodec.encode(dynamic_roster).should eq(literal_dynamic_roster)
+    CrystalClick::DynamicStructureCodec.decode(literal_dynamic_roster).should eq(dynamic_roster)
 
     dynamic_schema = {"typed" => array_dynamic}
     expect_raises(ArgumentError) do

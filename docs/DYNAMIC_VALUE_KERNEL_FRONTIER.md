@@ -5,6 +5,13 @@ Baseline: `f41eeb0`. Risk: CAUTION (recursive serialization and admission).
 Rollback: one atomic local feature commit; no push or history rewrite.
 This is the next prerequisite for typed Dynamic in Object, not full part support.
 
+W154 separately supersedes the blanket recursive-roster metadata rejection
+below with occurrence-specific structure planning; see
+[DYNAMIC_BULK_STRUCTURE_FRONTIER.md](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
+DynamicValueCodec still rejects recursive Dynamic/Variant ordinary values,
+including empty/zero-window calls. Generic bulk/physical and declared-Object
+Dynamic remain closed. Historical W153 execution results are not rerun claims.
+
 ## Boundary
 
 Admit paired `BinaryValueCodec.encode/decode` and known-type

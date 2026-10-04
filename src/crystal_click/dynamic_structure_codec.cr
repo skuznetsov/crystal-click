@@ -23,16 +23,26 @@ module CrystalClick
 
     # Internal shared-budget entry point. Descriptor trees begin at depth one;
     # this structure envelope does not add a recursive descriptor level.
-    def self.write_to(structure : DynamicStructure, context : BinaryCodecContext) : Nil
-      write_with_statistics_offset(structure, context)
+    def self.write_to(
+      structure : DynamicStructure,
+      context : BinaryCodecContext,
+      structure_depth : Int = 1,
+      type_depth : Int = 1,
+    ) : Nil
+      write_with_statistics_offset(structure, context, structure_depth, type_depth)
       nil
     end
 
     # Writes the complete metadata and returns the relative position before its
     # statistics flag without finishing or copying the encoded blob.
-    def self.write_with_statistics_offset(structure : DynamicStructure, context : BinaryCodecContext) : Int32
+    def self.write_with_statistics_offset(
+      structure : DynamicStructure,
+      context : BinaryCodecContext,
+      structure_depth : Int = 1,
+      type_depth : Int = 1,
+    ) : Int32
       parse_start = context.output_size
-      context.visit_node(1)
+      context.visit_node(structure_depth)
       write_u64_le(context, 4_u64)
 
       type_count = structure.type_count
@@ -43,7 +53,7 @@ module CrystalClick
       )
       context.write_var_uint(type_count.to_u64)
       type_count.times do |index|
-        BinaryDataTypeCodec.write_to(structure.type_at(index), context, 1)
+        BinaryDataTypeCodec.write_to(structure.type_at(index), context, type_depth)
       end
 
       statistics_offset = context.output_size - parse_start
@@ -57,15 +67,25 @@ module CrystalClick
     end
 
     # Internal shared-budget entry point for a paired structure operation.
-    def self.read_from(context : BinaryCodecContext) : DynamicStructure
-      read_with_statistics_offset(context)[0]
+    def self.read_from(
+      context : BinaryCodecContext,
+      structure_depth : Int = 1,
+      type_depth : Int = 1,
+      preflight_type_names : Bool = false,
+    ) : DynamicStructure
+      read_with_statistics_offset(context, structure_depth, type_depth, preflight_type_names)[0]
     end
 
     # Reads the complete metadata while exposing the relative start of the
     # statistics suffix flag for paired mark checks.
-    def self.read_with_statistics_offset(context : BinaryCodecContext) : Tuple(DynamicStructure, Int32)
+    def self.read_with_statistics_offset(
+      context : BinaryCodecContext,
+      structure_depth : Int = 1,
+      type_depth : Int = 1,
+      preflight_type_names : Bool = false,
+    ) : Tuple(DynamicStructure, Int32)
       parse_start = context.input_offset
-      context.visit_node(1)
+      context.visit_node(structure_depth)
       version = read_u64_le(context)
       case version
       when 4_u64
@@ -87,19 +107,46 @@ module CrystalClick
       )
       types = Array(BinaryDataType).new(type_count)
       type_count.times do
-        types << BinaryDataTypeCodec.read_from(context, 1)
+        types << BinaryDataTypeCodec.read_from(context, type_depth)
       end
 
       types.each do |type|
-        if type.contains_dynamic?
+        if type.tag == BinaryDataType::TAG_DYNAMIC
           context.unsupported!("Dynamic alternatives are not admitted in Dynamic V3")
         end
-        if type.contains_variant?
+        if type.tag == BinaryDataType::TAG_VARIANT
           context.unsupported!("Variant-containing alternatives are not admitted in Dynamic V3")
         end
         if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE
           context.unsupported!("top-level Nothing and Nullable are not admitted in Dynamic V3")
         end
+        if type.tag == BinaryDataType::TAG_LOW_CARDINALITY && type.child_at(0).tag == BinaryDataType::TAG_NULLABLE
+          context.unsupported!("LowCardinality(Nullable) alternatives are not admitted in Dynamic V3")
+        end
+      end
+
+      name_work_bytes = 0_u64
+      if preflight_type_names
+        # DynamicStructure canonicalizes names twice while checking the roster
+        # and retaining its statistics-bearing form. Measure both operations,
+        # including each detached retained-name copy, before either constructor
+        # materializes a recursive SQL display name.
+        2.times do
+          types.each do |type|
+            bounds = BinaryTypeNameBudget.measure(type, context.budget, type_depth)
+            work = bounds[1]
+            if bounds[0] > UInt64::MAX - work
+              context.corrupt!("Dynamic display-name work size overflows UInt64")
+            end
+            work += bounds[0]
+            if work > UInt64::MAX - name_work_bytes
+              context.corrupt!("Dynamic display-name work size overflows UInt64")
+            end
+            name_work_bytes += work
+          end
+        end
+        context.budget.ensure_wire_bytes(name_work_bytes)
+        context.budget.charge_wire_bytes(name_work_bytes)
       end
 
       profile = begin

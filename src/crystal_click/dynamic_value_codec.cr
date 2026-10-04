@@ -411,6 +411,9 @@ module CrystalClick
         if type.contains_dynamic?
           raise UnsupportedFormatError.new("recursive Dynamic alternatives are not admitted in Dynamic V3")
         end
+        if type.contains_variant?
+          raise UnsupportedFormatError.new("Variant-containing alternatives are not admitted in Dynamic V3")
+        end
         context.validate_type_tree(type)
         if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
           raise UnsupportedFormatError.new("Dynamic ordinary LowCardinality alternatives are not admitted")
@@ -428,6 +431,9 @@ module CrystalClick
         granule.each do |value|
           if value.type.contains_dynamic?
             raise UnsupportedFormatError.new("Dynamic values are outside the admitted Dynamic value profile")
+          end
+          if value.type.contains_variant?
+            raise UnsupportedFormatError.new("Variant-containing values are outside the admitted Dynamic value profile")
           end
           context.validate_type_tree(value.type)
         end
