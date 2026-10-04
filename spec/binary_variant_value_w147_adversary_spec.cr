@@ -242,7 +242,7 @@ describe "W147 generic Variant adversarial boundaries" do
     end
   end
 
-  it "does not widen Dynamic, borrowed, bulk or Object consumers" do
+  it "does not widen Dynamic, borrowed or Object consumers" do
     variant = w147_adv_type
     value = CrystalClick::BinaryValue.variant(variant, 0, CrystalClick::BinaryValue.string("x"))
     array_variant = CrystalClick::BinaryDataType.array(variant)
@@ -298,16 +298,6 @@ describe "W147 generic Variant adversarial boundaries" do
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::BinaryValueCodec.decode_borrowed(wire, CrystalClick::BinaryCodecBudget.new(w147_adv_limits))
       end
-    end
-
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkPhysicalPlan.new(variant, "v")
-    end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkPhysicalPlan.new(array_variant, "v")
-    end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkPhysicalPlan.new(map_variant, "v")
     end
 
     entry = CrystalClick::ObjectSharedMapEntry.new(path: Bytes[0x70_u8], value: value)

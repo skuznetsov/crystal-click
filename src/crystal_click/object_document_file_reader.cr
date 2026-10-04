@@ -416,6 +416,9 @@ module CrystalClick
         expanded_total = checked_add_u64(expanded_total, logical_size)
         ensure_name_size!(expanded_total, limits)
         context.validate_type_tree(type)
+        if type.contains_variant?
+          raise UnsupportedFormatError.new("Object typed Variant fields are not admitted")
+        end
       end
       copied = Hash(String, BinaryDataType).new(initial_capacity: schema.size)
       schema.each { |path, type| copied[String.new(path.to_slice)] = type }

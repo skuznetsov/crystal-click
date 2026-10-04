@@ -1,5 +1,19 @@
 # CrystalClick Modularization Frontier
 
+Current shared-planner checkpoint (2026-10-04): W149 introduces one cohesive
+`BinaryBulkVariantNamePlan` owner/file (214 lines) for bounded canonical arm
+spelling and Array-level-preserving role prefixes. The existing physical
+binder is 550 lines; Object physical plan/codec/file reader are 337/457/749
+lines and retain explicit persisted-profile refusal. Private stack metadata
+stays with its owner; no per-arm/container class family or legacy facade
+branch is introduced. The independent stock/literal and budget certificate
+is in [VARIANT_PHYSICAL_BINDING_FRONTIER.md](VARIANT_PHYSICAL_BINDING_FRONTIER.md).
+This is not complete facade modularization or evidence of lower allocation.
+Legacy reader/writer/table/catalog remain 15,985/25,977/6,786/1,560 lines.
+Next extraction is the existing writer schema/substream/serialization metadata
+responsibility, preserving emitted bytes and public API; I/O/publication stays
+outside that owner. It needs separate literal and stock regression evidence.
+
 Current architecture checkpoint (2026-10-03): the existing public writer
 `JSONTypedPathColumn` struct and its value alias now live in the single
 17-line `wide_part_writer/json_typed_path_column.cr` owner. Qualified names,

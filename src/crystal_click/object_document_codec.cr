@@ -33,7 +33,13 @@ module CrystalClick
       end
       validate_write_structure(plan.structures)
       plan.typed_path_count.times do |index|
-        validate_low_cardinality_typed_field!(plan.typed_type_for(plan.typed_path_at(index)), budget.limits)
+        type = plan.typed_type_for(plan.typed_path_at(index))
+        if type.contains_variant?
+          type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
+          type_context.validate_type_tree(type)
+          reject_variant_typed_field!(type)
+        end
+        validate_low_cardinality_typed_field!(type, budget.limits)
       end
 
       mark_count = granules.size
@@ -216,6 +222,7 @@ module CrystalClick
       end
       typed_schema.each_value do |type|
         schema_context.validate_type_tree(type)
+        reject_variant_typed_field!(type)
         validate_low_cardinality_typed_field!(type, budget.limits)
       end
 
@@ -376,6 +383,13 @@ module CrystalClick
       if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type) &&
          ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
         raise UnsupportedFormatError.new("Object typed LowCardinality fields are not admitted")
+      end
+      nil
+    end
+
+    private def self.reject_variant_typed_field!(type : BinaryDataType) : Nil
+      if type.contains_variant?
+        raise UnsupportedFormatError.new("Object typed Variant fields are not admitted")
       end
       nil
     end

@@ -1,6 +1,19 @@
 # CrystalClick project status
 
-Current checkpoint (2026-10-03): W148 implements paired normalized BASIC
+Current checkpoint (2026-10-04): W149 binds ordinary recursive normalized
+BASIC Variant lanes to Wide physical names and role-owned combined prefixes.
+Root passes 64 focused DEBUG, 533 affected RELEASE examples (68 unique files
+together) and 2,452 complete-inventory examples (381 unique files in sixteen
+serial disjoint non-release groups, not a combined-process run). Six fresh
+stock fixtures and six exchanges with library-emitted lanes pass complete
+roster/grid checks, actual ATTACH/CHECK and literal full/middle RowBinary;
+a separate Ruby oracle repeats 54 fresh queries, including a valid wrong-value
+control. These exchanges borrow stock envelopes: declared Object Variant/
+Dynamic and new public whole-part profiles remain closed. Scoped hostile
+verdict: ROBUST. See
+[VARIANT_PHYSICAL_BINDING_FRONTIER.md](VARIANT_PHYSICAL_BINDING_FRONTIER.md).
+
+Previous bulk checkpoint: W148 implements paired normalized BASIC
 Variant bulk lanes through ordinary recursive containers and eligible LC
 sites. Final focused DEBUG passes 50 examples; affected RELEASE passes 517
 examples across 66 unique files together. Two fresh stock Wide lane/grid
@@ -166,7 +179,9 @@ source/runtime identities and executed evidence.
   retain nominal arm identity, recursive values and explicit NULL. W148 adds
   normalized BASIC discriminator/sparse-arm bulk lanes, ordinary containers
   and eligible LC replay. This does not widen the physical part profiles
-  below; see the separate W147 and W148 certificates.
+  below. W149 adds shared ordinary recursive physical names and combined
+  prefixes, not a new public whole-part facade; see the separate W147-W149
+  certificates.
 - `WidePart` and `WidePartTable`: selected-column and typed reads, including
   windowed delivery. The public contracts admit explicit physical profiles,
   not arbitrary ClickHouse parts or recursive type combinations.
@@ -313,7 +328,10 @@ source/runtime identities and executed evidence.
    their own paired evidence. Existing logical binary codecs alone do not
    widen public part admission. W147 qualifies the generic Variant logical
    kernel; W148 implements normalized BASIC discriminator/sparse-arm bulk,
-   but generic physical binding remains closed. Shared Nested offsets,
+   and W149 qualifies generic Wide physical binding with combined prefixes
+   and finite stock witnesses, not a standalone general writer. Specialized
+   prefix streams and COMPACT Variant remain unqualified by that binder.
+   Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
    interchangeable capabilities. The general binary descriptor kernel still
@@ -365,7 +383,9 @@ source/runtime identities and executed evidence.
    persisted consumers. W148 implements generic BASIC bulk discriminator/
    sparse-arm scheduling, LC occurrence counts and empty-arm mark replay;
    its separate stock count/lane falsifier is executed within the W148 scope.
-   Next qualify physical binding before declared Object Variant/Dynamic.
+   W149 qualifies ordinary recursive physical binding, both String profiles
+   and LC-bearing sparse arms using borrowed stock envelopes. Next qualify
+   declared Object Variant/Dynamic and independent whole parts separately.
    Broader layout/type products remain separate.
    Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and

@@ -50,14 +50,13 @@ module CrystalClick
 
     private def build_bindings(type : BinaryDataType, prefix : String) : Hash(String, String)
       validate_type(type, 0)
-      # A normalized sparse bulk lane is not a qualified part filename/prefix
-      # binding. Keep this boundary recursive while generic Variant lanes land.
-      if type.contains_variant?
-        raise UnsupportedFormatError.new("generic Variant physical stream binding is not admitted")
-      end
       role_plan = BinaryBulkTypePlan.new(type, @profile)
       role_count = role_plan.role_count
       @context.record_elements(role_count)
+      if type.contains_variant?
+        return build_variant_bindings(type, prefix, role_plan, role_count)
+      end
+
       site_count, temporary_path_bytes, prefix_role_bytes = measure_dictionary_prefix_metadata(type, "root".bytesize.to_u64)
       if site_count > 0_u64
         # Admit both the temporary site roster and retained lookup before the
@@ -80,6 +79,88 @@ module CrystalClick
       roles = role_plan.roles
       names = Hash(String, String).new
       append_bindings(type, "root", prefix, 0_u64, names)
+      unless names.keys.sort == roles
+        raise UnsupportedFormatError.new("binary bulk physical roles do not match the admitted role grammar")
+      end
+      if names.size.to_u64 != role_count
+        raise UnsupportedFormatError.new("binary bulk physical lane count does not match the admitted role grammar")
+      end
+
+      seen_names = Hash(String, Bool).new
+      names.each_value do |name|
+        if seen_names.has_key?(name)
+          raise UnsupportedFormatError.new("binary bulk roles collide on a physical stream name")
+        end
+        seen_names[name] = true
+      end
+
+      actual_name_bytes = 0_u64
+      names.each do |role, name|
+        actual_name_bytes = add_size(actual_name_bytes, role.bytesize.to_u64)
+        actual_name_bytes = add_size(actual_name_bytes, name.bytesize.to_u64)
+      end
+      @context.charge_name_bytes(actual_name_bytes)
+      names
+    end
+
+    private def build_variant_bindings(
+      type : BinaryDataType,
+      prefix : String,
+      role_plan : BinaryBulkTypePlan,
+      role_count : UInt64,
+    ) : Hash(String, String)
+      variant_names = BinaryBulkVariantNamePlan.new(type, @context.limits, @context)
+      site_count, temporary_path_bytes, prefix_role_bytes = measure_dictionary_prefix_metadata(
+        type, "root".bytesize.to_u64
+      )
+      discriminator_count, discriminator_role_bytes = measure_discriminator_prefix_metadata(
+        type, "root".bytesize.to_u64
+      )
+      prefix_entries = add_size(site_count, discriminator_count)
+      prefix_metadata_elements = add_size(add_size(site_count, site_count), discriminator_count)
+      prefix_metadata_bytes = add_size(
+        add_size(temporary_path_bytes, prefix_role_bytes), discriminator_role_bytes
+      )
+
+      if prefix_metadata_elements > 0_u64
+        # LC site path/key records and Variant discriminator prefix-map keys
+        # are retained separately from the ordinary role roster.
+        @context.record_elements(prefix_metadata_elements)
+        @context.preflight_name_bytes(prefix_metadata_bytes)
+      end
+
+      role_bytes, rendered_name_bytes = measure_bindings(
+        type, 4_u64, prefix.bytesize.to_u64, 0_u64, variant_names
+      )
+      variant_names.finish_measurement!
+      conservative_roster_bytes = add_size(role_bytes, rendered_name_bytes)
+      combined_preflight_bytes = add_size(
+        add_size(conservative_roster_bytes, prefix_metadata_bytes), variant_names.name_work_bytes
+      )
+      @context.preflight_name_bytes(combined_preflight_bytes)
+
+      # All prospective SQL rendering, cache metadata, prefix metadata, roles
+      # and physical basename bounds have now passed before the first type.name
+      # or physical String role/site roster materialization.
+      if site_count > 0_u64
+        role_plan.low_cardinality_sites.each do |site|
+          @prefix_sizes[site.dictionary_role] = 8
+        end
+      end
+      unless @prefix_sizes.size.to_u64 == site_count
+        raise UnsupportedFormatError.new("binary bulk LC dictionary prefix roster changed after preflight")
+      end
+      @context.charge_name_bytes(prefix_metadata_bytes) if prefix_metadata_bytes > 0_u64
+      variant_names.materialize!
+
+      names = Hash(String, String).new
+      append_bindings(type, "root", prefix, 0_u64, names, variant_names)
+      variant_names.finish_binding!
+      unless @prefix_sizes.size.to_u64 == prefix_entries
+        raise UnsupportedFormatError.new("binary bulk Variant prefix roster changed after preflight")
+      end
+
+      roles = role_plan.roles
       unless names.keys.sort == roles
         raise UnsupportedFormatError.new("binary bulk physical roles do not match the admitted role grammar")
       end
@@ -176,6 +257,7 @@ module CrystalClick
       role_length : UInt64,
       name_length : UInt64,
       array_level : UInt64,
+      variant_names : BinaryBulkVariantNamePlan? = nil,
     ) : {UInt64, UInt64}
       role_bytes = 0_u64
       name_bytes = 0_u64
@@ -190,13 +272,13 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY
         role_bytes = add_size(role_bytes, add_size(role_length, 6_u64))
         name_bytes = add_size(name_bytes, add_size(name_length, add_size(5_u64, digit_count(array_level))))
-        nested_roles, nested_names = measure_bindings(type.child_at(0), add_size(role_length, 9_u64), name_length, array_level + 1_u64)
+        nested_roles, nested_names = measure_bindings(type.child_at(0), add_size(role_length, 9_u64), name_length, array_level + 1_u64, variant_names)
         role_bytes = add_size(role_bytes, nested_roles)
         name_bytes = add_size(name_bytes, nested_names)
       when BinaryDataType::TAG_NULLABLE
         role_bytes = add_size(role_bytes, add_size(role_length, 6_u64))
         name_bytes = add_size(name_bytes, add_size(name_length, 5_u64))
-        nested_roles, nested_names = measure_bindings(type.child_at(0), add_size(role_length, 7_u64), name_length, array_level)
+        nested_roles, nested_names = measure_bindings(type.child_at(0), add_size(role_length, 7_u64), name_length, array_level, variant_names)
         role_bytes = add_size(role_bytes, nested_roles)
         name_bytes = add_size(name_bytes, nested_names)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
@@ -211,7 +293,7 @@ module CrystalClick
                                 else
                                   add_size(name_length, add_size(3_u64, digit_count(index.to_u64 + 1_u64)))
                                 end
-            nested_roles, nested_names = measure_bindings(type.child_at(index), field_role_length, field_name_length, array_level)
+            nested_roles, nested_names = measure_bindings(type.child_at(index), field_role_length, field_name_length, array_level, variant_names)
             role_bytes = add_size(role_bytes, nested_roles)
             name_bytes = add_size(name_bytes, nested_names)
           end
@@ -219,8 +301,8 @@ module CrystalClick
       when BinaryDataType::TAG_MAP
         role_bytes = add_size(role_bytes, add_size(role_length, 6_u64))
         name_bytes = add_size(name_bytes, add_size(name_length, add_size(5_u64, digit_count(array_level))))
-        keys_roles, keys_names = measure_bindings(type.child_at(0), add_size(role_length, 17_u64), add_size(name_length, 7_u64), array_level + 1_u64)
-        values_roles, values_names = measure_bindings(type.child_at(1), add_size(role_length, 17_u64), add_size(name_length, 9_u64), array_level + 1_u64)
+        keys_roles, keys_names = measure_bindings(type.child_at(0), add_size(role_length, 17_u64), add_size(name_length, 7_u64), array_level + 1_u64, variant_names)
+        values_roles, values_names = measure_bindings(type.child_at(1), add_size(role_length, 17_u64), add_size(name_length, 9_u64), array_level + 1_u64, variant_names)
         role_bytes = add_size(role_bytes, add_size(keys_roles, values_roles))
         name_bytes = add_size(name_bytes, add_size(keys_names, values_names))
       when BinaryDataType::TAG_LOW_CARDINALITY
@@ -230,6 +312,22 @@ module CrystalClick
         role_bytes = add_size(role_bytes, add_size(role_length, 8_u64))  # .indexes
         name_bytes = add_size(name_bytes, add_size(name_length, 5_u64))  # .dict
         name_bytes = add_size(name_bytes, name_length)                   # indexes own prefix
+      when BinaryDataType::TAG_VARIANT
+        names = variant_names || raise(UnsupportedFormatError.new("Variant SQL names were not preflighted"))
+        site = names.next_measure_site
+        role_bytes = add_size(role_bytes, add_size(role_length, ".discriminators".bytesize.to_u64))
+        name_bytes = add_size(name_bytes, add_size(name_length, ".variant_discr".bytesize.to_u64))
+        type.child_count.times do |index|
+          arm_bound = names.bounds_for(site, index)[0]
+          escaped_arm_bound = multiply_size(arm_bound, 3_u64)
+          arm_role_length = add_size(role_length, add_size(5_u64, digit_count(index.to_u64)))
+          arm_name_length = add_size(name_length, add_size(1_u64, escaped_arm_bound))
+          nested_roles, nested_names = measure_bindings(
+            type.child_at(index), arm_role_length, arm_name_length, array_level, names
+          )
+          role_bytes = add_size(role_bytes, nested_roles)
+          name_bytes = add_size(name_bytes, nested_names)
+        end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         role_bytes = add_size(role_length, 5_u64)
         name_bytes = name_length
@@ -249,6 +347,7 @@ module CrystalClick
       prefix : String,
       array_level : UInt64,
       names : Hash(String, String),
+      variant_names : BinaryBulkVariantNamePlan? = nil,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_STRING
@@ -258,10 +357,10 @@ module CrystalClick
         end
       when BinaryDataType::TAG_ARRAY
         names["#{role}.sizes"] = PhysicalStreamName.append_literal(prefix, ".size#{array_level}")
-        append_bindings(type.child_at(0), "#{role}.elements", prefix, array_level + 1_u64, names)
+        append_bindings(type.child_at(0), "#{role}.elements", prefix, array_level + 1_u64, names, variant_names)
       when BinaryDataType::TAG_NULLABLE
         names["#{role}.nulls"] = PhysicalStreamName.append_literal(prefix, ".null")
-        append_bindings(type.child_at(0), "#{role}.nested", prefix, array_level, names)
+        append_bindings(type.child_at(0), "#{role}.nested", prefix, array_level, names, variant_names)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           names["#{role}.data"] = String.new(prefix.to_slice)
@@ -273,20 +372,29 @@ module CrystalClick
                            (index + 1).to_s
                          end
             field_prefix = PhysicalStreamName.append_escaped_field(prefix, field_name)
-            append_bindings(type.child_at(index), "#{role}.field.#{index}", field_prefix, array_level, names)
+            append_bindings(type.child_at(index), "#{role}.field.#{index}", field_prefix, array_level, names, variant_names)
           end
         end
       when BinaryDataType::TAG_MAP
         names["#{role}.sizes"] = PhysicalStreamName.append_literal(prefix, ".size#{array_level}")
         keys_prefix = PhysicalStreamName.append_escaped_field(prefix, "keys")
         values_prefix = PhysicalStreamName.append_escaped_field(prefix, "values")
-        append_bindings(type.child_at(0), "#{role}.elements.field.0", keys_prefix, array_level + 1_u64, names)
-        append_bindings(type.child_at(1), "#{role}.elements.field.1", values_prefix, array_level + 1_u64, names)
+        append_bindings(type.child_at(0), "#{role}.elements.field.0", keys_prefix, array_level + 1_u64, names, variant_names)
+        append_bindings(type.child_at(1), "#{role}.elements.field.1", values_prefix, array_level + 1_u64, names, variant_names)
       when BinaryDataType::TAG_LOW_CARDINALITY
         # Match the default LC serializer's physical names. Do not recurse into
         # the dictionary type; LC's paired codec owns the complete lane grammar.
         names["#{role}.dictionary"] = PhysicalStreamName.append_literal(prefix, ".dict")
         names["#{role}.indexes"] = String.new(prefix.to_slice)
+      when BinaryDataType::TAG_VARIANT
+        selected_names = variant_names || raise(UnsupportedFormatError.new("Variant SQL names were not materialized"))
+        names["#{role}.discriminators"] = PhysicalStreamName.append_literal(prefix, ".variant_discr")
+        @prefix_sizes["#{role}.discriminators"] = 8
+        site = selected_names.next_append_site
+        type.child_count.times do |index|
+          arm_prefix = selected_names.append_escaped_arm_prefix(prefix, site, index)
+          append_bindings(type.child_at(index), "#{role}.arm.#{index}", arm_prefix, array_level, names, selected_names)
+        end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         names["#{role}.data"] = String.new(prefix.to_slice)
       else
@@ -344,8 +452,66 @@ module CrystalClick
           type.child_at(1), add_size(path_length, 17_u64)
         )
         {add_size(key_count, value_count), add_size(key_paths, value_paths), add_size(key_roles, value_roles)}
+      when BinaryDataType::TAG_VARIANT
+        count = 0_u64
+        paths = 0_u64
+        roles = 0_u64
+        type.child_count.times do |index|
+          child_count, child_paths, child_roles = measure_dictionary_prefix_metadata(
+            type.child_at(index), add_size(path_length, add_size(5_u64, digit_count(index.to_u64)))
+          )
+          count = add_size(count, child_count)
+          paths = add_size(paths, child_paths)
+          roles = add_size(roles, child_roles)
+        end
+        {count, paths, roles}
       else
         {0_u64, 0_u64, 0_u64}
+      end
+    end
+
+    # Count Variant discriminator prefix-map entries before the physical role
+    # roster is materialized. The key duplicates the role String retained by
+    # the prefix-size lookup, so its bytes and element are separately charged.
+    private def measure_discriminator_prefix_metadata(
+      type : BinaryDataType,
+      path_length : UInt64,
+    ) : {UInt64, UInt64}
+      case type.tag
+      when BinaryDataType::TAG_ARRAY
+        measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
+      when BinaryDataType::TAG_NULLABLE
+        measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 7_u64))
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
+        count = 0_u64
+        bytes = 0_u64
+        type.child_count.times do |index|
+          child_path_length = if type.tag == BinaryDataType::TAG_MAP
+                                add_size(path_length, 17_u64)
+                              else
+                                add_size(path_length, add_size(7_u64, digit_count(index.to_u64)))
+                              end
+          child_count, child_bytes = measure_discriminator_prefix_metadata(
+            type.child_at(index), child_path_length
+          )
+          count = add_size(count, child_count)
+          bytes = add_size(bytes, child_bytes)
+        end
+        {count, bytes}
+      when BinaryDataType::TAG_VARIANT
+        count = 1_u64
+        bytes = add_size(path_length, ".discriminators".bytesize.to_u64)
+        type.child_count.times do |index|
+          arm_path_length = add_size(path_length, add_size(5_u64, digit_count(index.to_u64)))
+          child_count, child_bytes = measure_discriminator_prefix_metadata(
+            type.child_at(index), arm_path_length
+          )
+          count = add_size(count, child_count)
+          bytes = add_size(bytes, child_bytes)
+        end
+        {count, bytes}
+      else
+        {0_u64, 0_u64}
       end
     end
 
@@ -372,6 +538,13 @@ module CrystalClick
         raise UnsupportedFormatError.new("physical stream roster size overflows UInt64")
       end
       left + right
+    end
+
+    private def multiply_size(left : UInt64, right : UInt64) : UInt64
+      if right != 0_u64 && left > UInt64::MAX // right
+        raise UnsupportedFormatError.new("physical stream roster size overflows UInt64")
+      end
+      left * right
     end
   end
 end

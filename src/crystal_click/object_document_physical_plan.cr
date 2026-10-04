@@ -61,6 +61,9 @@ module CrystalClick
         dynamic.type_count.times do |type_index|
           type = dynamic.type_at(type_index)
           preflight_dynamic_type(type, limits.max_depth, 0, context, 0_u64, 0_u64)
+          if type.contains_variant?
+            raise UnsupportedFormatError.new("physical Object Dynamic Variant alternatives are not admitted")
+          end
           name_bound = display_name_bound(type, limits.max_depth, 0)
           escaped_name_bound = multiply_size(name_bound, 3_u64)
           context.preflight_name_bytes(escaped_name_bound)
@@ -87,6 +90,10 @@ module CrystalClick
         preflight_typed_path(plan, index, column_prefix.bytesize.to_u64, context)
         raw_path = plan.typed_path_at(index)
         type = plan.typed_type_for(raw_path)
+        if type.contains_variant?
+          preflight_variant_typed_type(type, limits.max_depth, 0, context, 0_u64, 0_u64)
+          raise UnsupportedFormatError.new("physical Object typed Variant fields are not admitted")
+        end
         if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type) &&
            ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
           raise UnsupportedFormatError.new("physical Object typed LowCardinality fields are not admitted")
@@ -205,6 +212,36 @@ module CrystalClick
       context.preflight_type_budget(add_size(prior_nodes, nodes), add_size(prior_elements, elements))
       children.times do |index|
         child_nodes, child_elements = preflight_dynamic_type(
+          type.child_at(index), maximum_depth, depth + 1, context,
+          add_size(prior_nodes, nodes), add_size(prior_elements, elements)
+        )
+        nodes = add_size(nodes, child_nodes)
+        elements = add_size(elements, child_elements)
+      end
+      {nodes, elements}
+    end
+
+    # Recursively bound typed Variant descriptors before the physical Object
+    # planner refuses the local profile. No SQL name or typed lane roster is
+    # materialized on this path.
+    private def preflight_variant_typed_type(
+      type : BinaryDataType,
+      maximum_depth : Int,
+      depth : Int,
+      context : PhysicalStreamPlanContext,
+      prior_nodes : UInt64,
+      prior_elements : UInt64,
+    ) : {UInt64, UInt64}
+      if depth > maximum_depth
+        raise UnsupportedFormatError.new("physical stream type depth exceeds configured limit")
+      end
+      metadata = type.metadata_entry_count
+      children = type.child_count
+      elements = add_size(metadata.to_u64, children.to_u64)
+      nodes = 1_u64
+      context.preflight_type_budget(add_size(prior_nodes, nodes), add_size(prior_elements, elements))
+      children.times do |index|
+        child_nodes, child_elements = preflight_variant_typed_type(
           type.child_at(index), maximum_depth, depth + 1, context,
           add_size(prior_nodes, nodes), add_size(prior_elements, elements)
         )
