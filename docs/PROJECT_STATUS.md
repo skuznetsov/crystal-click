@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W155 adds paired generic Dynamic
+Current capability checkpoint (2026-10-04): W156 adds an explicit
+`BinaryDynamicBulkPhysicalPlan` for prepared per-occurrence actual rosters.
+It separates structure/data names and data-prefix ownership, preserves
+recursive Array levels and LC stop-site accounting, and refuses physical
+collisions and mismatched shared-context limits. Default no-roster consumers
+remain closed. Final focused DEBUG passes 109 examples (18 unique specs,
+two disjoint groups) and affected RELEASE passes 567 examples (83 unique specs,
+nine disjoint groups), plus 2,582 complete-inventory examples (406 unique specs,
+41 disjoint non-release groups with `--no-debug`), all with zero
+failures/errors/pending and exit 0. Root independently reconciles exact
+inventory membership, observed counts, guard exits and current source/spec
+hashes; formatter, Ruby syntax and hygiene pass. These are test gates, not
+performance measurements.
+The finite pinned stock fixture passes four typed columns, six rows and three
+real marks. All planner-mapped Dynamic files are re-encoded inside borrowed
+stock Wide envelopes; library and CHECK-valid 42-to-43 mutant parts actually
+ATTACH and pass CHECK. A separate literal Ruby oracle distinguishes the mutant
+and verifies nominal/full/middle results. This is single-stream/BASIC/Dynamic V3
+native evidence, not other String/LC products or independently authored
+complete parts. Two scratch-only wrong-method controls each fail one of six
+adversary examples as intended. The new physical owner has one 712-line file;
+the 25,202/15,726/6,786-line writer/reader/table facades are unchanged.
+Scoped hostile verdict: ROBUST for this explicit physical-binding boundary and
+finite stock fixture, not general compatibility or overall goal completion.
+Declared Object Dynamic, general complete parts, broader MV/projection support,
+overall modularization and performance remain open. The next prerequisite
+preserves structure statistics offsets for metadata marks before typed Object
+integration. Exact scope, evidence and refresh conditions are in
+[DYNAMIC_PHYSICAL_BINDING_FRONTIER.md](DYNAMIC_PHYSICAL_BINDING_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W155 adds paired generic Dynamic
 normalized bulk values and complete per-role K+1 mark grids from explicit
 occurrence structures. Equal nominal sites keep distinct stored rosters;
 ordinary arms and SharedVariant typed envelopes remain separate. Recursive
@@ -380,9 +410,17 @@ source/runtime identities and executed evidence.
   Exact stored-site rosters control ordinary versus SharedVariant selection;
   actual LC-bearing arms keep full sparse schedules across selected windows.
   Supplied statistics are preserved, not recomputed as a publication
-  certificate. No production physical Dynamic binder or new whole-part writer
-  is admitted by this API. See
+  certificate. This API does not itself bind physical files or admit a new
+  whole-part writer. See
   [the W155 frontier](DYNAMIC_BULK_VALUE_FRONTIER.md).
+- `BinaryDynamicBulkPhysicalPlan` explicitly binds the prepared actual-roster
+  plan to separate Dynamic structure/data names and data-prefix ownership.
+  It preserves recursive Array levels, ordinary versus SharedVariant String,
+  LC stop-site budgets and whole-basename hashing. Default no-roster physical
+  consumers remain closed. The finite W156 stock certificate is limited to
+  the pinned single-stream/BASIC/Dynamic V3 fixture in borrowed Wide envelopes;
+  it is not independently authored complete-part or declared Object Dynamic
+  support. See [the W156 frontier](DYNAMIC_PHYSICAL_BINDING_FRONTIER.md).
 - `BinaryDataType.variant`, `BinaryValue.variant` and `variant_null` provide
   the shared canonical logical Variant kernel. Paired descriptor/value codecs
   retain nominal arm identity, recursive values and explicit NULL. W148 adds
@@ -555,10 +593,12 @@ source/runtime identities and executed evidence.
    every physical product admitted by its schema grammar.
    W152/W153 qualify nominal Dynamic descriptors and generic logical values;
    W154 adds actual per-occurrence structure/roster planning and W155 pairs it
-   with normalized bulk values and complete mark grids. Generic production
-   Dynamic physical binding and declared Object Dynamic remain separate open
-   frontiers. Equal nominal Dynamic types do not imply equal per-part or
-   per-site state.
+   with normalized bulk values and complete mark grids. W156 adds explicit
+   physical binding with a finite single-stream/BASIC/Dynamic V3 stock
+   certificate in borrowed Wide envelopes. Other physical products,
+   independently authored general complete parts and declared Object Dynamic
+   remain separate open frontiers. Equal nominal Dynamic types do not imply
+   equal per-part or per-site state.
    Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
@@ -641,9 +681,14 @@ source/runtime identities and executed evidence.
    the paired generic logical actual-type/value grammar. W154 adds paired
    actual per-occurrence structure streams and normalized role/site planning.
    W155 now pairs generic Dynamic normalized bulk values and complete mark-grid
-   scheduling over that actual state. The next transition is separately
-   qualified physical binding before declared Object Dynamic and complete-part
-   tests, not another logical-value or metadata-only transition.
+   scheduling over that actual state. W156 adds a separate actual-roster
+   physical binder and finite borrowed-envelope qualification. The next
+   prerequisite is preserving statistics offsets in the paired structure
+   owner for metadata marks; ordinary value K+1 grids cannot replace that
+   boundary. Then integrate per-typed-path actual plans and paired storage
+   ownership for declared Object Dynamic, with independently authored complete
+   parts and stock ATTACH/CHECK/full/middle literal tests. Keep default
+   no-roster consumers and unqualified profiles closed.
    Neither the cap nor Object's inferred-path policy substitutes for that roster.
    Broader layout/type products remain separate.
    Reuse existing leaf owners only
