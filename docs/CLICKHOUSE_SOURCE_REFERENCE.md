@@ -1,6 +1,54 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-03, second refresh)
+## Current source snapshot (2026-10-04)
+
+Use this separate checkout for new source comparisons:
+
+`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-37a251ff`
+
+- Upstream: `https://github.com/ClickHouse/ClickHouse.git`, branch `master`.
+- Revision: `37a251ffa2805b33201486306db980bfa96d73e7`.
+- Committer timestamp: `2026-10-04T01:24:02Z`.
+- Cloned with `git clone --depth 1 --single-branch --branch master --no-tags`.
+  Root's pre-clone and post-clone `git ls-remote` lookups both returned this
+  revision for `refs/heads/master`.
+- Root observed shallow repository `true`, one reachable commit, branch
+  `master` and a clean working tree. Recorded submodules remain uninitialized;
+  none were fetched. Existing checkouts were not modified.
+- This is a source reference, not a newly built or qualified executable. The
+  pinned runtime certificates retain their separate build identities.
+
+### Source comparison: 37a251ff vs 9007d227
+
+Root executed recursive `git diff --no-index --stat` comparisons:
+
+| Directory | Observed result |
+| --- | --- |
+| `src/DataTypes/Serializations` | Exit 0; identical contents. |
+| `src/DataTypes` | Three changed files, 173 insertions, 3 deletions; exit 1. |
+| `src/Columns` | Four changed files, 156 insertions, 10 deletions; exit 1. |
+| `src/Formats` | Only `ProtobufSerializer.cpp` changed, one insertion/deletion; exit 1. |
+| `src/Storages/MergeTree` | 49 changed files, 1,047 insertions, 254 deletions; exit 1. |
+| `src/Compression` | Two changed headers, 8 insertions; exit 1. |
+
+The inspected DataTypes change adds a paired recursive type-replacement
+utility through Nullable/LC/Array/Map/Tuple/Variant and refactors DateTime
+argument lookup. `DataTypeVariant`, `DataTypeObject`, the descriptor encoding
+table and all serializer sources are unchanged in this window. The inspected
+LC change adds batch in-memory String serialization and referenced-value
+sizing; it is not a new persisted dictionary/index serializer.
+`MergeTreePartition.cpp` changes the source of the sample block used for
+partition text, including patch-part handling. The wider MergeTree diff is
+not an exhaustive lifecycle, pruning or physical-format compatibility audit.
+
+These comparisons establish source continuity only for the stated paths and
+revisions. They do not qualify a current-master executable, widen the Object
+frontier, prove all physical layouts or establish performance. Refresh this
+record when relevant sources or upstream HEAD change. Type-family continuity
+is not a promise of exclusively additive descriptor or serialization changes;
+the reserved Time descriptor example below remains a concrete counterexample.
+
+## Previous source snapshot (2026-10-03, second refresh)
 
 Use this separate checkout for new source comparisons:
 
