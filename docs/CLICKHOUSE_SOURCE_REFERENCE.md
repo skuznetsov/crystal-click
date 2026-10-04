@@ -49,6 +49,53 @@ additive wire-format evolution: the current descriptor table still reserves
 removed timezone-bearing Time tags 0x33/0x35. Versions, settings, framing and
 recursive products need separate paired reader/writer evidence.
 
+### Recursive declared Dynamic comparison — W159 preparation
+
+Root inspected this snapshot's recursive stream delegation independently:
+`SerializationArray.cpp:255-294` emits sizes and delegates ArrayElements;
+`SerializationTuple.cpp:766-791` delegates each declared field;
+`SerializationMap.cpp:652-674` delegates BASIC to the nested
+`Array(Tuple(K,V))` representation, while other versions add bucket metadata.
+This motivates explicit BASIC settings for both zero-level and merged Map
+parts in the finite W159 qualification. A physical path such as
+`root.elements.field.1` is not a descriptor-depth coordinate: a Map value is
+one logical child edge, despite those three path components.
+
+Root also executed bounded stock grammar and input-shape probes under the
+resource guard (exit 0). The retained executable is ClickHouse 26.10.1.1201,
+build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`;
+it is not built from this source checkout. Factory probes admit declared
+Array/Tuple/Map Dynamic and legal Nullable/Tuple and Variant/Array wrappers.
+The six-row MergeTree input-shape probe accepts empty arrays/maps and NULL
+Dynamic children. Literal queries observe Int64 Array/Map alternatives,
+String spills with shared-data marker 1, and distinct Tuple-left Int64 and
+Tuple-right String alternatives; NULL has type `None` and marker 0.
+
+Probe inputs and outputs are retained under
+`/private/tmp/crystal-click-w159.huxO5J/stock-shape-probe.sql`,
+`stock_shape_probe.rb`, and `shape-separated-{0,1,2}.{stdout,stderr}`.
+The command is the resource guard wrapping `/usr/bin/ruby`, 60 seconds,
+4096 MiB, and that runner. An initial combined-query JSONEachRow framing
+error was an instrument failure, corrected by separate create/insert/query
+processes. These probes establish grammar and stock input shapes only, not
+library serialization, complete-part interoperability, or performance.
+Refresh after the source serializers, executable, settings or fixture change;
+W159's paired completion requires its separate declared frontier gates.
+
+The subsequent root-owned W159 complete-part oracle passes under that same
+separately pinned executable. It checks a stock-authored part and independently
+library-authored Wide parts with declared Array/Tuple/Map/direct Dynamic sites,
+explicit Int64/String rosters, exact metadata names and absent-statistics
+offset 10, six rows and three real plus one terminal mark. Actual stock
+ATTACH/CHECK, full/middle literal/type queries and an unchanged-oracle
+42-to-43 mutant control pass. The retained run is
+`/private/tmp/crystal-click-object-recursive-dynamic-w159.lL5TDe`; scope and
+library gates are in
+[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md).
+This finite V3/MAP/BASIC profile is not executable qualification of the new
+source checkout or general JSON layout compatibility.
+
 ## Previous source snapshot (2026-10-04, fourth refresh)
 
 Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-db9010c9`

@@ -38,9 +38,9 @@ module CrystalClick
       getter schema_snapshot : Hash(String, BinaryDataType)
       getter object_bytes : Bytes
       getter dynamic_bytes : Hash(String, Bytes)
-      getter typed_dynamic_bytes : Hash(String, Bytes)
+      getter typed_dynamic_bytes : Hash(String, Hash(String, Bytes))
       getter typed_dynamic_plans : Hash(String, BinaryDynamicBulkPlan)
-      getter typed_dynamic_statistics_offsets : Hash(String, Int32)
+      getter typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32))
       getter outer_rows : Array(UInt64)
       getter first_mark : Int32
       getter selected_count : Int32
@@ -58,9 +58,9 @@ module CrystalClick
         @schema_snapshot : Hash(String, BinaryDataType),
         @object_bytes : Bytes,
         @dynamic_bytes : Hash(String, Bytes),
-        @typed_dynamic_bytes : Hash(String, Bytes),
+        @typed_dynamic_bytes : Hash(String, Hash(String, Bytes)),
         @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPlan),
-        @typed_dynamic_statistics_offsets : Hash(String, Int32),
+        @typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32)),
         @outer_rows : Array(UInt64),
         @first_mark : Int32,
         @selected_count : Int32,
@@ -154,6 +154,13 @@ module CrystalClick
       replay_complete = schema_snapshot.each_value.any? do |type|
         BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
       end
+      typed_dynamic_metadata_names = discover_typed_dynamic_metadata_names!(
+        column_name,
+        schema_snapshot,
+        limits,
+        hashed,
+        codec_budget
+      )
       source = PartStreamSource.new(part_path)
 
       object_name = PhysicalStreamName.append_literal(column_prefix, ".object_structure")
@@ -192,35 +199,79 @@ module CrystalClick
         dynamic_structures[String.new(raw_path.to_slice)] = dynamic
       end
 
-      typed_dynamic_bytes = Hash(String, Bytes).new
+      typed_dynamic_bytes = Hash(String, Hash(String, Bytes)).new
       typed_dynamic_plans = Hash(String, BinaryDynamicBulkPlan).new
-      typed_dynamic_statistics_offsets = Hash(String, Int32).new
-      typed_dynamic_structures = Hash(String, DynamicStructure).new
+      typed_dynamic_site_statistics_offsets = Hash(String, Hash(String, Int32)).new
+      typed_dynamic_structures = Hash(String, Hash(String, DynamicStructure)).new
+      typed_dynamic_direct_structures = Hash(String, DynamicStructure).new
       schema_snapshot.each do |path, type|
-        next unless type.tag == BinaryDataType::TAG_DYNAMIC
-        path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, path)
-        logical_name = PhysicalStreamName.append_literal(path_prefix, ".dynamic_structure")
-        data_name, marks_name = file_pair(logical_name, hashed)
-        validate_physical_name!(data_name)
-        validate_physical_name!(marks_name)
-        grid = source.inspect_grid(data_name, marks_name, nil, transport_budget)
-        validate_same_rows!(grid, outer_rows)
-        charge_metadata_read!(grid, codec_budget)
-        bytes = source.read_all(data_name, transport_budget)
-        ensure_logical_size!(bytes, grid)
-        child_streams = BinaryDynamicStructureStreams.new({"root" => bytes})
-        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_plan(type, child_streams, codec_budget, profile)
-        statistics_offset = dynamic_plan.statistics_offset_for("root")
-        validate_metadata_grid!(grid, statistics_offset, bytes.size)
+        next unless type.contains_dynamic?
+        names = typed_dynamic_metadata_names[path]?
+        unless names
+          raise CorruptPartError.new("typed Dynamic declared site names are missing")
+        end
+        site_bytes = Hash(String, Bytes).new(initial_capacity: names.size)
+        site_grids = Hash(String, CompressedMarkGrid).new(initial_capacity: names.size)
+        names.each do |site_path, logical_name|
+          data_name, marks_name = file_pair(logical_name, hashed)
+          validate_physical_name!(data_name)
+          validate_physical_name!(marks_name)
+          grid = source.inspect_grid(data_name, marks_name, nil, transport_budget)
+          validate_same_rows!(grid, outer_rows)
+          charge_metadata_read!(grid, codec_budget)
+          bytes = source.read_all(data_name, transport_budget)
+          ensure_logical_size!(bytes, grid)
+          site_bytes[String.new(site_path.to_slice)] = bytes
+          site_grids[String.new(site_path.to_slice)] = grid
+        end
+        child_streams = BinaryDynamicStructureStreams.new(site_bytes)
+        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan(
+          type,
+          child_streams,
+          codec_budget,
+          profile,
+          root_depth: 2
+        )
+        expected_sites = dynamic_plan.site_paths
+        unless expected_sites.size == site_grids.size && expected_sites.size == names.size
+          raise CorruptPartError.new("typed Dynamic metadata grids do not match the retained site roster")
+        end
+        site_offsets = Hash(String, Int32).new(initial_capacity: expected_sites.size)
+        structures = Hash(String, DynamicStructure).new(initial_capacity: expected_sites.size)
+        expected_sites.each do |site_path|
+          grid = site_grids[site_path]? || raise(CorruptPartError.new("typed Dynamic metadata grid is missing a declared site"))
+          unless names.has_key?(site_path)
+            raise CorruptPartError.new("typed Dynamic metadata name is missing a declared site")
+          end
+          # The retained parse supplies each site's exact statistics boundary.
+          # `prepare_read_sites_plan` consumed these structure blobs once.
+          statistics_offset = dynamic_plan.statistics_offset_for(site_path)
+          bytes = site_bytes[site_path]? || raise(CorruptPartError.new("typed Dynamic metadata bytes are missing a declared site"))
+          validate_metadata_grid!(grid, statistics_offset, bytes.size)
+          site_offsets[String.new(site_path.to_slice)] = statistics_offset
+          structures[String.new(site_path.to_slice)] = dynamic_plan.structure_for(site_path)
+        end
         copied_path = String.new(path.to_slice)
-        typed_dynamic_bytes[copied_path] = bytes
+        typed_dynamic_bytes[copied_path] = site_bytes
         typed_dynamic_plans[copied_path] = dynamic_plan
-        typed_dynamic_statistics_offsets[copied_path] = statistics_offset
-        typed_dynamic_structures[copied_path] = dynamic_plan.structure_for("root")
+        typed_dynamic_site_statistics_offsets[copied_path] = site_offsets
+        typed_dynamic_structures[copied_path] = structures
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          typed_dynamic_direct_structures[copied_path] = structures["root"]? || raise(CorruptPartError.new("typed Dynamic root structure is missing"))
+        end
       end
 
       structure_set = ObjectDynamicStructureSet.new(object, dynamic_structures)
-      document_plan = ObjectDocumentPlan.new(structure_set, schema_snapshot, typed_dynamic_structures)
+      recursive_typed_dynamic_structures = Hash(String, Hash(String, DynamicStructure)).new
+      typed_dynamic_structures.each do |path, sites|
+        recursive_typed_dynamic_structures[path] = sites unless typed_dynamic_direct_structures.has_key?(path)
+      end
+      document_plan = ObjectDocumentPlan.new(
+        structure_set,
+        schema_snapshot,
+        typed_dynamic_direct_structures,
+        recursive_typed_dynamic_structures
+      )
       physical_plan = ObjectDocumentPhysicalPlan.new(
         column_name,
         document_plan,
@@ -228,6 +279,24 @@ module CrystalClick
         shared_profile,
         limits
       )
+
+      typed_dynamic_metadata_names.each do |path, names|
+        physical = physical_plan.typed_dynamic(path)
+        dynamic_plan = typed_dynamic_plans[path]? ||
+                       raise(CorruptPartError.new("typed Dynamic metadata has no retained read plan"))
+        unless names.size == dynamic_plan.site_count && physical.structure_stream_names.size == dynamic_plan.site_count
+          raise CorruptPartError.new("typed Dynamic physical structure roster changed after metadata discovery")
+        end
+        dynamic_plan.site_paths.each do |site_path|
+          logical_name = names[site_path]?
+          unless logical_name
+            raise CorruptPartError.new("typed Dynamic discovered metadata name is missing a retained site")
+          end
+          unless physical.structure_name_for(site_path) == logical_name
+            raise CorruptPartError.new("typed Dynamic discovered metadata name disagrees with the final physical plan")
+          end
+        end
+      end
 
       bulk_bindings = collect_bulk_bindings(document_plan, physical_plan, hashed)
       discriminator_bindings = collect_discriminator_bindings(object, physical_plan, hashed)
@@ -289,7 +358,7 @@ module CrystalClick
         dynamic_bytes,
         typed_dynamic_bytes,
         typed_dynamic_plans,
-        typed_dynamic_statistics_offsets,
+        typed_dynamic_site_statistics_offsets,
         outer_rows,
         first_mark.to_i32,
         selected_count.to_i32,
@@ -311,7 +380,7 @@ module CrystalClick
       dynamic_bytes = prepared.dynamic_bytes
       typed_dynamic_bytes = prepared.typed_dynamic_bytes
       typed_dynamic_plans = prepared.typed_dynamic_plans
-      typed_dynamic_statistics_offsets = prepared.typed_dynamic_statistics_offsets
+      typed_dynamic_site_statistics_offsets = prepared.typed_dynamic_site_statistics_offsets
       outer_rows = prepared.outer_rows
       first_mark = prepared.first_mark
       selected_count = prepared.selected_count
@@ -409,13 +478,32 @@ module CrystalClick
       typed_dynamic_rosters_match =
         typed_dynamic_data.size == typed_dynamic_plans.size &&
           typed_dynamic_bytes.size == typed_dynamic_plans.size &&
-          typed_dynamic_statistics_offsets.size == typed_dynamic_plans.size
+          typed_dynamic_site_statistics_offsets.size == typed_dynamic_plans.size
       typed_dynamic_data.each_key do |path|
         typed_dynamic_rosters_match = false unless typed_dynamic_plans.has_key?(path)
       end
-      typed_dynamic_plans.each_key do |path|
-        unless typed_dynamic_bytes.has_key?(path) && typed_dynamic_statistics_offsets.has_key?(path)
+      typed_dynamic_plans.each do |path, dynamic_plan|
+        metadata = typed_dynamic_bytes[path]?
+        offsets = typed_dynamic_site_statistics_offsets[path]?
+        unless metadata && offsets
           typed_dynamic_rosters_match = false
+          next
+        end
+        site_paths = dynamic_plan.site_paths
+        unless metadata.size == site_paths.size && offsets.size == site_paths.size
+          typed_dynamic_rosters_match = false
+          next
+        end
+        site_paths.each do |site_path|
+          unless metadata.has_key?(site_path) && offsets[site_path]? == dynamic_plan.statistics_offset_for(site_path)
+            typed_dynamic_rosters_match = false
+          end
+        end
+        metadata.each_key do |site_path|
+          typed_dynamic_rosters_match = false unless dynamic_plan.has_site?(site_path)
+        end
+        offsets.each_key do |site_path|
+          typed_dynamic_rosters_match = false unless dynamic_plan.has_site?(site_path)
         end
       end
       unless typed_dynamic_rosters_match
@@ -450,7 +538,7 @@ module CrystalClick
       stream_rows = replay_complete ? outer_rows : selected_rows
       ordinary_schema = Hash(String, BinaryDataType).new
       schema_snapshot.each do |path, type|
-        ordinary_schema[path] = type unless type.tag == BinaryDataType::TAG_DYNAMIC
+        ordinary_schema[path] = type unless type.contains_dynamic?
       end
       streams = ObjectDocumentStreams.new(
         ObjectDynamicStructureStreams.new(object_bytes, dynamic_bytes),
@@ -471,8 +559,9 @@ module CrystalClick
       )
       typed_dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
       typed_dynamic_data.each do |path, data|
-        type = schema_snapshot[path]?
-        unless type && type.tag == BinaryDataType::TAG_DYNAMIC && typed_dynamic_plans.has_key?(path)
+        type = schema_snapshot[path]? || raise(CorruptPartError.new("typed Dynamic value stream has no declared schema"))
+        dynamic_plan = typed_dynamic_plans[path]? || raise(CorruptPartError.new("typed Dynamic value stream has no retained plan"))
+        unless type.contains_dynamic? && dynamic_plan.type == type
           raise CorruptPartError.new("typed Dynamic value stream has no matching declared plan")
         end
         typed_dynamic_rows[path] = BinaryBulkDecoder.decode(
@@ -483,16 +572,16 @@ module CrystalClick
           replay_complete ? first_mark : 0,
           selected_count,
           profile,
-          typed_dynamic_plans[path]
+          dynamic_plan
         )
         typed_dynamic_rows[path].each do |mark_values|
           mark_values.each do |value|
-            ObjectDeclaredDynamicDeclaration.validate_selected_value!(value, type, codec_budget.limits, false)
+            ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, codec_budget, false)
           end
         end
       end
       if typed_dynamic_rows.size != typed_dynamic_plans.size || typed_dynamic_bytes.size != typed_dynamic_plans.size ||
-         typed_dynamic_statistics_offsets.size != typed_dynamic_plans.size
+         typed_dynamic_site_statistics_offsets.size != typed_dynamic_plans.size
         raise CorruptPartError.new("typed Dynamic prepared metadata and value rosters disagree")
       end
 
@@ -541,8 +630,6 @@ module CrystalClick
           unless ObjectDeclaredDynamicDeclaration.max_types_for(type)
             raise UnsupportedFormatError.new("Object typed Dynamic descriptor is not canonical")
           end
-        elsif type.contains_dynamic?
-          raise UnsupportedFormatError.new("Object typed containers containing Dynamic are not admitted")
         end
         escaped_size = PhysicalStreamName.escaped_size(path)
         logical_size = checked_add_u64(column_prefix.bytesize.to_u64, checked_add_u64(1_u64, escaped_size))
@@ -552,15 +639,6 @@ module CrystalClick
         ensure_unhashed_name_size!(marks_size, hashed)
         expanded_total = checked_add_u64(expanded_total, logical_size)
         ensure_name_size!(expanded_total, limits)
-        if type.tag == BinaryDataType::TAG_DYNAMIC
-          dynamic_metadata_size = checked_add_u64(logical_size, ".dynamic_structure".bytesize.to_u64)
-          dynamic_metadata_marks_size = checked_add_u64(dynamic_metadata_size, ".mrk2".bytesize.to_u64)
-          ensure_name_size!(dynamic_metadata_size, limits)
-          ensure_name_size!(dynamic_metadata_marks_size, limits)
-          ensure_unhashed_name_size!(dynamic_metadata_marks_size, hashed)
-          expanded_total = checked_add_u64(expanded_total, dynamic_metadata_size)
-          ensure_name_size!(expanded_total, limits)
-        end
         context.validate_type_tree(type)
         if type.contains_variant? && ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
           raise UnsupportedFormatError.new("Object typed Variant descriptor is outside the admitted declaration grammar")
@@ -594,6 +672,70 @@ module CrystalClick
         ensure_name_size!(total, limits)
       end
       nil
+    end
+
+    # Discovers only schema-derived names. Structure bytes are not trusted or
+    # parsed here; every site's exact first parse is retained later in its
+    # BinaryDynamicBulkPlan.
+    private def self.discover_typed_dynamic_metadata_names!(
+      column_name : String,
+      schema : Hash(String, BinaryDataType),
+      limits : BinaryCodecLimits,
+      hashed : Bool,
+      budget : BinaryCodecBudget,
+    ) : Hash(String, Hash(String, String))
+      shapes = Hash(String, ObjectDeclaredDynamicSites::Shape).new
+      total_sites = 0_u64
+      total_path_bytes = 0_u64
+      schema.each do |path, type|
+        next unless type.contains_dynamic?
+        shape = ObjectDeclaredDynamicSites.shape_for(type, limits, 2)
+        if shape.count == 0_u64
+          raise UnsupportedFormatError.new("typed Object Dynamic descriptor has no declared Dynamic site")
+        end
+        total_sites = checked_add_u64(total_sites, shape.count)
+        total_path_bytes = checked_add_u64(total_path_bytes, shape.path_bytes)
+        shapes[String.new(path.to_slice)] = shape
+      end
+      return Hash(String, Hash(String, String)).new if total_sites == 0_u64
+
+      if total_sites > limits.max_nodes.to_u64 || total_sites > limits.max_elements.to_u64
+        raise CorruptPartError.new("typed Object Dynamic site roster exceeds codec limits")
+      end
+      # Reserve aggregate site/name work before allocating a per-field map.
+      budget.ensure_future_nodes(total_sites)
+      budget.ensure_future_elements(total_sites)
+      depth_factor = checked_add_u64(limits.max_depth.to_u64, 1_u64)
+      path_work_bytes = checked_multiply_u64(total_path_bytes, depth_factor)
+      budget.ensure_wire_bytes(path_work_bytes)
+
+      names_by_field = Hash(String, Hash(String, String)).new(initial_capacity: shapes.size)
+      total_name_bytes = 0_u64
+      shapes.each do |path, shape|
+        type = schema[path]? || raise(CorruptPartError.new("typed Object Dynamic schema changed during metadata discovery"))
+        names = ObjectDocumentPhysicalPlan.typed_dynamic_structure_names(
+          column_name,
+          path,
+          type,
+          budget
+        )
+        unless names.size.to_u64 == shape.count
+          raise CorruptPartError.new("typed Dynamic metadata names do not match the declared site count")
+        end
+        names.each do |_site_path, logical_name|
+          ensure_name_size!(logical_name.bytesize.to_u64, limits)
+          data_name_bytes = checked_add_u64(logical_name.bytesize.to_u64, ".bin".bytesize.to_u64)
+          marks_name_bytes = checked_add_u64(logical_name.bytesize.to_u64, ".mrk2".bytesize.to_u64)
+          ensure_name_size!(data_name_bytes, limits)
+          ensure_name_size!(marks_name_bytes, limits)
+          ensure_unhashed_name_size!(data_name_bytes, hashed)
+          ensure_unhashed_name_size!(marks_name_bytes, hashed)
+          total_name_bytes = checked_add_u64(total_name_bytes, logical_name.bytesize.to_u64)
+          ensure_name_size!(total_name_bytes, limits)
+        end
+        names_by_field[String.new(path.to_slice)] = names
+      end
+      names_by_field
     end
 
     private def self.parse_object_metadata(
@@ -852,11 +994,13 @@ module CrystalClick
     private def self.metadata_total_size(
       object_bytes : Bytes,
       dynamics : Hash(String, Bytes),
-      typed_dynamics : Hash(String, Bytes),
+      typed_dynamics : Hash(String, Hash(String, Bytes)),
     ) : UInt64
       total = object_bytes.size.to_u64
       dynamics.each_value { |bytes| total = checked_add_u64(total, bytes.size.to_u64) }
-      typed_dynamics.each_value { |bytes| total = checked_add_u64(total, bytes.size.to_u64) }
+      typed_dynamics.each_value do |sites|
+        sites.each_value { |bytes| total = checked_add_u64(total, bytes.size.to_u64) }
+      end
       total
     end
 

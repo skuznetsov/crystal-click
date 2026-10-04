@@ -385,13 +385,10 @@ describe "W158 direct declared Dynamic physical read adversaries" do
 
     w158a_forbidden_recursive_types.each do |forbidden_type|
       invalid_roster = CrystalClick::DynamicStructure.new([forbidden_type] of CrystalClick::BinaryDataType)
-      _schema, invalid_plan, _rows = w158a_codec_input(
-        invalid_roster, CrystalClick::BinaryValue.uint64(10_u64)
-      )
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectDocumentCodec.encode(
-          invalid_plan, [] of Array(CrystalClick::ObjectDocument), mode: 0_u64
-        )
+      # W159 validates the complete explicit actual roster at construction,
+      # before an invalid plan can reach an encoder or physical consumer.
+      expect_raises(ArgumentError, "invalid typed Object Dynamic actual roster") do
+        w158a_codec_input(invalid_roster, CrystalClick::BinaryValue.uint64(10_u64))
       end
 
       empty_roster = CrystalClick::DynamicStructure.new([] of CrystalClick::BinaryDataType)

@@ -1,7 +1,7 @@
 module CrystalClick
-  # Closed declaration spelling for a direct Dynamic child of a JSON/Object
-  # typed path. Recursive containers intentionally do not inherit this leaf
-  # admission.
+  # Closed declaration spelling and site policy for declared Dynamic leaves
+  # in a JSON/Object typed path. It owns nominal site provenance; actual
+  # Dynamic arm values remain constrained by ObjectRecursiveDeclaration.
   module ObjectDeclaredDynamicDeclaration
     DEFAULT_MAX_TYPES =  32
     MAX_TYPES         = 254
@@ -76,11 +76,126 @@ module CrystalClick
 
     # Object's typed Dynamic slice reuses the existing Object declared-arm
     # domain, not the full generic Dynamic arm domain.
-    def self.validate_actual_structure!(structure : DynamicStructure, limits : BinaryCodecLimits, root_depth : Int = 3) : Nil
+    def self.validate_actual_structure!(
+      structure : DynamicStructure,
+      limits : BinaryCodecLimits,
+      root_depth : Int = 3,
+      budget : BinaryCodecBudget? = nil,
+    ) : Nil
       structure.type_count.times do |index|
-        validate_actual_type!(structure.type_at(index), limits, root_depth)
+        validate_actual_type!(structure.type_at(index), limits, root_depth, budget)
       end
       nil
+    end
+
+    # Prepares every declared Dynamic site under one shared operation budget.
+    # Supplied statistics are not forwarded into typed-child V3 metadata.
+    def self.prepare_write_sites_plan(
+      type : BinaryDataType,
+      structures : Hash(String, DynamicStructure),
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      root_depth : Int = 2,
+    ) : BinaryDynamicBulkPlan
+      unless budget.writing?
+        raise ArgumentError.new("typed Object Dynamic plan requires a writing budget")
+      end
+      limits = budget.limits
+      shape = ObjectDeclaredDynamicSites.shape_for(type, limits, root_depth)
+      unless shape.count > 0_u64
+        raise UnsupportedFormatError.new("typed Object Dynamic site plan requires a declared Dynamic site")
+      end
+      unless structures.size.to_u64 == shape.count
+        raise UnsupportedFormatError.new("typed Object Dynamic structures must exactly match declared sites")
+      end
+      if shape.count > 0_u64
+        budget.ensure_future_nodes(shape.count)
+        budget.preflight_children(shape.count)
+      end
+      path_work_bytes = checked_multiply(shape.path_bytes, checked_add(limits.max_depth.to_u64, 1_u64))
+      budget.ensure_wire_bytes(path_work_bytes)
+      budget.charge_wire_bytes(path_work_bytes)
+
+      sites = ObjectDeclaredDynamicSites.for_type(type, limits, root_depth)
+      prepared_structures = Hash(String, DynamicStructure).new(initial_capacity: sites.size)
+      sites.each do |site|
+        structure = structures[site.path]? || raise(UnsupportedFormatError.new("typed Object Dynamic structure is missing site: #{site.path.inspect}"))
+        maximum = max_types_for(site.type) || raise(UnsupportedFormatError.new("typed Object Dynamic site is not canonical"))
+        if structure.type_count > maximum
+          raise UnsupportedFormatError.new("typed Object Dynamic roster exceeds its declared max_types cap")
+        end
+        structure.type_count.times do |index|
+          actual_type = structure.type_at(index)
+          validate_actual_type!(actual_type, limits, site.actual_root_depth, budget)
+        end
+        prepared_structures[site.path] = without_statistics(structure, budget, site.actual_root_depth)
+      end
+
+      BinaryDynamicBulkPlan.new_with_budget(type, prepared_structures, budget, profile)
+    end
+
+    # Parses every nominal typed-Dynamic metadata site once. The returned
+    # generic plan retains each exact per-site statistics offset for the
+    # paired selected-value decoder.
+    def self.prepare_read_sites_plan(
+      type : BinaryDataType,
+      structures : BinaryDynamicStructureStreams,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      root_depth : Int = 2,
+    ) : BinaryDynamicBulkPlan
+      if budget.writing?
+        raise ArgumentError.new("typed Object Dynamic plan requires a reading budget")
+      end
+      limits = budget.limits
+      shape = begin
+        ObjectDeclaredDynamicSites.shape_for(type, limits, root_depth)
+      rescue ex : UnsupportedFormatError
+        raise CorruptPartError.new("typed Object Dynamic schema is outside the Object recursive grammar: #{ex.message}")
+      end
+      unless shape.count > 0_u64
+        raise CorruptPartError.new("typed Object Dynamic site plan requires a declared Dynamic site")
+      end
+      unless structures.site_count.to_u64 == shape.count
+        raise CorruptPartError.new("typed Object Dynamic structure site count does not match its declaration")
+      end
+      if shape.count > 0_u64
+        budget.ensure_future_nodes(shape.count)
+        budget.preflight_children(shape.count)
+      end
+      path_work_bytes = checked_multiply(shape.path_bytes, checked_add(limits.max_depth.to_u64, 1_u64))
+      budget.ensure_wire_bytes(path_work_bytes)
+      budget.charge_wire_bytes(path_work_bytes)
+      sites = ObjectDeclaredDynamicSites.for_type(type, limits, root_depth)
+
+      plan = begin
+        BinaryDynamicBulkPlan.decode_structure_streams(type, structures, budget, profile)
+      rescue ex : UnsupportedFormatError
+        raise CorruptPartError.new("invalid typed Object Dynamic structure: #{ex.message}")
+      end
+      unless plan.site_count == sites.size
+        raise CorruptPartError.new("typed Object Dynamic structure contains undeclared nested sites")
+      end
+
+      sites.each do |site|
+        unless plan.has_site?(site.path)
+          raise CorruptPartError.new("typed Object Dynamic structure is missing site: #{site.path.inspect}")
+        end
+        structure = plan.structure_for(site.path)
+        maximum = max_types_for(site.type) || raise(CorruptPartError.new("typed Object Dynamic site is not canonical"))
+        if structure.type_count > maximum
+          raise CorruptPartError.new("typed Object Dynamic roster exceeds its declared max_types cap")
+        end
+        begin
+          structure.type_count.times do |index|
+            actual_type = structure.type_at(index)
+            validate_actual_type!(actual_type, limits, site.actual_root_depth, budget)
+          end
+        rescue ex : UnsupportedFormatError
+          raise CorruptPartError.new("invalid typed Object Dynamic actual roster: #{ex.message}")
+        end
+      end
+      plan
     end
 
     # Prepares the one-root generic Dynamic plan used by a declared Object
@@ -92,12 +207,10 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
     ) : BinaryDynamicBulkPlan
-      maximum = max_types_for(type) || raise UnsupportedFormatError.new("typed Object Dynamic must be a direct canonical descriptor")
-      if structure.type_count > maximum
-        raise UnsupportedFormatError.new("typed Object Dynamic roster exceeds its declared max_types cap")
+      unless max_types_for(type)
+        raise UnsupportedFormatError.new("typed Object Dynamic must be a direct canonical descriptor")
       end
-      fresh_structure = without_statistics(structure, budget, 3)
-      BinaryDynamicBulkPlan.new_with_budget(type, {"root" => fresh_structure}, budget, profile)
+      prepare_write_sites_plan(type, {"root" => structure}, budget, profile, 2)
     end
 
     # Parses an exact one-root child structure stream once, under the caller's
@@ -108,33 +221,31 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
     ) : BinaryDynamicBulkPlan
-      maximum = max_types_for(type) || raise CorruptPartError.new("typed Object Dynamic schema is not a direct canonical descriptor")
-      plan = begin
-        BinaryDynamicBulkPlan.decode_structure_streams(type, structures, budget, profile)
-      rescue ex : UnsupportedFormatError
-        raise CorruptPartError.new("invalid typed Object Dynamic structure: #{ex.message}")
+      unless max_types_for(type)
+        raise CorruptPartError.new("typed Object Dynamic schema is not a direct canonical descriptor")
       end
-      unless plan.site_count == 1 && plan.has_site?("root")
-        raise CorruptPartError.new("typed Object Dynamic structure must contain exactly its root site")
-      end
-      structure = plan.structure_for("root")
-      if structure.type_count > maximum
-        raise CorruptPartError.new("typed Object Dynamic roster exceeds its declared max_types cap")
-      end
-      begin
-        validate_actual_structure!(structure, budget.limits, 3)
-      rescue ex : UnsupportedFormatError
-        raise CorruptPartError.new("invalid typed Object Dynamic actual roster: #{ex.message}")
-      end
-      plan
+      prepare_read_sites_plan(type, structures, budget, profile, 2)
     end
 
-    def self.validate_actual_type!(type : BinaryDataType, limits : BinaryCodecLimits, root_depth : Int = 3) : Nil
-      if type.contains_dynamic? || type.contains_variant? || BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
-        raise UnsupportedFormatError.new("typed Object Dynamic actual arms exclude Dynamic, Variant, and LowCardinality")
+    def self.validate_actual_type!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      root_depth : Int = 3,
+      budget : BinaryCodecBudget? = nil,
+    ) : Nil
+      if operation_budget = budget
+        type_context = BinaryCodecContext.new(limits, nil, operation_budget.writing?, operation_budget, false, false)
+        type_context.validate_type_tree(type, root_depth)
+      else
+        # Keep this standalone public seam finite even when no operation owner
+        # is supplied. Callers with an aggregate budget pass it explicitly.
+        BinaryCodecContext.new(limits, nil, true, nil, false, false).validate_type_tree(type, root_depth)
       end
       unless ObjectRecursiveDeclaration.measure_descriptor(type, limits, root_depth)
         raise UnsupportedFormatError.new("typed Object Dynamic actual arm is outside the recursive declaration grammar")
+      end
+      if type.contains_dynamic? || type.contains_variant? || BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+        raise UnsupportedFormatError.new("typed Object Dynamic actual arms exclude Dynamic, Variant, and LowCardinality")
       end
       nil
     end
@@ -151,7 +262,7 @@ module CrystalClick
       maximum_copy_bytes = 0_u64
       structure.type_count.times do |index|
         type = structure.type_at(index)
-        validate_actual_type!(type, budget.limits, root_depth)
+        validate_actual_type!(type, budget.limits, root_depth, budget)
         bound = BinaryTypeNameBudget.measure(type, budget, root_depth)
         maximum_copy_bytes = checked_add(maximum_copy_bytes, checked_add(bound[0], bound[1]))
       end
@@ -174,7 +285,14 @@ module CrystalClick
       expected_type : BinaryDataType,
       limits : BinaryCodecLimits,
       writing : Bool,
+      root_depth : Int = 3,
+      budget : BinaryCodecBudget? = nil,
     ) : Nil
+      if operation_budget = budget
+        unless operation_budget.writing? == writing
+          raise ArgumentError.new("typed Object Dynamic selected-value budget direction differs")
+        end
+      end
       unless value.type == expected_type && expected_type.tag == BinaryDataType::TAG_DYNAMIC
         selected_value_error!(writing, "typed Object Dynamic value does not match its declared descriptor")
       end
@@ -188,9 +306,128 @@ module CrystalClick
         selected_value_error!(writing, "typed Object Dynamic value does not contain exactly one selected child")
       end
       begin
-        validate_actual_type!(value.child_at(0).type, limits, 3)
+        validate_actual_type!(value.child_at(0).type, limits, root_depth, budget)
       rescue ex : UnsupportedFormatError
         selected_value_error!(writing, "typed Object Dynamic selected child is outside the Object recursive arm domain")
+      end
+      nil
+    end
+
+    # Checks every selected Dynamic node inside one declared composite value.
+    # Depth begins at the Object typed field root (2) and advances through the
+    # same wrappers that generate generic site paths.
+    def self.validate_selected_values!(
+      value : BinaryValue,
+      expected_type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      writing : Bool,
+    ) : Nil
+      budget = BinaryCodecBudget.new(limits, writing)
+      validate_selected_values!(value, expected_type, budget, writing, 2)
+    end
+
+    # Borrowed-budget form for paired codec owners. Direction is checked before
+    # descriptor scans or value traversal; each Dynamic-bearing wrapper edge
+    # and selected site node is preflighted/charged on the same operation
+    # budget used by the enclosing bulk lane.
+    def self.validate_selected_values!(
+      value : BinaryValue,
+      expected_type : BinaryDataType,
+      budget : BinaryCodecBudget,
+      writing : Bool,
+      root_depth : Int = 2,
+    ) : Nil
+      unless budget.writing? == writing
+        raise ArgumentError.new("typed Object Dynamic selected-value budget direction differs")
+      end
+      limits = budget.limits
+      # Descriptor recursion is bounded before the Dynamic predicate can walk
+      # it. This temporary read/write-neutral context is intentionally not the
+      # operation budget: the enclosing owner already accounts its schema.
+      BinaryCodecContext.new(limits, nil, writing, nil, false, false).validate_type_tree(expected_type, root_depth)
+      return nil unless expected_type.contains_dynamic?
+      unless ObjectRecursiveDeclaration.measure_descriptor(expected_type, limits, root_depth)
+        selected_value_error!(writing, "typed Object Dynamic descriptor is outside the recursive declaration grammar")
+      end
+      validate_selected_value_tree!(value, expected_type, limits, budget, writing, root_depth)
+      nil
+    end
+
+    private def self.validate_selected_value_tree!(
+      value : BinaryValue,
+      expected_type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      budget : BinaryCodecBudget,
+      writing : Bool,
+      object_depth : Int,
+    ) : Nil
+      budget.visit_node(object_depth)
+      unless value.type == expected_type
+        selected_value_error!(writing, "typed Object Dynamic value does not match its declared recursive descriptor")
+      end
+      case expected_type.tag
+      when BinaryDataType::TAG_DYNAMIC
+        validate_selected_value!(value, expected_type, limits, writing, object_depth + 1, budget)
+      when BinaryDataType::TAG_ARRAY
+        child_type = expected_type.child_at(0)
+        if child_type.contains_dynamic?
+          child_count = value.element_count.to_u64
+          budget.preflight_children(child_count) if child_count > 0_u64
+          value.element_count.times do |index|
+            validate_selected_value_tree!(value.element_at(index), child_type, limits, budget, writing, object_depth + 1)
+          end
+        end
+      when BinaryDataType::TAG_NULLABLE
+        child_type = expected_type.child_at(0)
+        if !value.is_null? && child_type.contains_dynamic?
+          unless value.child_count == 1
+            selected_value_error!(writing, "typed Object Dynamic Nullable value does not contain exactly one child")
+          end
+          budget.preflight_children(1_u64)
+          validate_selected_value_tree!(value.child_at(0), child_type, limits, budget, writing, object_depth + 1)
+        end
+      when BinaryDataType::TAG_MAP
+        value_type = expected_type.child_at(1)
+        if value_type.contains_dynamic?
+          if value.element_count % 2 != 0
+            selected_value_error!(writing, "typed Object Dynamic Map value has an incomplete key/value pair")
+          end
+          value_count = (value.element_count // 2).to_u64
+          budget.preflight_children(value_count) if value_count > 0_u64
+          index = 1
+          while index < value.element_count
+            validate_selected_value_tree!(value.element_at(index), value_type, limits, budget, writing, object_depth + 1)
+            index += 2
+          end
+        end
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        unless value.element_count == expected_type.child_count
+          selected_value_error!(writing, "typed Object Dynamic Tuple value does not match its declared fields")
+        end
+        dynamic_child_count = 0_u64
+        expected_type.child_count.times do |index|
+          dynamic_child_count += 1_u64 if expected_type.child_at(index).contains_dynamic?
+        end
+        budget.preflight_children(dynamic_child_count) if dynamic_child_count > 0_u64
+        expected_type.child_count.times do |index|
+          child_type = expected_type.child_at(index)
+          if child_type.contains_dynamic?
+            validate_selected_value_tree!(value.element_at(index), child_type, limits, budget, writing, object_depth + 1)
+          end
+        end
+      when BinaryDataType::TAG_VARIANT
+        unless value.is_null?
+          index = value.variant_index?.try(&.to_i) || selected_value_error!(writing, "non-NULL typed Object Variant is missing its selected arm")
+          if index >= expected_type.child_count
+            selected_value_error!(writing, "typed Object Variant discriminator exceeds its declared arms")
+          end
+          child_type = expected_type.child_at(index)
+          if child_type.contains_dynamic?
+            child = value.variant_child? || selected_value_error!(writing, "non-NULL typed Object Variant is missing its selected child")
+            budget.preflight_children(1_u64)
+            validate_selected_value_tree!(child, child_type, limits, budget, writing, object_depth + 1)
+          end
+        end
       end
       nil
     end
@@ -200,6 +437,13 @@ module CrystalClick
         raise UnsupportedFormatError.new("typed Object Dynamic metadata size overflows UInt64")
       end
       left + right
+    end
+
+    private def self.checked_multiply(left : UInt64, right : UInt64) : UInt64
+      if right != 0_u64 && left > UInt64::MAX // right
+        raise UnsupportedFormatError.new("typed Object Dynamic metadata size overflows UInt64")
+      end
+      left * right
     end
 
     private def self.selected_value_error!(writing : Bool, message : String) : NoReturn

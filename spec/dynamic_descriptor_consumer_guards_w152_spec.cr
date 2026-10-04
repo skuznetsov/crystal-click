@@ -260,7 +260,7 @@ describe "W152 Dynamic descriptor consumer guards" do
     end
   end
 
-  it "admits recursive Dynamic metadata while keeping Object schema and data guards" do
+  it "admits declared recursive Dynamic in Object plans without weakening borrowed guards" do
     array_dynamic = w152_consumer_dynamic_types[0]
     dynamic_roster = CrystalClick::DynamicStructure.new([array_dynamic] of CrystalClick::BinaryDataType)
     literal_dynamic_roster = Bytes[
@@ -271,17 +271,39 @@ describe "W152 Dynamic descriptor consumer guards" do
     CrystalClick::DynamicStructureCodec.decode(literal_dynamic_roster).should eq(dynamic_roster)
 
     dynamic_schema = {"typed" => array_dynamic}
-    expect_raises(ArgumentError) do
-      CrystalClick::ObjectDocumentSchema.new(dynamic_schema)
-    end
+    schema = CrystalClick::ObjectDocumentSchema.new(dynamic_schema)
+    schema.declaration.should eq("JSON(typed Array(Dynamic))")
+    dynamic_only_roster = CrystalClick::DynamicStructure.new([] of CrystalClick::BinaryDataType)
+    dynamic_plan = CrystalClick::ObjectDocumentPlan.new(
+      w152_consumer_object_set,
+      schema.typed_paths,
+      typed_dynamic_sites: {"typed" => {"root.elements" => dynamic_only_roster}},
+    )
+    schema.validate_plan(dynamic_plan)
 
-    dynamic_plan = CrystalClick::ObjectDocumentPlan.new(w152_consumer_object_set, dynamic_schema)
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentCodec.encode(dynamic_plan, [] of Array(CrystalClick::ObjectDocument))
-    end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentPhysicalPlan.new("payload", dynamic_plan)
-    end
+    dynamic_type = CrystalClick::BinaryDataType.dynamic
+    dynamic_element = CrystalClick::BinaryValue.dynamic(dynamic_type, nil)
+    dynamic_array = CrystalClick::BinaryValue.array(array_dynamic, [dynamic_element] of CrystalClick::BinaryValue)
+    dynamic_document = CrystalClick::ObjectDocument.new({"typed" => dynamic_array})
+    dynamic_streams = CrystalClick::ObjectDocumentCodec.encode(
+      dynamic_plan,
+      [[dynamic_document]],
+      mode: 0_u64,
+    )
+    dynamic_physical = CrystalClick::ObjectDocumentPhysicalPlan.new("payload", dynamic_plan)
+    dynamic_physical.typed_dynamic("typed").prefix_size_for("root.elements.discriminators").should eq(8)
+    decoded_dynamic = CrystalClick::ObjectDocumentCodec.decode(schema.typed_paths, dynamic_streams)
+    decoded_array = decoded_dynamic[0][0].value_for("typed")
+    decoded_array.element_count.should eq(1)
+    decoded_array.element_at(0).type.should eq(dynamic_type)
+    decoded_array.element_at(0).is_null?.should be_true
+    empty_dynamic = CrystalClick::ObjectDocumentCodec.decode(
+      schema.typed_paths,
+      dynamic_streams,
+      first_mark: 1,
+      mark_count: 0,
+    )
+    empty_dynamic.should be_empty
 
     uint64 = CrystalClick::BinaryDataType.primitive("UInt64")
     supported_schema = {"typed" => uint64}
@@ -293,20 +315,10 @@ describe "W152 Dynamic descriptor consumer guards" do
     decoded = CrystalClick::ObjectDocumentCodec.decode(supported_schema, streams)
     decoded[0][0].value_for("typed").as_uint64.should eq(31_u64)
 
-    # The manually supplied typed hash is refused even when selection is empty.
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    # Admission does not let an ordinary typed lane impersonate the separate
+    # recursive-Dynamic lane, even when no rows are selected.
+    expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::ObjectDocumentCodec.decode(dynamic_schema, streams, first_mark: 1, mark_count: 0)
-    end
-    # File-reader schema preflight must also win over part lookup for an empty selection.
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentFileReader.read(
-        "/not-read-part",
-        "payload",
-        dynamic_schema,
-        first_mark: 0,
-        mark_count: 0,
-        hashed: true,
-      )
     end
   end
 end

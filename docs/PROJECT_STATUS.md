@@ -1,6 +1,37 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W158 adds paired direct declared
+Current capability checkpoint (2026-10-04): W159 extends declared Object/JSON
+Dynamic to explicit recursive Array/Tuple/Map sites, with paired codec,
+statistics, physical binding and public complete-part reading/writing. Site
+rosters are explicit and exact; actual arms and SharedVariant spills retain
+the narrower Object arm domain and true Object depth. Each typed field keeps
+its first parsed site plan and per-site statistics offsets. Full metadata,
+BASIC headers and K+1 grids are checked before full/middle/zero body selection.
+Borrowed budgets cover recursive selected-value work and metadata-name copies;
+logical budget evidence is not an allocator-RSS certificate.
+Root passes 127 focused DEBUG examples (22 unique specs, three disjoint groups)
+and 572 affected RELEASE examples (77 unique specs, ten disjoint groups), all
+with zero failures/errors/pending and exit 0. Current source/spec hashes match
+both gate manifests. Two temporary depth/name-work guard bypasses fail their
+intended assertions; source hashes match exactly after restoration. Formatter,
+shell/Ruby syntax and hygiene pass. These are affected gates, not a fresh
+complete-inventory run or performance measurement.
+Pinned-stock qualification passes stock-authored and independently
+library-authored complete Wide parts, actual ATTACH/CHECK, explicit per-site
+metadata/rosters and independent full/middle literal/type queries. A CHECK-valid
+42-to-43 mutant fails the unchanged original value oracle. This native profile
+is declared Array/Tuple/Map/direct Dynamic with Int64/String actual rosters,
+String/Bool spills, empty collections and NULL, single-stream/BASIC,
+Dynamic V3/Object V3 MAP, six rows and three real plus one terminal mark.
+Legal Nullable/Tuple, Variant/Array, LC siblings, cap 0 and other actual arms
+have spec evidence here, not new general native-product qualification.
+Scoped hostile verdict: ROBUST for this slice. Broader JSON/type/layout
+products, MV/projections and overall modularization remain open; performance
+stays deferred. Source snapshot `895d13ea` is still separate from executable
+build `d9bcb5ab`. Exact scope, evidence and refresh conditions are in
+[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W158 adds paired direct declared
 `Dynamic` paths to bounded Object/JSON plans, whole-part writing and public
 file/column/table reading. Each path has an explicit actual roster; equal
 nominal caps may retain different rosters. The file reader retains the first
@@ -650,8 +681,9 @@ source/runtime identities and executed evidence.
    declared Variant with a paired prefix owner and independently owned whole
    parts. W158 adds direct declared Dynamic with exact per-path actual rosters,
    retained first-parse metadata and independently authored complete parts in
-   its finite BASIC profile. Recursive Dynamic, unqualified Dynamic/Variant/LC
-   leaves/products, Map LC keys, and
+   its finite BASIC profile. W159 extends explicit declared Dynamic rosters
+   through legal recursive wrappers, with separate Array/Tuple/Map whole-part
+   qualification. Unqualified Dynamic/Variant/LC leaves/products, Map LC keys, and
    the inherited timezone-profile gap remain open within Object,
    even where standalone part support exists. The older scalar typed-path behavior is
    unchanged. Neither adapter implies arbitrary
@@ -680,8 +712,10 @@ source/runtime identities and executed evidence.
    statistics-flag boundary needed by metadata marks. W158 binds exact child
    streams to those offsets and integrates direct declared Object Dynamic with
    a finite independently authored whole-part certificate. Other physical
-   products, independently authored general complete parts and recursive
-   declared Object Dynamic remain separate open frontiers. Equal nominal Dynamic types do not imply
+   products and independently authored general complete parts remain open.
+   W159 binds recursive declared Object Dynamic sites in its separate finite
+   paired profile; that is not qualification of every admitted schema product.
+   Equal nominal Dynamic types do not imply
    equal per-part or per-site state.
    Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
@@ -742,9 +776,9 @@ source/runtime identities and executed evidence.
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
    and canonical DateTime/DateTime64/Time/Time64. W140 now admits canonical
    recursive Array/Map(String,V)/Tuple/legal Nullable schemas, with separately
-   bounded physical witnesses. W151 adds bounded declared Variant and W158
-   adds direct declared Dynamic; remaining lanes include recursive Dynamic,
-   the timezone profile gap and
+   bounded physical witnesses. W151 adds bounded declared Variant, W158 adds
+   direct declared Dynamic and W159 adds recursive declared Dynamic sites;
+   remaining lanes include the timezone profile gap and
    separately qualified physical products. W141 establishes the logical
    LowCardinality prerequisite;
    W142 adds the separately qualified standalone dictionary/index codec.
@@ -772,8 +806,9 @@ source/runtime identities and executed evidence.
    exact metadata streams and retains their first parse results, integrating
    direct per-typed-path actual plans with paired storage ownership and
    independently authored complete parts plus stock ATTACH/CHECK/full/middle
-   literal tests. Next characterize recursive Dynamic composition and broader
-   JSON physical products before widening those consumers. Keep default
+   literal tests. W159 extends that retained-site law to recursive declared
+   Dynamic with independent complete Array/Tuple/Map parts. Next characterize
+   broader JSON physical products before widening those consumers. Keep default
    no-roster consumers and unqualified profiles closed.
    Neither the cap nor Object's inferred-path policy substitutes for that roster.
    Broader layout/type products remain separate.

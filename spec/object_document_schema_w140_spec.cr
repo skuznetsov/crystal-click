@@ -176,12 +176,16 @@ describe "W140 recursive Object JSON declared fields" do
     end
   end
 
-  it "admits the bounded LowCardinality subset while keeping recursive Dynamic closed" do
+  it "admits the bounded LowCardinality subset and declared recursive Dynamic" do
     low = CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v LowCardinality(String))")
     low.declaration.should eq("JSON(v LowCardinality(String))")
 
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v Array(Dynamic))")
-    end
+    recursive = CrystalClick::ObjectDocumentSchema.parse_declaration(
+      "JSON(v Array(Dynamic(max_types=1)))"
+    )
+    recursive.declaration.should eq("JSON(v Array(Dynamic(max_types=1)))")
+    recursive.typed_paths["v"].should eq(
+      CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.dynamic(1))
+    )
   end
 end

@@ -316,7 +316,7 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY
         return nil unless type.child_count == 1
         totals.child_edge(limits)
-        child_size = measure_type(type.child_at(0), depth + 1, limits, totals, false) || return nil
+        child_size = measure_type(type.child_at(0), depth + 1, limits, totals, allow_declared_dynamic) || return nil
         checked_add("Array(".bytesize.to_u64 + 1_u64, child_size)
       when BinaryDataType::TAG_NULLABLE
         return nil unless type.child_count == 1
@@ -325,7 +325,7 @@ module CrystalClick
                       child.tag == BinaryDataType::TAG_NULLABLE || child.tag == BinaryDataType::TAG_LOW_CARDINALITY ||
                       child.tag == BinaryDataType::TAG_VARIANT || child.tag == BinaryDataType::TAG_DYNAMIC
         totals.child_edge(limits)
-        child_size = measure_type(child, depth + 1, limits, totals, false) || return nil
+        child_size = measure_type(child, depth + 1, limits, totals, allow_declared_dynamic) || return nil
         checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
       when BinaryDataType::TAG_LOW_CARDINALITY
         return nil unless low_cardinality_child_admitted?(type)
@@ -339,7 +339,7 @@ module CrystalClick
         totals.child_edge(limits)
         key_size = measure_type(key, depth + 1, limits, totals, false) || return nil
         totals.child_edge(limits)
-        value_size = measure_type(type.child_at(1), depth + 1, limits, totals, false) || return nil
+        value_size = measure_type(type.child_at(1), depth + 1, limits, totals, allow_declared_dynamic) || return nil
         checked_add(checked_add("Map(".bytesize.to_u64, key_size), checked_add(", ".bytesize.to_u64 + value_size, 1_u64))
       when BinaryDataType::TAG_VARIANT
         count = type.child_count
@@ -356,7 +356,7 @@ module CrystalClick
             return nil
           end
           totals.child_edge(limits)
-          arm_size = measure_type(arm, depth + 1, limits, totals, false) || return nil
+          arm_size = measure_type(arm, depth + 1, limits, totals, allow_declared_dynamic) || return nil
           total = checked_add(total, 2_u64) if index > 0
           total = checked_add(total, arm_size)
         end
@@ -379,7 +379,7 @@ module CrystalClick
               total = checked_add(total, 1_u64)
             end
             totals.child_edge(limits)
-            child_size = measure_type(type.child_at(index), depth + 1, limits, totals, false) || return nil
+            child_size = measure_type(type.child_at(index), depth + 1, limits, totals, allow_declared_dynamic) || return nil
             total = checked_add(total, child_size)
           end
         end

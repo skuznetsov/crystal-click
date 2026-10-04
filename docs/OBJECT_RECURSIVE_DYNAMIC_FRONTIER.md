@@ -1,0 +1,326 @@
+# Recursive declared Object Dynamic frontier — W159
+
+Status: VERIFIED for the bounded paired slice below. Baseline: `032c515`
+(clean at inspection). Risk: CAUTION; this changes recursive schema admission and paired
+serialization. Rollback: keep the implementation in one isolated local feature
+commit touching only the owners below; revert that commit if a gate fails.
+
+## Boundary
+
+W159 extends the verified W158 direct-declared-Dynamic slice to the next useful
+paired transition: a caller-declared Object/JSON field may contain Dynamic at
+one or more recursive descriptor sites admitted by Object's existing recursive
+declaration grammar. The generic W154–157 `BinaryDynamicBulkPlan` remains the
+site/codec/physical authority. Site rosters are explicit; W159 must not infer,
+promote, or discover actual types from row values.
+
+Admit direct Dynamic unchanged and recursive declared sites such as
+`Array(Dynamic)`, `Tuple(x Dynamic, y Dynamic)`, and `Map(String, Dynamic)`.
+Also preserve already-legal surrounding wrappers: for example a nullable tuple
+containing Dynamic, a Variant arm whose contained wrapper contains Dynamic, and
+a legal LowCardinality sibling beside a Dynamic site. Each Dynamic site's
+actual ordinary alternatives and selected SharedVariant spills remain inside
+the W158 Object recursive arm domain: no contained Dynamic, Variant, or
+LowCardinality actual arm/spill. The actual-roster domain does not inherit the
+declared descriptor's recursive permission.
+
+Do not relax upstream/Object grammar while threading recursive permission:
+`Nullable(Dynamic)`, `Variant(Dynamic)` as a direct arm, a Dynamic Map key, and
+Dynamic beneath a LowCardinality wrapper remain rejected. Keep W158's cap,
+statistics, BASIC profile, V3/Object layout, and Wide-only boundaries. Compact,
+advanced shared-data layouts, general ClickHouse JSON compatibility, MV or
+projection consumers, and performance work are outside this transition.
+
+## Baseline anchors and fences
+
+These anchors describe the inspected W158 baseline, not the widened source.
+
+- `src/crystal_click/object_recursive_declaration.cr:303-400` measures typed
+  descriptors. It currently passes `allow_declared_dynamic: false` through
+  Array/Nullable/Map/Tuple recursion and rejects a direct Dynamic Nullable
+  child; Variant arm rules are separately stricter.
+- `src/crystal_click/object_recursive_declaration_text.cr:146-247` performs
+  allocation-bounded declaration scanning, and `:520-562` resolves tags and
+  keeps Variant/LowCardinality arm boundaries. `ObjectDocumentSchema` renders
+  through `ObjectTypedFieldType.append_name` at `:205-220`; both parse and
+  render must agree on the same recursive admission.
+- `src/crystal_click/binary_dynamic_bulk_plan.cr:302-405` parses or prepares an
+  exact site set; `:408-505` discovers paths through nominal wrappers and
+  actual roster arms. The generated path grammar includes Array `.elements`,
+  Nullable `.nested`, Tuple `.field.<index>`, Map
+  `.elements.field.{0,1}`, and Variant `.arm.<index>`, all rooted at `root`.
+  The plan retains `statistics_offset_for(site)` and exact per-site structure
+  roles. `binary_dynamic_bulk_codec.cr:15-59` is the paired generic path.
+- Object's current direct-only gates are `object_document_plan.cr:11-64`,
+  `object_document_codec.cr:34-56,263-295,339-388`,
+  `object_document_physical_plan.cr:29-38,100-134`,
+  `object_document_column_writer/lane_binder.cr:80-129,220-265`, and
+  `object_document_file_reader.cr:195-230,254-261,338-499,528-571`.
+- W158 stats copying/rebuild currently handles one structure per typed path at
+  `object_document_statistics.cr:45-50,183-193,196-265`. Every recursive site
+  needs fresh absent V3 statistics; copying stale supplied counts is not a
+  valid alternative.
+- Public declared-schema boundaries are
+  `object_document_column_writer.cr:7-45`,
+  `object_document_file_reader.cr:82-134`,
+  `object_column_reader.cr:31-36,149-179`,
+  `wide_part_writer.cr:25-45`, and
+  `wide_part_table/object_column_adapter.cr:5-13,28-57`.
+
+In particular, W158's one-site root-only stream check and `root.discriminators`
+header exception cannot simply be deleted. They must become exact per-field,
+per-site checks. Descriptor roster entries (field path → Dynamic-site path →
+`DynamicStructure`) are the explicit logical input. Physical metadata blobs,
+value-role names, and discriminator grids are then derived and checked from
+that descriptor plus the declared type; they are not caller-promoted roster
+entries. The Object physical owner must collision-check the complete generated
+physical filename set before proportional value output.
+
+## Public API contract
+
+Keep the three-argument-compatible plan surface:
+
+```crystal
+ObjectDocumentPlan.new(structures, typed_paths, typed_dynamics = {})
+ObjectDocumentPlan.new(
+  structures,
+  typed_paths,
+  typed_dynamics,
+  typed_dynamic_sites: Hash(String, Hash(String, DynamicStructure)),
+)
+```
+
+The existing third argument stays root-only for direct Dynamic fields and is
+normalized internally to site key `"root"`. The new fourth keyword supports
+any declared type containing Dynamic, including direct Dynamic. Supplying both
+forms for one field, using the legacy form for a composite type, or omitting,
+adding, or duplicating a declared field/site key is an error. The exact site
+set is validated by the generic plan against the declared type and all
+explicit actual rosters. No site map is inferred from values.
+
+`has_typed_dynamic?(field)` and the typed-Dynamic field roster cover every
+typed descriptor with `contains_dynamic?`. Add
+`typed_dynamic_sites_for(field) : Hash(String, DynamicStructure)` as a detached
+site-map accessor. Keep `typed_dynamic_for(field)` as a root-only compatibility
+accessor and reject calls for a composite descriptor; it must not return an
+arbitrary nested site. Ordinary `typed_for` and `streams.typed_for` continue to
+cover only fields without Dynamic. Keep typed Dynamic lanes in their separate
+`BinaryDynamicBulkStreams` map, now with exact site-keyed structure streams.
+Expose per-site statistics offsets (for example
+`typed_dynamic_statistics_offset(field, site)`); the old one-argument root
+accessor remains direct-only.
+
+## Paired invariants
+
+1. Parse and render use the same recursive descriptor walk. The walk carries a
+   declared-schema permission through legal wrappers, but keeps the explicit
+   direct-child exclusions for Nullable, Variant, Map keys, and LowCardinality.
+   It also carries the Object root depth so site actual-arm and SharedVariant
+   spill checks use the true depth through Array/Tuple/Map/Variant ancestors.
+   A wrapper that fits while its site actual arm exceeds the configured depth
+   must fail before names or lanes are materialized.
+2. Before copying caller maps or allocating child/role tables, bound the whole
+   schema, field/site counts, descriptor visits, type-name bytes, and metadata
+   copies under the shared codec budget. Prepare all per-field generic plans
+   from explicit rosters before physical planning or value-lane allocation.
+   One codec budget covers parent Object metadata, all typed sites, stats
+   normalization, ordinary/shared siblings, and values; one shared physical
+   context covers every field/site filename and collision. Do not restart a
+   budget per field or site. Nominal schema and actual-roster descriptor walks
+   must be bounded before recursive presence predicates. Schema-only metadata
+   discovery charges intermediate physical prefix copies as well as final
+   names before materialization; a borrowed discovery budget accumulates
+   across fields. Logical bounds do not certify allocator RSS.
+3. Write validates each typed root against its descriptor, then validates the
+   selected concrete type at every Dynamic site, including SharedVariant
+   spills, against the W158 actual-arm rule and true Object depth. Generic
+   Dynamic bulk encoding receives the prepared per-field plan; it never
+   discovers a roster from row values. Statistics recomputation preserves the
+   exact explicit site map while rebuilding each site's child structure with
+   absent stats. The recursive selected-value policy borrows the operation
+   budget and admits child counts before visiting collection elements; stats
+   normalization cannot defer that work bound to a later encoder.
+4. Physical planning derives every Dynamic role and every per-site
+   `.dynamic_structure` physical lane from the prepared generic plan, checks
+   all names for collisions globally, and applies the BASIC eight-byte prefix
+   only to each site discriminator role. Site structure lanes carry that
+   site's own statistics offset. Ordinary variant prefixes and Object's
+   inferred Dynamic lanes remain separate.
+5. Read parses every typed Dynamic structure stream exactly once into a
+   retained `BinaryDynamicBulkPlan` per typed field. That plan supplies the
+   exact site map and statistics offsets used to validate each metadata grid
+   and to decode selected values; do not reparse to recover offsets and do not
+   add a public trusted-plan parameter. A private prepared-read seam may pass
+   the first plan into the generic bulk decoder.
+6. Before any selected value window, validate exact field/site metadata
+   rosters, every metadata suffix/EOF, every complete K+1 value/discriminator
+   grid, BASIC discriminator headers, and global physical names. These checks
+   also run for `inspect`, middle selection, and zero selection. Bodies remain
+   selected-only; unselected body bytes are not promised to be semantically
+   decoded. Reassembled documents fail closed on any typed/shared field-name
+   collision; a Dynamic field must never overwrite an ordinary/shared field.
+
+## RED and transition DoD
+
+Baseline evidence at `032c515`: root ran four public recursive-schema
+examples. Compilation succeeded, and all four raised the existing unsupported
+recursive-Object `ArgumentError`; this is a schema-admission RED only. It does
+not establish paired-codec or complete-part RED coverage. After the schema
+fence is implemented, add and run the paired-codec and public complete-part
+falsifiers below before widening the implementation claim:
+
+- `Array(Dynamic)`, a named tuple with two Dynamic sites, and
+  `Map(String, Dynamic)`; assert canonical type rendering and exact site paths.
+- legal Nullable/Tuple and Variant/wrapper-containing-Dynamic cases, plus a
+  legal LowCardinality neighbor; retain RED for `Nullable(Dynamic)`, direct
+  `Variant(Dynamic)` arm, Map Dynamic key, and Dynamic-under-LC.
+- missing/extra/overlapping site maps; different rosters at same-cap sites;
+  explicit-only behavior when values could suggest an unprovided arm; and
+  selected illegal actual arms and SharedVariant spills.
+
+Implementation owners: `object_recursive_declaration*.cr`,
+`object_document_plan.cr`, `object_document_streams.cr`,
+`object_document_codec.cr`, `object_document_statistics.cr`,
+`object_document_physical_plan.cr`,
+`object_document_column_writer/lane_binder.cr`,
+`object_document_file_reader.cr`, and `crystal_click.cr` for any new owner.
+Keep historical W158 certificates unchanged. Current spec assertions may
+replace intentionally obsolete admission fences, while retaining unsupported
+profiles and malformed-input refusals. Use a cohesive new helper owner
+for recursive declared-site policy/provenance if doing so avoids broadening the
+large generic or legacy facades.
+
+The first useful completion is one public paired Object V3 MAP / Wide slice
+that parses and renders recursive descriptors, writes full parts, inspects
+them, and reads full/middle/zero marks with one retained site plan per field.
+It is not a producer-by-producer partial type gate. Require DEBUG and affected
+RELEASE coverage plus root's finite stock public round-trip before calling it
+verified. Do not claim Compact, arbitrary engine compatibility, MV/projection,
+or performance closure.
+
+RED/adversary matrix must include malformed or missing/extra site metadata,
+bad per-site statistics suffix, wrong/missing physical role, invalid BASIC
+header on a nested site, an unselected corrupt K+1 grid, and every one-short
+shared-budget dimension for a nested-site plan. Strongest counterexample:
+the wrapper and nominal descriptor fit the depth limit, but a nested actual
+arm or spilled selected type exceeds it; that must be rejected before
+publication. Also attack zero-window reads: they must still parse all site
+metadata, validate each header and every complete grid, yet decode no selected
+body. If any guard is removed and its negative case still passes, the test
+does not distinguish the boundary and needs a narrower falsifier.
+
+Small-limit work falsifiers also cover a long column prefix copied through
+nested named tuples, cumulative metadata discovery across individually fitting
+fields, maximal legal Int32 depth arithmetic, and recursive selected-value
+work in both the borrowed validator and standalone statistics recomputation.
+
+Reopen this seal if source-runtime legality disagrees with an admitted wrapper,
+the generic plan emits a site set outside the declared grammar, a child/site
+budget can be bypassed, a physical collision escapes, or zero-window selection
+skips metadata/header/grid validation. The pre-implementation design is
+superseded only within the scoped executed certificate below.
+
+## Executed certificate (2026-10-04)
+
+Root's scoped hostile verdict is ROBUST for recursive declared Dynamic in the
+existing normalized Wide/Object V3 MAP/BASIC profile. This is not general
+JSON compatibility, a new complete-inventory gate, MV/projection closure or
+performance evidence. Existing W158 actual-arm restrictions are preserved;
+constructor preflight now rejects an invalid explicit actual roster before
+an encoder can consume it. Historical certificates are not rewritten.
+
+One `ObjectDeclaredDynamicSites` module/file owns nominal site provenance,
+preflight shape and true Object-depth coordinates. Existing generic Dynamic
+bulk/physical owners remain authoritative. Public plan construction accepts
+the exact fourth site-map keyword, preserves the legacy direct-root form and
+rejects overlaps, missing/extra sites, wrong caps and undeclared fields. Site
+accessors detach keys; indexed walks retain a cached canonical site order.
+Prepared per-field plans, absent child statistics and exact offset maps flow
+through the codec, statistics, lane binder and private FileReader preparation
+seam. There is no public caller-certified prepared-read parameter.
+
+Specs cover Array, distinct same-cap Tuple sites, Map(String, Dynamic), legal
+Nullable/Tuple and Variant/Array wrappers, LC neighbors/replay, NULL/empty,
+cap 0 and unused ordinary arms. The main mixed fixture reaches codec,
+physical-plan, whole writer, inspect, full/middle/late/zero file and column
+reads, table windows and catalog `.values`. Negative cases retain illegal
+direct-child positions and actual-arm domains, and attack exact metadata
+rosters, statistics EOF, misnamed physical roles, nested BASIC headers,
+unselected K+1 grids and shared collisions. Small-limit cases distinguish
+true actual-arm depth, borrowed nodes/elements/bytes, intermediate prefix
+copies, cumulative fields, maximal Int32 depth arithmetic and standalone
+statistics selected-value work.
+
+### Observed gates and source lineage
+
+- Focused DEBUG: 127 examples, 22 unique specs, three disjoint groups; all
+  zero failures/errors/pending and guard exit 0.
+- Affected RELEASE: 572 examples, 77 unique specs, ten disjoint groups; all
+  zero failures/errors/pending and guard exit 0.
+- Root reconciled every captured source/spec SHA256 against the final files.
+  No source/spec input changed during either final gate.
+- Two temporary source-only controls each run one exact adversary example:
+  replacing `SiteSpec.actual_root_depth` with 3 makes row-free nested roster
+  preparation escape the depth-5 refusal; replacing `prefix_copy_factor`
+  with 1 makes long-prefix discovery escape the byte limit. Both fail the
+  intended `expect_raises` assertion, not compilation or an unrelated check.
+  Both owners were restored SHA256-identically before RELEASE.
+- Exact changed-file formatter check, shell syntax, Ruby syntax, diff and
+  source hygiene checks pass. Logical counters do not certify physical RSS.
+
+The retained gate runner is
+`/private/tmp/crystal-click-w159.huxO5J/run_spec_gates.rb`; commands were
+`ruby .../run_spec_gates.rb debug debug-final-4` and
+`ruby .../run_spec_gates.rb release release-final-1`.
+Each runs Crystal 1.21.0 serially through the existing resource guard with
+600 seconds/12288 MiB, `--single-module --threads 1`, host `ld`, an isolated
+cache and the configured macOS SDK. RELEASE adds `--release --no-debug`.
+Logs and exact inventories are retained beside that runner. Manifest hashes:
+
+| Manifest | SHA256 |
+| --- | --- |
+| `debug-final-4.summary` | `9b2a2f6b65e61bc8ec8e8b1c259bba6a538a5a817eb7be05d1d52051a0d9873d` |
+| `release-final-1.summary` | `3a42e362098ee7c0368e8ac557036f83df93a40f9b0957a622792ceaee28464d` |
+
+The focused inventory is the three W159 specs plus W158's three specs,
+W140 schema/recursive-consumer/logical-usage, W146 declared LC, W151 declared
+Variant, lane-binder refactor, W157 offsets pair, W156 physical pair, W154 plan
+pair, W155 values pair/shared-context and W152 descriptor-consumer guards.
+The affected inventory is the deduplicated sorted union of that inventory,
+all `spec/object_*spec.cr`, `binary_bulk_physical_prefix_w151_spec.cr` and specs
+matching `ObjectDocument|ObjectRecursiveDeclaration|ObjectDeclaredDynamic|ObjectColumn|object_documents|JSONTypedPath|json_typed_path`.
+Groups contain at most eight files; totals come from observed example results,
+not file-count proxies. The manifests record exact membership, not merely
+these selection rules.
+
+### Finite independent stock qualification
+
+Root ran `scripts/check_object_recursive_dynamic_w159.sh` through the guard
+with 900 seconds/12288 MiB and `W159_EXECUTE_AS_ROOT=YES`, explicit Crystal/Ruby
+executables and SDK. Both stages exit 0; evidence is retained at
+`/private/tmp/crystal-click-object-recursive-dynamic-w159.lL5TDe`.
+The producer executable is 26.10.1.1201, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+Source comparison remains the separate unbuilt shallow `895d13ea` checkout.
+
+The stock-authored and independently library-authored complete parts use six
+rows, three real marks plus a terminal mark, declared Array/Tuple/Map/direct
+Dynamic, explicit Int64/String site rosters, single-stream String and BASIC
+Dynamic/Map with Dynamic V3/Object V3 MAP. Array/Map String spills, a Tuple-right
+Bool spill, empty arrays/maps and NULL are literal witnesses. Exact metadata
+basenames/site keys and absent-statistics offset 10 are independently pinned.
+Crystal public full/middle/zero reads pass; actual stock ATTACH, one active Wide
+part, CHECK, nominal/runtime types and full/middle literal values pass.
+Ruby independently rechecks retained raw stdout/stderr/SQL. A complete
+library-authored 42-to-43 mutant ATTACHes and CHECKs, but fails the unchanged
+original value oracle and passes only its separately mutant-aware control.
+
+Other legal wrapper/actual-type combinations have spec evidence in this slice,
+not new general stock-product qualification. Compact, COMPACT Variant,
+bucketed/advanced shared data, other structure versions, unrestricted actual
+arms, general MV/projection consumers and reader speed parity remain open.
+Refresh after declaration policy, site/offset provenance, parser/codec,
+statistics, binding/grid selection, budget, runtime/settings or toolchain
+changes. Missing retained logs require rerunning gates, not promoting these
+manifest hashes into substantive evidence. Keep unsupported profiles closed.

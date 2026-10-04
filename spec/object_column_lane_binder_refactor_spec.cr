@@ -384,9 +384,25 @@ describe "Object column lane binder extraction characterization" do
     {coordinate_short.element_count, coordinate_short.wire_byte_count}.should eq({5_i64, 9_i64})
   end
 
-  it "does not widen public Object schema admission to recursive Dynamic" do
+  it "requires an explicit site roster for a declared recursive Dynamic field" do
+    array_dynamic = CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.dynamic)
+    schema = CrystalClick::ObjectDocumentSchema.new({"v" => array_dynamic})
+    structures = CrystalClick::ObjectDynamicStructureSet.new(
+      CrystalClick::ObjectStructure.new([] of String),
+      {} of String => CrystalClick::DynamicStructure,
+    )
+
     expect_raises(ArgumentError) do
-      CrystalClick::ObjectDocumentSchema.new({"v" => CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.dynamic)})
+      CrystalClick::ObjectDocumentPlan.new(structures, schema.typed_paths)
     end
+
+    roster = CrystalClick::DynamicStructure.new([] of CrystalClick::BinaryDataType)
+    plan = CrystalClick::ObjectDocumentPlan.new(
+      structures,
+      schema.typed_paths,
+      typed_dynamic_sites: {"v" => {"root.elements" => roster}},
+    )
+    physical = CrystalClick::ObjectDocumentPhysicalPlan.new("payload", plan)
+    physical.typed_dynamic("v").structure_name_for("root.elements").should end_with(".dynamic_structure")
   end
 end

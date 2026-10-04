@@ -2,6 +2,16 @@ module CrystalClick
   # Binds the W125 Object metadata, typed paths, Dynamic alternatives, and
   # shared MAP lanes into one collision-checked physical filename roster.
   class ObjectDocumentPhysicalPlan
+    private struct TypedDynamicNameShape
+      getter count : UInt64
+      getter path_bytes : UInt64
+      getter physical_name_bytes : UInt64
+      getter sql_name_work_bytes : UInt64
+
+      def initialize(@count : UInt64, @path_bytes : UInt64, @physical_name_bytes : UInt64, @sql_name_work_bytes : UInt64)
+      end
+    end
+
     @object_structure_stream : String
     @dynamic_structure_streams : Hash(String, String)
     @discriminator_streams : Hash(String, String)
@@ -10,6 +20,92 @@ module CrystalClick
     @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
     @shared_plan : BinaryBulkPhysicalPlan
     @stream_count : Int32
+
+    # Discover only declared Dynamic structure basenames, without constructing
+    # a dummy BinaryDynamicBulkPlan. This is used before metadata is available;
+    # the completed physical plan remains the authority and callers compare
+    # every discovered name against structure_name_for(site).
+    def self.typed_dynamic_structure_names(
+      column_name : String,
+      typed_path : String,
+      type : BinaryDataType,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+    ) : Hash(String, String)
+      budget = BinaryCodecBudget.new(limits, false)
+      typed_dynamic_structure_names(column_name, typed_path, type, budget)
+    end
+
+    # Borrowed-budget form for a whole FileReader prepare operation. All
+    # descriptor/site/name work accumulates in the same read budget as the
+    # other metadata and lanes rather than restarting per field.
+    def self.typed_dynamic_structure_names(
+      column_name : String,
+      typed_path : String,
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+    ) : Hash(String, String)
+      limits = budget.limits
+      unless ObjectRecursiveDeclaration.account_descriptor(type, budget, limits, 2)
+        raise UnsupportedFormatError.new("typed Object Dynamic descriptor is outside the Object recursive declaration grammar")
+      end
+      unless type.contains_dynamic?
+        raise UnsupportedFormatError.new("typed Dynamic structure-name discovery requires a declared Dynamic site")
+      end
+      site_shape = ObjectDeclaredDynamicSites.shape_for(type, limits, 2)
+      if site_shape.count == 0_u64
+        raise UnsupportedFormatError.new("typed Dynamic descriptor has no canonical sites")
+      end
+      if site_shape.count > Int32::MAX.to_u64
+        raise UnsupportedFormatError.new("typed Dynamic structure-name roster exceeds the in-memory domain")
+      end
+      budget.ensure_future_nodes(site_shape.count)
+      budget.preflight_children(site_shape.count)
+
+      raw_input_bytes = typed_dynamic_checked_add(column_name.bytesize.to_u64, typed_path.bytesize.to_u64)
+      budget.ensure_wire_bytes(raw_input_bytes)
+      column_prefix_bytes = PhysicalStreamName.escaped_size(column_name)
+      typed_component_bytes = PhysicalStreamName.escaped_size(typed_path)
+      root_prefix_bytes = typed_dynamic_checked_add(
+        column_prefix_bytes,
+        typed_dynamic_checked_add(1_u64, typed_component_bytes)
+      )
+      measured = measure_typed_dynamic_names(type, "root".bytesize.to_u64, root_prefix_bytes, 2, budget)
+      unless measured.count == site_shape.count && measured.path_bytes == site_shape.path_bytes
+        raise UnsupportedFormatError.new("typed Dynamic structure-name preflight disagrees with the declared site roster")
+      end
+
+      path_work_bound = typed_dynamic_checked_multiply(
+        site_shape.path_bytes,
+        typed_dynamic_checked_add(limits.max_depth.to_u64, 1_u64)
+      )
+      # Every tuple/map/variant edge creates a new physical prefix string.
+      # Summing only final basenames misses repeated prefix copies along a
+      # deep path, especially when the column name is long. Bound the sum of
+      # those intermediate prefixes by each final basename times the maximum
+      # descriptor depth, plus a small allowance for root/interpolation
+      # temporaries. Variant SQL-name rendering has its own recursive bound.
+      prefix_copy_factor = typed_dynamic_checked_add(limits.max_depth.to_u64, 2_u64)
+      physical_prefix_copies = typed_dynamic_checked_multiply(measured.physical_name_bytes, prefix_copy_factor)
+      physical_work_bound = typed_dynamic_checked_add(physical_prefix_copies, measured.sql_name_work_bytes)
+      allocation_bound = typed_dynamic_checked_add(path_work_bound, physical_work_bound)
+      allocation_bound = typed_dynamic_checked_add(allocation_bound, raw_input_bytes)
+      budget.ensure_wire_bytes(allocation_bound)
+      budget.ensure_future_nodes(site_shape.count)
+      # Charge the conservative complete bound before allocating any generated
+      # path, prefix, SQL arm name, or output Hash entry.
+      budget.charge_wire_bytes(allocation_bound)
+      site_shape.count.times { budget.charge_node }
+
+      prefix = PhysicalStreamName.escape(column_name)
+      prefix = PhysicalStreamName.append_escaped_component(prefix, typed_path)
+      names = Hash(String, String).new(initial_capacity: measured.count.to_i)
+      physical_seen = Hash(String, Bool).new(initial_capacity: measured.count.to_i)
+      collect_typed_dynamic_names(type, "root", prefix, names, physical_seen)
+      unless names.size.to_u64 == measured.count
+        raise UnsupportedFormatError.new("typed Dynamic structure-name roster changed after preflight")
+      end
+      names
+    end
 
     def initialize(
       column_name : String,
@@ -24,14 +120,24 @@ module CrystalClick
       end
 
       context = PhysicalStreamPlanContext.new(limits)
+      typed_dynamic_budget = BinaryCodecBudget.new(limits, true)
+      typed_dynamic_write_plans = Hash(String, BinaryDynamicBulkPlan).new
       total_records = add_size(plan.typed_path_count.to_u64, object.dynamic_path_count.to_u64)
       context.record_elements(total_records)
       plan.typed_path_count.times do |index|
         path = plan.typed_path_at(index)
         type = plan.typed_type_for(path)
-        if type.tag == BinaryDataType::TAG_DYNAMIC
-          ObjectDeclaredDynamicDeclaration.validate_actual_structure!(
-            plan.typed_dynamic_for(path), limits, root_depth: 3
+        if plan.has_typed_dynamic?(path)
+          unless ObjectRecursiveDeclaration.account_descriptor(type, typed_dynamic_budget, limits, 2)
+            raise UnsupportedFormatError.new("physical typed Object Dynamic descriptor is outside the recursive declaration grammar")
+          end
+          structures = plan.typed_dynamic_sites_for(path, typed_dynamic_budget)
+          typed_dynamic_write_plans[path] = ObjectDeclaredDynamicDeclaration.prepare_write_sites_plan(
+            type,
+            structures,
+            typed_dynamic_budget,
+            @profile,
+            2
           )
         elsif type.contains_dynamic?
           raise UnsupportedFormatError.new("physical Object typed Dynamic fields are not admitted")
@@ -99,17 +205,13 @@ module CrystalClick
 
       @typed_plans = Hash(String, BinaryBulkPhysicalPlan).new
       @typed_dynamic_plans = Hash(String, BinaryDynamicBulkPhysicalPlan).new
-      typed_dynamic_budget = BinaryCodecBudget.new(limits, true)
       plan.typed_path_count.times do |index|
         preflight_typed_path(plan, index, column_prefix.bytesize.to_u64, context)
         raw_path = plan.typed_path_at(index)
         type = plan.typed_type_for(raw_path)
         path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, raw_path, context)
-        if type.tag == BinaryDataType::TAG_DYNAMIC
-          structure = plan.typed_dynamic_for(raw_path)
-          prepared = ObjectDeclaredDynamicDeclaration.prepare_write_plan(
-            type, structure, typed_dynamic_budget, @profile
-          )
+        if plan.has_typed_dynamic?(raw_path)
+          prepared = typed_dynamic_write_plans[raw_path]
           typed_dynamic_plan = BinaryDynamicBulkPhysicalPlan.from_escaped_prefix(
             prepared, path_prefix, limits, context
           )
@@ -347,6 +449,203 @@ module CrystalClick
         digits += 1_u64
       end
       digits
+    end
+
+    private def self.measure_typed_dynamic_names(
+      type : BinaryDataType,
+      path_bytes : UInt64,
+      prefix_bytes : UInt64,
+      depth : Int,
+      budget : BinaryCodecBudget,
+    ) : TypedDynamicNameShape
+      if type.tag == BinaryDataType::TAG_DYNAMIC
+        return TypedDynamicNameShape.new(
+          1_u64,
+          path_bytes,
+          typed_dynamic_checked_add(prefix_bytes, ".dynamic_structure".bytesize.to_u64),
+          0_u64
+        )
+      end
+
+      case type.tag
+      when BinaryDataType::TAG_ARRAY
+        child = type.child_at(0)
+        return empty_typed_dynamic_shape unless child.contains_dynamic?
+        measure_typed_dynamic_names(
+          child,
+          typed_dynamic_checked_add(path_bytes, ".elements".bytesize.to_u64),
+          prefix_bytes,
+          depth + 1,
+          budget
+        )
+      when BinaryDataType::TAG_NULLABLE
+        child = type.child_at(0)
+        return empty_typed_dynamic_shape unless child.contains_dynamic?
+        measure_typed_dynamic_names(
+          child,
+          typed_dynamic_checked_add(path_bytes, ".nested".bytesize.to_u64),
+          prefix_bytes,
+          depth + 1,
+          budget
+        )
+      when BinaryDataType::TAG_MAP
+        child = type.child_at(1)
+        return empty_typed_dynamic_shape unless child.contains_dynamic?
+        values_prefix_bytes = typed_dynamic_checked_add(
+          prefix_bytes,
+          typed_dynamic_checked_add(3_u64, PhysicalStreamName.escaped_size("values"))
+        )
+        measure_typed_dynamic_names(
+          child,
+          typed_dynamic_checked_add(path_bytes, ".elements.field.1".bytesize.to_u64),
+          values_prefix_bytes,
+          depth + 1,
+          budget
+        )
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        total = empty_typed_dynamic_shape
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_dynamic?
+          field_component_bytes = if type.named_tuple?
+                                    raw_size = type.field_name_byte_size(index)
+                                    escaped = PhysicalStreamName.escaped_size(raw_size) do |byte_index|
+                                      type.field_name_byte_at(index, byte_index)
+                                    end
+                                    typed_dynamic_checked_add(3_u64, escaped)
+                                  else
+                                    typed_dynamic_checked_add(3_u64, decimal_digits(index + 1).to_u64)
+                                  end
+          child_shape = measure_typed_dynamic_names(
+            child,
+            typed_dynamic_checked_add(
+              path_bytes,
+              typed_dynamic_checked_add(".field.".bytesize.to_u64, decimal_digits(index).to_u64)
+            ),
+            typed_dynamic_checked_add(prefix_bytes, field_component_bytes),
+            depth + 1,
+            budget
+          )
+          total = add_typed_dynamic_shapes(total, child_shape)
+        end
+        total
+      when BinaryDataType::TAG_VARIANT
+        total = empty_typed_dynamic_shape
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_dynamic?
+          # The physical arm component is the canonical SQL type name. Bound
+          # its rendering and escaped form before constructing any output.
+          name_bounds = BinaryTypeNameBudget.measure(child, budget, depth + 1)
+          escaped_component_bound = typed_dynamic_checked_add(1_u64, typed_dynamic_checked_multiply(name_bounds[0], 3_u64))
+          child_shape = measure_typed_dynamic_names(
+            child,
+            typed_dynamic_checked_add(
+              path_bytes,
+              typed_dynamic_checked_add(".arm.".bytesize.to_u64, decimal_digits(index).to_u64)
+            ),
+            typed_dynamic_checked_add(prefix_bytes, escaped_component_bound),
+            depth + 1,
+            budget
+          )
+          child_shape = TypedDynamicNameShape.new(
+            child_shape.count,
+            child_shape.path_bytes,
+            child_shape.physical_name_bytes,
+            typed_dynamic_checked_add(child_shape.sql_name_work_bytes, name_bounds[1])
+          )
+          total = add_typed_dynamic_shapes(total, child_shape)
+        end
+        total
+      else
+        empty_typed_dynamic_shape
+      end
+    end
+
+    private def self.collect_typed_dynamic_names(
+      type : BinaryDataType,
+      path : String,
+      prefix : String,
+      names : Hash(String, String),
+      physical_seen : Hash(String, Bool),
+    ) : Nil
+      if type.tag == BinaryDataType::TAG_DYNAMIC
+        name = PhysicalStreamName.append_literal(prefix, ".dynamic_structure")
+        if names.has_key?(path) || physical_seen.has_key?(name)
+          raise UnsupportedFormatError.new("typed Dynamic sites collide on a physical structure name")
+        end
+        names[String.new(path.to_slice)] = name
+        physical_seen[name] = true
+        return nil
+      end
+
+      case type.tag
+      when BinaryDataType::TAG_ARRAY
+        child = type.child_at(0)
+        collect_typed_dynamic_names(child, path + ".elements", prefix, names, physical_seen) if child.contains_dynamic?
+      when BinaryDataType::TAG_NULLABLE
+        child = type.child_at(0)
+        collect_typed_dynamic_names(child, path + ".nested", prefix, names, physical_seen) if child.contains_dynamic?
+      when BinaryDataType::TAG_MAP
+        child = type.child_at(1)
+        if child.contains_dynamic?
+          values_prefix = PhysicalStreamName.append_escaped_field(prefix, "values")
+          collect_typed_dynamic_names(child, path + ".elements.field.1", values_prefix, names, physical_seen)
+        end
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_dynamic?
+          field_name = type.named_tuple? ? type.field_name_at(index) : (index + 1).to_s
+          field_prefix = PhysicalStreamName.append_escaped_field(prefix, field_name)
+          collect_typed_dynamic_names(child, path + ".field." + index.to_s, field_prefix, names, physical_seen)
+        end
+      when BinaryDataType::TAG_VARIANT
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_dynamic?
+          arm_prefix = PhysicalStreamName.append_escaped_component(prefix, child.name)
+          collect_typed_dynamic_names(child, path + ".arm." + index.to_s, arm_prefix, names, physical_seen)
+        end
+      end
+      nil
+    end
+
+    private def self.empty_typed_dynamic_shape : TypedDynamicNameShape
+      TypedDynamicNameShape.new(0_u64, 0_u64, 0_u64, 0_u64)
+    end
+
+    private def self.add_typed_dynamic_shapes(left : TypedDynamicNameShape, right : TypedDynamicNameShape) : TypedDynamicNameShape
+      TypedDynamicNameShape.new(
+        typed_dynamic_checked_add(left.count, right.count),
+        typed_dynamic_checked_add(left.path_bytes, right.path_bytes),
+        typed_dynamic_checked_add(left.physical_name_bytes, right.physical_name_bytes),
+        typed_dynamic_checked_add(left.sql_name_work_bytes, right.sql_name_work_bytes)
+      )
+    end
+
+    private def self.decimal_digits(value : Int) : Int32
+      digits = 1
+      remaining = value
+      while remaining >= 10
+        remaining //= 10
+        digits += 1
+      end
+      digits
+    end
+
+    private def self.typed_dynamic_checked_add(left : UInt64, right : UInt64) : UInt64
+      if left > UInt64::MAX - right
+        raise UnsupportedFormatError.new("typed Dynamic physical-name bound overflows UInt64")
+      end
+      left + right
+    end
+
+    private def self.typed_dynamic_checked_multiply(left : UInt64, right : UInt64) : UInt64
+      if right != 0_u64 && left > UInt64::MAX // right
+        raise UnsupportedFormatError.new("typed Dynamic physical-name bound overflows UInt64")
+      end
+      left * right
     end
 
     private def preflight_object_path(object : ObjectStructure, index : Int, column_length : UInt64, context : PhysicalStreamPlanContext) : Nil

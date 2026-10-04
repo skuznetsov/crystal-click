@@ -47,7 +47,7 @@ module CrystalClick
       # copied into ObjectStructure, copied into ObjectDynamicStructureSet,
       # then read once by that set's roster check. Typed paths are read once
       # and copied into the returned ObjectDocumentPlan.
-      dynamic_paths, typed_paths, typed_types, typed_dynamic_paths, typed_dynamic_structures = copy_rosters(plan, budget)
+      dynamic_paths, typed_paths, typed_types, typed_dynamic_sites = copy_rosters(plan, budget)
       typed_by_path = Hash(String, BinaryDataType).new
       typed_paths.each_with_index do |path, index|
         typed_by_path[path] = typed_types[index]
@@ -108,6 +108,14 @@ module CrystalClick
             context.validate_type_tree(value.type)
             unless value.type == typed_types[index]
               raise UnsupportedFormatError.new("typed Object field has a descriptor that differs from its schema")
+            end
+            if typed_types[index].contains_dynamic?
+              ObjectDeclaredDynamicDeclaration.validate_selected_values!(
+                value,
+                typed_types[index],
+                budget,
+                true
+              )
             end
           end
 
@@ -186,17 +194,13 @@ module CrystalClick
       typed_paths.each_with_index do |path, index|
         typed_schema[path] = typed_types[index]
       end
-      typed_dynamic_rosters = Hash(String, DynamicStructure).new
-      typed_dynamic_paths.each_with_index do |path, index|
-        typed_dynamic_rosters[path] = typed_dynamic_structures[index]
-      end
-      ObjectDocumentPlan.new(fresh_set, typed_schema, typed_dynamic_rosters)
+      ObjectDocumentPlan.new(fresh_set, typed_schema, typed_dynamic_sites: typed_dynamic_sites)
     end
 
     private def self.copy_rosters(
       plan : ObjectDocumentPlan,
       budget : BinaryCodecBudget,
-    ) : Tuple(Array(String), Array(String), Array(BinaryDataType), Array(String), Array(DynamicStructure))
+    ) : Tuple(Array(String), Array(String), Array(BinaryDataType), Hash(String, Hash(String, DynamicStructure)))
       object = plan.structures.object
       dynamic_count = object.dynamic_path_count
       typed_count = plan.typed_path_count
@@ -227,10 +231,48 @@ module CrystalClick
       dynamic_copy_bytes = checked_multiply(dynamic_bytes, 4_u64)
       typed_copy_bytes = checked_multiply(typed_bytes, 2_u64)
       typed_dynamic_copy_bytes = checked_multiply(typed_dynamic_bytes, 2_u64)
-      roster_copy_bytes = checked_add(checked_add(dynamic_copy_bytes, typed_copy_bytes), typed_dynamic_copy_bytes)
+      budget.ensure_wire_bytes(typed_dynamic_copy_bytes)
+      budget.charge_wire_bytes(typed_dynamic_copy_bytes)
+
+      # Field names are needed to query the plan's exact site-indexed roster.
+      # Their two operation copies (detached getter plus rebuilt-plan key) are
+      # charged before the first field-name getter allocates one.
+      budget.preflight_children(typed_dynamic_count.to_u64) if typed_dynamic_count > 0
+      typed_dynamic_paths = Array(String).new(typed_dynamic_count)
+      typed_dynamic_count.times do |index|
+        budget.charge_node
+        typed_dynamic_paths << plan.typed_dynamic_path_at(index)
+      end
+
+      typed_dynamic_site_count = 0_u64
+      typed_dynamic_paths.each do |path|
+        typed_dynamic_site_count = checked_add(
+          typed_dynamic_site_count,
+          plan.typed_dynamic_site_count_for(path).to_u64
+        )
+      end
+      budget.ensure_future_nodes(typed_dynamic_site_count)
+      budget.preflight_children(typed_dynamic_site_count) if typed_dynamic_site_count > 0_u64
+      typed_dynamic_site_bytes = 0_u64
+      typed_dynamic_paths.each do |path|
+        site_count = plan.typed_dynamic_site_count_for(path)
+        site_count.times do |site_index|
+          budget.charge_node
+          typed_dynamic_site_bytes = checked_add(
+            typed_dynamic_site_bytes,
+            plan.typed_dynamic_site_path_byte_size_at(path, site_index).to_u64
+          )
+        end
+      end
+      typed_dynamic_site_copy_bytes = checked_multiply(typed_dynamic_site_bytes, 2_u64)
+      budget.ensure_wire_bytes(typed_dynamic_site_copy_bytes)
+      budget.charge_wire_bytes(typed_dynamic_site_copy_bytes)
+
+      roster_copy_bytes = checked_add(dynamic_copy_bytes, typed_copy_bytes)
       budget.ensure_wire_bytes(roster_copy_bytes)
       budget.charge_wire_bytes(roster_copy_bytes)
-      budget.preflight_children(roster_count)
+      copy_count = checked_add(roster_count, typed_dynamic_site_count)
+      budget.preflight_children(copy_count)
 
       dynamic_paths = Array(String).new(dynamic_count)
       dynamic_count.times do |index|
@@ -250,19 +292,24 @@ module CrystalClick
         typed_types << type
       end
 
-      typed_dynamic_paths = Array(String).new(typed_dynamic_count)
-      typed_dynamic_structures = Array(DynamicStructure).new(typed_dynamic_count)
-      typed_dynamic_count.times do |index|
-        budget.charge_node
-        path = plan.typed_dynamic_path_at(index)
-        typed_dynamic_paths << path
-        typed_dynamic_structures << ObjectDeclaredDynamicDeclaration.without_statistics(
-          plan.typed_dynamic_for(path),
-          budget,
-          3
-        )
+      typed_dynamic_sites = Hash(String, Hash(String, DynamicStructure)).new(initial_capacity: typed_dynamic_count)
+      typed_dynamic_paths.each do |path|
+        site_count = plan.typed_dynamic_site_count_for(path)
+        site_roster = Hash(String, DynamicStructure).new(initial_capacity: site_count)
+        site_count.times do |site_index|
+          budget.charge_node
+          site_path = plan.typed_dynamic_site_path_at(path, site_index)
+          structure = plan.typed_dynamic_site_structure_for(path, site_path)
+          actual_root_depth = plan.typed_dynamic_site_object_depth_for(path, site_path) + 1
+          site_roster[site_path] = ObjectDeclaredDynamicDeclaration.without_statistics(
+            structure,
+            budget,
+            actual_root_depth
+          )
+        end
+        typed_dynamic_sites[path] = site_roster
       end
-      {dynamic_paths, typed_paths, typed_types, typed_dynamic_paths, typed_dynamic_structures}
+      {dynamic_paths, typed_paths, typed_types, typed_dynamic_sites}
     end
 
     private def self.build_routings(

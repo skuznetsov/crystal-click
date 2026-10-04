@@ -35,15 +35,21 @@ module CrystalClick
         raise UnsupportedFormatError.new("declared Object Dynamic fields require the BASIC Dynamic profile")
       end
       validate_write_structure(plan.structures)
+      typed_dynamic_write_plans = Hash(String, BinaryDynamicBulkPlan).new
       plan.typed_path_count.times do |index|
         path = plan.typed_path_at(index)
         type = plan.typed_type_for(path)
         if plan.has_typed_dynamic?(path)
-          unless type.tag == BinaryDataType::TAG_DYNAMIC && !ObjectDeclaredDynamicDeclaration.max_types_for(type).nil?
-            raise UnsupportedFormatError.new("typed Object Dynamic path has a noncanonical descriptor")
+          unless type.contains_dynamic? && ObjectRecursiveDeclaration.account_descriptor(type, budget, budget.limits, 2)
+            raise UnsupportedFormatError.new("typed Object Dynamic path is outside the recursive declaration grammar")
           end
-          ObjectDeclaredDynamicDeclaration.validate_actual_structure!(
-            plan.typed_dynamic_for(path), budget.limits, 3
+          structures = plan.typed_dynamic_sites_for(path, budget)
+          typed_dynamic_write_plans[path] = ObjectDeclaredDynamicDeclaration.prepare_write_sites_plan(
+            type,
+            structures,
+            budget,
+            profile,
+            2
           )
         elsif type.contains_dynamic?
           raise UnsupportedFormatError.new("Object typed containers containing Dynamic are not admitted")
@@ -110,6 +116,7 @@ module CrystalClick
       typed_lanes = Hash(String, BinaryBulkStreams).new
       typed_dynamic_lanes = Hash(String, BinaryDynamicBulkStreams).new
       typed_dynamic_statistics_offsets = Hash(String, Int32).new
+      typed_dynamic_site_statistics_offsets = Hash(String, Hash(String, Int32)).new
       plan.typed_path_count.times do |typed_index|
         path = plan.typed_path_at(typed_index)
         type = plan.typed_type_for(path)
@@ -128,23 +135,29 @@ module CrystalClick
             type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
             type_context.validate_type_tree(value.type)
             if plan.has_typed_dynamic?(path)
-              ObjectDeclaredDynamicDeclaration.validate_selected_value!(value, type, budget.limits, true)
+              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, true)
             end
             values << value
           end
           lane_granules << values
         end
         if plan.has_typed_dynamic?(path)
-          dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_write_plan(
-            type,
-            plan.typed_dynamic_for(path),
-            budget,
-            profile
-          )
+          dynamic_plan = typed_dynamic_write_plans[path]
           structures = dynamic_plan.encode_structure_streams(budget)
           data = BinaryBulkEncoder.encode(type, lane_granules, budget, profile, dynamic_plan)
           typed_dynamic_lanes[path] = BinaryDynamicBulkStreams.new(structures, data)
-          typed_dynamic_statistics_offsets[path] = dynamic_plan.statistics_offset_for("root")
+          site_offsets = Hash(String, Int32).new
+          site_paths = dynamic_plan.site_paths
+          unless site_paths.size == dynamic_plan.site_count
+            raise UnsupportedFormatError.new("typed Dynamic site roster changed during encoding")
+          end
+          site_paths.each do |site_path|
+            site_offsets[site_path] = dynamic_plan.statistics_offset_for(site_path)
+          end
+          typed_dynamic_site_statistics_offsets[path] = site_offsets
+          if dynamic_plan.site_count == 1 && dynamic_plan.has_site?("root")
+            typed_dynamic_statistics_offsets[path] = dynamic_plan.statistics_offset_for("root")
+          end
         else
           typed_lanes[path] = BinaryBulkCodec.encode_with_budget(type, lane_granules, budget, profile: profile)
         end
@@ -207,7 +220,8 @@ module CrystalClick
         dynamic_lanes,
         shared_lanes,
         typed_dynamic_lanes,
-        typed_dynamic_statistics_offsets
+        typed_dynamic_statistics_offsets,
+        typed_dynamic_site_statistics_offsets
       )
     end
 
@@ -262,15 +276,14 @@ module CrystalClick
       end
       typed_dynamic_count = 0
       typed_schema.each_value do |type|
-        if type.tag == BinaryDataType::TAG_DYNAMIC
-          if ObjectDeclaredDynamicDeclaration.max_types_for(type).nil?
-            raise UnsupportedFormatError.new("Object typed Dynamic descriptor is not canonical")
+        # Bound raw schema recursion before contains_dynamic? traverses it.
+        schema_context.validate_type_tree(type)
+        if type.contains_dynamic?
+          unless ObjectRecursiveDeclaration.account_descriptor(type, budget, budget.limits, 2)
+            raise UnsupportedFormatError.new("Object typed Dynamic descriptor is outside the recursive declaration grammar")
           end
           typed_dynamic_count += 1
-        elsif type.contains_dynamic?
-          raise UnsupportedFormatError.new("Object typed containers containing Dynamic are not admitted")
         end
-        schema_context.validate_type_tree(type)
         validate_variant_typed_field!(type, budget.limits)
         validate_low_cardinality_typed_field!(type, budget.limits)
       end
@@ -278,6 +291,11 @@ module CrystalClick
       structure_set = ObjectDynamicStructureCodec.decode_with_budget(streams.structures, budget)
       validate_read_structure(structure_set)
       object = structure_set.object
+      typed_schema.each_key do |path|
+        if object.has_dynamic_path?(path)
+          corrupt!("typed and Dynamic Object paths must be disjoint")
+        end
+      end
 
       if streams.typed_path_count != typed_schema.size - typed_dynamic_count
         corrupt!("ordinary typed Object lane keys do not exactly match the supplied schema")
@@ -286,7 +304,7 @@ module CrystalClick
         corrupt!("typed Dynamic Object lane keys do not exactly match the supplied schema")
       end
       typed_schema.each do |path, type|
-        if type.tag == BinaryDataType::TAG_DYNAMIC
+        if type.contains_dynamic?
           unless streams.has_typed_dynamic_path?(path)
             corrupt!("typed Dynamic Object lane is missing schema path #{path.inspect}")
           end
@@ -337,30 +355,24 @@ module CrystalClick
       end
 
       typed_dynamic_plans = Hash(String, BinaryDynamicBulkPlan).new
-      typed_dynamic_structures = Hash(String, DynamicStructure).new
       typed_schema.each do |path, type|
-        next unless type.tag == BinaryDataType::TAG_DYNAMIC
+        next unless type.contains_dynamic?
         dynamic_streams = streams.typed_dynamic_for(path)
-        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_plan(
+        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan(
           type,
           dynamic_streams.structures,
           budget,
-          profile
+          profile,
+          2
         )
         typed_dynamic_plans[path] = dynamic_plan
-        typed_dynamic_structures[path] = dynamic_plan.structure_for("root")
-      end
-
-      plan = begin
-        ObjectDocumentPlan.new(structure_set, typed_schema, typed_dynamic_structures)
-      rescue ex : ArgumentError
-        raise CorruptPartError.new("invalid Object typed schema: #{ex.message}")
       end
 
       typed_rows = Hash(String, Array(Array(BinaryValue))).new
       typed_schema.each do |path, type|
-        if type.tag == BinaryDataType::TAG_DYNAMIC
+        if type.contains_dynamic?
           dynamic_streams = streams.typed_dynamic_for(path)
+          dynamic_plan = typed_dynamic_plans[path]
           typed_rows[path] = BinaryBulkDecoder.decode(
             type,
             dynamic_streams.data,
@@ -369,11 +381,11 @@ module CrystalClick
             selected_first,
             selected_count,
             profile,
-            typed_dynamic_plans[path]
+            dynamic_plan
           )
           typed_rows[path].each do |mark_values|
             mark_values.each do |value|
-              ObjectDeclaredDynamicDeclaration.validate_selected_value!(value, type, budget.limits, false)
+              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, false)
             end
           end
         else

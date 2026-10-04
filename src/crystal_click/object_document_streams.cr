@@ -10,6 +10,7 @@ module CrystalClick
     @typed_dynamic_paths : Hash(String, BinaryDynamicBulkStreams)
     @typed_dynamic_names : Array(String)
     @typed_dynamic_statistics_offsets : Hash(String, Int32)
+    @typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32))
     @dynamic_paths : Hash(String, DynamicValueStreams)
     @dynamic_names : Array(String)
     @shared : BinaryBulkStreams
@@ -22,6 +23,7 @@ module CrystalClick
       shared : BinaryBulkStreams,
       typed_dynamic_paths : Hash(String, BinaryDynamicBulkStreams) = Hash(String, BinaryDynamicBulkStreams).new,
       typed_dynamic_statistics_offsets : Hash(String, Int32) = Hash(String, Int32).new,
+      typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32)) = Hash(String, Hash(String, Int32)).new,
     )
       @structures = structures
       @rows_per_mark = rows_per_mark.dup
@@ -49,15 +51,41 @@ module CrystalClick
       end
       @typed_dynamic_names.sort! { |left, right| compare_paths(left, right) }
       @typed_dynamic_statistics_offsets = Hash(String, Int32).new
+      @typed_dynamic_site_statistics_offsets = Hash(String, Hash(String, Int32)).new
       typed_dynamic_statistics_offsets.each do |path, offset|
         detached_path = String.new(path.to_slice)
-        unless @typed_dynamic_paths.has_key?(detached_path)
-          raise ArgumentError.new("typed Dynamic statistics offset has no matching lane: #{path.inspect}")
+        streams = @typed_dynamic_paths[detached_path]? || raise(ArgumentError.new("typed Dynamic statistics offset has no matching lane: #{path.inspect}"))
+        unless streams.structures.has_site?("root")
+          raise ArgumentError.new("typed Dynamic root statistics offset has no matching root site: #{path.inspect}")
         end
-        if offset < 0
-          raise ArgumentError.new("typed Dynamic statistics offset must be non-negative")
-        end
+        validate_statistics_offset!(offset)
         @typed_dynamic_statistics_offsets[detached_path] = offset
+        site_offsets = Hash(String, Int32).new
+        site_offsets["root"] = offset
+        @typed_dynamic_site_statistics_offsets[detached_path] = site_offsets
+      end
+      typed_dynamic_site_statistics_offsets.each do |path, offsets|
+        detached_path = String.new(path.to_slice)
+        streams = @typed_dynamic_paths[detached_path]? || raise(ArgumentError.new("typed Dynamic site statistics offsets have no matching lane: #{path.inspect}"))
+        site_offsets = @typed_dynamic_site_statistics_offsets[detached_path]?
+        unless site_offsets
+          site_offsets = Hash(String, Int32).new
+          @typed_dynamic_site_statistics_offsets[detached_path] = site_offsets
+        end
+        offsets.each do |site_path, offset|
+          unless streams.structures.has_site?(site_path)
+            raise ArgumentError.new("typed Dynamic statistics offset has no matching site: #{path.inspect}:#{site_path.inspect}")
+          end
+          validate_statistics_offset!(offset)
+          detached_site_path = String.new(site_path.to_slice)
+          if previous = site_offsets[detached_site_path]?
+            unless previous == offset
+              raise ArgumentError.new("typed Dynamic root statistics offsets conflict for #{path.inspect}")
+            end
+          else
+            site_offsets[detached_site_path] = offset
+          end
+        end
       end
 
       @dynamic_paths = Hash(String, DynamicValueStreams).new
@@ -141,7 +169,23 @@ module CrystalClick
     # Relative byte offset of the root Dynamic statistics flag within the
     # exact structure blob produced or parsed for this typed child.
     def typed_dynamic_statistics_offset(path : String) : Int32?
-      @typed_dynamic_statistics_offsets[path]?
+      if offset = @typed_dynamic_statistics_offsets[path]?
+        return offset
+      end
+      streams = @typed_dynamic_paths[path]?
+      return nil unless streams && streams.structures.site_count == 1 && streams.structures.has_site?("root")
+      site_offsets = @typed_dynamic_site_statistics_offsets[path]?
+      return nil unless site_offsets
+      site_offsets["root"]?
+    end
+
+    # Relative byte offset of a site's statistics flag. Missing offsets are
+    # tolerated for decoded/caller-constructed streams; the writer lane binder
+    # requires a complete per-site map before emitting physical lanes.
+    def typed_dynamic_site_statistics_offset(path : String, site_path : String) : Int32?
+      site_offsets = @typed_dynamic_site_statistics_offsets[path]?
+      return nil unless site_offsets
+      site_offsets[site_path]?
     end
 
     def dynamic_path_count : Int32
@@ -185,6 +229,12 @@ module CrystalClick
         return 1 if left_bytes[index] > right_bytes[index]
       end
       left_bytes.size <=> right_bytes.size
+    end
+
+    private def validate_statistics_offset!(offset : Int32) : Nil
+      if offset < 0
+        raise ArgumentError.new("typed Dynamic statistics offset must be non-negative")
+      end
     end
   end
 end

@@ -111,17 +111,30 @@ module CrystalClick
           typed_dynamic = streams.typed_dynamic_for(path)
           physical_dynamic = physical_plan.typed_dynamic(path)
           structures = typed_dynamic.structures
-          unless structures.site_count == 1 && structures.site_paths == ["root"]
-            raise UnsupportedFormatError.new("typed Dynamic structure lane must contain exactly the root site")
+          expected_site_paths = Array(String).new(plan.typed_dynamic_site_count_for(path))
+          plan.typed_dynamic_site_count_for(path).times do |site_index|
+            expected_site_paths << plan.typed_dynamic_site_path_at(path, site_index)
           end
-          statistics_offset = streams.typed_dynamic_statistics_offset(path) ||
-                              raise(UnsupportedFormatError.new("typed Dynamic metadata encoder omitted its statistics offset"))
-          structure_bytes = structures.structure_bytes_for("root")
-          add_lane!(lanes, expected, ObjectDocumentColumnLane.new(
-            physical_dynamic.structure_name_for("root"),
-            structure_bytes,
-            statistics_offset
-          ))
+          unless structures.site_count == expected_site_paths.size && structures.site_paths == expected_site_paths
+            raise UnsupportedFormatError.new("typed Dynamic structure sites do not exactly match the declared site roster")
+          end
+          expected_structure_roles = expected_site_paths.map { |site_path| "#{site_path}.dynamic_structure" }.sort
+          unless physical_dynamic.structure_stream_names.keys.sort == expected_structure_roles
+            raise UnsupportedFormatError.new("typed Dynamic structure roles do not match the declared site roster")
+          end
+          expected_site_paths.each do |site_path|
+            statistics_offset = streams.typed_dynamic_site_statistics_offset(path, site_path) ||
+                                raise(UnsupportedFormatError.new("typed Dynamic metadata encoder omitted a site statistics offset"))
+            structure_bytes = structures.structure_bytes_for(site_path)
+            unless statistics_offset >= 0 && statistics_offset < structure_bytes.size
+              raise UnsupportedFormatError.new("typed Dynamic statistics offset is outside its structure stream")
+            end
+            add_lane!(lanes, expected, ObjectDocumentColumnLane.new(
+              physical_dynamic.structure_name_for(site_path),
+              structure_bytes,
+              statistics_offset
+            ))
+          end
           add_typed_dynamic_data_lanes!(
             lanes, expected, physical_dynamic, typed_dynamic, streams.mark_count
           )
@@ -193,13 +206,17 @@ module CrystalClick
             raise UnsupportedFormatError.new("typed Dynamic value lane does not have the complete outer mark grid")
           end
           prefix = physical.prefix_size_for(role)
-          variant_prefix_role = if BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(role, prefix)
-                                  unless role == "root.discriminators"
-                                    raise UnsupportedFormatError.new("typed Dynamic discriminator is not the admitted root site")
+          variant_prefix_role = if role.ends_with?(".discriminators")
+                                  unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
+                                    raise UnsupportedFormatError.new("typed Dynamic discriminator is missing its BASIC physical prefix")
                                   end
                                   String.new(role.to_slice)
                                 else
-                                  unless prefix == 0
+                                  if role.ends_with?(".dictionary")
+                                    unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
+                                      raise UnsupportedFormatError.new("typed Dynamic LowCardinality dictionary is missing its version prefix")
+                                    end
+                                  elsif prefix != 0
                                     raise UnsupportedFormatError.new("typed Dynamic value lane has an unsupported physical prefix")
                                   end
                                   nil
@@ -252,11 +269,15 @@ module CrystalClick
           end
           typed_dynamic_streams.roles.each do |role|
             prefix = physical.prefix_size_for(role)
-            if BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(role, prefix)
-              unless role == "root.discriminators"
-                raise UnsupportedFormatError.new("typed Dynamic discriminator is not the admitted root site")
+            if role.ends_with?(".discriminators")
+              unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
+                raise UnsupportedFormatError.new("typed Dynamic discriminator is missing its BASIC physical prefix")
               end
               lanes << {role, typed_dynamic_streams.stream(role), prefix}
+            elsif role.ends_with?(".dictionary")
+              unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
+                raise UnsupportedFormatError.new("typed Dynamic LowCardinality dictionary is missing its version prefix")
+              end
             elsif prefix != 0
               raise UnsupportedFormatError.new("typed Dynamic value lane has an unsupported physical prefix")
             end

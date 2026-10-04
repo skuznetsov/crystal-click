@@ -17,15 +17,26 @@ checks where relevant, baseline characterizations and affected consumer tests.
 Serialization bytes, pre-callback refusals and publication rollback remain
 invariants. A shorter facade by itself is not a modularity or speed certificate.
 
+W159 adds one cohesive `ObjectDeclaredDynamicSites` module/file for nominal
+site provenance and Object-depth coordinates. It reuses the generic Dynamic
+bulk/physical owners instead of adding a class for each Array/Tuple/Map
+combination. Declared actual-arm policy, codec composition, statistics and
+file I/O remain with their existing owners. This 174-line owner does not
+complete decomposition of the large reader/writer/table facades.
+
 ## Object column lane binder plan (2026-10-04)
 
 The extraction certificate below is historical at `6dc7ed9`. W158 changes the
 owner and callers to add direct declared Object Dynamic; its new behavior must
 be qualified separately in
 [OBJECT_DECLARED_DYNAMIC_FRONTIER.md](OBJECT_DECLARED_DYNAMIC_FRONTIER.md).
-The historical direct-Dynamic refusal assertion is replaced by a recursive
-`Array(Dynamic)` refusal for that feature. The exact-move certificate does not
-certify the widened implementation, and its 178-line count is not current.
+W158 replaced the historical direct-Dynamic refusal with an `Array(Dynamic)`
+refusal. W159 intentionally replaces that fence with explicit recursive site
+rosters; missing rosters and forbidden direct-child positions remain closed.
+Its separate paired boundary is in
+[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md).
+The exact-move certificate does not certify either widened implementation,
+and its 178-line count is not current.
 
 Status: executed; the scoped certificate and exact inventory follow below.
 Baseline: clean `e3ffd24`. Risk: CAUTION (persisted
