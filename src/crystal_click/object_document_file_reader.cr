@@ -276,6 +276,17 @@ module CrystalClick
       replay_complete = prepared.replay_complete
       read_first = replay_complete ? 0 : first_mark
       read_count = replay_complete ? outer_rows.size : selected_count
+      prefix_reads = [] of Tuple(String, Int32, Int32)
+      bulk_bindings.each do |binding|
+        next unless binding.kind == :typed &&
+                    BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(binding.role, binding.prefix_size)
+        if read_count == Int32::MAX
+          raise CorruptPartError.new("Object Variant read coordinate count exceeds the supported domain")
+        end
+        prefix_reads << {binding.role, binding.prefix_size, read_count + 1}
+      end
+      BinaryBulkPhysicalPrefixAdapter.preflight_read(prefix_reads, codec_budget) unless prefix_reads.empty?
+
       typed_roles = Hash(String, Hash(String, BinaryBulkStream)).new
       dynamic_roles = Hash(String, Hash(String, Hash(String, BinaryBulkStream))).new
       shared_roles = Hash(String, BinaryBulkStream).new
@@ -288,7 +299,20 @@ module CrystalClick
           binding.prefix_size,
           transport_budget
         )
-        stream = BinaryBulkStream.new(window.bytes, window.offsets)
+        lane_bytes = window.bytes
+        lane_offsets = window.offsets
+        if binding.kind == :typed &&
+           BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(binding.role, binding.prefix_size)
+          logical = BinaryBulkPhysicalPrefixAdapter.read_lane(
+            binding.role,
+            lane_bytes,
+            lane_offsets,
+            binding.prefix_size
+          )
+          lane_bytes = logical[0]
+          lane_offsets = logical[1]
+        end
+        stream = BinaryBulkStream.new(lane_bytes, lane_offsets)
         case binding.kind
         when :typed
           if roles = typed_roles[binding.path]?
@@ -416,8 +440,8 @@ module CrystalClick
         expanded_total = checked_add_u64(expanded_total, logical_size)
         ensure_name_size!(expanded_total, limits)
         context.validate_type_tree(type)
-        if type.contains_variant?
-          raise UnsupportedFormatError.new("Object typed Variant fields are not admitted")
+        if type.contains_variant? && ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+          raise UnsupportedFormatError.new("Object typed Variant descriptor is outside the admitted declaration grammar")
         end
       end
       copied = Hash(String, BinaryDataType).new(initial_capacity: schema.size)

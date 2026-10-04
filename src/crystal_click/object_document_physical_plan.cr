@@ -92,7 +92,9 @@ module CrystalClick
         type = plan.typed_type_for(raw_path)
         if type.contains_variant?
           preflight_variant_typed_type(type, limits.max_depth, 0, context, 0_u64, 0_u64)
-          raise UnsupportedFormatError.new("physical Object typed Variant fields are not admitted")
+          if ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+            raise UnsupportedFormatError.new("physical Object typed Variant descriptor is outside the admitted declaration grammar")
+          end
         end
         if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type) &&
            ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?

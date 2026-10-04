@@ -186,6 +186,27 @@ module CrystalClick
       new(TAG_VARIANT, nil, canonical, [] of String, nil)
     end
 
+    # Internal delayed-materialization path for Object JSON declarations.
+    # ObjectRecursiveDeclarationText has already validated the complete
+    # borrowed tree, including strict arm order and the direct-arm policy,
+    # against one aggregate budget before constructing any descriptor. Do not
+    # re-normalize here: nested Variant normalization would recursively render
+    # the same arm names again with fresh per-Variant budgets.
+    protected def self.variant_from_canonical_object_declaration(arms : Array(BinaryDataType)) : BinaryDataType
+      unless 1 <= arms.size <= BinaryVariantRoster::MAX_ARMS
+        raise ArgumentError.new("canonical Object Variant roster is outside the admitted size")
+      end
+      arms.each do |arm|
+        if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.tag == TAG_VARIANT
+          raise ArgumentError.new("canonical Object Variant roster has a forbidden direct arm")
+        end
+        if arm.tag == TAG_LOW_CARDINALITY && arm.child_count == 1 && arm.child_at(0).tag == TAG_NULLABLE
+          raise ArgumentError.new("canonical Object Variant roster has a forbidden LowCardinality(Nullable) arm")
+        end
+      end
+      new(TAG_VARIANT, nil, arms, [] of String, nil)
+    end
+
     # Internal descriptor constructor for a fully parsed binary roster. It
     # preserves the decoder's aggregate traversal/name budget and applies the
     # local strict-canonical wire profile after the complete roster is read.

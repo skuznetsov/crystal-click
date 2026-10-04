@@ -51,6 +51,11 @@ module CrystalClick
         shared_profile: shared_profile
       )
 
+      # Variant discriminators acquire an eight-byte physical prefix only at
+      # the column boundary. Admit all added headers and coordinate rebasing
+      # against the same operation budget before constructing any adapted
+      # lane buffer.
+      preflight_variant_prefixes!(physical_plan, fresh_plan, streams, codec_budget)
       lanes = bind_lanes(physical_plan, fresh_plan, streams)
       mark_count = streams.mark_count + 1
       raw_sizes = Array(Int32).new(lanes.size) { |index| lanes[index].byte_size }
@@ -177,7 +182,14 @@ module CrystalClick
       end
       plan.typed_path_count.times do |index|
         path = plan.typed_path_at(index)
-        add_bulk_lanes!(lanes, expected, physical_plan.typed(path), streams.typed_for(path), streams.mark_count)
+        add_bulk_lanes!(
+          lanes,
+          expected,
+          physical_plan.typed(path),
+          streams.typed_for(path),
+          streams.mark_count,
+          variant_prefix_roles: true
+        )
       end
       add_bulk_lanes!(lanes, expected, physical_plan.shared, streams.shared, streams.mark_count)
 
@@ -193,6 +205,7 @@ module CrystalClick
       physical : BinaryBulkPhysicalPlan,
       streams : BinaryBulkStreams,
       real_mark_count : Int32,
+      variant_prefix_roles : Bool = false,
     ) : Nil
       physical_names = physical.stream_names
       if physical_names.size != streams.role_count
@@ -208,15 +221,44 @@ module CrystalClick
         end
         name = physical.stream_name_for(role)
         bytes = source.borrowed_slice(0, source.byte_size)
+        variant_prefix_role = if variant_prefix_roles &&
+                                 BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(role, physical.prefix_size_for(role))
+                                String.new(role.to_slice)
+                              else
+                                nil
+                              end
         add_lane!(lanes, expected, ObjectDocumentColumnLane.new(
           name,
           bytes,
           nil,
           source,
           nil,
-          physical.prefix_size_for(role)
+          physical.prefix_size_for(role),
+          variant_prefix_role
         ))
       end
+      nil
+    end
+
+    private def self.preflight_variant_prefixes!(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      lanes = [] of Tuple(String, BinaryBulkStream, Int32)
+      plan.typed_path_count.times do |index|
+        path = plan.typed_path_at(index)
+        physical = physical_plan.typed(path)
+        typed_streams = streams.typed_for(path)
+        typed_streams.roles.each do |role|
+          prefix = physical.prefix_size_for(role)
+          if BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(role, prefix)
+            lanes << {role, typed_streams.stream(role), prefix}
+          end
+        end
+      end
+      BinaryBulkPhysicalPrefixAdapter.preflight_write(lanes, budget) unless lanes.empty?
       nil
     end
 

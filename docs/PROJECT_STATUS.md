@@ -1,5 +1,25 @@
 # CrystalClick project status
 
+Current capability checkpoint (2026-10-04): W151 admits canonical declared
+Variant fields in the bounded normalized Object/JSON writer and its public
+file/column/table/catalog readers, including legal recursive containers and
+eligible LC-bearing arms. A separate 275-line `BinaryBulkPhysicalPrefixAdapter`
+owns BASIC physical prefixes and mark rebasing. Root passes 109 focused DEBUG,
+756 affected RELEASE examples (131 unique files in six serial groups), and
+2,477 complete-inventory examples (387 unique files in 27 successful serial,
+disjoint non-release groups). The inventory uses mixed debug-symbol flags;
+legacy generic compilation required a 12-GiB guard for some groups. These
+are compiler/test results, not runtime memory or performance measurements.
+Two stock parts and four independently library-owned parts pass literal
+full/middle values, nominal types and actual CHECK; all four library parts
+actually ATTACH. Seven declared witnesses cross both String profiles and the
+existing Dynamic modes, with typed Variant restricted to BASIC. An independent
+Ruby oracle runs 74 fresh queries and rejects a CHECK-valid changed-value part.
+Typed COMPACT Variant is a separately tested refusal, not positive admission.
+Scoped hostile verdict: ROBUST. Exact gates, source/runtime identities,
+zero-window semantics and residual limits are sealed in
+[OBJECT_DECLARED_VARIANT_FRONTIER.md](OBJECT_DECLARED_VARIANT_FRONTIER.md).
+
 Current architecture checkpoint (2026-10-04): W150 moves the existing 67
 writer schema/substream/serialization metadata helpers to one private
 518-line `PartSchemaMetadata` class/file. Root verifies exact moved bodies,
@@ -13,7 +33,7 @@ verdict: ROBUST for the ownership move. The writer is still 25,466 lines;
 large-facade decomposition remains open. The execution seal is in
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
 
-Current capability checkpoint: W149 binds ordinary recursive normalized
+Previous physical checkpoint: W149 binds ordinary recursive normalized
 BASIC Variant lanes to Wide physical names and role-owned combined prefixes.
 Root passes 64 focused DEBUG, 533 affected RELEASE examples (68 unique files
 together) and 2,452 complete-inventory examples (381 unique files in sixteen
@@ -21,8 +41,9 @@ serial disjoint non-release groups, not a combined-process run). Six fresh
 stock fixtures and six exchanges with library-emitted lanes pass complete
 roster/grid checks, actual ATTACH/CHECK and literal full/middle RowBinary;
 a separate Ruby oracle repeats 54 fresh queries, including a valid wrong-value
-control. These exchanges borrow stock envelopes: declared Object Variant/
-Dynamic and new public whole-part profiles remain closed. Scoped hostile
+control. These exchanges borrow stock envelopes: at that checkpoint declared
+Object Variant/Dynamic and new public whole-part profiles remained closed.
+W151 separately supersedes the bounded typed-Variant refusal. Scoped hostile
 verdict: ROBUST. See
 [VARIANT_PHYSICAL_BINDING_FRONTIER.md](VARIANT_PHYSICAL_BINDING_FRONTIER.md).
 
@@ -181,7 +202,7 @@ guard. W145 subsequently admits generic physical role/name binding, while
 keeping Object/Dynamic and existing whole-part facade boundaries closed at
 that checkpoint. W146 supersedes only the bounded typed-Object LC refusal.
 Neither shared bulk nor filename binding qualifies a new standalone writer.
-Reviewed on 2026-10-03. This is a navigation summary, not a new compatibility
+Reviewed on 2026-10-04. This is a navigation summary, not a new compatibility
 certificate; the linked frontier documents retain their tested profiles,
 source/runtime identities and executed evidence.
 
@@ -191,10 +212,11 @@ source/runtime identities and executed evidence.
   the shared canonical logical Variant kernel. Paired descriptor/value codecs
   retain nominal arm identity, recursive values and explicit NULL. W148 adds
   normalized BASIC discriminator/sparse-arm bulk lanes, ordinary containers
-  and eligible LC replay. This does not widen the physical part profiles
-  below. W149 adds shared ordinary recursive physical names and combined
-  prefixes, not a new public whole-part facade; see the separate W147-W149
-  certificates.
+  and eligible LC replay. W149 adds shared ordinary recursive physical names
+  and combined prefixes, not a new public whole-part facade; see W147-W149
+  certificates. W151 separately admits declared Variant in the existing
+  bounded complete-Object writer and public consumers, not an arbitrary-schema
+  standalone Variant part writer.
 - `WidePart` and `WidePartTable`: selected-column and typed reads, including
   windowed delivery. The public contracts admit explicit physical profiles,
   not arbitrary ClickHouse parts or recursive type combinations.
@@ -270,6 +292,15 @@ source/runtime identities and executed evidence.
   per mark. This is correctness admission, not selective I/O or a performance
   certificate. Dynamic/shared LC remains outside the Object profile. See
   [the declared LC frontier](OBJECT_DECLARED_LOW_CARDINALITY_FRONTIER.md).
+  W151 adds canonical declared Variant through the same complete-part and
+  public consumer owners. Seven recursive witnesses have independent stock
+  and library-owned part evidence, including NULL, unused arms and LC keys
+  reused across marks. Plain non-LC Variant preserves selected body reads;
+  LC anywhere in a typed tree requires complete replay. Every physical grid
+  is checked, including zero windows; untouched body frames are not all
+  authenticated by a selected read. Typed Dynamic, COMPACT Variant and general
+  Object layouts remain refused. See
+  [the declared Variant frontier](OBJECT_DECLARED_VARIANT_FRONTIER.md).
   The inherited timezone manifest still lacks runtime-added America/Coyhaique.
   See
   [the example](../examples/write_object_document_part.cr) and
@@ -304,7 +335,7 @@ source/runtime identities and executed evidence.
 
 ## Important remaining boundaries
 
-1. **General JSON compatibility.** W117-W146 provide
+1. **General JSON compatibility.** W117-W151 provide
    reusable type/value, bulk, structure, binding, transport, normalized Object
    reader, column writer and complete normalized whole-part owners. W128
    generates every pre-ATTACH file from owned inputs and has fresh stock
@@ -324,8 +355,9 @@ source/runtime identities and executed evidence.
    identity and independent ticks/text checks. W140 adds recursively bounded
    Array/Map/Tuple/Nullable declared fields and catalog descriptor-tree charging.
    W146 adds bounded canonical declared LC with shared physical state replay
-   and an independent whole-part certificate. Declared Variant/Dynamic,
-   unqualified LC leaves/products, Map LC keys, and
+   and an independent whole-part certificate. W151 adds bounded canonical
+   declared Variant with a paired prefix owner and independently owned whole
+   parts. Typed Dynamic, unqualified Variant/LC leaves/products, Map LC keys, and
    the inherited timezone-profile gap remain open within Object,
    even where standalone part support exists. The older scalar typed-path behavior is
    unchanged. Neither adapter implies arbitrary
@@ -344,6 +376,8 @@ source/runtime identities and executed evidence.
    and W149 qualifies generic Wide physical binding with combined prefixes
    and finite stock witnesses, not a standalone general writer. Specialized
    prefix streams and COMPACT Variant remain unqualified by that binder.
+   W151 qualifies the separate declared-Object BASIC Variant profile, not
+   every physical product admitted by its schema grammar.
    Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
@@ -376,7 +410,9 @@ source/runtime identities and executed evidence.
    dispatcher. The existing public `WidePartWriter::JSONTypedPathColumn`
    and associated value alias now have their own owner with exact constructor
    semantics. W150 separately extracts the existing writer metadata renderer
-   with exact-move, literal and stock regression evidence. Next remain
+   with exact-move, literal and stock regression evidence. W151 adds one
+   role-owned physical-prefix adapter class/file instead of embedding its
+   coordinate law in the large facades. Next remain
    shared schema/substream planning, physical I/O/validation, leaf codecs and
    thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
@@ -384,8 +420,9 @@ source/runtime identities and executed evidence.
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
    and canonical DateTime/DateTime64/Time/Time64. W140 now admits canonical
    recursive Array/Map(String,V)/Tuple/legal Nullable schemas, with separately
-   bounded physical witnesses. The next proposed lanes are declared
-   Variant/Dynamic and the timezone profile gap. W141 establishes the logical
+   bounded physical witnesses. W151 adds bounded declared Variant; the next
+   proposed lane is typed Dynamic, alongside the timezone profile gap and
+   separately qualified physical products. W141 establishes the logical
    LowCardinality prerequisite;
    W142 adds the separately qualified standalone dictionary/index codec.
    W143 qualifies recursive non-floating bulk role binding, flattened
@@ -399,8 +436,9 @@ source/runtime identities and executed evidence.
    sparse-arm scheduling, LC occurrence counts and empty-arm mark replay;
    its separate stock count/lane falsifier is executed within the W148 scope.
    W149 qualifies ordinary recursive physical binding, both String profiles
-   and LC-bearing sparse arms using borrowed stock envelopes. Next qualify
-   declared Object Variant/Dynamic and independent whole parts separately.
+   and LC-bearing sparse arms using borrowed stock envelopes. W151 separately
+   qualifies declared Object Variant with independent complete parts and
+   shared public consumers. Typed Dynamic remains the next distinct frontier.
    Broader layout/type products remain separate.
    Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
@@ -419,15 +457,17 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-03-depth1-9007d227`, revision
-`9007d227b64a3f8b667fc5258ceb2923f3cf477d`.
+`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-37a251ff`, revision
+`37a251ffa2805b33201486306db980bfa96d73e7`.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Against the previous `f86ca42b` snapshot,
-Serializations, Columns and Formats are identical; DataTypes adds one test,
-and two MergeTree plus two Compression files differ. The Wide writer now
-aligns compressed-buffer sizing to whole fixed-width values, so unchanged
-leaf serializers do not imply unchanged compressed framing. This is source
-evidence only: no executable from this checkout has been built or qualified.
+comparison and earlier identities. Against the previous `9007d227` snapshot,
+all serializer sources are identical; DataTypes, Columns, Formats, MergeTree
+and Compression have bounded changes recorded there. Unchanged serializers
+do not imply unchanged framing, metadata or lifecycle behavior. This is
+source evidence only: no executable from this checkout has been built or
+qualified. Source identity and the separately pinned executable oracle must
+not be conflated. Type families persisting across releases also does not
+imply immutable binary descriptors or physical layouts.
 
 This summary becomes stale when source admission, facade dispatch, the tested
 runtime/profile or the architecture boundary changes. Refresh it from the

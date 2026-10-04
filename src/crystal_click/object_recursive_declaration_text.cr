@@ -174,7 +174,7 @@ module CrystalClick
         child_after = after - 1
         return nil if child_first >= child_after
         child_tag = tag_for_slice(bytes, child_first, child_after) || return nil
-        return nil if child_tag == BinaryDataType::TAG_ARRAY || child_tag == BinaryDataType::TAG_MAP || child_tag == BinaryDataType::TAG_NULLABLE || child_tag == BinaryDataType::TAG_LOW_CARDINALITY
+        return nil if child_tag == BinaryDataType::TAG_ARRAY || child_tag == BinaryDataType::TAG_MAP || child_tag == BinaryDataType::TAG_NULLABLE || child_tag == BinaryDataType::TAG_LOW_CARDINALITY || child_tag == BinaryDataType::TAG_VARIANT
         totals.child_edge(limits)
         child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals) || return nil
         return ObjectRecursiveDeclaration.checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
@@ -189,6 +189,35 @@ module CrystalClick
         totals.child_edge(limits)
         child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals) || return nil
         return ObjectRecursiveDeclaration.checked_add("LowCardinality(".bytesize.to_u64 + 1_u64, child_size)
+      end
+
+      if slice_equals?(bytes, first, first + "Variant(".bytesize, "Variant(") &&
+         after > first + "Variant()".bytesize && bytes[after - 1] == ')'.ord.to_u8
+        body_first = first + "Variant(".bytesize
+        body_after = after - 1
+        variant_cursor = TopLevelCursor.new(bytes, body_first, body_after)
+        current : Range? = variant_cursor.next_range
+        return nil unless current
+        previous : Range? = nil
+        arm_count = 0
+        total_size = "Variant(".bytesize.to_u64 + 1_u64
+        while variant_arm_range = current
+          arm_count += 1
+          return nil if arm_count > BinaryVariantRoster::MAX_ARMS
+          return nil unless admitted_variant_arm_slice?(bytes, variant_arm_range.first, variant_arm_range.after)
+          if prior = previous
+            return nil if compare_slices(bytes, prior.first, prior.after, variant_arm_range.first, variant_arm_range.after) >= 0
+            total_size = ObjectRecursiveDeclaration.checked_add(total_size, 2_u64)
+          end
+          totals.child_edge(limits)
+          arm_size = scan_type(bytes, variant_arm_range.first, variant_arm_range.after, depth + 1, limits, totals) || return nil
+          total_size = ObjectRecursiveDeclaration.checked_add(total_size, arm_size)
+          previous = variant_arm_range
+          current = variant_cursor.next_range
+          return nil unless variant_cursor.valid?
+        end
+        return nil if arm_count == 0
+        return total_size
       end
 
       if slice_equals?(bytes, first, first + "Map(".bytesize, "Map(") &&
@@ -306,6 +335,11 @@ module CrystalClick
         comma, _ = top_level_separator(bytes, body_first, body_after).not_nil!
         charge_slice_child(bytes, body_first, comma, depth, budget)
         charge_slice_child(bytes, comma + 2, body_after, depth, budget)
+      elsif slice_equals?(bytes, first, first + "Variant(".bytesize, "Variant(")
+        variant_cursor = TopLevelCursor.new(bytes, first + "Variant(".bytesize, after - 1)
+        while variant_arm_range = variant_cursor.next_range
+          charge_slice_child(bytes, variant_arm_range.first, variant_arm_range.after, depth, budget)
+        end
       else
         body_first = first + "Tuple(".bytesize
         body_after = after - 1
@@ -356,6 +390,11 @@ module CrystalClick
         comma, _ = top_level_separator(bytes, body_first, after - 1).not_nil!
         validate_tuple_names_admitted(bytes, body_first, comma, depth + 1, limits)
         validate_tuple_names_admitted(bytes, comma + 2, after - 1, depth + 1, limits)
+      elsif slice_equals?(bytes, first, first + "Variant(".bytesize, "Variant(")
+        variant_cursor = TopLevelCursor.new(bytes, first + "Variant(".bytesize, after - 1)
+        while variant_arm_range = variant_cursor.next_range
+          validate_tuple_names_admitted(bytes, variant_arm_range.first, variant_arm_range.after, depth + 1, limits)
+        end
       else
         body_first = first + "Tuple(".bytesize
         body_after = after - 1
@@ -416,6 +455,13 @@ module CrystalClick
         key = materialize_admitted_slice(bytes, body_first, comma, depth + 1, limits)
         value = materialize_admitted_slice(bytes, comma + 2, after - 1, depth + 1, limits)
         BinaryDataType.map(key, value)
+      elsif slice_equals?(bytes, first, first + "Variant(".bytesize, "Variant(")
+        variant_cursor = TopLevelCursor.new(bytes, first + "Variant(".bytesize, after - 1)
+        arms = Array(BinaryDataType).new
+        while variant_arm_range = variant_cursor.next_range
+          arms << materialize_admitted_slice(bytes, variant_arm_range.first, variant_arm_range.after, depth + 1, limits)
+        end
+        BinaryDataType.variant_from_canonical_object_declaration(arms)
       else
         body_first = first + "Tuple(".bytesize
         body_after = after - 1
@@ -462,6 +508,8 @@ module CrystalClick
         BinaryDataType::TAG_NULLABLE
       elsif slice_equals?(bytes, first, first + "LowCardinality(".bytesize, "LowCardinality(")
         BinaryDataType::TAG_LOW_CARDINALITY
+      elsif slice_equals?(bytes, first, first + "Variant(".bytesize, "Variant(")
+        BinaryDataType::TAG_VARIANT
       elsif slice_equals?(bytes, first, first + "Tuple(".bytesize, "Tuple(")
         BinaryDataType::TAG_UNNAMED_TUPLE
       else
@@ -484,6 +532,34 @@ module CrystalClick
         leaf = ObjectTypedFieldType.resolve_leaf_slice(bytes, first, after) || return false
         ObjectRecursiveDeclaration.low_cardinality_leaf_tag_admitted?(leaf.tag)
       end
+    end
+
+    private def self.admitted_variant_arm_slice?(bytes : Bytes, first : Int32, after : Int32) : Bool
+      tag = tag_for_slice(bytes, first, after) || return false
+      return false if tag == BinaryDataType::TAG_NOTHING || tag == BinaryDataType::TAG_NULLABLE || tag == BinaryDataType::TAG_VARIANT
+      if tag == BinaryDataType::TAG_LOW_CARDINALITY
+        child_first = first + "LowCardinality(".bytesize
+        child_after = after - 1
+        return false if tag_for_slice(bytes, child_first, child_after) == BinaryDataType::TAG_NULLABLE
+      end
+      true
+    end
+
+    private def self.compare_slices(bytes : Bytes, left_first : Int32, left_after : Int32, right_first : Int32, right_after : Int32) : Int32
+      left_size = left_after - left_first
+      right_size = right_after - right_first
+      shared_size = Math.min(left_size, right_size)
+      index = 0
+      while index < shared_size
+        left = bytes[left_first + index]
+        right = bytes[right_first + index]
+        return -1 if left < right
+        return 1 if left > right
+        index += 1
+      end
+      return -1 if left_size < right_size
+      return 1 if left_size > right_size
+      0
     end
 
     private def self.slice_equals?(bytes : Bytes, first : Int32, after : Int32, expected : String) : Bool

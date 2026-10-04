@@ -231,7 +231,7 @@ describe "W149 generic Variant physical binding adversaries" do
     end
   end
 
-  it "keeps typed Object and Dynamic consumers closed after generic binding admission" do
+  it "admits canonical typed Object bindings but keeps Dynamic and unsupported Object declarations closed" do
     variant = CrystalClick::BinaryDataType.variant([
       CrystalClick::BinaryDataType.primitive("String"),
       CrystalClick::BinaryDataType.primitive("UInt64"),
@@ -253,29 +253,42 @@ describe "W149 generic Variant physical binding adversaries" do
         CrystalClick::DynamicStructure.new([type] of CrystalClick::BinaryDataType)
       end
       dynamic_error.message.not_nil!.should contain("Variant")
-
-      plan = CrystalClick::ObjectDocumentPlan.new(empty_structures, {"typed" => type})
-      physical_error = expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectDocumentPhysicalPlan.new("doc", plan)
-      end
-      physical_error.message.not_nil!.should contain("Variant")
-      encode_error = expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectDocumentCodec.encode(plan, [] of Array(CrystalClick::ObjectDocument))
-      end
-      encode_error.message.not_nil!.should contain("Variant")
-      decode_error = expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectDocumentCodec.decode({"typed" => type}, empty_streams)
-      end
-      decode_error.message.not_nil!.should contain("Variant")
-      file_error = expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectDocumentFileReader.inspect(
-          "/__w149_variant_guard_must_precede_filesystem__",
-          "doc",
-          {"typed" => type},
-        )
-      end
-      file_error.message.not_nil!.should contain("Variant")
     end
+
+    direct_plan = CrystalClick::ObjectDocumentPlan.new(empty_structures, {"typed" => variant})
+    direct_physical = CrystalClick::ObjectDocumentPhysicalPlan.new("doc", direct_plan)
+    direct_physical.typed("typed").stream_name_for("root.discriminators").should eq("doc.typed.variant_discr")
+
+    nested_variant = CrystalClick::BinaryDataType.array(variant)
+    nested_plan = CrystalClick::ObjectDocumentPlan.new(empty_structures, {"typed" => nested_variant})
+    nested_physical = CrystalClick::ObjectDocumentPhysicalPlan.new("doc", nested_plan)
+    nested_physical.typed("typed").stream_name_for("root.elements.discriminators").should eq("doc.typed.variant_discr")
+
+    unsupported = CrystalClick::BinaryDataType.map(
+      CrystalClick::BinaryDataType.primitive("UInt8"),
+      variant,
+    )
+    unsupported_plan = CrystalClick::ObjectDocumentPlan.new(empty_structures, {"typed" => unsupported})
+    physical_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::ObjectDocumentPhysicalPlan.new("doc", unsupported_plan)
+    end
+    physical_error.message.not_nil!.should contain("Variant")
+    encode_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::ObjectDocumentCodec.encode(unsupported_plan, [] of Array(CrystalClick::ObjectDocument))
+    end
+    encode_error.message.not_nil!.should contain("Variant")
+    decode_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::ObjectDocumentCodec.decode({"typed" => unsupported}, empty_streams)
+    end
+    decode_error.message.not_nil!.should contain("Variant")
+    file_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::ObjectDocumentFileReader.inspect(
+        "/__w149_variant_guard_must_precede_filesystem__",
+        "doc",
+        {"typed" => unsupported},
+      )
+    end
+    file_error.message.not_nil!.should contain("Variant")
   end
 
   it "still charges physical type depth, nodes, and role elements before binding" do

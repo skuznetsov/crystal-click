@@ -37,7 +37,7 @@ module CrystalClick
         if type.contains_variant?
           type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
           type_context.validate_type_tree(type)
-          reject_variant_typed_field!(type)
+          validate_variant_typed_field!(type, budget.limits)
         end
         validate_low_cardinality_typed_field!(type, budget.limits)
       end
@@ -222,7 +222,7 @@ module CrystalClick
       end
       typed_schema.each_value do |type|
         schema_context.validate_type_tree(type)
-        reject_variant_typed_field!(type)
+        validate_variant_typed_field!(type, budget.limits)
         validate_low_cardinality_typed_field!(type, budget.limits)
       end
 
@@ -387,9 +387,9 @@ module CrystalClick
       nil
     end
 
-    private def self.reject_variant_typed_field!(type : BinaryDataType) : Nil
-      if type.contains_variant?
-        raise UnsupportedFormatError.new("Object typed Variant fields are not admitted")
+    private def self.validate_variant_typed_field!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil
+      if type.contains_variant? && ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+        raise UnsupportedFormatError.new("Object typed Variant descriptor is outside the admitted declaration grammar")
       end
       nil
     end

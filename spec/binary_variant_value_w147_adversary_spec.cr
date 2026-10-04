@@ -332,12 +332,10 @@ describe "W147 generic Variant adversarial boundaries" do
       CrystalClick::ObjectSharedMapCodec.encode([map_row] of CrystalClick::ObjectSharedMapRow)
     end
 
-    expect_raises(ArgumentError) do
-      CrystalClick::ObjectDocumentSchema.new({"v" => variant})
-    end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(v Variant(String, UInt64))")
-    end
+    schema = CrystalClick::ObjectDocumentSchema.new({"v" => variant})
+    schema.declaration.should eq("JSON(v Variant(String, UInt64))")
+    parsed_schema = CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration)
+    parsed_schema.typed_paths.should eq({"v" => variant})
 
     # The older exact physical plans remain unchanged; nearby generic rosters
     # do not gain their stream layouts merely because the logical codec admits
