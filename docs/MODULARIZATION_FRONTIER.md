@@ -1,5 +1,76 @@
 # CrystalClick Modularization Frontier
 
+## Reader metadata text grammar extraction (2026-10-04)
+
+Behavior-preserving extraction over `9cc95db` (production baseline `09cc7b3`).
+The existing twelve grammar helpers now belong to one stateless private
+`WidePart::PartMetadataTextParser` in its own 170-line file. `WidePart` is
+15,820 lines, down from 15,985. This owner parses columns/counts/quoted names,
+bounded lines and substream headers, and distinguishes opaque stream names
+from selected filename components. File I/O, substream inventories, type
+admission and filesystem policy stay in the facade. The separate
+`SelectedJsonMetadataProbe` keeps its stricter zero-column and I/O/error
+policies. No public API, type/layout, dependency, allocation or performance
+admission changes. Large-facade modularization remains open.
+
+Risk: CAUTION because metadata interpretation controls persisted input.
+Rollback: the separate atomic local extraction commit; no push. The strongest
+failure mode is namespace/call-site drift changing accepted input, errors or
+filename policy. Root independently verifies all twelve method signatures and
+bodies against the baseline, normalizing only indentation, static/private
+visibility and enclosing-constant qualification. The whole remaining facade
+is identical modulo the qualified calls; the loader adds one ordered require.
+A seeded changed duplicate-column error is rejected after identical
+normalization, and restoring just that message restores exact equality.
+The initial mutation instrument omitted constant normalization; only its
+corrected replay counts as the negative control.
+
+Root runs six independent literal characterizations on the unchanged facade
+and again after extraction: both pass with zero failures/errors/pending.
+The unchanged expectations cover escaped names, zero-column parser versus
+facade policy, duplicate/trailing/truncated metadata, UInt64 overflow, line
+bounds and opaque/selected names. These are neutral characterizations, not a
+claimed behavioral RED. All 155 affected examples pass together in each of
+DEBUG and RELEASE over the following explicit fifteen-file inventory:
+
+```text
+spec/wide_part_metadata_parser_refactor_spec.cr
+spec/wide_part_spec.cr
+spec/multicolumn_wide_part_spec.cr
+spec/wide_part_reader_w22_spec.cr
+spec/wide_part_reader_w23_spec.cr
+spec/wide_part_reader_w50_spec.cr
+spec/wide_part_reader_tuple_metadata_spec.cr
+spec/object_column_reader_w129_spec.cr
+spec/object_table_w130_spec.cr
+spec/object_table_w130_root_spec.cr
+spec/object_offline_table_w130_spec.cr
+spec/object_variant_w151_root_probe_spec.cr
+spec/offline_catalog_spec.cr
+spec/offline_catalog_projection_w87_spec.cr
+spec/wide_part_table_projection_w87_spec.cr
+```
+
+Replay with `crystal spec --single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace` and these paths; add
+`--release --no-debug` for RELEASE. Root runs Crystal 1.21.0/LLVM 22.1.8
+serially under `cogni-ml/scripts/run_safe.sh`, with a 50% free-memory floor,
+600-second timeout, 12-GiB affected-suite cap and isolated Crystal cache.
+An external owner reference fails specifically with `private constant
+CrystalClick::WidePart::PartMetadataTextParser referenced`. Four affected
+source/spec formatter checks and `git diff --check` pass. Root's temporary
+comparison/privacy instruments are in
+`/private/tmp/crystal-click-metadata-refactor-root.3enC0O/`; they may decay.
+A sandbox process-group refusal was an instrument launch failure, not a
+parser result; guarded execution with the required permission passed.
+
+Scoped hostile verdict: ROBUST for the ownership move. Luna authors and
+provides a correlated read-only audit; independent exact comparison, negative
+privacy/control probes and executed literal/regression gates are root-owned.
+No fresh stock ATTACH/CHECK oracle or complete-inventory rerun is claimed for
+this slice; prior W151 evidence retains its original source/runtime scope.
+Refresh this certificate when owner, loader, callers, grammar or limits change.
+
 ## W150 metadata owner extraction (2026-10-04)
 
 Behavior-preserving extraction over clean `d7ed482`; risk CAUTION because

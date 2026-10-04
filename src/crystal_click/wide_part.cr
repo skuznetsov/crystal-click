@@ -11115,7 +11115,7 @@ module CrystalClick
       dynamic_string = @column_type == "Dynamic"
       expected_mark_rows = nil.as(Array(UInt64)?)
       physical_streams.each do |stream_name|
-        validate_selected_stream_name(stream_name)
+        PartMetadataTextParser.validate_selected_stream_name(stream_name)
         data_path, mark_path, compressed_marks = resolve_stream(stream_name)
         if (variant_plan || dynamic_string) && compressed_marks
           raise UnsupportedFormatError.new("Variant and Dynamic require plain .mrk2 marks")
@@ -11318,7 +11318,7 @@ module CrystalClick
 
     private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, String, String, Bool, UInt64, Array(String)}
       columns_text = read_metadata_file("columns.txt")
-      columns = parse_columns(columns_text)
+      columns = PartMetadataTextParser.parse_columns(columns_text)
       if columns.empty?
         raise UnsupportedFormatError.new("columns.txt contains no columns")
       end
@@ -11553,28 +11553,6 @@ module CrystalClick
       codec
     end
 
-    private def parse_columns(text : String) : Array({String, String})
-      bytes = text.to_slice
-      cursor = 0
-      require_metadata_line(bytes, cursor, "columns format version: 1", "columns.txt")
-      cursor += line_length(bytes, cursor)
-      count_line = metadata_line(bytes, cursor, "columns.txt")
-      cursor += line_length(bytes, cursor)
-      count = parse_count_line(count_line, " columns:", MAX_METADATA_COLUMNS, "columns.txt")
-      columns = Array({String, String}).new(count)
-      seen = Set(String).new
-      count.times do
-        line = metadata_line(bytes, cursor, "columns.txt")
-        cursor += line_length(bytes, cursor)
-        name, type_text = parse_column_line(line)
-        raise UnsupportedFormatError.new("duplicate column name") if seen.includes?(name)
-        seen << name
-        columns << {name, type_text}
-      end
-      raise UnsupportedFormatError.new("trailing columns.txt data") unless cursor == bytes.size
-      columns
-    end
-
     private def parse_substreams(
       columns : Array({String, String}),
       selected_column : String,
@@ -11593,32 +11571,32 @@ module CrystalClick
       text = read_metadata_file("columns_substreams.txt")
       bytes = text.to_slice
       cursor = 0
-      require_metadata_line(bytes, cursor, "columns substreams version: 1", "columns_substreams.txt")
-      cursor += line_length(bytes, cursor)
-      count_line = metadata_line(bytes, cursor, "columns_substreams.txt")
-      cursor += line_length(bytes, cursor)
-      count = parse_count_line(count_line, " columns:", MAX_METADATA_COLUMNS, "columns_substreams.txt")
+      PartMetadataTextParser.require_metadata_line(bytes, cursor, "columns substreams version: 1", "columns_substreams.txt")
+      cursor += PartMetadataTextParser.line_length(bytes, cursor)
+      count_line = PartMetadataTextParser.metadata_line(bytes, cursor, "columns_substreams.txt")
+      cursor += PartMetadataTextParser.line_length(bytes, cursor)
+      count = PartMetadataTextParser.parse_count_line(count_line, " columns:", MAX_METADATA_COLUMNS, "columns_substreams.txt")
       raise UnsupportedFormatError.new("column count does not match") unless count == columns.size
 
       seen_columns = Set(String).new
       seen_streams = Set(String).new
       selected_streams = nil.as(Array(String)?)
       count.times do |index|
-        line = metadata_line(bytes, cursor, "columns_substreams.txt")
-        cursor += line_length(bytes, cursor)
-        stream_count, column = parse_substream_header(line)
+        line = PartMetadataTextParser.metadata_line(bytes, cursor, "columns_substreams.txt")
+        cursor += PartMetadataTextParser.line_length(bytes, cursor)
+        stream_count, column = PartMetadataTextParser.parse_substream_header(line)
         expected_column = columns[index][0]
         raise UnsupportedFormatError.new("column order does not match") unless column == expected_column
         raise UnsupportedFormatError.new("duplicate column block") if seen_columns.includes?(column)
         seen_columns << column
         streams = Array(String).new(stream_count)
         stream_count.times do
-          stream_line = metadata_line(bytes, cursor, "columns_substreams.txt")
-          cursor += line_length(bytes, cursor)
+          stream_line = PartMetadataTextParser.metadata_line(bytes, cursor, "columns_substreams.txt")
+          cursor += PartMetadataTextParser.line_length(bytes, cursor)
           raise UnsupportedFormatError.new("invalid physical stream name") unless stream_line.starts_with?("\t")
           stream_bytes = stream_line.to_slice
           stream = String.new(stream_bytes[1, stream_bytes.size - 1])
-          validate_opaque_name(stream)
+          PartMetadataTextParser.validate_opaque_name(stream)
           raise UnsupportedFormatError.new("duplicate physical stream name") if seen_streams.includes?(stream)
           seen_streams << stream
           streams << stream
@@ -13014,151 +12992,8 @@ module CrystalClick
       text = File.read(path)
       raise CorruptPartError.new("invalid row count") unless text.bytesize == size
       text = String.new(text.to_slice[0, text.bytesize - 1]) if text.ends_with?("\n")
-      value = parse_decimal(text, UInt64::MAX, name)
+      value = PartMetadataTextParser.parse_decimal(text, UInt64::MAX, name)
       value
-    end
-
-    private def parse_count_line(line : String, suffix : String, limit : Int, file : String) : Int
-      raise UnsupportedFormatError.new("invalid count in #{file}") unless line.ends_with?(suffix)
-      line_bytes = line.to_slice
-      digits = String.new(line_bytes[0, line_bytes.size - suffix.bytesize])
-      value = parse_decimal(digits, limit.to_u64, file)
-      value.to_i
-    end
-
-    private def parse_decimal(text : String, limit : UInt64, file : String) : UInt64
-      raise UnsupportedFormatError.new("invalid count in #{file}") if text.empty? || (text.bytesize > 1 && text.to_slice[0] == '0'.ord)
-      value = 0_u64
-      text.each_byte do |byte|
-        raise UnsupportedFormatError.new("invalid count in #{file}") unless byte >= '0'.ord && byte <= '9'.ord
-        digit = (byte - '0'.ord).to_u64
-        raise UnsupportedFormatError.new("count exceeds limit in #{file}") if value > (limit - digit) // 10
-        value = value * 10 + digit
-      end
-      value
-    end
-
-    private def metadata_line(bytes : Bytes, cursor : Int, file : String) : String
-      length = line_length(bytes, cursor)
-      raise UnsupportedFormatError.new("line exceeds metadata limit in #{file}") if length > MAX_METADATA_LINE_BYTES
-      String.new(bytes[cursor, length - 1])
-    end
-
-    private def require_metadata_line(bytes : Bytes, cursor : Int, expected : String, file : String)
-      raise UnsupportedFormatError.new("unsupported #{file}") unless metadata_line(bytes, cursor, file) == expected
-    end
-
-    private def line_length(bytes : Bytes, cursor : Int) : Int
-      raise UnsupportedFormatError.new("truncated metadata line") if cursor < 0 || cursor >= bytes.size
-      index = cursor
-      while index < bytes.size && bytes[index] != 10
-        index += 1
-      end
-      raise UnsupportedFormatError.new("truncated metadata line") if index >= bytes.size
-      index - cursor + 1
-    end
-
-    private def parse_column_line(line : String) : {String, String}
-      name, end_index = parse_quoted_name(line, 0)
-      bytes = line.to_slice
-      raise UnsupportedFormatError.new("invalid column type") if end_index >= bytes.size || bytes[end_index] != ' '.ord
-      type_text = String.new(bytes[end_index + 1, bytes.size - end_index - 1])
-      raise UnsupportedFormatError.new("invalid column type") if type_text.empty? || type_text.each_byte.any? { |byte| byte == 0 || byte == 13 }
-      {name, type_text}
-    end
-
-    private def parse_substream_header(line : String) : {Int32, String}
-      marker = " substreams for column "
-      marker_index = line.index(marker)
-      raise UnsupportedFormatError.new("invalid substream header") unless marker_index
-      line_bytes = line.to_slice
-      count = parse_decimal(String.new(line_bytes[0, marker_index]), MAX_METADATA_SUBSTREAMS.to_u64, "columns_substreams.txt").to_i
-      start = marker_index + marker.bytesize
-      name, end_index = parse_quoted_name(line, start)
-      bytes = line.to_slice
-      raise UnsupportedFormatError.new("invalid substream header") unless end_index < bytes.size && bytes[end_index] == ':'.ord
-      raise UnsupportedFormatError.new("invalid substream header") unless end_index + 1 == bytes.size
-      {count, name}
-    end
-
-    private def parse_quoted_name(line : String, start : Int) : {String, Int32}
-      bytes = line.to_slice
-      raise UnsupportedFormatError.new("invalid quoted identifier") if start < 0 || start >= bytes.size || bytes[start] != '`'.ord
-      end_index = -1
-      decoded_length = 0
-      decoded = String.build do |io|
-        index = start + 1
-        while index < bytes.size
-          byte = bytes[index]
-          if byte == '`'.ord
-            if index + 1 < bytes.size && bytes[index + 1] == '`'.ord
-              io.write_byte('`'.ord.to_u8)
-              decoded_length += 1
-              index += 2
-              next
-            end
-            end_index = index + 1
-            break
-          elsif byte == '\\'.ord
-            index += 1
-            raise UnsupportedFormatError.new("invalid quoted identifier escape") if index >= bytes.size
-            escaped = bytes[index]
-            if escaped == 'x'.ord
-              raise UnsupportedFormatError.new("invalid hex escape") if index + 2 >= bytes.size
-              high = hex_digit(bytes[index + 1])
-              low = hex_digit(bytes[index + 2])
-              raise UnsupportedFormatError.new("invalid hex escape") unless high && low
-              io.write_byte((high.not_nil! << 4) | low.not_nil!)
-              decoded_length += 1
-              index += 3
-              next
-            elsif escaped == 'N'.ord
-              index += 1
-              next
-            end
-            decoded_byte = escaped == 'a'.ord ? 0x07_u8 : escaped == 'b'.ord ? 0x08_u8 : escaped == 'e'.ord ? 0x1b_u8 : escaped == 'f'.ord ? 0x0c_u8 : escaped == 'n'.ord ? 0x0a_u8 : escaped == 'r'.ord ? 0x0d_u8 : escaped == 't'.ord ? 0x09_u8 : escaped == 'v'.ord ? 0x0b_u8 : escaped == '0'.ord ? 0_u8 : escaped
-            if decoded_byte != '\\'.ord && decoded_byte != '\''.ord && decoded_byte != '"'.ord && decoded_byte != '`'.ord && decoded_byte != '/'.ord && decoded_byte != '='.ord && decoded_byte >= 0x20
-              io.write_byte('\\'.ord.to_u8)
-              decoded_length += 1
-            end
-            io.write_byte(decoded_byte)
-            decoded_length += 1
-            index += 1
-          else
-            raise UnsupportedFormatError.new("invalid quoted identifier") if byte == 0 || byte == 10 || byte == 13
-            io.write_byte(byte)
-            decoded_length += 1
-            index += 1
-          end
-        end
-      end
-      raise UnsupportedFormatError.new("unterminated quoted identifier") if end_index < 0
-      raise UnsupportedFormatError.new("empty column name") if decoded_length == 0
-      {decoded, end_index}
-    end
-
-    private def hex_digit(byte : UInt8) : UInt8?
-      if byte >= '0'.ord && byte <= '9'.ord
-        byte - '0'.ord
-      elsif byte >= 'a'.ord && byte <= 'f'.ord
-        byte - 'a'.ord + 10
-      elsif byte >= 'A'.ord && byte <= 'F'.ord
-        byte - 'A'.ord + 10
-      end
-    end
-
-    private def validate_opaque_name(name : String)
-      raise UnsupportedFormatError.new("invalid physical stream name") if name.empty? || name.bytesize > MAX_METADATA_LINE_BYTES
-      name.each_byte do |byte|
-        raise UnsupportedFormatError.new("invalid physical stream name") if byte < 0x20 || byte == 0x7f
-      end
-    end
-
-    private def validate_selected_stream_name(name : String)
-      validate_opaque_name(name)
-      if name.includes?("/") || name.includes?("\\")
-        raise UnsupportedFormatError.new("selected physical stream name is not a filename component")
-      end
     end
 
     private def resolve_stream(column : String) : {String, String, Bool}

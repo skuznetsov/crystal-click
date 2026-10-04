@@ -20,7 +20,22 @@ Scoped hostile verdict: ROBUST. Exact gates, source/runtime identities,
 zero-window semantics and residual limits are sealed in
 [OBJECT_DECLARED_VARIANT_FRONTIER.md](OBJECT_DECLARED_VARIANT_FRONTIER.md).
 
-Current architecture checkpoint (2026-10-04): W150 moves the existing 67
+Current architecture checkpoint (2026-10-04): the reader's twelve metadata
+text-grammar helpers move unchanged into one private stateless 170-line
+`PartMetadataTextParser` class/file. Root verifies exact bodies/signatures,
+the complete facade remainder and loader order; six literal characterizations
+pass before and after extraction. All 155 affected reader/table/catalog/Object
+examples pass together in each of DEBUG and RELEASE. A corrected seeded
+mutation control is refused, external access fails on the private constant,
+and formatter/diff checks pass. The reader is now 15,820 lines. Public API,
+grammar, errors, type/layout admission and I/O policy are unchanged; the
+stricter selected-JSON probe stays separate. Scoped hostile verdict: ROBUST
+for this ownership move, not full modularization or performance. No stock
+oracle or complete-inventory rerun is claimed for this slice. Its executed
+boundary and replay inventory are in
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Previous architecture checkpoint (2026-10-04): W150 moves the existing 67
 writer schema/substream/serialization metadata helpers to one private
 518-line `PartSchemaMetadata` class/file. Root verifies exact moved bodies,
 the facade remainder and loader order; five literal characterizations pass
@@ -405,14 +420,16 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,786 lines; the reader/writer are now 15,985/25,466 lines.
+   is 6,786 lines; the reader/writer are now 15,820/25,466 lines.
    W148 separates the full-mark LC occurrence scheduler from its thin replay
    dispatcher. The existing public `WidePartWriter::JSONTypedPathColumn`
    and associated value alias now have their own owner with exact constructor
    semantics. W150 separately extracts the existing writer metadata renderer
    with exact-move, literal and stock regression evidence. W151 adds one
    role-owned physical-prefix adapter class/file instead of embedding its
-   coordinate law in the large facades. Next remain
+   coordinate law in the large facades. The reader metadata text grammar
+   now has a separate private owner, without merging the selected-JSON policy.
+   Next remain
    shared schema/substream planning, physical I/O/validation, leaf codecs and
    thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
@@ -438,7 +455,10 @@ source/runtime identities and executed evidence.
    W149 qualifies ordinary recursive physical binding, both String profiles
    and LC-bearing sparse arms using borrowed stock envelopes. W151 separately
    qualifies declared Object Variant with independent complete parts and
-   shared public consumers. Typed Dynamic remains the next distinct frontier.
+   shared public consumers. Typed Dynamic remains the next distinct frontier:
+   the nominal `Dynamic(max_types=N)` descriptor must preserve its cap,
+   while physical planning uses the actual per-part roster/structure. Neither
+   the cap nor Object's inferred-path policy is a substitute for that roster.
    Broader layout/type products remain separate.
    Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
