@@ -1506,51 +1506,11 @@ module CrystalClick
     # by this reader: simple top-level identifiers with exact primitive
     # numeric or String types. Unsupported declarations fail closed.
     def self.json_typed_paths(type : String) : Array({String, String})
-      raise UnsupportedFormatError.new("JSON column has no explicit typed paths") unless type.starts_with?("JSON(") && type.ends_with?(")")
-      inner = type.byte_slice(5, type.bytesize - 6)
-      raise UnsupportedFormatError.new("empty JSON typed-path declaration") if inner.empty?
-
-      declarations = Array({String, String}).new
-      seen = Set(String).new
-      start = 0
-      depth = 0
-      inner.to_slice.each_with_index do |byte, index|
-        case byte
-        when '('.ord
-          depth += 1
-        when ')'.ord
-          depth -= 1
-          raise UnsupportedFormatError.new("malformed JSON typed-path declaration") if depth < 0
-        when ','.ord
-          next unless depth == 0
-          add_json_typed_path(inner.byte_slice(start, index - start), declarations, seen)
-          start = index + 1
-        end
-      end
-      raise UnsupportedFormatError.new("malformed JSON typed-path declaration") unless depth == 0
-      add_json_typed_path(inner.byte_slice(start, inner.bytesize - start), declarations, seen)
-      declarations
+      JsonTypedPathDeclaration.parse(self, type)
     end
 
     def self.json_typed_path_type(type : String, path : String) : String?
       json_typed_paths(type).find { |entry| entry[0] == path }.try(&.[1])
-    end
-
-    private def self.add_json_typed_path(
-      declaration : String,
-      declarations : Array({String, String}),
-      seen : Set(String),
-    ) : Nil
-      match = /\A\s*([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z0-9_]+)\s*\z/.match(declaration)
-      raise UnsupportedFormatError.new("unsupported JSON typed-path declaration") unless match
-      path = match[1]
-      type = match[2]
-      raise UnsupportedFormatError.new("duplicate JSON typed path") if seen.includes?(path)
-      unless type == "String" || supports_numeric_type?(type)
-        raise UnsupportedFormatError.new("unsupported JSON typed-path scalar type")
-      end
-      seen << path
-      declarations << {path, type}
     end
 
     def self.numeric_type_name(type : T.class) : String forall T

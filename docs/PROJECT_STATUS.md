@@ -41,7 +41,23 @@ Scoped hostile verdict: ROBUST. Exact gates, source/runtime identities,
 zero-window semantics and residual limits are sealed in
 [OBJECT_DECLARED_VARIANT_FRONTIER.md](OBJECT_DECLARED_VARIANT_FRONTIER.md).
 
-Current architecture checkpoint (2026-10-04): the reader's twelve metadata
+Current architecture checkpoint (2026-10-04): pure JSON typed-path declaration
+grammar belongs to one private stateless 52-line `JsonTypedPathDeclaration`
+class/file. Public lookup stays in the facade; parsing receives the calling
+class as a generic policy. Root caught and corrected two inherited-dispatch
+regressions in the first extraction, then passes all 182 affected examples
+together in each of DEBUG and RELEASE over 21 unique files. The eight public
+characterizations plus four integration scans also pass an exact-original
+method baseline replay. Root verifies moved bodies, complete facade/loader
+remainder, seeded error/pinned-policy refusals, private visibility and hygiene.
+The reader is 15,780 lines. Public grammar, errors, base-class type/layout
+admission and I/O remain unchanged. Scoped hostile verdict: ROBUST only for
+this corrected ownership move; no stock oracle or full-inventory rerun is
+claimed. Large-facade modularization remains open. Replay and the refuted
+fixed-base-policy route are in
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Previous architecture checkpoint (2026-10-04): the reader's twelve metadata
 text-grammar helpers move unchanged into one private stateless 170-line
 `PartMetadataTextParser` class/file. Root verifies exact bodies/signatures,
 the complete facade remainder and loader order; six literal characterizations
@@ -441,7 +457,12 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,786 lines; the reader/writer are now 15,820/25,466 lines.
+   is 6,786 lines; the reader/writer are now 15,780/25,466 lines.
+   Pure metadata text and JSON typed-path grammar have separate private owners.
+   JSON parsing preserves caller-policy and public-parser overrides; the next
+   larger seams are staged validation and physical stream binding, followed
+   by reader granule orchestration and table adapters. Each is a separately
+   characterized ownership move, not a class per type combination.
    W148 separates the full-mark LC occurrence scheduler from its thin replay
    dispatcher. The existing public `WidePartWriter::JSONTypedPathColumn`
    and associated value alias now have their own owner with exact constructor
@@ -498,12 +519,12 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-37a251ff`, revision
-`37a251ffa2805b33201486306db980bfa96d73e7`.
+`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-b94acbe3`, revision
+`b94acbe318f8459ac88b35647f4e2293d8e225db`.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Against the previous `9007d227` snapshot,
-all serializer sources are identical; DataTypes, Columns, Formats, MergeTree
-and Compression have bounded changes recorded there. Unchanged serializers
+comparison and earlier identities. Against the previous `7f568d60` snapshot,
+DataTypes, Columns, Formats, MergeTree and Compression are exactly identical
+in five separate recursive content comparisons. Unchanged serializers
 do not imply unchanged framing, metadata or lifecycle behavior. This is
 source evidence only: no executable from this checkout has been built or
 qualified. Source identity and the separately pinned executable oracle must

@@ -1,5 +1,136 @@
 # CrystalClick Modularization Frontier
 
+## Architecture direction
+
+Use one cohesive class per source file, organized by responsibility rather
+than by every scalar/container combination. Keep public facades stable while
+moving pure declaration/schema grammar, physical role planning, codecs,
+granule I/O, staged validation/publication and table/catalog orchestration
+into separate owners. Private value structs may remain with their owner;
+do not add a class hierarchy merely to reduce line counts.
+
+The next larger seams are the writer's staged validation and physical stream
+binding, followed by reader granule/column orchestration and table adapters.
+These are proposed decomposition boundaries, not completed extractions. Each
+slice needs an explicit call-site inventory, retained-buffer/resource lifetime
+checks where relevant, baseline characterizations and affected consumer tests.
+Serialization bytes, pre-callback refusals and publication rollback remain
+invariants. A shorter facade by itself is not a modularity or speed certificate.
+
+## JSON typed-path declaration owner plan (2026-10-04)
+
+Behavior-preserving slice over `4b964ee` (production baseline `3f46570`).
+Move only the existing pure declaration grammar from `WidePart` into the
+private stateless `WidePart::JsonTypedPathDeclaration`, one owner/file at
+`src/crystal_click/wide_part/json_typed_path_declaration.cr`. Keep the public
+`json_typed_paths` signature as a delegate, passing its calling class as a
+generic policy without a Proc or instance. Keep `json_typed_path_type`'s
+original body in the facade so overrides of public parsing remain visible.
+The primitive policy still belongs to the calling class's existing
+`supports_numeric_type?`; do not copy or pin it to the base class.
+File I/O, selected-JSON metadata probing, full Object declarations,
+type/layout admission, limits, allocation policy and dependencies stay put.
+
+Risk: CAUTION because declaration interpretation controls persisted input.
+Rollback: one atomic local refactor commit, with no push. The strongest
+failure is a namespace/require/policy change that alters accepted grammar,
+error precedence or caller-owned results. Luna owns only the facade, new
+owner and ordered aggregate require; a separate Luna authors public-API
+characterizations. Root owns all serial compiler checks and exact-diff review.
+
+DoD: run the independent literal characterization examples before production
+edits and after extraction, expecting zero failures/errors. Include inherited
+predicate and public-parser overrides, not only concrete base-class calls.
+Then run the affected JSON reader, writer, Object/table and catalog specs in
+DEBUG and RELEASE under the existing guarded Crystal invocation. Independently
+compare the moved bodies and complete facade/loader remainder against the
+baseline, allowing only indentation, method visibility/name changes and
+explicit generic propagation of the caller's policy. A seeded changed error
+or pinned base-class policy must fail this
+comparison. Check private-owner visibility, formatter output and
+`git diff --check`. This proves only a bounded neutral ownership move, not
+broader JSON support, full modularization, stock interoperability or speed.
+The separately authored, unexecuted W153 Dynamic probes are outside this slice.
+
+## JSON typed-path declaration executed certificate (2026-10-04)
+
+Status: VERIFIED for the corrected behavior-preserving ownership move only.
+Root's bounded hostile verdict is ROBUST; Luna's implementation and static
+review are correlated support, not independent execution evidence. Production
+baseline is `4b964ee` / `3f46570`. The private stateless owner is 52 lines;
+the reader facade is 15,780, down from 15,820. Its scanner and append grammar
+are unchanged. Public lookup stays in the facade and parsing receives the
+calling class as a generic policy, preserving inherited public overrides.
+No new concrete-base type, layout, limits, I/O, dependency or performance
+admission follows.
+
+Root executed these discriminating checks:
+
+- Before extraction, six literal characterizations plus four existing JSON
+  integration scans pass: 10 examples, zero failures/errors/pending.
+- The first extraction passed 180 consumer examples in DEBUG and RELEASE,
+  but pinned the numeric policy to the base class and bypassed overridden
+  public parsing during lookup. A separate inherited-dispatch probe reproduced
+  the error. The two added regressions then produce one failure and one error
+  among eight examples on that version. These green pre-correction consumer
+  gates are not the final certificate.
+- A temporary replay containing the byte-exact original three-method block
+  from `4b964ee` passes the eight expanded characterizations and four integration
+  scans: 12 examples, zero failures/errors/pending. Production was not changed
+  for that baseline replay. An initial absolute-require instrument launch
+  failure is excluded; the corrected relative-require replay is the evidence.
+- After generic caller-policy propagation and restoration of the original
+  public lookup body, all 182 examples in the 21-file inventory below pass
+  together in each of DEBUG and RELEASE, zero failures/errors/pending and
+  guarded outer exit 0.
+- Root's exact comparator verifies the two moved grammar methods against the
+  fixed baseline, permitting only indentation, rename/signature changes and
+  explicit generic policy propagation. It verifies the complete facade
+  remainder and the one ordered loader require. In-memory seeded changes to
+  the duplicate error and caller policy (pinning it back to `WidePart`) are
+  rejected. The baseline replay is separately checked against the original
+  block. Structural equality alone did not prove inherited dispatch.
+- An external owner reference fails specifically with `private constant
+  CrystalClick::WidePart::JsonTypedPathDeclaration referenced`. Formatter
+  checks for all four changed source/spec files and `git diff --check` pass.
+
+Replay the following inventory with `crystal spec --single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace`; add `--release --no-debug` for RELEASE:
+
+```text
+spec/json_typed_path_declaration_refactor_spec.cr
+spec/json_typed_path_scan_spec.cr
+spec/wide_part_metadata_parser_refactor_spec.cr
+spec/wide_part_spec.cr
+spec/multicolumn_wide_part_spec.cr
+spec/wide_part_reader_w22_spec.cr
+spec/wide_part_reader_w23_spec.cr
+spec/wide_part_reader_w50_spec.cr
+spec/wide_part_reader_tuple_metadata_spec.cr
+spec/object_column_reader_w129_spec.cr
+spec/object_table_w130_spec.cr
+spec/object_table_w130_root_spec.cr
+spec/object_offline_table_w130_spec.cr
+spec/object_variant_w151_root_probe_spec.cr
+spec/offline_catalog_spec.cr
+spec/offline_catalog_projection_w87_spec.cr
+spec/wide_part_table_projection_w87_spec.cr
+spec/wide_part_writer_json_typed_spec.cr
+spec/wide_part_writer_json_typed_general_spec.cr
+spec/wide_part_writer_json_typed_path_column_spec.cr
+spec/wide_part_writer_metadata_w150_spec.cr
+```
+
+Root runs Crystal 1.21.0/LLVM 22.1.8 on AArch64 macOS with SDK 26.5 and an
+isolated cache, serially under `cogni-ml/scripts/run_safe.sh` (600 seconds,
+12-GiB cap, minimum free memory 50%). Temporary exact-comparison, baseline
+and privacy instruments are in
+`/private/tmp/crystal-click-json-declaration-refactor.43OD4y/` and may expire.
+The guard does not establish library memory bounds. No new stock oracle or
+complete-inventory rerun is claimed; pending W153 probes are excluded.
+Refresh after owner, loader, policy, public override contracts or callers
+change. Broader JSON compatibility and large-facade modularization remain open.
+
 ## Reader metadata text grammar extraction (2026-10-04)
 
 Behavior-preserving extraction over `9cc95db` (production baseline `09cc7b3`).
