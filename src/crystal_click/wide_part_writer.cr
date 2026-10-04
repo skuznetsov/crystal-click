@@ -81,10 +81,10 @@ module CrystalClick
         records.concat(write_uint64_stream(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        write_plain_metadata(stage, "columns.txt", columns_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.columns_metadata(key_name, value_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -120,11 +120,11 @@ module CrystalClick
         records.concat(write_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", nullable_columns_metadata(key_name, value_name))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.nullable_columns_metadata(key_name, value_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", nullable_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.nullable_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -200,11 +200,11 @@ module CrystalClick
         records.concat(write_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", string_columns_metadata(key_name, value_name))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.string_columns_metadata(key_name, value_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -240,11 +240,11 @@ module CrystalClick
         records.concat(write_dynamic_string_streams(stage, value_column, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", dynamic_string_columns_metadata(key_column, value_column))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.dynamic_string_columns_metadata(key_column, value_column))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", dynamic_string_substreams_metadata(key_column, value_column))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.dynamic_string_substreams_metadata(key_column, value_column))
         write_checksums(stage, records)
         validate_staged_dynamic_string_part(stage, key_column, keys, value_column, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -279,11 +279,11 @@ module CrystalClick
         records.concat(write_dynamic_string_uint64_streams(stage, value_column, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_column, keys))
-        write_plain_metadata(stage, "columns.txt", dynamic_string_columns_metadata(key_column, value_column))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.json_typed_serialization_metadata(key_column, keys))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.dynamic_string_columns_metadata(key_column, value_column))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", dynamic_string_string_uint64_substreams_metadata(key_column, value_column))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.dynamic_string_string_uint64_substreams_metadata(key_column, value_column))
         write_checksums(stage, records)
         validate_staged_dynamic_string_uint64_part(stage, key_column, keys, value_column, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -318,11 +318,11 @@ module CrystalClick
         records.concat(write_variant_string_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, WideVariantStringUInt64TypePlan::TYPE))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, WideVariantStringUInt64TypePlan::TYPE))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", variant_string_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.variant_string_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_variant_string_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -356,11 +356,11 @@ module CrystalClick
         records.concat(write_variant_bool_string_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, WideVariantBoolStringUInt64TypePlan::TYPE))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, WideVariantBoolStringUInt64TypePlan::TYPE))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", variant_bool_string_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.variant_bool_string_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_variant_bool_string_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -403,11 +403,11 @@ module CrystalClick
         records.concat(write_string_streams(stage, "#{value_name}%2Eb", b_slice, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", tuple_string_serialization_metadata(key_name, value_name, keys, values))
-        write_plain_metadata(stage, "columns.txt", tuple_string_columns_metadata(key_name, value_name))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.tuple_string_serialization_metadata(key_name, value_name, keys, values))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.tuple_string_columns_metadata(key_name, value_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", tuple_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.tuple_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_tuple_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1027,11 +1027,11 @@ module CrystalClick
         records.concat(write_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Evalues", keys.size, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
-        write_plain_metadata(stage, "columns.txt", json_typed_columns_metadata(key_name, value_name))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.json_typed_columns_metadata(key_name, value_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", json_typed_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.json_typed_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_json_typed_part(stage, key_name, keys, value_name, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1074,11 +1074,11 @@ module CrystalClick
         records.concat(write_json_empty_stream(stage, "#{value_name}.object_shared_data.0%2Evalues", keys.size, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
-        write_plain_metadata(stage, "columns.txt", json_typed_paths_columns_metadata(key_name, value_name, paths))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.json_typed_paths_columns_metadata(key_name, value_name, paths))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", json_typed_paths_substreams_metadata(key_name, value_name, sorted_paths))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.json_typed_paths_substreams_metadata(key_name, value_name, sorted_paths))
         write_checksums(stage, records)
         validate_staged_json_typed_paths_part(stage, key_name, keys, value_name, paths, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1114,11 +1114,11 @@ module CrystalClick
         records.concat(write_low_cardinality_index_stream(stage, value_name, values, value_ids, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "LowCardinality(String)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "LowCardinality(String)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", low_cardinality_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.low_cardinality_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_low_cardinality_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1155,11 +1155,11 @@ module CrystalClick
         records.concat(write_fixed_string_stream(stage, value_name, values, width, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "FixedString(#{width})"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "FixedString(#{width})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", typed_substreams_metadata(key_name, value_name, "FixedString(#{width})"))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.typed_substreams_metadata(key_name, value_name, "FixedString(#{width})"))
         write_checksums(stage, records)
         validate_staged_fixed_string_part(stage, key_name, value_name, keys, values, width, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1195,11 +1195,11 @@ module CrystalClick
         records.concat(write_nullable_fixed_string_streams(stage, value_name, values, width, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", nullable_fixed_string_serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Nullable(FixedString(#{width}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.nullable_fixed_string_serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Nullable(FixedString(#{width}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", nullable_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.nullable_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_nullable_fixed_string_part(stage, key_name, value_name, keys, values, width, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1234,11 +1234,11 @@ module CrystalClick
         records.concat(write_array_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(UInt64)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(UInt64)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1277,11 +1277,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{type_name})"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(#{type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_numeric_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
         publish_exclusively(stage, target)
@@ -1717,11 +1717,11 @@ module CrystalClick
         records.concat(write_array_array_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Array(UInt64))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Array(UInt64))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1760,11 +1760,11 @@ module CrystalClick
         records.concat(write_array_array_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Array(#{type_name}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Array(#{type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_numeric_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
         publish_exclusively(stage, target)
@@ -1799,11 +1799,11 @@ module CrystalClick
         records.concat(write_array_array_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Array(String))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Array(String))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1838,11 +1838,11 @@ module CrystalClick
         records.concat(write_array_array_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Array(Nullable(UInt64)))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Array(Nullable(UInt64)))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_nullable_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -1882,11 +1882,11 @@ module CrystalClick
         records.concat(write_array_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Array(Nullable(#{type_name})))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Array(Nullable(#{type_name})))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_nullable_numeric_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
         publish_exclusively(stage, target)
@@ -2185,11 +2185,11 @@ module CrystalClick
         records.concat(write_array_array_nullable_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Array(Nullable(String)))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Array(Nullable(String)))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_nullable_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2244,11 +2244,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{type_name}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(#{type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_numeric_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
         publish_exclusively(stage, target)
@@ -2309,11 +2309,11 @@ module CrystalClick
         records.concat(write_array_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(String)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(String)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2348,11 +2348,11 @@ module CrystalClick
         records.concat(write_array_nullable_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(String))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(String))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2388,11 +2388,11 @@ module CrystalClick
         records.concat(write_array_fixed_string_streams(stage, value_name, values, width, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(FixedString(#{width}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(FixedString(#{width}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_fixed_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_fixed_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_fixed_string_part(stage, key_name, value_name, keys, values, width, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2427,11 +2427,11 @@ module CrystalClick
         records.concat(write_array_nullable_fixed_string_streams(stage, value_name, values, width, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(FixedString(#{width})))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(FixedString(#{width})))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_fixed_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_fixed_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_fixed_string_part(stage, key_name, value_name, keys, values, width, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2466,11 +2466,11 @@ module CrystalClick
         records.concat(write_array_bool_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Bool)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Bool)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_bool_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_bool_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_bool_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2504,11 +2504,11 @@ module CrystalClick
         records.concat(write_array_nullable_bool_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(Bool))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(Bool))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_bool_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_bool_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_bool_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2543,11 +2543,11 @@ module CrystalClick
         records.concat(write_map_uint64_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(UInt64, String)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, String)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_uint64_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_uint64_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_uint64_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2582,11 +2582,11 @@ module CrystalClick
         records.concat(write_map_uint64_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(UInt64, UInt64)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, UInt64)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_uint64_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_uint64_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_uint64_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2691,11 +2691,11 @@ module CrystalClick
         records.concat(write_map_uint64_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(UInt64, Nullable(UInt64))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, Nullable(UInt64))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_uint64_nullable_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_uint64_nullable_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_uint64_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2731,11 +2731,11 @@ module CrystalClick
         records.concat(write_map_uint64_array_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(UInt64, Array(Nullable(UInt64)))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, Array(Nullable(UInt64)))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_uint64_array_nullable_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_uint64_array_nullable_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_uint64_array_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2802,11 +2802,11 @@ module CrystalClick
         records.concat(write_map_uint64_nullable_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(UInt64, Nullable(String))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, Nullable(String))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_uint64_nullable_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_uint64_nullable_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_uint64_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2840,11 +2840,11 @@ module CrystalClick
         records.concat(write_map_string_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(String, UInt64)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(String, UInt64)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_string_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_string_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_string_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -2880,11 +2880,11 @@ module CrystalClick
         records.concat(write_array_map_string_uint64_streams(stage, physical_plan, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Map(String, UInt64))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Map(String, UInt64))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_map_string_uint64_substreams_metadata(key_name, value_name, physical_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_map_string_uint64_substreams_metadata(key_name, value_name, physical_plan))
         write_checksums(stage, records)
         validate_staged_array_map_string_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark, physical_plan)
         publish_exclusively(stage, target)
@@ -3156,11 +3156,11 @@ module CrystalClick
         records.concat(write_map_string_array_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(String, Array(UInt64))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(String, Array(UInt64))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_string_array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_string_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_string_array_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -3185,7 +3185,7 @@ module CrystalClick
         false, false)
 
       write_map_array_core_pair(destination, key_name, keys, value_name, rows_per_mark,
-        "Map(UInt64, Array(UInt64))", map_uint64_array_uint64_substreams_metadata(key_name, value_name),
+        "Map(UInt64, Array(UInt64))", PartSchemaMetadata.map_uint64_array_uint64_substreams_metadata(key_name, value_name),
         ->(stage : String) { write_map_array_core_streams(stage, value_name, values, rows_per_mark, false, false) },
         ->(stage : String) { validate_staged_map_uint64_array_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark) })
     end
@@ -3258,7 +3258,7 @@ module CrystalClick
         true, true)
 
       write_map_array_core_pair(destination, key_name, keys, value_name, rows_per_mark,
-        "Map(String, Array(String))", map_string_array_string_substreams_metadata(key_name, value_name),
+        "Map(String, Array(String))", PartSchemaMetadata.map_string_array_string_substreams_metadata(key_name, value_name),
         ->(stage : String) { write_map_array_core_streams(stage, value_name, values, rows_per_mark, true, true) },
         ->(stage : String) { validate_staged_map_string_array_string_part(stage, key_name, value_name, keys, values, rows_per_mark) })
     end
@@ -3279,7 +3279,7 @@ module CrystalClick
         false, true)
 
       write_map_array_core_pair(destination, key_name, keys, value_name, rows_per_mark,
-        "Map(UInt64, Array(String))", map_uint64_array_string_substreams_metadata(key_name, value_name),
+        "Map(UInt64, Array(String))", PartSchemaMetadata.map_uint64_array_string_substreams_metadata(key_name, value_name),
         ->(stage : String) { write_map_array_core_streams(stage, value_name, values, rows_per_mark, false, true) },
         ->(stage : String) { validate_staged_map_uint64_array_string_part(stage, key_name, value_name, keys, values, rows_per_mark) })
     end
@@ -3310,11 +3310,11 @@ module CrystalClick
         records.concat(write_map_string_array_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(String, Array(Nullable(UInt64)))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(String, Array(Nullable(UInt64)))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_string_array_nullable_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_string_array_nullable_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_string_array_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -3350,11 +3350,11 @@ module CrystalClick
         records.concat(write_map_string_array_nullable_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(String, Array(Nullable(String)))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(String, Array(Nullable(String)))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_string_array_nullable_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_string_array_nullable_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_string_array_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -3390,11 +3390,11 @@ module CrystalClick
         records.concat(write_map_uint64_array_nullable_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(UInt64, Array(Nullable(String)))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, Array(Nullable(String)))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_uint64_array_nullable_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_uint64_array_nullable_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_uint64_array_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -3429,11 +3429,11 @@ module CrystalClick
         records.concat(write_map_string_nullable_uint64_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(String, Nullable(UInt64))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(String, Nullable(UInt64))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_string_nullable_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_string_nullable_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_string_nullable_uint64_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -3468,11 +3468,11 @@ module CrystalClick
         records.concat(write_map_string_nullable_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(String, Nullable(String))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(String, Nullable(String))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_string_nullable_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_string_nullable_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_string_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -3506,11 +3506,11 @@ module CrystalClick
         records.concat(write_map_string_string_streams(stage, value_name, values, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Map(String, String)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(String, String)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_string_string_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_string_string_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_map_string_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -3546,11 +3546,11 @@ module CrystalClick
         records.concat(write_array_tuple_string_streams(stage, value_name, values, rows_per_mark, type_plan))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_plan.column_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_plan.column_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_tuple_substreams_metadata(key_name, value_name, type_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_tuple_substreams_metadata(key_name, value_name, type_plan))
         write_checksums(stage, records)
         validate_staged_array_tuple_part(stage, key_name, value_name, keys, values, rows_per_mark, type_plan)
         publish_exclusively(stage, target)
@@ -3586,11 +3586,11 @@ module CrystalClick
         records.concat(write_array_tuple_string_streams(stage, value_name, values, rows_per_mark, type_plan))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_plan.column_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_plan.column_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_tuple_substreams_metadata(key_name, value_name, type_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_tuple_substreams_metadata(key_name, value_name, type_plan))
         write_checksums(stage, records)
         validate_staged_array_tuple_part(stage, key_name, value_name, keys, values, rows_per_mark, type_plan)
         publish_exclusively(stage, target)
@@ -3627,11 +3627,11 @@ module CrystalClick
         records.concat(write_array_tuple_uint64_streams(stage, value_name, values, rows_per_mark, type_plan))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_plan.column_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_plan.column_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_tuple_substreams_metadata(key_name, value_name, type_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_tuple_substreams_metadata(key_name, value_name, type_plan))
         write_checksums(stage, records)
         validate_staged_array_tuple_part(stage, key_name, value_name, keys, values, rows_per_mark, type_plan)
         publish_exclusively(stage, target)
@@ -4114,13 +4114,13 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil?
-          records << write_checksummed_file(stage, "serialization.json", typed_serialization_metadata(type_name))
+        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || PartSchemaMetadata.semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil?
+          records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.typed_serialization_metadata(type_name))
         end
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", typed_substreams_metadata(key_name, value_name, type_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.typed_substreams_metadata(key_name, value_name, type_name))
         write_checksums(stage, records)
         validate_staged_typed_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
         publish_exclusively(stage, target)
@@ -4559,14 +4559,14 @@ module CrystalClick
         ))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys))
         map_type = {% if K == String %}"Map(String, Array(#{type_name}))"{% else %}"Map(UInt64, Array(#{type_name}))"{% end %}
         substreams = {% if K == String %}
-                       map_string_array_uint64_substreams_metadata(key_name, value_name)
+                       PartSchemaMetadata.map_string_array_uint64_substreams_metadata(key_name, value_name)
                      {% else %}
-                       map_uint64_array_uint64_substreams_metadata(key_name, value_name)
+                       PartSchemaMetadata.map_uint64_array_uint64_substreams_metadata(key_name, value_name)
                      {% end %}
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, map_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, map_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", substreams)
@@ -4604,11 +4604,11 @@ module CrystalClick
         records.concat(write_map_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, map_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, map_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_array_nullable_numeric_substreams_metadata(key_name, value_name, string_keys))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_array_nullable_numeric_substreams_metadata(key_name, value_name, string_keys))
         write_checksums(stage, records)
         validate_staged_map_array_nullable_numeric_part(stage, key_name, value_name, keys, values, rows_per_mark, type_name)
         publish_exclusively(stage, target)
@@ -4641,8 +4641,8 @@ module CrystalClick
         records.concat(write_streams.call(stage))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", json_typed_serialization_metadata(key_name, keys))
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, type_name))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_name))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
         write_plain_metadata(stage, "columns_substreams.txt", substreams)
@@ -5345,12 +5345,12 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
         expected_type = column_type.try(&.type_name) || "Array(#{element_type})"
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
@@ -5401,12 +5401,12 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
         expected_type = column_type.try(&.type_name) || "Array(Nullable(#{element_type}))"
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
@@ -5441,11 +5441,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "Int32"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_decimal32_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5480,11 +5480,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "Int32"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_decimal32_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5519,11 +5519,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "Int64"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_decimal64_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5558,11 +5558,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "Int64"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_decimal64_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5597,11 +5597,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "Int128"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_decimal128_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5636,11 +5636,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "Int128"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_decimal128_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5675,11 +5675,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "Decimal256"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(#{decimal_type.type_name})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5714,11 +5714,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "Decimal256"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(#{decimal_type.type_name}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_decimal256_part(stage, key_name, value_name, keys, values, rows_per_mark, scale, precision)
         publish_exclusively(stage, target)
@@ -5754,11 +5754,11 @@ module CrystalClick
         records.concat(write_array_array_numeric_streams(stage, value_name, values, rows_per_mark, physical_type))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
         expected_type = "Array(Array(#{decimal_type.type_name}))"
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_decimal_part(stage, key_name, value_name, keys, values, rows_per_mark, precision, scale, physical_type)
         publish_exclusively(stage, target)
@@ -5798,11 +5798,11 @@ module CrystalClick
         records.concat(write_array_array_numeric_streams(stage, value_name, values, rows_per_mark, carrier))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_time_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
         publish_exclusively(stage, target)
@@ -5842,11 +5842,11 @@ module CrystalClick
         records.concat(write_array_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, carrier))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_nullable_time_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type)
         publish_exclusively(stage, target)
@@ -5893,11 +5893,11 @@ module CrystalClick
         records.concat(write_array_array_numeric_streams(stage, value_name, values, rows_per_mark, carrier))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
@@ -5944,11 +5944,11 @@ module CrystalClick
         records.concat(write_array_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, carrier))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_nullable_temporal_part(stage, key_name, value_name, keys, values, rows_per_mark, element_type, column_type)
         publish_exclusively(stage, target)
@@ -5984,12 +5984,12 @@ module CrystalClick
         records.concat(write_array_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, physical_type))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
         expected_type = "Array(Array(Nullable(#{decimal_type.type_name})))"
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, expected_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_array_nullable_decimal_part(stage, key_name, value_name, keys, values, rows_per_mark, precision, scale, physical_type)
         publish_exclusively(stage, target)
@@ -6031,11 +6031,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(#{canonical_enum_type})"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(#{canonical_enum_type})"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_enum_part(stage, key_name, value_name, keys, values, rows_per_mark, canonical_enum_type, type_name)
         publish_exclusively(stage, target)
@@ -6085,11 +6085,11 @@ module CrystalClick
         {% end %}
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(#{canonical_enum_type}))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(#{canonical_enum_type}))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_nullable_enum_part(stage, key_name, value_name, keys, values, rows_per_mark, canonical_enum_type, type_name)
         publish_exclusively(stage, target)
@@ -6154,11 +6154,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "UUID"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(UUID)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(UUID)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_uuid_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -6190,11 +6190,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "UUID"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(UUID))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(UUID))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_uuid_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -6226,11 +6226,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "IPv4"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(IPv4)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(IPv4)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_ipv4_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -6262,11 +6262,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "IPv4"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(IPv4))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(IPv4))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_ipv4_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -6298,11 +6298,11 @@ module CrystalClick
         records.concat(write_array_numeric_streams(stage, value_name, values, rows_per_mark, "IPv6"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(IPv6)"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(IPv6)"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_uint64_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_ipv6_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -6334,11 +6334,11 @@ module CrystalClick
         records.concat(write_array_nullable_numeric_streams(stage, value_name, values, rows_per_mark, "IPv6"))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, "Array(Nullable(IPv6))"))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(IPv6))"))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_nullable_numeric_substreams_metadata(key_name, value_name))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name))
         write_checksums(stage, records)
         validate_staged_array_ipv6_part(stage, key_name, value_name, keys, values, rows_per_mark)
         publish_exclusively(stage, target)
@@ -7989,11 +7989,11 @@ module CrystalClick
         records.concat(write_map_numeric_streams(stage, value_name, values, type_name, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, map_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, map_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_numeric_substreams_metadata(key_name, value_name, string_keys))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_numeric_substreams_metadata(key_name, value_name, string_keys))
         write_checksums(stage, records)
         validate_staged_map_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
         publish_exclusively(stage, target)
@@ -8029,11 +8029,11 @@ module CrystalClick
         records.concat(write_map_nullable_numeric_streams(stage, value_name, values, type_name, rows_per_mark))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, map_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, map_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", map_nullable_numeric_substreams_metadata(key_name, value_name, string_keys))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.map_nullable_numeric_substreams_metadata(key_name, value_name, string_keys))
         write_checksums(stage, records)
         validate_staged_map_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
         publish_exclusively(stage, target)
@@ -8557,11 +8557,11 @@ module CrystalClick
         records.concat(write_array_map_string_streams(stage, values, rows_per_mark, physical_plan))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, full_type))
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, full_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_map_string_substreams_metadata(key_name, value_name, physical_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_map_string_substreams_metadata(key_name, value_name, physical_plan))
         write_checksums(stage, records)
         validate_staged_array_map_string_part(stage, key_name, value_name, keys, values, rows_per_mark, physical_plan)
         publish_exclusively(stage, target)
@@ -8939,14 +8939,14 @@ module CrystalClick
         records.concat(write_array_map_numeric_streams(stage, value_name, values, type_name, rows_per_mark, physical_plan))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", serialization_metadata)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
         value_type = physical_plan.nullable_values ? "Nullable(#{type_name})" : type_name
         key_type = physical_plan.string_keys ? "String" : "UInt64"
         full_type = "Array(Map(#{key_type}, #{value_type}))"
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, full_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, full_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_map_numeric_substreams_metadata(key_name, value_name, physical_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_map_numeric_substreams_metadata(key_name, value_name, physical_plan))
         write_checksums(stage, records)
         validate_staged_array_map_numeric_part(stage, key_name, value_name, keys, values, type_class, type_name, rows_per_mark, physical_plan)
         publish_exclusively(stage, target)
@@ -8979,13 +8979,13 @@ module CrystalClick
         records.concat(write_array_map_array_numeric_streams(stage, value_name, values, rows_per_mark, physical_plan))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", array_map_array_serialization_metadata)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.array_map_array_serialization_metadata)
         key_type = physical_plan.string_keys ? "String" : "UInt64"
         full_type = "Array(Map(#{key_type}, Array(#{type_name})))"
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, full_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, full_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_map_array_numeric_substreams_metadata(key_name, value_name, physical_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_map_array_numeric_substreams_metadata(key_name, value_name, physical_plan))
         write_checksums(stage, records)
         validate_staged_array_map_array_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark, physical_plan)
         publish_exclusively(stage, target)
@@ -9017,14 +9017,14 @@ module CrystalClick
         records.concat(write_array_map_array_streams(stage, value_name, values, rows_per_mark, physical_plan))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        records << write_checksummed_file(stage, "serialization.json", array_map_array_serialization_metadata)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.array_map_array_serialization_metadata)
         key_type = physical_plan.string_keys ? "String" : "UInt64"
         value_type = physical_plan.string_values ? "String" : "UInt64"
         full_type = "Array(Map(#{key_type}, Array(#{value_type})))"
-        write_plain_metadata(stage, "columns.txt", typed_columns_metadata(key_name, value_name, full_type))
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, full_type))
         write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
         write_plain_metadata(stage, "metadata_version.txt", "0")
-        write_plain_metadata(stage, "columns_substreams.txt", array_map_array_substreams_metadata(key_name, value_name, physical_plan))
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.array_map_array_substreams_metadata(key_name, value_name, physical_plan))
         write_checksums(stage, records)
         validate_staged_array_map_array_part(stage, key_name, value_name, keys, values, rows_per_mark, physical_plan)
         publish_exclusively(stage, target)
@@ -10900,7 +10900,7 @@ module CrystalClick
       mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
       raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
 
-      structure_frame_size = literal_frame_size(json_object_structure_bytes.size.to_i64)
+      structure_frame_size = literal_frame_size(PartSchemaMetadata.json_object_structure_bytes.size.to_i64)
       raise ArgumentError.new("Object structure frame exceeds reader limit") if structure_frame_size > MAX_FRAME_COMPRESSED.to_i64
 
       fixed_stream_bytes = 0_i64
@@ -11014,7 +11014,7 @@ module CrystalClick
       raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
       index_size = (mark_count.to_i64 + 1_i64) * 8_i64
       raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
-      structure_frame_size = literal_frame_size(json_object_structure_bytes.size.to_i64)
+      structure_frame_size = literal_frame_size(PartSchemaMetadata.json_object_structure_bytes.size.to_i64)
       raise ArgumentError.new("Object structure frame exceeds reader limit") if structure_frame_size > MAX_FRAME_COMPRESSED.to_i64
 
       previous = keys[0]
@@ -11079,7 +11079,7 @@ module CrystalClick
         end
       end
 
-      substreams_size = json_typed_paths_substreams_metadata(key_name, value_name, paths.sort_by(&.name)).bytesize
+      substreams_size = PartSchemaMetadata.json_typed_paths_substreams_metadata(key_name, value_name, paths.sort_by(&.name)).bytesize
       raise ArgumentError.new("JSON typed-path substream metadata exceeds reader limit") if substreams_size > WidePart::MAX_METADATA_FILE_BYTES
       nil
     end
@@ -12173,7 +12173,7 @@ module CrystalClick
       base_name = StreamName.hash("#{column}.object_structure")
       data_name = "#{base_name}.bin"
       marks_name = "#{base_name}.mrk2"
-      raw = json_object_structure_bytes
+      raw = PartSchemaMetadata.json_object_structure_bytes
       frame = encode_lz4_frame(raw)
       raise ArgumentError.new("Object structure stream exceeds reader limit") if frame.size.to_i64 > MAX_DATA_FILE_BYTES
 
@@ -19588,13 +19588,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == dynamic_string_columns_metadata(key_column, value_column)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.dynamic_string_columns_metadata(key_column, value_column)
         raise CorruptPartError.new("staged Dynamic columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == dynamic_string_substreams_metadata(key_column, value_column)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.dynamic_string_substreams_metadata(key_column, value_column)
         raise CorruptPartError.new("staged Dynamic substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
         raise CorruptPartError.new("staged Dynamic serialization metadata differs")
       end
       raise CorruptPartError.new("staged row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -19643,13 +19643,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == dynamic_string_columns_metadata(key_column, value_column)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.dynamic_string_columns_metadata(key_column, value_column)
         raise CorruptPartError.new("staged W75 Dynamic columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == dynamic_string_string_uint64_substreams_metadata(key_column, value_column)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.dynamic_string_string_uint64_substreams_metadata(key_column, value_column)
         raise CorruptPartError.new("staged W75 Dynamic substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == json_typed_serialization_metadata(key_column, keys)
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.json_typed_serialization_metadata(key_column, keys)
         raise CorruptPartError.new("staged W75 Dynamic serialization metadata differs")
       end
       raise CorruptPartError.new("staged W75 row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -19698,13 +19698,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, WideVariantStringUInt64TypePlan::TYPE)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, WideVariantStringUInt64TypePlan::TYPE)
         raise CorruptPartError.new("staged Variant columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == variant_string_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.variant_string_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Variant substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
         raise CorruptPartError.new("staged Variant serialization metadata differs")
       end
       raise CorruptPartError.new("staged row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -19761,13 +19761,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, WideVariantBoolStringUInt64TypePlan::TYPE)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, WideVariantBoolStringUInt64TypePlan::TYPE)
         raise CorruptPartError.new("staged Variant columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == variant_bool_string_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.variant_bool_string_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Variant substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
         raise CorruptPartError.new("staged Variant serialization metadata differs")
       end
       raise CorruptPartError.new("staged row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -19827,13 +19827,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == tuple_string_columns_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.tuple_string_columns_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Tuple columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == tuple_string_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.tuple_string_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Tuple substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == tuple_string_serialization_metadata(key_name, value_name, keys, values)
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.tuple_string_serialization_metadata(key_name, value_name, keys, values)
         raise CorruptPartError.new("staged Tuple serialization metadata differs")
       end
       raise CorruptPartError.new("staged row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -20125,13 +20125,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, type_plan.column_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_plan.column_type)
         raise CorruptPartError.new("staged Array Tuple columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_tuple_substreams_metadata(key_name, value_name, type_plan)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_tuple_substreams_metadata(key_name, value_name, type_plan)
         raise CorruptPartError.new("staged Array Tuple substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
         raise CorruptPartError.new("staged Array Tuple serialization metadata differs")
       end
       raise CorruptPartError.new("staged Array Tuple row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -20285,9 +20285,9 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      raise CorruptPartError.new("staged JSON columns metadata differs") unless File.read(File.join(stage, "columns.txt")) == json_typed_columns_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged JSON substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == json_typed_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged JSON serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == json_typed_serialization_metadata(key_name, keys)
+      raise CorruptPartError.new("staged JSON columns metadata differs") unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.json_typed_columns_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged JSON substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.json_typed_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged JSON serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       raise CorruptPartError.new("staged JSON row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
       raise CorruptPartError.new("staged JSON compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged JSON metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
@@ -20367,9 +20367,9 @@ module CrystalClick
       end
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      raise CorruptPartError.new("staged JSON columns metadata differs") unless File.read(File.join(stage, "columns.txt")) == json_typed_paths_columns_metadata(key_name, value_name, paths)
-      raise CorruptPartError.new("staged JSON substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == json_typed_paths_substreams_metadata(key_name, value_name, sorted_paths)
-      raise CorruptPartError.new("staged JSON serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == json_typed_serialization_metadata(key_name, keys)
+      raise CorruptPartError.new("staged JSON columns metadata differs") unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.json_typed_paths_columns_metadata(key_name, value_name, paths)
+      raise CorruptPartError.new("staged JSON substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.json_typed_paths_substreams_metadata(key_name, value_name, sorted_paths)
+      raise CorruptPartError.new("staged JSON serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       raise CorruptPartError.new("staged JSON row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
       raise CorruptPartError.new("staged JSON compression codec differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged JSON metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
@@ -20607,7 +20607,7 @@ module CrystalClick
       base_name = StreamName.hash("#{column}.object_structure")
       data_file = File.open(File.join(stage, "#{base_name}.bin"), "r")
       marks_file = File.open(File.join(stage, "#{base_name}.mrk2"), "r")
-      raw = json_object_structure_bytes
+      raw = PartSchemaMetadata.json_object_structure_bytes
       expected_mark_count = checked_mark_count(row_count, rows_per_mark)
       expected_mark_file_size = (expected_mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
       unless marks_file.size == expected_mark_file_size
@@ -20810,8 +20810,8 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged Array numeric marks do not match") unless value_part.mark_row_counts == expected_mark_rows
-      raise CorruptPartError.new("staged Array numeric substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged Array numeric serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Array numeric substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Array numeric serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
@@ -20849,12 +20849,12 @@ module CrystalClick
       raise CorruptPartError.new("staged temporal Array type does not match") unless value_part.column_type == expected_type
       if temporal_type = DateTimeColumnType.parse(expected_type)
         if temporal_type.shape == DateTimeColumnType::Shape::Array &&
-           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, temporal_type.type_name)
           raise CorruptPartError.new("staged temporal Array column metadata differs")
         end
       end
-      raise CorruptPartError.new("staged temporal Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged temporal Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -20924,8 +20924,8 @@ module CrystalClick
       end
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      expected_substreams = nullable_uuid ? array_nullable_numeric_substreams_metadata(key_name, value_name) : array_uint64_substreams_metadata(key_name, value_name)
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      expected_substreams = nullable_uuid ? PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name) : PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged UUID Array column metadata differs")
       end
       unless File.read(File.join(stage, "columns_substreams.txt")) == expected_substreams
@@ -20933,7 +20933,7 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged UUID Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged UUID Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged UUID Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged UUID Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -20996,8 +20996,8 @@ module CrystalClick
       end
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      expected_substreams = nullable_ipv4 ? array_nullable_numeric_substreams_metadata(key_name, value_name) : array_uint64_substreams_metadata(key_name, value_name)
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      expected_substreams = nullable_ipv4 ? PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name) : PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged IPv4 Array column metadata differs")
       end
       unless File.read(File.join(stage, "columns_substreams.txt")) == expected_substreams
@@ -21005,7 +21005,7 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged IPv4 Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged IPv4 Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged IPv4 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged IPv4 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21068,8 +21068,8 @@ module CrystalClick
       end
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      expected_substreams = nullable_ipv6 ? array_nullable_numeric_substreams_metadata(key_name, value_name) : array_uint64_substreams_metadata(key_name, value_name)
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      expected_substreams = nullable_ipv6 ? PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name) : PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged IPv6 Array column metadata differs")
       end
       unless File.read(File.join(stage, "columns_substreams.txt")) == expected_substreams
@@ -21077,7 +21077,7 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged IPv6 Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged IPv6 Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged IPv6 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged IPv6 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21241,14 +21241,14 @@ module CrystalClick
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
       expected_type = "Array(Array(#{type_name}))"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested numeric Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested numeric Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested numeric Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
-      raise CorruptPartError.new("staged nested numeric Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested numeric Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21291,14 +21291,14 @@ module CrystalClick
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
       expected_type = "Array(Array(String))"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested String Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_string_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_string_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested String Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested String Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
-      raise CorruptPartError.new("staged nested String Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested String Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21358,15 +21358,15 @@ module CrystalClick
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
       expected_type = "Array(Array(Nullable(String)))"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested nullable String Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_string_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_nullable_string_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested nullable String Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested nullable String Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged nested nullable String Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged nested nullable String Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested nullable String Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21428,7 +21428,7 @@ module CrystalClick
       checksums.entries.each_key do |name|
         checksums.validate_selected_entries(stage, name)
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_nullable_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Array(Array(Nullable(UInt64))) substream metadata differs")
       end
 
@@ -21474,14 +21474,14 @@ module CrystalClick
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
       expected_type = "Array(Array(Nullable(#{type_name})))"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested nullable numeric Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_numeric_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested nullable numeric Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested nullable numeric Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
-      raise CorruptPartError.new("staged nested nullable numeric Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested nullable numeric Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21530,15 +21530,15 @@ module CrystalClick
              carrier == WidePart.array_numeric_type_name(T)
         raise CorruptPartError.new("staged nested Time Array semantic type is invalid")
       end
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested Time Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested Time Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested Time Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged nested Time Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged nested Time Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested Time Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21598,15 +21598,15 @@ module CrystalClick
              carrier == WidePart.array_numeric_type_name(T)
         raise CorruptPartError.new("staged nested nullable Time Array semantic type is invalid")
       end
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested nullable Time Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_numeric_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested nullable Time Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested nullable Time Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged nested nullable Time Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged nested nullable Time Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested nullable Time Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21667,15 +21667,15 @@ module CrystalClick
              carrier == WidePart.array_numeric_type_name(T)
         raise CorruptPartError.new("staged nested temporal Array semantic type is invalid")
       end
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested temporal Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested temporal Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested temporal Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged nested temporal Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged nested temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21736,15 +21736,15 @@ module CrystalClick
              carrier == WidePart.array_numeric_type_name(T)
         raise CorruptPartError.new("staged nested nullable temporal Array semantic type is invalid")
       end
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested nullable temporal Array column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_numeric_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested nullable temporal Array substream metadata differs")
       end
       raise CorruptPartError.new("staged nested nullable temporal Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged nested nullable temporal Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged nested nullable temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested nullable temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -21802,14 +21802,14 @@ module CrystalClick
 
       decimal_type = staged_decimal_type_for_width(precision, scale, numeric_width(physical_type))
       expected_type = "Array(Array(#{decimal_type.type_name}))"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested Decimal column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested Decimal substream metadata differs")
       end
       raise CorruptPartError.new("staged nested Decimal codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
-      raise CorruptPartError.new("staged nested Decimal serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested Decimal serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       unless decimal_array_array_scale(expected_type, precision) == scale
         raise CorruptPartError.new("staged nested Decimal scale or semantic declaration is invalid")
@@ -21869,15 +21869,15 @@ module CrystalClick
 
       decimal_type = staged_decimal_type_for_width(precision, scale, numeric_width(physical_type))
       expected_type = "Array(Array(Nullable(#{decimal_type.type_name})))"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nested nullable Decimal column metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_array_nullable_numeric_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_array_nullable_numeric_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged nested nullable Decimal substream metadata differs")
       end
       raise CorruptPartError.new("staged nested nullable Decimal codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged nested nullable Decimal metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged nested nullable Decimal serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nested nullable Decimal serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       unless nullable_decimal_array_array_scale(expected_type, precision) == scale
         raise CorruptPartError.new("staged nested nullable Decimal scale or semantic declaration is invalid")
@@ -22050,7 +22050,7 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged Array(Nullable(T)) row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged Array(Nullable(T)) column type does not match") unless value_part.column_type == expected_type
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Array(Nullable(T)) substream metadata does not match")
       end
 
@@ -22071,7 +22071,7 @@ module CrystalClick
       end
       raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
       raise CorruptPartError.new("staged Array(Nullable(T)) marks do not match") unless value_part.mark_row_counts == expected_mark_rows
-      raise CorruptPartError.new("staged Array(Nullable(T)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Array(Nullable(T)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
       nil
@@ -22109,12 +22109,12 @@ module CrystalClick
       raise CorruptPartError.new("staged nullable temporal Array type does not match") unless value_part.column_type == expected_type
       if temporal_type = DateTimeColumnType.parse(expected_type)
         if temporal_type.shape == DateTimeColumnType::Shape::ArrayNullable &&
-           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, temporal_type.type_name)
           raise CorruptPartError.new("staged nullable temporal Array column metadata differs")
         end
       end
-      raise CorruptPartError.new("staged nullable temporal Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged nullable temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nullable temporal Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable temporal Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22181,8 +22181,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged Decimal32 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged Decimal32 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged Decimal32 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged Decimal32 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Decimal32 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Decimal32 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22230,8 +22230,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal32 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal32 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged nullable Decimal32 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged nullable Decimal32 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nullable Decimal32 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable Decimal32 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22279,8 +22279,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged Decimal64 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged Decimal64 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged Decimal64 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged Decimal64 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Decimal64 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Decimal64 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22328,8 +22328,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal64 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal64 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged nullable Decimal64 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged nullable Decimal64 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nullable Decimal64 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable Decimal64 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22377,8 +22377,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged Decimal128 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged Decimal128 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged Decimal128 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged Decimal128 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Decimal128 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Decimal128 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22426,8 +22426,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal128 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal128 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged nullable Decimal128 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged nullable Decimal128 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nullable Decimal128 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable Decimal128 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22475,8 +22475,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged Decimal256 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged Decimal256 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged Decimal256 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged Decimal256 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Decimal256 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Decimal256 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22524,8 +22524,8 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal256 Array row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged nullable Decimal256 Array type does not match") unless value_part.column_type == expected_type
-      raise CorruptPartError.new("staged nullable Decimal256 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
-      raise CorruptPartError.new("staged nullable Decimal256 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nullable Decimal256 Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable Decimal256 Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22578,13 +22578,13 @@ module CrystalClick
       raise CorruptPartError.new("staged Enum Array checksum inventory differs") unless checksums.entries.keys.sort == expected_checksum_files.sort
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged Enum Array column metadata differs")
       end
-      raise CorruptPartError.new("staged Enum Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_uint64_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged Enum Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_uint64_substreams_metadata(key_name, value_name)
       raise CorruptPartError.new("staged Enum Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged Enum Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged Enum Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Enum Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -22653,13 +22653,13 @@ module CrystalClick
       raise CorruptPartError.new("staged nullable Enum Array checksum inventory differs") unless checksums.entries.keys.sort == expected_checksum_files.sort
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, expected_type)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, expected_type)
         raise CorruptPartError.new("staged nullable Enum Array column metadata differs")
       end
-      raise CorruptPartError.new("staged nullable Enum Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_numeric_substreams_metadata(key_name, value_name)
+      raise CorruptPartError.new("staged nullable Enum Array substream metadata differs") unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_numeric_substreams_metadata(key_name, value_name)
       raise CorruptPartError.new("staged nullable Enum Array codec metadata differs") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged nullable Enum Array metadata version differs") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged nullable Enum Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged nullable Enum Array serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -22828,15 +22828,15 @@ module CrystalClick
       unless value_part.column_type == "Array(Nullable(String))"
         raise CorruptPartError.new("staged Array(Nullable(String)) column type does not match")
       end
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Array(Nullable(String))")
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(String))")
         raise CorruptPartError.new("staged Array(Nullable(String)) column metadata does not match")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_string_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_string_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Array(Nullable(String)) substream metadata does not match")
       end
       raise CorruptPartError.new("staged Array(Nullable(String)) codec metadata does not match") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged Array(Nullable(String)) metadata version does not match") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged Array(Nullable(String)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Array(Nullable(String)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22890,15 +22890,15 @@ module CrystalClick
       unless value_part.column_type == "Array(FixedString(#{width}))"
         raise CorruptPartError.new("staged Array(FixedString) column type does not match")
       end
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Array(FixedString(#{width}))")
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(FixedString(#{width}))")
         raise CorruptPartError.new("staged Array(FixedString) column metadata does not match")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_fixed_string_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_fixed_string_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Array(FixedString) substream metadata does not match")
       end
       raise CorruptPartError.new("staged Array(FixedString) codec metadata does not match") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged Array(FixedString) metadata version does not match") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged Array(FixedString) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Array(FixedString) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -22953,15 +22953,15 @@ module CrystalClick
       unless value_part.column_type == "Array(Nullable(FixedString(#{width})))"
         raise CorruptPartError.new("staged Array(Nullable(FixedString)) column type does not match")
       end
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Array(Nullable(FixedString(#{width})))")
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(FixedString(#{width})))")
         raise CorruptPartError.new("staged Array(Nullable(FixedString)) column metadata does not match")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_fixed_string_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_fixed_string_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Array(Nullable(FixedString)) substream metadata does not match")
       end
       raise CorruptPartError.new("staged Array(Nullable(FixedString)) codec metadata does not match") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged Array(Nullable(FixedString)) metadata version does not match") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged Array(Nullable(FixedString)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Array(Nullable(FixedString)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -23013,15 +23013,15 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged Array(Bool) row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged Array(Bool) column type does not match") unless value_part.column_type == "Array(Bool)"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Array(Bool)")
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Bool)")
         raise CorruptPartError.new("staged Array(Bool) column metadata does not match")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_bool_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_bool_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Array(Bool) substream metadata does not match")
       end
       raise CorruptPartError.new("staged Array(Bool) codec metadata does not match") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged Array(Bool) metadata version does not match") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged Array(Bool) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Array(Bool) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -23073,15 +23073,15 @@ module CrystalClick
       raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
       raise CorruptPartError.new("staged Array(Nullable(Bool)) row count does not match") unless value_part.row_count == values.size.to_u64
       raise CorruptPartError.new("staged Array(Nullable(Bool)) column type does not match") unless value_part.column_type == "Array(Nullable(Bool))"
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Array(Nullable(Bool))")
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Array(Nullable(Bool))")
         raise CorruptPartError.new("staged Array(Nullable(Bool)) column metadata does not match")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == array_nullable_bool_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.array_nullable_bool_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Array(Nullable(Bool)) substream metadata does not match")
       end
       raise CorruptPartError.new("staged Array(Nullable(Bool)) codec metadata does not match") unless File.read(File.join(stage, "default_compression_codec.txt")) == "CODEC(LZ4)"
       raise CorruptPartError.new("staged Array(Nullable(Bool)) metadata version does not match") unless File.read(File.join(stage, "metadata_version.txt")) == "0"
-      raise CorruptPartError.new("staged Array(Nullable(Bool)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      raise CorruptPartError.new("staged Array(Nullable(Bool)) serialization metadata differs") unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
 
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -23176,13 +23176,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Map(UInt64, String)")
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, String)")
         raise CorruptPartError.new("staged Map columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == map_uint64_string_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.map_uint64_string_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Map substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
         raise CorruptPartError.new("staged Map serialization metadata differs")
       end
       raise CorruptPartError.new("staged Map row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -23285,7 +23285,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, UInt64)",
-        map_string_uint64_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_uint64_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys", "#{value_name}%2Evalues"]
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -23325,7 +23325,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Array(Map(String, UInt64))",
-        array_map_string_uint64_substreams_metadata(key_name, value_name, physical_plan),
+        PartSchemaMetadata.array_map_string_uint64_substreams_metadata(key_name, value_name, physical_plan),
         logical_streams
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -23368,7 +23368,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         full_type,
-        array_map_string_substreams_metadata(key_name, value_name, physical_plan),
+        PartSchemaMetadata.array_map_string_substreams_metadata(key_name, value_name, physical_plan),
         logical_streams
       )
 
@@ -23427,7 +23427,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         full_type,
-        array_map_numeric_substreams_metadata(key_name, value_name, physical_plan),
+        PartSchemaMetadata.array_map_numeric_substreams_metadata(key_name, value_name, physical_plan),
         logical_streams
       )
       {% if T == Bool %}
@@ -23520,9 +23520,9 @@ module CrystalClick
         keys,
         rows_per_mark,
         full_type,
-        array_map_array_numeric_substreams_metadata(key_name, value_name, physical_plan),
+        PartSchemaMetadata.array_map_array_numeric_substreams_metadata(key_name, value_name, physical_plan),
         logical_streams,
-        array_map_array_serialization_metadata
+        PartSchemaMetadata.array_map_array_serialization_metadata
       )
 
       streams = physical_plan.streams
@@ -23598,9 +23598,9 @@ module CrystalClick
         keys,
         rows_per_mark,
         full_type,
-        array_map_array_substreams_metadata(key_name, value_name, physical_plan),
+        PartSchemaMetadata.array_map_array_substreams_metadata(key_name, value_name, physical_plan),
         logical_streams,
-        array_map_array_serialization_metadata
+        PartSchemaMetadata.array_map_array_serialization_metadata
       )
 
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -23755,7 +23755,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, Array(UInt64))",
-        map_string_array_uint64_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_array_uint64_substreams_metadata(key_name, value_name),
         [
           key_name,
           "#{value_name}.size0",
@@ -23800,7 +23800,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, Array(Nullable(UInt64)))",
-        map_string_array_nullable_uint64_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_array_nullable_uint64_substreams_metadata(key_name, value_name),
         [
           key_name,
           "#{value_name}.size0",
@@ -23846,7 +23846,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, Array(Nullable(String)))",
-        map_string_array_nullable_string_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_array_nullable_string_substreams_metadata(key_name, value_name),
         [
           key_name,
           "#{value_name}.size0",
@@ -23857,7 +23857,7 @@ module CrystalClick
           "#{value_name}%2Evalues.size",
           "#{value_name}%2Evalues",
         ],
-        json_typed_serialization_metadata(key_name, keys)
+        PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -23894,7 +23894,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, String)",
-        map_string_string_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_string_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size", "#{value_name}%2Evalues"]
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -23932,7 +23932,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(UInt64, Nullable(UInt64))",
-        map_uint64_nullable_uint64_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_uint64_nullable_uint64_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.null", "#{value_name}%2Evalues"]
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -23980,9 +23980,9 @@ module CrystalClick
         keys,
         rows_per_mark,
         map_type,
-        map_array_nullable_numeric_substreams_metadata(key_name, value_name, string_keys),
+        PartSchemaMetadata.map_array_nullable_numeric_substreams_metadata(key_name, value_name, string_keys),
         logical_streams,
-        serialization_metadata
+        PartSchemaMetadata.serialization_metadata
       )
 
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -24045,7 +24045,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(UInt64, Array(Nullable(UInt64)))",
-        map_uint64_array_nullable_uint64_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_uint64_array_nullable_uint64_substreams_metadata(key_name, value_name),
         [
           key_name,
           "#{value_name}.size0",
@@ -24090,9 +24090,9 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(UInt64, Array(UInt64))",
-        map_uint64_array_uint64_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_uint64_array_uint64_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size1", "#{value_name}%2Evalues"],
-        json_typed_serialization_metadata(key_name, keys)
+        PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -24129,10 +24129,10 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, Array(String))",
-        map_string_array_string_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_array_string_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys",
          "#{value_name}%2Evalues.size1", "#{value_name}%2Evalues.size", "#{value_name}%2Evalues"],
-        json_typed_serialization_metadata(key_name, keys)
+        PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -24169,10 +24169,10 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(UInt64, Array(String))",
-        map_uint64_array_string_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_uint64_array_string_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size1",
          "#{value_name}%2Evalues.size", "#{value_name}%2Evalues"],
-        json_typed_serialization_metadata(key_name, keys)
+        PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -24209,7 +24209,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(UInt64, Array(Nullable(String)))",
-        map_uint64_array_nullable_string_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_uint64_array_nullable_string_substreams_metadata(key_name, value_name),
         [
           key_name,
           "#{value_name}.size0",
@@ -24219,7 +24219,7 @@ module CrystalClick
           "#{value_name}%2Evalues.size",
           "#{value_name}%2Evalues",
         ],
-        json_typed_serialization_metadata(key_name, keys)
+        PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -24256,7 +24256,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, Nullable(UInt64))",
-        map_string_nullable_uint64_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_nullable_uint64_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.null", "#{value_name}%2Evalues"]
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -24294,7 +24294,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(UInt64, Nullable(String))",
-        map_uint64_nullable_string_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_uint64_nullable_string_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.null", "#{value_name}%2Evalues.size", "#{value_name}%2Evalues"]
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -24332,7 +24332,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         "Map(String, Nullable(String))",
-        map_string_nullable_string_substreams_metadata(key_name, value_name),
+        PartSchemaMetadata.map_string_nullable_string_substreams_metadata(key_name, value_name),
         [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys.size", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.null", "#{value_name}%2Evalues.size", "#{value_name}%2Evalues"]
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
@@ -24364,7 +24364,7 @@ module CrystalClick
       type_name : String,
       substreams_metadata : String,
       logical_streams : Array(String),
-      serialization_json : String = serialization_metadata,
+      serialization_json : String = PartSchemaMetadata.serialization_metadata,
     ) : Tuple(WidePart, WidePart, Int32)
       checksums = PartChecksums.open(stage)
       expected_checksum_files = ["count.txt", "primary.idx", "serialization.json"]
@@ -24380,7 +24380,7 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, type_name)
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_name)
         raise CorruptPartError.new("staged String-key Map columns metadata differs")
       end
       unless File.read(File.join(stage, "columns_substreams.txt")) == substreams_metadata
@@ -24438,7 +24438,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         map_type,
-        map_numeric_substreams_metadata(key_name, value_name, string_keys),
+        PartSchemaMetadata.map_numeric_substreams_metadata(key_name, value_name, string_keys),
         logical_streams
       )
       expected_mark_rows = [] of UInt64
@@ -24501,9 +24501,9 @@ module CrystalClick
                           [key_name, "#{value_name}.size0", "#{value_name}%2Ekeys", "#{value_name}%2Evalues.size1", "#{value_name}%2Evalues"]
                         {% end %}
       substreams = {% if K == String %}
-                     map_string_array_uint64_substreams_metadata(key_name, value_name)
+                     PartSchemaMetadata.map_string_array_uint64_substreams_metadata(key_name, value_name)
                    {% else %}
-                     map_uint64_array_uint64_substreams_metadata(key_name, value_name)
+                     PartSchemaMetadata.map_uint64_array_uint64_substreams_metadata(key_name, value_name)
                    {% end %}
 
       key_part, value_part, mark_count = validate_staged_map_string_metadata(
@@ -24515,7 +24515,7 @@ module CrystalClick
         map_type,
         substreams,
         logical_streams,
-        json_typed_serialization_metadata(key_name, keys)
+        PartSchemaMetadata.json_typed_serialization_metadata(key_name, keys)
       )
       expected_mark_rows = Array(UInt64).new(mark_count)
       start = 0
@@ -24581,7 +24581,7 @@ module CrystalClick
         keys,
         rows_per_mark,
         map_type,
-        map_nullable_numeric_substreams_metadata(key_name, value_name, string_keys),
+        PartSchemaMetadata.map_nullable_numeric_substreams_metadata(key_name, value_name, string_keys),
         logical_streams
       )
       expected_mark_rows = [] of UInt64
@@ -24648,13 +24648,13 @@ module CrystalClick
         checksums.validate_selected_entries(stage, name)
       end
 
-      unless File.read(File.join(stage, "columns.txt")) == typed_columns_metadata(key_name, value_name, "Map(UInt64, UInt64)")
+      unless File.read(File.join(stage, "columns.txt")) == PartSchemaMetadata.typed_columns_metadata(key_name, value_name, "Map(UInt64, UInt64)")
         raise CorruptPartError.new("staged Map columns metadata differs")
       end
-      unless File.read(File.join(stage, "columns_substreams.txt")) == map_uint64_uint64_substreams_metadata(key_name, value_name)
+      unless File.read(File.join(stage, "columns_substreams.txt")) == PartSchemaMetadata.map_uint64_uint64_substreams_metadata(key_name, value_name)
         raise CorruptPartError.new("staged Map substream metadata differs")
       end
-      unless File.read(File.join(stage, "serialization.json")) == serialization_metadata
+      unless File.read(File.join(stage, "serialization.json")) == PartSchemaMetadata.serialization_metadata
         raise CorruptPartError.new("staged Map serialization metadata differs")
       end
       raise CorruptPartError.new("staged Map row count differs") unless File.read(File.join(stage, "count.txt")) == keys.size.to_s
@@ -24940,7 +24940,7 @@ module CrystalClick
       end
       if temporal_type = DateTimeColumnType.parse(type_name)
         if temporal_type.shape == DateTimeColumnType::Shape::Scalar &&
-           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, temporal_type.type_name)
           raise CorruptPartError.new("staged typed temporal column metadata differs")
         end
       end
@@ -25162,7 +25162,7 @@ module CrystalClick
       checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
       if temporal_type = DateTimeColumnType.parse(type_name)
         if temporal_type.shape == DateTimeColumnType::Shape::Nullable &&
-           File.read(File.join(stage, "columns.txt")) != typed_columns_metadata(key_name, value_name, temporal_type.type_name)
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, temporal_type.type_name)
           raise CorruptPartError.new("staged Nullable temporal column metadata differs")
         end
       end
@@ -25412,517 +25412,6 @@ module CrystalClick
 
     private def self.publish_exclusively(stage : String, target : String) : Nil
       PartDirectoryPublisher.publish_exclusively(stage, target)
-    end
-
-    private def self.columns_metadata(key_name : String, value_name : String) : String
-      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` UInt64\n"
-    end
-
-    private def self.nullable_columns_metadata(key_name : String, value_name : String) : String
-      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` Nullable(UInt64)\n"
-    end
-
-    private def self.string_columns_metadata(key_name : String, value_name : String) : String
-      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` String\n"
-    end
-
-    private def self.dynamic_string_columns_metadata(key_name : String, value_name : String) : String
-      typed_columns_metadata(key_name, value_name, "Dynamic")
-    end
-
-    private def self.tuple_string_columns_metadata(key_name : String, value_name : String) : String
-      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` Tuple(a UInt64, b String)\n"
-    end
-
-    private def self.json_typed_columns_metadata(key_name : String, value_name : String) : String
-      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` JSON(a UInt64, b String)\n"
-    end
-
-    private def self.json_typed_paths_columns_metadata(
-      key_name : String,
-      value_name : String,
-      paths : Array(JSONTypedPathColumn),
-    ) : String
-      declaration = paths.sort_by(&.name).map { |path| "#{path.name} #{path.type_name}" }.join(", ")
-      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` JSON(#{declaration})\n"
-    end
-
-    private def self.json_object_structure_bytes : Bytes
-      Bytes[0x04_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 1_u8, 1_u8, 1_u8, 0_u8]
-    end
-
-    private def self.substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n1 substreams for column `#{value_name}`:\n\t#{value_name}\n"
-    end
-
-    private def self.nullable_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.null\n\t#{value_name}\n"
-    end
-
-    private def self.string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size\n\t#{value_name}\n"
-    end
-
-    private def self.dynamic_string_substreams_metadata(key_name : String, value_name : String) : String
-      value_streams = [
-        "#{value_name}.dynamic_structure",
-        "#{value_name}.variant_discr",
-        "#{value_name}.SharedVariant.size",
-        "#{value_name}.SharedVariant",
-        "#{value_name}.String.size",
-        "#{value_name}.String",
-      ]
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
-      value_streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.dynamic_string_string_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      value_streams = [
-        "#{value_name}.dynamic_structure",
-        "#{value_name}.variant_discr",
-        "#{value_name}.SharedVariant.size",
-        "#{value_name}.SharedVariant",
-        "#{value_name}.String.size",
-        "#{value_name}.String",
-        "#{value_name}.UInt64",
-      ]
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
-      value_streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.variant_string_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      value_streams = WideVariantStringUInt64TypePlan.physical_streams(value_name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
-      value_streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.variant_bool_string_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      value_streams = WideVariantBoolStringUInt64TypePlan.physical_streams(value_name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
-      value_streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.tuple_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}%2Ea\n\t#{value_name}%2Eb.size\n\t#{value_name}%2Eb\n"
-    end
-
-    private def self.array_tuple_substreams_metadata(
-      key_name : String,
-      value_name : String,
-      type_plan : WideTypePlan,
-    ) : String
-      value_streams = type_plan.physical_substreams(value_name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
-      value_streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.json_typed_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "7 substreams for column `#{value_name}`:\n\t#{value_name}.object_structure\n\t#{value_name}.a\n" +
-        "\t#{value_name}.b.size\n\t#{value_name}.b\n" +
-        "\t#{value_name}.object_shared_data.0.size0\n" +
-        "\t#{value_name}.object_shared_data.0%2Epaths\n" +
-        "\t#{value_name}.object_shared_data.0%2Evalues\n"
-    end
-
-    private def self.json_typed_paths_substreams_metadata(
-      key_name : String,
-      value_name : String,
-      sorted_paths : Array(JSONTypedPathColumn),
-    ) : String
-      streams = ["#{value_name}.object_structure"]
-      sorted_paths.each do |path|
-        typed_name = "#{value_name}.#{path.name}"
-        streams << "#{typed_name}.size" if path.type_name == "String"
-        streams << typed_name
-      end
-      streams.concat([
-        "#{value_name}.object_shared_data.0.size0",
-        "#{value_name}.object_shared_data.0%2Epaths",
-        "#{value_name}.object_shared_data.0%2Evalues",
-      ])
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
-      streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.low_cardinality_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.dict\n\t#{value_name}\n"
-    end
-
-    private def self.array_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}\n"
-    end
-
-    private def self.array_array_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size1\n\t#{value_name}\n"
-    end
-
-    private def self.array_array_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size1\n\t#{value_name}.size\n\t#{value_name}\n"
-    end
-
-    private def self.array_array_nullable_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size1\n\t#{value_name}.null\n\t#{value_name}.size\n\t#{value_name}\n"
-    end
-
-    private def self.array_array_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size1\n\t#{value_name}.null\n\t#{value_name}\n"
-    end
-
-    private def self.array_array_nullable_numeric_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size1\n\t#{value_name}.null\n\t#{value_name}\n"
-    end
-
-    private def self.array_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      array_nullable_numeric_substreams_metadata(key_name, value_name)
-    end
-
-    private def self.array_nullable_numeric_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.null\n\t#{value_name}\n"
-    end
-
-    private def self.array_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.size\n\t#{value_name}\n"
-    end
-
-    private def self.array_nullable_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.null\n\t#{value_name}.size\n\t#{value_name}\n"
-    end
-
-    private def self.array_fixed_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}\n"
-    end
-
-    private def self.array_nullable_fixed_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.null\n\t#{value_name}\n"
-    end
-
-    private def self.array_bool_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n2 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}\n"
-    end
-
-    private def self.array_nullable_bool_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n\t#{value_name}.null\n\t#{value_name}\n"
-    end
-
-    private def self.map_uint64_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_uint64_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "3 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_numeric_substreams_metadata(key_name : String, value_name : String, string_keys : Bool) : String
-      if string_keys
-        "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-          "4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-          "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues\n"
-      else
-        map_uint64_uint64_substreams_metadata(key_name, value_name)
-      end
-    end
-
-    private def self.map_nullable_numeric_substreams_metadata(key_name : String, value_name : String, string_keys : Bool) : String
-      if string_keys
-        "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-          "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-          "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-          "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
-      else
-        "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-          "4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-          "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
-      end
-    end
-
-    private def self.map_uint64_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_uint64_array_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size1\n" +
-        "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_array_nullable_numeric_substreams_metadata(key_name : String, value_name : String, string_keys : Bool) : String
-      if string_keys
-        "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-          "6 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-          "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-          "\t#{value_name}%2Evalues.size1\n\t#{value_name}%2Evalues.null\n" +
-          "\t#{value_name}%2Evalues\n"
-      else
-        "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-          "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-          "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size1\n" +
-          "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
-      end
-    end
-
-    private def self.map_uint64_array_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size1\n" +
-        "\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_uint64_array_nullable_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "6 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size1\n" +
-        "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues.size\n" +
-        "\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_uint64_array_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.size1\n" +
-        "\t#{value_name}%2Evalues.size\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_uint64_nullable_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues.null\n" +
-        "\t#{value_name}%2Evalues.size\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_string_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "4 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.array_map_string_uint64_substreams_metadata(
-      key_name : String,
-      value_name : String,
-      physical_plan : ArrayMapStringUInt64PhysicalPlan,
-    ) : String
-      streams = physical_plan.streams.map(&.name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
-      streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.array_map_numeric_substreams_metadata(
-      key_name : String,
-      value_name : String,
-      physical_plan : ArrayMapNumericPhysicalPlan,
-    ) : String
-      streams = physical_plan.streams.map(&.name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
-      streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.array_map_string_substreams_metadata(
-      key_name : String,
-      value_name : String,
-      physical_plan : ArrayMapStringPhysicalPlan,
-    ) : String
-      streams = physical_plan.streams.map(&.name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
-      streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.array_map_array_numeric_substreams_metadata(
-      key_name : String,
-      value_name : String,
-      physical_plan : ArrayMapArrayNumericPhysicalPlan,
-    ) : String
-      streams = physical_plan.streams.map(&.name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
-      streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.array_map_array_substreams_metadata(
-      key_name : String,
-      value_name : String,
-      physical_plan : ArrayMapArrayPhysicalPlan,
-    ) : String
-      streams = physical_plan.streams.map(&.name)
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{streams.size} substreams for column `#{value_name}`:\n"
-      streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.array_map_array_serialization_metadata : String
-      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":1},\"version\":1}"
-    end
-
-    private def self.map_string_array_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-        "\t#{value_name}%2Evalues.size1\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_string_array_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "6 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-        "\t#{value_name}%2Evalues.size1\n\t#{value_name}%2Evalues.size\n" +
-        "\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_string_array_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "6 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-        "\t#{value_name}%2Evalues.size1\n\t#{value_name}%2Evalues.null\n" +
-        "\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_string_array_nullable_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "7 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-        "\t#{value_name}%2Evalues.size1\n\t#{value_name}%2Evalues.null\n" +
-        "\t#{value_name}%2Evalues.size\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_string_nullable_uint64_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-        "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_string_nullable_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "6 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-        "\t#{value_name}%2Evalues.null\n\t#{value_name}%2Evalues.size\n" +
-        "\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.map_string_string_substreams_metadata(key_name : String, value_name : String) : String
-      "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n" +
-        "5 substreams for column `#{value_name}`:\n\t#{value_name}.size0\n" +
-        "\t#{value_name}%2Ekeys.size\n\t#{value_name}%2Ekeys\n" +
-        "\t#{value_name}%2Evalues.size\n\t#{value_name}%2Evalues\n"
-    end
-
-    private def self.typed_columns_metadata(key_name : String, value_name : String, type_name : String) : String
-      "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` #{type_name}\n"
-    end
-
-    private def self.typed_substreams_metadata(key_name : String, value_name : String, type_name : String) : String
-      value_streams = if type_name == "String"
-                        ["#{value_name}.size", value_name]
-                      elsif type_name == "Nullable(String)"
-                        ["#{value_name}.null", "#{value_name}.size", value_name]
-                      elsif type_name.starts_with?("Nullable(")
-                        ["#{value_name}.null", value_name]
-                      else
-                        [value_name]
-                      end
-      payload = IO::Memory.new
-      payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
-      payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
-      value_streams.each { |stream| payload << "\t#{stream}\n" }
-      payload.to_s
-    end
-
-    private def self.typed_serialization_metadata(type_name : String) : String
-      versions = if type_name == "String"
-                   "\"string\":1"
-                 elsif type_name == "Nullable(String)"
-                   "\"nullable\":0,\"string\":1"
-                 elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil?
-                   # BASIC Nullable payloads, UUID, IPv4, and IPv6 use this global
-                   # serializer-version metadata. Semantic identity is
-                   # carried by the exact column type.
-                   "\"string\":1"
-                 else
-                   ""
-                 end
-      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{#{versions}},\"version\":1}"
-    end
-
-    private def self.semantic_fixed_width_type?(type_name : String) : Bool
-      type_name == "Bool" || type_name == "BFloat16" || !WidePart.enum8_codes(type_name).nil? || !WidePart.enum16_codes(type_name).nil? ||
-        !WidePart.decimal32_scale(type_name).nil? || !WidePart.decimal64_scale(type_name).nil? ||
-        !WidePart.decimal128_scale(type_name).nil? || !WidePart.decimal256_scale(type_name).nil?
-    end
-
-    private def self.nullable_fixed_string_serialization_metadata : String
-      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"nullable\":0,\"string\":1},\"version\":1}"
-    end
-
-    private def self.serialization_metadata : String
-      "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":1},\"version\":1}"
-    end
-
-    private def self.tuple_string_serialization_metadata(
-      key_name : String,
-      value_name : String,
-      keys : Slice(UInt64),
-      values : Array(Tuple(UInt64, String)),
-    ) : String
-      rows = values.size
-      key_defaults = keys.count { |key| key == 0_u64 }
-      tuple_defaults = values.count { |value| value[0] == 0_u64 && value[1].empty? }
-      a_defaults = values.count { |value| value[0] == 0_u64 }
-      b_defaults = values.count { |value| value[1].empty? }
-      String.build do |json|
-        json << "{\"columns\":["
-        json << "{\"kind\":\"Default\",\"name\":\"#{key_name}\",\"num_defaults\":#{key_defaults},\"num_rows\":#{rows}},"
-        json << "{\"kind\":\"Default\",\"name\":\"#{value_name}\",\"num_defaults\":#{tuple_defaults},\"num_rows\":#{rows},\"subcolumns\":["
-        json << "{\"kind\":\"Default\",\"num_defaults\":#{a_defaults},\"num_rows\":#{rows}},"
-        json << "{\"kind\":\"Default\",\"num_defaults\":#{b_defaults},\"num_rows\":#{rows}}]}],"
-        json << "\"propagate_types_serialization_versions_to_nested_types\":true,"
-        json << "\"types_serialization_versions\":{\"string\":1},\"version\":1}"
-      end
-    end
-
-    private def self.json_typed_serialization_metadata(key_name : String, keys : Slice(UInt64)) : String
-      key_defaults = keys.count { |key| key == 0_u64 }
-      String.build do |json|
-        json << "{\"columns\":[{\"kind\":\"Default\",\"name\":\"#{key_name}\",\"num_defaults\":#{key_defaults},\"num_rows\":#{keys.size}}],"
-        json << "\"propagate_types_serialization_versions_to_nested_types\":true,"
-        json << "\"types_serialization_versions\":{\"string\":1},\"version\":1}"
-      end
     end
 
     private def self.literal_frame_size(raw_size : Int64) : Int64

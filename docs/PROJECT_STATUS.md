@@ -1,6 +1,19 @@
 # CrystalClick project status
 
-Current checkpoint (2026-10-04): W149 binds ordinary recursive normalized
+Current architecture checkpoint (2026-10-04): W150 moves the existing 67
+writer schema/substream/serialization metadata helpers to one private
+518-line `PartSchemaMetadata` class/file. Root verifies exact moved bodies,
+the facade remainder and loader order; five literal characterizations pass
+before and after extraction, and all 574 affected RELEASE examples pass
+across 110 unique files together. Seven fresh library-owned parts pass
+actual stock ATTACH/CHECK, nominal types and full/selected literal queries;
+an independent Ruby checker repeats 30 fresh stock queries. The public API,
+emitted metadata and admitted types/layouts are unchanged. Scoped hostile
+verdict: ROBUST for the ownership move. The writer is still 25,466 lines;
+large-facade decomposition remains open. The execution seal is in
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Current capability checkpoint: W149 binds ordinary recursive normalized
 BASIC Variant lanes to Wide physical names and role-owned combined prefixes.
 Root passes 64 focused DEBUG, 533 affected RELEASE examples (68 unique files
 together) and 2,452 complete-inventory examples (381 unique files in sixteen
@@ -358,12 +371,14 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,786 lines; the reader/writer are now 15,985/25,977 lines.
+   is 6,786 lines; the reader/writer are now 15,985/25,466 lines.
    W148 separates the full-mark LC occurrence scheduler from its thin replay
    dispatcher. The existing public `WidePartWriter::JSONTypedPathColumn`
    and associated value alias now have their own owner with exact constructor
-   semantics. Next remain legacy shared schema/substream planning, physical
-   I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
+   semantics. W150 separately extracts the existing writer metadata renderer
+   with exact-move, literal and stock regression evidence. Next remain
+   shared schema/substream planning, physical I/O/validation, leaf codecs and
+   thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16

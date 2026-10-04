@@ -1,5 +1,111 @@
 # CrystalClick Modularization Frontier
 
+## W150 metadata owner extraction (2026-10-04)
+
+Behavior-preserving extraction over clean `d7ed482`; risk CAUTION because
+metadata controls persistent part interpretation. The existing contiguous
+writer metadata helpers now belong to the private nested
+`WidePartWriter::PartSchemaMetadata` class, in one 518-line owner file.
+The facade is 25,466 lines, down from 25,977. Helper bodies/signatures,
+emitted order/bytes, public APIs, validation, ownership and transport are
+unchanged. The owner has no instances, file I/O, publication or new
+type/layout admission. Existing Object metadata retains its separate owner.
+This is not complete facade modularization or an allocation/performance claim.
+
+Root's exact-move comparator accounts for all 67 helpers, the 511-line moved
+block including its separator, and 402 qualified calls on 399 facade lines.
+The owner is identical modulo indentation/helper visibility and one formatted
+blank line; the remaining facade is identical modulo those calls. Two pinned
+same-spelled local-variable contexts are explicitly excluded. The loader
+differs by one correctly ordered require. The original moved-block and facade
+remainder SHA-256 values are respectively
+`31efeea06bbb324369d68521cbc260a6f51781f2ef920c9d09a438d11559bfdf` and
+`c0c8fce9036556823bae30b0f405c9d4f11557a9ede0a83f71057c255e2ca61f`.
+
+Root executed five independent literal public-writer characterizations on
+the unchanged facade, then the same five after extraction. Both pass with
+zero failures/errors/pending. They cover String/Nullable, Tuple default
+census, sorted JSON typed paths/structure, an unused Variant arm/empty Dynamic
+spill, and nested Array(Map) metadata. Expected metadata bytes do not come
+from the reader or moved renderer. These are characterization gates, not a
+claimed behavioral RED. The affected RELEASE inventory contains 110 unique
+spec files selected by `rg --files spec -g '*_spec.cr'`, filtered by
+`wide_part_writer|object|w69|w80` and sorted uniquely. All 574 examples pass
+together, with zero failures/errors/pending. An external reference to the
+new owner fails specifically with `private constant ... referenced`.
+Final four-file formatter and diff checks pass.
+
+The four affected source/spec paths use the sorted-relative-path TAB
+file-SHA-256 LF fingerprint format; documentation is excluded:
+`8fa2a8ecad2ea33585304c4fbe823e46b88f37d2477389075d254d844cb90b13`.
+Root's instruments and captured gates are in
+`/private/tmp/crystal-click-w150-root.xiJqsd/`:
+
+- `baseline-final.log`: `7890bd2e63f1b3a6c6aee7106594db5b29c76c017be2a3d648dfb365f7628956`;
+- `focused.log`: `ebc64091c65f82f1a85756b80cb605b1fc2cfefdff0644a29923a267261cbc33`;
+- `release.log`: `557ab161c9b7eaa8fe84a210ae1f1a8454a17611dbcdf0dbda8818aac8365b4f`;
+- `release-inventory.txt`: `ed19e57216067ea2d230c3080ddee66d1a3186d1c7909e6de9e83476ae8fe219`;
+- `private-corrected.log`: `90bf245ee450c9d064918e06ee63532738ac458d68f60dfee328dc57941a2d57`;
+- `movecheck-final-check.log`: `110c9c00c5c7bdde530e65ba89ff9ddc6f49d82c98e8e19555bbfe04193e1eaf`.
+
+The likeliest blind spot is writer and staged validator agreeing on the same
+incorrect renderer; literals and a separate stock consumer guard it. Root
+builds and executes the inspected tmp-only native harness in the fresh
+`/private/tmp/crystal-click-w150-native.20261003-5d3a/` root. All seven
+library-owned complete parts pass actual stock ATTACH/CHECK, nominal
+system.columns/toTypeName, and literal full/selected RowBinary: String,
+Nullable(UInt64), Tuple(a UInt64, b String), sorted typed JSON, the existing
+COMPACT Variant(String, UInt64), mixed Dynamic, and Array(Map(String, UInt64)).
+The unused Variant UInt64 arm and Dynamic shared spill stay empty. A separate
+root-authored Ruby checker repeats 30 fresh stock queries with independent
+manual carriers, nominal types and CHECK. Its Dynamic witness queries nominal
+arm types/text; the native harness separately checks direct Dynamic RowBinary.
+These are seven finite regressions, not new type/layout admission or every
+metadata helper/product/profile.
+
+Runtime identity is ClickHouse 26.10.1.1201, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, binary SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The separately verified shallow source reference is `9007d227`; it is not this
+executable's build provenance. No current-master executable qualification is
+claimed. Additional captured artifacts:
+
+- native authoring harness, `/private/tmp/crystal-click-w150.Mey1RS/w150_library_stock_attach_probe.cr`:
+  `c0c33ff41581f29dabee883cd370d62d6d927d0ff3ceae367fa451bc4513b1fa`;
+- native `results/summary.txt`:
+  `83880416e81d3c3426ee7a03abe9348f58c0f223772e04e3d0914d6a3ac2fdd6`;
+- root `recheck_stock.rb`:
+  `8850842080f293b2a45364c7e58de22b92be64ea96b5d852bd564ed2e2b8a474`;
+- native `ruby-recheck/summary.txt` and root `stock-ruby.log`:
+  `6453eaa97cb9fd2e08a1f43827859047ea65d855b0e9d5b24fbb7563968ca7db`.
+
+Scoped hostile verdict: ROBUST for this ownership move. Exact bodies/facade
+checks, private-owner refusal, unrelated-type metadata literals and external
+stock readers attack namespace/dispatch drift and common-renderer blindness.
+W149's complete 381-file inventory predates this extraction and is not a
+W150 rerun. Root executes all compilers and stock/Ruby processes serially
+through the memory guard; Luna authors/reviews without running those jobs.
+Rollback is the separate atomic extraction commit, not W149; no remote push
+is authorized. Refresh on owner, loader, consumer, runtime or profile changes.
+Temporary logs can decay and hashes are evidence indexes, not proof of
+behavior. Replay the checked-in literal spec and the same affected inventory
+with `crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld
+--error-trace`, adding `--release --no-debug` for the affected set, under the
+serial memory guard. Use fresh scratch/native roots for external replay;
+never reuse or overwrite the retained evidence roots.
+
+Instrument corrections are not compatibility results: the initial Dynamic
+characterization omitted its required UInt64 arm; the first temporary privacy
+probe used an unsupported absolute require; a malformed patch header was
+removed before execution. A mislabeled formatter phase actually ran the
+focused spec, and an accidentally launched combined-spec compile was stopped
+without a result. Only the explicitly named final gates above count.
+Before native execution, root also caught an identity/profile directory
+collision, an overly narrow CHECK result assertion and incorrect Tuple
+literal length; the harness was corrected before its successful run. Its
+deprecated File.executable? warning is not a production failure or a new
+compatibility result.
+
 Current shared-planner checkpoint (2026-10-04): W149 introduces one cohesive
 `BinaryBulkVariantNamePlan` owner/file (214 lines) for bounded canonical arm
 spelling and Array-level-preserving role prefixes. The existing physical
@@ -9,10 +115,11 @@ stays with its owner; no per-arm/container class family or legacy facade
 branch is introduced. The independent stock/literal and budget certificate
 is in [VARIANT_PHYSICAL_BINDING_FRONTIER.md](VARIANT_PHYSICAL_BINDING_FRONTIER.md).
 This is not complete facade modularization or evidence of lower allocation.
-Legacy reader/writer/table/catalog remain 15,985/25,977/6,786/1,560 lines.
-Next extraction is the existing writer schema/substream/serialization metadata
-responsibility, preserving emitted bytes and public API; I/O/publication stays
-outside that owner. It needs separate literal and stock regression evidence.
+At the W149 checkpoint, legacy reader/writer/table/catalog were
+15,985/25,977/6,786/1,560 lines. W150 above extracts the existing writer
+schema/substream/serialization metadata responsibility; I/O/publication stays
+outside that owner. Next isolate staged validation and physical stream
+orchestration under their own regression gates.
 
 Current architecture checkpoint (2026-10-03): the existing public writer
 `JSONTypedPathColumn` struct and its value alias now live in the single
