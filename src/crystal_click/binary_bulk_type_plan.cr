@@ -24,6 +24,9 @@ module CrystalClick
     end
 
     def initialize(@type : BinaryDataType, @profile : BinaryBulkProfile)
+      if @type.contains_dynamic?
+        raise UnsupportedFormatError.new("Dynamic is outside the admitted bulk storage profile")
+      end
     end
 
     def roles : Array(String)

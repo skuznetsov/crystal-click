@@ -408,6 +408,9 @@ module CrystalClick
       context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
       structure.type_count.times do |index|
         type = structure.type_at(index)
+        if type.contains_dynamic?
+          raise UnsupportedFormatError.new("recursive Dynamic alternatives are not admitted in Dynamic V3")
+        end
         context.validate_type_tree(type)
         if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
           raise UnsupportedFormatError.new("Dynamic ordinary LowCardinality alternatives are not admitted")
@@ -423,6 +426,9 @@ module CrystalClick
       context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
       granules.each do |granule|
         granule.each do |value|
+          if value.type.contains_dynamic?
+            raise UnsupportedFormatError.new("Dynamic values are outside the admitted Dynamic value profile")
+          end
           context.validate_type_tree(value.type)
         end
       end

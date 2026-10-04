@@ -23,6 +23,8 @@ module CrystalClick
       context.write_byte(type.tag)
 
       case type.tag
+      when BinaryDataType::TAG_DYNAMIC
+        context.write_byte(type.dynamic_max_types.not_nil!)
       when BinaryDataType::TAG_FIXED_STRING
         context.write_var_uint(type.fixed_size.not_nil!.to_u64)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_LOW_CARDINALITY
@@ -99,6 +101,12 @@ module CrystalClick
           context.corrupt!("FixedString descriptor size is outside ClickHouse's supported range")
         end
         BinaryDataType.fixed_string(size.to_i)
+      when BinaryDataType::TAG_DYNAMIC
+        max_types = context.read_byte
+        if max_types == 0xff_u8
+          context.corrupt!("Dynamic max_types 255 is outside the local normal-type profile")
+        end
+        BinaryDataType.dynamic(max_types.to_i)
       when BinaryDataType::TAG_ARRAY
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)

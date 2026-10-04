@@ -28,6 +28,7 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       context : PhysicalStreamPlanContext? = nil,
     )
+      reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
       @context.preflight_name_bytes(PhysicalStreamName.escaped_size(column_name))
@@ -42,6 +43,7 @@ module CrystalClick
       limits : BinaryCodecLimits,
       context : PhysicalStreamPlanContext?,
     )
+      reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
       @context.preflight_name_bytes(escaped_prefix.value.bytesize.to_u64)
@@ -101,6 +103,12 @@ module CrystalClick
       end
       @context.charge_name_bytes(actual_name_bytes)
       names
+    end
+
+    private def reject_dynamic_type!(type : BinaryDataType) : Nil
+      if type.contains_dynamic?
+        raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")
+      end
     end
 
     private def build_variant_bindings(
@@ -195,6 +203,9 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       context : PhysicalStreamPlanContext? = nil,
     ) : BinaryBulkPhysicalPlan
+      if type.contains_dynamic?
+        raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")
+      end
       selected_context = context || PhysicalStreamPlanContext.new(limits)
       selected_context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
       new(type, EscapedPrefix.validated(escaped_prefix), profile, limits, selected_context)

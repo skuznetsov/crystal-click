@@ -431,6 +431,9 @@ module CrystalClick
       context = BinaryCodecContext.new(limits, nil, false, budget, false, false)
       expanded_total = 0_u64
       schema.each do |path, type|
+        if type.contains_dynamic?
+          raise UnsupportedFormatError.new("Object typed Dynamic fields are not admitted")
+        end
         escaped_size = PhysicalStreamName.escaped_size(path)
         logical_size = checked_add_u64(column_prefix.bytesize.to_u64, checked_add_u64(1_u64, escaped_size))
         ensure_name_size!(logical_size, limits)

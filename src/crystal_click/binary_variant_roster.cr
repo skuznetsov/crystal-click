@@ -92,6 +92,9 @@ module CrystalClick
     end
 
     private def self.validate_direct_arm!(arm : BinaryDataType) : Nil
+      if arm.tag == BinaryDataType::TAG_DYNAMIC
+        raise ArgumentError.new("Variant cannot directly contain Dynamic")
+      end
       if arm.tag == BinaryDataType::TAG_NULLABLE
         raise ArgumentError.new("Variant cannot directly contain Nullable")
       end

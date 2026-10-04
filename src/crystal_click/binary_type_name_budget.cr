@@ -21,6 +21,13 @@ module CrystalClick
       end
 
       output = case type.tag
+               when BinaryDataType::TAG_DYNAMIC
+                 max_types = type.dynamic_max_types.not_nil!
+                 if max_types == 32_u8
+                   7_u64
+                 else
+                   add(19_u64, digits(max_types.to_u64))
+                 end
                when BinaryDataType::TAG_ARRAY
                  add(7_u64, children[0][0])
                when BinaryDataType::TAG_NULLABLE

@@ -34,6 +34,9 @@ module CrystalClick
       validate_write_structure(plan.structures)
       plan.typed_path_count.times do |index|
         type = plan.typed_type_for(plan.typed_path_at(index))
+        if type.contains_dynamic?
+          raise UnsupportedFormatError.new("Object typed Dynamic fields are not admitted")
+        end
         if type.contains_variant?
           type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
           type_context.validate_type_tree(type)
@@ -221,6 +224,9 @@ module CrystalClick
         budget.preflight_children(1_u64)
       end
       typed_schema.each_value do |type|
+        if type.contains_dynamic?
+          raise UnsupportedFormatError.new("Object typed Dynamic fields are not admitted")
+        end
         schema_context.validate_type_tree(type)
         validate_variant_typed_field!(type, budget.limits)
         validate_low_cardinality_typed_field!(type, budget.limits)

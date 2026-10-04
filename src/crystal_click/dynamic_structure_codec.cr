@@ -91,6 +91,9 @@ module CrystalClick
       end
 
       types.each do |type|
+        if type.contains_dynamic?
+          context.unsupported!("Dynamic alternatives are not admitted in Dynamic V3")
+        end
         if type.contains_variant?
           context.unsupported!("Variant-containing alternatives are not admitted in Dynamic V3")
         end

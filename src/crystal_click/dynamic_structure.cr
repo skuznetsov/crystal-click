@@ -22,6 +22,9 @@ module CrystalClick
       seen = Set(String).new
       seen.add(names[0])
       @types.each do |type|
+        if type.contains_dynamic?
+          raise ArgumentError.new("Dynamic alternatives are not admitted in Dynamic V3")
+        end
         if type.contains_variant?
           raise ArgumentError.new("Variant-containing alternatives are not admitted in Dynamic V3")
         end

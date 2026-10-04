@@ -44,6 +44,7 @@ module CrystalClick
     TAG_IPV4            =     0x28_u8
     TAG_IPV6            =     0x29_u8
     TAG_VARIANT         =     0x2a_u8
+    TAG_DYNAMIC         =     0x2b_u8
     TAG_BOOL            =     0x2d_u8
     TAG_BFLOAT16        =     0x31_u8
     TAG_TIME            =     0x32_u8
@@ -58,6 +59,8 @@ module CrystalClick
     # before an enclosing codec has validated a caller-supplied type tree.
     getter? contains_low_cardinality : Bool
     getter? contains_variant : Bool
+    getter? contains_dynamic : Bool
+    getter dynamic_max_types : UInt8?
 
     @primitive_name : String?
     @children : Array(BinaryDataType)
@@ -75,11 +78,13 @@ module CrystalClick
       @temporal_type : BinaryTemporalType? = nil,
       @decimal_type : BinaryDecimalType? = nil,
       @enum_definition : BinaryEnumDefinition? = nil,
+      @dynamic_max_types : UInt8? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
       @contains_low_cardinality = @tag == TAG_LOW_CARDINALITY || @children.any?(&.contains_low_cardinality?)
       @contains_variant = @tag == TAG_VARIANT || @children.any?(&.contains_variant?)
+      @contains_dynamic = @tag == TAG_DYNAMIC || @children.any?(&.contains_dynamic?)
     end
 
     def self.primitive(name : String) : BinaryDataType
@@ -164,9 +169,16 @@ module CrystalClick
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
+    def self.dynamic(max_types : Int = 32) : BinaryDataType
+      unless 0 <= max_types <= 254
+        raise ArgumentError.new("Dynamic max_types must be between 0 and 254")
+      end
+      new(TAG_DYNAMIC, nil, [] of BinaryDataType, [] of String, nil, nil, nil, nil, max_types.to_u8)
+    end
+
     def self.nullable(child : BinaryDataType) : BinaryDataType
-      if child.tag == TAG_ARRAY || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT
-        raise ArgumentError.new("Nullable cannot directly contain Array, Map, Nullable, LowCardinality, or Variant")
+      if child.tag == TAG_ARRAY || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
+        raise ArgumentError.new("Nullable cannot directly contain Array, Map, Nullable, LowCardinality, Variant, or Dynamic")
       end
       new(TAG_NULLABLE, nil, [child] of BinaryDataType, [] of String, nil)
     end
@@ -197,7 +209,7 @@ module CrystalClick
         raise ArgumentError.new("canonical Object Variant roster is outside the admitted size")
       end
       arms.each do |arm|
-        if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.tag == TAG_VARIANT
+        if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.tag == TAG_VARIANT || arm.tag == TAG_DYNAMIC
           raise ArgumentError.new("canonical Object Variant roster has a forbidden direct arm")
         end
         if arm.tag == TAG_LOW_CARDINALITY && arm.child_count == 1 && arm.child_at(0).tag == TAG_NULLABLE
@@ -326,6 +338,15 @@ module CrystalClick
       case @tag
       when TAG_FIXED_STRING
         "FixedString(#{@fixed_size})"
+      when TAG_DYNAMIC
+        max_types = @dynamic_max_types.not_nil!
+        if max_types == 32_u8
+          "Dynamic"
+        else
+          String.build do |io|
+            io << "Dynamic(max_types=" << max_types << ')'
+          end
+        end
       when TAG_DATETIME, TAG_DATETIME_ZONE, TAG_DATETIME64, TAG_DATETIME64_ZONE, TAG_TIME64
         @temporal_type.not_nil!.type_name
       when TAG_DECIMAL32, TAG_DECIMAL64, TAG_DECIMAL128, TAG_DECIMAL256
@@ -423,6 +444,7 @@ module CrystalClick
       return false unless @temporal_type == other.@temporal_type
       return false unless @decimal_type == other.@decimal_type
       return false unless @enum_definition == other.@enum_definition
+      return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
 
@@ -432,7 +454,7 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @children, @field_names
 
     private def format_field_name(value : String) : String
       bytes = value.to_slice

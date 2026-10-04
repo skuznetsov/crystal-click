@@ -35,6 +35,7 @@ module CrystalClick
       context : BinaryCodecContext,
       allow_low_cardinality : Bool = true,
     ) : Bytes
+      reject_dynamic_type!(value.type, context)
       BinaryDataTypeCodec.write_to(value.type, context)
       reject_borrowed_type!(value.type, context) unless allow_low_cardinality
       if value.type.tag == BinaryDataType::TAG_NOTHING
@@ -65,6 +66,7 @@ module CrystalClick
       allow_low_cardinality : Bool = true,
     ) : BinaryValue
       type = BinaryDataTypeCodec.read_from(context)
+      reject_dynamic_type!(type, context)
       reject_borrowed_type!(type, context) unless allow_low_cardinality
       if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(1)
@@ -81,6 +83,7 @@ module CrystalClick
     # are omitted, preventing deep type equality/processing from bypassing it.
     def self.encode_value(value : BinaryValue, limits : BinaryCodecLimits = BinaryCodecLimits.default) : Bytes
       context = BinaryCodecContext.new(limits, nil, true)
+      reject_dynamic_type!(value.type, context)
       context.validate_type_tree(value.type)
       if value.type.tag == BinaryDataType::TAG_NOTHING
         context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
@@ -91,6 +94,7 @@ module CrystalClick
 
     def self.decode_value(type : BinaryDataType, bytes : Bytes, limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryValue
       context = BinaryCodecContext.new(limits, bytes)
+      reject_dynamic_type!(type, context)
       context.validate_type_tree(type)
       value = read_value(type, context)
       context.ensure_consumed
@@ -255,6 +259,12 @@ module CrystalClick
         width = type.fixed_width || context.unsupported!("unsupported scalar DataType")
         raw = context.read_slice(width.to_u64)
         BinaryValue.fixed(type, raw)
+      end
+    end
+
+    private def self.reject_dynamic_type!(type : BinaryDataType, context : BinaryCodecContext) : Nil
+      if type.contains_dynamic?
+        context.unsupported!("Dynamic values are outside the admitted RowBinary value profile")
       end
     end
 

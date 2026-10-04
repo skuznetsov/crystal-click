@@ -1,6 +1,27 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W151 admits canonical declared
+Current capability checkpoint (2026-10-04): W152 adds paired immutable nominal
+`Dynamic(max_types=N)` descriptors for caps 0..254, preserving the cap in
+canonical identity and encoding it as `0x2B` plus one byte. Legal recursive
+descriptor parents are admitted; generic Dynamic values/bulk/physical lanes
+and declared Object Dynamic remain refused, including empty/NULL/cache-hit
+paths. Existing standalone Dynamic support is unchanged. Root passes 123
+focused DEBUG examples, 773 affected RELEASE examples (134 unique files in
+six serial groups) plus a separate six-example metadata RELEASE regression,
+and 2,500 complete-inventory examples (391 unique files in 28 serial disjoint
+non-release groups, all with `--no-debug`). Every gate has zero
+failures/errors/pending. These are test results, not runtime performance.
+A separate literal Ruby/stock oracle qualifies all 255 normal caps and four
+finite recursive wrappers from library-generated headers, including actual
+input type inference and a valid changed-cap control. Its row body is borrowed
+from stock: no Dynamic-value or new part-writer qualification follows. The
+local factory-profile refusal of cap 255 is distinguished from upstream's
+unchecked raw decoder. Scoped hostile verdict: ROBUST for this descriptor
+transition, with the partial/no-op LC-helper limitation explicitly retained.
+Exact source/runtime identities, executed gates and next value-kernel frontier
+are in [DYNAMIC_DESCRIPTOR_FRONTIER.md](DYNAMIC_DESCRIPTOR_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W151 admits canonical declared
 Variant fields in the bounded normalized Object/JSON writer and its public
 file/column/table/catalog readers, including legal recursive containers and
 eligible LC-bearing arms. A separate 275-line `BinaryBulkPhysicalPrefixAdapter`

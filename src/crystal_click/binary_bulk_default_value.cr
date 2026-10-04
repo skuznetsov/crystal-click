@@ -17,6 +17,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       cache : Hash(UInt64, Cost)? = nil,
     ) : Cost
+      reject_dynamic_type!(type)
       costs = cache || Hash(UInt64, Cost).new
       key = type.object_id
       if existing = costs[key]?
@@ -72,6 +73,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       cache : Hash(Tuple(UInt64, Bool), Cost)? = nil,
     ) : Cost
+      reject_dynamic_type!(type)
       costs = cache || Hash(Tuple(UInt64, Bool), Cost).new
       key = {type.object_id, true}
       if existing = costs[key]?
@@ -120,6 +122,7 @@ module CrystalClick
     end
 
     def self.build(type : BinaryDataType) : BinaryValue
+      reject_dynamic_type!(type)
       case type.tag
       when BinaryDataType::TAG_STRING
         BinaryValue.string("")
@@ -146,6 +149,12 @@ module CrystalClick
         else
           raise UnsupportedFormatError.new("unsupported binary bulk default DataType")
         end
+      end
+    end
+
+    private def self.reject_dynamic_type!(type : BinaryDataType) : Nil
+      if type.contains_dynamic?
+        raise UnsupportedFormatError.new("Dynamic is outside the admitted bulk default-value profile")
       end
     end
 

@@ -25,6 +25,12 @@ module CrystalClick
       context = PhysicalStreamPlanContext.new(limits)
       total_records = add_size(plan.typed_path_count.to_u64, object.dynamic_path_count.to_u64)
       context.record_elements(total_records)
+      plan.typed_path_count.times do |index|
+        type = plan.typed_type_for(plan.typed_path_at(index))
+        if type.contains_dynamic?
+          raise UnsupportedFormatError.new("physical Object typed Dynamic fields are not admitted")
+        end
+      end
 
       context.preflight_name_bytes(PhysicalStreamName.escaped_size(column_name))
       column_prefix = PhysicalStreamName.escape(column_name)
