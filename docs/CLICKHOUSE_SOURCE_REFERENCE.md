@@ -1,6 +1,38 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-04)
+## Current source snapshot (2026-10-04, second refresh)
+
+Use this separate checkout for new source comparisons:
+
+`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-7f568d60`
+
+- Upstream: `https://github.com/ClickHouse/ClickHouse.git`, branch `master`.
+- Revision: `7f568d607755c5dcebd48d8eacb17ad745d34c21`.
+- Committer timestamp: `2026-10-04T05:25:42Z`.
+- Cloned with `git clone --depth 1 --single-branch --branch master --no-tags`.
+  Root's pre-clone and post-clone `git ls-remote` lookups both returned this
+  revision for `refs/heads/master`.
+- Root observed shallow repository `true`, one reachable commit, branch
+  `master` and a clean working tree. Submodules were not initialized; existing
+  checkouts were not modified. The clone ran under the serial memory guard.
+- This is a source reference, not a built or qualified executable. Retained
+  runtime certificates keep their separate build identities.
+
+Root independently repeated recursive `git diff --no-index --stat` comparisons
+against `37a251ff`: `src/DataTypes` (including `Serializations`), `src/Columns`,
+and `src/Storages/MergeTree` each returned exit 0 with no differences. This is
+working-tree content comparison, not a shallow-history ancestry claim. Other
+directories and current-master executable behavior were not qualified here.
+The inspected Dynamic serializer and descriptor table therefore retain the
+same source anchors within this comparison window.
+
+Type-family continuity still does not imply exclusively additive wire-format
+changes. The current descriptor table explicitly reserves removed Time/Time64
+timezone tags 0x33/0x35. Persisted structure versions, settings, framing and
+supported products require separate reader/writer evidence. Refresh this
+record on relevant upstream or local-source changes.
+
+## Previous source snapshot (2026-10-04)
 
 Use this separate checkout for new source comparisons:
 
