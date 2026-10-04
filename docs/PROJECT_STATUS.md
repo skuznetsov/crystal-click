@@ -25,6 +25,9 @@ ROBUST for metadata/site planning and retained legacy consumer fences only.
 Exact boundary, observed
 gates and refresh conditions are in
 [DYNAMIC_BULK_STRUCTURE_FRONTIER.md](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
+The 2,539-example total is the last complete-inventory capability checkpoint,
+before the neutral writer selector extraction below; it is not a fresh full
+inventory run of that subsequent refactor.
 
 Previous capability checkpoint (2026-10-04): W153 adds paired generic Dynamic
 logical values. Root passes 116 focused DEBUG, 542 affected RELEASE examples
@@ -85,7 +88,23 @@ Scoped hostile verdict: ROBUST. Exact gates, source/runtime identities,
 zero-window semantics and residual limits are sealed in
 [OBJECT_DECLARED_VARIANT_FRONTIER.md](OBJECT_DECLARED_VARIANT_FRONTIER.md).
 
-Current architecture checkpoint (2026-10-04): the reader's four nested
+Current architecture checkpoint (2026-10-04): the writer's scalar/nullable
+typed staged-readback selectors belong to one private stateless 289-line
+`TypedMarkReadback` class/file. Same-signature private facade wrappers retain
+generic type inference and the original module/supplied-reader dispatch.
+Root passes 17 baseline and post-extraction characterizations/regressions,
+then all 143 affected examples in each of DEBUG and RELEASE (21 unique files,
+three serial disjoint groups per mode), with zero failures/errors/pending.
+A seeded direct-owner bypass fails specifically on missing facade traces;
+root restores the candidate before final gates. Exact moved-body/facade/loader
+comparison, source/spec hash reconciliation, private visibility and hygiene
+pass. Writer/reader/table are 25,202/15,726/6,786 lines. Scoped hostile verdict:
+ROBUST for this neutral ownership move only. No new type/profile admission,
+stock oracle, full-inventory rerun or performance certificate is claimed.
+The execution scope and refresh conditions are in
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Previous architecture checkpoint (2026-10-04): the reader's four nested
 temporal/Decimal payload reconstruction loops share one private stateless
 89-line `NestedFixedWidthPayloadDecoder` class/file. All preflight, selected
 I/O, type/range checks and resource policy stay in the facade. Inline callbacks
@@ -534,7 +553,7 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,786 lines; the reader/writer are now 15,726/25,466 lines.
+   is 6,786 lines; the reader/writer are now 15,726/25,202 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -542,15 +561,14 @@ source/runtime identities and executed evidence.
    larger seams are staged validation and physical stream binding, followed
    by reader granule orchestration and table adapters. Each is a separately
    characterized ownership move, not a class per type combination.
-   A concrete PROPOSED first writer seam is the two private generic selectors
-   `read_typed_numeric_mark` and `read_typed_nullable_numeric_mark` (about 280
-   lines), while staged-validation orchestration remains in the facade.
-   Retain `Slice(T)`/`forall T` and characterize inherited/private dispatch
-   before replacing call sites; an extraction must not bypass a facade
-   override. Numeric/nullable and DateTime writer readbacks supply positive
-   witnesses; same-width metadata tampering supplies a separate validator
-   guard, not proof that the selector itself ran. No extraction is implemented
-   by this inventory.
+   The first writer seam is now executed: the two private generic selectors
+   `read_typed_numeric_mark` and `read_typed_nullable_numeric_mark` delegate to
+   one private `TypedMarkReadback` owner, while staged-validation orchestration
+   remains in the facade. `Slice(T)`/`forall T`, module reopen overrides and
+   supplied-reader virtual dispatch remain pinned. Numeric/nullable and
+   temporal readbacks supply positive witnesses; a direct-owner bypass fails
+   the selector trace. Metadata tampering remains a separate validator guard,
+   not proof that the selector itself ran. Larger validator/I/O seams remain.
    W148 separates the full-mark LC occurrence scheduler from its thin replay
    dispatcher. The existing public `WidePartWriter::JSONTypedPathColumn`
    and associated value alias now have their own owner with exact constructor

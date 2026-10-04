@@ -10,6 +10,12 @@ The checkout has that revision, committer timestamp `2026-10-04T07:12:25Z`,
 one reachable commit, shallow status `true`, and a clean working tree.
 Existing checkouts were not modified; submodules were not initialized.
 
+Freshness recheck at `2026-10-04 12:36 UTC`: a new public upstream
+`git ls-remote ... refs/heads/master` returns the same `b94acbe3` revision.
+Root rechecks local HEAD, shallow status and the clean working tree. No
+duplicate clone is needed while the inspected upstream HEAD is unchanged;
+this is a time-scoped source observation, not an executable qualification.
+
 Root ran recursive `git diff --no-index --stat` against `7f568d60` separately
 for `src/DataTypes`, `src/Columns`, `src/Storages/MergeTree`, `src/Compression`
 and `src/Formats`. All five returned exit 0 with no differences. This is an

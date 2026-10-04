@@ -17,6 +17,140 @@ checks where relevant, baseline characterizations and affected consumer tests.
 Serialization bytes, pre-callback refusals and publication rollback remain
 invariants. A shorter facade by itself is not a modularity or speed certificate.
 
+## Typed writer readback selector plan (2026-10-04)
+
+Status: executed; the scoped certificate and exact inventory follow below.
+Baseline: clean `0f20d96`. Risk: CAUTION (staged persisted-input validation).
+Rollback: one atomic local refactor commit; no push or history rewrite.
+
+Move only the bodies of `read_typed_numeric_mark` and
+`read_typed_nullable_numeric_mark` into one private, stateless
+`WidePartWriter::TypedMarkReadback` class at
+`src/crystal_click/wide_part_writer/typed_mark_readback.cr`. Retain both
+private facade signatures, `Slice(T)` inference and `forall T`. Keep every
+type branch, accessor, error and mark-range argument. The owner does not open
+files, retain buffers, compare values, publish parts or decide type admission.
+Validation and resource lifetimes stay in the facade.
+
+Baseline consumer inventory: bounded `rg -n
+'read_typed_(nullable_)?numeric_mark|extend (CrystalClick::)?WidePartWriter|include (CrystalClick::)?WidePartWriter'
+src spec examples scripts --glob '*.cr'` finds two definitions and exactly
+two staged-validator calls, all in the writer facade, with no include/extend
+consumers. Current explicit `WidePart` and `DateTimeColumnType` policies and
+the original facade call sites remain unchanged; do not invent callbacks.
+The new characterization adds test-only facade reopen hooks and one bridge;
+the production call inventory is unchanged after extraction.
+
+Execution order / DoD:
+
+1. Run independent public writer characterizations on unchanged production.
+   Returned values, literal raw bytes, nullable masks, selected marks and
+   rejected inputs must match. Characterize actual staged readback dispatch.
+2. Extract the two bodies only. Compare moved bodies, retained signatures,
+   complete facade remainder and aggregate require against the baseline.
+3. Repeat characterizations, then affected writer/type regressions in DEBUG
+   and RELEASE under guarded Crystal (`--single-module --threads 1
+   --link-flags=-fuse-ld=ld --error-trace`; RELEASE adds `--release --no-debug`).
+   Record exact file inventory and observed zero failures/errors/pending.
+4. Attack selector dispatch with a reversible behavioral mutation. Restore
+   before final gates; check private visibility, formatting and diff hygiene.
+
+Strongest failure: changing or bypassing staged readback while published
+values still look correct. Later independent reads alone cannot detect that;
+a metadata-tampering guard also does not prove this selector ran. No new
+wire/profile, performance or complete architecture claim follows. Refresh
+after selector, facade, loader, caller, type-policy or validation changes.
+
+## Typed writer readback selector executed certificate (2026-10-04)
+
+Status: VERIFIED for this neutral ownership move only. Root's scoped hostile
+verdict is ROBUST after exact-source comparison, independent guarded execution
+and a behavioral bypass control. Luna implementation/review are correlated
+supporting evidence, not independent execution. Baseline:
+`0f20d96f5b1d3d0113414a07e944e0b3e9598507`.
+
+One private, stateless 289-line `TypedMarkReadback` class/file now owns the two
+selectors. The writer is 25,202 lines, down from 25,466; reader/table remain
+15,726/6,786. Same-signature private facade delegates retain `Slice(T)`,
+`forall T`, the original unqualified caller dispatch and the same supplied
+`WidePart` instance. No validator orchestration, lifetime, publication or
+admission policy moved. Line count is not a coupling or speed certificate.
+
+Root observed:
+
+- Existing typed/DateTime baseline: 12 examples, zero failures/errors/pending.
+  Expanded baseline and post-extraction: the new five characterizations plus
+  those existing suites pass 17 examples each. Literal payload/null-map bytes,
+  Float64 signed-zero bits, full/middle reads, exact marks, refusal/no-mutation
+  behavior and supplied-reader virtual dispatch are pinned. Test preparation
+  initially used `previous_def` for an inherited instance override; changing
+  that test to `super` resolves the compile error on unchanged production.
+- All 143 examples in the 21 unique files below pass in each of DEBUG and
+  RELEASE, in three serial disjoint groups of 10/10/1 files and 86/53/4
+  examples. Every outer guard exit is 0, with zero failures/errors/pending.
+  Root separately reconciles observed stdout, guard exits, exact membership
+  and current source/spec SHA-256 hashes. This is the affected selector scope,
+  not a complete-inventory rerun or new stock compatibility qualification.
+- Root's comparator matches both moved bodies byte-exactly, permitting only
+  indentation/method naming, the private class shell and facade delegates.
+  The complete facade remainder and loader are exact except for the ordered
+  new require. An in-memory changed-error control is rejected. A scratch Ruby
+  block-terminator typo was corrected before the comparator could execute;
+  that preparation failure is not production evidence.
+- A temporary direct-owner call bypasses the scalar facade while preserving
+  the same readback operation. The characterization fails specifically on
+  missing selector traces: five examples, two failures, zero errors/pending;
+  expected UInt16/Bool marks 0/1/2, observed `[]`. Root restores the original
+  call before both final gates and rechecks exact-source equality afterward.
+- An external constant reference fails specifically with `private constant
+  CrystalClick::WidePartWriter::TypedMarkReadback referenced`. The initial
+  absolute-require failure was probe preparation, not visibility evidence.
+  Four-file `crystal tool format --check` and diff hygiene pass.
+
+Commands: root ran the isolated-cache guard with `spec --single-module
+--threads 1 --link-flags=-fuse-ld=ld --error-trace`; RELEASE additionally used
+`--release --no-debug`. Test guards allow 600 seconds/12 GiB process-tree RSS
+and require 50 percent system-free memory; these are execution limits, not
+runtime performance or allocation measurements. Root ran
+`ruby /private/tmp/crystal-click-readback-refactor.Ws9WNH/run_gates.rb debug final-debug`
+and the corresponding `release final-release`, then `reconcile.rb` and
+`check_exact_move.rb` in that scratch directory. Scratch logs/scripts are
+temporary aids. Refresh by rerunning this exact inventory under the recorded
+arguments; do not treat a vanished log or this ledger as fresh execution.
+
+Sorted inventory (three groups split after entries 10 and 20):
+
+```text
+spec/bool_semantics_w98_spec.cr
+spec/timezone_temporal_writer_w104_spec.cr
+spec/wide_part_reader_w35_spec.cr
+spec/wide_part_reader_w36_spec.cr
+spec/wide_part_reader_w37_spec.cr
+spec/wide_part_reader_w38_spec.cr
+spec/wide_part_reader_w49_spec.cr
+spec/wide_part_reader_w50_spec.cr
+spec/wide_part_writer_bool_canonical_w98_spec.cr
+spec/wide_part_writer_date_spec.cr
+spec/wide_part_writer_datetime_spec.cr
+spec/wide_part_writer_decimal_precision_w102_spec.cr
+spec/wide_part_writer_nullable_temporal_spec.cr
+spec/wide_part_writer_typed_mark_readback_spec.cr
+spec/wide_part_writer_typed_spec.cr
+spec/wide_part_writer_w15_spec.cr
+spec/wide_part_writer_w16_spec.cr
+spec/wide_part_writer_w17_spec.cr
+spec/wide_part_writer_w18_spec.cr
+spec/wide_part_writer_w19_spec.cr
+spec/wide_part_writer_w20_spec.cr
+```
+
+Refresh after owner, facade, loader, caller, type-policy or validator changes.
+Large-facade decomposition remains open: next characterize staged validation
+and physical binding as separate responsibilities. Capability return point
+remains W154 structure/site planning -> generic Dynamic bulk values and mark
+grids -> separately qualified physical binding -> declared Object Dynamic.
+That transition is not implemented here. MV/projections precede performance.
+
 ## Nested fixed-width payload owner plan (2026-10-04)
 
 Status: executed; the scoped certificate and path inventory follow below.
