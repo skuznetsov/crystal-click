@@ -1,10 +1,28 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W152 adds paired immutable nominal
+Current capability checkpoint (2026-10-04): W153 adds paired generic Dynamic
+logical values. Root passes 116 focused DEBUG, 542 affected RELEASE examples
+(76 unique files, eight serial disjoint groups), and 2,519 complete-inventory
+examples (394 unique files, 40 serial disjoint non-release groups with
+`--no-debug`), all with zero failures/errors/pending. Root independently
+reconciles the inventory paths, spec hashes and per-group results.
+Fourteen owned-value literals
+and four independent stock SQL values pass paired nominal-child/value/byte
+checks; a stock-valid 42-to-43 mutation fails specifically as a semantic
+mismatch. One private 42-line `BinaryDynamicEnvelope` owns framing and shares
+the recursive context with the generic dispatcher. Stored/bulk/Object Dynamic
+fences remain load-bearing; existing standalone Dynamic profiles are unchanged.
+The source audit rejected a proposed ordinary nested Nothing relaxation before
+implementation. Scoped hostile verdict: ROBUST for this logical transition
+and retained consumer fences, not new physical storage or full compatibility.
+No performance work is reopened. Exact boundary and gates are
+in [DYNAMIC_VALUE_KERNEL_FRONTIER.md](DYNAMIC_VALUE_KERNEL_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W152 adds paired immutable nominal
 `Dynamic(max_types=N)` descriptors for caps 0..254, preserving the cap in
 canonical identity and encoding it as `0x2B` plus one byte. Legal recursive
-descriptor parents are admitted; generic Dynamic values/bulk/physical lanes
-and declared Object Dynamic remain refused, including empty/NULL/cache-hit
+descriptor parents are admitted; at that checkpoint generic Dynamic values,
+bulk/physical lanes and declared Object Dynamic remain refused, including empty/NULL/cache-hit
 paths. Existing standalone Dynamic support is unchanged. Root passes 123
 focused DEBUG examples, 773 affected RELEASE examples (134 unique files in
 six serial groups) plus a separate six-example metadata RELEASE regression,
@@ -260,6 +278,12 @@ source/runtime identities and executed evidence.
 
 ## What is usable now
 
+- `BinaryDataType.dynamic` and `BinaryValue.dynamic` provide nominal-cap
+  identity and paired generic logical Dynamic values. W153 preserves selected
+  type/value identity, recursive containers and typed NULL distinctions;
+  borrowed persisted consumers and unqualified bulk/physical/Object lanes
+  remain fenced. A logical envelope is not a ColumnDynamic slot/roster plan
+  or a new complete-part writer.
 - `BinaryDataType.variant`, `BinaryValue.variant` and `variant_null` provide
   the shared canonical logical Variant kernel. Paired descriptor/value codecs
   retain nominal arm identity, recursive values and explicit NULL. W148 adds
@@ -463,6 +487,15 @@ source/runtime identities and executed evidence.
    larger seams are staged validation and physical stream binding, followed
    by reader granule orchestration and table adapters. Each is a separately
    characterized ownership move, not a class per type combination.
+   A concrete PROPOSED first writer seam is the two private generic selectors
+   `read_typed_numeric_mark` and `read_typed_nullable_numeric_mark` (about 280
+   lines), while staged-validation orchestration remains in the facade.
+   Retain `Slice(T)`/`forall T` and characterize inherited/private dispatch
+   before replacing call sites; an extraction must not bypass a facade
+   override. Numeric/nullable and DateTime writer readbacks supply positive
+   witnesses; same-width metadata tampering supplies a separate validator
+   guard, not proof that the selector itself ran. No extraction is implemented
+   by this inventory.
    W148 separates the full-mark LC occurrence scheduler from its thin replay
    dispatcher. The existing public `WidePartWriter::JSONTypedPathColumn`
    and associated value alias now have their own owner with exact constructor
@@ -497,10 +530,13 @@ source/runtime identities and executed evidence.
    W149 qualifies ordinary recursive physical binding, both String profiles
    and LC-bearing sparse arms using borrowed stock envelopes. W151 separately
    qualifies declared Object Variant with independent complete parts and
-   shared public consumers. Typed Dynamic remains the next distinct frontier:
-   the nominal `Dynamic(max_types=N)` descriptor must preserve its cap,
-   while physical planning uses the actual per-part roster/structure. Neither
-   the cap nor Object's inferred-path policy is a substitute for that roster.
+   shared public consumers. Typed Dynamic remains the next distinct storage
+   frontier. W152 preserves the nominal `Dynamic(max_types=N)` cap; W153 adds
+   the paired generic logical actual-type/value grammar. Physical planning
+   must still use the actual per-part roster/structure. The next transition
+   separately qualifies Dynamic structure/actual-roster bulk planning and
+   physical binding before declared Object Dynamic and complete-part tests.
+   Neither the cap nor Object's inferred-path policy substitutes for that roster.
    Broader layout/type products remain separate.
    Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and

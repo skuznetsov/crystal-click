@@ -80,7 +80,7 @@ private def w152_consumer_assert_value(actual : CrystalClick::BinaryValue, expec
 end
 
 describe "W152 Dynamic descriptor consumer guards" do
-  it "refuses valid recursive Dynamic envelopes at every scalar codec entry point" do
+  it "admits generic recursive Dynamic values while retaining borrowed storage refusals" do
     types = w152_consumer_dynamic_types
     values = w152_consumer_dynamic_values
     payloads = [0x00_u8, 0x01_u8, 0x00_u8, 0xff_u8]
@@ -93,18 +93,16 @@ describe "W152 Dynamic descriptor consumer guards" do
       value = values[index]
       envelope = w152_consumer_value_wire(type, payloads[index])
 
-      expect_raises(CrystalClick::UnsupportedFormatError, /Dynamic/) do
-        CrystalClick::BinaryValueCodec.encode(value)
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError, /Dynamic/) do
-        CrystalClick::BinaryValueCodec.decode(envelope)
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError, /Dynamic/) do
-        CrystalClick::BinaryValueCodec.encode_value(value)
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError, /Dynamic/) do
-        CrystalClick::BinaryValueCodec.decode_value(type, Bytes[payloads[index]])
-      end
+      CrystalClick::BinaryValueCodec.encode(value).should eq(envelope)
+      decoded = CrystalClick::BinaryValueCodec.decode(envelope)
+      decoded.type.should eq(type)
+      decoded.is_null?.should eq(value.is_null?)
+      decoded.element_count.should eq(0)
+      CrystalClick::BinaryValueCodec.encode_value(value).should eq(Bytes[payloads[index]])
+      scalar = CrystalClick::BinaryValueCodec.decode_value(type, Bytes[payloads[index]])
+      scalar.type.should eq(type)
+      scalar.is_null?.should eq(value.is_null?)
+      scalar.element_count.should eq(0)
       expect_raises(CrystalClick::UnsupportedFormatError, /Dynamic/) do
         CrystalClick::BinaryValueCodec.encode_borrowed(
           value,

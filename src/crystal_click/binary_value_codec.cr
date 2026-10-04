@@ -27,15 +27,16 @@ module CrystalClick
         false,
         budget.remaining_wire_bytes - reserved_wire_bytes
       )
-      encode_in_context(value, context, allow_low_cardinality: false)
+      encode_in_context(value, context, allow_dynamic: false, allow_low_cardinality: false)
     end
 
     private def self.encode_in_context(
       value : BinaryValue,
       context : BinaryCodecContext,
+      allow_dynamic : Bool = true,
       allow_low_cardinality : Bool = true,
     ) : Bytes
-      reject_dynamic_type!(value.type, context)
+      reject_dynamic_type!(value.type, context) unless allow_dynamic
       BinaryDataTypeCodec.write_to(value.type, context)
       reject_borrowed_type!(value.type, context) unless allow_low_cardinality
       if value.type.tag == BinaryDataType::TAG_NOTHING
@@ -58,15 +59,16 @@ module CrystalClick
     # caller has already charged all physical input lanes to the shared budget.
     def self.decode_borrowed(bytes : Bytes, budget : BinaryCodecBudget) : BinaryValue
       context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
-      decode_in_context(context, allow_low_cardinality: false)
+      decode_in_context(context, allow_dynamic: false, allow_low_cardinality: false)
     end
 
     private def self.decode_in_context(
       context : BinaryCodecContext,
+      allow_dynamic : Bool = true,
       allow_low_cardinality : Bool = true,
     ) : BinaryValue
       type = BinaryDataTypeCodec.read_from(context)
-      reject_dynamic_type!(type, context)
+      reject_dynamic_type!(type, context) unless allow_dynamic
       reject_borrowed_type!(type, context) unless allow_low_cardinality
       if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(1)
@@ -83,7 +85,6 @@ module CrystalClick
     # are omitted, preventing deep type equality/processing from bypassing it.
     def self.encode_value(value : BinaryValue, limits : BinaryCodecLimits = BinaryCodecLimits.default) : Bytes
       context = BinaryCodecContext.new(limits, nil, true)
-      reject_dynamic_type!(value.type, context)
       context.validate_type_tree(value.type)
       if value.type.tag == BinaryDataType::TAG_NOTHING
         context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
@@ -94,7 +95,6 @@ module CrystalClick
 
     def self.decode_value(type : BinaryDataType, bytes : Bytes, limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryValue
       context = BinaryCodecContext.new(limits, bytes)
-      reject_dynamic_type!(type, context)
       context.validate_type_tree(type)
       value = read_value(type, context)
       context.ensure_consumed
@@ -162,6 +162,10 @@ module CrystalClick
           context.ensure_depth(depth + 1)
           context.write_byte(index)
           write_value(child, context, depth + 1)
+        end
+      when BinaryDataType::TAG_DYNAMIC
+        BinaryDynamicEnvelope.write(value, context, depth) do |selected, selected_depth|
+          write_value(selected, context, selected_depth)
         end
       else
         width = type.fixed_width || context.unsupported!("unsupported scalar DataType")
@@ -254,6 +258,10 @@ module CrystalClick
           rescue ex : ArgumentError
             context.corrupt!("invalid selected Variant value: #{ex.message}")
           end
+        end
+      when BinaryDataType::TAG_DYNAMIC
+        BinaryDynamicEnvelope.read(type, context, depth) do |selected_type, selected_depth|
+          read_value(selected_type, context, selected_depth)
         end
       else
         width = type.fixed_width || context.unsupported!("unsupported scalar DataType")

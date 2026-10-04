@@ -88,6 +88,27 @@ module CrystalClick
       new(type, nil, [] of BinaryValue, true)
     end
 
+    # Dynamic retains its nominal type descriptor while carrying either NULL
+    # (no selected value) or one value of the selected runtime type. A
+    # Nothing NULL child is the same sentinel and is normalized to no child;
+    # NULLs selected through Nullable, Variant, or nested Dynamic stay typed.
+    def self.dynamic(type : BinaryDataType, child : BinaryValue? = nil) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_DYNAMIC
+        raise ArgumentError.new("Dynamic value requires Dynamic type")
+      end
+      if child && child.type.tag == BinaryDataType::TAG_NOTHING
+        unless child.is_null?
+          raise ArgumentError.new("Dynamic Nothing child must be NULL")
+        end
+        child = nil
+      end
+      if selected = child
+        new(type, nil, [selected] of BinaryValue)
+      else
+        new(type, nil, [] of BinaryValue, true)
+      end
+    end
+
     # Variant NULL is a separate UInt8 discriminator value (255), not an
     # ordinary arm and not a child value.
     def self.variant_null(type : BinaryDataType) : BinaryValue

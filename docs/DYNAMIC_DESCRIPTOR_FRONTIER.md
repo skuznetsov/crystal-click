@@ -8,6 +8,11 @@ Risk: CAUTION (binary descriptor grammar and recursive consumer admission).
 Rollback: one atomic local feature commit, separate from metadata extraction;
 no push.
 
+W153 supersedes only this checkpoint's generic logical-value rejection; see
+[DYNAMIC_VALUE_KERNEL_FRONTIER.md](DYNAMIC_VALUE_KERNEL_FRONTIER.md). The W152
+descriptor identity and retained stored/bulk/physical/Object guards remain the
+boundary. Historical W152 execution results below are not rerun claims.
+
 ## Admitted transition
 
 Represent `Dynamic(max_types=N)` as an immutable nominal BinaryDataType leaf,
