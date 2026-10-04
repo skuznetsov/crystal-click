@@ -1,6 +1,25 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-04, second refresh)
+## Current source snapshot (2026-10-04, third refresh)
+
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-b94acbe3`
+for new source comparisons. Root cloned public `ClickHouse/ClickHouse` master
+with `--depth 1 --single-branch --branch master --no-tags` after observing
+upstream HEAD `b94acbe318f8459ac88b35647f4e2293d8e225db`.
+The checkout has that revision, committer timestamp `2026-10-04T07:12:25Z`,
+one reachable commit, shallow status `true`, and a clean working tree.
+Existing checkouts were not modified; submodules were not initialized.
+
+Root ran recursive `git diff --no-index --stat` against `7f568d60` separately
+for `src/DataTypes`, `src/Columns`, `src/Storages/MergeTree`, `src/Compression`
+and `src/Formats`. All five returned exit 0 with no differences. This is an
+exact content comparison of these directories, not an exhaustive compatibility
+audit or a claim about shallow-history ancestry. The snapshot is unbuilt;
+existing executable certificates retain their separate runtime identities.
+Refresh on relevant source changes. The reserved-descriptor and version/profile
+limitations below still apply.
+
+## Previous source snapshot (2026-10-04, second refresh)
 
 Use this separate checkout for new source comparisons:
 
