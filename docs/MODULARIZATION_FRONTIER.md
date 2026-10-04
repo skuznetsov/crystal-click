@@ -1,6 +1,22 @@
 # CrystalClick Modularization Frontier
 
-Current architecture checkpoint (2026-10-03): W147 adds one cohesive
+Current architecture checkpoint (2026-10-03): W148 separates one cohesive
+`BinaryBulkLowCardinalityOccurrenceSchedule` module/file (311 lines) for
+full-mark structural census and logical preflight. The LC site decoder is a
+50-line dispatch/replay owner; `BinaryBulkTypePlan` is 468 lines and keeps
+descriptor-owned roles/shape dependencies/grid counts. The direct scheduler
+rescans descriptor-derived metadata before census charging/allocation rather
+than trusting caller-supplied grid counts or role lists. No per-arm/container
+class family or new legacy facade branch is introduced. Root passes 50 focused
+DEBUG, 517 affected RELEASE and 2,434 complete-inventory examples (378 unique
+files, sixteen serial disjoint groups). Final verification, stock exchange
+and compatibility scope are recorded in the separate
+[W148 frontier](VARIANT_RECURSIVE_BULK_FRONTIER.md).
+The next bounded extraction is the existing writer JSON typed-path input
+descriptor and associated alias, retaining its public qualified name and
+constructor. This is not full writer orchestration or facade decomposition.
+
+Previous architecture checkpoint: W147 adds one cohesive
 `BinaryVariantRoster` module/file (106 lines) for bounded normal roster
 canonicalization and strict incoming roster validation. Generic descriptors,
 descriptor codecs, values and value codecs retain their existing owners

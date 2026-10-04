@@ -50,6 +50,11 @@ module CrystalClick
 
     private def build_bindings(type : BinaryDataType, prefix : String) : Hash(String, String)
       validate_type(type, 0)
+      # A normalized sparse bulk lane is not a qualified part filename/prefix
+      # binding. Keep this boundary recursive while generic Variant lanes land.
+      if type.contains_variant?
+        raise UnsupportedFormatError.new("generic Variant physical stream binding is not admitted")
+      end
       role_plan = BinaryBulkTypePlan.new(type, @profile)
       role_count = role_plan.role_count
       @context.record_elements(role_count)

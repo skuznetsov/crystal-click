@@ -116,6 +116,16 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         return zero_cost
+      when BinaryDataType::TAG_VARIANT
+        wire_bytes = 1_u64
+        if index = value.variant_index?
+          child_type = type.child_at(index.to_i)
+          child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
+          child = minimum_value_cost(child_type, child_value, profile, default_costs)
+          nodes = checked_add(nodes, child[:nodes])
+          edges = checked_add(1_u64, child[:edges])
+          wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
+        end
       when BinaryDataType::TAG_STRING
         size = value.byte_size.to_u64
         wire_bytes = profile.with_size_stream? ? checked_add(8_u64, size) : checked_add(var_uint_size(size), size)
@@ -201,6 +211,24 @@ module CrystalClick
       edges = 0_u64
       wire_bytes = 0_u64
       case type.tag
+      when BinaryDataType::TAG_VARIANT
+        wire_bytes = 1_u64
+        if index = value.variant_index?
+          child_type = type.child_at(index.to_i)
+          child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
+          edges = 1_u64
+          child = value_cost(
+            child_type,
+            child_value,
+            profile,
+            budget,
+            add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
+            default_costs
+          )
+          nodes = checked_add(nodes, child[:nodes])
+          edges = checked_add(edges, child[:edges])
+          wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
+        end
       when BinaryDataType::TAG_STRING
         size = value.byte_size.to_u64
         wire_bytes = profile.with_size_stream? ? checked_add(8_u64, size) : checked_add(var_uint_size(size), size)
@@ -309,6 +337,17 @@ module CrystalClick
           raise UnsupportedFormatError.new("Nothing bulk values must use the NULL sentinel")
         end
         write_byte(lanes, "#{path}.data", 0x30_u8, budget)
+      when BinaryDataType::TAG_VARIANT
+        index = value.variant_index?
+        write_byte(lanes, "#{path}.discriminators", index || 0xff_u8, budget)
+        if index
+          child_type = type.child_at(index.to_i)
+          child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
+          child_path = "#{path}.arm.#{index}"
+          preflight_child_type(traversal, child_type, 1_u64)
+          traversal.ensure_depth(depth + 1)
+          write_value(child_type, child_value, child_path, depth + 1, traversal, budget, lanes, profile)
+        end
       when BinaryDataType::TAG_ARRAY
         count = value.element_count
         preflight_child_type(traversal, type.child_at(0), count.to_u64) unless count == 0
@@ -402,6 +441,8 @@ module CrystalClick
         write_byte(lanes, "#{path}.data", BoolValueCodec.encode(false), budget)
       when BinaryDataType::TAG_NOTHING
         write_byte(lanes, "#{path}.data", 0x30_u8, budget)
+      when BinaryDataType::TAG_VARIANT
+        write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
         write_u64(lanes, "#{path}.sizes", 0_u64, budget)
       when BinaryDataType::TAG_NULLABLE

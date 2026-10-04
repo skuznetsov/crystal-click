@@ -301,7 +301,13 @@ describe "W147 generic Variant adversarial boundaries" do
     end
 
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkCodec.encode(variant, [[value]] of Array(CrystalClick::BinaryValue))
+      CrystalClick::BinaryBulkPhysicalPlan.new(variant, "v")
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryBulkPhysicalPlan.new(array_variant, "v")
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryBulkPhysicalPlan.new(map_variant, "v")
     end
 
     entry = CrystalClick::ObjectSharedMapEntry.new(path: Bytes[0x70_u8], value: value)

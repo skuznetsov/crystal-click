@@ -111,6 +111,12 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         increment_count(counts, path, mark)
+      when BinaryDataType::TAG_VARIANT
+        if index = value.variant_index?
+          child_type = type.child_at(index.to_i)
+          child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
+          count_value(child_type, child_value, "#{path}.arm.#{index}", mark, counts, has_default)
+        end
       when BinaryDataType::TAG_ARRAY
         child_type = type.child_at(0)
         value.element_count.times do |index|
@@ -175,6 +181,12 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         buckets[path][mark] << value
+      when BinaryDataType::TAG_VARIANT
+        if index = value.variant_index?
+          child_type = type.child_at(index.to_i)
+          child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
+          append_value(child_type, child_value, "#{path}.arm.#{index}", mark, buckets, default_values)
+        end
       when BinaryDataType::TAG_ARRAY
         child_type = type.child_at(0)
         value.element_count.times do |index|
@@ -245,7 +257,8 @@ module CrystalClick
         total
       when BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_STRING,
            BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP,
-           BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+           BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL,
+           BinaryDataType::TAG_VARIANT
         0_u64
       else
         if width = type.fixed_width

@@ -1,5 +1,13 @@
 # Generic Variant value kernel frontier (W147)
 
+Later transition: W148 implements the separately qualified normalized BASIC
+recursive bulk codec in
+[VARIANT_RECURSIVE_BULK_FRONTIER.md](VARIANT_RECURSIVE_BULK_FRONTIER.md).
+That transition supersedes only the generic bulk refusal below; generic
+physical binding, Object Variant/Dynamic and new public part profiles remain
+closed. The following execution certificate describes the historical W147
+source state, not those later bulk capabilities.
+
 Status: VERIFIED within the paired logical descriptor/RowBinary profile below;
 generic bulk, physical binding and Object admission remain closed.
 Baseline: `6b9464d`, 2026-10-03. Risk: CAUTION (binary type/value grammar and

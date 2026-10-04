@@ -1,6 +1,18 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-03): W147 adds paired generic Variant
+Current checkpoint (2026-10-03): W148 implements paired normalized BASIC
+Variant bulk lanes through ordinary recursive containers and eligible LC
+sites. Final focused DEBUG passes 50 examples; affected RELEASE passes 517
+examples across 66 unique files together. Two fresh stock Wide lane/grid
+fixtures and both library-emitted Native payloads pass independent literal
+checks, including a valid wrong-value control. Final complete-inventory
+passes 2,434 examples across 378 unique files in sixteen serial disjoint
+non-release groups, not a combined-process run. Formatter, Ruby syntax and
+diff checks pass; the scoped hostile verdict is ROBUST. Physical binding,
+declared Object Variant/Dynamic and new public part profiles remain closed.
+See [VARIANT_RECURSIVE_BULK_FRONTIER.md](VARIANT_RECURSIVE_BULK_FRONTIER.md).
+
+Previous logical checkpoint: W147 adds paired generic Variant
 descriptors and owned RowBinary values, with canonical arm identity, NULL and
 legal recursive compositions. Root passes 62 focused DEBUG, 503 affected
 RELEASE examples (64 unique files together) and 2,420 complete-inventory
@@ -144,8 +156,10 @@ source/runtime identities and executed evidence.
 
 - `BinaryDataType.variant`, `BinaryValue.variant` and `variant_null` provide
   the shared canonical logical Variant kernel. Paired descriptor/value codecs
-  retain nominal arm identity, recursive values and explicit NULL. This does
-  not widen the physical part profiles below; see the W147 certificate.
+  retain nominal arm identity, recursive values and explicit NULL. W148 adds
+  normalized BASIC discriminator/sparse-arm bulk lanes, ordinary containers
+  and eligible LC replay. This does not widen the physical part profiles
+  below; see the separate W147 and W148 certificates.
 - `WidePart` and `WidePartTable`: selected-column and typed reads, including
   windowed delivery. The public contracts admit explicit physical profiles,
   not arbitrary ClickHouse parts or recursive type combinations.
@@ -291,8 +305,8 @@ source/runtime identities and executed evidence.
    versions, Compact parts and unqualified wrapper/container combinations need
    their own paired evidence. Existing logical binary codecs alone do not
    widen public part admission. W147 qualifies the generic Variant logical
-   kernel, but its discriminator/sparse-arm bulk and physical binding remain
-   closed. Shared Nested offsets,
+   kernel; W148 implements normalized BASIC discriminator/sparse-arm bulk,
+   but generic physical binding remains closed. Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
    interchangeable capabilities. The general binary descriptor kernel still
@@ -320,7 +334,11 @@ source/runtime identities and executed evidence.
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
    is 6,786 lines; the reader/writer remain 15,985/25,991 lines.
-   Next remain legacy shared schema/substream planning, physical
+   W148 separates the full-mark LC occurrence scheduler from its thin replay
+   dispatcher. The next narrow writer extraction is the existing public
+   `WidePartWriter::JSONTypedPathColumn` and associated value alias, preserving
+   exact constructor semantics. Then remain legacy shared schema/substream
+   planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
@@ -338,11 +356,11 @@ source/runtime identities and executed evidence.
    default-LC/BASIC-Map profiles. W146 admits declared Object LC with independent
    complete parts and selected public consumers within its finite certificate.
    W147 adds the paired logical Variant prerequisite without widening these
-   persisted consumers. Next qualify generic bulk discriminator/sparse-arm
-   scheduling, including LC occurrence counts and empty-arm mark replay,
-   before physical binding and declared Object Variant/Dynamic. Broader
-   layout/type products remain separate. The proposed native count falsifier
-   is recorded in the W147 frontier, not asserted executed.
+   persisted consumers. W148 implements generic BASIC bulk discriminator/
+   sparse-arm scheduling, LC occurrence counts and empty-arm mark replay;
+   its separate stock count/lane falsifier is executed within the W148 scope.
+   Next qualify physical binding before declared Object Variant/Dynamic.
+   Broader layout/type products remain separate.
    Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.

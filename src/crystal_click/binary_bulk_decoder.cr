@@ -26,7 +26,7 @@ module CrystalClick
       planned_role_count = plan.role_count
       ordinary_role_count = plan.ordinary_role_count
       low_cardinality_sites = plan.low_cardinality_sites
-      ancestor_size_roles = plan.ancestor_size_roles
+      shape_roles = plan.low_cardinality_shape_roles
 
       # Offset records and parent-supplied per-mark row counts are metadata.
       # Charge and preflight these before allocating the role roster, contexts,
@@ -75,7 +75,8 @@ module CrystalClick
       low_cardinality_values = BinaryBulkLowCardinalitySiteDecoder.decode(
         type,
         low_cardinality_sites,
-        ancestor_size_roles,
+        shape_roles,
+        plan.low_cardinality_schedule_grid_count,
         streams,
         rows_per_mark,
         budget,
@@ -87,7 +88,7 @@ module CrystalClick
         return low_cardinality_values["root"]? || corrupt!("binary bulk root LowCardinality site is missing")
       end
 
-      selected_wire_bytes = selected_byte_size(streams, ordinary_roles, ancestor_size_roles, selected_first, selected_count)
+      selected_wire_bytes = selected_byte_size(streams, ordinary_roles, shape_roles, selected_first, selected_count)
       budget.ensure_wire_bytes(selected_wire_bytes)
       budget.charge_wire_bytes(selected_wire_bytes)
 
@@ -219,6 +220,8 @@ module CrystalClick
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
         ensure_role_minimum(contexts, "#{path}.sizes", count, 8_u64)
+      when BinaryDataType::TAG_VARIANT
+        ensure_role_minimum(contexts, "#{path}.discriminators", count, 1_u64)
       when BinaryDataType::TAG_LOW_CARDINALITY
         # The LC owner validates every mark and pays its full-state wire cost.
       when BinaryDataType::TAG_NULLABLE
@@ -281,6 +284,23 @@ module CrystalClick
       traversal.visit_node(depth)
 
       case type.tag
+      when BinaryDataType::TAG_VARIANT
+        discriminator = context_for(contexts, "#{path}.discriminators").read_byte
+        if discriminator == 0xff_u8
+          BinaryValue.variant_null(type)
+        else
+          index = discriminator.to_i
+          if index >= type.child_count
+            corrupt!("Variant bulk discriminator is outside its arm roster")
+          end
+          child_type = type.child_at(index)
+          child_path = "#{path}.arm.#{discriminator}"
+          preflight_child_type(traversal, child_type, 1_u64)
+          traversal.ensure_depth(depth + 1)
+          ensure_minimum_count(child_type, child_path, 1_u64, profile, contexts)
+          child = decode_value(child_type, child_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors)
+          BinaryValue.variant(type, discriminator.to_i, child)
+        end
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
           size = read_u64(context_for(contexts, "#{path}.string_sizes"))

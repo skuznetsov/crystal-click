@@ -26,6 +26,10 @@ module CrystalClick
       cost = case type.tag
              when BinaryDataType::TAG_STRING
                Cost.new(1_u64, 0_u64, profile.with_size_stream? ? 8_u64 : 1_u64)
+             when BinaryDataType::TAG_VARIANT
+               # The sparse-bulk default is Variant NULL: one discriminator,
+               # with no selected arm value or arm edge.
+               Cost.new(1_u64, 0_u64, 1_u64)
              when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
                Cost.new(1_u64, 0_u64, 8_u64)
              when BinaryDataType::TAG_NULLABLE
@@ -79,6 +83,9 @@ module CrystalClick
                Cost.new(0_u64, 0_u64, 0_u64)
              when BinaryDataType::TAG_STRING
                Cost.new(1_u64, 0_u64, profile.with_size_stream? ? 8_u64 : 1_u64)
+             when BinaryDataType::TAG_VARIANT
+               # Variant NULL has no ordinary child subtree to exclude.
+               Cost.new(1_u64, 0_u64, 1_u64)
              when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
                Cost.new(1_u64, 0_u64, 8_u64)
              when BinaryDataType::TAG_NULLABLE
@@ -126,6 +133,8 @@ module CrystalClick
         BinaryValue.map(type, [] of BinaryValue)
       when BinaryDataType::TAG_LOW_CARDINALITY
         BinaryValue.low_cardinality(type, build(type.child_at(0)))
+      when BinaryDataType::TAG_VARIANT
+        BinaryValue.variant_null(type)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         fields = Array(BinaryValue).new(type.child_count) do |index|
           build(type.child_at(index))
