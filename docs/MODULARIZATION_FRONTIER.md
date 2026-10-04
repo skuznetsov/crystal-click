@@ -17,6 +17,164 @@ checks where relevant, baseline characterizations and affected consumer tests.
 Serialization bytes, pre-callback refusals and publication rollback remain
 invariants. A shorter facade by itself is not a modularity or speed certificate.
 
+## Nested fixed-width payload owner plan (2026-10-04)
+
+Status: executed; the scoped certificate and path inventory follow below.
+Baseline: clean `0a6284c`. Risk: CAUTION (selected persisted input).
+Rollback: one atomic local refactor commit; no push or history rewrite.
+
+Move only payload-to-row reconstruction from the four private
+`read_array_array_{nullable_}{temporal,decimal}_values` methods in
+`src/crystal_click/wide_part.cr` into one private stateless
+`WidePart::NestedFixedWidthPayloadDecoder` class/file at
+`src/crystal_click/wide_part/nested_fixed_width_payload_decoder.cr`.
+Two generic methods reconstruct ordinary and Nullable nested rows, using
+the existing type carrier, sizes, row/leaf counts and fixed-width payload.
+Pass an inline offset block to the existing caller's numeric/decimal decoder:
+no owner instance, stored Proc, new inheritance tree or public callback API.
+
+Keep accessors and all preflight/type/mark/count/null-byte checks, stream reads,
+allocation limits and resource lifetimes in the facade in their original order.
+Retain the four private method signatures and inherited decoder dispatch.
+Consume every hidden NULL slot without calling the value decoder. Preserve
+exact error text and precedence, selected-only I/O and result ownership.
+No type/profile admission, wire format, stock compatibility or speed claim
+follows from this ownership move. Dynamic physical work stays a separate track.
+
+Consumer inventory: `rg -n
+'read_array_array_(nullable_)?(temporal|decimal)_values' src spec` finds twelve
+calls and four definitions in the reader; the similarly named table helpers
+remain independent. The temporal helper pair serves Date/Date32/DateTime,
+DateTime64/Time/Time64 carrier accessors. The decimal pair serves all four
+coefficient widths. Only the reader facade, owner, aggregate require,
+independent characterization spec and these status ledgers are editable.
+
+Execution order / DoD:
+
+1. Luna authors literal public-API characterizations on the unchanged baseline;
+   root runs them with zero failures/errors expected before production edits.
+2. Luna extracts the reconstruction loops only. Root compares all retained
+   preflight/read code, callback targets, facade remainder and loader ordering
+   against `0a6284c`, then runs the same characterizations again.
+3. Root runs affected temporal/decimal nested-array reader, writer, table,
+   catalog and timezone specs in DEBUG and RELEASE under the serial guarded
+   Crystal invocation (`--single-module --threads 1
+   --link-flags=-fuse-ld=ld --error-trace`; RELEASE adds `--release --no-debug`).
+   Expected signal: zero failures/errors/pending; preserve exact path inventory.
+4. Check external private-owner refusal, formatting and `git diff --check`.
+   Attack NULL skipping, selected mark offsets and inherited private dispatch;
+   a seeded callback-under-NULL or changed error must be detected, then restored
+   before final gates. Root seals only the verified neutral extraction.
+
+Strongest failure: a shared materializer decodes a hidden NULL slot or pins
+the decoder to the base class. NULL callback and inherited-override tests
+discriminate it. Generic carrier/return types, count consumption and literal
+error checks guard the remaining reconstruction boundary. Refresh after owner,
+facade, loader, caller, grammar or resource-policy changes.
+
+## Nested fixed-width payload executed certificate (2026-10-04)
+
+Status: VERIFIED for this neutral ownership move only. Root's scoped hostile
+verdict is ROBUST after independent execution, exact-source comparison and
+the behavioral mutation control. Luna's implementation and read-only review
+are correlated supporting evidence, not independent execution proof.
+Baseline is `0a6284ca9563e6beb58581e6aa41750ca6d38525`.
+The private stateless owner is 89 lines; the reader is 15,726, down from
+15,780. The writer/table remain 25,466/6,786 lines. Large-facade decomposition
+is still open; line count does not certify lower coupling or higher speed.
+
+Root executed the following checks:
+
+- The existing W64/W65/W66 reader baseline passes 13 examples. The new public
+  characterization initially has one test-preparation error: a width-unaligned
+  mark is rejected during opening, outside its expected selected-read guard.
+  Correcting the test, not production, restores four passing examples.
+  After adversary review, the expanded four-example characterization passes
+  on unchanged production and after extraction. It covers all four temporal
+  carriers and four Decimal widths, literal full/middle nested rows, ordinary
+  and nullable inherited private dispatch, hidden NULL offsets, exact public
+  refusals, and error precedence. A matched aligned value-mark-only fault
+  actually fails selected preflight without callbacks; the combined bad-null
+  and aligned-value fault fails first on the exact null-map boolean error,
+  also without callbacks. A zero-mark range remains an explicit BoundsError,
+  not a newly admitted successful empty read.
+- All 361 examples in the 18 unique files below pass in each of DEBUG and
+  RELEASE: two serial, disjoint groups with 32 and 329 examples, respectively.
+  All four guarded outer exits are 0, with zero failures/errors/pending.
+- Root's exact-move comparator verifies the statement sequence of all four
+  original reconstruction bodies, ignoring comments/indentation and permitting
+  only label/payload-label parameters, inline `yield`
+  instead of the existing private callback, and nullable `null_map` naming.
+  Signatures, retained preflight/I/O prefixes and the complete facade remainder
+  are byte-identical to the baseline. The loader has only the ordered new
+  require, immediately after `WidePart`. The owner has no instance state,
+  stored Proc or file/stream handle. In-memory changed-error and callback-under-
+  NULL controls are rejected by the comparator. An initial comment-only
+  `Stream` false positive in its state/I/O check was corrected; it is not a
+  production defect or verification signal.
+- A temporary production mutation calls the decoder under NULL but discards
+  its result, leaving returned rows unchanged. The characterization fails
+  specifically on callback offsets: expected `[2, 6, 10, 12]`, observed
+  `[0, 2, 4, 6, 8, 10, 12, 14]` (four examples, one failure, zero errors).
+  Root restores the exact candidate before the final DEBUG/RELEASE gates.
+- A matched external library-loading type-check succeeds. External owner
+  access fails specifically with `private constant
+  CrystalClick::WidePart::NestedFixedWidthPayloadDecoder referenced`.
+  Formatting and `git diff --check` pass.
+
+The guarded spec command uses Crystal 1.21.0, SDK 26.5, an isolated cache,
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`, a 600-second
+timeout, 12-GiB process-tree cap and 50-percent system-free-memory threshold.
+RELEASE adds `--release --no-debug`. Root scratch instruments are under
+`/private/tmp/crystal-click-nested-refactor-root.qd2nkV`; they are noncanonical
+local aids, not required runtime dependencies or durable proof by themselves.
+
+Group A (32 examples in each mode):
+
+```text
+spec/nested_fixed_width_payload_refactor_spec.cr
+spec/wide_part_reader_w60_spec.cr
+spec/wide_part_reader_w62_spec.cr
+spec/wide_part_reader_w64_spec.cr
+spec/wide_part_reader_w65_spec.cr
+spec/wide_part_reader_w66_spec.cr
+spec/wide_part_table_w64_spec.cr
+spec/wide_part_writer_w65_spec.cr
+spec/wide_part_writer_w66_spec.cr
+```
+
+Group B (329 examples in each mode):
+
+```text
+spec/decimal_column_type_w102_spec.cr
+spec/decimal_precision_admission_w102_spec.cr
+spec/decimal_precision_consumers_w102_spec.cr
+spec/wide_part_writer_decimal_precision_w102_spec.cr
+spec/timezone_temporal_admission_w104_spec.cr
+spec/timezone_temporal_model_w104_spec.cr
+spec/timezone_temporal_writer_w104_spec.cr
+spec/timezone_temporal_consumers_w104_spec.cr
+spec/offline_catalog_spec.cr
+```
+
+Tested source SHA-256 anchors (documentation-only edits do not alter them):
+
+```text
+0aeeabdb22bc12e257167c3c7a4afa1cbd0a42ae47f9f0924924ccbfd72b07da  src/crystal_click.cr
+d542cd337a6511fb43bac0576a261ac375db089355c420a07906df34a11db260  src/crystal_click/wide_part.cr
+966d70302cd45d4e4ae5bfc818c9fcf346507caab85528184ba350e1170d8bb9  src/crystal_click/wide_part/nested_fixed_width_payload_decoder.cr
+38811bc00c8d51e30b7e4964f6a62a96fcc4af4dc7ff510b13f05a3790641c8e  spec/nested_fixed_width_payload_refactor_spec.cr
+```
+
+No stock oracle or complete-spec-inventory rerun is claimed for this slice.
+Public API, persisted profile/type admission, allocation limits and resource
+policy remain unchanged. This certificate does not qualify new Dynamic bulk,
+physical or declared-Object storage, current-master runtime compatibility,
+complete modularization, memory usage or performance. Refresh it after owner,
+facade, loader, callback consumer or resource-policy changes. The next type
+frontier remains actual per-site Dynamic roster/structure planning before
+physical binding and declared Object Dynamic.
+
 ## JSON typed-path declaration owner plan (2026-10-04)
 
 Behavior-preserving slice over `4b964ee` (production baseline `3f46570`).

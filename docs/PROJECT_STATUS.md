@@ -59,7 +59,23 @@ Scoped hostile verdict: ROBUST. Exact gates, source/runtime identities,
 zero-window semantics and residual limits are sealed in
 [OBJECT_DECLARED_VARIANT_FRONTIER.md](OBJECT_DECLARED_VARIANT_FRONTIER.md).
 
-Current architecture checkpoint (2026-10-04): pure JSON typed-path declaration
+Current architecture checkpoint (2026-10-04): the reader's four nested
+temporal/Decimal payload reconstruction loops share one private stateless
+89-line `NestedFixedWidthPayloadDecoder` class/file. All preflight, selected
+I/O, type/range checks and resource policy stay in the facade. Inline callbacks
+preserve inherited private decoder dispatch and skip every hidden NULL slot.
+Root passes the four expanded public characterizations before and after
+extraction, then all 361 affected examples in each of DEBUG and RELEASE
+(18 unique files, two serial disjoint groups per mode). A seeded callback-under-
+NULL mutation leaves values unchanged but fails the offset witness; root
+restores the candidate before final gates. Exact moved-body/prefix/facade/loader
+comparison, private visibility and hygiene pass. The reader is 15,726 lines;
+writer/table remain 25,466/6,786. Scoped hostile verdict: ROBUST for this neutral
+move, not broader admission, complete modularization or performance. No stock
+oracle or complete-inventory rerun is claimed. Executed scope and refresh
+conditions are in [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Previous architecture checkpoint (2026-10-04): pure JSON typed-path declaration
 grammar belongs to one private stateless 52-line `JsonTypedPathDeclaration`
 class/file. Public lookup stays in the facade; parsing receives the calling
 class as a generic policy. Root caught and corrected two inherited-dispatch
@@ -481,8 +497,10 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,786 lines; the reader/writer are now 15,780/25,466 lines.
+   is 6,786 lines; the reader/writer are now 15,726/25,466 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
+   Nested fixed-width temporal/Decimal payload reconstruction now has one
+   private owner, with unchanged preflight and inherited private dispatch.
    JSON parsing preserves caller-policy and public-parser overrides; the next
    larger seams are staged validation and physical stream binding, followed
    by reader granule orchestration and table adapters. Each is a separately

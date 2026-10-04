@@ -6063,28 +6063,18 @@ module CrystalClick
         element_width
       )
 
-      values = Array(Array(Array(T))).new(rows.to_i)
-      inner_offset = 0
-      value_offset = 0
-      outer_sizes.each do |inner_count|
-        row = Array(Array(T)).new(inner_count.to_i)
-        inner_count.to_i.times do
-          raise CorruptPartError.new("Array(Array(temporal)) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
-          leaf_count = element_sizes[inner_offset]
-          inner = Array(T).new(leaf_count.to_i)
-          leaf_count.to_i.times do
-            raise CorruptPartError.new("Array(Array(temporal)) sizes exceed selected temporal bytes") if value_offset > value_bytes.size - element_width
-            inner << decode_array_numeric_value(value_bytes, value_offset, type)
-            value_offset += element_width
-          end
-          row << inner
-          inner_offset += 1
-        end
-        values << row
+      NestedFixedWidthPayloadDecoder.decode(
+        outer_sizes,
+        element_sizes,
+        rows,
+        value_bytes,
+        element_width,
+        type,
+        "Array(Array(temporal))",
+        "temporal"
+      ) do |value_offset|
+        decode_array_numeric_value(value_bytes, value_offset, type)
       end
-      raise CorruptPartError.new("Array(Array(temporal)) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
-      raise CorruptPartError.new("Array(Array(temporal)) sizes do not consume selected temporal bytes") unless value_offset == value_bytes.size
-      values
     end
 
     private def read_array_array_nullable_temporal_values(
@@ -6136,38 +6126,20 @@ module CrystalClick
         element_width
       )
 
-      values = Array(Array(Array(T?))).new(rows.to_i)
-      inner_offset = 0
-      leaf_offset = 0
-      value_offset = 0
-      outer_sizes.each do |inner_count|
-        row = Array(Array(T?)).new(inner_count.to_i)
-        inner_count.to_i.times do
-          raise CorruptPartError.new("Array(Array(Nullable(temporal))) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
-          leaf_count = element_sizes[inner_offset]
-          inner = Array(T?).new(leaf_count.to_i)
-          leaf_count.to_i.times do
-            raise CorruptPartError.new("Array(Array(Nullable(temporal))) sizes exceed selected child streams") if leaf_offset >= flat_leaf_elements
-            raise CorruptPartError.new("Array(Array(Nullable(temporal))) sizes exceed selected temporal bytes") if value_offset > value_bytes.size - element_width
-            if null_bytes[leaf_offset] == 1_u8
-              inner << nil
-            else
-              inner << decode_array_numeric_value(value_bytes, value_offset, type)
-            end
-            # Every physical slot is consumed, including bytes hidden under
-            # NULL. Hidden values are deliberately never decoded.
-            value_offset += element_width
-            leaf_offset += 1
-          end
-          row << inner
-          inner_offset += 1
-        end
-        values << row
+      NestedFixedWidthPayloadDecoder.decode_nullable(
+        outer_sizes,
+        element_sizes,
+        rows,
+        value_bytes,
+        null_bytes,
+        flat_leaf_elements,
+        element_width,
+        type,
+        "Array(Array(Nullable(temporal)))",
+        "temporal"
+      ) do |value_offset|
+        decode_array_numeric_value(value_bytes, value_offset, type)
       end
-      raise CorruptPartError.new("Array(Array(Nullable(temporal))) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
-      raise CorruptPartError.new("Array(Array(Nullable(temporal))) sizes do not consume selected null-map bytes") unless leaf_offset.to_u64 == flat_leaf_elements
-      raise CorruptPartError.new("Array(Array(Nullable(temporal))) sizes do not consume selected temporal bytes") unless value_offset == value_bytes.size
-      values
     end
 
     private def read_array_array_decimal_values(
@@ -6204,28 +6176,18 @@ module CrystalClick
         element_width
       )
 
-      values = Array(Array(Array(T))).new(rows.to_i)
-      inner_offset = 0
-      value_offset = 0
-      outer_sizes.each do |inner_count|
-        row = Array(Array(T)).new(inner_count.to_i)
-        inner_count.to_i.times do
-          raise CorruptPartError.new("Array(Array(Decimal)) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
-          leaf_count = element_sizes[inner_offset]
-          inner = Array(T).new(leaf_count.to_i)
-          leaf_count.to_i.times do
-            raise CorruptPartError.new("Array(Array(Decimal)) sizes exceed selected coefficient bytes") if value_offset > value_bytes.size - element_width
-            inner << decode_array_decimal_value(value_bytes, value_offset, type)
-            value_offset += element_width
-          end
-          row << inner
-          inner_offset += 1
-        end
-        values << row
+      NestedFixedWidthPayloadDecoder.decode(
+        outer_sizes,
+        element_sizes,
+        rows,
+        value_bytes,
+        element_width,
+        type,
+        "Array(Array(Decimal))",
+        "coefficient"
+      ) do |value_offset|
+        decode_array_decimal_value(value_bytes, value_offset, type)
       end
-      raise CorruptPartError.new("Array(Array(Decimal)) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
-      raise CorruptPartError.new("Array(Array(Decimal)) sizes do not consume selected coefficient bytes") unless value_offset == value_bytes.size
-      values
     end
 
     private def read_array_array_nullable_decimal_values(
@@ -6277,36 +6239,20 @@ module CrystalClick
         element_width
       )
 
-      values = Array(Array(Array(T?))).new(rows.to_i)
-      inner_offset = 0
-      leaf_offset = 0
-      value_offset = 0
-      outer_sizes.each do |inner_count|
-        row = Array(Array(T?)).new(inner_count.to_i)
-        inner_count.to_i.times do
-          raise CorruptPartError.new("Array(Array(Nullable(Decimal))) size1 count exceeds selected bytes") if inner_offset >= element_sizes.size
-          leaf_count = element_sizes[inner_offset]
-          inner = Array(T?).new(leaf_count.to_i)
-          leaf_count.to_i.times do
-            raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes exceed selected child streams") if leaf_offset >= flat_leaf_elements
-            raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes exceed selected coefficient bytes") if value_offset > value_bytes.size - element_width
-            if null_map[leaf_offset] == 1_u8
-              inner << nil
-            else
-              inner << decode_array_decimal_value(value_bytes, value_offset, type)
-            end
-            value_offset += element_width
-            leaf_offset += 1
-          end
-          row << inner
-          inner_offset += 1
-        end
-        values << row
+      NestedFixedWidthPayloadDecoder.decode_nullable(
+        outer_sizes,
+        element_sizes,
+        rows,
+        value_bytes,
+        null_map,
+        flat_leaf_elements,
+        element_width,
+        type,
+        "Array(Array(Nullable(Decimal)))",
+        "coefficient"
+      ) do |value_offset|
+        decode_array_decimal_value(value_bytes, value_offset, type)
       end
-      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes do not consume selected nested sizes") unless inner_offset == element_sizes.size
-      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes do not consume selected null-map bytes") unless leaf_offset.to_u64 == flat_leaf_elements
-      raise CorruptPartError.new("Array(Array(Nullable(Decimal))) sizes do not consume selected coefficient bytes") unless value_offset == value_bytes.size
-      values
     end
 
     # Read the exact W59 Array(Array(String)) shape. Counts and mark-local
