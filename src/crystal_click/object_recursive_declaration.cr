@@ -208,7 +208,7 @@ module CrystalClick
     ) : Metrics?
       raise UnsupportedFormatError.new("binary codec depth limit exceeded") if root_depth <= 0 || root_depth > Int32::MAX
       totals = ScanTotals.new
-      byte_size = measure_type(type, root_depth.to_i32, limits, totals) || return nil
+      byte_size = measure_type(type, root_depth.to_i32, limits, totals, true) || return nil
       metadata_bytes = checked_add(totals.tuple_name_bytes, checked_add(totals.label_bytes, totals.zone_bytes))
       raise UnsupportedFormatError.new("binary codec byte limit exceeded") if checked_add(byte_size, checked_multiply(metadata_bytes, 2_u64)) > limits.max_bytes.to_u64
       totals.metrics(byte_size)
@@ -305,36 +305,41 @@ module CrystalClick
       depth : Int32,
       limits : BinaryCodecLimits,
       totals : ScanTotals,
+      allow_declared_dynamic : Bool,
     ) : UInt64?
       totals.visit_node(depth, limits)
+      if type.tag == BinaryDataType::TAG_DYNAMIC
+        return nil unless allow_declared_dynamic
+        return ObjectDeclaredDynamicDeclaration.byte_size_for(type)
+      end
       case type.tag
       when BinaryDataType::TAG_ARRAY
         return nil unless type.child_count == 1
         totals.child_edge(limits)
-        child_size = measure_type(type.child_at(0), depth + 1, limits, totals) || return nil
+        child_size = measure_type(type.child_at(0), depth + 1, limits, totals, false) || return nil
         checked_add("Array(".bytesize.to_u64 + 1_u64, child_size)
       when BinaryDataType::TAG_NULLABLE
         return nil unless type.child_count == 1
         child = type.child_at(0)
         return nil if child.tag == BinaryDataType::TAG_ARRAY || child.tag == BinaryDataType::TAG_MAP ||
                       child.tag == BinaryDataType::TAG_NULLABLE || child.tag == BinaryDataType::TAG_LOW_CARDINALITY ||
-                      child.tag == BinaryDataType::TAG_VARIANT
+                      child.tag == BinaryDataType::TAG_VARIANT || child.tag == BinaryDataType::TAG_DYNAMIC
         totals.child_edge(limits)
-        child_size = measure_type(child, depth + 1, limits, totals) || return nil
+        child_size = measure_type(child, depth + 1, limits, totals, false) || return nil
         checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
       when BinaryDataType::TAG_LOW_CARDINALITY
         return nil unless low_cardinality_child_admitted?(type)
         totals.child_edge(limits)
-        child_size = measure_type(type.child_at(0), depth + 1, limits, totals) || return nil
+        child_size = measure_type(type.child_at(0), depth + 1, limits, totals, false) || return nil
         checked_add("LowCardinality(".bytesize.to_u64 + 1_u64, child_size)
       when BinaryDataType::TAG_MAP
         return nil unless type.child_count == 2
         key = type.child_at(0)
         return nil unless key.tag == BinaryDataType::TAG_STRING
         totals.child_edge(limits)
-        key_size = measure_type(key, depth + 1, limits, totals) || return nil
+        key_size = measure_type(key, depth + 1, limits, totals, false) || return nil
         totals.child_edge(limits)
-        value_size = measure_type(type.child_at(1), depth + 1, limits, totals) || return nil
+        value_size = measure_type(type.child_at(1), depth + 1, limits, totals, false) || return nil
         checked_add(checked_add("Map(".bytesize.to_u64, key_size), checked_add(", ".bytesize.to_u64 + value_size, 1_u64))
       when BinaryDataType::TAG_VARIANT
         count = type.child_count
@@ -344,13 +349,14 @@ module CrystalClick
           arm = type.child_at(index)
           return nil if arm.tag == BinaryDataType::TAG_NOTHING ||
                         arm.tag == BinaryDataType::TAG_NULLABLE ||
-                        arm.tag == BinaryDataType::TAG_VARIANT
+                        arm.tag == BinaryDataType::TAG_VARIANT ||
+                        arm.tag == BinaryDataType::TAG_DYNAMIC
           if arm.tag == BinaryDataType::TAG_LOW_CARDINALITY && arm.child_count == 1 &&
              arm.child_at(0).tag == BinaryDataType::TAG_NULLABLE
             return nil
           end
           totals.child_edge(limits)
-          arm_size = measure_type(arm, depth + 1, limits, totals) || return nil
+          arm_size = measure_type(arm, depth + 1, limits, totals, false) || return nil
           total = checked_add(total, 2_u64) if index > 0
           total = checked_add(total, arm_size)
         end
@@ -373,12 +379,13 @@ module CrystalClick
               total = checked_add(total, 1_u64)
             end
             totals.child_edge(limits)
-            child_size = measure_type(type.child_at(index), depth + 1, limits, totals) || return nil
+            child_size = measure_type(type.child_at(index), depth + 1, limits, totals, false) || return nil
             total = checked_add(total, child_size)
           end
         end
         total
       else
+        return nil if type.tag == BinaryDataType::TAG_DYNAMIC
         size = ObjectTypedFieldType.leaf_byte_size_for(type) || return nil
         if type.tag == BinaryDataType::TAG_ENUM8 || type.tag == BinaryDataType::TAG_ENUM16
           definition = type.enum_definition || return nil
@@ -452,7 +459,11 @@ module CrystalClick
         end
         io << ')'
       else
-        ObjectTypedFieldType.append_leaf_name(io, type)
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          ObjectDeclaredDynamicDeclaration.append_name(io, type)
+        else
+          ObjectTypedFieldType.append_leaf_name(io, type)
+        end
       end
       nil
     end

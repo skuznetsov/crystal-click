@@ -130,7 +130,7 @@ describe "W151 declared Object Variant admission" do
     end
   end
 
-  it "rejects noncanonical and forbidden direct-arm rosters without widening Dynamic" do
+  it "rejects noncanonical and forbidden direct-arm rosters without widening recursive Dynamic" do
     [
       "JSON(v Variant(UInt64, String))",
       "JSON(v Variant(String, String))",
@@ -139,7 +139,7 @@ describe "W151 declared Object Variant admission" do
       "JSON(v Variant(Variant(String, UInt8), UInt64))",
       "JSON(v Variant(LowCardinality(Nullable(String)), UInt64))",
       "JSON(v Nullable(Variant(String, UInt64)))",
-      "JSON(v Dynamic)",
+      "JSON(v Array(Dynamic))",
     ].each do |declaration|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)

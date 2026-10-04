@@ -1,6 +1,34 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W157 retains each validated Dynamic
+Current capability checkpoint (2026-10-04): W158 adds paired direct declared
+`Dynamic` paths to bounded Object/JSON plans, whole-part writing and public
+file/column/table reading. Each path has an explicit actual roster; equal
+nominal caps may retain different rosters. The file reader retains the first
+validated child plan and exact statistics boundary, validates full metadata
+and K+1 grids before selected bodies, and refuses shared-path collisions.
+Supplied stale child statistics are omitted, not republished. Callers must
+select BASIC explicitly (`mode: 0_u64`); legacy inferred defaults are unchanged.
+Root passes 103 focused DEBUG examples (19 unique specs, three disjoint groups)
+and 272 affected RELEASE examples (43 unique specs, six disjoint groups), all
+with zero failures/errors/pending and exit 0. Root independently reconciles
+current source/spec hashes, formatter/syntax/hygiene and a collision-guard
+bypass that fails its intended assertion. These are affected gates, not a
+new complete-inventory run or performance measurement.
+Fresh pinned-stock qualification passes both a stock-authored part and
+independently library-authored complete parts, actual ATTACH/CHECK and literal
+full/middle/type/shared-arm checks. A CHECK-valid 42-to-43 part fails the same
+original literal oracle. The finite native profile is one direct
+`Dynamic(max_types=1)` path, Int64 and a shared `Array(Nullable(Int64))` spill,
+Wide/single-stream/BASIC/Dynamic V3/Object V3 MAP. Multiple per-path rosters,
+NULL, cap 0 and unused arms have spec evidence only here. Scoped hostile verdict:
+ROBUST for this slice, not arbitrary JSON/Dynamic compatibility. The source
+snapshot `895d13ea` remains separate from executable build `d9bcb5ab`.
+Recursive Dynamic, broader physical/type products, MV/projections, overall
+modularization and later performance work remain open. Exact boundary,
+commands, inventory and refresh conditions are in
+[OBJECT_DECLARED_DYNAMIC_FRONTIER.md](OBJECT_DECLARED_DYNAMIC_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W157 retains each validated Dynamic
 site's relative statistics-flag offset in `BinaryDynamicBulkPlan`, captured
 during the existing writer/parser pass under its shared budget. The strict
 getter distinguishes the per-site boundary from EOF and cumulative dry-write
@@ -620,7 +648,10 @@ source/runtime identities and executed evidence.
    W146 adds bounded canonical declared LC with shared physical state replay
    and an independent whole-part certificate. W151 adds bounded canonical
    declared Variant with a paired prefix owner and independently owned whole
-   parts. Typed Dynamic, unqualified Variant/LC leaves/products, Map LC keys, and
+   parts. W158 adds direct declared Dynamic with exact per-path actual rosters,
+   retained first-parse metadata and independently authored complete parts in
+   its finite BASIC profile. Recursive Dynamic, unqualified Dynamic/Variant/LC
+   leaves/products, Map LC keys, and
    the inherited timezone-profile gap remain open within Object,
    even where standalone part support exists. The older scalar typed-path behavior is
    unchanged. Neither adapter implies arbitrary
@@ -646,10 +677,11 @@ source/runtime identities and executed evidence.
    with normalized bulk values and complete mark grids. W156 adds explicit
    physical binding with a finite single-stream/BASIC/Dynamic V3 stock
    certificate in borrowed Wide envelopes. W157 retains the per-site
-   statistics-flag boundary needed by metadata marks; it does not migrate
-   those consumers or admit Object Dynamic. Other physical products,
-   independently authored general complete parts and declared Object Dynamic
-   remain separate open frontiers. Equal nominal Dynamic types do not imply
+   statistics-flag boundary needed by metadata marks. W158 binds exact child
+   streams to those offsets and integrates direct declared Object Dynamic with
+   a finite independently authored whole-part certificate. Other physical
+   products, independently authored general complete parts and recursive
+   declared Object Dynamic remain separate open frontiers. Equal nominal Dynamic types do not imply
    equal per-part or per-site state.
    Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
@@ -710,8 +742,9 @@ source/runtime identities and executed evidence.
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
    and canonical DateTime/DateTime64/Time/Time64. W140 now admits canonical
    recursive Array/Map(String,V)/Tuple/legal Nullable schemas, with separately
-   bounded physical witnesses. W151 adds bounded declared Variant; the next
-   proposed lane is typed Dynamic, alongside the timezone profile gap and
+   bounded physical witnesses. W151 adds bounded declared Variant and W158
+   adds direct declared Dynamic; remaining lanes include recursive Dynamic,
+   the timezone profile gap and
    separately qualified physical products. W141 establishes the logical
    LowCardinality prerequisite;
    W142 adds the separately qualified standalone dictionary/index codec.
@@ -728,19 +761,19 @@ source/runtime identities and executed evidence.
    W149 qualifies ordinary recursive physical binding, both String profiles
    and LC-bearing sparse arms using borrowed stock envelopes. W151 separately
    qualifies declared Object Variant with independent complete parts and
-   shared public consumers. Typed Dynamic remains the next distinct storage
-   frontier. W152 preserves the nominal `Dynamic(max_types=N)` cap; W153 adds
+   shared public consumers. W152 preserves the nominal `Dynamic(max_types=N)` cap; W153 adds
    the paired generic logical actual-type/value grammar. W154 adds paired
    actual per-occurrence structure streams and normalized role/site planning.
    W155 now pairs generic Dynamic normalized bulk values and complete mark-grid
    scheduling over that actual state. W156 adds a separate actual-roster
    physical binder and finite borrowed-envelope qualification. W157 now
    preserves statistics offsets in the paired structure owner for metadata
-   marks; ordinary value K+1 grids cannot replace that boundary. Next bind
-   the exact metadata stream and retain its first parse result, then integrate
-   per-typed-path actual plans and paired storage
-   ownership for declared Object Dynamic, with independently authored complete
-   parts and stock ATTACH/CHECK/full/middle literal tests. Keep default
+   marks; ordinary value K+1 grids cannot replace that boundary. W158 binds
+   exact metadata streams and retains their first parse results, integrating
+   direct per-typed-path actual plans with paired storage ownership and
+   independently authored complete parts plus stock ATTACH/CHECK/full/middle
+   literal tests. Next characterize recursive Dynamic composition and broader
+   JSON physical products before widening those consumers. Keep default
    no-roster consumers and unqualified profiles closed.
    Neither the cap nor Object's inferred-path policy substitutes for that roster.
    Broader layout/type products remain separate.
@@ -761,12 +794,13 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-b94acbe3`, revision
-`b94acbe318f8459ac88b35647f4e2293d8e225db`.
+`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-895d13ea`, revision
+`895d13ea4ce8abb811b3b1b3d51b23a466a342a9`.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Against the previous `7f568d60` snapshot,
-DataTypes, Columns, Formats, MergeTree and Compression are exactly identical
-in five separate recursive content comparisons. Unchanged serializers
+comparison and earlier identities. Against the previous `db9010c9` snapshot,
+DataTypes, Columns and Compression are content-identical. The bounded
+MergeTree and Formats diffs change rejection diagnostics and format-settings
+hashing, respectively, not the inspected persisted type serializers. Unchanged serializers
 do not imply unchanged framing, metadata or lifecycle behavior. This is
 source evidence only: no executable from this checkout has been built or
 qualified. Source identity and the separately pinned executable oracle must

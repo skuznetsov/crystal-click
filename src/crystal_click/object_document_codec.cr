@@ -31,11 +31,22 @@ module CrystalClick
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
       end
+      if plan.typed_dynamic_count > 0 && mode != DynamicDiscriminatorCodec::BASIC_MODE
+        raise UnsupportedFormatError.new("declared Object Dynamic fields require the BASIC Dynamic profile")
+      end
       validate_write_structure(plan.structures)
       plan.typed_path_count.times do |index|
-        type = plan.typed_type_for(plan.typed_path_at(index))
-        if type.contains_dynamic?
-          raise UnsupportedFormatError.new("Object typed Dynamic fields are not admitted")
+        path = plan.typed_path_at(index)
+        type = plan.typed_type_for(path)
+        if plan.has_typed_dynamic?(path)
+          unless type.tag == BinaryDataType::TAG_DYNAMIC && !ObjectDeclaredDynamicDeclaration.max_types_for(type).nil?
+            raise UnsupportedFormatError.new("typed Object Dynamic path has a noncanonical descriptor")
+          end
+          ObjectDeclaredDynamicDeclaration.validate_actual_structure!(
+            plan.typed_dynamic_for(path), budget.limits, 3
+          )
+        elsif type.contains_dynamic?
+          raise UnsupportedFormatError.new("Object typed containers containing Dynamic are not admitted")
         end
         if type.contains_variant?
           type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
@@ -97,6 +108,8 @@ module CrystalClick
       # published if a later lane fails.
       metadata = ObjectDynamicStructureCodec.encode_with_budget(plan.structures, budget)
       typed_lanes = Hash(String, BinaryBulkStreams).new
+      typed_dynamic_lanes = Hash(String, BinaryDynamicBulkStreams).new
+      typed_dynamic_statistics_offsets = Hash(String, Int32).new
       plan.typed_path_count.times do |typed_index|
         path = plan.typed_path_at(typed_index)
         type = plan.typed_type_for(path)
@@ -114,11 +127,27 @@ module CrystalClick
             # mismatching descriptor cannot bypass its bound during equality.
             type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
             type_context.validate_type_tree(value.type)
+            if plan.has_typed_dynamic?(path)
+              ObjectDeclaredDynamicDeclaration.validate_selected_value!(value, type, budget.limits, true)
+            end
             values << value
           end
           lane_granules << values
         end
-        typed_lanes[path] = BinaryBulkCodec.encode_with_budget(type, lane_granules, budget, profile: profile)
+        if plan.has_typed_dynamic?(path)
+          dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_write_plan(
+            type,
+            plan.typed_dynamic_for(path),
+            budget,
+            profile
+          )
+          structures = dynamic_plan.encode_structure_streams(budget)
+          data = BinaryBulkEncoder.encode(type, lane_granules, budget, profile, dynamic_plan)
+          typed_dynamic_lanes[path] = BinaryDynamicBulkStreams.new(structures, data)
+          typed_dynamic_statistics_offsets[path] = dynamic_plan.statistics_offset_for("root")
+        else
+          typed_lanes[path] = BinaryBulkCodec.encode_with_budget(type, lane_granules, budget, profile: profile)
+        end
       end
 
       dynamic_lanes = Hash(String, DynamicValueStreams).new
@@ -171,7 +200,15 @@ module CrystalClick
       end
       shared_lanes = ObjectDocumentSharedCodec.encode_with_budget(shared_granules, budget, shared_profile)
 
-      ObjectDocumentStreams.new(metadata, row_counts, typed_lanes, dynamic_lanes, shared_lanes)
+      ObjectDocumentStreams.new(
+        metadata,
+        row_counts,
+        typed_lanes,
+        dynamic_lanes,
+        shared_lanes,
+        typed_dynamic_lanes,
+        typed_dynamic_statistics_offsets
+      )
     end
 
     def self.decode(
@@ -223,9 +260,15 @@ module CrystalClick
       typed_schema.size.times do
         budget.preflight_children(1_u64)
       end
+      typed_dynamic_count = 0
       typed_schema.each_value do |type|
-        if type.contains_dynamic?
-          raise UnsupportedFormatError.new("Object typed Dynamic fields are not admitted")
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          if ObjectDeclaredDynamicDeclaration.max_types_for(type).nil?
+            raise UnsupportedFormatError.new("Object typed Dynamic descriptor is not canonical")
+          end
+          typed_dynamic_count += 1
+        elsif type.contains_dynamic?
+          raise UnsupportedFormatError.new("Object typed containers containing Dynamic are not admitted")
         end
         schema_context.validate_type_tree(type)
         validate_variant_typed_field!(type, budget.limits)
@@ -236,11 +279,18 @@ module CrystalClick
       validate_read_structure(structure_set)
       object = structure_set.object
 
-      if streams.typed_path_count != typed_schema.size
-        corrupt!("typed Object lane keys do not exactly match the supplied schema")
+      if streams.typed_path_count != typed_schema.size - typed_dynamic_count
+        corrupt!("ordinary typed Object lane keys do not exactly match the supplied schema")
       end
-      typed_schema.each_key do |path|
-        unless streams.has_typed_path?(path)
+      if streams.typed_dynamic_path_count != typed_dynamic_count
+        corrupt!("typed Dynamic Object lane keys do not exactly match the supplied schema")
+      end
+      typed_schema.each do |path, type|
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          unless streams.has_typed_dynamic_path?(path)
+            corrupt!("typed Dynamic Object lane is missing schema path #{path.inspect}")
+          end
+        elsif !streams.has_typed_path?(path)
           corrupt!("typed Object lane is missing schema path #{path.inspect}")
         end
       end
@@ -286,23 +336,57 @@ module CrystalClick
         end
       end
 
+      typed_dynamic_plans = Hash(String, BinaryDynamicBulkPlan).new
+      typed_dynamic_structures = Hash(String, DynamicStructure).new
+      typed_schema.each do |path, type|
+        next unless type.tag == BinaryDataType::TAG_DYNAMIC
+        dynamic_streams = streams.typed_dynamic_for(path)
+        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_plan(
+          type,
+          dynamic_streams.structures,
+          budget,
+          profile
+        )
+        typed_dynamic_plans[path] = dynamic_plan
+        typed_dynamic_structures[path] = dynamic_plan.structure_for("root")
+      end
+
       plan = begin
-        ObjectDocumentPlan.new(structure_set, typed_schema)
+        ObjectDocumentPlan.new(structure_set, typed_schema, typed_dynamic_structures)
       rescue ex : ArgumentError
         raise CorruptPartError.new("invalid Object typed schema: #{ex.message}")
       end
 
       typed_rows = Hash(String, Array(Array(BinaryValue))).new
       typed_schema.each do |path, type|
-        typed_rows[path] = BinaryBulkCodec.decode_with_budget(
-          type,
-          streams.typed_for(path),
-          rows_per_mark,
-          budget,
-          first_mark: selected_first,
-          mark_count: selected_count,
-          profile: profile
-        )
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          dynamic_streams = streams.typed_dynamic_for(path)
+          typed_rows[path] = BinaryBulkDecoder.decode(
+            type,
+            dynamic_streams.data,
+            rows_per_mark,
+            budget,
+            selected_first,
+            selected_count,
+            profile,
+            typed_dynamic_plans[path]
+          )
+          typed_rows[path].each do |mark_values|
+            mark_values.each do |value|
+              ObjectDeclaredDynamicDeclaration.validate_selected_value!(value, type, budget.limits, false)
+            end
+          end
+        else
+          typed_rows[path] = BinaryBulkCodec.decode_with_budget(
+            type,
+            streams.typed_for(path),
+            rows_per_mark,
+            budget,
+            first_mark: selected_first,
+            mark_count: selected_count,
+            profile: profile
+          )
+        end
       end
 
       dynamic_rows = Hash(String, Array(Array(BinaryValue))).new

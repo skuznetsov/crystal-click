@@ -6,6 +6,7 @@ module CrystalClick
     @dynamic_structure_streams : Hash(String, String)
     @discriminator_streams : Hash(String, String)
     @typed_plans : Hash(String, BinaryBulkPhysicalPlan)
+    @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
     @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
     @shared_plan : BinaryBulkPhysicalPlan
     @stream_count : Int32
@@ -26,8 +27,13 @@ module CrystalClick
       total_records = add_size(plan.typed_path_count.to_u64, object.dynamic_path_count.to_u64)
       context.record_elements(total_records)
       plan.typed_path_count.times do |index|
-        type = plan.typed_type_for(plan.typed_path_at(index))
-        if type.contains_dynamic?
+        path = plan.typed_path_at(index)
+        type = plan.typed_type_for(path)
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          ObjectDeclaredDynamicDeclaration.validate_actual_structure!(
+            plan.typed_dynamic_for(path), limits, root_depth: 3
+          )
+        elsif type.contains_dynamic?
           raise UnsupportedFormatError.new("physical Object typed Dynamic fields are not admitted")
         end
       end
@@ -92,10 +98,26 @@ module CrystalClick
       end
 
       @typed_plans = Hash(String, BinaryBulkPhysicalPlan).new
+      @typed_dynamic_plans = Hash(String, BinaryDynamicBulkPhysicalPlan).new
+      typed_dynamic_budget = BinaryCodecBudget.new(limits, true)
       plan.typed_path_count.times do |index|
         preflight_typed_path(plan, index, column_prefix.bytesize.to_u64, context)
         raw_path = plan.typed_path_at(index)
         type = plan.typed_type_for(raw_path)
+        path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, raw_path, context)
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          structure = plan.typed_dynamic_for(raw_path)
+          prepared = ObjectDeclaredDynamicDeclaration.prepare_write_plan(
+            type, structure, typed_dynamic_budget, @profile
+          )
+          typed_dynamic_plan = BinaryDynamicBulkPhysicalPlan.from_escaped_prefix(
+            prepared, path_prefix, limits, context
+          )
+          @typed_dynamic_plans[String.new(raw_path.to_slice)] = typed_dynamic_plan
+          collect_plan_names!(typed_dynamic_plan, seen_names)
+          next
+        end
+
         if type.contains_variant?
           preflight_variant_typed_type(type, limits.max_depth, 0, context, 0_u64, 0_u64)
           if ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
@@ -106,7 +128,6 @@ module CrystalClick
            ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
           raise UnsupportedFormatError.new("physical Object typed LowCardinality fields are not admitted")
         end
-        path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, raw_path, context)
         typed_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(type, path_prefix, @profile, limits, context)
         @typed_plans[String.new(raw_path.to_slice)] = typed_plan
         collect_plan_names!(typed_plan, seen_names)
@@ -142,6 +163,10 @@ module CrystalClick
       @typed_plans[path]? || raise(KeyError.new("typed Object path not found: #{path.inspect}"))
     end
 
+    def typed_dynamic(path : String) : BinaryDynamicBulkPhysicalPlan
+      @typed_dynamic_plans[path]? || raise(KeyError.new("typed Dynamic Object path not found: #{path.inspect}"))
+    end
+
     def dynamic_arm(path : String, arm_name : String) : BinaryBulkPhysicalPlan
       arms = @dynamic_arm_plans[path]? || raise(KeyError.new("Dynamic Object path not found: #{path.inspect}"))
       arms[arm_name]? || raise(KeyError.new("Dynamic alternative not found: #{arm_name.inspect}"))
@@ -167,6 +192,9 @@ module CrystalClick
       @typed_plans.each_value do |physical|
         physical.stream_names.each_value { |name| names << String.new(name.to_slice) }
       end
+      @typed_dynamic_plans.each_value do |physical|
+        physical.stream_names.each_value { |name| names << String.new(name.to_slice) }
+      end
       @dynamic_arm_plans.each_value do |arms|
         arms.each_value do |physical|
           physical.stream_names.each_value { |name| names << String.new(name.to_slice) }
@@ -178,6 +206,13 @@ module CrystalClick
     end
 
     private def collect_plan_names!(plan : BinaryBulkPhysicalPlan, seen : Hash(String, Bool)) : Nil
+      plan.stream_names.each_value do |name|
+        reject_collision!(name, seen)
+      end
+      nil
+    end
+
+    private def collect_plan_names!(plan : BinaryDynamicBulkPhysicalPlan, seen : Hash(String, Bool)) : Nil
       plan.stream_names.each_value do |name|
         reject_collision!(name, seen)
       end

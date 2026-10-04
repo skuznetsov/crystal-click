@@ -7,6 +7,9 @@ module CrystalClick
     @rows_per_mark : Array(UInt64)
     @typed_paths : Hash(String, BinaryBulkStreams)
     @typed_names : Array(String)
+    @typed_dynamic_paths : Hash(String, BinaryDynamicBulkStreams)
+    @typed_dynamic_names : Array(String)
+    @typed_dynamic_statistics_offsets : Hash(String, Int32)
     @dynamic_paths : Hash(String, DynamicValueStreams)
     @dynamic_names : Array(String)
     @shared : BinaryBulkStreams
@@ -17,6 +20,8 @@ module CrystalClick
       typed_paths : Hash(String, BinaryBulkStreams),
       dynamic_paths : Hash(String, DynamicValueStreams),
       shared : BinaryBulkStreams,
+      typed_dynamic_paths : Hash(String, BinaryDynamicBulkStreams) = Hash(String, BinaryDynamicBulkStreams).new,
+      typed_dynamic_statistics_offsets : Hash(String, Int32) = Hash(String, Int32).new,
     )
       @structures = structures
       @rows_per_mark = rows_per_mark.dup
@@ -31,6 +36,29 @@ module CrystalClick
         @typed_names << detached_path
       end
       @typed_names.sort! { |left, right| compare_paths(left, right) }
+
+      @typed_dynamic_paths = Hash(String, BinaryDynamicBulkStreams).new
+      @typed_dynamic_names = Array(String).new(typed_dynamic_paths.size)
+      typed_dynamic_paths.each do |path, streams|
+        detached_path = String.new(path.to_slice)
+        if @typed_dynamic_paths.has_key?(detached_path)
+          raise ArgumentError.new("typed Dynamic Object lane keys must be unique by raw bytes")
+        end
+        @typed_dynamic_paths[detached_path] = streams
+        @typed_dynamic_names << detached_path
+      end
+      @typed_dynamic_names.sort! { |left, right| compare_paths(left, right) }
+      @typed_dynamic_statistics_offsets = Hash(String, Int32).new
+      typed_dynamic_statistics_offsets.each do |path, offset|
+        detached_path = String.new(path.to_slice)
+        unless @typed_dynamic_paths.has_key?(detached_path)
+          raise ArgumentError.new("typed Dynamic statistics offset has no matching lane: #{path.inspect}")
+        end
+        if offset < 0
+          raise ArgumentError.new("typed Dynamic statistics offset must be non-negative")
+        end
+        @typed_dynamic_statistics_offsets[detached_path] = offset
+      end
 
       @dynamic_paths = Hash(String, DynamicValueStreams).new
       @dynamic_names = Array(String).new(dynamic_paths.size)
@@ -88,6 +116,32 @@ module CrystalClick
 
     def typed_for(path : String) : BinaryBulkStreams
       @typed_paths[path]? || raise(KeyError.new("typed Object lanes not found: #{path.inspect}"))
+    end
+
+    def typed_dynamic_path_count : Int32
+      @typed_dynamic_paths.size
+    end
+
+    def typed_dynamic_path_at(index : Int) : String
+      String.new(@typed_dynamic_names[index].to_slice)
+    end
+
+    def has_typed_dynamic_path?(path : String) : Bool
+      @typed_dynamic_paths.has_key?(path)
+    end
+
+    def typed_dynamic_paths : Array(String)
+      @typed_dynamic_names.map { |path| String.new(path.to_slice) }
+    end
+
+    def typed_dynamic_for(path : String) : BinaryDynamicBulkStreams
+      @typed_dynamic_paths[path]? || raise(KeyError.new("typed Object Dynamic lanes not found: #{path.inspect}"))
+    end
+
+    # Relative byte offset of the root Dynamic statistics flag within the
+    # exact structure blob produced or parsed for this typed child.
+    def typed_dynamic_statistics_offset(path : String) : Int32?
+      @typed_dynamic_statistics_offsets[path]?
     end
 
     def dynamic_path_count : Int32

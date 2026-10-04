@@ -47,7 +47,7 @@ module CrystalClick
       # copied into ObjectStructure, copied into ObjectDynamicStructureSet,
       # then read once by that set's roster check. Typed paths are read once
       # and copied into the returned ObjectDocumentPlan.
-      dynamic_paths, typed_paths, typed_types = copy_rosters(plan, budget)
+      dynamic_paths, typed_paths, typed_types, typed_dynamic_paths, typed_dynamic_structures = copy_rosters(plan, budget)
       typed_by_path = Hash(String, BinaryDataType).new
       typed_paths.each_with_index do |path, index|
         typed_by_path[path] = typed_types[index]
@@ -186,17 +186,22 @@ module CrystalClick
       typed_paths.each_with_index do |path, index|
         typed_schema[path] = typed_types[index]
       end
-      ObjectDocumentPlan.new(fresh_set, typed_schema)
+      typed_dynamic_rosters = Hash(String, DynamicStructure).new
+      typed_dynamic_paths.each_with_index do |path, index|
+        typed_dynamic_rosters[path] = typed_dynamic_structures[index]
+      end
+      ObjectDocumentPlan.new(fresh_set, typed_schema, typed_dynamic_rosters)
     end
 
     private def self.copy_rosters(
       plan : ObjectDocumentPlan,
       budget : BinaryCodecBudget,
-    ) : Tuple(Array(String), Array(String), Array(BinaryDataType))
+    ) : Tuple(Array(String), Array(String), Array(BinaryDataType), Array(String), Array(DynamicStructure))
       object = plan.structures.object
       dynamic_count = object.dynamic_path_count
       typed_count = plan.typed_path_count
-      roster_count = checked_add(dynamic_count.to_u64, typed_count.to_u64)
+      typed_dynamic_count = plan.typed_dynamic_count
+      roster_count = checked_add(checked_add(dynamic_count.to_u64, typed_count.to_u64), typed_dynamic_count.to_u64)
       # The byte-size walk is itself logical work. Admit its complete node and
       # edge lower bound before reading any per-path metadata; the later
       # detached-copy pass is admitted and charged separately below.
@@ -213,11 +218,18 @@ module CrystalClick
         budget.charge_node
         typed_bytes = checked_add(typed_bytes, plan.typed_path_byte_size_at(index).to_u64)
       end
+      typed_dynamic_bytes = 0_u64
+      typed_dynamic_count.times do |index|
+        budget.charge_node
+        typed_dynamic_bytes = checked_add(typed_dynamic_bytes, plan.typed_dynamic_path_byte_size_at(index).to_u64)
+      end
 
       dynamic_copy_bytes = checked_multiply(dynamic_bytes, 4_u64)
       typed_copy_bytes = checked_multiply(typed_bytes, 2_u64)
-      budget.ensure_wire_bytes(checked_add(dynamic_copy_bytes, typed_copy_bytes))
-      budget.charge_wire_bytes(checked_add(dynamic_copy_bytes, typed_copy_bytes))
+      typed_dynamic_copy_bytes = checked_multiply(typed_dynamic_bytes, 2_u64)
+      roster_copy_bytes = checked_add(checked_add(dynamic_copy_bytes, typed_copy_bytes), typed_dynamic_copy_bytes)
+      budget.ensure_wire_bytes(roster_copy_bytes)
+      budget.charge_wire_bytes(roster_copy_bytes)
       budget.preflight_children(roster_count)
 
       dynamic_paths = Array(String).new(dynamic_count)
@@ -237,7 +249,20 @@ module CrystalClick
         typed_paths << path
         typed_types << type
       end
-      {dynamic_paths, typed_paths, typed_types}
+
+      typed_dynamic_paths = Array(String).new(typed_dynamic_count)
+      typed_dynamic_structures = Array(DynamicStructure).new(typed_dynamic_count)
+      typed_dynamic_count.times do |index|
+        budget.charge_node
+        path = plan.typed_dynamic_path_at(index)
+        typed_dynamic_paths << path
+        typed_dynamic_structures << ObjectDeclaredDynamicDeclaration.without_statistics(
+          plan.typed_dynamic_for(path),
+          budget,
+          3
+        )
+      end
+      {dynamic_paths, typed_paths, typed_types, typed_dynamic_paths, typed_dynamic_structures}
     end
 
     private def self.build_routings(

@@ -384,9 +384,9 @@ describe "Object column lane binder extraction characterization" do
     {coordinate_short.element_count, coordinate_short.wire_byte_count}.should eq({5_i64, 9_i64})
   end
 
-  it "does not widen public Object schema admission to Dynamic" do
+  it "does not widen public Object schema admission to recursive Dynamic" do
     expect_raises(ArgumentError) do
-      CrystalClick::ObjectDocumentSchema.new({"v" => CrystalClick::BinaryDataType.dynamic})
+      CrystalClick::ObjectDocumentSchema.new({"v" => CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.dynamic)})
     end
   end
 end

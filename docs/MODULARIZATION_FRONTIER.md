@@ -19,6 +19,14 @@ invariants. A shorter facade by itself is not a modularity or speed certificate.
 
 ## Object column lane binder plan (2026-10-04)
 
+The extraction certificate below is historical at `6dc7ed9`. W158 changes the
+owner and callers to add direct declared Object Dynamic; its new behavior must
+be qualified separately in
+[OBJECT_DECLARED_DYNAMIC_FRONTIER.md](OBJECT_DECLARED_DYNAMIC_FRONTIER.md).
+The historical direct-Dynamic refusal assertion is replaced by a recursive
+`Array(Dynamic)` refusal for that feature. The exact-move certificate does not
+certify the widened implementation, and its 178-line count is not current.
+
 Status: executed; the scoped certificate and exact inventory follow below.
 Baseline: clean `e3ffd24`. Risk: CAUTION (persisted
 physical stream composition). Rollback: one atomic local refactor commit;
