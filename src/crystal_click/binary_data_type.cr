@@ -43,6 +43,7 @@ module CrystalClick
     TAG_MAP             =     0x27_u8
     TAG_IPV4            =     0x28_u8
     TAG_IPV6            =     0x29_u8
+    TAG_VARIANT         =     0x2a_u8
     TAG_BOOL            =     0x2d_u8
     TAG_BFLOAT16        =     0x31_u8
     TAG_TIME            =     0x32_u8
@@ -56,6 +57,7 @@ module CrystalClick
     # immediate, already-immutable children avoids an unbounded recursive walk
     # before an enclosing codec has validated a caller-supplied type tree.
     getter? contains_low_cardinality : Bool
+    getter? contains_variant : Bool
 
     @primitive_name : String?
     @children : Array(BinaryDataType)
@@ -77,6 +79,7 @@ module CrystalClick
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
       @contains_low_cardinality = @tag == TAG_LOW_CARDINALITY || @children.any?(&.contains_low_cardinality?)
+      @contains_variant = @tag == TAG_VARIANT || @children.any?(&.contains_variant?)
     end
 
     def self.primitive(name : String) : BinaryDataType
@@ -162,10 +165,48 @@ module CrystalClick
     end
 
     def self.nullable(child : BinaryDataType) : BinaryDataType
-      if child.tag == TAG_ARRAY || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY
-        raise ArgumentError.new("Nullable cannot directly contain Array, Map, Nullable, or LowCardinality")
+      if child.tag == TAG_ARRAY || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT
+        raise ArgumentError.new("Nullable cannot directly contain Array, Map, Nullable, LowCardinality, or Variant")
       end
       new(TAG_NULLABLE, nil, [child] of BinaryDataType, [] of String, nil)
+    end
+
+    # Normal Variant construction canonicalizes by bounded SQL display name;
+    # binary decode uses the same helper with the enclosing operation's budget.
+    def self.variant(arms : Array(BinaryDataType), limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryDataType
+      budget = BinaryCodecBudget.new(limits, true)
+      canonical = BinaryVariantRoster.normalize(
+        arms,
+        budget,
+        1,
+        account_variant_node: true,
+        account_roster_edges: true,
+        strict_wire: false
+      )
+      new(TAG_VARIANT, nil, canonical, [] of String, nil)
+    end
+
+    # Internal descriptor constructor for a fully parsed binary roster. It
+    # preserves the decoder's aggregate traversal/name budget and applies the
+    # local strict-canonical wire profile after the complete roster is read.
+    def self.variant_from_wire(
+      arms : Array(BinaryDataType),
+      context : BinaryCodecContext,
+      variant_depth : Int,
+    ) : BinaryDataType
+      canonical = begin
+        BinaryVariantRoster.normalize(
+          arms,
+          context.budget,
+          variant_depth,
+          account_variant_node: false,
+          account_roster_edges: false,
+          strict_wire: true
+        )
+      rescue ex : ArgumentError
+        context.corrupt!("invalid Variant arm roster: #{ex.message}")
+      end
+      new(TAG_VARIANT, nil, canonical, [] of String, nil)
     end
 
     def self.low_cardinality(child : BinaryDataType) : BinaryDataType
@@ -280,6 +321,15 @@ module CrystalClick
         "LowCardinality(#{@children[0].name})"
       when TAG_MAP
         "Map(#{@children[0].name}, #{@children[1].name})"
+      when TAG_VARIANT
+        String.build do |io|
+          io << "Variant("
+          @children.each_with_index do |child, index|
+            io << ", " unless index == 0
+            io << child.name
+          end
+          io << ')'
+        end
       when TAG_UNNAMED_TUPLE
         String.build do |io|
           io << "Tuple("

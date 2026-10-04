@@ -8,12 +8,14 @@ module CrystalClick
     @payload : Bytes?
     @elements : Array(BinaryValue)
     @null : Bool
+    @variant_index : UInt8?
 
     private def initialize(
       @type : BinaryDataType,
       payload : Bytes? = nil,
       elements : Array(BinaryValue) = [] of BinaryValue,
       @null : Bool = false,
+      @variant_index : UInt8? = nil,
     )
       @payload = payload.try { |bytes| Bytes.new(bytes.size) { |index| bytes[index] } }
       @elements = elements.dup
@@ -84,6 +86,28 @@ module CrystalClick
         raise ArgumentError.new("NULL value requires Nothing or Nullable type")
       end
       new(type, nil, [] of BinaryValue, true)
+    end
+
+    # Variant NULL is a separate UInt8 discriminator value (255), not an
+    # ordinary arm and not a child value.
+    def self.variant_null(type : BinaryDataType) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_VARIANT
+        raise ArgumentError.new("Variant NULL value requires Variant type")
+      end
+      new(type, nil, [] of BinaryValue, true)
+    end
+
+    def self.variant(type : BinaryDataType, index : Int, child : BinaryValue) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_VARIANT
+        raise ArgumentError.new("Variant value requires Variant type")
+      end
+      if index < 0 || index >= type.child_count || index >= 255
+        raise ArgumentError.new("Variant discriminator is outside its declared arm roster")
+      end
+      unless child.type == type.child_at(index)
+        raise ArgumentError.new("Variant child type does not match its selected arm")
+      end
+      new(type, nil, [child] of BinaryValue, false, index.to_u8)
     end
 
     def self.array(type : BinaryDataType, elements : Array(BinaryValue)) : BinaryValue
@@ -195,6 +219,16 @@ module CrystalClick
 
     def is_null? : Bool
       @null
+    end
+
+    def variant_index? : UInt8?
+      require_tag(BinaryDataType::TAG_VARIANT, "Variant")
+      @variant_index
+    end
+
+    def variant_child? : BinaryValue?
+      require_tag(BinaryDataType::TAG_VARIANT, "Variant")
+      @variant_index.nil? ? nil : @elements[0]?
     end
 
     def as_string : String

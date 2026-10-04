@@ -1,6 +1,18 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-03): W146 admits canonical declared
+Current capability checkpoint (2026-10-03): W147 adds paired generic Variant
+descriptors and owned RowBinary values, with canonical arm identity, NULL and
+legal recursive compositions. Root passes 62 focused DEBUG, 503 affected
+RELEASE examples (64 unique files together) and 2,420 complete-inventory
+examples (376 unique files, sixteen serial disjoint non-release groups, not
+a combined-process run). The independent literal stock/library exchange
+passes seven rows in each direction plus a valid 42-to-43 wrong-value control.
+This is a logical codec prerequisite: generic Variant bulk/physical lanes,
+declared Object Variant/Dynamic and new public part profiles remain closed.
+The scoped certificate is in
+[VARIANT_VALUE_KERNEL_FRONTIER.md](VARIANT_VALUE_KERNEL_FRONTIER.md).
+
+Previous whole-part checkpoint: W146 admits canonical declared
 LowCardinality fields in normalized Object/JSON, including legal recursive
 compositions and LC(Nullable(T)). The existing independent complete-part
 writer and file/column/table/catalog consumers share role-owned dictionary
@@ -130,6 +142,10 @@ source/runtime identities and executed evidence.
 
 ## What is usable now
 
+- `BinaryDataType.variant`, `BinaryValue.variant` and `variant_null` provide
+  the shared canonical logical Variant kernel. Paired descriptor/value codecs
+  retain nominal arm identity, recursive values and explicit NULL. This does
+  not widen the physical part profiles below; see the W147 certificate.
 - `WidePart` and `WidePartTable`: selected-column and typed reads, including
   windowed delivery. The public contracts admit explicit physical profiles,
   not arbitrary ClickHouse parts or recursive type combinations.
@@ -274,7 +290,9 @@ source/runtime identities and executed evidence.
    JSON/Dynamic compatibility. Bucketed/advanced layouts, other structure
    versions, Compact parts and unqualified wrapper/container combinations need
    their own paired evidence. Existing logical binary codecs alone do not
-   widen public part admission. Generic Variant arms, shared Nested offsets,
+   widen public part admission. W147 qualifies the generic Variant logical
+   kernel, but its discriminator/sparse-arm bulk and physical binding remain
+   closed. Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
    interchangeable capabilities. The general binary descriptor kernel still
@@ -319,7 +337,12 @@ source/runtime identities and executed evidence.
    boundary. W145 now qualifies shared physical LC role binding under explicit
    default-LC/BASIC-Map profiles. W146 admits declared Object LC with independent
    complete parts and selected public consumers within its finite certificate.
-   Next remain declared Variant/Dynamic and broader layout/type products.
+   W147 adds the paired logical Variant prerequisite without widening these
+   persisted consumers. Next qualify generic bulk discriminator/sparse-arm
+   scheduling, including LC occurrence counts and empty-arm mark replay,
+   before physical binding and declared Object Variant/Dynamic. Broader
+   layout/type products remain separate. The proposed native count falsifier
+   is recorded in the W147 frontier, not asserted executed.
    Reuse existing leaf owners only
    after bounded declaration parsing, semantic parameter identity and
    independent physical qualification.

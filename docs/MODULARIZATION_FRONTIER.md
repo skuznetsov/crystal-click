@@ -1,6 +1,18 @@
 # CrystalClick Modularization Frontier
 
-Current architecture checkpoint (2026-10-03): W146 reuses the existing Object
+Current architecture checkpoint (2026-10-03): W147 adds one cohesive
+`BinaryVariantRoster` module/file (106 lines) for bounded normal roster
+canonicalization and strict incoming roster validation. Generic descriptors,
+descriptor codecs, values and value codecs retain their existing owners
+(469/227/303/270 lines). Private measured/name metadata stays with the roster
+owner; no arm-specific class family or legacy facade branch is added.
+The immutable cached membership fact supports persisted-profile guards,
+without replacing bounded codec traversal. W147's logical compatibility
+certificate is separate from bulk/physical/Object admission in
+[VARIANT_VALUE_KERNEL_FRONTIER.md](VARIANT_VALUE_KERNEL_FRONTIER.md).
+This checkpoint does not complete the large-facade decomposition.
+
+W146 reuses the existing Object
 recursive descriptor/text owners (475/495 lines), generic physical binder
 (372 lines), Object physical plan (300 lines) and column writer/file reader
 (235/746 lines). Declared LC policy, role-owned dictionary prefixes and

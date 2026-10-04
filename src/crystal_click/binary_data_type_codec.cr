@@ -29,6 +29,14 @@ module CrystalClick
         preflight_descriptor_children(type, context)
         context.ensure_depth(depth + 1)
         write_to(type.child_at(0), context, depth + 1)
+      when BinaryDataType::TAG_VARIANT
+        count = type.child_count
+        context.preflight_children(count.to_u64)
+        context.ensure_depth(depth + 1)
+        context.write_var_uint(count.to_u64)
+        count.times do |index|
+          write_to(type.child_at(index), context, depth + 1)
+        end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = type.child_count
         context.charge_elements(count.to_u64) unless count == 0
@@ -123,6 +131,22 @@ module CrystalClick
         rescue ex : ArgumentError
           context.corrupt!("invalid Map child types: #{ex.message}")
         end
+      when BinaryDataType::TAG_VARIANT
+        raw_count = context.read_var_uint
+        if raw_count == 0_u64 || raw_count > BinaryVariantRoster::MAX_ARMS.to_u64
+          context.corrupt!("Variant wire roster must contain between 1 and 255 arms")
+        end
+        count = context.preflight_metadata(
+          raw_count,
+          1_u64,
+          BinaryVariantRoster::MAX_ARMS.to_u64,
+          "Variant arm count"
+        )
+        context.ensure_depth(depth + 1)
+        arms = Array(BinaryDataType).new(count) do
+          read_from(context, depth + 1)
+        end
+        BinaryDataType.variant_from_wire(arms, context, depth)
       else
         if recognized_but_unsupported?(tag)
           context.unsupported!("ClickHouse binary DataType tag 0x#{tag.to_s(16)} is valid but not admitted")

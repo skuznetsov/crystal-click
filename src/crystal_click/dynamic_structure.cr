@@ -22,6 +22,9 @@ module CrystalClick
       seen = Set(String).new
       seen.add(names[0])
       @types.each do |type|
+        if type.contains_variant?
+          raise ArgumentError.new("Variant-containing alternatives are not admitted in Dynamic V3")
+        end
         if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE
           raise ArgumentError.new("top-level Nothing and Nullable are not admitted in Dynamic V3")
         end

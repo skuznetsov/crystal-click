@@ -51,6 +51,15 @@ between the stated revisions. They do not admit new Object schemas/layouts,
 qualify the current-master executable, or establish performance. Refresh this
 record when relevant sources or upstream HEAD change.
 
+### Descriptor continuity boundary
+
+Root also inspected `src/DataTypes/DataTypesBinaryEncoding.h:62-77` for W147.
+The table explicitly reserves 0x33/0x35 after timezone-bearing Time/Time64
+descriptors were removed; it does not promise only additive descriptor changes.
+W147 preserves these reserved-tag refusals. Source construction, logical wire
+encoding and persisted part framing are separate compatibility surfaces, and
+each qualification retains its source and executable identities.
+
 ## Earlier October 3 source snapshot (f86ca42b)
 
 Use this separate checkout for new source comparisons:

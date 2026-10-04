@@ -60,6 +60,13 @@ module CrystalClick
       @budget.element_count
     end
 
+    # Internal shared budget access for bounded Variant roster-name work.
+    # This is intentionally the same operation budget used for wire bytes and
+    # recursive descriptor/value traversal.
+    def budget : BinaryCodecBudget
+      @budget
+    end
+
     def visit_node(depth : Int) : Nil
       @budget.visit_node(depth)
     end

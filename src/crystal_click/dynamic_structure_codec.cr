@@ -91,6 +91,9 @@ module CrystalClick
       end
 
       types.each do |type|
+        if type.contains_variant?
+          context.unsupported!("Variant-containing alternatives are not admitted in Dynamic V3")
+        end
         if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE
           context.unsupported!("top-level Nothing and Nullable are not admitted in Dynamic V3")
         end

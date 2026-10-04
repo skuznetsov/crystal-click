@@ -32,6 +32,13 @@ module CrystalClick
                  add(16_u64, children[0][0])
                when BinaryDataType::TAG_MAP
                  add(7_u64, add(children[0][0], children[1][0]))
+               when BinaryDataType::TAG_VARIANT
+                 total = 9_u64 # "Variant(" plus closing parenthesis
+                 type.child_count.times do |index|
+                   total = add(total, children[index][0])
+                   total = add(total, 2_u64) if index > 0
+                 end
+                 total
                when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
                  total = 7_u64
                  type.child_count.times do |index|

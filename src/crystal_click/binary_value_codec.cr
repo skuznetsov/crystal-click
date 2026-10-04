@@ -36,7 +36,7 @@ module CrystalClick
       allow_low_cardinality : Bool = true,
     ) : Bytes
       BinaryDataTypeCodec.write_to(value.type, context)
-      reject_borrowed_low_cardinality!(value.type, context) unless allow_low_cardinality
+      reject_borrowed_type!(value.type, context) unless allow_low_cardinality
       if value.type.tag == BinaryDataType::TAG_NOTHING
         unless value.is_null?
           context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
@@ -65,7 +65,7 @@ module CrystalClick
       allow_low_cardinality : Bool = true,
     ) : BinaryValue
       type = BinaryDataTypeCodec.read_from(context)
-      reject_borrowed_low_cardinality!(type, context) unless allow_low_cardinality
+      reject_borrowed_type!(type, context) unless allow_low_cardinality
       if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(1)
         value = BinaryValue.null(type)
@@ -148,6 +148,17 @@ module CrystalClick
         context.preflight_children(1_u64)
         context.ensure_depth(depth + 1)
         write_value(value.child_at(0), context, depth + 1)
+      when BinaryDataType::TAG_VARIANT
+        if value.is_null?
+          context.write_byte(0xff_u8)
+        else
+          index = value.variant_index? || context.unsupported!("non-NULL Variant value has no arm discriminator")
+          child = value.variant_child? || context.unsupported!("non-NULL Variant value has no selected child")
+          context.preflight_children(1_u64)
+          context.ensure_depth(depth + 1)
+          context.write_byte(index)
+          write_value(child, context, depth + 1)
+        end
       else
         width = type.fixed_width || context.unsupported!("unsupported scalar DataType")
         unless value.byte_size == width
@@ -224,6 +235,22 @@ module CrystalClick
         context.ensure_depth(depth + 1)
         child = read_value(type.child_at(0), context, depth + 1)
         BinaryValue.low_cardinality(type, child)
+      when BinaryDataType::TAG_VARIANT
+        index = context.read_byte
+        if index == 0xff_u8
+          BinaryValue.variant_null(type)
+        elsif index.to_u64 >= type.child_count.to_u64
+          context.corrupt!("Variant discriminator is outside its declared arm roster")
+        else
+          context.preflight_children(1_u64)
+          context.ensure_depth(depth + 1)
+          child = read_value(type.child_at(index.to_i), context, depth + 1)
+          begin
+            BinaryValue.variant(type, index.to_i, child)
+          rescue ex : ArgumentError
+            context.corrupt!("invalid selected Variant value: #{ex.message}")
+          end
+        end
       else
         width = type.fixed_width || context.unsupported!("unsupported scalar DataType")
         raw = context.read_slice(width.to_u64)
@@ -231,7 +258,10 @@ module CrystalClick
       end
     end
 
-    private def self.reject_borrowed_low_cardinality!(type : BinaryDataType, context : BinaryCodecContext) : Nil
+    private def self.reject_borrowed_type!(type : BinaryDataType, context : BinaryCodecContext) : Nil
+      if type.contains_variant?
+        context.unsupported!("Variant is outside the borrowed persisted-envelope profile")
+      end
       if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
         context.unsupported!("LowCardinality is outside the borrowed persisted-envelope profile")
       end
