@@ -12,6 +12,13 @@ diff checks pass; the scoped hostile verdict is ROBUST. Physical binding,
 declared Object Variant/Dynamic and new public part profiles remain closed.
 See [VARIANT_RECURSIVE_BULK_FRONTIER.md](VARIANT_RECURSIVE_BULK_FRONTIER.md).
 
+Separate architecture checkpoint: the existing public writer JSON typed-path
+descriptor and alias have moved unchanged to their own 17-line owner. Root
+passes two standalone constructor/import examples and 67 adjacent examples
+in each of DEBUG and RELEASE, with exact moved-body/facade/loader checks.
+No type, physical profile or writer behavior changes; the large facade refactor
+remains open. See [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
 Previous logical checkpoint: W147 adds paired generic Variant
 descriptors and owned RowBinary values, with canonical arm identity, NULL and
 legal recursive compositions. Root passes 62 focused DEBUG, 503 affected
@@ -333,12 +340,11 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,786 lines; the reader/writer remain 15,985/25,991 lines.
+   is 6,786 lines; the reader/writer are now 15,985/25,977 lines.
    W148 separates the full-mark LC occurrence scheduler from its thin replay
-   dispatcher. The next narrow writer extraction is the existing public
-   `WidePartWriter::JSONTypedPathColumn` and associated value alias, preserving
-   exact constructor semantics. Then remain legacy shared schema/substream
-   planning, physical
+   dispatcher. The existing public `WidePartWriter::JSONTypedPathColumn`
+   and associated value alias now have their own owner with exact constructor
+   semantics. Next remain legacy shared schema/substream planning, physical
    I/O/validation, leaf codecs and thin table/catalog adapters. Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,

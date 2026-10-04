@@ -6,20 +6,6 @@ module CrystalClick
   # format maximum per granule so its output stays within this repository's
   # table-reader materialization bound as well as the frame decoder's bounds.
   module WidePartWriter
-    alias JSONTypedPathValue = Int8 | Int16 | Int32 | Int64 | UInt8 | UInt16 | UInt32 | UInt64 | Float32 | Float64 | String
-
-    # One declared scalar JSON typed path. The explicit type name is checked
-    # against every value before any staging directory is created.
-    struct JSONTypedPathColumn
-      getter name : String
-      getter type_name : String
-      getter values : Array(JSONTypedPathValue)
-
-      def initialize(@name : String, @type_name : String, values : Array(T)) forall T
-        @values = values.map { |value| value.as(JSONTypedPathValue) }
-      end
-    end
-
     MAX_ROWS_PER_MARK                      = 65_536
     MAX_LOW_CARDINALITY_KEYS               =    256
     MAX_LOW_CARDINALITY_DICTIONARY_BYTES   = 64_i64 * 1024 * 1024

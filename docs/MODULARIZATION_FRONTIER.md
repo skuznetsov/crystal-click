@@ -1,6 +1,52 @@
 # CrystalClick Modularization Frontier
 
-Current architecture checkpoint (2026-10-03): W148 separates one cohesive
+Current architecture checkpoint (2026-10-03): the existing public writer
+`JSONTypedPathColumn` struct and its value alias now live in the single
+17-line `wide_part_writer/json_typed_path_column.cr` owner. Qualified names,
+generic constructor, allowed values and array-container copy semantics are
+unchanged. The root entry point explicitly requires this owner before the
+writer facade, which is now 25,977 lines. This small navigation improvement
+does not complete the facade refactor or add validation, types or profiles.
+
+Root checked the move against `238e0b2`: the inner alias/struct body is byte
+identical, the facade remainder is byte identical, and the loader differs by
+exactly one correctly ordered require. The moved inner body SHA-256 is
+`2dcb26a03212ec8a1b5da5d265c97869f5cc327e303d8e9387c3d245b2c09080`.
+The four affected source/spec paths use W148's sorted-path fingerprint format:
+`8ba0bae0fec63c4c6a9adcd568afedee03b7dcdb69b29d3f832e5df7fef74f4d`.
+
+Root executes two standalone-import characterization examples, then 67 DEBUG
+and 67 RELEASE examples across twelve unique adjacent spec files together;
+all pass with zero failures/errors/pending. The standalone spec imports only
+`spec` and the new owner: all eleven alias members retain nominal runtime
+types, empty/homogeneous/heterogeneous arrays work, embedded NUL is retained,
+and caller slot reassignment does not alter the copied array. Final formatter
+and diff checks pass. Scoped hostile verdict: ROBUST for this exact ownership
+move, not a deep-copy/immutability, schema-validation or compatibility widening
+claim. W148's complete inventory and stock evidence were executed before this
+extraction; neither is presented as a rerun at the extraction state.
+
+Replay the standalone `spec/wide_part_writer_json_typed_path_column_spec.cr`,
+then that file plus `wide_part_writer_json_typed_general`,
+`wide_part_writer_json_typed`, `json_typed_path_scan`,
+`object_column_writer_w127`, `object_column_writer_w127_root`,
+`object_part_writer_w128`, `object_part_writer_w128_root`,
+`binary_variant_bulk_w148`, `binary_variant_bulk_w148_adversary`,
+`binary_variant_value_w147`, and `binary_variant_value_w147_adversary`
+(`spec/` prefix and `_spec.cr` suffix). Use W148's serial guarded compiler
+flags; repeat the adjacent set with `--release --no-debug`. Captured logs in
+`/private/tmp/crystal-click-w148.r9IBwB/` have SHA-256:
+
+- `owner-standalone-final.log`: `397cae57e18a73a9bde67522f02f6534dfc89d0d278a6646d4179f90d832e1ac`;
+- `owner-focused.log`: `9207d19f9d4ddeeccf7de6c6d84511cdc47f685b9f4da78cb04eeb8826ea9546`;
+- `owner-release.log`: `0d63a93c1e0f56fb8930e51c6c61ca1633d509911659d6feff872387515172d4`.
+
+Atomic local commit over clean `238e0b2`; rollback by reverting only this
+extraction commit. Refresh the certificate if the owner body, loader order,
+constructor contract or consumers change. Next decompose legacy shared
+schema/substream planning, I/O validation and orchestration by responsibility.
+
+Previous architecture checkpoint: W148 separates one cohesive
 `BinaryBulkLowCardinalityOccurrenceSchedule` module/file (311 lines) for
 full-mark structural census and logical preflight. The LC site decoder is a
 50-line dispatch/replay owner; `BinaryBulkTypePlan` is 468 lines and keeps
@@ -12,9 +58,9 @@ DEBUG, 517 affected RELEASE and 2,434 complete-inventory examples (378 unique
 files, sixteen serial disjoint groups). Final verification, stock exchange
 and compatibility scope are recorded in the separate
 [W148 frontier](VARIANT_RECURSIVE_BULK_FRONTIER.md).
-The next bounded extraction is the existing writer JSON typed-path input
-descriptor and associated alias, retaining its public qualified name and
-constructor. This is not full writer orchestration or facade decomposition.
+The subsequent extraction above moves the existing writer JSON typed-path
+input descriptor and alias. Neither checkpoint completes writer orchestration
+or facade decomposition.
 
 Previous architecture checkpoint: W147 adds one cohesive
 `BinaryVariantRoster` module/file (106 lines) for bounded normal roster
