@@ -17,6 +17,131 @@ checks where relevant, baseline characterizations and affected consumer tests.
 Serialization bytes, pre-callback refusals and publication rollback remain
 invariants. A shorter facade by itself is not a modularity or speed certificate.
 
+## Object column lane binder plan (2026-10-04)
+
+Status: executed; the scoped certificate and exact inventory follow below.
+Baseline: clean `e3ffd24`. Risk: CAUTION (persisted
+physical stream composition). Rollback: one atomic local refactor commit;
+no push or history rewrite. This neutral ownership move prepares declared
+Object Dynamic integration but does not admit it.
+
+Move only `bind_lanes`, `add_bulk_lanes!`, `preflight_variant_prefixes!` and
+`add_lane!` from `ObjectDocumentColumnWriter` into one private stateless
+`ObjectDocumentColumnWriter::LaneBinder` class/file at
+`src/crystal_click/object_document_column_writer/lane_binder.cr`. Keep
+same-signature private facade wrappers for the two methods called by
+`encode`, their order, supplied plans/streams, shared budget, exact roster,
+prefix adaptation and errors. Filename preflight, statistics recomputation,
+compression/transport budgets and returned files stay in the writer facade.
+The owner retains no resources or buffers between calls.
+
+DoD: run new opt-in dispatch characterizations on unchanged production,
+then after extraction; compare moved bodies and complete facade remainder
+against the baseline; execute the affected Object writer, Variant/prefix,
+LC and complete-part regression inventory in DEBUG and RELEASE under the
+serial guard (`spec --single-module --threads 1 --link-flags=-fuse-ld=ld
+--error-trace`; RELEASE adds `--release --no-debug`). Every group must exit 0
+with zero failures/errors/pending. Check private visibility, formatter and
+diff hygiene. Root independently reconciles inventory and observed results.
+
+Strongest failure: bypassing/reordering prefix admission while generated
+values remain correct. Seed a direct-owner facade bypass in scratch or a
+reversible local mutation; require the characterization to reject it and
+restore before final gates. Existing W127 literal files/marks and W151
+Variant prefix/readback tests guard persisted fidelity. This is not a new
+native ATTACH/CHECK certificate, whole-project modularization or performance
+claim. Refresh after owner/facade/loader/caller/prefix/roster changes.
+
+## Object column lane binder executed certificate (2026-10-04)
+
+Status: VERIFIED for this neutral ownership move only. Root's scoped hostile
+verdict is ROBUST after independent source comparison, guarded execution and
+a behavioral bypass control. Luna implementation/review are correlated
+supporting evidence, not independent execution. Baseline:
+`e3ffd24a76c2147d24f51c7d10e5aaddfa6bbd02`.
+
+One private stateless 178-line `LaneBinder` class/file owns the four methods.
+The Object column writer is 123 lines, down from 278. Its private facade
+signatures, original unqualified `encode` calls and prefix-before-binding
+order remain. Statistics, codec and transport orchestration, file-name
+admission, compression and returned-file ownership remain in the facade.
+Borrowed lane buffers keep their existing stream owners and are copied into
+compressed pairs before the operation returns. There is no retained owner
+instance/state. The 25,202/15,726/6,786-line general writer/reader/table facades
+are unchanged; neither overall modularity nor performance is qualified.
+
+Root observed:
+
+- Existing baseline: 20 examples, zero failures/errors/pending. The expanded
+  baseline and post-extraction each pass 23 examples, including three new
+  characterizations. Preparation corrected a test-only namespace and a missing
+  checksum sidecar on unchanged production; neither was a production failure.
+- The opt-in probe pins `preflight -> bind` dispatch, physical/fresh-plan/stream
+  identity and one shared statistics/codec/prefix budget. Prefix admission
+  adds exactly 8 wire bytes and three K+1 coordinates, no nodes. Exact capacity
+  succeeds; one-byte and one-coordinate deficits refuse without partial charge.
+  The seven literal physical names, BASIC header/discriminator bytes, three
+  raw adaptive mark triples and full/middle public readback are checked.
+  The public declared Dynamic schema fence remains closed.
+- All 94 examples in the 16 unique files below pass in each of DEBUG and
+  RELEASE, in two serial disjoint groups of eight files and 47 examples each.
+  Four guard exits are 0, with zero failures/errors/pending. Root separately
+  reconciles observed logs/counts, exact membership and final source/spec
+  SHA-256 hashes, identical across both modes. This is the affected inventory,
+  not a whole-project rerun or a new stock qualification.
+- The comparator matches all four moved bodies byte-exactly except indentation
+  and internal visibility, both same-signature facade delegates, the complete
+  facade remainder and the single ordered require. An in-memory changed-error
+  control is rejected. Statistics/codec ordering and the codec plan argument
+  are not separately timeline-instrumented by this probe: the unchanged facade
+  comparison closes that risk for this extraction only.
+- A temporary direct-owner bind call preserves generated binding but loses
+  facade dispatch. The characterization rejects it: three examples, one
+  failure, zero errors/pending; expected `[preflight, bind]`, observed
+  `[preflight]`. Root restores the call before both final gates and rechecks
+  source equality. An external owner reference refuses specifically with
+  `private constant CrystalClick::ObjectDocumentColumnWriter::LaneBinder
+  referenced`. Four-file format check and diff hygiene pass.
+
+Commands: isolated-cache serial guard with `spec --single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace`; RELEASE adds `--release --no-debug`.
+Test guards allow 600 seconds/12 GiB process-tree RSS and require 50 percent
+system-free memory; these are execution limits, not performance measurements.
+Root runs `ruby /private/tmp/crystal-click-lane-binder.L6T6UV/run_gates.rb
+debug final-debug` and the corresponding `release final-release`, then
+`reconcile.rb` and `check_exact_move.rb`. Scratch scripts/logs are temporary
+aids, not permanent execution certificates; refresh by rerunning the recorded
+inventory and arguments. The test's zero-hash v4 sidecar supplies size metadata,
+not hash validation, complete-part or native ATTACH/CHECK evidence.
+
+Sorted inventory (split after entry eight):
+
+```text
+spec/binary_bulk_physical_prefix_w151_spec.cr
+spec/binary_variant_physical_w149_adversary_spec.cr
+spec/binary_variant_physical_w149_spec.cr
+spec/object_column_lane_binder_refactor_spec.cr
+spec/object_column_reader_w129_spec.cr
+spec/object_column_writer_w127_root_spec.cr
+spec/object_column_writer_w127_spec.cr
+spec/object_declared_variant_w151_spec.cr
+spec/object_file_reader_w126_root_spec.cr
+spec/object_low_cardinality_consumers_w146_spec.cr
+spec/object_part_writer_w128_root_spec.cr
+spec/object_part_writer_w128_spec.cr
+spec/object_statistics_w127_spec.cr
+spec/object_variant_consumers_w151_spec.cr
+spec/object_variant_prefix_w151_adversary_spec.cr
+spec/object_variant_w151_root_probe_spec.cr
+```
+
+Refresh after owner, facade, loader, caller, prefix, roster or budget changes.
+Capability return point is W157's retained per-site statistics offsets ->
+W158 declared Object Dynamic integration, which must preserve exact child
+rosters, first-parse results and per-child metadata marks. It is not admitted
+here. Broad type products, MV/projections and large-facade decomposition remain
+open; performance work remains after the capability prerequisites.
+
 ## Typed writer readback selector plan (2026-10-04)
 
 Status: executed; the scoped certificate and exact inventory follow below.

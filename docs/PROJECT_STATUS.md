@@ -17,8 +17,9 @@ passes literal bytes/rosters/names/hashes, paired offsets and three real plus
 one terminal mark. Independent Ruby decoding confirms the native mark triples;
 two scratch-only wrong-offset controls fail their intended assertions. This
 is finite retained-fixture evidence, not a new server run or complete-part
-qualification. Current shallow source is `db9010c9`; the separately pinned
-stock producer remains build `d9bcb5ab`. Typed Object Dynamic, broader
+qualification. The refreshed comparison source is `895d13ea` (unbuilt;
+DataTypes/Serializations match the previous `db9010c9` snapshot); the separately
+pinned stock producer remains build `d9bcb5ab`. Typed Object Dynamic, broader
 MV/projection coverage, overall modularization and performance remain open.
 The getter is not a provenance-certifying envelope; Object integration must
 bind its exact stream and preserve the first parse result. Scope and refresh
@@ -167,7 +168,26 @@ Scoped hostile verdict: ROBUST. Exact gates, source/runtime identities,
 zero-window semantics and residual limits are sealed in
 [OBJECT_DECLARED_VARIANT_FRONTIER.md](OBJECT_DECLARED_VARIANT_FRONTIER.md).
 
-Current architecture checkpoint (2026-10-04): the writer's scalar/nullable
+Current architecture checkpoint (2026-10-04): Object column physical lane
+binding belongs to one private stateless 178-line `LaneBinder` class/file.
+The column facade is 123 lines, down from 278; same-signature private delegates
+preserve the original prefix-before-binding dispatch and shared operation
+budget. Statistics/codec/transport orchestration and buffer lifetimes stay
+unchanged. Root passes 23 baseline and post-extraction examples, then all 94
+affected examples in each of DEBUG and RELEASE (16 unique files, two serial
+disjoint groups per mode), with zero failures/errors/pending and four guard
+exits 0. Exact moved-body/facade/loader comparison, final source/spec hash
+reconciliation, private visibility, formatting and hygiene pass. A seeded
+direct-owner bypass loses the facade trace and fails its intended assertion;
+root restores it before final gates. Scoped hostile verdict: ROBUST for this
+neutral ownership move only. The general writer/reader/table remain
+25,202/15,726/6,786 lines; overall modularization is still open. No new declared
+Dynamic, complete-part, native oracle, full-inventory or performance
+qualification follows. W158 declared Object Dynamic is the capability return
+point; exact scope and refresh conditions are in
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Previous architecture checkpoint (2026-10-04): the writer's scalar/nullable
 typed staged-readback selectors belong to one private stateless 289-line
 `TypedMarkReadback` class/file. Same-signature private facade wrappers retain
 generic type inference and the original module/supplied-reader dispatch.

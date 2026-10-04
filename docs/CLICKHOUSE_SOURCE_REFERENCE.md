@@ -1,6 +1,55 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-04, fourth refresh)
+## Current source snapshot (2026-10-04, fifth refresh)
+
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-895d13ea`
+for new source comparisons. Root cloned public master with
+`--depth 1 --single-branch --branch master --no-tags` under the serial memory
+guard (exit 0). Both upstream lookups returned
+`895d13ea4ce8abb811b3b1b3d51b23a466a342a9`; the checkout has that revision,
+committer timestamp `2026-10-04T17:26:48Z`, one reachable commit, shallow
+status `true`, and a clean working tree. Existing checkouts were not modified;
+submodules were not initialized.
+
+Root ran recursive `git diff --no-index --stat` against `db9010c9` for five
+directories. `src/DataTypes` (including all serializers), `src/Columns` and
+`src/Compression` returned exit 0 with identical contents. MergeTree has one
+changed file (7 insertions, 3 deletions): the inspected `checkKeyExpression`
+diff adds offending names/types to existing rejection messages. Formats has
+two changed files (47 insertions): the inspected diff adds
+`getFormatSettingsHash`, not a persisted type serializer. These are bounded
+working-tree content comparisons, not a history-ancestry, executable,
+lifecycle or performance qualification. This snapshot is unbuilt; retained
+stock runtime certificates keep their separate build identity.
+
+### Declared Dynamic Object integration source anchors
+
+Root inspected the current source independently after Luna's bounded audit:
+`DataTypeObject.cpp:865-877` passes a declared path type to `DataTypeFactory`
+without a Dynamic exclusion. The direct MergeTree regression
+`tests/queries/0_stateless/03214_json_typed_dynamic_path.sql:3-17` uses
+`JSON(a Dynamic)` with scalar and array-valued rows and both Wide and Compact
+parts. This is source evidence, not an executed qualification of this library
+or of a declared `Array(Dynamic)` path.
+
+`ISerialization.cpp:369-408` gives the child metadata basename
+`json.a.dynamic_structure`; `ObjectData` contributes no filename segment.
+`SerializationObject.cpp:971-1007` delegates typed-path suffixes to their
+nested serializer, while `SerializationDynamic.cpp:529-554` writes the child
+statistics to its own DynamicStructure. Object and child statistics are
+distinct sites. Both V3 structure versions use wire value 4, whereas value 3
+is Native-only FLATTENED (`SerializationObject.h:41-57`,
+`SerializationDynamic.h:40-52`). W158 must preserve exact child rosters,
+first-parse results and per-child relative statistics offsets; no Object type
+admission changes follow from this audit.
+
+Refresh after relevant source changes; do not clone an unchanged snapshot
+solely because a goal turn resumed. Type-family continuity is not exclusively
+additive wire-format evolution: the current descriptor table still reserves
+removed timezone-bearing Time tags 0x33/0x35. Versions, settings, framing and
+recursive products need separate paired reader/writer evidence.
+
+## Previous source snapshot (2026-10-04, fourth refresh)
 
 Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-db9010c9`
 for new source comparisons. Root observed public master HEAD
