@@ -11,8 +11,15 @@ module CrystalClick
       getter structure : DynamicStructure
       getter depth : Int32
       getter arms : Array(BinaryDataType)
+      getter statistics_offset : Int32
 
-      def initialize(@type : BinaryDataType, @structure : DynamicStructure, @depth : Int32, @arms : Array(BinaryDataType))
+      def initialize(
+        @type : BinaryDataType,
+        @structure : DynamicStructure,
+        @depth : Int32,
+        @arms : Array(BinaryDataType),
+        @statistics_offset : Int32,
+      )
       end
     end
 
@@ -131,6 +138,15 @@ module CrystalClick
     def structure_for(path : String) : DynamicStructure
       site = @sites[path]? || raise(KeyError.new("Dynamic site not found: #{path.inspect}"))
       site.structure
+    end
+
+    # Byte offset of the statistics flag relative to this site's structure
+    # blob. Use only with exact decoded bytes or bytes emitted by this plan.
+    # Writer plans retain the offset from planning serialization; reader plans
+    # retain it from the exact per-site bytes parsed during discovery.
+    def statistics_offset_for(path : String) : Int32
+      site = @sites[path]? || raise(KeyError.new("Dynamic site not found: #{path.inspect}"))
+      site.statistics_offset
     end
 
     def arm_count(path : String) : Int32
@@ -405,10 +421,10 @@ module CrystalClick
           raise ArgumentError.new("Dynamic structure site path is duplicated")
         end
 
-        DynamicStructureCodec.write_to(structure, context, depth, depth + 1)
+        statistics_offset = DynamicStructureCodec.write_with_statistics_offset(structure, context, depth, depth + 1)
         charge_shared_variant_arm(context, depth + 1)
         arms = canonical_arm_types(structure, context, depth + 1)
-        sites[path] = Site.new(type, structure, depth, arms)
+        sites[path] = Site.new(type, structure, depth, arms, statistics_offset)
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
           discover_write_sites(arm, child, depth + 1, structures, context, sites)
@@ -456,11 +472,13 @@ module CrystalClick
 
         bytes = streams.structure_bytes_for(path)
         structure_context = BinaryCodecContext.new(context.limits, bytes, false, context.budget, false, false)
-        structure = DynamicStructureCodec.read_from(structure_context, depth, depth + 1, true)
+        structure, statistics_offset = DynamicStructureCodec.read_with_statistics_offset(
+          structure_context, depth, depth + 1, true,
+        )
         structure_context.ensure_consumed
         charge_shared_variant_arm(context, depth + 1)
         arms = canonical_arm_types(structure, context, depth + 1)
-        sites[path] = Site.new(type, structure, depth, arms)
+        sites[path] = Site.new(type, structure, depth, arms, statistics_offset)
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
           discover_read_sites(arm, child, depth + 1, streams, context, sites)

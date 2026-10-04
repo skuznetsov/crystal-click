@@ -1,9 +1,35 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-04, third refresh)
+## Current source snapshot (2026-10-04, fourth refresh)
 
-Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-b94acbe3`
-for new source comparisons. Root cloned public `ClickHouse/ClickHouse` master
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-db9010c9`
+for new source comparisons. Root observed public master HEAD
+`db9010c9dd7cc78968fb077c967b915fc6166a7b` at 17:47 UTC and cloned with
+`--depth 1 --single-branch --branch master --no-tags` under the serial memory
+guard (exit 0). The checkout has that revision, committer timestamp
+`2026-10-04T16:40:46Z`, one reachable commit, shallow status `true`, and a
+clean working tree. A post-clone upstream lookup returns the same revision.
+Existing checkouts were not modified; submodules were not initialized.
+
+Root independently ran recursive `git diff --no-index --stat` against
+`b94acbe3` for five directories. `src/DataTypes`, `src/Columns`,
+`src/Formats` and `src/Compression` each returned exit 0 with no differences.
+`src/Storages/MergeTree` returned exit 1: 32 changed files, 3,399 insertions,
+126 deletions, including new `ColumnsCache` files/tests and substantial Wide
+reader changes. This is content comparison, not an exhaustive lifecycle,
+cache, physical-format or performance qualification. W157 separately checks
+the Dynamic suffix and Wide real/final-mark ordering: the Wide writer is
+unchanged, and no relevant mark-law drift was found in the bounded audit.
+The snapshot is unbuilt; retained executable certificates keep their separate
+build identity.
+Freshness is time-scoped and must be rechecked after relevant upstream changes.
+The reserved-descriptor and version/profile limitations below still apply.
+
+## Previous source snapshot (2026-10-04, third refresh)
+
+The previous comparison used
+`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-b94acbe3`.
+Root cloned public `ClickHouse/ClickHouse` master
 with `--depth 1 --single-branch --branch master --no-tags` after observing
 upstream HEAD `b94acbe318f8459ac88b35647f4e2293d8e225db`.
 The checkout has that revision, committer timestamp `2026-10-04T07:12:25Z`,

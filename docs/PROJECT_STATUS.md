@@ -1,6 +1,31 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W156 adds an explicit
+Current capability checkpoint (2026-10-04): W157 retains each validated Dynamic
+site's relative statistics-flag offset in `BinaryDynamicBulkPlan`, captured
+during the existing writer/parser pass under its shared budget. The strict
+getter distinguishes the per-site boundary from EOF and cumulative dry-write
+positions; raw structure envelopes do not certify supplied offsets. Root
+passes 90 focused DEBUG examples (17 unique specs, two disjoint groups) and
+246 affected RELEASE examples (37 unique specs, four disjoint groups), and
+2,590 complete-inventory examples (408 unique specs, 41 disjoint non-release
+groups with `--no-debug`), all with zero failures/errors/pending and exit 0.
+Root independently reconciles observed logs/counts, inventory and current
+source/spec hashes; formatter and hygiene pass. Scoped hostile verdict:
+ROBUST for retained offsets and the finite stock fixture only.
+A read-only check over five original W156 stock metadata streams
+passes literal bytes/rosters/names/hashes, paired offsets and three real plus
+one terminal mark. Independent Ruby decoding confirms the native mark triples;
+two scratch-only wrong-offset controls fail their intended assertions. This
+is finite retained-fixture evidence, not a new server run or complete-part
+qualification. Current shallow source is `db9010c9`; the separately pinned
+stock producer remains build `d9bcb5ab`. Typed Object Dynamic, broader
+MV/projection coverage, overall modularization and performance remain open.
+The getter is not a provenance-certifying envelope; Object integration must
+bind its exact stream and preserve the first parse result. Scope and refresh
+conditions are in
+[DYNAMIC_STATISTICS_OFFSETS_FRONTIER.md](DYNAMIC_STATISTICS_OFFSETS_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W156 adds an explicit
 `BinaryDynamicBulkPhysicalPlan` for prepared per-occurrence actual rosters.
 It separates structure/data names and data-prefix ownership, preserves
 recursive Array levels and LC stop-site accounting, and refuses physical
@@ -405,6 +430,11 @@ source/runtime identities and executed evidence.
   detached complete structure blobs. Paired structure decode/encode and
   logical role rosters are available under shared operation budgets. See
   [the W154 frontier](DYNAMIC_BULK_STRUCTURE_FRONTIER.md).
+  W157's `statistics_offset_for(path)` retains the relative pre-statistics-flag
+  position for exact decoded bytes or the same plan's emitted structure,
+  including an absent-statistics flag. It does not itself certify arbitrary
+  stream binding. See
+  [the W157 frontier](DYNAMIC_STATISTICS_OFFSETS_FRONTIER.md).
 - `BinaryDynamicBulkCodec` and `BinaryDynamicBulkStreams` pair those structures
   with normalized generic Dynamic values and complete per-role mark grids.
   Exact stored-site rosters control ordinary versus SharedVariant selection;
@@ -595,7 +625,9 @@ source/runtime identities and executed evidence.
    W154 adds actual per-occurrence structure/roster planning and W155 pairs it
    with normalized bulk values and complete mark grids. W156 adds explicit
    physical binding with a finite single-stream/BASIC/Dynamic V3 stock
-   certificate in borrowed Wide envelopes. Other physical products,
+   certificate in borrowed Wide envelopes. W157 retains the per-site
+   statistics-flag boundary needed by metadata marks; it does not migrate
+   those consumers or admit Object Dynamic. Other physical products,
    independently authored general complete parts and declared Object Dynamic
    remain separate open frontiers. Equal nominal Dynamic types do not imply
    equal per-part or per-site state.
@@ -682,10 +714,11 @@ source/runtime identities and executed evidence.
    actual per-occurrence structure streams and normalized role/site planning.
    W155 now pairs generic Dynamic normalized bulk values and complete mark-grid
    scheduling over that actual state. W156 adds a separate actual-roster
-   physical binder and finite borrowed-envelope qualification. The next
-   prerequisite is preserving statistics offsets in the paired structure
-   owner for metadata marks; ordinary value K+1 grids cannot replace that
-   boundary. Then integrate per-typed-path actual plans and paired storage
+   physical binder and finite borrowed-envelope qualification. W157 now
+   preserves statistics offsets in the paired structure owner for metadata
+   marks; ordinary value K+1 grids cannot replace that boundary. Next bind
+   the exact metadata stream and retain its first parse result, then integrate
+   per-typed-path actual plans and paired storage
    ownership for declared Object Dynamic, with independently authored complete
    parts and stock ATTACH/CHECK/full/middle literal tests. Keep default
    no-roster consumers and unqualified profiles closed.
