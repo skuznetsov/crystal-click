@@ -9,6 +9,22 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
+## Preparatory responsibility separation — W178
+
+The unloaded Count argument-name utility uses two classes/files:
+`BinaryAggregateCountArgumentNameReader` (362 lines) owns bounded recursive
+grammar, and `BinaryAggregateCountArgumentNameParser` (27) owns canonical
+render-back policy. Root compares the reader move exactly after class rename
+and deindent; retained policy differs only in its helper reference. Both
+classes remain outside the default loader and public production admission.
+Five DEBUG and five RELEASE unit examples pass after the move, with immutable
+inputs and child/guard exit 0. The pre-fix negative-Enum assertion fails before
+repair; malformed/composition/name/limit controls pass afterward. This is a
+finite utility certificate, not a decomposition of the large facades, reduced
+coupling/performance proof or broad Count storage capability. Exact scope,
+source/runtime distinction and refresh triggers:
+[AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md](AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md).
+
 ## Latest responsibility separation — W177
 
 Four Count consumer classes have separate files:

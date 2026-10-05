@@ -1,5 +1,21 @@
 # CrystalClick project status
 
+Current investigation (W178, 2026-10-05): production admission remains W177's
+three Count signatures below. A fresh clean depth-1 source snapshot is pinned
+to `29e0e201c786933171818f17c0fefc2bb11ec0a2`, separately from the executed
+stock `d9bcb5ab`. Root hash-checks Luna's 16-file source comparison with no
+differences. A fresh stock diagnostic observes 75 profiles: 65 exact ordinary
+Count lanes, one canonicalized `nothingUInt64` zero-only identity and nine
+server construction refusals; all 409 process/hash records reconcile.
+The bounded canonical argument-name preparation has two classes/files and
+passes five DEBUG and five RELEASE unit examples after an independently
+reproduced negative-Enum failure. It remains unloaded, not new stored-type
+support. The public argument-admission probe still has four assertion REDs and
+is not staged with this preparation. Remaining paired types/layouts, general
+MV/projections, large-facade decomposition and arbitrary-schema writing remain
+open; memory/performance stays deferred. Scope, commands and continuation:
+[AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md](AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md).
+
 Latest capability checkpoint (W177, 2026-10-05): the three exact Count state
 signatures now reach ordinary typed table scans, physical-row windows,
 whole candidate granules and offline column `.values`. Batches and retained
