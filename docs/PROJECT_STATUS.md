@@ -1,5 +1,23 @@
 # CrystalClick project status
 
+Latest architecture checkpoint (R1, 2026-10-05): staged scalar/nullable numeric
+Array validation now has one private stateless 106-line class/file. Both
+private writer signatures and public calls remain unchanged; the retained
+writer remainder is byte-identical to `7251c05`, with only three helper-call
+substitutions in the moved bodies and one loader require. Root passes 225
+DEBUG and 225 RELEASE examples across 25 selected specs, zero failures/errors/
+pending and actual child/guard exit 0. An executed comparison-bypass control
+fails both negative mark-readback assertions; exact restoration, input-hash
+reconciliation, formatting and diff checks pass. Scoped verdict: ROBUST for
+this ownership move, not new type/runtime or performance qualification.
+Writer/reader/table/offline facades remain 25,662/16,284/7,222/4,049 lines;
+overall decomposition is unfinished. The unrelated untracked W175
+AggregateFunction admission RED spec remains untouched and uncompiled.
+Fresh source `095fae58` is separately cloned, clean/shallow and unbuilt;
+source comparison is not a new stock-runtime certificate. Memory/performance
+remains deferred. Scope, rosters, commands and decay:
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md#active-architecture-cleanup--r1).
+
 Latest capability checkpoint (W174, 2026-10-05): W173's explicit flattened
 `Nested` profile now has typed table and separate offline DDL-bound consumers.
 The caller-bound UInt64 key and nominal root/type are validated across every
@@ -1320,15 +1338,16 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1`, revision
-`e9b645ed83ad3c07b64f09fbd014e8f770d8691b` (2026-10-05).
+`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-095fae58`, revision
+`095fae5865df96627496345209d6bbf2013121f3` (2026-10-05).
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Against the previous `41b7bd50` snapshot,
-six files differ in the bounded DataTypes/Columns/MergeTree roster: Dynamic
-recursion guards, Object statistics reuse, empty part-metadata recovery and
-current-only merge/fetch cancellation. Compression, Formats, AggregateFunctions
-and binary descriptor owners are unchanged. No wire encoding change was found
-in that bounded comparison. Unchanged serializers
+comparison and earlier identities. Against the previous `e9b645ed` snapshot,
+DataTypes/Serializations, Columns, Compression, Formats and AggregateFunctions
+are content-identical. Seven MergeTree files differ: bounded part-local
+row-mask update coalescing, partition parsing/pruning checks, text-index
+caching and private reader accessor cleanup. No persisted type/schema
+serialization or storage-format version edit was found in that bounded
+comparison. Unchanged serializers
 do not imply unchanged framing, metadata or lifecycle behavior. This is
 source evidence only: no executable from this checkout has been built or
 qualified. Source identity and the separately pinned executable oracle must

@@ -1,8 +1,41 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-05, seventh refresh)
+## Current source snapshot (2026-10-05, eighth refresh)
 
-Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1` for new comparisons.
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-095fae58`
+for new comparisons. Root cloned public master with `--depth 1
+--single-branch --branch master --no-tags --no-recurse-submodules` under the
+serial memory guard (exit 0). Pre/post-clone upstream lookups and the clean
+checkout agree on `095fae5865df96627496345209d6bbf2013121f3`. The checkout is
+shallow, has one reachable commit, and records committer timestamp
+`2026-10-05T14:52:29Z`. Existing source directories remain untouched.
+
+Root independently compared directory contents against `e9b645ed` after
+Luna's read-only audit. DataTypes (including Serializations), Columns,
+Compression, Formats and AggregateFunctions each return diff exit 0.
+MergeTree has seven modified files, no additions/deletions, 530 insertions
+and 20 deletions: MergeTreeData, MergeTreeIndexText (cpp/h),
+MergeTreeReaderWide (cpp/h), MergeTreeSettings and MutateTask.
+
+The inspected changes include bounded coalescing of adjacent singleton
+row-mask updates during part-local mutation execution (persisted commands
+and versions are unchanged), DateTime64 partition fractional parsing for
+dot-separated dates, table-scope Alias/Ephemeral nondeterminism checks,
+LowCardinality text-index token/posting-builder caching, and private Wide
+reader stream accessors changing from pointers to references. No persisted
+type/schema serialization or storage-format version edit was found in this
+bounded comparison; mutation, pruning and index-construction behavior is
+not thereby qualified.
+
+This tree is unbuilt. Executed compatibility certificates still name their
+separately pinned stock build `d9bcb5ab`, not this snapshot. Recheck after
+relevant upstream changes. Type-family continuity is not exclusively additive
+profile evolution: the current descriptor header still reserves removed
+timezone-bearing Time/Time64 codes `0x33`/`0x35`.
+
+## Previous source snapshot (2026-10-05, seventh refresh)
+
+The previous comparison used `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1`.
 Root cloned public HEAD with `--depth 1 --single-branch --no-recurse-submodules`;
 pre/post-clone upstream lookups and the checkout agree on
 `e9b645ed83ad3c07b64f09fbd014e8f770d8691b`. The checkout is clean, shallow,

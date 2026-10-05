@@ -9,6 +9,94 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
+## Active architecture cleanup — R1
+
+Status: VERIFIED within this behavior-preserving extraction (2026-10-05).
+Baseline: `7251c05`. Overall modularization remains IN_PROGRESS.
+Risk: CAUTION; one atomic local commit is the rollback boundary. Preserve the
+unrelated untracked W175 aggregate-admission spec; no push is authorized.
+
+Extracted only `validate_staged_array_numeric_part` and
+`validate_staged_array_nullable_numeric_part` into one private stateless
+`WidePartWriter::StagedArrayNumericPartValidator`, in
+`wide_part_writer/staged_array_numeric_part_validator.cr`. The bounded
+`rg -n 'validate_staged_array_(nullable_)?numeric_part'
+src/crystal_click/wide_part_writer.cr` inventory finds calls at 1344/2311 and
+definitions at 21308/22565 in the baseline. The two private facade signatures
+and public calls are unchanged; the loader adds exactly one require.
+Synchronous callbacks retain the
+existing mark-count, primary-index and bit-exact row-comparison helpers;
+virtual typed readers stay directly dispatched. No state, reader, buffer or
+callback is retained by the new owner.
+
+Before production edits, root ran
+`spec/staged_array_numeric_validator_r1_spec.cr` on the unchanged facades,
+with W30/W31: 17 examples, zero failures/errors/pending and child/guard exit 0.
+The new characterization covers
+ragged and empty rows, 2/2/1 marks, Float64 NaN/-0 identity and nullable
+elements. A mark-1 returned-value mismatch must stop validation before mark 2
+and leave neither a destination nor a staged part. After extraction, a
+temporary row-comparison bypass in both owner methods produced precisely two
+failures in four examples, zero errors/pending and child/guard exit 1: each
+negative case observed the forbidden mark-2 readback. Root restored the exact
+owner SHA256 `fa324f3ce4a5b2e3965734f2957f437b19115b10f2e9468873daabbcaccc9b9f`.
+Moved bodies compare exactly with only three declared helper substitutions;
+the retained writer remainder is byte-identical to the baseline. Signature,
+loader and body comparisons pass again after restoration.
+
+DoD: root-owned serial guarded `crystal spec` DEBUG/RELEASE gates with the
+new characterization and affected writer/reader/table/catalog consumers,
+isolated caches, `--single-module --threads 1 --link-flags=-fuse-ld=ld
+--error-trace` (RELEASE adds `--release --no-debug`). Require actual child and
+guard exit 0, zero failures/errors/pending, unchanged code inputs, exact-path
+formatting and `git diff --check`. Existing type admission, serialized bytes,
+publication/cleanup and public API are invariants, not new capabilities.
+The strongest counterexample is a moved validator that skips a returned-row
+comparison or loses nominal/null/float identity while still publishing a
+plausible part. A shorter facade is not performance or architecture closure.
+
+Observed DoD: 225 DEBUG and 225 RELEASE examples across the same 25 unique
+specs, zero failures/errors/pending and actual child/guard exit 0. Two disjoint
+rosters each pass in both modes:
+
+- Core (104 examples): `staged_array_numeric_validator_r1_spec.cr`,
+  `wide_part_reader_w30_spec.cr`, `wide_part_reader_w31_spec.cr`, and
+  `wide_part_reader_w39_spec.cr` through `wide_part_reader_w49_spec.cr`
+  inclusive. These cover generic numeric Arrays, nullable Arrays, wide integer
+  and BFloat16 aliases, literal payload/offset bytes and table/catalog consumers.
+- Consumers/seams (121 examples): `staged_typed_numeric_validator_w162_spec.cr`,
+  `staged_typed_string_validator_w165_spec.cr`,
+  `staged_fixed_string_validator_w167_spec.cr`,
+  `wide_part_writer_leaf_seam_spec.cr`,
+  `wide_part_writer_typed_mark_readback_spec.cr`,
+  `wide_part_writer_metadata_w150_spec.cr`, `offline_catalog_spec.cr`,
+  `offline_tui_page_source_spec.cr`, `part_checksums_spec.cr`,
+  `wide_part_table_projection_w87_spec.cr`,
+  `offline_catalog_projection_w87_spec.cr`.
+
+All roster entries are under `spec/`. Exact commands, input hashes and output
+logs are indexed by `core-{debug,release}` and `consumers-{debug,release}`
+records in `/private/tmp/crystal-click-architecture-r1.shwDws`. Root executed
+the serial guard with `/usr/bin/ruby 600 12288 run_gate.rb`, 50% minimum free
+memory, isolated per-gate caches and macOS SDKROOT. The runner invokes
+`crystal spec <one exact roster>` with the DoD flags above. Input hashes and
+log hashes reconcile with final restored source; the unchanged W175 RED spec
+is not selected, staged or counted. Exact four-file format checking and
+`git diff --check` pass. Temporary evidence is an index, not permanent proof;
+rerun those rosters if the scratch records are unavailable.
+
+Root's scoped adversary verdict is ROBUST: exact source comparisons,
+bit/null/ragged mark traces, the executed bypass control and affected literal
+byte/consumer checks support this ownership move. Luna's read-only hostile
+review is supplementary and correlated, not independent verification.
+No fresh stock runtime or benchmark was run. The owner is 106 lines; the
+writer remains 25,662 lines and the larger facades are unchanged. Refresh this
+certificate after either validator, callback, reader dispatch, loader or tested
+profile changes. Broader type/layout admission and the overall architecture
+remain open; callback performance/allocation overhead is not measured.
+
+## Architecture roadmap
+
 The next larger seams are additional writer staged-validation cohorts and
 physical stream binding, followed by reader granule/column orchestration and
 table adapters. W162, W165 and W167 below extract scalar/nullable typed numeric,
@@ -78,18 +166,11 @@ performance improvement. Reader/writer/table/offline facades remain
 and consumer evidence are in
 [FLATTENED_NESTED_CONSUMERS_FRONTIER.md](FLATTENED_NESTED_CONSUMERS_FRONTIER.md).
 
-The next bounded candidate is one Array-numeric staged-validation cohort:
-`validate_staged_array_numeric_part` has one public call at writer line 1286
-and a definition at 21250; `validate_staged_array_nullable_numeric_part` has
-one public call at 2253 and a definition at 22507 (W170 source coordinates).
-Keep both private facade signatures, public call sites, virtual readbacks,
-comparison order and cleanup/publication ownership. Pass only synchronous
-helper callbacks; do not retain borrowed input slices, readers or resources.
-Before moving bodies, add baseline scalar/nullable characterizations and
-readback-mismatch trace controls. Require exact moved-body comparison with
-declared callback substitutions, byte-identical retained facade remainder,
-and affected writer/table/catalog DEBUG/RELEASE gates. This seam is PROPOSED;
-W170/W171 do not execute or certify the Array ownership move.
+R1 above executes the former Array-numeric staged-validation candidate.
+Additional staged-validation cohorts and physical stream binding remain
+proposed. Each needs its own call inventory, baseline characterization,
+resource/dispatch checks and affected consumer gates; R1 does not certify
+those future moves.
 
 W159 adds one cohesive `ObjectDeclaredDynamicSites` module/file for nominal
 site provenance and Object-depth coordinates. It reuses the generic Dynamic
