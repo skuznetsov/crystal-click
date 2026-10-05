@@ -11,8 +11,8 @@ do not add a class hierarchy merely to reduce line counts.
 
 The next larger seams are additional writer staged-validation cohorts and
 physical stream binding, followed by reader granule/column orchestration and
-table adapters. W162 below extracts only scalar/nullable typed numeric staging.
-These are proposed decomposition boundaries, not completed extractions. Each
+table adapters. W162 and W165 below extract scalar/nullable typed numeric and
+String staged-validation cohorts. The larger boundaries remain proposed. Each
 slice needs an explicit call-site inventory, retained-buffer/resource lifetime
 checks where relevant, baseline characterizations and affected consumer tests.
 Serialization bytes, pre-callback refusals and publication rollback remain
@@ -24,6 +24,140 @@ bulk/physical owners instead of adding a class for each Array/Tuple/Map
 combination. Declared actual-arm policy, codec composition, statistics and
 file I/O remain with their existing owners. This 174-line owner does not
 complete decomposition of the large reader/writer/table facades.
+
+## String staged validator extraction — W165
+
+Status: VERIFIED within this behavior-preserving extraction (2026-10-05).
+Baseline: clean `74c53b10ad5da42c548407e0e65548bbb6391ce1`.
+Risk: CAUTION (behavior-neutral validation ownership change).
+Rollback: one atomic local commit after green gates; no push or history rewrite.
+
+Move only the scalar and outer-Nullable String staged-validation bodies into
+one private stateless `WidePartWriter::StagedTypedStringPartValidator` in
+`src/crystal_click/wide_part_writer/staged_typed_string_part_validator.cr`.
+Keep both same-signature private writer facades, the scalar public writer call
+and the typed Nullable(String) dispatcher. Add one adjacent loader require.
+`rg` at the baseline finds exactly two validator call sites in the writer:
+the scalar writer at line 209 and the typed dispatcher at line 25127.
+Baseline definitions are at 19733 and 25230; these are revision-local locators.
+
+Borrow synchronous checked-mark-count callbacks from the writer in both
+methods, and its existing primary-index helper only for Nullable(String).
+Keep scalar inline primary-index validation unchanged. Both String readbacks
+are direct virtual calls on `WidePart`, not private writer selectors; preserve
+that dispatch inside the owner without adding a new selector API. The owner
+retains no stage, reader, input buffer, callback or I/O handle after return.
+Staging, preflight, streams, metadata/checksums, publication and cleanup remain
+with their current owners. Array/Map/FixedString and all type/layout admission
+are outside this slice; no performance improvement is claimed.
+
+Strongest failure: equal successful output hides bypassed validation or virtual
+dispatch. Before production edits, run baseline characterizations of both
+public paths with 2/2/1 marks, null/empty/binary/UTF-8 values and test-only
+inherited readback overrides. A mark-1 returned-value mismatch must be rejected
+by the real comparison, with marks 0/1 observed and no target or staging leak.
+Qualify that probe with a reversible bypass that produces actual assertion
+failures, not compilation errors. Compare the two moved bodies (allowing only
+declared callback substitutions) and the entire retained facade remainder.
+
+DoD: guarded `crystal spec spec/staged_typed_string_validator_w165_spec.cr`
+and the affected writer/reader/table/catalog/MV consumers in DEBUG/RELEASE,
+with isolated caches and the host linker; each positive gate must exit 0 with
+zero failures/errors/pending. Root owns serial jobs and independently checks
+source hashes, actual membership and results. Run format and diff checks.
+New native format qualification is not required for an exact body move;
+behavior drift reopens that decision. The overall architecture remains open.
+
+Executed characterization and controls: existing scalar/typed writer specs
+pass 24 baseline DEBUG examples. The initial exact-type fixture changes only
+`columns.txt` to FixedString; `open_typed` rejects its incompatible physical
+shape before the intended staged type guard. Its two failures are not a
+production defect, intentional control or positive evidence. The corrected
+fixture uses valid, public-written opposite String/Nullable(String) profiles
+and passes both baseline examples without relaxing the production assertions.
+These examples assert literal String payloads, little-endian UInt64 length
+streams, nullable null maps, exact nominal types and complete 2/2/1 mark grids.
+
+On unchanged production, a temporary readback-to-input bypass keeps successful
+output valid but produces two intended trace failures, zero errors/pending and
+child exit 1. The baseline is restored byte-for-byte and the two examples pass.
+After extraction, bypassing both returned-value comparisons produces two
+intended failures: the trace wrongly continues to mark 2 instead of stopping
+after the mark-1 mutation. The trace assertion in `ensure` is the observed red
+signal; this mutant does not demonstrate a corruption exception. Exact owner
+restoration and the final positive gates pass. Neither bypass is retained.
+
+Root independently reads the production diff and both bodies, then compares
+the complete retained writer remainder against the baseline: byte-identical
+outside the two sealed definitions. Both facade signatures are exact. Moved
+bodies are exact after only checked-mark-count callback substitutions in both
+methods and the nullable primary-index callback substitution. Both direct
+virtual `WidePart` readbacks remain intact. The loader adds one require; the
+private 100-line owner has no instance fields or retained callbacks/resources.
+The reader/writer/table facades are 15,845/25,313/6,911 lines. Callback overhead
+and lower coupling beyond this cohort are not measured.
+
+Final root-owned affected gates pass 44 DEBUG and 189 RELEASE examples, with
+actual child/guard exit 0 and zero failures/errors/pending. The RELEASE roster
+is 16 unique specs in three disjoint groups; each name below denotes
+`spec/<name>.cr`:
+
+1. **Writers — 44 examples:** `staged_typed_string_validator_w165_spec`,
+   `wide_part_writer_spec`, `wide_part_writer_typed_spec`,
+   `staged_typed_numeric_validator_w162_spec`,
+   `wide_part_writer_typed_mark_readback_spec`, `wide_part_writer_leaf_seam_spec`,
+   `wide_part_writer_metadata_w150_spec`. The final DEBUG gate uses this same
+   seven-spec roster.
+2. **Embedded table and MV — 48 examples:** `embedded_merge_tree_table_spec`,
+   `embedded_merge_tree_pk_range_spec`, `offline_mv_materialization_w88_spec`.
+3. **Scans, catalog and projections — 97 examples:**
+   `wide_part_table_projection_w87_spec`, `offline_catalog_projection_w87_spec`,
+   `string_nullable_scan_spec`, `nullable_string_scan_spec`,
+   `offline_catalog_spec`, `part_checksums_spec`.
+
+Consumer inventory: EmbeddedMergeTree insert/merge and String projection
+fixtures call the scalar writer; the explicit identity MV path calls the typed
+writer. Catalog/scanning examples are existing reader/adaptor smoke checks,
+not additional staged-validation certificates. The flag-gated
+`embedded_merge_tree_fault_spec.cr` is excluded: no crash/power-loss claim.
+
+All jobs run serially under the bounded guard, Crystal 1.21/LLVM 22.1.8,
+isolated caches, SDK26.5 and host linker. The actual command is
+`env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+TMPDIR=/private/tmp /bin/bash
+/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby
+600 12288 /private/tmp/crystal-click-w165.1Foccr/run_gate.rb
+<label> <debug|release|red> <exact spec paths>`.
+The runner executes `/opt/homebrew/bin/crystal spec` with
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`; RELEASE
+adds `--release --no-debug`. Red controls require actual assertion failures,
+zero errors/pending and child exit 1, not compilation failure.
+
+Root's independent reconciliation checks actual log summaries, exact group
+membership, before/after input manifests, cross-gate consistency and all 316
+current source/spec/support inputs, including the final DEBUG roster. Final
+input manifest SHA256:
+`0fa63b4fb5e89a8b741c22f59f8943e40c5a6cd6a106554e3b59463a68649e1e`.
+Final writer SHA256:
+`028d4da8aa0f2c120c6c1e34359ccf7688f6148430cf43c7daf8aa81e463595c`;
+owner SHA256:
+`8101ff142664587e74daf7f364b2ed632648e7a518bb1e65a228205ecb53d790`.
+Logs, results, exact-move checker and reconciler are ephemeral local evidence
+under `/private/tmp/crystal-click-w165.1Foccr`, not committed fixtures or
+self-authenticating proof. Format, Ruby syntax and diff checks pass.
+
+Scoped hostile verdict: ROBUST for retained readback dispatch, comparisons,
+nominal guards, validation order and affected consumers of this exact move.
+Luna implementation, characterization and static review are correlated;
+root's source inspection, serial jobs and seeded controls qualify the claim.
+Existing stock certificates retain their original revision/runtime/profile.
+No new type/API/layout/native-runtime or performance claim is added. Refresh
+after owner/facade/require graph/readback/helper/lifecycle or compiler changes,
+and rerun the affected gates if scratch evidence expires. Next architecture
+seams are another cohesive validator cohort or physical stream binding, each
+with its own characterization; broader types, MV/projections and speed remain
+open.
 
 ## SimpleAggregateFunction extended numeric reuse — W164
 
@@ -56,19 +190,10 @@ behavior-neutral ownership extraction. Evidence and refresh conditions are in
 Reader/writer/table facades remain 15,845/25,362/6,911 lines. Architecture
 cleanup and performance claims remain open.
 
-The next proposed extraction is one private `StagedTypedStringPartValidator`
-in `wide_part_writer/staged_typed_string_part_validator.cr`, owning only
-`validate_staged_string_part` and `validate_staged_nullable_string_part` bodies.
-Keep those writer facade methods, the typed String selector and scalar writer
-call site. Existing mark-count, readback and primary-index checks remain shared
-through callbacks; staging, resource preflight, metadata/checksums, cleanup and
-publication remain with the writer. Do not combine Array/Map/FixedString cohorts.
-Characterize both public writer paths with null/empty/binary/UTF-8 values and
-test-only inherited readback overrides that inject a mark-1 mismatch: assert
-mark-0/mark-1 trace, corruption error, no target and stage cleanup. Use the W162
-override/bypass pattern plus `wide_part_writer_spec` and
-`wide_part_writer_typed_spec`; rerun affected consumers after the exact move.
-This is a plan, not an executed extraction or a new type/layout admission.
+The historical next String staged-validator proposal is implemented and
+qualified by W165 above. String readbacks are direct virtual WidePart calls,
+not writer selector callbacks; the extracted owner preserves that distinction.
+Array/Map/FixedString cohorts and publication ownership remain separate.
 
 ## SimpleAggregateFunction numeric extension — W163
 
