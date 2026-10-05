@@ -1796,6 +1796,25 @@ module CrystalClick
       @array_tuple_row_values[column] = values
     end
 
+    # Nominal Nested keeps its exact column type while reusing W107's owned
+    # outer-row handles. Array(Tuple) accessors remain nominally Array-only.
+    def nested_rows_for(column : String) : Slice(WideArrayTupleRow)
+      index = column_index(column)
+      unless WideNestedTypePlan.for_type(@column_types[index])
+        raise UnsupportedFormatError.new("Nested row accessor requires an admitted nominal Nested column")
+      end
+      @array_tuple_row_values[column]? || raise(UnsupportedFormatError.new("Nested column was not materialized in this batch"))
+    end
+
+    def install_nested_rows(column : String, values : Slice(WideArrayTupleRow), expected_rows : Int) : Nil
+      index = column_index(column)
+      unless WideNestedTypePlan.for_type(@column_types[index])
+        raise UnsupportedFormatError.new("Nested installation requires an admitted nominal Nested column")
+      end
+      raise CorruptPartError.new("selected Nested row count differs from batch") unless values.size == expected_rows
+      @array_tuple_row_values[column] = values
+    end
+
     # Return ordered Map-entry rows for a generic named Map(K, Tuple(...))
     # column. W84-specialized Map accessors retain their existing result types.
     def map_tuple_rows_for(column : String) : Slice(WideMapTupleRow)
@@ -5013,7 +5032,11 @@ module CrystalClick
               )
               part.readers.each do |selected|
                 if values = generic_array_tuple_slices[selected.name]?
-                  batch.install_array_tuple_rows(selected.name, values, size)
+                  if WideNestedTypePlan.for_type(selected.column_type)
+                    batch.install_nested_rows(selected.name, values, size)
+                  else
+                    batch.install_array_tuple_rows(selected.name, values, size)
+                  end
                 elsif values = generic_map_tuple_slices[selected.name]?
                   batch.install_map_tuple_rows(selected.name, values, size)
                 elsif values = geo_array_slices[selected.name]?

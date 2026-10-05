@@ -176,6 +176,24 @@ module CrystalClick
         return {observed_rows, string_bytes}
       end
 
+      if nested_plan = WideNestedTypePlan.for_type(selected_type)
+        observed_rows, array_elements[0], tuple_cells[0], string_bytes = ArrayTupleValuesMaterializer.append_rows(
+          values,
+          batch,
+          column_name,
+          observed_rows,
+          expected_rows,
+          array_elements[0],
+          tuple_cells[0],
+          string_bytes,
+          max_string_bytes,
+          max_tuple_cells,
+          nested_plan.tuple_plan.fields.size,
+          true
+        )
+        return {observed_rows, string_bytes}
+      end
+
       if array_tuple_plan = WideArrayTupleTypePlan.for_type(selected_type)
         if WideTypePlan.admitted(selected_type).nil?
           observed_rows, array_elements[0], tuple_cells[0], string_bytes = ArrayTupleValuesMaterializer.append_rows(

@@ -227,6 +227,15 @@ module CrystalClick
       mark_count : Int,
     ) : {WideArrayTupleTypePlan, ArrayTupleReader}
       plan = ensure_named_array_tuple_column(column)
+      array_tuple_storage_reader_for_plan(plan, column, first_mark, mark_count)
+    end
+
+    private def array_tuple_storage_reader_for_plan(
+      plan : WideArrayTupleTypePlan,
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : {WideArrayTupleTypePlan, ArrayTupleReader}
       array_tuple_reader_checked_range(plan, column, first_mark, mark_count)
 
       reader = ArrayTupleReader.new(

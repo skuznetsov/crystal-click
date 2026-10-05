@@ -34,7 +34,15 @@ remain separate from byte I/O and staging/publication. These are capability
 owners, not a behavior-neutral extraction certificate. Scope and paired
 evidence are in
 [SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md](SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md).
-The W170 reader/writer/table facades remain 16,174/25,647/7,152 lines.
+W171 adds one 30-line `WideNestedTypePlan` and one 64-line
+`NestedSerializationProfile`, each in its own file, plus a 58-line explicit
+reader facade extension. Declaration identity and strict metadata admission
+remain separate from the reused Array(Tuple) physical reader/writer and
+table/offline orchestration. No new per-leaf storage kernel or independent
+publication lifecycle is introduced. These are new capability seams, not a
+behavior-neutral extraction or reduced-coupling certificate. Scope and paired
+evidence are in [NESTED_STORAGE_FRONTIER.md](NESTED_STORAGE_FRONTIER.md).
+The W171 reader/writer/table facades remain 16,221/25,676/7,175 lines.
 Additional validator cohorts and physical stream binding remain the next
 behavior-preserving extraction seams. The overall refactor is still open.
 
@@ -49,7 +57,7 @@ Before moving bodies, add baseline scalar/nullable characterizations and
 readback-mismatch trace controls. Require exact moved-body comparison with
 declared callback substitutions, byte-identical retained facade remainder,
 and affected writer/table/catalog DEBUG/RELEASE gates. This seam is PROPOSED;
-W170 does not execute or certify the Array ownership move.
+W170/W171 do not execute or certify the Array ownership move.
 
 W159 adds one cohesive `ObjectDeclaredDynamicSites` module/file for nominal
 site provenance and Object-depth coordinates. It reuses the generic Dynamic

@@ -40,6 +40,17 @@ module CrystalClick
       nil
     end
 
+    # Parse one nominal Nested declaration using the same aggregate source,
+    # depth and node budget as its physical Array(Tuple) storage shape. The
+    # Nested token charges the structural Array node; the shared tuple-body
+    # parser charges the Tuple node and every descendant exactly once.
+    def self.parse_nested_tree(source : String) : WideTupleSchemaNode?
+      return nil if source.bytesize > MAX_SOURCE_BYTES
+      new(source).parse_nested_tree
+    rescue ex : ArgumentError
+      nil
+    end
+
     # Parse a complete Map declaration with one aggregate source/depth/node
     # budget. The key remains an exact scalar descriptor and the value is the
     # normal recursive Tuple tree; neither child is reparsed by a new parser.
@@ -88,6 +99,18 @@ module CrystalClick
       root
     end
 
+    protected def parse_nested_tree : WideTupleSchemaNode
+      expect_text!("Nested")
+      add_node! # The nominal declaration represents the structural Array.
+      skip_whitespace
+      expect_byte!('('.ord.to_u8)
+
+      root = parse_tuple_body(nil, 2)
+      skip_whitespace
+      raise ArgumentError.new("trailing bytes after Nested") unless @offset == @bytes.size
+      root
+    end
+
     protected def parse_map_tuple_tree : {WideTupleLeafType, WideTupleSchemaNode}
       expect_text!("Map")
       add_node!
@@ -115,10 +138,15 @@ module CrystalClick
     private def parse_tuple(tuple_name : String?, depth : Int32) : WideTupleSchemaNode
       raise ArgumentError.new("Tuple nesting exceeds limit") if depth > MAX_DEPTH
       expect_text!("Tuple")
-      add_node!
       skip_whitespace
       expect_byte!('('.ord.to_u8)
 
+      parse_tuple_body(tuple_name, depth)
+    end
+
+    private def parse_tuple_body(tuple_name : String?, depth : Int32) : WideTupleSchemaNode
+      raise ArgumentError.new("Tuple nesting exceeds limit") if depth > MAX_DEPTH
+      add_node! # The Tuple node is shared by Tuple syntax and Nested storage.
       children = [] of WideTupleSchemaNode
       names = Set(String).new
       skip_whitespace

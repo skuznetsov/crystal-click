@@ -5,15 +5,36 @@ module CrystalClick
   class WideArrayTupleTypePlan
     @tuple_plan : WideTupleTypePlan
     @column_type : String
+    @nested : Bool
 
-    private def initialize(@tuple_plan : WideTupleTypePlan)
-      @column_type = "Array(#{@tuple_plan.type_name})"
+    private def initialize(@tuple_plan : WideTupleTypePlan, @column_type : String, @nested : Bool)
     end
 
     def self.for_type(type : String) : WideArrayTupleTypePlan?
       return nil if type.bytesize > WideTupleSchemaParser::MAX_SOURCE_BYTES
       tuple_plan = WideTupleTypePlan.for_array_type(type) || return nil
-      new(tuple_plan)
+      new(tuple_plan, "Array(#{tuple_plan.type_name})", false)
+    end
+
+    # Shared paired-storage planning factory. Unlike the Array-only #for_type,
+    # this factory also admits Nested while retaining its nominal declaration.
+    # It does not widen the ArrayTuple reader/writer entry points.
+    def self.for_storage_type(type : String) : WideArrayTupleTypePlan?
+      return for_type(type) if type.starts_with?("Array")
+      return nil unless type.starts_with?("Nested")
+      tuple_plan = WideTupleTypePlan.for_nested_type(type) || return nil
+      new(tuple_plan, nested_type_name(tuple_plan), true)
+    end
+
+    def self.nested_type_name(tuple_plan : WideTupleTypePlan) : String
+      String.build do |io|
+        io << "Nested("
+        tuple_plan.root_fields.each_with_index do |field, index|
+          io << ", " unless index == 0
+          io << field.name << ' ' << field.type_name
+        end
+        io << ')'
+      end
     end
 
     # Canonical full outer declaration. Return an owned String snapshot so a
@@ -28,6 +49,10 @@ module CrystalClick
 
     def tuple_plan : WideTupleTypePlan
       @tuple_plan
+    end
+
+    def nested? : Bool
+      @nested
     end
 
     def outer_size_stream(column : String) : String

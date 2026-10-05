@@ -1440,6 +1440,10 @@ module CrystalClick
       !WideTupleTypePlan.for_type(type).nil?
     end
 
+    def self.supports_nested_type?(type : String) : Bool
+      !WideNestedTypePlan.for_type(type).nil?
+    end
+
     def self.supports_variant_string_uint64_type?(type : String) : Bool
       WideVariantStringUInt64TypePlan.admitted?(type)
     end
@@ -1486,7 +1490,7 @@ module CrystalClick
         supports_map_uint64_array_string_type?(type) ||
         supports_map_uint64_nullable_uint64_type?(type) || supports_map_string_nullable_uint64_type?(type) ||
         supports_map_uint64_nullable_string_type?(type) || supports_map_string_nullable_string_type?(type) ||
-        supports_named_scalar_tuple_type?(type) || supports_named_array_tuple_type?(type) ||
+        supports_named_scalar_tuple_type?(type) || supports_nested_type?(type) || supports_named_array_tuple_type?(type) ||
         supports_named_map_tuple_type?(type) ||
         supports_variant_type?(type) || type == "Dynamic"
     end
@@ -11317,6 +11321,7 @@ module CrystalClick
       qbit_plan = QBitColumnType.for_type(@column_type)
       variant_plan = WidePart.variant_type_plan(@column_type)
       array_tuple_plan = WideArrayTupleTypePlan.for_type(@column_type)
+      nested_plan = WideNestedTypePlan.for_type(@column_type)
       map_tuple_plan = WideMapTupleTypePlan.for_type(@column_type)
       legacy_array_tuple_plan = !WideTypePlan.admitted(@column_type).nil?
       dynamic_string = @column_type == "Dynamic"
@@ -11367,6 +11372,8 @@ module CrystalClick
                                      WidePart.array_element_stream_names(@column, @column_type).not_nil!.includes?(stream_name)
                                  elsif array_tuple_plan && !legacy_array_tuple_plan
                                    stream_name != array_tuple_plan.outer_size_stream(@column)
+                                 elsif nested_plan
+                                   stream_name != nested_plan.storage_plan.outer_size_stream(@column)
                                  elsif map_tuple_plan
                                    stream_name != map_tuple_plan.outer_size_stream(@column)
                                  elsif WidePart.supports_array_map_type?(@column_type)
@@ -11461,6 +11468,8 @@ module CrystalClick
                            stream_name == geo_array_plan.size_stream(@column, 0) ? 8 : 1
                          elsif array_tuple_plan && !legacy_array_tuple_plan
                            stream_name == array_tuple_plan.outer_size_stream(@column) ? 8 : 1
+                         elsif nested_plan
+                           stream_name == nested_plan.storage_plan.outer_size_stream(@column) ? 8 : 1
                          elsif map_tuple_plan
                            stream_name == map_tuple_plan.outer_size_stream(@column) ? 8 : 1
                          elsif stream_name != "#{@column}.size0" &&
@@ -11541,7 +11550,9 @@ module CrystalClick
       point_plan = PointColumnType.for_type(column_type)
       geo_array_plan = GeoArrayColumnType.for_type(column_type)
       array_tuple_plan = WideArrayTupleTypePlan.for_type(column_type)
+      nested_plan = WideNestedTypePlan.for_type(column_type)
       generic_array_tuple = !array_tuple_plan.nil? && WideTypePlan.admitted(column_type).nil?
+      generic_nested = !nested_plan.nil?
       map_tuple_plan = WideMapTupleTypePlan.for_type(column_type)
       generic_map_tuple = !map_tuple_plan.nil?
       raise UnsupportedFormatError.new("JSON typed paths require the exact typed scan") if json_typed_path && mode != :typed
@@ -11555,7 +11566,7 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if (geometry_plan || geo_array_plan || point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_map_tuple ||
+      if (geometry_plan || geo_array_plan || point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_nested || generic_map_tuple ||
          WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
         message = if geo_array_plan
                     "Geo Array bounded profile requires CODEC(LZ4)"
@@ -11569,6 +11580,8 @@ module CrystalClick
                     "Array(Map) bounded profile requires CODEC(LZ4)"
                   elsif generic_array_tuple
                     "Array(Tuple) bounded profile requires CODEC(LZ4)"
+                  elsif generic_nested
+                    "Nested bounded profile requires CODEC(LZ4)"
                   elsif generic_map_tuple
                     "Map(Tuple) bounded profile requires CODEC(LZ4)"
                   else
@@ -11603,6 +11616,8 @@ module CrystalClick
         validate_array_map_bool_leaf_serialization(columns, selected, column_type)
       elsif WidePart.supports_array_map_numeric_type?(column_type)
         validate_array_map_numeric_serialization(columns, selected, column_type)
+      elsif generic_nested
+        validate_nested_serialization_profile(columns, selected, column_type, row_count)
       elsif generic_array_tuple
         validate_array_type_serialization_version(column_type, columns, selected, row_count)
       elsif generic_map_tuple
@@ -11663,6 +11678,23 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
 
       QBitSerializationProfile.validate!(text)
+    end
+
+    private def validate_nested_serialization_profile(
+      columns : Array({String, String}),
+      selected_column : String,
+      selected_type : String,
+      row_count : UInt64,
+    ) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for Nested") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      NestedSerializationProfile.validate!(text, columns, selected_column, selected_type, row_count)
     end
 
     private def validate_geo_array_serialization_profile(
@@ -11832,6 +11864,10 @@ module CrystalClick
           if columns.any? { |name, type| name == column && type == "UInt64" }
             raise UnsupportedFormatError.new("Map(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
           end
+        elsif WideNestedTypePlan.for_type(selected_type)
+          if columns.any? { |name, type| name == column && type == "UInt64" }
+            raise UnsupportedFormatError.new("Nested key column must have one plain UInt64 stream") unless streams == [column]
+          end
         elsif PointColumnType.for_type(selected_type)
           if columns.any? { |name, type| name == column && type == "UInt64" }
             raise UnsupportedFormatError.new("Point primary key column must have one plain UInt64 stream") unless streams == [column]
@@ -11910,7 +11946,7 @@ module CrystalClick
         plan.size_streams(column) + plan.coordinate_streams(column).to_a
       elsif plan = WideTypePlan.admitted(type)
         plan.physical_streams(column).map(&.name)
-      elsif plan = WideArrayTupleTypePlan.for_type(type)
+      elsif plan = WideArrayTupleTypePlan.for_storage_type(type)
         plan.physical_streams(column)
       elsif plan = WideMapTupleTypePlan.for_type(type)
         plan.physical_streams(column)
@@ -13489,6 +13525,11 @@ module CrystalClick
         raise CorruptPartError.new("selected Array(Tuple) size0 stream is missing from its plan") unless stream_names.includes?(stream)
         return stream
       end
+      if plan = WideNestedTypePlan.for_type(@column_type)
+        stream = plan.storage_plan.outer_size_stream(@column)
+        raise CorruptPartError.new("selected Nested size0 stream is missing from its plan") unless stream_names.includes?(stream)
+        return stream
+      end
       if plan = WideMapTupleTypePlan.for_type(@column_type)
         stream = plan.outer_size_stream(@column)
         raise CorruptPartError.new("selected Map(Tuple) size0 stream is missing from its plan") unless stream_names.includes?(stream)
@@ -13577,6 +13618,9 @@ module CrystalClick
       elsif plan = WideArrayTupleTypePlan.for_type(@column_type)
         plan.stream_width(@column, stream_name) ||
           raise(UnsupportedFormatError.new("unsupported compositional Array(Tuple) substream"))
+      elsif plan = WideNestedTypePlan.for_type(@column_type)
+        plan.storage_plan.stream_width(@column, stream_name) ||
+          raise(UnsupportedFormatError.new("unsupported Nested child substream"))
       elsif plan = WideMapTupleTypePlan.for_type(@column_type)
         plan.stream_width(@column, stream_name) ||
           raise(UnsupportedFormatError.new("unsupported compositional Map(Tuple) substream"))
@@ -15925,6 +15969,9 @@ module CrystalClick
                                else
                                  false
                                end
+                             elsif nested_plan = WideNestedTypePlan.for_type(@column_type)
+                               tuple_profile = true
+                               stream.name != nested_plan.storage_plan.outer_size_stream(@column)
                              elsif map_tuple_plan = WideMapTupleTypePlan.for_type(@column_type)
                                tuple_profile = true
                                stream.name != map_tuple_plan.outer_size_stream(@column)

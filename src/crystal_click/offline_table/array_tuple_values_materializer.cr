@@ -1,7 +1,7 @@
 module CrystalClick
   class OfflineTable
-    # Accumulates bounded Array(Tuple) results while retaining one outer-row
-    # handle per source row and accounting inner cells and all String payloads.
+    # Accumulates bounded Array(Tuple)/Nested storage results while retaining
+    # one outer-row handle per source row and accounting cells and String bytes.
     private class ArrayTupleValuesMaterializer
       def self.append_rows(
         values : Array(OfflineColumnValue),
@@ -15,8 +15,13 @@ module CrystalClick
         max_string_bytes : UInt64,
         max_tuple_cells : UInt64,
         expected_field_count : Int32,
+        nested : Bool = false,
       ) : {UInt64, UInt64, UInt64, UInt64}
-        rows = batch.array_tuple_rows_for(column_name)
+        rows = if nested
+                 batch.nested_rows_for(column_name)
+               else
+                 batch.array_tuple_rows_for(column_name)
+               end
         batch_rows = rows.size.to_u64
         if observed_rows > expected_rows || batch_rows > expected_rows - observed_rows
           raise CorruptPartError.new("observed selected column row count exceeds preflight count")

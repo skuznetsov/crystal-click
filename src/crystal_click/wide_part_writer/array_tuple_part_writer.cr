@@ -14,8 +14,46 @@ module CrystalClick
         rows_per_mark : Int32,
         infrastructure : TuplePartInfrastructure,
       ) : String
+        type_plan = WideArrayTupleTypePlan.for_type(type_name) ||
+                    raise ArgumentError.new("unsupported compositional Array(Tuple) type")
+        write_with_plan(
+          destination, key_name, keys, value_name, type_plan, row_sizes, columns,
+          rows_per_mark, infrastructure
+        )
+      end
+
+      def self.write_nested(
+        destination : String,
+        key_name : String,
+        keys : Slice(UInt64),
+        value_name : String,
+        type_name : String,
+        row_sizes : Slice(UInt64),
+        columns : Array(WideTupleLeafColumn),
+        rows_per_mark : Int32,
+        infrastructure : TuplePartInfrastructure,
+      ) : String
+        nested_plan = WideNestedTypePlan.for_type(type_name) ||
+                      raise ArgumentError.new("unsupported nominal Nested type")
+        write_with_plan(
+          destination, key_name, keys, value_name, nested_plan.storage_plan, row_sizes,
+          columns, rows_per_mark, infrastructure
+        )
+      end
+
+      private def self.write_with_plan(
+        destination : String,
+        key_name : String,
+        keys : Slice(UInt64),
+        value_name : String,
+        type_plan : WideArrayTupleTypePlan,
+        row_sizes : Slice(UInt64),
+        columns : Array(WideTupleLeafColumn),
+        rows_per_mark : Int32,
+        infrastructure : TuplePartInfrastructure,
+      ) : String
         input = preflight(
-          destination, key_name, keys, value_name, type_name, row_sizes,
+          destination, key_name, keys, value_name, type_plan, row_sizes,
           columns, rows_per_mark, infrastructure
         )
         stage = infrastructure.stage_factory.call(input.parent)
@@ -65,6 +103,25 @@ module CrystalClick
         rows_per_mark : Int32,
         infrastructure : TuplePartInfrastructure,
       ) : ArrayTuplePartWriteInput
+        type_plan = WideArrayTupleTypePlan.for_type(type_name) ||
+                    raise ArgumentError.new("unsupported compositional Array(Tuple) type")
+        preflight(
+          destination, key_name, keys, value_name, type_plan, row_sizes,
+          columns, rows_per_mark, infrastructure
+        )
+      end
+
+      private def self.preflight(
+        destination : String,
+        key_name : String,
+        keys : Slice(UInt64),
+        value_name : String,
+        type_plan : WideArrayTupleTypePlan,
+        row_sizes : Slice(UInt64),
+        columns : Array(WideTupleLeafColumn),
+        rows_per_mark : Int32,
+        infrastructure : TuplePartInfrastructure,
+      ) : ArrayTuplePartWriteInput
         raise ArgumentError.new("destination must not be empty") if destination.empty?
         infrastructure.validate_column_name(key_name)
         infrastructure.validate_column_name(value_name)
@@ -75,8 +132,6 @@ module CrystalClick
         raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
         raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
 
-        type_plan = WideArrayTupleTypePlan.for_type(type_name) ||
-                    raise ArgumentError.new("unsupported compositional Array(Tuple) type")
         tuple_plan = type_plan.tuple_plan
         fields = tuple_plan.fields
         raise ArgumentError.new("Array(Tuple) leaf count does not match schema") unless columns.size == fields.size
@@ -207,7 +262,7 @@ module CrystalClick
 
         columns_metadata = columns_metadata(key_name, value_name, type_plan)
         substreams_metadata = substreams_metadata(key_name, value_name, value_streams)
-        serialization_metadata = serialization_metadata(key_name, keys_copy)
+        serialization_metadata = serialization_metadata(key_name, keys_copy, type_plan)
         validate_metadata_limits(columns_metadata, substreams_metadata, serialization_metadata)
         validate_checksums_file_budget(
           logical_streams, compressed_sizes, raw_sizes, mark_file_size,
@@ -354,9 +409,14 @@ module CrystalClick
         end
       end
 
-      private def self.serialization_metadata(key_name : String, keys : Array(UInt64)) : String
+      private def self.serialization_metadata(
+        key_name : String,
+        keys : Array(UInt64),
+        type_plan : WideArrayTupleTypePlan,
+      ) : String
         defaults = keys.count { |key| key == 0_u64 }
-        "{\"columns\":[{\"kind\":\"Default\",\"name\":\"#{key_name}\",\"num_defaults\":#{defaults},\"num_rows\":#{keys.size}}]," +
+        exact_defaults = type_plan.nested? ? ",\"exact_num_defaults\":true" : ""
+        "{\"columns\":[{\"kind\":\"Default\",\"name\":\"#{key_name}\",\"num_defaults\":#{defaults},\"num_rows\":#{keys.size}#{exact_defaults}}]," +
           "\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":1},\"version\":1}"
       end
 
@@ -491,7 +551,11 @@ module CrystalClick
         unless part.mark_row_counts == expected_mark_rows
           raise CorruptPartError.new("staged Array(Tuple) mark schedule differs")
         end
-        decoded = part.read_array_tuple_mark_range(input.value_name, 0, input.mark_count)
+        decoded = if input.type_plan.nested?
+                    part.read_nested_mark_range(input.value_name, 0, input.mark_count)
+                  else
+                    part.read_array_tuple_mark_range(input.value_name, 0, input.mark_count)
+                  end
         unless decoded.type_name == input.type_plan.type_name && decoded.row_count == input.keys.size &&
                decoded.element_count == input.schedule.leaf_count && decoded.row_sizes == input.row_sizes
           raise CorruptPartError.new("staged Array(Tuple) outer sizes or cardinality differ")

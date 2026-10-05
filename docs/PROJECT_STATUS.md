@@ -1,6 +1,40 @@
 # CrystalClick project status
 
-Latest capability checkpoint (W170, 2026-10-05): canonical unary, non-parametric
+Latest capability checkpoint (W171, 2026-10-05): nominal unflattened
+`Nested(...)` is paired for one sorted UInt64 key and one payload in Wide/LZ4
+parts. The inherited named recursive Tuple/scalar-leaf profile reuses the
+existing ragged physical reader/writer; exact Nested identity is retained
+instead of presenting it as Array(Tuple). Explicit part reader/writer,
+table full/window batches and offline column `.values` are available.
+Array(Tuple)-only and scalar Tuple accessors remain separate. One aggregate
+source/depth/node budget includes the implicit Array/Tuple nodes; existing
+row/element/logical-byte limits, child axes and staged exclusive publication
+remain enforced.
+Root passes 86 DEBUG and 86 RELEASE examples across 22 focused specs, with
+zero failures/errors/pending. The stock-only source law captures all three
+Nested flatten=0/1 and Array(Tuple) profiles; actual public paired admission
+remains flatten=0 only. Stock ATTACH/CHECK accepts the independently authored
+library base and CHECK-valid value mutant, plus a stock control; root
+independently reconciles 41 native statuses and 25 exact binary windows.
+Actual pre-fix nominal-consumer RED and seeded nominal/value staged-comparison
+failures qualify the refusal gates. Scoped verdict: ROBUST within the finite
+three-leaf whole-part witness, not every inherited schema/profile product.
+Empty rows have native evidence; entirely empty marks/children have library
+spec evidence only. Flattened shared-offset groups and general Nested logical
+binary descriptor/value/bulk support remain open.
+The nominal plan and metadata profile each have their own 30/64-line file;
+the explicit reader seam is a 58-line extension. They reuse the existing
+physical kernel rather than adding per-child classes. Reader/writer/table
+facades remain 16,221/25,676/7,175 lines: overall architecture cleanup is
+unfinished. The next neutral candidate remains Array-numeric staged validation.
+General JSON/Dynamic/Variant profiles, AggregateFunction states, broader SAF,
+general MV/projection execution/storage and arbitrary-schema table writing
+remain open; memory/performance is deferred. Fresh source `e9b645ed` remains
+clean, shallow and unbuilt, distinct from executed stock build `d9bcb5ab`.
+Exact scope, commands, evidence and decay:
+[NESTED_STORAGE_FRONTIER.md](NESTED_STORAGE_FRONTIER.md).
+
+Previous capability checkpoint (W170, 2026-10-05): canonical unary, non-parametric
 SimpleAggregateFunction(any/anyLast/min/max, temporal leaf) is paired across
 descriptor/value/bulk/physical codecs, explicit scalar/outer-Nullable Wide
 writers/readers, table batches/windows and offline column `.values`.
@@ -1000,7 +1034,10 @@ source/runtime identities and executed evidence.
    paired profile; that is not qualification of every admitted schema product.
    Equal nominal Dynamic types do not imply
    equal per-part or per-site state.
-   Shared Nested offsets, AggregateFunction state serialization and broader
+   W171 pairs nominal unflattened Nested through the inherited recursive
+   Tuple/scalar storage plan and explicit part/table/offline entrypoints.
+   Its native whole-part witness is one three-leaf profile, not every schema
+   product. Flattened shared Nested offsets, AggregateFunction state serialization and broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -1058,8 +1095,8 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   was 6,911 lines at W167; W170 reader/writer/table facades are now
-   16,174/25,647/7,152 lines.
+   was 6,911 lines at W167; W171 reader/writer/table facades are now
+   16,221/25,676/7,175 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -1170,8 +1207,12 @@ source/runtime identities and executed evidence.
    construction law and finite paired physical witnesses. Other SAF functions,
    children, parameters, aliases and recursive products require their own
    source/result-type laws and independent complete-part qualification.
-   AggregateFunction state serialization and shared Nested offsets are separate
-   unresolved families; a stored-value wrapper does not certify either.
+   W171 closes the bounded unflattened nominal Nested storage lane using
+   existing ragged Tuple/scalar owners, including explicit table/offline
+   consumers. Flattened shared-offset discovery/writing and general Nested
+   binary descriptors/values/bulk remain separate unresolved lanes.
+   AggregateFunction state serialization remains an unresolved family;
+   a stored-value wrapper does not certify aggregate state execution.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
 4. Only then reopen memory/performance work. No current claim of stock-reader

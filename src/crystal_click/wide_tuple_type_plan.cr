@@ -37,6 +37,15 @@ module CrystalClick
       new(root)
     end
 
+    # Build the inner Tuple plan from the bounded nominal Nested declaration.
+    # Its parser charges the underlying Array and Tuple structural nodes in
+    # the same aggregate budget, without synthesizing/reparsing a wrapper.
+    def self.for_nested_type(type : String) : WideTupleTypePlan?
+      return nil if type.bytesize > WideTupleSchemaParser::MAX_SOURCE_BYTES
+      root = WideTupleSchemaParser.parse_nested_tree(type) || return nil
+      new(root)
+    end
+
     # Parse a complete Map(K, Tuple(...)) expression once, retaining one
     # validated nonnullable scalar key descriptor and the recursive value
     # Tuple plan. This is the only Map-to-value-plan admission path.

@@ -1,11 +1,11 @@
 module CrystalClick
   class WidePartTable
-    # Converts one compositional Array(Tuple) mark into row handles while
-    # preserving the separate outer-row and flattened-element axes.
+    # Converts one compositional Array(Tuple) or nominal Nested mark into row
+    # handles while preserving outer-row and flattened-element axes.
     private class ArrayTupleColumnAdapter
       def self.generic_type?(type_name : String) : Bool
-        !WideArrayTupleTypePlan.for_type(type_name).nil? &&
-          WideTypePlan.admitted(type_name).nil?
+        !WideNestedTypePlan.for_type(type_name).nil? ||
+          (!WideArrayTupleTypePlan.for_type(type_name).nil? && WideTypePlan.admitted(type_name).nil?)
       end
 
       def self.preflight_mark_charge(
@@ -19,12 +19,15 @@ module CrystalClick
           raise CorruptPartError.new("Array(Tuple) table materialization charge exceeds aggregate limit")
         end
 
-        reader_charge = reader.array_tuple_mark_range_materialization_charge(
-          column,
-          mark_index,
-          1,
-          max_materialized_bytes - table_header
-        )
+        reader_charge = if WideNestedTypePlan.for_type(reader.column_type)
+                          reader.nested_mark_range_materialization_charge(
+                            column, mark_index, 1, max_materialized_bytes - table_header
+                          )
+                        else
+                          reader.array_tuple_mark_range_materialization_charge(
+                            column, mark_index, 1, max_materialized_bytes - table_header
+                          )
+                        end
         checked_total_charge(reader_charge, max_materialized_bytes)
       end
 
@@ -42,18 +45,20 @@ module CrystalClick
           raise CorruptPartError.new("Array(Tuple) table materialization charge exceeds aggregate limit")
         end
 
-        data = reader.read_array_tuple_mark_range(
-          column,
-          mark_index,
-          1,
-          max_materialized_bytes - table_header
-        )
+        plan = WideArrayTupleTypePlan.for_storage_type(type_name) ||
+               raise(UnsupportedFormatError.new("selected ragged Tuple storage type is not admitted by the compositional plan"))
+        data = if plan.nested?
+                 reader.read_nested_mark_range(column, mark_index, 1, max_materialized_bytes - table_header)
+               else
+                 reader.read_array_tuple_mark_range(column, mark_index, 1, max_materialized_bytes - table_header)
+               end
+        unless data.type_name == plan.type_name
+          raise CorruptPartError.new("selected Array(Tuple)/Nested nominal type changed")
+        end
         unless data.row_count.to_u64 == expected_rows
           raise CorruptPartError.new("selected Array(Tuple) mark row count changed")
         end
 
-        plan = WideArrayTupleTypePlan.for_type(type_name) ||
-               raise(UnsupportedFormatError.new("selected Array(Tuple) type is not admitted by the compositional plan"))
         string_payload_bytes = 0_u64
         data.row_count.times do |outer_index|
           data.row(outer_index).each do |tuple_row|
