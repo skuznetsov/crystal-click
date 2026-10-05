@@ -1462,6 +1462,7 @@ module CrystalClick
 
     def self.supports_typed_type?(type : String) : Bool
       !GeometryColumnType.for_type(type).nil? || !GeoArrayColumnType.for_type(type).nil? || !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
+        !WideAggregateCountStoragePlan.for_type_name(type).nil? ||
         !DateTimeColumnType.parse(type).nil? ||
         !IntervalColumnType.parse(type).nil? ||
         !SimpleAggregateColumnType.parse(type).nil? ||
@@ -2420,6 +2421,35 @@ module CrystalClick
       SimpleAggregateColumnReader.read_uint64(@column_type) do
         read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 8, UInt64)
       end
+    end
+
+    # Count stores canonical VarUInt state bytes in its one physical value
+    # stream. Keep this nominal reader separate from the fixed-width UInt64
+    # accessor even though the returned BinaryValue owns a UInt64 carrier.
+    def read_aggregate_count_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      expected_type : BinaryDataType,
+    ) : Array(BinaryValue)
+      ensure_column(column)
+      plan = WideAggregateCountStoragePlan.require(expected_type)
+      raise UnsupportedFormatError.new("AggregateFunction(count) accessor does not match the selected column") unless plan.type_name == @column_type
+
+      stream = @streams[column]
+      unless stream.name == column
+        raise UnsupportedFormatError.new("AggregateFunction(count) requires its exact one-stream physical plan")
+      end
+      _start_mark, _end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      plan.maximum_state_bytes(rows)
+      values = Array(BinaryValue).new(rows.to_i)
+      mark_count.times do |offset|
+        start_mark, end_mark, mark_rows = checked_stream_mark_range(stream, first_mark + offset, 1)
+        maximum_bytes = plan.maximum_state_bytes(mark_rows)
+        state_bytes = read_bounded_mark_range_bytes(stream, start_mark, end_mark, maximum_bytes, 1)
+        values.concat(WideAggregateCountStateReader.read(state_bytes, mark_rows, plan.data_type))
+      end
+      values
     end
 
     # Read the exact stored SimpleAggregateFunction child without opening the
@@ -11607,7 +11637,7 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if (@flattened_nested_context || geometry_plan || geo_array_plan || point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_nested || generic_map_tuple ||
+      if (@flattened_nested_context || geometry_plan || geo_array_plan || point_plan || !WideAggregateCountStoragePlan.for_type_name(column_type).nil? || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_nested || generic_map_tuple ||
          WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
         message = if geo_array_plan
                     "Geo Array bounded profile requires CODEC(LZ4)"
@@ -11625,6 +11655,8 @@ module CrystalClick
                     "Nested bounded profile requires CODEC(LZ4)"
                   elsif generic_map_tuple
                     "Map(Tuple) bounded profile requires CODEC(LZ4)"
+                  elsif !WideAggregateCountStoragePlan.for_type_name(column_type).nil?
+                    "AggregateFunction(count) bounded profile requires CODEC(LZ4)"
                   else
                     "Variant and Dynamic require CODEC(LZ4)"
                   end
@@ -11701,6 +11733,8 @@ module CrystalClick
         validate_dynamic_string_serialization(columns, selected, row_count)
       elsif WidePart.supports_named_scalar_tuple_type?(column_type)
         validate_tuple_uint64_string_serialization(columns, selected, column_type, row_count)
+      elsif !WideAggregateCountStoragePlan.for_type_name(column_type).nil?
+        validate_aggregate_count_serialization_profile(columns, selected, column_type, row_count)
       elsif column_type == "Int128" || column_type == "UInt128" || column_type == "Int256" || column_type == "UInt256"
         validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
@@ -11989,6 +12023,8 @@ module CrystalClick
     private def expected_physical_streams(column : String, type : String) : Array(String)
       if type == "Dynamic"
         ["#{column}.dynamic_structure", "#{column}.variant_discr", "#{column}.SharedVariant.size", "#{column}.SharedVariant", "#{column}.String.size", "#{column}.String"]
+      elsif plan = WideAggregateCountStoragePlan.for_type_name(type)
+        plan.physical_streams(column)
       elsif interval_type = IntervalColumnType.parse(type)
         interval_type.shape == IntervalColumnType::Shape::Nullable ? ["#{column}.null", column] : [column]
       elsif text_plan = SimpleAggregateTextStoragePlan.for_type_name(type)
@@ -13158,6 +13194,23 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json is malformed")
     end
 
+    private def validate_aggregate_count_serialization_profile(
+      part_columns : Array({String, String}),
+      count_column : String,
+      count_type_name : String,
+      row_count : UInt64,
+    ) : Nil
+      file = File.join(@path, "serialization.json")
+      raise UnsupportedFormatError.new("serialization.json is required for AggregateFunction(count)") unless File.file?(file)
+      raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)
+      size = File.size(file)
+      raise UnsupportedFormatError.new("serialization.json exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
+      text = File.read(file)
+      raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
+
+      WideAggregateCountSerializationProfile.validate!(text, part_columns, count_column, count_type_name, row_count)
+    end
+
     private def validate_nullable_raw_integer_serialization(part_columns : Array({String, String}), row_count : UInt64) : Nil
       file = File.join(@path, "serialization.json")
       raise UnsupportedFormatError.new("serialization.json is required for Nullable raw wide integers") unless File.file?(file)
@@ -13642,7 +13695,9 @@ module CrystalClick
     end
 
     private def stream_element_width(stream_name : String) : Int32
-      if plan = QBitColumnType.for_type(@column_type)
+      if plan = WideAggregateCountStoragePlan.for_type_name(@column_type)
+        plan.stream_width(@column, stream_name)
+      elsif plan = QBitColumnType.for_type(@column_type)
         plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported QBit substream"))
       elsif plan = PointColumnType.for_type(@column_type)
         plan.stream_width(@column, stream_name) || raise(UnsupportedFormatError.new("unsupported Point coordinate stream"))
@@ -16143,8 +16198,12 @@ module CrystalClick
           geometry_profile = !GeometryColumnType.for_type(@column_type).nil?
           point_profile = !PointColumnType.for_type(@column_type).nil?
           geo_array_profile = !GeoArrayColumnType.for_type(@column_type).nil?
+          count_profile = !WideAggregateCountStoragePlan.for_type_name(@column_type).nil?
+          if count_profile && !valid_compressed_frame_checksum?(data, frame_offset)
+            raise CorruptPartError.new("AggregateFunction(count) compressed frame checksum does not match")
+          end
           if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic" ||
-             WidePart.supports_array_map_type?(@column_type) || qbit_profile || geometry_profile || point_profile || geo_array_profile
+             WidePart.supports_array_map_type?(@column_type) || qbit_profile || geometry_profile || point_profile || geo_array_profile || count_profile
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
               if WidePart.supports_array_map_type?(@column_type) &&
@@ -16153,6 +16212,8 @@ module CrystalClick
               end
               message = if @column_type == "Dynamic"
                           "Dynamic requires LZ4 compressed streams"
+                        elsif count_profile
+                          "AggregateFunction(count) requires LZ4 compressed streams"
                         elsif WidePart.supports_array_map_type?(@column_type)
                           "Array(Map) numeric profile requires LZ4 compressed streams"
                         elsif qbit_profile

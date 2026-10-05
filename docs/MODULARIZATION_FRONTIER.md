@@ -9,6 +9,34 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
+## Latest responsibility separation — W176
+
+The paired Count Wide/LZ4 capability uses five cohesive classes in separate
+files: `WideAggregateCountStoragePlan` (62 lines),
+`WideAggregateCountStateReader` (36),
+`WideAggregateCountSerializationProfile` (90), private
+`WidePartWriter::AggregateCountColumnStreamWriter` (66), and private
+`WidePartWriter::StagedAggregateCountPartValidator` (89). Facades retain
+bounded public orchestration and their existing private staging/publication
+lifecycle. The new decoder/profile/lane/validator do not create a class per
+signature or widen generic raw-integer/table admission.
+
+Root passes the same ten affected specs in DEBUG/RELEASE, 89 examples each,
+zero failures/errors/pending and actual exit 0. The restored nominal/value and
+mark-local guards are challenged by executed bypasses; independent pinned-stock
+part/value checks qualify the new capability, not global architecture quality.
+Exact boundaries, commands and refresh triggers are in
+[AGGREGATE_COUNT_WIDE_FRONTIER.md](AGGREGATE_COUNT_WIDE_FRONTIER.md).
+
+Current direct file inventory: reader/writer/table/offline facades are
+16,345/25,781/7,222/1,560 lines. OfflineCatalog's 1,560-line value is unchanged
+from `ae29054`; an earlier status entry incorrectly counted it as 4,049.
+Overall responsibility-level decomposition remains IN_PROGRESS. The next
+larger seams are remaining staged validator cohorts, physical stream binding,
+reader granule orchestration and table/catalog adapters, each with retained
+public/private dispatch and lifecycle tests. A larger file count or smaller
+individual owner is not lower coupling or performance evidence by itself.
+
 ## Active architecture cleanup — R1
 
 Status: VERIFIED within this behavior-preserving extraction (2026-10-05).

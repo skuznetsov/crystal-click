@@ -3720,6 +3720,56 @@ module CrystalClick
       {% end %}
     end
 
+    # Write a sorted UInt64 key and one nominal AggregateFunction(count)
+    # state column. The count descriptor is exact; its state leaf is a
+    # canonical VarUInt stream and is not a fixed-width UInt64 payload.
+    def self.write_uint64_aggregate_count_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type : BinaryDataType,
+      values : Slice(BinaryValue),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      plan = WideAggregateCountStoragePlan.require(type)
+      validate_aggregate_count_inputs(destination, key_name, keys, value_name, plan, values, rows_per_mark)
+
+      target = File.expand_path(destination)
+      parent = File.dirname(target)
+      raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+      raise ArgumentError.new("destination must not already exist") if File.exists?(target) || File.symlink?(target)
+
+      stage = create_stage(parent)
+      begin
+        records = [] of ChecksumRecord
+        records.concat(write_uint64_stream(stage, key_name, keys, rows_per_mark))
+        records.concat(AggregateCountColumnStreamWriter.write(stage, value_name, values, rows_per_mark))
+        records << write_primary_index(stage, keys, rows_per_mark)
+        records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
+        records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.serialization_metadata)
+        write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, plan.type_name))
+        write_plain_metadata(stage, "default_compression_codec.txt", "CODEC(LZ4)")
+        write_plain_metadata(stage, "metadata_version.txt", "0")
+        write_plain_metadata(stage, "columns_substreams.txt", PartSchemaMetadata.typed_substreams_metadata(key_name, value_name, plan.type_name))
+        write_checksums(stage, records)
+        StagedAggregateCountPartValidator.validate(
+          stage,
+          key_name,
+          value_name,
+          keys,
+          values,
+          plan,
+          rows_per_mark,
+          ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) }
+        )
+        publish_exclusively(stage, target)
+        target
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+    end
+
     # Write UUID values as the pinned ClickHouse 16-byte representation:
     # little-endian high UInt64 followed by little-endian low UInt64. UUID has
     # a named entry point so it is never inferred from a numeric or string slice.
@@ -11702,6 +11752,75 @@ module CrystalClick
       raw_size = full_granule_rows.to_i64 * 8_i64
       raise ArgumentError.new("granule exceeds decompressed frame limit") if raw_size > MAX_FRAME_RAW_BYTES
       raise ArgumentError.new("granule literal frame exceeds compressed frame limit") if literal_frame_size(raw_size) > MAX_FRAME_COMPRESSED.to_i64
+      nil
+    end
+
+    private def self.validate_aggregate_count_inputs(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      plan : WideAggregateCountStoragePlan,
+      values : Slice(BinaryValue),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("destination must not be empty") if destination.empty?
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
+      raise ArgumentError.new("row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > MAX_ROWS_PER_MARK
+
+      stream_names = [key_name] + plan.physical_streams(value_name)
+      stream_bases = stream_names.map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      mark_count = checked_mark_count(keys.size, rows_per_mark)
+      mark_file_size = (mark_count.to_i64 + 1_i64) * WidePart::MARK_SIZE
+      raise ArgumentError.new("mark file exceeds reader limit") if mark_file_size > MAX_MARK_FILE_BYTES
+      index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+      raise ArgumentError.new("primary index exceeds reader limit") if index_size > MAX_PRIMARY_INDEX_BYTES
+
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+
+      values.each do |value|
+        unless value.type == plan.data_type
+          raise UnsupportedFormatError.new("AggregateFunction(count) state does not match its exact nominal type")
+        end
+      end
+
+      # The state is a concatenation of canonical VarUInt values, not a
+      # nullable bitmap plus a fixed-width payload. Preflight exact per-mark
+      # literal-frame growth so stream creation cannot exceed reader limits.
+      total_frame_bytes = 0_i64
+      start_row = 0
+      while start_row < values.size
+        rows = {rows_per_mark, values.size - start_row}.min
+        raw_size = 0_i64
+        rows.times do |offset|
+          state_size = BinaryAggregateCountStateCodec.encoded_size(values[start_row + offset].count_state).to_i64
+          if state_size > WideAggregateCountStoragePlan::MAX_STATE_BYTES_PER_ROW.to_i64
+            raise ArgumentError.new("AggregateFunction(count) state exceeds ten VarUInt bytes")
+          end
+          if state_size > WidePart::MAX_FRAME_DECOMPRESSED_BYTES.to_i64 - raw_size
+            raise ArgumentError.new("AggregateFunction(count) mark exceeds decompressed frame limit")
+          end
+          raw_size += state_size
+        end
+        frame_size = literal_frame_size(raw_size)
+        raise ArgumentError.new("AggregateFunction(count) mark exceeds compressed frame limit") if frame_size > MAX_FRAME_COMPRESSED.to_i64
+        if frame_size > WidePart::MAX_DATA_FILE_BYTES - total_frame_bytes
+          raise ArgumentError.new("AggregateFunction(count) data stream exceeds reader limit")
+        end
+        total_frame_bytes += frame_size
+        start_row += rows
+      end
       nil
     end
 

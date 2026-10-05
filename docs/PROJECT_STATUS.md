@@ -1,6 +1,32 @@
 # CrystalClick project status
 
-Latest capability checkpoint (W175, 2026-10-05): paired logical
+Latest capability checkpoint (W176, 2026-10-05): the three W175 nominal Count
+profiles now have paired complete Wide/LZ4 parts with one sorted UInt64 key.
+The dedicated reader consumes canonical VarUInt states independently per mark,
+verifies bounded Count frame checksums before decoding and limits one public
+call to 65,536 rows. The writer checks input identity/order/limits, then staged
+metadata, key/index axes and nominal/value readback before exclusive publication.
+Five cohesive Count owners have separate files (storage plan, state decoder,
+serialization profile, stream writer, staged validator); existing facade
+visibility and other aggregate refusal boundaries remain intact.
+Root passes 89 DEBUG and 89 RELEASE examples across the same ten selected specs,
+zero failures/errors/pending, actual child/guard exit 0 and immutable inputs.
+Two fresh native runs reconcile 142 actual pinned-stock statuses and exact
+full/middle/empty values/schema/part axes; DEBUG/RELEASE output parts are
+byte-identical. CHECK-valid 128-to-129 values fail the unchanged literal oracle.
+Executed staged nominal/value and mark-boundary bypasses fail unchanged guards;
+exact restoration passes. Scoped verdict: ROBUST for the explicit profiles,
+not all AggregateFunction states, arbitrary schemas/layouts or reader key
+provenance. Whole-file checksum verification is not generally implemented by
+the existing size-check API; the new integrity guard is Count-frame-specific.
+Count table/catalog consumers remain refused. Other aggregate states, recursive
+type/layout products, broader SAF, general MV/projections and large-facade
+decomposition remain open. Memory/performance remains deferred. Fresh clean
+depth-1 source `095fae58` is unbuilt, separate from executed stock `d9bcb5ab`.
+Exact commands, scope, evidence, decay and next frontier:
+[AGGREGATE_COUNT_WIDE_FRONTIER.md](AGGREGATE_COUNT_WIDE_FRONTIER.md).
+
+Previous capability checkpoint (W175, 2026-10-05): paired logical
 `AggregateFunction(count)`, `AggregateFunction(count, UInt64)` and
 `AggregateFunction(count, Nullable(UInt64))` now retain nominal identity
 through descriptor, known-type scalar/envelope and ordinary normalized bulk
@@ -33,7 +59,7 @@ pending and actual child/guard exit 0. An executed comparison-bypass control
 fails both negative mark-readback assertions; exact restoration, input-hash
 reconciliation, formatting and diff checks pass. Scoped verdict: ROBUST for
 this ownership move, not new type/runtime or performance qualification.
-Writer/reader/table/offline facades remain 25,662/16,284/7,222/4,049 lines;
+Writer/reader/table/offline facades were 25,662/16,284/7,222/1,560 lines;
 overall decomposition is unfinished. The W175 AggregateFunction admission
 RED spec was excluded from R1; its later qualification is recorded above.
 Fresh source `095fae58` is separately cloned, clean/shallow and unbuilt;
@@ -1171,8 +1197,10 @@ source/runtime identities and executed evidence.
    product. W173 pairs an explicit flattened shared-offset part view/writer for
    direct scalar/Nullable leaves. W174 qualifies explicit typed table/offline
    context mapping for the exact two-column DDL profile; implicit discovery and
-   general context mapping remain unqualified. AggregateFunction state
-   serialization and broader
+   general context mapping remain unqualified. W175/W176 pair the three exact
+   scalar Count state signatures through logical codecs and explicit Wide/LZ4
+   part readers/writers; table/catalog consumers and other AggregateFunction
+   states remain unqualified. Broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -1199,8 +1227,9 @@ source/runtime identities and executed evidence.
    not a public whole-part certificate for every composition.
    W172 pairs the nominal Nested descriptor and ordinary logical value/bulk
    kernel; specialized Nested LC/Variant/Dynamic products remain refused.
-   The general descriptor kernel still lacks AggregateFunction,
-   Custom, JSON and QBit/QBitWithStride tags. SimpleAggregateFunction's tag is
+   The general descriptor kernel admits AggregateFunction only for W175's
+   exact Count profile; other aggregate states, Custom, JSON and
+   QBit/QBitWithStride tags remain outside it. SimpleAggregateFunction's tag is
    now paired only within the W163/W164 numeric, W168 text, W169 Decimal and
    W170 temporal profiles.
    This is not an inventory of wholly absent physical types: dedicated Object,
