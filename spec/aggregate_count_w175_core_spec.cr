@@ -141,8 +141,11 @@ describe "W175 paired AggregateFunction(count) core" do
       Bytes[0x25_u8, 0x00, 0x05, 0x75, 0x6e, 0x69, 0x71, 0x58, 0x00, 0x00], # same-length wrong function
       w175_count_concat([base, Bytes[0x01_u8, 0x00]] of Bytes),             # parameterized, zero arguments
       w175_count_concat([base, Bytes[0x00_u8, 0x02, 0x04, 0x04]] of Bytes), # two arguments
-      w175_count_concat([base, Bytes[0x00_u8, 0x01, 0x01]] of Bytes),       # UInt8 argument
-      w175_count_concat([base, Bytes[0x00_u8, 0x01, 0x23, 0x01]] of Bytes), # Nullable(UInt8)
+      w175_count_concat([base, Bytes[0x00_u8, 0x01, 0x23, 0x00]] of Bytes), # transformed Nullable(Nothing)
+      w175_count_concat([
+        base,
+        Bytes[0x00_u8, 0x01, 0x25, 0x00, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x00, 0x00],
+      ] of Bytes), # nested Count argument
     ]
     bad_descriptors.each do |wire|
       expect_raises(CrystalClick::UnsupportedFormatError) do
@@ -192,10 +195,13 @@ describe "W175 paired AggregateFunction(count) core" do
       CrystalClick::BinaryDataTypeCodec.encode(type, w175_count_limits(max_depth: 1))
     end
 
+    expected_name_bounds = [24_u64, 42_u64, 52_u64]
+    minimum_name_bytes = [24_u64, 32_u64, 42_u64]
     [0, 1, 2].each_with_index do |expected_edges, index|
       name_budget = CrystalClick::BinaryCodecBudget.new(w175_count_limits, true)
       name_bounds = CrystalClick::BinaryTypeNameBudget.measure(w175_count_types[index], name_budget)
-      name_bounds[0].should eq(w175_count_types[index].name.bytesize.to_u64)
+      name_bounds[0].should eq(expected_name_bounds[index])
+      name_bounds[0].should be >= minimum_name_bytes[index]
       name_budget.element_count.should eq(expected_edges.to_i64)
       expected_nodes = expected_edges == 0 ? 1 : (index == 2 ? 3 : 2)
       name_budget.node_count.should eq(expected_nodes.to_i64)
@@ -212,12 +218,15 @@ describe "W175 paired AggregateFunction(count) core" do
         CrystalClick::BinaryTypeNameBudget.measure(type, CrystalClick::BinaryCodecBudget.new(limits, true))
       end
     end
-    name_limits = w175_count_limits(max_bytes: 83)
-    name_budget = CrystalClick::BinaryCodecBudget.new(name_limits, true)
+    name_budget = CrystalClick::BinaryCodecBudget.new(w175_count_limits, true)
     name_bounds = CrystalClick::BinaryTypeNameBudget.measure(type, name_budget)
-    name_bounds[0].should eq(42_u64)
+    name_bounds[0].should eq(52_u64)
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryTypeNameBudget.materialize(type, name_budget, name_bounds)
+      short_budget = CrystalClick::BinaryCodecBudget.new(
+        w175_count_limits(max_bytes: name_bounds[1].to_i - 1),
+        true,
+      )
+      CrystalClick::BinaryTypeNameBudget.materialize(type, short_budget, name_bounds)
     end
 
     expect_raises(CrystalClick::UnsupportedFormatError) do

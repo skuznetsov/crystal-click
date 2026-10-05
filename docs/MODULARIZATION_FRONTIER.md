@@ -9,20 +9,27 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Preparatory responsibility separation — W178
+## Current responsibility separation — W178
 
-The unloaded Count argument-name utility uses two classes/files:
+Count argument admission now uses cohesive loaded owners in separate files:
 `BinaryAggregateCountArgumentNameReader` (362 lines) owns bounded recursive
-grammar, and `BinaryAggregateCountArgumentNameParser` (27) owns canonical
-render-back policy. Root compares the reader move exactly after class rename
-and deindent; retained policy differs only in its helper reference. Both
-classes remain outside the default loader and public production admission.
-Five DEBUG and five RELEASE unit examples pass after the move, with immutable
-inputs and child/guard exit 0. The pre-fix negative-Enum assertion fails before
-repair; malformed/composition/name/limit controls pass afterward. This is a
-finite utility certificate, not a decomposition of the large facades, reduced
-coupling/performance proof or broad Count storage capability. Exact scope,
-source/runtime distinction and refresh triggers:
+grammar; `BinaryAggregateCountArgumentNameParser` (28) owns canonical
+render-back; `BinaryAggregateCountArgumentPolicy` (59) owns ordinary Count's
+nominal construction law. `BinaryAggregateCountType` (31) retains immutable
+argument identity, and `WideAggregateCountStoragePlan` (94) binds the exact
+descriptor to the existing single VarUInt lane. Facades still own dispatch and
+I/O/publication lifecycle; no class is added per argument signature.
+
+The native component qualifies 63 exact canonical profiles in each direction;
+the same 64-spec coverage passes 582 examples in each of DEBUG and RELEASE,
+partitioned into four disjoint serial cohorts with immutable inputs and
+child/guard exit 0. The interrupted combined RELEASE compiler exceeded the
+unchanged 12-GB guard and is not counted. Both modes' 63 generated parts match
+the native-qualified input inventories and bytes. The executed descriptor-
+equality bypass fails two unchanged negative assertions; root restores the
+exact policy hash and all final gates pass. This is a capability/ownership
+slice, not a neutral move of the large facades, reduced coupling, heap/RSS or
+performance proof. Exact scope, source/runtime distinction and refresh triggers:
 [AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md](AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md).
 
 ## Latest responsibility separation — W177

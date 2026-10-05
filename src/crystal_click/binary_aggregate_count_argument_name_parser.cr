@@ -7,7 +7,8 @@ module CrystalClick
   # column, a value lane, or a wrapper around AggregateFunction(count).
   # It also does not assert ClickHouse's normalized aggregate identity:
   # Nullable(Nothing), for example, can be reported under a distinct function
-  # name and must be checked by a later storage-plan admission owner.
+  # name and is rejected by BinaryAggregateCountArgumentPolicy, not this
+  # standalone argument grammar.
   class BinaryAggregateCountArgumentNameParser
     def self.parse_canonical(
       source : String,

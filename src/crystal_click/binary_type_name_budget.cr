@@ -55,15 +55,10 @@ module CrystalClick
                  function_name_bytes = type.simple_aggregate_type.not_nil!.function_name.bytesize.to_u64
                  add(27_u64, add(function_name_bytes, children[0][0]))
                when BinaryDataType::TAG_AGGREGATE_COUNT
-                 case type.aggregate_count_type.not_nil!.argument
-                 when BinaryAggregateCountType::Argument::None
-                   24_u64
-                 when BinaryAggregateCountType::Argument::UInt64
-                   32_u64
-                 when BinaryAggregateCountType::Argument::NullableUInt64
-                   42_u64
+                 if argument_bounds = aggregate_count_argument_bounds
+                   add(26_u64, argument_bounds[0])
                  else
-                   raise UnsupportedFormatError.new("AggregateFunction(count) name is outside the admitted profile")
+                   24_u64
                  end
                when BinaryDataType::TAG_MAP
                  add(7_u64, add(children[0][0], children[1][0]))

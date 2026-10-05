@@ -1,26 +1,13 @@
 module CrystalClick
-  # Nominal identity for the deliberately narrow AggregateFunction(count)
-  # descriptor profile. The argument kind is stored as a closed discriminator,
-  # not as a generic BinaryDataType child: count's state is a leaf even when
-  # the descriptor has one argument type.
+  # Nominal identity for the admitted AggregateFunction(count) profile. Its
+  # optional argument is immutable descriptor metadata, never a value child.
   class BinaryAggregateCountType
     VERSION = 0_u8
 
-    enum Argument
-      None
-      UInt64
-      NullableUInt64
-    end
+    getter argument_type : BinaryDataType?
 
-    getter argument : Argument
-
-    def initialize(@argument : Argument)
-      case @argument
-      when Argument::None, Argument::UInt64, Argument::NullableUInt64
-        # Closed local profile.
-      else
-        raise ArgumentError.new("invalid AggregateFunction(count) argument kind")
-      end
+    def initialize(@argument_type : BinaryDataType? = nil)
+      BinaryAggregateCountArgumentPolicy.require!(@argument_type)
     end
 
     def function_name : String
@@ -28,22 +15,17 @@ module CrystalClick
     end
 
     def type_name : String
-      case @argument
-      when Argument::None
-        "AggregateFunction(count)"
-      when Argument::UInt64
-        "AggregateFunction(count, UInt64)"
-      when Argument::NullableUInt64
-        "AggregateFunction(count, Nullable(UInt64))"
+      if argument = @argument_type
+        "AggregateFunction(count, #{argument.name})"
       else
-        raise ArgumentError.new("invalid AggregateFunction(count) argument kind")
+        "AggregateFunction(count)"
       end
     end
 
     def ==(other : BinaryAggregateCountType) : Bool
-      @argument == other.@argument
+      @argument_type == other.@argument_type
     end
 
-    def_hash @argument
+    def_hash @argument_type
   end
 end

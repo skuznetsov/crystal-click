@@ -1,22 +1,35 @@
 # CrystalClick project status
 
-Current investigation (W178, 2026-10-05): production admission remains W177's
-three Count signatures below. A fresh clean depth-1 source snapshot is pinned
-to `29e0e201c786933171818f17c0fefc2bb11ec0a2`, separately from the executed
-stock `d9bcb5ab`. Root hash-checks Luna's 16-file source comparison with no
-differences. A fresh stock diagnostic observes 75 profiles: 65 exact ordinary
-Count lanes, one canonicalized `nothingUInt64` zero-only identity and nine
-server construction refusals; all 409 process/hash records reconcile.
-The bounded canonical argument-name preparation has two classes/files and
-passes five DEBUG and five RELEASE unit examples after an independently
-reproduced negative-Enum failure. It remains unloaded, not new stored-type
-support. The public argument-admission probe still has four assertion REDs and
-is not staged with this preparation. Remaining paired types/layouts, general
-MV/projections, large-facade decomposition and arbitrary-schema writing remain
-open; memory/performance stays deferred. Scope, commands and continuation:
+Current implementation (W178, 2026-10-05): ordinary Count now retains a bounded
+canonical argument descriptor instead of a closed three-signature discriminator.
+The argument is immutable nominal metadata, not a physical value child; Count
+keeps one VarUInt state lane. Separate grammar, canonical parse policy and
+aggregate admission owners are loaded, and the shared storage-plan gateway
+retains full descriptor identity. `Nullable(Nothing)`'s transformed
+`nothingUInt64` identity, noncanonical Decimal-width aliases, Count-containing
+arguments and unqualified outer/storage products remain refused.
+The native component passes 63 canonical profiles in each direction; root
+reconciles all 1,325 statuses and input/output hashes, literal values and runtime
+pins. The same 64-spec coverage passes 582 examples in DEBUG and 582 in RELEASE,
+each partitioned into four disjoint serial cohorts, with zero failures/errors/
+pending, child/guard exit 0 and 970 immutable code-input hashes. The combined
+RELEASE compiler exceeded the unchanged 12-GB guard; that attempt is not counted.
+Root verifies that both modes' 63 generated parts are byte-identical to the
+native-qualified inputs. An executed descriptor-equality bypass fails two
+unchanged negative assertions; exact restoration and final gates pass. Scoped
+verdict: ROBUST for the declared canonical metadata law and finite paired
+witnesses, not all recursive argument products or the complete repository suite.
+A fresh clean, unbuilt depth-1 source snapshot is pinned to
+`29e0e201c786933171818f17c0fefc2bb11ec0a2`, distinct from executed stock
+`26.10.1.1201` / `d9bcb5ab`. Root hash-checks Luna's 16-file comparison with no
+differences; this is not a fresh-master runtime certificate. The binary header
+reserves removed timezone-bearing Time tags 0x33/0x35, so strictly append-only
+type definitions are not an invariant. Remaining paired types/layouts, general
+MV/projections, large-facade decomposition and arbitrary-schema writing stay
+open; memory/performance is deferred. Scope, commands and continuation:
 [AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md](AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md).
 
-Latest capability checkpoint (W177, 2026-10-05): the three exact Count state
+Previous capability checkpoint (W177, 2026-10-05): the three exact Count state
 signatures now reach ordinary typed table scans, physical-row windows,
 whole candidate granules and offline column `.values`. Batches and retained
 values preserve the exact nominal BinaryValue descriptor; numeric aliases and
@@ -1011,14 +1024,17 @@ source/runtime identities and executed evidence.
 
 ## What is usable now
 
-- W175-W177 pair the three exact scalar Count state signatures through logical
-  codecs, complete two-column Wide/LZ4 parts, typed table/window/candidate
-  scans and exact DDL-bound offline `.values`. Use
+- W178 pairs ordinary Count with bounded canonical argument metadata through
+  logical codecs, complete two-column Wide/LZ4 parts, typed table/window/
+  candidate scans and exact DDL-bound offline `.values`. The native certificate
+  covers 63 canonical argument profiles plus inherited no-argument controls,
+  not every recursive argument product or 63 new physical serializers. Use
   `batch.aggregate_count_states_for(column, expected_type)` for nominal
   BinaryValue states; the batch Slice is callback-borrowed, copied state
-  handles and `.values` are owned. Other argument/function/product/layout
-  profiles and Count projection payloads remain refused. See
-  [the W177 frontier](AGGREGATE_COUNT_CONSUMERS_FRONTIER.md).
+  handles and `.values` are owned. Transformed `nothingUInt64`, other aggregate
+  functions, unqualified outer/storage products and Count projection payloads
+  remain refused. See
+  [the W178 frontier](AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md).
 - `BinaryDataType.dynamic` and `BinaryValue.dynamic` provide nominal-cap
   identity and paired generic logical Dynamic values. W153 preserves selected
   type/value identity, recursive containers and typed NULL distinctions;
@@ -1245,11 +1261,13 @@ source/runtime identities and executed evidence.
    product. W173 pairs an explicit flattened shared-offset part view/writer for
    direct scalar/Nullable leaves. W174 qualifies explicit typed table/offline
    context mapping for the exact two-column DDL profile; implicit discovery and
-   general context mapping remain unqualified. W175-W177 pair the three exact
-   scalar Count state signatures through logical codecs and explicit Wide/LZ4
-   part readers/writers, typed table/window/candidate scans and exact DDL-bound
-   offline `.values`; other AggregateFunction states and broader Count
-   arguments/products/layouts remain unqualified. Broader
+   general context mapping remain unqualified. W178 extends W175-W177's ordinary
+   Count state to bounded canonical argument metadata through logical codecs,
+   explicit Wide/LZ4 part readers/writers, typed table/window/candidate scans
+   and exact DDL-bound offline `.values`. Its finite native matrix covers 63
+   canonical argument profiles, not every recursive argument product. Other
+   AggregateFunction states and unqualified outer/storage products/layouts
+   remain outside the certificate. Broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -1276,9 +1294,9 @@ source/runtime identities and executed evidence.
    not a public whole-part certificate for every composition.
    W172 pairs the nominal Nested descriptor and ordinary logical value/bulk
    kernel; specialized Nested LC/Variant/Dynamic products remain refused.
-   The general descriptor kernel admits AggregateFunction only for W175's
-   exact Count profile; other aggregate states, Custom, JSON and
-   QBit/QBitWithStride tags remain outside it. SimpleAggregateFunction's tag is
+   The general descriptor kernel admits AggregateFunction only for W178's
+   ordinary Count canonical-argument profile; other aggregate states, Custom,
+   JSON and QBit/QBitWithStride tags remain outside it. SimpleAggregateFunction's tag is
    now paired only within the W163/W164 numeric, W168 text, W169 Decimal and
    W170 temporal profiles.
    This is not an inventory of wholly absent physical types: dedicated Object,

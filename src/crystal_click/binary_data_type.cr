@@ -255,27 +255,10 @@ module CrystalClick
     end
 
     # A top-level count state is nominally distinct from UInt64 despite using
-    # UInt64 as its owned in-memory carrier. Its descriptor signature admits
-    # only no argument, UInt64, or Nullable(UInt64); the caller's descriptor
-    # is reduced to that closed kind and never retained or aliased.
+    # UInt64 as its owned in-memory carrier. The optional argument is nominal
+    # descriptor metadata and does not become a generic value child.
     def self.aggregate_count(argument : BinaryDataType? = nil) : BinaryDataType
-      nominal = case argument
-                when nil
-                  BinaryAggregateCountType.new(BinaryAggregateCountType::Argument::None)
-                else
-                  case argument.tag
-                  when TAG_UINT64
-                    BinaryAggregateCountType.new(BinaryAggregateCountType::Argument::UInt64)
-                  when TAG_NULLABLE
-                    if argument.child_count == 1 && argument.child_at(0).tag == TAG_UINT64
-                      BinaryAggregateCountType.new(BinaryAggregateCountType::Argument::NullableUInt64)
-                    else
-                      raise ArgumentError.new("AggregateFunction(count) admits only Nullable(UInt64) as a nullable argument")
-                    end
-                  else
-                    raise ArgumentError.new("AggregateFunction(count) admits only UInt64 or Nullable(UInt64) arguments")
-                  end
-                end
+      nominal = BinaryAggregateCountType.new(argument)
       new(TAG_AGGREGATE_COUNT, nil, [] of BinaryDataType, [] of String, nil, aggregate_count_type: nominal)
     end
 
@@ -460,19 +443,11 @@ module CrystalClick
       @aggregate_count_type
     end
 
-    # Reconstruct the canonical argument descriptor on demand so neither the
-    # public constructor's input object nor a mutable caller reference is
-    # retained by the nominal Count owner.
+    # Return the exact immutable descriptor held by Count's nominal metadata.
+    # It remains separate from the generic physical child list.
     def aggregate_count_argument_type : BinaryDataType?
       descriptor = @aggregate_count_type || return nil
-      case descriptor.argument
-      when BinaryAggregateCountType::Argument::None
-        nil
-      when BinaryAggregateCountType::Argument::UInt64
-        BinaryDataType.primitive("UInt64")
-      when BinaryAggregateCountType::Argument::NullableUInt64
-        BinaryDataType.nullable(BinaryDataType.primitive("UInt64"))
-      end
+      descriptor.argument_type
     end
 
     # Enum declarations are metadata edges/nodes in the binary budget, not
