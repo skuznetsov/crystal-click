@@ -25024,67 +25024,26 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      checksums = PartChecksums.open(stage)
-      checksums.entries.each_key do |name|
-        checksums.validate_selected_entries(stage, name)
-      end
-      if temporal_type = DateTimeColumnType.parse(type_name)
-        if temporal_type.shape == DateTimeColumnType::Shape::Scalar &&
-           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, temporal_type.type_name)
-          raise CorruptPartError.new("staged typed temporal column metadata differs")
-        end
-      end
-      if interval_type = IntervalColumnType.parse(type_name)
-        if interval_type.shape == IntervalColumnType::Shape::Scalar &&
-           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, interval_type.type_name)
-          raise CorruptPartError.new("staged typed Interval column metadata differs")
-        end
-      end
-      if aggregate_type = SimpleAggregateColumnType.parse(type_name)
-        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar &&
-           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, aggregate_type.type_name)
-          raise CorruptPartError.new("staged typed SimpleAggregateFunction column metadata differs")
-        end
-      end
-
-      mark_count = checked_mark_count(keys.size, rows_per_mark)
-      key_part = WidePart.open(stage, key_name)
-      value_part = WidePart.open_typed(stage, value_name)
-      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
-      raise CorruptPartError.new("staged typed payload row count does not match") unless value_part.row_count == values.size.to_u64
-      raise CorruptPartError.new("staged typed payload column type does not match") unless value_part.column_type == type_name
-
-      expected_mark_rows = Array(UInt64).new(mark_count)
-      start = 0
-      while start < keys.size
-        rows = {rows_per_mark, keys.size - start}.min
-        mark_index = expected_mark_rows.size
-        expected_mark_rows << rows.to_u64
-        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
-        expected_values = read_typed_numeric_mark(value_part, value_name, mark_index, values, type_name)
-        rows.times do |offset|
-          unless expected_keys[offset] == keys[start + offset] && typed_numeric_value_equal?(expected_values[offset], values[start + offset])
-            raise CorruptPartError.new("staged typed numeric stream readback differs from input")
-          end
-        end
-        start += rows
-      end
-      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
-      raise CorruptPartError.new("staged typed payload marks do not match") unless value_part.mark_row_counts == expected_mark_rows
-      {% if T == Bool %}
-        validate_staged_bool_values_stream(stage, value_name, values, rows_per_mark)
-      {% end %}
-
-      index = PrimaryKeyIndex.open(stage, mark_count, checksums)
-      expected_index = Array(UInt64).new(mark_count + 1)
-      row = 0
-      while row < keys.size
-        expected_index << keys[row]
-        row += rows_per_mark
-      end
-      expected_index << keys.last
-      raise CorruptPartError.new("staged primary index differs from input") unless index.keys == expected_index
-      nil
+      StagedTypedNumericPartValidator.validate_scalar(
+        stage,
+        key_name,
+        value_name,
+        keys,
+        values,
+        type_name,
+        rows_per_mark,
+        ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
+        ->(part : WidePart, column : String, mark_index : Int32, source_values : Slice(T), exact_type : String) {
+          read_typed_numeric_mark(part, column, mark_index, source_values, exact_type)
+        },
+        ->(expected : T, actual : T) { typed_numeric_value_equal?(expected, actual) },
+        ->(validation_stage : String, column : String, source_values : Slice(T), mark_size : Int32) {
+          {% if T == Bool %}
+            validate_staged_bool_values_stream(validation_stage, column, source_values, mark_size)
+          {% end %}
+          nil
+        }
+      )
     end
 
     private def self.read_typed_numeric_mark(
@@ -25128,57 +25087,29 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      checksums = PartChecksums.open(stage)
-      checksums.entries.each_key { |name| checksums.validate_selected_entries(stage, name) }
-      if temporal_type = DateTimeColumnType.parse(type_name)
-        if temporal_type.shape == DateTimeColumnType::Shape::Nullable &&
-           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, temporal_type.type_name)
-          raise CorruptPartError.new("staged Nullable temporal column metadata differs")
-        end
-      end
-      if interval_type = IntervalColumnType.parse(type_name)
-        if interval_type.shape == IntervalColumnType::Shape::Nullable &&
-           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, interval_type.type_name)
-          raise CorruptPartError.new("staged Nullable Interval column metadata differs")
-        end
-      end
-      if aggregate_type = SimpleAggregateColumnType.parse(type_name)
-        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable &&
-           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, aggregate_type.type_name)
-          raise CorruptPartError.new("staged Nullable SimpleAggregateFunction column metadata differs")
-        end
-      end
-
-      mark_count = checked_mark_count(keys.size, rows_per_mark)
-      key_part = WidePart.open(stage, key_name)
-      value_part = WidePart.open_typed(stage, value_name)
-      raise CorruptPartError.new("staged key row count does not match") unless key_part.row_count == keys.size.to_u64
-      raise CorruptPartError.new("staged Nullable payload row count does not match") unless value_part.row_count == values.size.to_u64
-      raise CorruptPartError.new("staged Nullable payload type does not match") unless value_part.column_type == type_name
-
-      expected_mark_rows = Array(UInt64).new(mark_count)
-      start = 0
-      while start < keys.size
-        rows = {rows_per_mark, keys.size - start}.min
-        mark_index = expected_mark_rows.size
-        expected_mark_rows << rows.to_u64
-        expected_keys = key_part.read_uint64_mark_range(key_name, mark_index, 1)
-        expected_values = read_typed_nullable_numeric_mark(value_part, value_name, mark_index, values, type_name)
-        rows.times do |offset|
-          unless expected_keys[offset] == keys[start + offset] && typed_nullable_numeric_value_equal?(expected_values[offset], values[start + offset])
-            raise CorruptPartError.new("staged Nullable numeric stream readback differs from input")
-          end
-        end
-        start += rows
-      end
-      raise CorruptPartError.new("staged key marks do not match") unless key_part.mark_row_counts == expected_mark_rows
-      raise CorruptPartError.new("staged Nullable payload marks do not match") unless value_part.mark_row_counts == expected_mark_rows
-      {% if T == Bool? %}
-        validate_staged_nullable_bool_values_stream(stage, value_name, values, rows_per_mark)
-      {% end %}
-
-      validate_staged_primary_index(stage, checksums, keys, rows_per_mark, mark_count)
-      nil
+      StagedTypedNumericPartValidator.validate_nullable(
+        stage,
+        key_name,
+        value_name,
+        keys,
+        values,
+        type_name,
+        rows_per_mark,
+        ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
+        ->(part : WidePart, column : String, mark_index : Int32, source_values : Slice(T), exact_type : String) {
+          read_typed_nullable_numeric_mark(part, column, mark_index, source_values, exact_type)
+        },
+        ->(expected : T, actual : T) { typed_nullable_numeric_value_equal?(expected, actual) },
+        ->(validation_stage : String, column : String, source_values : Slice(T), mark_size : Int32) {
+          {% if T == Bool? %}
+            validate_staged_nullable_bool_values_stream(validation_stage, column, source_values, mark_size)
+          {% end %}
+          nil
+        },
+        ->(validation_stage : String, checksums : PartChecksums, source_keys : Slice(UInt64), mark_size : Int32, marks : Int32) {
+          validate_staged_primary_index(validation_stage, checksums, source_keys, mark_size, marks)
+        }
+      )
     end
 
     private def self.validate_staged_nullable_string_part(

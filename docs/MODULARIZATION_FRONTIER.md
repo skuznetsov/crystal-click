@@ -9,8 +9,9 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-The next larger seams are the writer's staged validation and physical stream
-binding, followed by reader granule/column orchestration and table adapters.
+The next larger seams are additional writer staged-validation cohorts and
+physical stream binding, followed by reader granule/column orchestration and
+table adapters. W162 below extracts only scalar/nullable typed numeric staging.
 These are proposed decomposition boundaries, not completed extractions. Each
 slice needs an explicit call-site inventory, retained-buffer/resource lifetime
 checks where relevant, baseline characterizations and affected consumer tests.
@@ -35,13 +36,129 @@ I/O resources. The wrapper keeps its nominal identity while reusing the
 UInt64 physical serializer and existing typed staging/readback/publication.
 There is no class per aggregate-function or scalar/Nullable combination.
 
-The current reader/writer/table facades are 15,798/25,316/6,852 lines. These
+The W161 reader/writer/table facades are 15,798/25,316/6,852 lines. These
 counts expose unfinished responsibility-level decomposition; the new owners
 do not constitute overall architecture completion or a speed certificate.
 The finite paired capability and its verification scope are recorded in
-[SIMPLE_AGGREGATE_FRONTIER.md](SIMPLE_AGGREGATE_FRONTIER.md). The next validator
-boundary below remains PROPOSED. Re-inventory its call sites after W161's
-UInt64/UInt64? dispatch and exact metadata additions before extraction.
+[SIMPLE_AGGREGATE_FRONTIER.md](SIMPLE_AGGREGATE_FRONTIER.md). These counts are
+the W161 baseline; W162 below extracts one staged-validator cohort without
+widening the paired type frontier.
+
+## Staged typed numeric validator extraction — W162
+
+Status: VERIFIED within this behavior-preserving extraction. Baseline: clean
+`acae96b1ff4c66cf17ca72f00b9f6bfc101ce620`.
+Risk: CAUTION (behavior-neutral staged verification refactor).
+Rollback: one local atomic extraction commit after green gates; no push or
+history rewrite. This moves responsibility, not format/API/type admission.
+
+Move only the scalar and nullable numeric staged-validation bodies into one
+private stateless `WidePartWriter::StagedTypedNumericPartValidator`, in
+`src/crystal_click/wide_part_writer/staged_typed_numeric_part_validator.cr`.
+Preserve same-signature private facade methods, generic `Slice(T)`/`forall T`,
+compile-time Bool/Bool? branches and the Nullable(String) sibling dispatcher.
+Shared mark counting, semantic readback selectors, value comparators, Bool
+raw-stream guards and nullable primary-index helper retain facade ownership.
+Typed synchronous callbacks bridge those existing seams without making shared
+helpers public or calling TypedMarkReadback directly from the new owner.
+The owner retains no stage, inputs, callback, reader or I/O handle after return.
+Stage creation, publication and failure cleanup remain with the existing writer.
+
+The baseline locators are wide_part_writer.cr:25000 (dispatcher), 25018
+(scalar validator), 25090 (scalar selector), 25100 (bit-exact comparator),
+25122 (nullable numeric validator), 25184 (Nullable(String) sibling), 25224
+(shared primary-index helper) and 25243 (nullable selector). They are source
+locators, not stable contracts. Scalar inline primary-index validation and
+nullable helper invocation remain distinct. Preserve checksum validation,
+nominal metadata, checked mark count, reader/count/type checks, ordered mark
+readback, complete mark counts, raw Bool guards and primary-index order.
+
+Strongest failure: correct values mask a bypassed facade selector or pinned
+reader-class dispatch. Before production edits, execute the new W162
+characterization and existing selector spec on the unchanged baseline. After
+the move, require the same traces and values, plus a reversible direct-selector
+bypass that fails the intended trace; restore and reconcile source hashes.
+Characterize multi-mark scalar/nullable values, exact nominal metadata,
+supplied-reader overrides, bit-exact floats and failed-publication cleanup.
+Run focused and affected typed writer, Bool, timezone, Interval,
+SimpleAggregateFunction and metadata/readback regressions in DEBUG/RELEASE,
+serially under run_safe.sh with isolated caches, SDK26.5, Crystal1.21.0,
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace` (RELEASE
+also `--release --no-debug`). Every counted group must exit 0 with zero
+failures/errors/pending. Root independently compares moved bodies, retained
+facade remainder, actual test membership/results and current input hashes.
+The executed inventory and results below qualify only this extraction.
+This is not a new native runtime, full architecture or performance certificate.
+
+Observed characterization: on unchanged production, the new W162 spec and
+existing selector spec pass nine DEBUG examples with exit 0 and zero
+failures/errors/pending. The initial extracted gate exposes Crystal 1.21's
+refusal of abstract `Int` Proc arguments; concrete callback `Int32` coordinates
+match Slice/Array sizes while the existing facade selector/helper signatures
+remain unchanged. After that correction, the same nine examples pass. A
+temporary bypass of both facade selector callbacks preserves readback values
+but produces six intended assertion failures, no errors/pending, and exit 1.
+After restoration the writer hash matches the previous green state and the
+nine-example DEBUG gate passes again. The bypass is not retained in production.
+
+Root separately verifies the entire writer remainder against the baseline,
+excluding only the two sealed method definitions; it is byte-identical.
+The moved bodies are byte-identical after indentation and the explicitly
+listed callback-call substitutions. The require graph adds only this owner.
+The owner has no instance fields, retained callbacks or resource ownership;
+all callback arguments are borrowed synchronously. Callback overhead is not
+measured here. The class has 150 lines and the writer facade has 25,247 lines;
+the large facade and broader modularization remain unfinished.
+
+Final affected gates: nine DEBUG examples (the new W162 and existing selector
+specs) and 179 RELEASE examples in 27 unique specs and five disjoint groups.
+Every counted group exits 0 with zero failures/errors/pending. The RELEASE
+counts are 16, 37, 28, 56 and 42, respectively:
+
+1. `staged_typed_numeric_validator_w162_spec`,
+   `wide_part_writer_typed_mark_readback_spec`, `wide_part_writer_typed_spec`.
+2. `wide_part_writer_bool_canonical_w98_spec`,
+   `wide_part_writer_decimal_precision_w102_spec`,
+   `timezone_temporal_writer_w104_spec`, `wide_part_writer_date_spec`,
+   `wide_part_writer_datetime_spec`, `wide_part_writer_nullable_temporal_spec`.
+3. `wide_part_writer_w15_spec`, `wide_part_writer_w16_spec`,
+   `wide_part_writer_w17_spec`, `wide_part_writer_w18_spec`,
+   `wide_part_writer_w19_spec`, `wide_part_writer_w20_spec`.
+4. `wide_part_reader_w35_spec`, `wide_part_reader_w36_spec`,
+   `wide_part_reader_w37_spec`, `wide_part_reader_w38_spec`,
+   `wide_part_reader_w49_spec`, `wide_part_reader_w50_spec`.
+5. `interval_w160_wide_spec`, `interval_w160_guards_spec`,
+   `simple_aggregate_w161_wide_spec`, `simple_aggregate_w161_guards_spec`,
+   `wide_part_writer_metadata_w150_spec`, `wide_part_writer_spec`.
+
+Each name denotes `spec/<name>.cr`. The actual guarded command is
+`env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+TMPDIR=/private/tmp /bin/bash
+/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby
+300 12288 /private/tmp/crystal-click-w162.589eVA/run_gate.rb
+<label> <debug|release> <exact spec paths>`.
+The runner executes `/opt/homebrew/bin/crystal spec` with the flags above and
+checks actual subprocess exit, parsed summary and unchanged input manifests.
+Its baseline, extracted, restored, control and five RELEASE results/logs are
+under `/private/tmp/crystal-click-w162.589eVA`; these are ephemeral local
+artifacts, not a committed fixture or a self-authenticating certificate.
+
+Root's separate reconciliation checks exact group membership, log summaries,
+before/after manifests and all 324 current source/spec/support inputs. It
+also checks that only the writer changed in the temporary control and that
+the pre-control and restored 299-input manifests are identical. The initial
+abstract-Int compile failure and intentional bypass failures are not counted
+as positive gates. Formatter and `git diff --check` pass. Scoped hostile
+verdict: ROBUST for retained semantic dispatch, check ordering and this
+extraction's affected consumer surface. Existing native certificates retain
+their original revisions/runtime/profile; no fresh stock or benchmark run
+was performed for W162. Broader modularization, types, MV/projections and the
+overall speed objective remain open.
+
+Refresh after owner/facade/require graph/selector/helper/lifecycle changes.
+Luna workers have separate implementation, characterization and read-only
+inventory ownership; root owns serial jobs, hostile review and local commit.
 
 ## Interval owners and next validator boundary — W160
 
@@ -55,7 +172,8 @@ per-type writer wrapper. The general writer/reader/table facades are still
 25,247/15,759/6,818 lines. This is incremental ownership, not completion of
 the requested architecture cleanup or a coupling/performance certificate.
 
-Next extraction: PROPOSED, not implemented or verified. One private
+Historical W160 proposal, subsequently implemented and qualified by W162
+above: one private
 `StagedTypedNumericPartValidator` should own the scalar and nullable staged
 numeric verification cohort. Preserve the dispatcher and Nullable(String)
 sibling route in `WidePartWriter`, along with same-signature facade methods
@@ -89,8 +207,9 @@ and RELEASE under the serial resource guard; require exit 0 and zero
 failures/errors/pending. A reversible direct-owner bypass must fail the
 intended selector trace. Stage creation, cleanup and publication stay with
 the writer: inputs and stage are borrowed synchronously, not retained or
-owned by the validator. No extraction certificate exists yet. Re-inventory
-after validator/facade/selector/generic dispatch or lifecycle changes.
+owned by the validator. At W160 no extraction certificate existed; the
+subsequent W162 certificate is recorded above. Re-inventory after
+validator/facade/selector/generic dispatch or lifecycle changes.
 
 ## Object column lane binder plan (2026-10-04)
 

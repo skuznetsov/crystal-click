@@ -1,6 +1,27 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04 local / 2026-10-05 UTC): W161 pairs
+Current architecture checkpoint (W162, 2026-10-04 local / 2026-10-05 UTC):
+scalar and nullable typed-numeric staged validation now has one private,
+stateless `StagedTypedNumericPartValidator` owner in its own 150-line file.
+Same-signature facade entry points and shared helpers retain semantic-reader
+dispatch, bit-exact comparison, canonical Bool guards and validation order.
+Scalar primary-index validation remains inline; nullable validation calls the
+existing shared helper. The writer remainder is byte-identical to `acae96b`
+after excluding the two sealed method definitions, and the moved bodies are
+exact after the declared callback substitutions.
+Root passes 9 DEBUG and 179 RELEASE examples (27 unique RELEASE specs in five
+disjoint groups), with actual exit 0 and zero failures/errors/pending.
+A temporary selector bypass produces six failures; exact restoration passes.
+All 324 final source/spec/support inputs reconcile with the executed gates.
+Scoped hostile verdict: ROBUST for this behavior-preserving ownership move.
+The reader/writer/table facades remain 15,798/25,247/6,852 lines; this is not
+completion of the architecture cleanup. No new type, API, physical layout,
+native compatibility or performance claim is admitted by this extraction.
+Exact scope, commands, evidence and refresh conditions:
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Previous capability checkpoint (W161 at `acae96b`, 2026-10-04 local /
+2026-10-05 UTC): W161 pairs
 nine canonical unary, non-parametric `SimpleAggregateFunction` identities with
 exact UInt64 storage: any, anyLast, min, max, sum, sumWithOverflow, groupBitAnd,
 groupBitOr and groupBitXor. The descriptor/value/bulk/physical codecs and
@@ -11,8 +32,8 @@ aggregate execution or AggregatingMergeTree lifecycle support.
 Root passes 31 focused DEBUG examples (six unique specs) and 748 affected
 RELEASE examples (64 unique specs, eight disjoint groups), all counted groups
 with exit 0 and zero failures/errors/pending. Root independently reconciles
-actual logs, membership and all 360 current source/spec inputs. The incomplete
-aggregate attempt is not counted; its final eighth group passes separately.
+actual logs, membership and all 360 then-current source/spec inputs. The
+incomplete aggregate attempt is not counted; its final eighth group passes separately.
 The opt-in stock reader executes two additional actual native-fixture examples.
 Pinned stock qualification passes a native-authored nineteen-column Wide/LZ4
 source, eighteen library-authored scalar/Nullable complete parts, actual
@@ -23,9 +44,9 @@ Root independently checks native output bytes and confirms the type mutant
 changes only columns.txt. All 363 native source/spec/script inputs match the
 final gate state. Scoped hostile verdict: ROBUST for this finite profile only.
 Three cohesive new owners have separate files, while the reader/writer/table
-facades remain 15,798/25,316/6,852 lines. The next staged-validator extraction
-is PROPOSED, not implemented. Fresh clean shallow source `41b7bd50` is unbuilt
-and distinct from executed stock build `d9bcb5ab`. Wider type/layout products,
+facades at W161 remain 15,798/25,316/6,852 lines. The subsequent behavior-neutral
+W162 staged-validator extraction is recorded above. Fresh clean shallow source
+`41b7bd50` is unbuilt and distinct from executed stock build `d9bcb5ab`. Wider type/layout products,
 general MV/projections and architecture cleanup remain open; memory/performance
 work stays deferred. Exact scope, inventory, commands and refresh conditions:
 [SIMPLE_AGGREGATE_FRONTIER.md](SIMPLE_AGGREGATE_FRONTIER.md).
@@ -819,7 +840,7 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,852 lines at W161; the reader/writer are now 15,798/25,316 lines.
+   is 6,852 lines at W162; the reader/writer are now 15,798/25,247 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -829,8 +850,10 @@ source/runtime identities and executed evidence.
    characterized ownership move, not a class per type combination.
    The first writer seam is now executed: the two private generic selectors
    `read_typed_numeric_mark` and `read_typed_nullable_numeric_mark` delegate to
-   one private `TypedMarkReadback` owner, while staged-validation orchestration
-   remains in the facade. `Slice(T)`/`forall T`, module reopen overrides and
+   one private `TypedMarkReadback` owner. W162 now extracts the scalar and
+   nullable numeric staged-validator cohort to a separate private owner,
+   retaining same-signature facade entry points; other validator cohorts
+   remain in the facade. `Slice(T)`/`forall T`, module reopen overrides and
    supplied-reader virtual dispatch remain pinned. Numeric/nullable and
    temporal readbacks supply positive witnesses; a direct-owner bypass fails
    the selector trace. Metadata tampering remains a separate validator guard,
@@ -849,11 +872,10 @@ source/runtime identities and executed evidence.
    and semantic reader-gate owners; W161 adds three cohesive nominal-function,
    scalar/Nullable grammar and semantic-gate owners, each in its own file.
    Physical I/O stays with the checked fixed-width reader and staging stays
-   with the existing typed writer. The proposed next numeric staged-validator
-   boundary and
-   its selector/lifetime/publication guards are recorded in
-   [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md); it has not yet
-   been extracted or qualified. Keep one
+   with the existing typed writer. The qualified W162 numeric staged-validator
+   boundary, its selector/lifetime/publication guards and the remaining
+   validator cohorts are recorded in
+   [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md). Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
