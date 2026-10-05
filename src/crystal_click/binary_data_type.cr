@@ -185,16 +185,21 @@ module CrystalClick
       storage_type : BinaryDataType = primitive("UInt64"),
     ) : BinaryDataType
       storage_type_name = case storage_type.tag
-                          when TAG_UINT8   then "UInt8"
-                          when TAG_UINT16  then "UInt16"
-                          when TAG_UINT32  then "UInt32"
-                          when TAG_UINT64  then "UInt64"
-                          when TAG_INT8    then "Int8"
-                          when TAG_INT16   then "Int16"
-                          when TAG_INT32   then "Int32"
-                          when TAG_INT64   then "Int64"
-                          when TAG_FLOAT32 then "Float32"
-                          when TAG_FLOAT64 then "Float64"
+                          when TAG_UINT8    then "UInt8"
+                          when TAG_UINT16   then "UInt16"
+                          when TAG_UINT32   then "UInt32"
+                          when TAG_UINT64   then "UInt64"
+                          when TAG_UINT128  then "UInt128"
+                          when TAG_UINT256  then "UInt256"
+                          when TAG_INT8     then "Int8"
+                          when TAG_INT16    then "Int16"
+                          when TAG_INT32    then "Int32"
+                          when TAG_INT64    then "Int64"
+                          when TAG_INT128   then "Int128"
+                          when TAG_INT256   then "Int256"
+                          when TAG_FLOAT32  then "Float32"
+                          when TAG_FLOAT64  then "Float64"
+                          when TAG_BFLOAT16 then "BFloat16"
                           else
                             # Reject from the exact tag before asking an
                             # arbitrary child to render a recursive SQL name.

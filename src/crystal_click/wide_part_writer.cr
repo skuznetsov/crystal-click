@@ -11524,8 +11524,8 @@ module CrystalClick
     end
 
     # Validate a semantic aggregate before the typed numeric payload path can
-    # use width-based encoding. `typed_type_name` is the existing exact map
-    # for the supplied Slice element type, including its Nullable wrapper.
+    # use width-based encoding. Keep its carrier check on the central SAF map
+    # so explicit aggregate writes do not widen ordinary type inference.
     private def self.validate_simple_aggregate_payload!(
       type_name : String,
       values : Slice(T),
@@ -11533,16 +11533,18 @@ module CrystalClick
     ) : Nil forall T
       aggregate_type = SimpleAggregateColumnType.parse(type_name) ||
                        raise(UnsupportedFormatError.new("typed payload requires an admitted SimpleAggregateFunction profile"))
-      actual_type_name = typed_type_name(values)
-      actual_storage_type = if expected_shape == SimpleAggregateColumnType::Shape::Nullable
-                              unless actual_type_name.starts_with?("Nullable(") && actual_type_name.ends_with?(")")
-                                raise UnsupportedFormatError.new("Nullable SimpleAggregateFunction payload requires a Nullable carrier")
-                              end
-                              actual_type_name.byte_slice("Nullable(".bytesize, actual_type_name.bytesize - "Nullable()".bytesize)
-                            else
-                              actual_type_name
-                            end
-      unless aggregate_type.shape == expected_shape && aggregate_type.storage_type_name == actual_storage_type
+      actual_shape = SimpleAggregateColumnType::Shape::Scalar
+      actual_storage_type = begin
+        {% if T.union_types.size == 2 && T.union_types.includes?(Nil) %}
+          actual_shape = SimpleAggregateColumnType::Shape::Nullable
+          SimpleAggregateColumnType.storage_name({{ T.union_types.reject { |type| type == Nil }.first }})
+        {% else %}
+          SimpleAggregateColumnType.storage_name(T)
+        {% end %}
+      rescue ArgumentError
+        raise UnsupportedFormatError.new("SimpleAggregateFunction payload uses an unsupported carrier")
+      end
+      unless aggregate_type.shape == expected_shape && actual_shape == expected_shape && aggregate_type.storage_type_name == actual_storage_type
         raise UnsupportedFormatError.new("SimpleAggregateFunction payload does not match its exact declared carrier")
       end
       nil
@@ -11558,10 +11560,18 @@ module CrystalClick
       rows_per_mark : Int32,
     ) : Nil forall T
       {% if T == BFloat16Value %}
-        raise UnsupportedFormatError.new("BFloat16 writer requires exact BFloat16 metadata") unless type_name == "BFloat16"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("BFloat16 writer requires exact BFloat16 metadata") unless type_name == "BFloat16"
+        end
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == BFloat16Value? %}
-        raise UnsupportedFormatError.new("Nullable BFloat16 writer requires exact Nullable(BFloat16) metadata") unless type_name == "Nullable(BFloat16)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable BFloat16 writer requires exact Nullable(BFloat16) metadata") unless type_name == "Nullable(BFloat16)"
+        end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UUIDValue %}
         raise UnsupportedFormatError.new("UUID writer requires exact UUID metadata") unless type_name == "UUID"
@@ -11588,32 +11598,60 @@ module CrystalClick
         raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(P, S)) metadata in the 39..76 precision band") unless WidePart.nullable_decimal256_scale(type_name)
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Int128 %}
-        unless type_name == "Int128" || WidePart.decimal128_scale(type_name)
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        elsif type_name != "Int128" && !WidePart.decimal128_scale(type_name)
           raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(P, S) metadata in the 19..38 precision band")
         end
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt128 %}
-        raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
+        end
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Int256Value %}
-        raise UnsupportedFormatError.new("Int256 payload requires exact Int256 metadata") unless type_name == "Int256"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("Int256 payload requires exact Int256 metadata") unless type_name == "Int256"
+        end
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt256Value %}
-        raise UnsupportedFormatError.new("UInt256 payload requires exact UInt256 metadata") unless type_name == "UInt256"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("UInt256 payload requires exact UInt256 metadata") unless type_name == "UInt256"
+        end
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Int256Value? %}
-        raise UnsupportedFormatError.new("Nullable Int256 payload requires exact Nullable(Int256) metadata") unless type_name == "Nullable(Int256)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable Int256 payload requires exact Nullable(Int256) metadata") unless type_name == "Nullable(Int256)"
+        end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt256Value? %}
-        raise UnsupportedFormatError.new("Nullable UInt256 payload requires exact Nullable(UInt256) metadata") unless type_name == "Nullable(UInt256)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable UInt256 payload requires exact Nullable(UInt256) metadata") unless type_name == "Nullable(UInt256)"
+        end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Int128? %}
-        unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        elsif type_name != "Nullable(Int128)" && !WidePart.nullable_decimal128_scale(type_name)
           raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Nullable(Decimal(P, S)) metadata in the 19..38 precision band")
         end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt128? %}
-        raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
+        end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt64 %}
         aggregate_type = SimpleAggregateColumnType.parse(type_name)
@@ -11654,10 +11692,18 @@ module CrystalClick
       type_name : String,
     ) : Array(ChecksumRecord) forall T
       {% if T == BFloat16Value %}
-        raise UnsupportedFormatError.new("BFloat16 writer requires exact BFloat16 metadata") unless type_name == "BFloat16"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("BFloat16 writer requires exact BFloat16 metadata") unless type_name == "BFloat16"
+        end
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == BFloat16Value? %}
-        raise UnsupportedFormatError.new("Nullable BFloat16 writer requires exact Nullable(BFloat16) metadata") unless type_name == "Nullable(BFloat16)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable BFloat16 writer requires exact Nullable(BFloat16) metadata") unless type_name == "Nullable(BFloat16)"
+        end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UUIDValue %}
         raise UnsupportedFormatError.new("UUID writer requires exact UUID metadata") unless type_name == "UUID"
@@ -11684,32 +11730,60 @@ module CrystalClick
         raise UnsupportedFormatError.new("Nullable Decimal256 writer requires exact Nullable(Decimal(P, S)) metadata in the 39..76 precision band") unless WidePart.nullable_decimal256_scale(type_name)
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Int128 %}
-        unless type_name == "Int128" || WidePart.decimal128_scale(type_name)
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        elsif type_name != "Int128" && !WidePart.decimal128_scale(type_name)
           raise UnsupportedFormatError.new("Int128 payload requires exact Int128 or Decimal(P, S) metadata in the 19..38 precision band")
         end
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt128 %}
-        raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("UInt128 payload requires exact UInt128 metadata") unless type_name == "UInt128"
+        end
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Int256Value %}
-        raise UnsupportedFormatError.new("Int256 payload requires exact Int256 metadata") unless type_name == "Int256"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("Int256 payload requires exact Int256 metadata") unless type_name == "Int256"
+        end
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt256Value %}
-        raise UnsupportedFormatError.new("UInt256 payload requires exact UInt256 metadata") unless type_name == "UInt256"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        else
+          raise UnsupportedFormatError.new("UInt256 payload requires exact UInt256 metadata") unless type_name == "UInt256"
+        end
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Int256Value? %}
-        raise UnsupportedFormatError.new("Nullable Int256 payload requires exact Nullable(Int256) metadata") unless type_name == "Nullable(Int256)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable Int256 payload requires exact Nullable(Int256) metadata") unless type_name == "Nullable(Int256)"
+        end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt256Value? %}
-        raise UnsupportedFormatError.new("Nullable UInt256 payload requires exact Nullable(UInt256) metadata") unless type_name == "Nullable(UInt256)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable UInt256 payload requires exact Nullable(UInt256) metadata") unless type_name == "Nullable(UInt256)"
+        end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Int128? %}
-        unless type_name == "Nullable(Int128)" || WidePart.nullable_decimal128_scale(type_name)
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        elsif type_name != "Nullable(Int128)" && !WidePart.nullable_decimal128_scale(type_name)
           raise UnsupportedFormatError.new("Nullable Int128 payload requires exact Nullable(Int128) or Nullable(Decimal(P, S)) metadata in the 19..38 precision band")
         end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt128? %}
-        raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        else
+          raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
+        end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt64 %}
         aggregate_type = SimpleAggregateColumnType.parse(type_name)

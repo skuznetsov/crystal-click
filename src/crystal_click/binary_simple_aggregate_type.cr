@@ -115,6 +115,12 @@ module CrystalClick
         4
       when "UInt64", "Int64", "Float64"
         8
+      when "UInt128", "Int128"
+        16
+      when "UInt256", "Int256"
+        32
+      when "BFloat16"
+        2
       else
         nil
       end
@@ -131,9 +137,20 @@ module CrystalClick
            Function::SumWithOverflow
         true
       when Function::Sum
-        storage_type_name == "UInt64" || storage_type_name == "Int64" || storage_type_name == "Float64"
+        case storage_type_name
+        when "UInt64", "Int64", "Float64", "UInt128", "Int128", "UInt256", "Int256"
+          true
+        else
+          false
+        end
       when Function::GroupBitAnd, Function::GroupBitOr, Function::GroupBitXor
-        storage_type_name != "Float32" && storage_type_name != "Float64"
+        case storage_type_name
+        when "UInt8", "UInt16", "UInt32", "UInt64", "UInt128", "UInt256",
+             "Int8", "Int16", "Int32", "Int64", "Int128", "Int256"
+          true
+        else
+          false
+        end
       else
         false
       end

@@ -1641,17 +1641,22 @@ module CrystalClick
 
     private def append_simple_aggregate_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, storage_type_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       case storage_type_name
-      when "UInt8"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt8), observed_rows, expected_rows)
-      when "UInt16"  then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt16), observed_rows, expected_rows)
-      when "UInt32"  then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt32), observed_rows, expected_rows)
-      when "UInt64"  then append_materialized_values(values, batch.simple_aggregate_uint64s_for(column_name), observed_rows, expected_rows)
-      when "Int8"    then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int8), observed_rows, expected_rows)
-      when "Int16"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int16), observed_rows, expected_rows)
-      when "Int32"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int32), observed_rows, expected_rows)
-      when "Int64"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int64), observed_rows, expected_rows)
-      when "Float32" then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Float32), observed_rows, expected_rows)
-      when "Float64" then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Float64), observed_rows, expected_rows)
-      else                raise UnsupportedFormatError.new("unsupported SimpleAggregateFunction carrier")
+      when "UInt8"    then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt8), observed_rows, expected_rows)
+      when "UInt16"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt16), observed_rows, expected_rows)
+      when "UInt32"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt32), observed_rows, expected_rows)
+      when "UInt64"   then append_materialized_values(values, batch.simple_aggregate_uint64s_for(column_name), observed_rows, expected_rows)
+      when "Int8"     then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int8), observed_rows, expected_rows)
+      when "Int16"    then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int16), observed_rows, expected_rows)
+      when "Int32"    then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int32), observed_rows, expected_rows)
+      when "Int64"    then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int64), observed_rows, expected_rows)
+      when "Float32"  then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Float32), observed_rows, expected_rows)
+      when "Float64"  then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Float64), observed_rows, expected_rows)
+      when "Int128"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int128), observed_rows, expected_rows)
+      when "UInt128"  then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt128), observed_rows, expected_rows)
+      when "Int256"   then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, Int256Value), observed_rows, expected_rows)
+      when "UInt256"  then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, UInt256Value), observed_rows, expected_rows)
+      when "BFloat16" then append_materialized_values(values, batch.simple_aggregate_values_for(column_name, BFloat16Value), observed_rows, expected_rows)
+      else                 raise UnsupportedFormatError.new("unsupported SimpleAggregateFunction carrier")
       end
     end
 
@@ -1701,17 +1706,22 @@ module CrystalClick
 
     private def append_nullable_simple_aggregate_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, storage_type_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       case storage_type_name
-      when "UInt8"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt8), observed_rows, expected_rows)
-      when "UInt16"  then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt16), observed_rows, expected_rows)
-      when "UInt32"  then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt32), observed_rows, expected_rows)
-      when "UInt64"  then append_materialized_values(values, batch.nullable_simple_aggregate_uint64s_for(column_name), observed_rows, expected_rows)
-      when "Int8"    then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int8), observed_rows, expected_rows)
-      when "Int16"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int16), observed_rows, expected_rows)
-      when "Int32"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int32), observed_rows, expected_rows)
-      when "Int64"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int64), observed_rows, expected_rows)
-      when "Float32" then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Float32), observed_rows, expected_rows)
-      when "Float64" then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Float64), observed_rows, expected_rows)
-      else                raise UnsupportedFormatError.new("unsupported Nullable SimpleAggregateFunction carrier")
+      when "UInt8"    then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt8), observed_rows, expected_rows)
+      when "UInt16"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt16), observed_rows, expected_rows)
+      when "UInt32"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt32), observed_rows, expected_rows)
+      when "UInt64"   then append_materialized_values(values, batch.nullable_simple_aggregate_uint64s_for(column_name), observed_rows, expected_rows)
+      when "Int8"     then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int8), observed_rows, expected_rows)
+      when "Int16"    then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int16), observed_rows, expected_rows)
+      when "Int32"    then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int32), observed_rows, expected_rows)
+      when "Int64"    then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int64), observed_rows, expected_rows)
+      when "Float32"  then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Float32), observed_rows, expected_rows)
+      when "Float64"  then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Float64), observed_rows, expected_rows)
+      when "Int128"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int128), observed_rows, expected_rows)
+      when "UInt128"  then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt128), observed_rows, expected_rows)
+      when "Int256"   then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, Int256Value), observed_rows, expected_rows)
+      when "UInt256"  then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, UInt256Value), observed_rows, expected_rows)
+      when "BFloat16" then append_materialized_values(values, batch.nullable_simple_aggregate_values_for(column_name, BFloat16Value), observed_rows, expected_rows)
+      else                 raise UnsupportedFormatError.new("unsupported Nullable SimpleAggregateFunction carrier")
       end
     end
 

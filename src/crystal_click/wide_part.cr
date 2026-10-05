@@ -2401,9 +2401,10 @@ module CrystalClick
       type : T.class,
     ) : Array(T) forall T
       ensure_column(column)
-      storage_type_name = SimpleAggregateColumnType.storage_name(type)
+      aggregate_type = SimpleAggregateColumnType.parse(@column_type) ||
+                       raise(UnsupportedFormatError.new("numeric SimpleAggregateFunction accessor requires an admitted profile"))
       SimpleAggregateColumnReader.read_numeric(@column_type, type) do
-        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, numeric_type_width(storage_type_name), type)
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, aggregate_type.raw_width, type)
       end
     end
 
@@ -2498,9 +2499,10 @@ module CrystalClick
       type : T.class,
     ) : Array(T?) forall T
       ensure_column(column)
-      storage_type_name = SimpleAggregateColumnType.storage_name(type)
+      aggregate_type = SimpleAggregateColumnType.parse(@column_type) ||
+                       raise(UnsupportedFormatError.new("nullable numeric SimpleAggregateFunction accessor requires an admitted profile"))
       SimpleAggregateColumnReader.read_nullable_numeric(@column_type, type) do
-        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, numeric_type_width(storage_type_name), type)
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, aggregate_type.raw_width, type)
       end
     end
 
@@ -15465,6 +15467,20 @@ module CrystalClick
         u128(bytes, offset).unsafe_as(Int128)
       {% elsif T == UInt128 %}
         u128(bytes, offset)
+      {% elsif T == Int256Value %}
+        Int256Value.from_words(
+          u64(bytes, offset),
+          u64(bytes, offset + 8),
+          u64(bytes, offset + 16),
+          u64(bytes, offset + 24)
+        )
+      {% elsif T == UInt256Value %}
+        UInt256Value.from_words(
+          u64(bytes, offset),
+          u64(bytes, offset + 8),
+          u64(bytes, offset + 16),
+          u64(bytes, offset + 24)
+        )
       {% elsif T == Float32 %}
         u32(bytes, offset).unsafe_as(Float32)
       {% elsif T == Float64 %}

@@ -45,6 +45,8 @@ module CrystalClick
         "UInt32"
       {% elsif T == UInt64 %}
         "UInt64"
+      {% elsif T == UInt128 %}
+        "UInt128"
       {% elsif T == Int8 %}
         "Int8"
       {% elsif T == Int16 %}
@@ -53,6 +55,14 @@ module CrystalClick
         "Int32"
       {% elsif T == Int64 %}
         "Int64"
+      {% elsif T == Int128 %}
+        "Int128"
+      {% elsif T == UInt256Value %}
+        "UInt256"
+      {% elsif T == Int256Value %}
+        "Int256"
+      {% elsif T == BFloat16Value %}
+        "BFloat16"
       {% elsif T == Float32 %}
         "Float32"
       {% elsif T == Float64 %}

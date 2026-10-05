@@ -365,7 +365,7 @@ describe "W163 SimpleAggregateFunction numeric carrier descriptors" do
     end
   end
 
-  it "maps only the ten qualified numeric accessor classes to storage identity" do
+  it "maps qualified numeric accessor classes and rejects unsupported controls" do
     CrystalClick::SimpleAggregateColumnType.storage_name(UInt8).should eq("UInt8")
     CrystalClick::SimpleAggregateColumnType.storage_name(UInt16).should eq("UInt16")
     CrystalClick::SimpleAggregateColumnType.storage_name(UInt32).should eq("UInt32")
@@ -376,9 +376,13 @@ describe "W163 SimpleAggregateFunction numeric carrier descriptors" do
     CrystalClick::SimpleAggregateColumnType.storage_name(Int64).should eq("Int64")
     CrystalClick::SimpleAggregateColumnType.storage_name(Float32).should eq("Float32")
     CrystalClick::SimpleAggregateColumnType.storage_name(Float64).should eq("Float64")
-    expect_raises(ArgumentError) do
-      CrystalClick::SimpleAggregateColumnType.storage_name(UInt128)
-    end
+    CrystalClick::SimpleAggregateColumnType.storage_name(UInt128).should eq("UInt128")
+    CrystalClick::SimpleAggregateColumnType.storage_name(Int128).should eq("Int128")
+    CrystalClick::SimpleAggregateColumnType.storage_name(CrystalClick::UInt256Value).should eq("UInt256")
+    CrystalClick::SimpleAggregateColumnType.storage_name(CrystalClick::Int256Value).should eq("Int256")
+    CrystalClick::SimpleAggregateColumnType.storage_name(CrystalClick::BFloat16Value).should eq("BFloat16")
+    expect_raises(ArgumentError) { CrystalClick::SimpleAggregateColumnType.storage_name(Bool) }
+    expect_raises(ArgumentError) { CrystalClick::SimpleAggregateColumnType.storage_name(String) }
   end
 
   it "charges the longest nullable carrier name at exact and one-short byte budgets" do

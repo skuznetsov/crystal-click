@@ -360,18 +360,17 @@ describe "W163 SimpleAggregateFunction numeric runtime" do
           [true, false, true, false, true, false].to_unsafe.to_slice(6), CrystalClick::BinarySimpleAggregateType::Function::Any
         )
       end
-      expect_raises(ArgumentError) do
-        CrystalClick::WidePartWriter.write_uint64_simple_aggregate_pair(
-          File.join(root, "int128"), "pk", keys.to_unsafe.to_slice(keys.size), "v",
-          [Int128::MIN, -1_i128, 0_i128, 1_i128, 2_i128, Int128::MAX].to_unsafe.to_slice(6), CrystalClick::BinarySimpleAggregateType::Function::Any
-        )
-      end
       bfloat_values = [0_u16, 0x8000_u16, 0x3f80_u16, 0x7fc1_u16, 0xffa2_u16, 1_u16].map { |bits| CrystalClick::BFloat16Value.new(bits) }
-      expect_raises(ArgumentError) do
-        CrystalClick::WidePartWriter.write_uint64_simple_aggregate_pair(
-          File.join(root, "bfloat16"), "pk", keys.to_unsafe.to_slice(keys.size), "v",
-          bfloat_values.to_unsafe.to_slice(bfloat_values.size), CrystalClick::BinarySimpleAggregateType::Function::Any
-        )
+      [
+        CrystalClick::BinarySimpleAggregateType::Function::Sum,
+        CrystalClick::BinarySimpleAggregateType::Function::GroupBitAnd,
+      ].each_with_index do |function, index|
+        expect_raises(ArgumentError) do
+          CrystalClick::WidePartWriter.write_uint64_simple_aggregate_pair(
+            File.join(root, "invalid_bfloat_#{index}"), "pk", keys.to_unsafe.to_slice(keys.size), "v",
+            bfloat_values.to_unsafe.to_slice(bfloat_values.size), function
+          )
+        end
       end
       Dir.children(root).should be_empty
     ensure

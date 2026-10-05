@@ -25,6 +25,51 @@ combination. Declared actual-arm policy, codec composition, statistics and
 file I/O remain with their existing owners. This 174-line owner does not
 complete decomposition of the large reader/writer/table facades.
 
+## SimpleAggregateFunction extended numeric reuse — W164
+
+W164 extends the same three cohesive owners for raw UInt128/256, Int128/256
+and BFloat16; there is no new class per function/carrier/Nullable product.
+`BinarySimpleAggregateType` owns the finite function/result-type law (176 lines),
+`SimpleAggregateColumnType` owns exact carrier/shape parsing and mapping (122),
+and the private semantic reader gate remains 36 lines in its own file.
+WidePart uses the existing checked fixed-width granule/null-map path and adds
+four-limb decoding under exact nominal admission, not a duplicated I/O loop.
+Writer readback still goes through the existing semantic selector and numeric
+staged-validator owner. Table/catalog adapters reuse that same carrier law.
+
+One architectural coupling produced a real regression during qualification:
+SAF preflight reused ordinary inferred `typed_type_name`. Extending the latter
+would admit new ordinary inferred writers. W164 instead separates semantic
+preflight from inference and reuses `SimpleAggregateColumnType.storage_name`,
+checking actual Nullable shape and exact carrier before stage creation.
+Root confirms the ordinary inferred mapper is byte-identical to `a61aa14` and
+its array counterpart is unchanged. Existing W35/W36 refusal tests stay intact;
+new all-five-carrier scalar/Nullable refusal tests assert no publication.
+
+Root passes 60 focused DEBUG and 873 affected RELEASE examples, plus two actual
+native-fixture examples and 82 new complete library-to-stock parts. A reader
+carrier-gate bypass produces four expected failures, exact restoration passes,
+and root recomputes literal values/types and reconciles all 1,121 inputs.
+Scoped hostile verdict: ROBUST for the finite capability extension, not a
+behavior-neutral ownership extraction. Evidence and refresh conditions are in
+[SIMPLE_AGGREGATE_EXTENDED_NUMERIC_FRONTIER.md](SIMPLE_AGGREGATE_EXTENDED_NUMERIC_FRONTIER.md).
+Reader/writer/table facades remain 15,845/25,362/6,911 lines. Architecture
+cleanup and performance claims remain open.
+
+The next proposed extraction is one private `StagedTypedStringPartValidator`
+in `wide_part_writer/staged_typed_string_part_validator.cr`, owning only
+`validate_staged_string_part` and `validate_staged_nullable_string_part` bodies.
+Keep those writer facade methods, the typed String selector and scalar writer
+call site. Existing mark-count, readback and primary-index checks remain shared
+through callbacks; staging, resource preflight, metadata/checksums, cleanup and
+publication remain with the writer. Do not combine Array/Map/FixedString cohorts.
+Characterize both public writer paths with null/empty/binary/UTF-8 values and
+test-only inherited readback overrides that inject a mark-1 mismatch: assert
+mark-0/mark-1 trace, corruption error, no target and stage cleanup. Use the W162
+override/bypass pattern plus `wide_part_writer_spec` and
+`wide_part_writer_typed_spec`; rerun affected consumers after the exact move.
+This is a plan, not an executed extraction or a new type/layout admission.
+
 ## SimpleAggregateFunction numeric extension — W163
 
 W163 reuses the three W161 role-owned classes rather than adding a class for
@@ -51,7 +96,7 @@ hostile verdict is ROBUST for the finite stored-value extension, not a new
 ownership extraction. Exact whole-part qualification and affected gates are in
 [SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md](SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md).
 
-The current reader/writer/table facades have 15,829/25,288/6,901 lines.
+At W163 the reader/writer/table facades have 15,829/25,288/6,901 lines.
 This capability slice makes no claim of smaller overall facades, complete
 responsibility-level decomposition or improved performance. Next architecture
 seams remain other staged-validator cohorts, physical stream binding, reader
