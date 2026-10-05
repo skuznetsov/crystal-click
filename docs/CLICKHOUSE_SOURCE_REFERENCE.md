@@ -1,6 +1,49 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-04, fifth refresh)
+## Current source snapshot (2026-10-04, sixth refresh)
+
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-41b7bd50`
+for new source comparisons. Root observed public master revision
+`41b7bd50051cc2017fe5ca5505fb35c9dc620000` and cloned with
+`--depth 1 --single-branch --branch master --no-tags` under the serial memory
+guard (exit 0). The checkout has that revision, committer timestamp
+`2026-10-04T23:03:16Z`, one reachable commit, shallow status `true`, and a
+clean working tree. Existing checkouts were not modified; submodules were
+not initialized. Freshness is time-scoped, not a promise that master stays put.
+
+Root compared contents against `895d13ea`: serializers, Columns and
+Compression are identical (each recursive diff exit 0). Explicit comparisons
+of `DataTypeInterval.cpp`, `DataTypesBinaryEncoding.cpp` and `IntervalKind.h`
+also return exit 0. DataTypes has 31 changed files (529 insertions,
+235 deletions), chiefly explicit child access and the new TypeTree traversal
+and rewrite API. The inspected AggregateFunction diff changes recursive
+version rewriting, not its serializer. MergeTree has seven changed files
+(24 insertions, 47 deletions); the inspected changes replace child traversal
+in index/filter checks and shared-column descriptions. Formats changes
+JSONUtils traversal (two files, three insertions, five deletions).
+
+This bounded source audit does not qualify all recursive semantics or lifecycle
+behavior. The checkout is unbuilt. W160's Interval wire/serialization anchors
+remain unchanged in this comparison window; executable whole-part evidence
+still names its separately pinned stock build. Type-family continuity does
+not establish that versions, framing, settings or accepted products are
+exclusively additive.
+
+Concrete descriptor counterexample: the current
+`src/DataTypes/DataTypesBinaryEncoding.h:61-75` explains that timezone-bearing
+Time/Time64 types were removed and reserves 0x33/0x35 to avoid reinterpreting
+old encodings. Preserving reserved codes is backward-compatibility policy,
+not continued admission of every historical type/profile. QBit's separate
+0x36/0x37 encodings likewise require canonical stride handling, not simply
+counting type-family names.
+
+W160's executed whole-part certificate is in
+[INTERVAL_FRONTIER.md](INTERVAL_FRONTIER.md): all eleven scalar and Nullable
+kinds pass a separately pinned stock runtime, including CHECK-valid nominal
+and value mutants rejected by unchanged literal oracles. It is not runtime
+qualification of this unbuilt checkout.
+
+## Previous source snapshot (2026-10-04, fifth refresh)
 
 Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-895d13ea`
 for new source comparisons. Root cloned public master with

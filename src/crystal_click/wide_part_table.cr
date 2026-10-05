@@ -879,6 +879,17 @@ module CrystalClick
       @column_values[index].as(Slice(Int64))
     end
 
+    # Return raw signed Interval counts only for a scalar exact Interval kind.
+    def interval_counts_for(column : String) : Slice(Int64)
+      index = column_index(column)
+      interval_type = IntervalColumnType.parse(@column_types[index])
+      unless interval_type && interval_type.shape == IntervalColumnType::Shape::Scalar
+        raise UnsupportedFormatError.new("Interval accessor requires an exact scalar Interval column")
+      end
+      return @typed_numeric_values[column].as(Slice(Int64)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int64))
+    end
+
     def time_seconds_for(column : String) : Slice(Int32)
       index = column_index(column)
       raise UnsupportedFormatError.new("Time accessor requires an exact Time column") unless @column_types[index] == "Time"
@@ -2110,6 +2121,15 @@ module CrystalClick
         raise UnsupportedFormatError.new("Nullable(DateTime64) accessor requires a canonical Nullable(DateTime64(p)) column")
       end
       @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(DateTime64) column was not materialized in this batch"))
+    end
+
+    def nullable_interval_counts_for(column : String) : Slice(Int64?)
+      index = column_index(column)
+      interval_type = IntervalColumnType.parse(@column_types[index])
+      unless interval_type && interval_type.shape == IntervalColumnType::Shape::Nullable
+        raise UnsupportedFormatError.new("Interval accessor requires an exact Nullable(Interval) column")
+      end
+      @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(Interval) column was not materialized in this batch"))
     end
 
     def nullable_time_seconds_for(column : String) : Slice(Int32?)
@@ -5003,6 +5023,12 @@ module CrystalClick
         end
       end
 
+      if interval_type = IntervalColumnType.parse(type)
+        if interval_type.shape == IntervalColumnType::Shape::Scalar
+          return reader.read_interval_counts_mark_range(selected.name, mark_index, 1)
+        end
+      end
+
       case selected.column_type
       when "Date"
         reader.read_date_codes_mark_range(selected.name, mark_index, 1)
@@ -6242,6 +6268,12 @@ module CrystalClick
         if datetime_type.shape == DateTimeColumnType::Shape::Nullable &&
            datetime_type.family == DateTimeColumnType::Family::DateTime
           return reader.read_nullable_datetime_seconds_mark_range(selected.name, mark_index, 1)
+        end
+      end
+
+      if interval_type = IntervalColumnType.parse(type)
+        if interval_type.shape == IntervalColumnType::Shape::Nullable
+          return reader.read_nullable_interval_counts_mark_range(selected.name, mark_index, 1)
         end
       end
 

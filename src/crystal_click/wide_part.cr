@@ -1459,6 +1459,7 @@ module CrystalClick
     def self.supports_typed_type?(type : String) : Bool
       !GeometryColumnType.for_type(type).nil? || !GeoArrayColumnType.for_type(type).nil? || !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         !DateTimeColumnType.parse(type).nil? ||
+        !IntervalColumnType.parse(type).nil? ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         type == "Time" || !datetime64_scale(type).nil? || !time64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
         type == "Int256" || type == "UInt256" ||
@@ -2370,6 +2371,15 @@ module CrystalClick
       values
     end
 
+    # Interval counts are raw signed Int64 values, but the exact kind remains
+    # a required nominal metadata check and is not accepted by the Int64 API.
+    def read_interval_counts_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64)
+      ensure_column(column)
+      IntervalColumnReader.read_counts(@column_type) do
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+      end
+    end
+
     # Time uses signed raw Int32 seconds. The exact semantic type gate keeps
     # this distinct from a primitive Int32 declaration.
     def read_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
@@ -2432,6 +2442,15 @@ module CrystalClick
       ensure_column(column)
       raise UnsupportedFormatError.new("Nullable(DateTime64) accessor requires a canonical Nullable(DateTime64(p)) column") unless WidePart.nullable_datetime64_scale(@column_type)
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+    end
+
+    # Nullable Interval keeps the same raw nested Int64 representation while
+    # preserving NULL slots and the declared kind as a distinct API identity.
+    def read_nullable_interval_counts_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int64?)
+      ensure_column(column)
+      IntervalColumnReader.read_nullable_counts(@column_type) do
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+      end
     end
 
     def read_nullable_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32?)
@@ -11340,7 +11359,7 @@ module CrystalClick
         validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
         validate_nullable_raw_integer_serialization(columns, row_count)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_time_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type)
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_time_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type) || !IntervalColumnType.parse(column_type).nil?
         validate_type_serialization_version(column_type)
       end
 
@@ -11587,6 +11606,8 @@ module CrystalClick
     private def expected_physical_streams(column : String, type : String) : Array(String)
       if type == "Dynamic"
         ["#{column}.dynamic_structure", "#{column}.variant_discr", "#{column}.SharedVariant.size", "#{column}.SharedVariant", "#{column}.String.size", "#{column}.String"]
+      elsif interval_type = IntervalColumnType.parse(type)
+        interval_type.shape == IntervalColumnType::Shape::Nullable ? ["#{column}.null", column] : [column]
       elsif plan = GeometryColumnType.for_type(type)
         plan.physical_streams(column).map(&.[0])
       elsif variant_plan = WidePart.variant_type_plan(type)
@@ -12668,6 +12689,12 @@ module CrystalClick
         columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("W15 semantic column serializers are required"))
         raise UnsupportedFormatError.new("W15 per-column serialization is unsupported") unless columns.empty?
         raise UnsupportedFormatError.new("W15 missing-column serialization is unsupported") if info.has_key?("missing_columns")
+      elsif IntervalColumnType.parse(type)
+        string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("Interval serialization version is required"))
+        raise UnsupportedFormatError.new("only Interval serialization version 1 is supported") unless string_version == 1
+        columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Interval column serializers are required"))
+        raise UnsupportedFormatError.new("Interval per-column serialization is unsupported") unless columns.empty?
+        raise UnsupportedFormatError.new("Interval missing-column serialization is unsupported") if info.has_key?("missing_columns")
       end
       nil
     rescue ex : JSON::ParseException | TypeCastError
@@ -13650,6 +13677,12 @@ module CrystalClick
         stream_name == "#{@column}.null" ? 1 : nullable_time_width(@column_type)
       elsif WidePart.supports_nullable_semantic_fixed_width_type?(@column_type)
         stream_name == "#{@column}.null" ? 1 : semantic_type_width(nullable_semantic_inner_type(@column_type))
+      elsif interval_type = IntervalColumnType.parse(@column_type)
+        if interval_type.shape == IntervalColumnType::Shape::Nullable
+          stream_name == "#{@column}.null" ? 1 : interval_type.raw_width
+        else
+          interval_type.raw_width
+        end
       elsif @column_type == "Date"
         2
       elsif @column_type == "Date32"

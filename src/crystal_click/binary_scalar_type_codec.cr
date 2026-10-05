@@ -16,6 +16,8 @@ module CrystalClick
         write_string(temporal.time_zone?.not_nil!.name, context)
       when BinaryDataType::TAG_TIME64
         context.write_byte(type.temporal_type.not_nil!.scale.not_nil!.to_u8)
+      when BinaryDataType::TAG_INTERVAL
+        context.write_byte(type.interval_type.not_nil!.kind_code)
       when BinaryDataType::TAG_DECIMAL32, BinaryDataType::TAG_DECIMAL64,
            BinaryDataType::TAG_DECIMAL128, BinaryDataType::TAG_DECIMAL256
         decimal = type.decimal_type.not_nil!
@@ -46,6 +48,10 @@ module CrystalClick
         BinaryDataType.primitive("Time")
       when BinaryDataType::TAG_TIME64
         BinaryDataType.time64(read_scale(context, "Time64"))
+      when BinaryDataType::TAG_INTERVAL
+        code = context.read_byte
+        kind = BinaryIntervalType.kind_for_code(code) || context.corrupt!("invalid Interval kind byte")
+        BinaryDataType.interval(kind)
       when BinaryDataType::TAG_UUID
         BinaryDataType.primitive("UUID")
       when BinaryDataType::TAG_IPV4

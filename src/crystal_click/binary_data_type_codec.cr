@@ -93,7 +93,7 @@ module CrystalClick
            BinaryDataType::TAG_DECIMAL128, BinaryDataType::TAG_DECIMAL256,
            BinaryDataType::TAG_UUID, BinaryDataType::TAG_IPV4,
            BinaryDataType::TAG_IPV6, BinaryDataType::TAG_TIME,
-           BinaryDataType::TAG_TIME64
+           BinaryDataType::TAG_TIME64, BinaryDataType::TAG_INTERVAL
         BinaryScalarTypeCodec.read_type(tag, context, depth)
       when BinaryDataType::TAG_FIXED_STRING
         size = context.read_var_uint
@@ -229,7 +229,8 @@ module CrystalClick
     end
 
     private def self.recognized_but_unsupported?(tag : UInt8) : Bool
-      (tag >= 0x0f_u8 && tag <= 0x32_u8) || tag == 0x34_u8 || tag == 0x36_u8 || tag == 0x37_u8
+      (tag >= 0x0f_u8 && tag <= 0x32_u8 && tag != BinaryDataType::TAG_INTERVAL) ||
+        tag == 0x34_u8 || tag == 0x36_u8 || tag == 0x37_u8
     end
   end
 end

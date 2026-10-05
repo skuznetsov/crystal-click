@@ -24,6 +24,55 @@ combination. Declared actual-arm policy, codec composition, statistics and
 file I/O remain with their existing owners. This 174-line owner does not
 complete decomposition of the large reader/writer/table facades.
 
+## Interval owners and next validator boundary — W160
+
+W160 adds separate cohesive owners for exact Interval kind/wire identity
+(`BinaryIntervalType`, 133 lines), canonical scalar/nullable column grammar
+(`IntervalColumnType`, 71 lines), and the private semantic reader gate
+(`WidePart::IntervalColumnReader`, 23 lines). The latter delegates physical
+decoding to the existing checked fixed-width reader; it does not own I/O.
+Part staging and publication reuse the existing typed writer, not a new
+per-type writer wrapper. The general writer/reader/table facades are still
+25,247/15,759/6,818 lines. This is incremental ownership, not completion of
+the requested architecture cleanup or a coupling/performance certificate.
+
+Next extraction: PROPOSED, not implemented or verified. One private
+`StagedTypedNumericPartValidator` should own the scalar and nullable staged
+numeric verification cohort. Preserve the dispatcher and Nullable(String)
+sibling route in `WidePartWriter`, along with same-signature facade methods
+used by W98/W102/W104/W160 test bridges and module reopens. The existing
+`TypedMarkReadback` owner remains responsible for semantic accessor dispatch.
+
+The W160 source inventory locates the dispatcher at
+`wide_part_writer.cr:24943`, scalar validator at 24961, scalar selector at
+25027, shared comparator at 25037, nullable validator at 25059, primary-index
+helper at 25155, nullable selector at 25174 and nullable comparator at 25184.
+These are locators, not stable line-number contracts. Both validators retain
+`Slice(T)`/`forall T` and compile-time Bool/Bool? checks. `checked_mark_count`,
+primary-index validation and bit-exact numeric comparison have callers outside
+this cohort; retain their shared ownership and facade entrypoints rather than
+moving them blindly. Preserve the scalar inline-index check and nullable
+shared-helper ordering until a separate characterization allows unification.
+
+Root inspected both validator bodies, the typed writer lifecycle, and the
+`previous_def` selector probe after Luna's read-only dependency inventory.
+The strongest failure is bypassing the facade selector while readback values
+still look correct. A typed synchronous callback or equivalent generic
+adapter must preserve that dispatch and the virtual supplied-reader accessor;
+do not erase semantic types into bytes or primitive Int64.
+
+Risk: CAUTION. Rollback: one neutral local extraction commit after green gates,
+without push or history rewriting. Before moving code, characterize multi-mark
+scalar/nullable traces, supplied-reader overrides, bit-exact values, exact
+metadata refusals, and public failed-publication cleanup. After extraction,
+run the affected writer, Bool, timezone, Interval and selector suites in DEBUG
+and RELEASE under the serial resource guard; require exit 0 and zero
+failures/errors/pending. A reversible direct-owner bypass must fail the
+intended selector trace. Stage creation, cleanup and publication stay with
+the writer: inputs and stage are borrowed synchronously, not retained or
+owned by the validator. No extraction certificate exists yet. Re-inventory
+after validator/facade/selector/generic dispatch or lifecycle changes.
+
 ## Object column lane binder plan (2026-10-04)
 
 The extraction certificate below is historical at `6dc7ed9`. W158 changes the

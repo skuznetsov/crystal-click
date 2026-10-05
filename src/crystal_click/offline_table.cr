@@ -451,6 +451,12 @@ module CrystalClick
         observed_rows = append_datetime_seconds_values(values, batch, column_name, observed_rows, expected_rows)
       when "Int64"
         observed_rows = append_int64_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("Interval")
+        interval_type = IntervalColumnType.parse(selected_type)
+        unless interval_type && interval_type.shape == IntervalColumnType::Shape::Scalar
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_interval_counts_values(values, batch, column_name, observed_rows, expected_rows)
       when .starts_with?("DateTime64(")
         unless WidePart.datetime64_scale(selected_type)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
@@ -1197,6 +1203,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         observed_rows = append_nullable_time64_ticks_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("Nullable(Interval")
+        interval_type = IntervalColumnType.parse(selected_type)
+        unless interval_type && interval_type.shape == IntervalColumnType::Shape::Nullable
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_nullable_interval_counts_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt8)"
         observed_rows = append_nullable_uint8_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt16)"
@@ -1611,6 +1623,10 @@ module CrystalClick
       append_materialized_values(values, batch.datetime64_ticks_for(column_name), observed_rows, expected_rows)
     end
 
+    private def append_interval_counts_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.interval_counts_for(column_name), observed_rows, expected_rows)
+    end
+
     private def append_time_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.time_seconds_for(column_name), observed_rows, expected_rows)
     end
@@ -1649,6 +1665,10 @@ module CrystalClick
 
     private def append_nullable_datetime64_ticks_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.nullable_datetime64_ticks_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_interval_counts_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_interval_counts_for(column_name), observed_rows, expected_rows)
     end
 
     private def append_nullable_time_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64

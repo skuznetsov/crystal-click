@@ -458,7 +458,7 @@ module CrystalClick
                      "\"string\":1"
                    elsif type_name == "Nullable(String)"
                      "\"nullable\":0,\"string\":1"
-                   elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil?
+                   elsif type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil? || !IntervalColumnType.parse(type_name).nil?
                      # BASIC Nullable payloads, UUID, IPv4, and IPv6 use this global
                      # serializer-version metadata. Semantic identity is
                      # carried by the exact column type.

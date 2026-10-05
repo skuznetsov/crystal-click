@@ -68,6 +68,8 @@ module CrystalClick
                when BinaryDataType::TAG_DECIMAL32, BinaryDataType::TAG_DECIMAL64,
                     BinaryDataType::TAG_DECIMAL128, BinaryDataType::TAG_DECIMAL256
                  32_u64
+               when BinaryDataType::TAG_INTERVAL
+                 type.interval_type.not_nil!.name_byte_size
                when BinaryDataType::TAG_FIXED_STRING
                  add(13_u64, digits(type.fixed_size.not_nil!.to_u64))
                else

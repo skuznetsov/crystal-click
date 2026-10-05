@@ -95,6 +95,12 @@ module CrystalClick
         {% elsif T == Int64 %}
           if WidePart.time64_scale(type_name)
             part.read_time64_ticks_mark_range(column, mark_index, 1)
+          elsif interval_type = IntervalColumnType.parse(type_name)
+            if interval_type.shape == IntervalColumnType::Shape::Scalar
+              part.read_interval_counts_mark_range(column, mark_index, 1)
+            else
+              raise UnsupportedFormatError.new("typed writer requires an exact Int64, DateTime64, or scalar Interval payload")
+            end
           elsif temporal_type = DateTimeColumnType.parse(type_name)
             if temporal_type.family == DateTimeColumnType::Family::DateTime64 && temporal_type.shape == DateTimeColumnType::Shape::Scalar
               part.read_datetime64_ticks_mark_range(column, mark_index, 1)
@@ -237,6 +243,12 @@ module CrystalClick
         {% elsif T == Int64? %}
           if WidePart.nullable_time64_scale(type_name)
             part.read_nullable_time64_ticks_mark_range(column, mark_index, 1)
+          elsif interval_type = IntervalColumnType.parse(type_name)
+            if interval_type.shape == IntervalColumnType::Shape::Nullable
+              part.read_nullable_interval_counts_mark_range(column, mark_index, 1)
+            else
+              raise UnsupportedFormatError.new("typed Nullable Int64 writer requires exact Nullable(Interval) metadata")
+            end
           elsif temporal_type = DateTimeColumnType.parse(type_name)
             if temporal_type.family == DateTimeColumnType::Family::DateTime64 && temporal_type.shape == DateTimeColumnType::Shape::Nullable
               part.read_nullable_datetime64_ticks_mark_range(column, mark_index, 1)

@@ -42,7 +42,7 @@ module CrystalClick
                      BinaryDataType::TAG_DECIMAL128, BinaryDataType::TAG_DECIMAL256,
                      BinaryDataType::TAG_UUID, BinaryDataType::TAG_IPV4,
                      BinaryDataType::TAG_IPV6, BinaryDataType::TAG_TIME,
-                     BinaryDataType::TAG_TIME64
+                     BinaryDataType::TAG_TIME64, BinaryDataType::TAG_INTERVAL
                   true
                 else
                   false
@@ -67,6 +67,13 @@ module CrystalClick
     def self.int64(value : Int64) : BinaryValue
       bits = value.unsafe_as(UInt64)
       new(BinaryDataType.primitive("Int64"), little_endian(bits, 8))
+    end
+
+    def self.interval(type : BinaryDataType, count : Int64) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_INTERVAL
+        raise ArgumentError.new("Interval value requires an Interval type")
+      end
+      new(type, little_endian(count.unsafe_as(UInt64), 8))
     end
 
     def self.uint64(value : UInt64) : BinaryValue
@@ -265,6 +272,11 @@ module CrystalClick
 
     def as_int64 : Int64
       require_tag(BinaryDataType::TAG_INT64, "Int64")
+      read_le_u64.unsafe_as(Int64)
+    end
+
+    def as_interval_count : Int64
+      require_tag(BinaryDataType::TAG_INTERVAL, "Interval")
       read_le_u64.unsafe_as(Int64)
     end
 

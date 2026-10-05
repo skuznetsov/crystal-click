@@ -38,6 +38,7 @@ module CrystalClick
     TAG_ARRAY           =     0x1e_u8
     TAG_UNNAMED_TUPLE   =     0x1f_u8
     TAG_NAMED_TUPLE     =     0x20_u8
+    TAG_INTERVAL        =     0x22_u8
     TAG_LOW_CARDINALITY =     0x26_u8
     TAG_NULLABLE        =     0x23_u8
     TAG_MAP             =     0x27_u8
@@ -68,6 +69,7 @@ module CrystalClick
     @temporal_type : BinaryTemporalType?
     @decimal_type : BinaryDecimalType?
     @enum_definition : BinaryEnumDefinition?
+    @interval_type : BinaryIntervalType?
 
     private def initialize(
       @tag : UInt8,
@@ -79,6 +81,7 @@ module CrystalClick
       @decimal_type : BinaryDecimalType? = nil,
       @enum_definition : BinaryEnumDefinition? = nil,
       @dynamic_max_types : UInt8? = nil,
+      @interval_type : BinaryIntervalType? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
@@ -135,6 +138,11 @@ module CrystalClick
     def self.time64(scale : Int) : BinaryDataType
       parameters = BinaryTemporalType.time64(scale)
       new(TAG_TIME64, nil, [] of BinaryDataType, [] of String, nil, parameters)
+    end
+
+    def self.interval(kind : BinaryIntervalType::Kind) : BinaryDataType
+      interval_type = BinaryIntervalType.new(kind)
+      new(TAG_INTERVAL, nil, [] of BinaryDataType, [] of String, nil, nil, nil, nil, nil, interval_type)
     end
 
     def self.decimal(width_bits : Int, precision : Int, scale : Int) : BinaryDataType
@@ -320,6 +328,10 @@ module CrystalClick
       @enum_definition
     end
 
+    def interval_type : BinaryIntervalType?
+      @interval_type
+    end
+
     # Enum declarations are metadata edges/nodes in the binary budget, not
     # recursive DataType children and therefore do not increase tree depth.
     def metadata_entry_count : Int32
@@ -349,6 +361,8 @@ module CrystalClick
         end
       when TAG_DATETIME, TAG_DATETIME_ZONE, TAG_DATETIME64, TAG_DATETIME64_ZONE, TAG_TIME64
         @temporal_type.not_nil!.type_name
+      when TAG_INTERVAL
+        @interval_type.not_nil!.type_name
       when TAG_DECIMAL32, TAG_DECIMAL64, TAG_DECIMAL128, TAG_DECIMAL256
         @decimal_type.not_nil!.type_name
       when TAG_ENUM8
@@ -423,6 +437,8 @@ module CrystalClick
         4
       when TAG_DATETIME64, TAG_DATETIME64_ZONE, TAG_TIME64
         8
+      when TAG_INTERVAL
+        @interval_type.not_nil!.fixed_width
       when TAG_DECIMAL64
         8
       when TAG_UUID, TAG_IPV6
@@ -444,6 +460,7 @@ module CrystalClick
       return false unless @temporal_type == other.@temporal_type
       return false unless @decimal_type == other.@decimal_type
       return false unless @enum_definition == other.@enum_definition
+      return false unless @interval_type == other.@interval_type
       return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
@@ -454,7 +471,7 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @children, @field_names
 
     private def format_field_name(value : String) : String
       bytes = value.to_slice

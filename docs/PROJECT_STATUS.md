@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W159 extends declared Object/JSON
+Current capability checkpoint (2026-10-04): W160 pairs all eleven exact
+`Interval` kinds in the general descriptor/value/bulk/physical codecs and
+scalar/Nullable public Wide-part readers and writers. Kind identity remains
+distinct from primitive Int64 and from other same-width Interval kinds.
+`WidePartTable` batches/windows and offline catalog column `.values` share
+that admission; Object/JSON Interval fields and actual arms remain refused.
+Root passes 31 focused DEBUG examples (six unique specs) and 701 affected
+RELEASE examples (57 unique specs, eight disjoint groups), all with zero
+failures/errors/pending and exit 0. Root independently reconciles log counts,
+membership and current source/spec hashes. These are affected gates, not a
+fresh complete-inventory run or a performance measurement.
+Pinned-stock qualification passes a native-authored all-kind Wide/LZ4 table,
+22 independently library-authored complete parts, actual ATTACH/CHECK, exact
+types and independent full/middle/empty RowBinary comparisons. Two CHECK-valid
+mutants fail the unchanged original oracle: a metadata-only Second-to-Month
+change with identical count bytes, and a one-count value change. Direct
+zero-mark reads retain BoundsError; empty SQL/table windows are separate
+contracts. Scoped hostile verdict: ROBUST for this finite scalar/Nullable
+profile. Generic container/LC codec evidence does not qualify all public
+whole-part products, Compact layouts or per-column serializer versions.
+Three cohesive Interval owners have separate files, but the large facades
+remain; the next staged-validator extraction is only proposed. Fresh shallow
+source `41b7bd50` is unbuilt and separate from executable build `d9bcb5ab`.
+Broader type/layout products, MV/projections and overall modularization remain
+open, with performance deferred. Exact scope, commands, inventory and refresh
+conditions are in [INTERVAL_FRONTIER.md](INTERVAL_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W159 extends declared Object/JSON
 Dynamic to explicit recursive Array/Tuple/Map sites, with paired codec,
 statistics, physical binding and public complete-part reading/writing. Site
 rosters are explicit and exact; actual arms and SharedVariant spills retain
@@ -720,9 +747,20 @@ source/runtime identities and executed evidence.
    Shared Nested offsets,
    AggregateFunction state serialization and SimpleAggregateFunction alias
    canonicalization remain unqualified; aggregate states and aliases are not
-   interchangeable capabilities. The general binary descriptor kernel still
-   lacks Interval descriptors; source eligibility for LC(Interval) is not
-   equivalent to represented values or qualified physical parts.
+   interchangeable capabilities. W160 now pairs Interval descriptors, values,
+   normalized bulk and generic physical composition plus independently authored
+   scalar/Nullable whole parts. Recursive and LC Interval codec admission is
+   not a public whole-part certificate for every composition.
+   The general descriptor kernel still lacks AggregateFunction,
+   SimpleAggregateFunction, Nested, Custom, JSON and QBit/QBitWithStride tags.
+   This is not an inventory of wholly absent physical types: dedicated Object,
+   geometry and QBit owners already cover narrower persisted profiles. Set and
+   Function descriptors are also absent, but the current ClickHouse source
+   makes them IDataTypeDummy expression intermediates that cannot be stored in
+   tables; they are not outstanding MergeTree column serializers. See
+   `src/DataTypes/{DataTypesBinaryEncoding.h,IDataTypeDummy.h,DataTypeSet.h,
+   DataTypeFunction.h}` in the pinned source checkout. Ordinary type aliases
+   likewise do not automatically introduce new wire families.
 3. **MV/projection coverage.** Offline declaration metadata and explicit reads
    of fully covered physical Wide projection child parts are available. The
    persisted MV materializer is one explicit-TO identity projection over
@@ -744,7 +782,7 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,786 lines; the reader/writer are now 15,726/25,202 lines.
+   is 6,818 lines at W160; the reader/writer are now 15,759/25,247 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -770,7 +808,12 @@ source/runtime identities and executed evidence.
    now has a separate private owner, without merging the selected-JSON policy.
    Next remain
    shared schema/substream planning, physical I/O/validation, leaf codecs and
-   thin table/catalog adapters. Keep one
+   thin table/catalog adapters. W160 adds exact Interval kind, column-grammar
+   and semantic reader-gate owners; physical I/O stays with the checked
+   fixed-width reader. The proposed next numeric staged-validator boundary and
+   its selector/lifetime/publication guards are recorded in
+   [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md); it has not yet
+   been extracted or qualified. Keep one
    cohesive class per file rather than one new class per type combination.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
@@ -829,13 +872,14 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-895d13ea`, revision
-`895d13ea4ce8abb811b3b1b3d51b23a466a342a9`.
+`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-41b7bd50`, revision
+`41b7bd50051cc2017fe5ca5505fb35c9dc620000`.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Against the previous `db9010c9` snapshot,
-DataTypes, Columns and Compression are content-identical. The bounded
-MergeTree and Formats diffs change rejection diagnostics and format-settings
-hashing, respectively, not the inspected persisted type serializers. Unchanged serializers
+comparison and earlier identities. Against the previous `895d13ea` snapshot,
+Serializations, Columns and Compression are content-identical. The bounded
+DataTypes, MergeTree and Formats diffs primarily replace recursive child
+traversal with TypeTree APIs; the inspected Interval and descriptor owners
+are unchanged. Unchanged serializers
 do not imply unchanged framing, metadata or lifecycle behavior. This is
 source evidence only: no executable from this checkout has been built or
 qualified. Source identity and the separately pinned executable oracle must

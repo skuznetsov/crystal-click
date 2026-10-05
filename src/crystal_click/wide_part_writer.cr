@@ -3982,6 +3982,21 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, ticks, column_type.type_name, rows_per_mark)
     end
 
+    # Write a scalar Interval as exact raw signed Int64 counts. Its kind is
+    # persisted in the type name and never inferred from the payload width.
+    def self.write_uint64_interval_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      counts : Slice(Int64),
+      kind : BinaryIntervalType::Kind,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_name = IntervalColumnType.interval(kind).type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, counts, type_name, rows_per_mark)
+    end
+
     # Write Time as raw signed Int32 seconds, without text or timezone conversion.
     def self.write_uint64_time_pair(
       destination : String,
@@ -4065,6 +4080,21 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, column_type.type_name, rows_per_mark)
     end
 
+    # Write Nullable(Interval) as a null map plus raw signed Int64 counts.
+    # Non-NULL values, including zero and signed extremes, are preserved.
+    def self.write_uint64_nullable_interval_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      counts : Slice(Int64?),
+      kind : BinaryIntervalType::Kind,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_name = IntervalColumnType.nullable_interval(kind).type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, counts, type_name, rows_per_mark)
+    end
+
     # Write Nullable(Time) as raw signed Int32 seconds with a separate null map.
     def self.write_uint64_nullable_time_pair(
       destination : String,
@@ -4114,7 +4144,7 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || PartSchemaMetadata.semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil?
+        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || PartSchemaMetadata.semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil? || !IntervalColumnType.parse(type_name).nil?
           records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.typed_serialization_metadata(type_name))
         end
         write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_name))
@@ -11620,6 +11650,9 @@ module CrystalClick
     private def self.numeric_width(type_name : String) : Int32
       if temporal_type = DateTimeColumnType.parse(type_name)
         return temporal_type.raw_width
+      end
+      if interval_type = IntervalColumnType.parse(type_name)
+        return interval_type.raw_width
       end
 
       case type_name
@@ -24944,6 +24977,12 @@ module CrystalClick
           raise CorruptPartError.new("staged typed temporal column metadata differs")
         end
       end
+      if interval_type = IntervalColumnType.parse(type_name)
+        if interval_type.shape == IntervalColumnType::Shape::Scalar &&
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, interval_type.type_name)
+          raise CorruptPartError.new("staged typed Interval column metadata differs")
+        end
+      end
 
       mark_count = checked_mark_count(keys.size, rows_per_mark)
       key_part = WidePart.open(stage, key_name)
@@ -25032,6 +25071,12 @@ module CrystalClick
         if temporal_type.shape == DateTimeColumnType::Shape::Nullable &&
            File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, temporal_type.type_name)
           raise CorruptPartError.new("staged Nullable temporal column metadata differs")
+        end
+      end
+      if interval_type = IntervalColumnType.parse(type_name)
+        if interval_type.shape == IntervalColumnType::Shape::Nullable &&
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, interval_type.type_name)
+          raise CorruptPartError.new("staged Nullable Interval column metadata differs")
         end
       end
 

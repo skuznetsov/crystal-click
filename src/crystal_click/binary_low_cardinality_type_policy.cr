@@ -26,8 +26,7 @@ module CrystalClick
 
     private def self.admitted_leaf?(type : BinaryDataType) : Bool
       # This is the source constructor's admitted-leaf set intersected with
-      # descriptor leaves represented by BinaryDataType. Interval is
-      # constructor-eligible upstream but has no tag in this grammar yet.
+      # descriptor leaves represented by BinaryDataType.
       tag = type.tag
       (tag >= BinaryDataType::TAG_UINT8 && tag <= BinaryDataType::TAG_FLOAT64) ||
         case tag
@@ -41,6 +40,7 @@ module CrystalClick
              BinaryDataType::TAG_IPV4,
              BinaryDataType::TAG_IPV6,
              BinaryDataType::TAG_TIME,
+             BinaryDataType::TAG_INTERVAL,
              BinaryDataType::TAG_BOOL,
              BinaryDataType::TAG_BFLOAT16
           true
