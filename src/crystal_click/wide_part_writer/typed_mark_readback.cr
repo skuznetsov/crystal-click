@@ -63,7 +63,14 @@ module CrystalClick
             raise UnsupportedFormatError.new("typed writer requires an exact UInt32 or DateTime payload")
           end
         {% elsif T == UInt64 %}
-          part.read_numeric_mark_range(column, mark_index, 1, UInt64)
+          if aggregate_type = SimpleAggregateColumnType.parse(type_name)
+            unless aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+              raise UnsupportedFormatError.new("typed writer requires an exact scalar SimpleAggregateFunction payload")
+            end
+            part.read_simple_aggregate_uint64_mark_range(column, mark_index, 1)
+          else
+            part.read_numeric_mark_range(column, mark_index, 1, UInt64)
+          end
         {% elsif T == Int8 %}
           if WidePart.enum8_codes(type_name)
             part.read_enum8_codes_mark_range(column, mark_index, 1)
@@ -211,7 +218,14 @@ module CrystalClick
             raise UnsupportedFormatError.new("typed Nullable UInt32 writer requires exact DateTime or numeric metadata")
           end
         {% elsif T == UInt64? %}
-          part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt64)
+          if aggregate_type = SimpleAggregateColumnType.parse(type_name)
+            unless aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+              raise UnsupportedFormatError.new("typed Nullable writer requires an exact Nullable(SimpleAggregateFunction) payload")
+            end
+            part.read_nullable_simple_aggregate_uint64_mark_range(column, mark_index, 1)
+          else
+            part.read_nullable_numeric_mark_range(column, mark_index, 1, UInt64)
+          end
         {% elsif T == Int8? %}
           if WidePart.enum8_codes(type_name)
             part.read_nullable_enum8_codes_mark_range(column, mark_index, 1)

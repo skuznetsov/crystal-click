@@ -292,6 +292,8 @@ module CrystalClick
         nested_roles, nested_names = measure_bindings(type.child_at(0), add_size(role_length, 7_u64), name_length, array_level, variant_names)
         role_bytes = add_size(role_bytes, nested_roles)
         name_bytes = add_size(name_bytes, nested_names)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        role_bytes, name_bytes = measure_bindings(type.child_at(0), role_length, name_length, array_level, variant_names)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           role_bytes = add_size(role_length, 5_u64)
@@ -372,6 +374,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         names["#{role}.nulls"] = PhysicalStreamName.append_literal(prefix, ".null")
         append_bindings(type.child_at(0), "#{role}.nested", prefix, array_level, names, variant_names)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_bindings(type.child_at(0), role, prefix, array_level, names, variant_names)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           names["#{role}.data"] = String.new(prefix.to_slice)
@@ -441,6 +445,8 @@ module CrystalClick
         measure_dictionary_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
       when BinaryDataType::TAG_NULLABLE
         measure_dictionary_prefix_metadata(type.child_at(0), add_size(path_length, 7_u64))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        measure_dictionary_prefix_metadata(type.child_at(0), path_length)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = 0_u64
         paths = 0_u64
@@ -493,6 +499,8 @@ module CrystalClick
         measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
       when BinaryDataType::TAG_NULLABLE
         measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 7_u64))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        measure_discriminator_prefix_metadata(type.child_at(0), path_length)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
         count = 0_u64
         bytes = 0_u64

@@ -178,6 +178,18 @@ module CrystalClick
       new(type, nil, [child] of BinaryValue)
     end
 
+    # SimpleAggregateFunction is nominal but has no row-value framing: its
+    # UInt64 storage value remains one typed child in the logical tree.
+    def self.simple_aggregate(type : BinaryDataType, child : BinaryValue) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE
+        raise ArgumentError.new("SimpleAggregateFunction value requires SimpleAggregateFunction type")
+      end
+      unless child.type == type.child_at(0)
+        raise ArgumentError.new("SimpleAggregateFunction child type does not match its descriptor")
+      end
+      new(type, nil, [child] of BinaryValue)
+    end
+
     def self.tuple(type : BinaryDataType, fields : Array(BinaryValue)) : BinaryValue
       unless type.tag == BinaryDataType::TAG_UNNAMED_TUPLE || type.tag == BinaryDataType::TAG_NAMED_TUPLE
         raise ArgumentError.new("tuple value requires Tuple type")
@@ -283,6 +295,11 @@ module CrystalClick
     def as_uint64 : UInt64
       require_tag(BinaryDataType::TAG_UINT64, "UInt64")
       read_le_u64
+    end
+
+    def as_simple_aggregate : BinaryValue
+      require_tag(BinaryDataType::TAG_SIMPLE_AGGREGATE, "SimpleAggregateFunction")
+      @elements[0]
     end
 
     def as_float32_bits : UInt32

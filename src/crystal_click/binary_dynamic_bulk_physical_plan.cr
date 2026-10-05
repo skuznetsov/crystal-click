@@ -318,6 +318,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         add_data_role(path, ".nulls")
         scan_type(type.child_at(0), child_path(path, ".nested"), depth + 1)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        scan_type(type.child_at(0), path, depth + 1)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if child_count == 0
           add_data_role(path, ".data")
@@ -380,6 +382,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         add_physical_name(add_size(prefix_length, 5_u64))
         measure_bindings(type.child_at(0), child_path(path, ".nested"), prefix_length, array_level)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        measure_bindings(type.child_at(0), path, prefix_length, array_level)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           add_physical_name(prefix_length)
@@ -479,6 +483,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         add_data_binding("#{path}.nulls", PhysicalStreamName.append_literal(prefix, ".null"))
         append_bindings(type.child_at(0), child_path(path, ".nested"), prefix, array_level)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_bindings(type.child_at(0), path, prefix, array_level)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           add_data_binding("#{path}.data", String.new(prefix.to_slice))

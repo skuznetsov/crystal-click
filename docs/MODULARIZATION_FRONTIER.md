@@ -24,6 +24,25 @@ combination. Declared actual-arm policy, codec composition, statistics and
 file I/O remain with their existing owners. This 174-line owner does not
 complete decomposition of the large reader/writer/table facades.
 
+## SimpleAggregateFunction owners — W161
+
+W161 adds one nominal function/profile owner (`BinarySimpleAggregateType`,
+98 lines), one scalar/Nullable declaration owner (`SimpleAggregateColumnType`,
+72 lines), and one private semantic reader gate
+(`WidePart::SimpleAggregateColumnReader`, 24 lines), each in its own file.
+The gate borrows a synchronous decoding callback; it neither owns nor retains
+I/O resources. The wrapper keeps its nominal identity while reusing the
+UInt64 physical serializer and existing typed staging/readback/publication.
+There is no class per aggregate-function or scalar/Nullable combination.
+
+The current reader/writer/table facades are 15,798/25,316/6,852 lines. These
+counts expose unfinished responsibility-level decomposition; the new owners
+do not constitute overall architecture completion or a speed certificate.
+The finite paired capability and its verification scope are recorded in
+[SIMPLE_AGGREGATE_FRONTIER.md](SIMPLE_AGGREGATE_FRONTIER.md). The next validator
+boundary below remains PROPOSED. Re-inventory its call sites after W161's
+UInt64/UInt64? dispatch and exact metadata additions before extraction.
+
 ## Interval owners and next validator boundary — W160
 
 W160 adds separate cohesive owners for exact Interval kind/wire identity
@@ -40,7 +59,7 @@ Next extraction: PROPOSED, not implemented or verified. One private
 `StagedTypedNumericPartValidator` should own the scalar and nullable staged
 numeric verification cohort. Preserve the dispatcher and Nullable(String)
 sibling route in `WidePartWriter`, along with same-signature facade methods
-used by W98/W102/W104/W160 test bridges and module reopens. The existing
+used by W98/W102/W104/W160/W161 test bridges and module reopens. The existing
 `TypedMarkReadback` owner remains responsible for semantic accessor dispatch.
 
 The W160 source inventory locates the dispatcher at

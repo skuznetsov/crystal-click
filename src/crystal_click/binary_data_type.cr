@@ -5,53 +5,54 @@ module CrystalClick
   # W117-W119 descriptor/value kernel. A familiar display name is not enough
   # to admit an otherwise unsupported type or imply broader part support.
   class BinaryDataType
-    TAG_NOTHING         =     0x00_u8
-    TAG_UINT8           =     0x01_u8
-    TAG_UINT16          =     0x02_u8
-    TAG_UINT32          =     0x03_u8
-    TAG_UINT64          =     0x04_u8
-    TAG_UINT128         =     0x05_u8
-    TAG_UINT256         =     0x06_u8
-    TAG_INT8            =     0x07_u8
-    TAG_INT16           =     0x08_u8
-    TAG_INT32           =     0x09_u8
-    TAG_INT64           =     0x0a_u8
-    TAG_INT128          =     0x0b_u8
-    TAG_INT256          =     0x0c_u8
-    TAG_FLOAT32         =     0x0d_u8
-    TAG_FLOAT64         =     0x0e_u8
-    TAG_DATE            =     0x0f_u8
-    TAG_DATE32          =     0x10_u8
-    TAG_DATETIME        =     0x11_u8
-    TAG_DATETIME_ZONE   =     0x12_u8
-    TAG_DATETIME64      =     0x13_u8
-    TAG_DATETIME64_ZONE =     0x14_u8
-    TAG_STRING          =     0x15_u8
-    TAG_FIXED_STRING    =     0x16_u8
-    TAG_ENUM8           =     0x17_u8
-    TAG_ENUM16          =     0x18_u8
-    TAG_DECIMAL32       =     0x19_u8
-    TAG_DECIMAL64       =     0x1a_u8
-    TAG_DECIMAL128      =     0x1b_u8
-    TAG_DECIMAL256      =     0x1c_u8
-    TAG_UUID            =     0x1d_u8
-    TAG_ARRAY           =     0x1e_u8
-    TAG_UNNAMED_TUPLE   =     0x1f_u8
-    TAG_NAMED_TUPLE     =     0x20_u8
-    TAG_INTERVAL        =     0x22_u8
-    TAG_LOW_CARDINALITY =     0x26_u8
-    TAG_NULLABLE        =     0x23_u8
-    TAG_MAP             =     0x27_u8
-    TAG_IPV4            =     0x28_u8
-    TAG_IPV6            =     0x29_u8
-    TAG_VARIANT         =     0x2a_u8
-    TAG_DYNAMIC         =     0x2b_u8
-    TAG_BOOL            =     0x2d_u8
-    TAG_BFLOAT16        =     0x31_u8
-    TAG_TIME            =     0x32_u8
-    TAG_TIME64          =     0x34_u8
-    MAX_FIXED_STRING    = 0x00ff_ffff
-    MAX_TUPLE_ARITY     =   1_000_000
+    TAG_NOTHING          =     0x00_u8
+    TAG_UINT8            =     0x01_u8
+    TAG_UINT16           =     0x02_u8
+    TAG_UINT32           =     0x03_u8
+    TAG_UINT64           =     0x04_u8
+    TAG_UINT128          =     0x05_u8
+    TAG_UINT256          =     0x06_u8
+    TAG_INT8             =     0x07_u8
+    TAG_INT16            =     0x08_u8
+    TAG_INT32            =     0x09_u8
+    TAG_INT64            =     0x0a_u8
+    TAG_INT128           =     0x0b_u8
+    TAG_INT256           =     0x0c_u8
+    TAG_FLOAT32          =     0x0d_u8
+    TAG_FLOAT64          =     0x0e_u8
+    TAG_DATE             =     0x0f_u8
+    TAG_DATE32           =     0x10_u8
+    TAG_DATETIME         =     0x11_u8
+    TAG_DATETIME_ZONE    =     0x12_u8
+    TAG_DATETIME64       =     0x13_u8
+    TAG_DATETIME64_ZONE  =     0x14_u8
+    TAG_STRING           =     0x15_u8
+    TAG_FIXED_STRING     =     0x16_u8
+    TAG_ENUM8            =     0x17_u8
+    TAG_ENUM16           =     0x18_u8
+    TAG_DECIMAL32        =     0x19_u8
+    TAG_DECIMAL64        =     0x1a_u8
+    TAG_DECIMAL128       =     0x1b_u8
+    TAG_DECIMAL256       =     0x1c_u8
+    TAG_UUID             =     0x1d_u8
+    TAG_ARRAY            =     0x1e_u8
+    TAG_UNNAMED_TUPLE    =     0x1f_u8
+    TAG_NAMED_TUPLE      =     0x20_u8
+    TAG_INTERVAL         =     0x22_u8
+    TAG_LOW_CARDINALITY  =     0x26_u8
+    TAG_NULLABLE         =     0x23_u8
+    TAG_MAP              =     0x27_u8
+    TAG_IPV4             =     0x28_u8
+    TAG_IPV6             =     0x29_u8
+    TAG_VARIANT          =     0x2a_u8
+    TAG_DYNAMIC          =     0x2b_u8
+    TAG_BOOL             =     0x2d_u8
+    TAG_SIMPLE_AGGREGATE =     0x2e_u8
+    TAG_BFLOAT16         =     0x31_u8
+    TAG_TIME             =     0x32_u8
+    TAG_TIME64           =     0x34_u8
+    MAX_FIXED_STRING     = 0x00ff_ffff
+    MAX_TUPLE_ARITY      =   1_000_000
 
     getter tag : UInt8
     getter fixed_size : Int32?
@@ -70,6 +71,7 @@ module CrystalClick
     @decimal_type : BinaryDecimalType?
     @enum_definition : BinaryEnumDefinition?
     @interval_type : BinaryIntervalType?
+    @simple_aggregate_type : BinarySimpleAggregateType?
 
     private def initialize(
       @tag : UInt8,
@@ -82,6 +84,7 @@ module CrystalClick
       @enum_definition : BinaryEnumDefinition? = nil,
       @dynamic_max_types : UInt8? = nil,
       @interval_type : BinaryIntervalType? = nil,
+      @simple_aggregate_type : BinarySimpleAggregateType? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
@@ -175,6 +178,17 @@ module CrystalClick
 
     def self.array(child : BinaryDataType) : BinaryDataType
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
+    end
+
+    def self.simple_aggregate(
+      function : BinarySimpleAggregateType::Function,
+      storage_type : BinaryDataType = primitive("UInt64"),
+    ) : BinaryDataType
+      unless storage_type.tag == TAG_UINT64
+        raise ArgumentError.new("SimpleAggregateFunction storage type is outside the admitted UInt64 profile")
+      end
+      descriptor = BinarySimpleAggregateType.new(function)
+      new(TAG_SIMPLE_AGGREGATE, nil, [storage_type] of BinaryDataType, [] of String, nil, nil, nil, nil, nil, nil, descriptor)
     end
 
     def self.dynamic(max_types : Int = 32) : BinaryDataType
@@ -332,6 +346,10 @@ module CrystalClick
       @interval_type
     end
 
+    def simple_aggregate_type : BinarySimpleAggregateType?
+      @simple_aggregate_type
+    end
+
     # Enum declarations are metadata edges/nodes in the binary budget, not
     # recursive DataType children and therefore do not increase tree depth.
     def metadata_entry_count : Int32
@@ -375,6 +393,8 @@ module CrystalClick
         "Nullable(#{@children[0].name})"
       when TAG_LOW_CARDINALITY
         "LowCardinality(#{@children[0].name})"
+      when TAG_SIMPLE_AGGREGATE
+        "SimpleAggregateFunction(#{@simple_aggregate_type.not_nil!.function_name}, #{@children[0].name})"
       when TAG_MAP
         "Map(#{@children[0].name}, #{@children[1].name})"
       when TAG_VARIANT
@@ -461,6 +481,7 @@ module CrystalClick
       return false unless @decimal_type == other.@decimal_type
       return false unless @enum_definition == other.@enum_definition
       return false unless @interval_type == other.@interval_type
+      return false unless @simple_aggregate_type == other.@simple_aggregate_type
       return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
@@ -471,7 +492,7 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @children, @field_names
 
     private def format_field_name(value : String) : String
       bytes = value.to_slice

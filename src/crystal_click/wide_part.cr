@@ -1460,6 +1460,7 @@ module CrystalClick
       !GeometryColumnType.for_type(type).nil? || !GeoArrayColumnType.for_type(type).nil? || !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         !DateTimeColumnType.parse(type).nil? ||
         !IntervalColumnType.parse(type).nil? ||
+        !SimpleAggregateColumnType.parse(type).nil? ||
         type == "LowCardinality(String)" || type == "Date" || type == "Date32" || type == "DateTime" ||
         type == "Time" || !datetime64_scale(type).nil? || !time64_scale(type).nil? || type == "String" || type == "Int128" || type == "UInt128" ||
         type == "Int256" || type == "UInt256" ||
@@ -2380,6 +2381,16 @@ module CrystalClick
       end
     end
 
+    # SimpleAggregateFunction values are exposed as their stored raw UInt64
+    # child; the exact function identity remains a required nominal check and
+    # is not accepted by the primitive UInt64 API.
+    def read_simple_aggregate_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt64)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_uint64(@column_type) do
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 8, UInt64)
+      end
+    end
+
     # Time uses signed raw Int32 seconds. The exact semantic type gate keeps
     # this distinct from a primitive Int32 declaration.
     def read_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
@@ -2450,6 +2461,15 @@ module CrystalClick
       ensure_column(column)
       IntervalColumnReader.read_nullable_counts(@column_type) do
         read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+      end
+    end
+
+    # Nullable SimpleAggregateFunction preserves NULL independently of the
+    # raw UInt64 child and remains distinct from Nullable(UInt64).
+    def read_nullable_simple_aggregate_uint64_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(UInt64?)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_nullable_uint64(@column_type) do
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, UInt64)
       end
     end
 
@@ -11359,7 +11379,7 @@ module CrystalClick
         validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
         validate_nullable_raw_integer_serialization(columns, row_count)
-      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_time_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type) || !IntervalColumnType.parse(column_type).nil?
+      elsif column_type == "String" || !WidePart.fixed_string_width(column_type).nil? || !WidePart.nullable_fixed_string_width(column_type).nil? || WidePart.supports_nullable_numeric_type?(column_type) || WidePart.supports_nullable_temporal_type?(column_type) || WidePart.supports_nullable_time_type?(column_type) || WidePart.supports_nullable_string_type?(column_type) || WidePart.supports_uuid_type?(column_type) || WidePart.supports_nullable_uuid_type?(column_type) || WidePart.supports_ipv4_type?(column_type) || WidePart.supports_nullable_ipv4_type?(column_type) || WidePart.supports_ipv6_type?(column_type) || WidePart.supports_nullable_ipv6_type?(column_type) || WidePart.supports_semantic_fixed_width_type?(column_type) || WidePart.supports_nullable_semantic_fixed_width_type?(column_type) || !IntervalColumnType.parse(column_type).nil? || !SimpleAggregateColumnType.parse(column_type).nil?
         validate_type_serialization_version(column_type)
       end
 
@@ -11608,6 +11628,8 @@ module CrystalClick
         ["#{column}.dynamic_structure", "#{column}.variant_discr", "#{column}.SharedVariant.size", "#{column}.SharedVariant", "#{column}.String.size", "#{column}.String"]
       elsif interval_type = IntervalColumnType.parse(type)
         interval_type.shape == IntervalColumnType::Shape::Nullable ? ["#{column}.null", column] : [column]
+      elsif aggregate_type = SimpleAggregateColumnType.parse(type)
+        aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable ? ["#{column}.null", column] : [column]
       elsif plan = GeometryColumnType.for_type(type)
         plan.physical_streams(column).map(&.[0])
       elsif variant_plan = WidePart.variant_type_plan(type)
@@ -12635,8 +12657,9 @@ module CrystalClick
       propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
       raise UnsupportedFormatError.new("serialization.json nested-version flag is unsupported") unless propagated == true
       versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
+      simple_aggregate_type = SimpleAggregateColumnType.parse(type)
       versions.each_key do |key|
-        allowed = key == "string" || key == "nullable" && (WidePart.supports_nullable_string_type?(type) || !WidePart.nullable_fixed_string_width(type).nil?)
+        allowed = key == "string" || key == "nullable" && (WidePart.supports_nullable_string_type?(type) || !WidePart.nullable_fixed_string_width(type).nil? || simple_aggregate_type.try(&.shape) == SimpleAggregateColumnType::Shape::Nullable)
         raise UnsupportedFormatError.new("unsupported serialization type version") unless allowed
       end
 
@@ -12695,6 +12718,16 @@ module CrystalClick
         columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("Interval column serializers are required"))
         raise UnsupportedFormatError.new("Interval per-column serialization is unsupported") unless columns.empty?
         raise UnsupportedFormatError.new("Interval missing-column serialization is unsupported") if info.has_key?("missing_columns")
+      elsif aggregate_type = simple_aggregate_type
+        string_version = versions["string"]?.try(&.as_i) || raise(UnsupportedFormatError.new("SimpleAggregateFunction serialization version is required"))
+        raise UnsupportedFormatError.new("only SimpleAggregateFunction serialization version 1 is supported") unless string_version == 1
+        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          nullable_version = versions["nullable"]?.try(&.as_i) || 0_i64
+          raise UnsupportedFormatError.new("only basic Nullable SimpleAggregateFunction serialization is supported") unless nullable_version == 0
+        end
+        columns = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("SimpleAggregateFunction column serializers are required"))
+        raise UnsupportedFormatError.new("SimpleAggregateFunction per-column serialization is unsupported") unless columns.empty?
+        raise UnsupportedFormatError.new("SimpleAggregateFunction missing-column serialization is unsupported") if info.has_key?("missing_columns")
       end
       nil
     rescue ex : JSON::ParseException | TypeCastError
@@ -13682,6 +13715,12 @@ module CrystalClick
           stream_name == "#{@column}.null" ? 1 : interval_type.raw_width
         else
           interval_type.raw_width
+        end
+      elsif aggregate_type = SimpleAggregateColumnType.parse(@column_type)
+        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          stream_name == "#{@column}.null" ? 1 : aggregate_type.raw_width
+        else
+          aggregate_type.raw_width
         end
       elsif @column_type == "Date"
         2

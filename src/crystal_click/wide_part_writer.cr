@@ -3997,6 +3997,21 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, counts, type_name, rows_per_mark)
     end
 
+    # Write a scalar SimpleAggregateFunction profile as its stored raw UInt64
+    # child. The function is preserved as nominal metadata only.
+    def self.write_uint64_simple_aggregate_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt64),
+      function : BinarySimpleAggregateType::Function,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_name = SimpleAggregateColumnType.simple_aggregate(function).type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
     # Write Time as raw signed Int32 seconds, without text or timezone conversion.
     def self.write_uint64_time_pair(
       destination : String,
@@ -4095,6 +4110,21 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, counts, type_name, rows_per_mark)
     end
 
+    # Write Nullable(SimpleAggregateFunction) as a null map plus its raw
+    # UInt64 child. The function is preserved as nominal metadata only.
+    def self.write_uint64_nullable_simple_aggregate_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(UInt64?),
+      function : BinarySimpleAggregateType::Function,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_name = SimpleAggregateColumnType.nullable_simple_aggregate(function).type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
     # Write Nullable(Time) as raw signed Int32 seconds with a separate null map.
     def self.write_uint64_nullable_time_pair(
       destination : String,
@@ -4144,7 +4174,7 @@ module CrystalClick
         records.concat(write_typed_payload_streams(stage, value_name, values, rows_per_mark, type_name))
         records << write_primary_index(stage, keys, rows_per_mark)
         records << write_checksummed_file(stage, "count.txt", keys.size.to_s)
-        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || PartSchemaMetadata.semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil? || !IntervalColumnType.parse(type_name).nil?
+        if type_name == "UUID" || type_name == "IPv4" || type_name == "IPv6" || type_name == "Int128" || type_name == "UInt128" || type_name == "Int256" || type_name == "UInt256" || type_name.starts_with?("Nullable(") || PartSchemaMetadata.semantic_fixed_width_type?(type_name) || type_name == "Time" || !WidePart.time64_scale(type_name).nil? || !IntervalColumnType.parse(type_name).nil? || !SimpleAggregateColumnType.parse(type_name).nil?
           records << write_checksummed_file(stage, "serialization.json", PartSchemaMetadata.typed_serialization_metadata(type_name))
         end
         write_plain_metadata(stage, "columns.txt", PartSchemaMetadata.typed_columns_metadata(key_name, value_name, type_name))
@@ -11560,7 +11590,19 @@ module CrystalClick
       {% elsif T == UInt128? %}
         raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
-      {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+      {% elsif T == UInt64 %}
+        aggregate_type = SimpleAggregateColumnType.parse(type_name)
+        unless type_name == "UInt64" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+          raise UnsupportedFormatError.new("UInt64 payload requires exact UInt64 or scalar SimpleAggregateFunction metadata")
+        end
+        validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == UInt64? %}
+        aggregate_type = SimpleAggregateColumnType.parse(type_name)
+        unless type_name == "Nullable(UInt64)" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          raise UnsupportedFormatError.new("Nullable UInt64 payload requires exact Nullable(UInt64) or Nullable(SimpleAggregateFunction) metadata")
+        end
+        validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
@@ -11636,7 +11678,19 @@ module CrystalClick
       {% elsif T == UInt128? %}
         raise UnsupportedFormatError.new("Nullable UInt128 payload requires exact Nullable(UInt128) metadata") unless type_name == "Nullable(UInt128)"
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
-      {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == UInt64 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+      {% elsif T == UInt64 %}
+        aggregate_type = SimpleAggregateColumnType.parse(type_name)
+        unless type_name == "UInt64" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+          raise UnsupportedFormatError.new("UInt64 payload requires exact UInt64 or scalar SimpleAggregateFunction metadata")
+        end
+        write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == UInt64? %}
+        aggregate_type = SimpleAggregateColumnType.parse(type_name)
+        unless type_name == "Nullable(UInt64)" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          raise UnsupportedFormatError.new("Nullable UInt64 payload requires exact Nullable(UInt64) or Nullable(SimpleAggregateFunction) metadata")
+        end
+        write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
@@ -11653,6 +11707,9 @@ module CrystalClick
       end
       if interval_type = IntervalColumnType.parse(type_name)
         return interval_type.raw_width
+      end
+      if aggregate_type = SimpleAggregateColumnType.parse(type_name)
+        return aggregate_type.raw_width
       end
 
       case type_name
@@ -24949,7 +25006,7 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
-      {% if T == BFloat16Value? || T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Int256Value? || T == UInt256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == UInt128? || T == Float32? || T == Float64? %}
+      {% if T == BFloat16Value? || T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Int256Value? || T == UInt256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == UInt64? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == UInt128? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
@@ -24981,6 +25038,12 @@ module CrystalClick
         if interval_type.shape == IntervalColumnType::Shape::Scalar &&
            File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, interval_type.type_name)
           raise CorruptPartError.new("staged typed Interval column metadata differs")
+        end
+      end
+      if aggregate_type = SimpleAggregateColumnType.parse(type_name)
+        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar &&
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, aggregate_type.type_name)
+          raise CorruptPartError.new("staged typed SimpleAggregateFunction column metadata differs")
         end
       end
 
@@ -25077,6 +25140,12 @@ module CrystalClick
         if interval_type.shape == IntervalColumnType::Shape::Nullable &&
            File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, interval_type.type_name)
           raise CorruptPartError.new("staged Nullable Interval column metadata differs")
+        end
+      end
+      if aggregate_type = SimpleAggregateColumnType.parse(type_name)
+        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable &&
+           File.read(File.join(stage, "columns.txt")) != PartSchemaMetadata.typed_columns_metadata(key_name, value_name, aggregate_type.type_name)
+          raise CorruptPartError.new("staged Nullable SimpleAggregateFunction column metadata differs")
         end
       end
 

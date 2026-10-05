@@ -233,6 +233,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         ensure_role_minimum(contexts, child_path(path, ".nulls", nil, budget, dynamic_plan), count, 1_u64)
         ensure_minimum_count(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        ensure_minimum_count(type.child_at(0), path, count, profile, contexts, budget, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
@@ -355,6 +357,13 @@ module CrystalClick
             BinaryValue.dynamic(type, child)
           end
         end
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        child_type = type.child_at(0)
+        traversal.preflight_children(1_u64)
+        traversal.ensure_depth(depth + 1)
+        ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
+        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+        BinaryValue.simple_aggregate(type, child)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
           size = read_u64(context_for(contexts, child_path(path, ".string_sizes", nil, traversal.budget, dynamic_plan)))

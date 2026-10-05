@@ -890,6 +890,19 @@ module CrystalClick
       @column_values[index].as(Slice(Int64))
     end
 
+    # Return raw UInt64 children only for an exact scalar
+    # SimpleAggregateFunction declaration; primitive UInt64 accessors remain
+    # closed over their own exact type.
+    def simple_aggregate_uint64s_for(column : String) : Slice(UInt64)
+      index = column_index(column)
+      aggregate_type = SimpleAggregateColumnType.parse(@column_types[index])
+      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+        raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires an exact scalar UInt64 profile")
+      end
+      return @typed_numeric_values[column].as(Slice(UInt64)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(UInt64))
+    end
+
     def time_seconds_for(column : String) : Slice(Int32)
       index = column_index(column)
       raise UnsupportedFormatError.new("Time accessor requires an exact Time column") unless @column_types[index] == "Time"
@@ -2130,6 +2143,15 @@ module CrystalClick
         raise UnsupportedFormatError.new("Interval accessor requires an exact Nullable(Interval) column")
       end
       @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable(Interval) column was not materialized in this batch"))
+    end
+
+    def nullable_simple_aggregate_uint64s_for(column : String) : Slice(UInt64?)
+      index = column_index(column)
+      aggregate_type = SimpleAggregateColumnType.parse(@column_types[index])
+      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+        raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires an exact Nullable scalar UInt64 profile")
+      end
+      @nullable_values[column]?.try(&.as(Slice(UInt64?))) || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction column was not materialized in this batch"))
     end
 
     def nullable_time_seconds_for(column : String) : Slice(Int32?)
@@ -5029,6 +5051,12 @@ module CrystalClick
         end
       end
 
+      if aggregate_type = SimpleAggregateColumnType.parse(type)
+        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+          return reader.read_simple_aggregate_uint64_mark_range(selected.name, mark_index, 1)
+        end
+      end
+
       case selected.column_type
       when "Date"
         reader.read_date_codes_mark_range(selected.name, mark_index, 1)
@@ -6274,6 +6302,12 @@ module CrystalClick
       if interval_type = IntervalColumnType.parse(type)
         if interval_type.shape == IntervalColumnType::Shape::Nullable
           return reader.read_nullable_interval_counts_mark_range(selected.name, mark_index, 1)
+        end
+      end
+
+      if aggregate_type = SimpleAggregateColumnType.parse(type)
+        if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          return reader.read_nullable_simple_aggregate_uint64_mark_range(selected.name, mark_index, 1)
         end
       end
 

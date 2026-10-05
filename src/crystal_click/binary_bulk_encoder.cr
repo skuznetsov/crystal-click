@@ -118,6 +118,13 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         return zero_cost
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        child_type = type.child_at(0)
+        child_value = value.child_at(0)
+        child = minimum_value_cost(child_type, child_value, profile, default_costs, dynamic_plan)
+        nodes = checked_add(nodes, child[:nodes])
+        edges = checked_add(1_u64, child[:edges])
+        wire_bytes = child[:wire_bytes]
       when BinaryDataType::TAG_VARIANT
         wire_bytes = 1_u64
         if index = value.variant_index?
@@ -326,6 +333,22 @@ module CrystalClick
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
         end
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        child_type = type.child_at(0)
+        edges = 1_u64
+        child = value_cost(
+          child_type,
+          value.child_at(0),
+          path,
+          profile,
+          budget,
+          add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
+          default_costs,
+          dynamic_plan
+        )
+        nodes = checked_add(nodes, child[:nodes])
+        edges = checked_add(edges, child[:edges])
+        wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
       else
         width = type.fixed_width || raise UnsupportedFormatError.new("unsupported binary bulk leaf")
         unless value.byte_size == width
@@ -471,6 +494,11 @@ module CrystalClick
           traversal.ensure_depth(depth + 1)
           write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
         end
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        child_type = type.child_at(0)
+        preflight_child_type(traversal, child_type, 1_u64)
+        traversal.ensure_depth(depth + 1)
+        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan)
       else
         width = type.fixed_width || raise UnsupportedFormatError.new("unsupported binary bulk leaf")
         unless value.byte_size == width
@@ -521,6 +549,11 @@ module CrystalClick
         preflight_child_type(traversal, child_type, 1_u64)
         traversal.ensure_depth(depth + 1)
         write_default_value(child_type, child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        child_type = type.child_at(0)
+        preflight_child_type(traversal, child_type, 1_u64)
+        traversal.ensure_depth(depth + 1)
+        write_default_value(child_type, path, depth + 1, traversal, budget, lanes, profile, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           write_byte(lanes, "#{path}.data", 0x30_u8, budget)

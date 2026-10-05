@@ -457,6 +457,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         observed_rows = append_interval_counts_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("SimpleAggregateFunction(")
+        aggregate_type = SimpleAggregateColumnType.parse(selected_type)
+        unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_simple_aggregate_uint64_values(values, batch, column_name, observed_rows, expected_rows)
       when .starts_with?("DateTime64(")
         unless WidePart.datetime64_scale(selected_type)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
@@ -1209,6 +1215,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         observed_rows = append_nullable_interval_counts_values(values, batch, column_name, observed_rows, expected_rows)
+      when .starts_with?("Nullable(SimpleAggregateFunction(")
+        aggregate_type = SimpleAggregateColumnType.parse(selected_type)
+        unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          raise UnsupportedFormatError.new("selected table column type is unsupported")
+        end
+        observed_rows = append_nullable_simple_aggregate_uint64_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt8)"
         observed_rows = append_nullable_uint8_values(values, batch, column_name, observed_rows, expected_rows)
       when "Nullable(UInt16)"
@@ -1627,6 +1639,10 @@ module CrystalClick
       append_materialized_values(values, batch.interval_counts_for(column_name), observed_rows, expected_rows)
     end
 
+    private def append_simple_aggregate_uint64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.simple_aggregate_uint64s_for(column_name), observed_rows, expected_rows)
+    end
+
     private def append_time_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.time_seconds_for(column_name), observed_rows, expected_rows)
     end
@@ -1669,6 +1685,10 @@ module CrystalClick
 
     private def append_nullable_interval_counts_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
       append_materialized_values(values, batch.nullable_interval_counts_for(column_name), observed_rows, expected_rows)
+    end
+
+    private def append_nullable_simple_aggregate_uint64_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64
+      append_materialized_values(values, batch.nullable_simple_aggregate_uint64s_for(column_name), observed_rows, expected_rows)
     end
 
     private def append_nullable_time_seconds_values(values : Array(OfflineColumnValue), batch : WidePartTableBatch, column_name : String, observed_rows : UInt64, expected_rows : UInt64) : UInt64

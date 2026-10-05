@@ -199,6 +199,8 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
         suffix = type.tag == BinaryDataType::TAG_ARRAY ? ".elements" : ".nested"
         contains_low_cardinality?(type.child_at(0), contextual_generated_name(context, path, suffix), context)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        contains_low_cardinality?(type.child_at(0), path, context)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = contextual_generated_name(context, path, ".field.", index)
@@ -433,6 +435,8 @@ module CrystalClick
         discover_write_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, structures, context, sites)
       when BinaryDataType::TAG_NULLABLE
         discover_write_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, structures, context, sites)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        discover_write_sites(type.child_at(0), path, depth + 1, structures, context, sites)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
@@ -487,6 +491,8 @@ module CrystalClick
         discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, streams, context, sites)
       when BinaryDataType::TAG_NULLABLE
         discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, streams, context, sites)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        discover_read_sites(type.child_at(0), path, depth + 1, streams, context, sites)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
@@ -677,6 +683,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         child = child_path(context, path, ".nested")
         checked_role_add(1_u64, count_type_roles(type.child_at(0), child, sites, profile, context))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        count_type_roles(type.child_at(0), path, sites, profile, context)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           1_u64
@@ -743,6 +751,8 @@ module CrystalClick
         append_role(context, path, ".nulls", roles)
         child = child_path(context, path, ".nested")
         append_type_roles(type.child_at(0), child, sites, profile, context, roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_type_roles(type.child_at(0), path, sites, profile, context, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           append_role(context, path, ".data", roles)
@@ -805,6 +815,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         child = child_path(context, path, ".nested")
         checked_role_add(1_u64, count_ordinary_type_roles(type.child_at(0), child, sites, profile, context))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        count_ordinary_type_roles(type.child_at(0), path, sites, profile, context)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           1_u64
@@ -858,6 +870,8 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
         suffix = type.tag == BinaryDataType::TAG_ARRAY ? ".elements" : ".nested"
         count_low_cardinality_sites(type.child_at(0), child_path(context, path, suffix), sites, context)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        count_low_cardinality_sites(type.child_at(0), path, sites, context)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_VARIANT
         count = 0_u64
         type.child_count.times do |index|
@@ -900,6 +914,8 @@ module CrystalClick
         {contains: child[:contains], count: child[:contains] ? checked_role_add(1_u64, child[:count]) : 0_u64}
       when BinaryDataType::TAG_NULLABLE
         count_ancestor_size_roles(type.child_at(0), child_path(context, path, ".nested"), sites, context)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        count_ancestor_size_roles(type.child_at(0), path, sites, context)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_VARIANT
         contains = false
         count = 0_u64
@@ -959,6 +975,8 @@ module CrystalClick
         end
       when BinaryDataType::TAG_NULLABLE
         low_cardinality_schedule_metrics(type.child_at(0), child_path(context, path, ".nested"), sites, context)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        low_cardinality_schedule_metrics(type.child_at(0), path, sites, context)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
         contains = false
         grids = 0_u64
@@ -1010,6 +1028,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         append_role(context, path, ".nulls", roles)
         append_ordinary_type_roles(type.child_at(0), child_path(context, path, ".nested"), sites, profile, context, roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_ordinary_type_roles(type.child_at(0), path, sites, profile, context, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           append_role(context, path, ".data", roles)
@@ -1057,6 +1077,8 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
         suffix = type.tag == BinaryDataType::TAG_ARRAY ? ".elements" : ".nested"
         append_low_cardinality_sites(type.child_at(0), child_path(context, path, suffix), sites_by_path, context, result)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_low_cardinality_sites(type.child_at(0), path, sites_by_path, context, result)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_VARIANT
         type.child_count.times do |index|
           suffix = type.tag == BinaryDataType::TAG_VARIANT ? ".arm." : ".field."
@@ -1093,6 +1115,8 @@ module CrystalClick
         found
       when BinaryDataType::TAG_NULLABLE
         append_ancestor_size_roles(type.child_at(0), child_path(context, path, ".nested"), sites, context, roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_ancestor_size_roles(type.child_at(0), path, sites, context, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_VARIANT
         found = false
         type.child_count.times do |index|
@@ -1142,6 +1166,8 @@ module CrystalClick
         end
       when BinaryDataType::TAG_NULLABLE
         append_low_cardinality_shape_roles(type.child_at(0), child_path(context, path, ".nested"), sites, context, roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_low_cardinality_shape_roles(type.child_at(0), path, sites, context, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           append_low_cardinality_shape_roles(type.child_at(index), child_path(context, path, ".field.", index), sites, context, roles)

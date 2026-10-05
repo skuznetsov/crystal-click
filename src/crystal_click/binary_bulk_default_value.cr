@@ -40,6 +40,9 @@ module CrystalClick
              when BinaryDataType::TAG_NULLABLE
                child = measure(type.child_at(0), profile, costs, dynamic_plan)
                Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), add(1_u64, child.wire_bytes))
+             when BinaryDataType::TAG_SIMPLE_AGGREGATE
+               child = measure(type.child_at(0), profile, costs, dynamic_plan)
+               Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), child.wire_bytes)
              when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
                if type.child_count == 0
                  Cost.new(1_u64, 0_u64, 1_u64)
@@ -100,6 +103,9 @@ module CrystalClick
              when BinaryDataType::TAG_NULLABLE
                child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan)
                Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), add(1_u64, child.wire_bytes))
+             when BinaryDataType::TAG_SIMPLE_AGGREGATE
+               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan)
+               Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), child.wire_bytes)
              when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
                if type.child_count == 0
                  Cost.new(1_u64, 0_u64, 1_u64)
@@ -143,6 +149,8 @@ module CrystalClick
         BinaryValue.map(type, [] of BinaryValue)
       when BinaryDataType::TAG_LOW_CARDINALITY
         BinaryValue.low_cardinality(type, build(type.child_at(0), dynamic_plan))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        BinaryValue.simple_aggregate(type, build(type.child_at(0), dynamic_plan))
       when BinaryDataType::TAG_VARIANT
         BinaryValue.variant_null(type)
       when BinaryDataType::TAG_DYNAMIC

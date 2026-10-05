@@ -83,6 +83,20 @@ Lazy delivery has eager structural validation of all selected mark boundaries
 before the first callback; it is not a promise of zero selected preflight I/O.
 See the [Geo frontier](../docs/GEO_TYPES_FRONTIER.md) for exact qualification.
 
+Write and read a standalone `SimpleAggregateFunction(sum, UInt64)` part:
+
+```sh
+crystal run examples/write_simple_aggregate_part.cr -- /tmp/my-simple-aggregate-table/all_1_1_0
+```
+
+Create the parent directory first and choose a new destination outside any
+ClickHouse server data root. This example writes raw UInt64 storage values
+and preserves the exact function declaration; it does not execute `sum`,
+merge aggregate values or attach the part to a server. The paired APIs admit
+nine explicit unary, non-parametric UInt64 functions and their outer Nullable
+forms. Other carriers/functions remain closed. See the
+[SimpleAggregateFunction frontier](../docs/SIMPLE_AGGREGATE_FRONTIER.md).
+
 Write and read a ragged `Array` of recursively named Tuple elements:
 
 ```sh

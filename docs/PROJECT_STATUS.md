@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current capability checkpoint (2026-10-04): W160 pairs all eleven exact
+Current capability checkpoint (2026-10-04 local / 2026-10-05 UTC): W161 pairs
+nine canonical unary, non-parametric `SimpleAggregateFunction` identities with
+exact UInt64 storage: any, anyLast, min, max, sum, sumWithOverflow, groupBitAnd,
+groupBitOr and groupBitXor. The descriptor/value/bulk/physical codecs and
+scalar/outer Nullable public Wide-part writer/reader, table windows/batches
+and offline column values retain nominal identity; primitive UInt64 APIs do
+not silently accept the wrapper. This is stored-value compatibility, not
+aggregate execution or AggregatingMergeTree lifecycle support.
+Root passes 31 focused DEBUG examples (six unique specs) and 748 affected
+RELEASE examples (64 unique specs, eight disjoint groups), all counted groups
+with exit 0 and zero failures/errors/pending. Root independently reconciles
+actual logs, membership and all 360 current source/spec inputs. The incomplete
+aggregate attempt is not counted; its final eighth group passes separately.
+The opt-in stock reader executes two additional actual native-fixture examples.
+Pinned stock qualification passes a native-authored nineteen-column Wide/LZ4
+source, eighteen library-authored scalar/Nullable complete parts, actual
+ATTACH/CHECK, exact types and 54 literal full/middle/empty RowBinary windows.
+Two additional CHECK-valid mutant copies are rejected by the unchanged oracle:
+metadata-only min-to-max identity drift and a first-value 0-to-1 change.
+Root independently checks native output bytes and confirms the type mutant
+changes only columns.txt. All 363 native source/spec/script inputs match the
+final gate state. Scoped hostile verdict: ROBUST for this finite profile only.
+Three cohesive new owners have separate files, while the reader/writer/table
+facades remain 15,798/25,316/6,852 lines. The next staged-validator extraction
+is PROPOSED, not implemented. Fresh clean shallow source `41b7bd50` is unbuilt
+and distinct from executed stock build `d9bcb5ab`. Wider type/layout products,
+general MV/projections and architecture cleanup remain open; memory/performance
+work stays deferred. Exact scope, inventory, commands and refresh conditions:
+[SIMPLE_AGGREGATE_FRONTIER.md](SIMPLE_AGGREGATE_FRONTIER.md).
+
+Previous capability checkpoint (2026-10-04): W160 pairs all eleven exact
 `Interval` kinds in the general descriptor/value/bulk/physical codecs and
 scalar/Nullable public Wide-part readers and writers. Kind identity remains
 distinct from primitive Int64 and from other same-width Interval kinds.
@@ -744,15 +774,22 @@ source/runtime identities and executed evidence.
    paired profile; that is not qualification of every admitted schema product.
    Equal nominal Dynamic types do not imply
    equal per-part or per-site state.
-   Shared Nested offsets,
-   AggregateFunction state serialization and SimpleAggregateFunction alias
-   canonicalization remain unqualified; aggregate states and aliases are not
-   interchangeable capabilities. W160 now pairs Interval descriptors, values,
+   Shared Nested offsets, AggregateFunction state serialization and broader
+   SimpleAggregateFunction carriers/functions/parameters/aliases remain
+   unqualified; aggregate states and ordinary stored values are not
+   interchangeable capabilities. W161 admits nine canonical unary,
+   non-parametric SimpleAggregateFunction identities with exact UInt64 storage,
+   scalar/Nullable Wide readers/writers and their table/catalog consumers.
+   The finite certificate is recorded in
+   [SIMPLE_AGGREGATE_FRONTIER.md](SIMPLE_AGGREGATE_FRONTIER.md), not a claim of
+   complete SimpleAggregateFunction or AggregatingMergeTree execution support.
+   W160 now pairs Interval descriptors, values,
    normalized bulk and generic physical composition plus independently authored
    scalar/Nullable whole parts. Recursive and LC Interval codec admission is
    not a public whole-part certificate for every composition.
-   The general descriptor kernel still lacks AggregateFunction,
-   SimpleAggregateFunction, Nested, Custom, JSON and QBit/QBitWithStride tags.
+   The general descriptor kernel still lacks AggregateFunction, Nested,
+   Custom, JSON and QBit/QBitWithStride tags. SimpleAggregateFunction's tag is
+   now paired only within W161's exact UInt64 profile.
    This is not an inventory of wholly absent physical types: dedicated Object,
    geometry and QBit owners already cover narrower persisted profiles. Set and
    Function descriptors are also absent, but the current ClickHouse source
@@ -782,7 +819,7 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,818 lines at W160; the reader/writer are now 15,759/25,247 lines.
+   is 6,852 lines at W161; the reader/writer are now 15,798/25,316 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -809,8 +846,11 @@ source/runtime identities and executed evidence.
    Next remain
    shared schema/substream planning, physical I/O/validation, leaf codecs and
    thin table/catalog adapters. W160 adds exact Interval kind, column-grammar
-   and semantic reader-gate owners; physical I/O stays with the checked
-   fixed-width reader. The proposed next numeric staged-validator boundary and
+   and semantic reader-gate owners; W161 adds three cohesive nominal-function,
+   scalar/Nullable grammar and semantic-gate owners, each in its own file.
+   Physical I/O stays with the checked fixed-width reader and staging stays
+   with the existing typed writer. The proposed next numeric staged-validator
+   boundary and
    its selector/lifetime/publication guards are recorded in
    [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md); it has not yet
    been extracted or qualified. Keep one

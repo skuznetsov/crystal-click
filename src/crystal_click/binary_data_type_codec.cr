@@ -31,6 +31,15 @@ module CrystalClick
         preflight_descriptor_children(type, context)
         context.ensure_depth(depth + 1)
         write_to(type.child_at(0), context, depth + 1)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        function_name = type.simple_aggregate_type.not_nil!.function_name.to_slice
+        context.write_var_uint(function_name.size.to_u64)
+        context.write_slice(function_name)
+        context.write_var_uint(0_u64) # parameters
+        context.write_var_uint(1_u64) # argument types
+        preflight_descriptor_children(type, context)
+        context.ensure_depth(depth + 1)
+        write_to(type.child_at(0), context, depth + 1)
       when BinaryDataType::TAG_VARIANT
         count = type.child_count
         context.preflight_children(count.to_u64)
@@ -111,6 +120,31 @@ module CrystalClick
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)
         BinaryDataType.array(child)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        name_length = context.read_var_uint
+        if name_length > 15_u64
+          context.unsupported!("SimpleAggregateFunction name is outside the admitted function profile")
+        end
+        raw_name = context.read_slice(name_length)
+        descriptor = BinarySimpleAggregateType.from_name(String.new(raw_name))
+        unless simple_aggregate_type = descriptor
+          context.unsupported!("SimpleAggregateFunction function is outside the admitted function profile")
+        end
+        parameter_count = context.read_var_uint
+        if parameter_count != 0_u64
+          context.unsupported!("parameterized SimpleAggregateFunction is outside the admitted profile")
+        end
+        argument_count = context.read_var_uint
+        if argument_count != 1_u64
+          context.unsupported!("SimpleAggregateFunction argument count is outside the admitted unary profile")
+        end
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        child = read_from(context, depth + 1)
+        unless child.tag == BinaryDataType::TAG_UINT64
+          context.unsupported!("SimpleAggregateFunction storage type is outside the admitted UInt64 profile")
+        end
+        BinaryDataType.simple_aggregate(simple_aggregate_type.function, child)
       when BinaryDataType::TAG_NULLABLE
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)

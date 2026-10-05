@@ -119,6 +119,8 @@ module CrystalClick
         @profile.with_size_stream? ? 2_u64 : 1_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
         checked_role_add(1_u64, count_roles(type.child_at(0)))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        count_roles(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           1_u64
@@ -158,6 +160,8 @@ module CrystalClick
         @profile.with_size_stream? ? 2_u64 : 1_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
         checked_role_add(1_u64, count_ordinary_roles(type.child_at(0)))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        count_ordinary_roles(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           1_u64
@@ -191,7 +195,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         1_u64
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_SIMPLE_AGGREGATE
         count_sites(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
         count = 0_u64
@@ -218,6 +222,8 @@ module CrystalClick
         child = count_ancestor_size_roles(type.child_at(0))
         {contains: child[:contains], count: child[:contains] ? checked_role_add(1_u64, child[:count]) : 0_u64}
       when BinaryDataType::TAG_NULLABLE
+        count_ancestor_size_roles(type.child_at(0))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
         count_ancestor_size_roles(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         contains = false
@@ -266,6 +272,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         roles << "#{path}.nulls"
         append_roles(type.child_at(0), "#{path}.nested", roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           roles << "#{path}.data"
@@ -311,6 +319,8 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         roles << "#{path}.nulls"
         append_ordinary_roles(type.child_at(0), "#{path}.nested", roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_ordinary_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           roles << "#{path}.data"
@@ -348,6 +358,8 @@ module CrystalClick
         append_sites(type.child_at(0), "#{path}.elements", sites)
       when BinaryDataType::TAG_NULLABLE
         append_sites(type.child_at(0), "#{path}.nested", sites)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_sites(type.child_at(0), path, sites)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           append_sites(type.child_at(index), "#{path}.field.#{index}", sites)
@@ -373,6 +385,8 @@ module CrystalClick
         child_has_site
       when BinaryDataType::TAG_NULLABLE
         append_ancestor_size_roles(type.child_at(0), "#{path}.nested", roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_ancestor_size_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         contains_site = false
         type.child_count.times do |index|
@@ -408,6 +422,8 @@ module CrystalClick
          shape_roles: child[:contains] ? checked_role_add(1_u64, child[:shape_roles]) : 0_u64,
          grids:       child[:contains] ? checked_role_add(1_u64, child[:grids]) : 0_u64}
       when BinaryDataType::TAG_NULLABLE
+        low_cardinality_schedule_metrics(type.child_at(0))
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
         low_cardinality_schedule_metrics(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         contains = false
@@ -459,6 +475,8 @@ module CrystalClick
         contains
       when BinaryDataType::TAG_NULLABLE
         append_low_cardinality_shape_roles(type.child_at(0), "#{path}.nested", roles)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        append_low_cardinality_shape_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         contains = false
         type.child_count.times do |index|

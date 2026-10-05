@@ -211,6 +211,10 @@ module CrystalClick
         context.preflight_children(1_u64)
         context.ensure_depth(depth + 1)
         write_value(value.child_at(0), context, depth + 1)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        write_value(value.child_at(0), context, depth + 1)
       when BinaryDataType::TAG_VARIANT
         if value.is_null?
           context.write_byte(0xff_u8)
@@ -302,6 +306,11 @@ module CrystalClick
         context.ensure_depth(depth + 1)
         child = read_value(type.child_at(0), context, depth + 1)
         BinaryValue.low_cardinality(type, child)
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        child = read_value(type.child_at(0), context, depth + 1)
+        BinaryValue.simple_aggregate(type, child)
       when BinaryDataType::TAG_VARIANT
         index = context.read_byte
         if index == 0xff_u8
