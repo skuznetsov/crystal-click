@@ -48,6 +48,7 @@ module CrystalClick
     TAG_DYNAMIC          =     0x2b_u8
     TAG_BOOL             =     0x2d_u8
     TAG_SIMPLE_AGGREGATE =     0x2e_u8
+    TAG_NESTED           =     0x2f_u8
     TAG_BFLOAT16         =     0x31_u8
     TAG_TIME             =     0x32_u8
     TAG_TIME64           =     0x34_u8
@@ -62,6 +63,7 @@ module CrystalClick
     getter? contains_low_cardinality : Bool
     getter? contains_variant : Bool
     getter? contains_dynamic : Bool
+    getter? contains_nested : Bool
     getter dynamic_max_types : UInt8?
 
     @primitive_name : String?
@@ -91,6 +93,7 @@ module CrystalClick
       @contains_low_cardinality = @tag == TAG_LOW_CARDINALITY || @children.any?(&.contains_low_cardinality?)
       @contains_variant = @tag == TAG_VARIANT || @children.any?(&.contains_variant?)
       @contains_dynamic = @tag == TAG_DYNAMIC || @children.any?(&.contains_dynamic?)
+      @contains_nested = @tag == TAG_NESTED || @children.any?(&.contains_nested?)
     end
 
     def self.primitive(name : String) : BinaryDataType
@@ -180,6 +183,16 @@ module CrystalClick
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
+    # Nested is nominally distinct from Array(Tuple(...)). Its one implicit
+    # named-Tuple child preserves shared row alignment across sibling fields.
+    def self.nested(children : Array(BinaryDataType), names : Array(String)) : BinaryDataType
+      if children.empty?
+        raise ArgumentError.new("Nested requires at least one field")
+      end
+      tuple_type = tuple(children, names)
+      new(TAG_NESTED, nil, [tuple_type] of BinaryDataType, [] of String, nil)
+    end
+
     def self.simple_aggregate(
       function : BinarySimpleAggregateType::Function,
       storage_type : BinaryDataType = primitive("UInt64"),
@@ -239,8 +252,8 @@ module CrystalClick
     end
 
     def self.nullable(child : BinaryDataType) : BinaryDataType
-      if child.tag == TAG_ARRAY || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
-        raise ArgumentError.new("Nullable cannot directly contain Array, Map, Nullable, LowCardinality, Variant, or Dynamic")
+      if child.tag == TAG_ARRAY || child.tag == TAG_NESTED || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
+        raise ArgumentError.new("Nullable cannot directly contain Array, Nested, Map, Nullable, LowCardinality, Variant, or Dynamic")
       end
       new(TAG_NULLABLE, nil, [child] of BinaryDataType, [] of String, nil)
     end
@@ -362,6 +375,12 @@ module CrystalClick
       String.new(@field_names[index].to_slice)
     end
 
+    # Bounded structural names may render a Nested root using its implicit
+    # Tuple's field names without exposing mutable internal name storage.
+    def field_name_display_at(index : Int) : String
+      format_field_name(@field_names[index])
+    end
+
     def field_name_byte_size(index : Int) : Int32
       @field_names[index].bytesize
     end
@@ -429,6 +448,16 @@ module CrystalClick
         @enum_definition.not_nil!.type_name
       when TAG_ARRAY
         "Array(#{@children[0].name})"
+      when TAG_NESTED
+        tuple_type = @children[0]
+        String.build do |io|
+          io << "Nested("
+          tuple_type.child_count.times do |index|
+            io << ", " unless index == 0
+            io << tuple_type.field_name_display_at(index) << ' ' << tuple_type.child_at(index).name
+          end
+          io << ')'
+        end
       when TAG_NULLABLE
         "Nullable(#{@children[0].name})"
       when TAG_LOW_CARDINALITY

@@ -43,6 +43,13 @@ publication lifecycle is introduced. These are new capability seams, not a
 behavior-neutral extraction or reduced-coupling certificate. Scope and paired
 evidence are in [NESTED_STORAGE_FRONTIER.md](NESTED_STORAGE_FRONTIER.md).
 The W171 reader/writer/table facades remain 16,221/25,676/7,175 lines.
+W172 adds one 34-line `BinaryNestedType` invariant module in its own file for
+the logical descriptor/value/ordinary-bulk boundary. Existing carrier and
+leaf codecs are reused, with explicit nominal dispatch and guarded specialized
+products rather than per-child classes. This is a capability seam, not a
+behavior-neutral extraction or a reduced-coupling/performance certificate;
+the large facades remain unchanged. Scope and paired checks are recorded in
+[NESTED_BINARY_FRONTIER.md](NESTED_BINARY_FRONTIER.md).
 Additional validator cohorts and physical stream binding remain the next
 behavior-preserving extraction seams. The overall refactor is still open.
 

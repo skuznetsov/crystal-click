@@ -35,7 +35,7 @@ module CrystalClick
              when BinaryDataType::TAG_DYNAMIC
                # A hidden Dynamic default is NULL: discriminator only.
                Cost.new(1_u64, 0_u64, 1_u64)
-             when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
+             when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_MAP
                Cost.new(1_u64, 0_u64, 8_u64)
              when BinaryDataType::TAG_NULLABLE
                child = measure(type.child_at(0), profile, costs, dynamic_plan)
@@ -98,7 +98,7 @@ module CrystalClick
                Cost.new(1_u64, 0_u64, 1_u64)
              when BinaryDataType::TAG_DYNAMIC
                Cost.new(1_u64, 0_u64, 1_u64)
-             when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
+             when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_MAP
                Cost.new(1_u64, 0_u64, 8_u64)
              when BinaryDataType::TAG_NULLABLE
                child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan)
@@ -145,6 +145,8 @@ module CrystalClick
         BinaryValue.null(type)
       when BinaryDataType::TAG_ARRAY
         BinaryValue.array(type, [] of BinaryValue)
+      when BinaryDataType::TAG_NESTED
+        BinaryValue.nested(type, [] of BinaryValue)
       when BinaryDataType::TAG_MAP
         BinaryValue.map(type, [] of BinaryValue)
       when BinaryDataType::TAG_LOW_CARDINALITY

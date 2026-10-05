@@ -28,6 +28,7 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       context : PhysicalStreamPlanContext? = nil,
     )
+      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
@@ -43,6 +44,7 @@ module CrystalClick
       limits : BinaryCodecLimits,
       context : PhysicalStreamPlanContext?,
     )
+      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
@@ -203,6 +205,7 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       context : PhysicalStreamPlanContext? = nil,
     ) : BinaryBulkPhysicalPlan
+      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
       if type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")
       end
@@ -281,6 +284,12 @@ module CrystalClick
           name_bytes = add_size(name_bytes, add_size(name_length, 5_u64))
         end
       when BinaryDataType::TAG_ARRAY
+        role_bytes = add_size(role_bytes, add_size(role_length, 6_u64))
+        name_bytes = add_size(name_bytes, add_size(name_length, add_size(5_u64, digit_count(array_level))))
+        nested_roles, nested_names = measure_bindings(type.child_at(0), add_size(role_length, 9_u64), name_length, array_level + 1_u64, variant_names)
+        role_bytes = add_size(role_bytes, nested_roles)
+        name_bytes = add_size(name_bytes, nested_names)
+      when BinaryDataType::TAG_NESTED
         role_bytes = add_size(role_bytes, add_size(role_length, 6_u64))
         name_bytes = add_size(name_bytes, add_size(name_length, add_size(5_u64, digit_count(array_level))))
         nested_roles, nested_names = measure_bindings(type.child_at(0), add_size(role_length, 9_u64), name_length, array_level + 1_u64, variant_names)
@@ -371,6 +380,9 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY
         names["#{role}.sizes"] = PhysicalStreamName.append_literal(prefix, ".size#{array_level}")
         append_bindings(type.child_at(0), "#{role}.elements", prefix, array_level + 1_u64, names, variant_names)
+      when BinaryDataType::TAG_NESTED
+        names["#{role}.sizes"] = PhysicalStreamName.append_literal(prefix, ".size#{array_level}")
+        append_bindings(type.child_at(0), "#{role}.elements", prefix, array_level + 1_u64, names, variant_names)
       when BinaryDataType::TAG_NULLABLE
         names["#{role}.nulls"] = PhysicalStreamName.append_literal(prefix, ".null")
         append_bindings(type.child_at(0), "#{role}.nested", prefix, array_level, names, variant_names)
@@ -443,6 +455,8 @@ module CrystalClick
         {1_u64, path_length, add_size(path_length, 11_u64)}
       when BinaryDataType::TAG_ARRAY
         measure_dictionary_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
+      when BinaryDataType::TAG_NESTED
+        measure_dictionary_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
       when BinaryDataType::TAG_NULLABLE
         measure_dictionary_prefix_metadata(type.child_at(0), add_size(path_length, 7_u64))
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
@@ -496,6 +510,8 @@ module CrystalClick
     ) : {UInt64, UInt64}
       case type.tag
       when BinaryDataType::TAG_ARRAY
+        measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
+      when BinaryDataType::TAG_NESTED
         measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
       when BinaryDataType::TAG_NULLABLE
         measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 7_u64))

@@ -30,6 +30,10 @@ module CrystalClick
                  end
                when BinaryDataType::TAG_ARRAY
                  add(7_u64, children[0][0])
+               when BinaryDataType::TAG_NESTED
+                 # Replacing the implicit Tuple prefix with Nested adds one
+                 # display byte; the shared fields and child names are equal.
+                 add(children[0][0], 1_u64)
                when BinaryDataType::TAG_NULLABLE
                  add(10_u64, children[0][0])
                when BinaryDataType::TAG_LOW_CARDINALITY

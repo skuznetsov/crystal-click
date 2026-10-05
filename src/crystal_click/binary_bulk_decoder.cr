@@ -222,7 +222,7 @@ module CrystalClick
         else
           ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
         end
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_MAP
         ensure_role_minimum(contexts, child_path(path, ".sizes", nil, budget, dynamic_plan), count, 8_u64)
       when BinaryDataType::TAG_VARIANT
         ensure_role_minimum(contexts, child_path(path, ".discriminators", nil, budget, dynamic_plan), count, 1_u64)
@@ -383,7 +383,7 @@ module CrystalClick
           corrupt!("Nothing bulk placeholder is not canonical ASCII zero")
         end
         BinaryValue.null(type)
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         sizes = context_for(contexts, child_path(path, ".sizes", nil, traversal.budget, dynamic_plan))
         raw_count = read_u64(sizes)
         count = checked_collection_count(raw_count, "Array element count")
@@ -395,7 +395,11 @@ module CrystalClick
         elements = Array(BinaryValue).new(count) do
           decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
         end
-        BinaryValue.array(type, elements)
+        if type.tag == BinaryDataType::TAG_NESTED
+          BinaryValue.nested(type, elements)
+        else
+          BinaryValue.array(type, elements)
+        end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = type.child_count
         if count == 0

@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Latest capability checkpoint (W171, 2026-10-05): nominal unflattened
+Latest capability checkpoint (W172, 2026-10-05): nominal `Nested(...)` is
+paired through the reusable binary descriptor, known-type row/envelope,
+ordinary logical bulk and physical-name APIs. Exact field metadata and the
+implicit named-Tuple child stay distinct from Array(Tuple); synthetic graph
+nodes/edges share descriptor and envelope limits. Both String profiles,
+ordinary recursive Nested/Array/Tuple/Map products, hidden Nullable Tuple
+defaults and nonzero/empty mark windows have library coverage. Products
+combining Nested with LC/Variant/Dynamic bulk remain explicitly refused,
+including actual Nested Dynamic rosters in both directions. The bounded
+W171 complete-part writer profile is unchanged.
+Root passes 286 DEBUG and 286 RELEASE examples across 39 focused specs,
+zero failures/errors/pending and actual child/guard exit 0. Root reconciles
+nine pinned stock processes, six exact native input/output buffers and two
+distinct descriptors against library-authored bytes and decoded values.
+Six stock-created payload lanes, K+1 offsets and four mark windows match.
+A seeded synthetic-node budget bypass fails an unchanged assertion; exact
+restoration passes. Scoped verdict: ROBUST within the ordinary logical
+profile and finite three-leaf native witnesses, not every native child/layout
+product. Entirely empty marks and recursive products retain library-only
+evidence. Flattened shared Nested offsets remain open.
+The 34-line invariant owner has its own file; existing leaf/carrier codecs
+are reused. Reader/writer/table facades stay 16,221/25,676/7,175 lines;
+overall modularization is unfinished. JSON/Dynamic/Variant layout widening,
+AggregateFunction states, broader SAF, general MV/projection execution/storage
+and arbitrary-schema complete-part/table writing remain open. Memory and
+performance stay deferred. Fresh source `e9b645ed` is clean, shallow and
+unbuilt; executed stock remains separately pinned to `d9bcb5ab`.
+Exact commands, scope, evidence and decay:
+[NESTED_BINARY_FRONTIER.md](NESTED_BINARY_FRONTIER.md).
+
+Previous capability checkpoint (W171, 2026-10-05): nominal unflattened
 `Nested(...)` is paired for one sorted UInt64 key and one payload in Wide/LZ4
 parts. The inherited named recursive Tuple/scalar-leaf profile reuses the
 existing ragged physical reader/writer; exact Nested identity is retained

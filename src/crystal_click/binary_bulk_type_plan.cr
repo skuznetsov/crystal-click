@@ -29,6 +29,7 @@ module CrystalClick
       @profile : BinaryBulkProfile,
       @dynamic_plan : BinaryDynamicBulkPlan? = nil,
     )
+      BinaryNestedType.reject_unqualified_specialized_bulk!(@type)
       if dynamic_plan = @dynamic_plan
         unless dynamic_plan.type == @type && dynamic_plan.profile == @profile
           raise ArgumentError.new("binary Dynamic bulk type plan does not match its descriptor profile")
@@ -117,7 +118,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_STRING
         @profile.with_size_stream? ? 2_u64 : 1_u64
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE
         checked_role_add(1_u64, count_roles(type.child_at(0)))
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         count_roles(type.child_at(0))
@@ -158,7 +159,7 @@ module CrystalClick
         0_u64
       when BinaryDataType::TAG_STRING
         @profile.with_size_stream? ? 2_u64 : 1_u64
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE
         checked_role_add(1_u64, count_ordinary_roles(type.child_at(0)))
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         count_ordinary_roles(type.child_at(0))
@@ -195,7 +196,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         1_u64
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_SIMPLE_AGGREGATE
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_SIMPLE_AGGREGATE
         count_sites(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
         count = 0_u64
@@ -218,7 +219,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         {contains: true, count: 0_u64}
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = count_ancestor_size_roles(type.child_at(0))
         {contains: child[:contains], count: child[:contains] ? checked_role_add(1_u64, child[:count]) : 0_u64}
       when BinaryDataType::TAG_NULLABLE
@@ -266,7 +267,7 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         roles << "#{path}.data"
         roles << "#{path}.string_sizes" if @profile.with_size_stream?
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         roles << "#{path}.sizes"
         append_roles(type.child_at(0), "#{path}.elements", roles)
       when BinaryDataType::TAG_NULLABLE
@@ -313,7 +314,7 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         roles << "#{path}.data"
         roles << "#{path}.string_sizes" if @profile.with_size_stream?
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         roles << "#{path}.sizes"
         append_ordinary_roles(type.child_at(0), "#{path}.elements", roles)
       when BinaryDataType::TAG_NULLABLE
@@ -354,7 +355,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         sites << LowCardinalitySite.new(type, path)
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_sites(type.child_at(0), "#{path}.elements", sites)
       when BinaryDataType::TAG_NULLABLE
         append_sites(type.child_at(0), "#{path}.nested", sites)
@@ -379,7 +380,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         true
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child_has_site = append_ancestor_size_roles(type.child_at(0), "#{path}.elements", roles)
         roles << "#{path}.sizes" if child_has_site
         child_has_site
@@ -416,7 +417,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         {contains: true, shape_roles: 0_u64, grids: 0_u64}
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = low_cardinality_schedule_metrics(type.child_at(0))
         {contains:    child[:contains],
          shape_roles: child[:contains] ? checked_role_add(1_u64, child[:shape_roles]) : 0_u64,
@@ -469,7 +470,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         true
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         contains = append_low_cardinality_shape_roles(type.child_at(0), "#{path}.elements", roles)
         roles << "#{path}.sizes" if contains
         contains

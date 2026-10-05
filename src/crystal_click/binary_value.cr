@@ -146,6 +146,15 @@ module CrystalClick
       new(type, nil, elements)
     end
 
+    # Nested retains its nominal root descriptor while each stored item is a
+    # record of the one implicit named Tuple child. This keeps Array(Tuple)
+    # construction/access from serving as a nominal substitute.
+    def self.nested(type : BinaryDataType, elements : Array(BinaryValue)) : BinaryValue
+      tuple_type = BinaryNestedType.tuple_for(type)
+      validate_children(tuple_type, elements)
+      new(type, nil, elements)
+    end
+
     # A NULL Nullable has no child. A non-NULL value contains exactly its
     # wrapped child as elements[0], while retaining the Nullable nominal type.
     def self.nullable(type : BinaryDataType, child : BinaryValue? = nil) : BinaryValue

@@ -182,6 +182,15 @@ module CrystalClick
         count.times do |index|
           write_value(value.element_at(index), context, depth + 1)
         end
+      when BinaryDataType::TAG_NESTED
+        count = value.element_count
+        tuple_type = BinaryNestedType.tuple_for(type)
+        context.preflight_children(count.to_u64) unless count == 0
+        context.ensure_depth(depth + 1) unless count == 0
+        context.write_var_uint(count.to_u64)
+        count.times do |index|
+          write_value(value.element_at(index), context, depth + 1)
+        end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = value.element_count
         context.preflight_children(count.to_u64) unless count == 0
@@ -262,6 +271,16 @@ module CrystalClick
           read_value(child_type, context, depth + 1)
         end
         BinaryValue.array(type, elements)
+      when BinaryDataType::TAG_NESTED
+        raw_count = context.read_var_uint
+        count = context.checked_count(raw_count, "Nested element count")
+        context.preflight_children(raw_count) unless raw_count == 0_u64
+        context.ensure_depth(depth + 1) unless raw_count == 0_u64
+        tuple_type = BinaryNestedType.tuple_for(type)
+        elements = Array(BinaryValue).new(count) do
+          read_value(tuple_type, context, depth + 1)
+        end
+        BinaryValue.nested(type, elements)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = type.child_count
         context.preflight_children(count.to_u64) unless count == 0

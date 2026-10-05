@@ -520,6 +520,15 @@ module CrystalClick
       count = structure.canonical_variant_count
       context.preflight_metadata(count.to_u64, maximum_count: 255_u64, label: "Dynamic canonical arm count")
 
+      # The Dynamic site walker has its own actual-roster grammar. Until that
+      # specialized owner models Nested's shared sibling offsets, reject it
+      # before canonical-name measurement or any arm/role roster allocation.
+      structure.type_count.times do |index|
+        if structure.type_at(index).contains_nested?
+          context.unsupported!("Nested in Dynamic actual rosters is outside the admitted bulk profile")
+        end
+      end
+
       name_work_bytes = 0_u64
       structure.type_count.times do |index|
         bounds = BinaryTypeNameBudget.measure(structure.type_at(index), context.budget, descriptor_depth)

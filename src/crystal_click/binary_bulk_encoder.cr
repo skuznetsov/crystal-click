@@ -144,7 +144,7 @@ module CrystalClick
         wire_bytes = 1_u64
       when BinaryDataType::TAG_BOOL, BinaryDataType::TAG_NOTHING
         wire_bytes = 1_u64
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         count = value.element_count.to_u64
         child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs, dynamic_plan)
         nodes = checked_add(nodes, checked_multiply(count, child.nodes))
@@ -284,7 +284,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("Nothing bulk values must use the NULL sentinel")
         end
         wire_bytes = 1_u64
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         wire_bytes = 8_u64
         count = value.element_count
         edges = count.to_u64
@@ -438,7 +438,7 @@ module CrystalClick
             write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan)
           end
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         count = value.element_count
         preflight_child_type(traversal, type.child_at(0), count.to_u64) unless count == 0
         traversal.ensure_depth(depth + 1) unless count == 0
@@ -541,7 +541,7 @@ module CrystalClick
         write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)
       when BinaryDataType::TAG_DYNAMIC
         write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_MAP
         write_u64(lanes, "#{path}.sizes", 0_u64, budget)
       when BinaryDataType::TAG_NULLABLE
         write_byte(lanes, "#{path}.nulls", 1_u8, budget)

@@ -65,6 +65,26 @@ module CrystalClick
           end
           write_to(type.child_at(index), context, depth + 1)
         end
+      when BinaryDataType::TAG_NESTED
+        tuple_type = BinaryNestedType.tuple_for(type)
+        # Nested has one implicit named-Tuple node even though the wire omits
+        # the Tuple tag. Charge its root edge/node before field metadata.
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        context.visit_node(depth + 1)
+        count = tuple_type.child_count.to_u64
+        context.preflight_children(count)
+        context.ensure_depth(depth + 2)
+        context.write_var_uint(count)
+        tuple_type.child_count.times do |index|
+          name_size = tuple_type.field_name_byte_size(index)
+          context.write_var_uint(name_size.to_u64)
+          context.ensure_output_bytes(name_size.to_u64)
+          name_size.times do |byte_index|
+            context.write_byte(tuple_type.field_name_byte_at(index, byte_index))
+          end
+          write_to(tuple_type.child_at(index), context, depth + 2)
+        end
       when BinaryDataType::TAG_MAP
         preflight_descriptor_children(type, context)
         context.ensure_depth(depth + 1)
@@ -165,6 +185,8 @@ module CrystalClick
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         read_tuple(context, tag, depth)
+      when BinaryDataType::TAG_NESTED
+        read_nested(context, depth)
       when BinaryDataType::TAG_MAP
         context.preflight_children(2_u64)
         key = read_from(context, depth + 1)
@@ -230,6 +252,40 @@ module CrystalClick
         rescue ex : ArgumentError
           context.corrupt!("invalid Tuple field names: #{ex.message}")
         end
+      end
+    end
+
+    private def self.read_nested(context : BinaryCodecContext, depth : Int) : BinaryDataType
+      raw_count = context.read_var_uint
+      if raw_count == 0_u64 || raw_count > BinaryDataType::MAX_TUPLE_ARITY.to_u64
+        context.corrupt!("Nested field count is outside ClickHouse's supported range")
+      end
+
+      # Match the constructed graph: Nested root -> implicit Tuple -> fields.
+      # Both edges and the Tuple node are charged before either field array is
+      # allocated, sharing the enclosing descriptor operation's budget.
+      context.preflight_children(1_u64)
+      context.ensure_depth(depth + 1)
+      context.visit_node(depth + 1)
+      context.preflight_children(raw_count)
+      context.ensure_depth(depth + 2)
+
+      count = raw_count.to_i32
+      children = [] of BinaryDataType
+      names = [] of String
+      count.times do
+        name_length = context.read_var_uint
+        if name_length > Int32::MAX.to_u64
+          context.corrupt!("Nested field name is too large")
+        end
+        raw_name = context.read_slice(name_length)
+        names << String.new(raw_name)
+        children << read_from(context, depth + 2)
+      end
+      begin
+        BinaryDataType.nested(children, names)
+      rescue ex : ArgumentError
+        context.corrupt!("invalid Nested field names: #{ex.message}")
       end
     end
 
