@@ -2425,6 +2425,7 @@ module CrystalClick
     @entries : Array(PartEntry)
     @numeric_mode : Bool
     @typed_mode : Bool
+    @flattened_context : FlattenedNestedTableContext?
 
     def self.open_selected(parts : Array(String), columns : Array(String)) : WidePartTable
       new(parts, columns, false, false)
@@ -2438,6 +2439,20 @@ module CrystalClick
       new(parts, columns, false, true)
     end
 
+    # Read an explicit logical Nested root and/or its expected UInt64 key from
+    # caller-selected flattened Wide-part paths. Ordinary table opens retain
+    # their exact physical-column semantics.
+    def self.open_selected_flattened_nested_typed(
+      parts : Array(String),
+      columns : Array(String),
+      key_name : String,
+      group_name : String,
+      type_name : String,
+    ) : WidePartTable
+      context = FlattenedNestedTableContext.new(key_name, group_name, type_name)
+      new(parts, columns, false, true, nil, context)
+    end
+
     # Read a named physical projection from each caller-selected parent part.
     # Scan batches retain the parent identity while their readers and row
     # offsets use the projection's independent physical row and mark layout.
@@ -2446,7 +2461,11 @@ module CrystalClick
     end
 
     def columns : Array(String)
-      @columns.dup
+      if @flattened_context
+        @columns.map { |column| String.new(column.to_slice) }
+      else
+        @columns.dup
+      end
     end
 
     def column_types : Array({String, String})
@@ -2454,7 +2473,11 @@ module CrystalClick
       types = @entries.first.column_types
       selected = Array({String, String}).new(@columns.size)
       @columns.each_with_index do |column, index|
-        selected << {column, types[index]}
+        if @flattened_context
+          selected << {String.new(column.to_slice), String.new(types[index].to_slice)}
+        else
+          selected << {column, types[index]}
+        end
       end
       selected
     end
@@ -2464,7 +2487,11 @@ module CrystalClick
     def column_sources : Array({String, String, String})
       return [] of {String, String, String} if @entries.empty?
       @entries.first.column_sources.map do |column, source_name, source_type|
-        {column.dup, source_name.dup, source_type.dup}
+        if @flattened_context
+          {String.new(column.to_slice), String.new(source_name.to_slice), String.new(source_type.to_slice)}
+        else
+          {column.dup, source_name.dup, source_type.dup}
+        end
       end
     end
 
@@ -6719,7 +6746,12 @@ module CrystalClick
       @numeric_mode : Bool,
       @typed_mode : Bool,
       projection_name : String? = nil,
+      flattened_context : FlattenedNestedTableContext? = nil,
     )
+      @flattened_context = flattened_context
+      if flattened_context && (!@typed_mode || @numeric_mode || projection_name)
+        raise UnsupportedFormatError.new("flattened Nested table context requires a direct typed reader")
+      end
       raise BoundsError.new("no parts selected") if parts.empty?
       raise BoundsError.new("part count exceeds limit") if parts.size > MAX_PARTS
       raise BoundsError.new("no columns selected") if columns.empty?
@@ -6732,7 +6764,12 @@ module CrystalClick
         raise BoundsError.new("column name is empty or exceeds limit") if column.empty? || column.bytesize > MAX_COLUMN_NAME_BYTES
         raise BoundsError.new("duplicate selected column") if seen_columns.includes?(column)
         seen_columns << column
-        @columns << column.dup
+        stored_column = if flattened_context
+                          String.new(column.to_slice)
+                        else
+                          column.dup
+                        end
+        @columns << stored_column
       end
 
       @entries = Array(PartEntry).new(parts.size)
@@ -6781,7 +6818,7 @@ module CrystalClick
 
         @columns.each do |column|
           object_declaration = nil.as(String?)
-          if @typed_mode && !@numeric_mode
+          if @typed_mode && !@numeric_mode && flattened_context.nil?
             object_declaration = WidePart.selected_json_declaration(path, column)
             if projection_name && object_declaration
               raise UnsupportedFormatError.new("Object columns are unsupported in typed projections")
@@ -6803,7 +6840,9 @@ module CrystalClick
             selected_checksum_names = object_reader.selected_checksum_names
             object_readers << ObjectColumnReaderEntry.new(column, object_reader, column_type)
           else
-            reader = if @numeric_mode
+            reader = if context = flattened_context
+                       context.open_reader(path, column)
+                     elsif @numeric_mode
                        WidePart.open_numeric(path, column)
                      elsif @typed_mode
                        WidePart.open_typed(path, column)
@@ -6814,7 +6853,15 @@ module CrystalClick
             mark_rows = reader.mark_row_counts
             column_row_count = reader.row_count
             column_type = reader.column_type
-            column_source = {column, reader.source_column_name, reader.source_column_type}
+            if flattened_context
+              column_source = {
+                String.new(column.to_slice),
+                String.new(reader.source_column_name.to_slice),
+                String.new(reader.source_column_type.to_slice),
+              }
+            else
+              column_source = {column, reader.source_column_name, reader.source_column_type}
+            end
             selected_checksum_names = reader.selected_checksum_names
             readers << ColumnReader.new(column, reader)
           end

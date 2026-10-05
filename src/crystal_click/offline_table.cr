@@ -1,3 +1,5 @@
+require "./offline_flattened_nested_binding"
+
 module CrystalClick
   # Read-only view of one table's parsed DDL and physical part candidates.
   class OfflineTable
@@ -8,7 +10,6 @@ module CrystalClick
 
     getter name : String
     getter engine : String
-    getter primary_key_column : String?
     getter kind : Symbol
 
     @columns : Array(OfflineColumn)
@@ -17,6 +18,7 @@ module CrystalClick
     @part_candidates_catalog : OfflineCatalog?
     @metadata_ddl : String?
     @projections : Array(OfflineProjection)
+    @flattened_nested_binding : OfflineFlattenedNestedBinding?
 
     def initialize(
       @name : String,
@@ -32,6 +34,7 @@ module CrystalClick
     )
       @metadata_ddl = metadata_ddl.try(&.dup)
       @projections = projections.map(&.copy)
+      @flattened_nested_binding = nil
     end
 
     def uuid : String
@@ -40,14 +43,26 @@ module CrystalClick
       value.dup
     end
 
+    def primary_key_column : String?
+      if @flattened_nested_binding
+        @primary_key_column.try { |value| String.new(value.to_slice) }
+      else
+        @primary_key_column
+      end
+    end
+
     def columns : Array(OfflineColumn)
-      @columns.dup
+      @flattened_nested_binding ? detached_columns : @columns.dup
     end
 
     # Returns the exact bounded local metadata text when this object came from
     # an on-disk DDL file. The copy prevents callers from mutating catalog state.
     def metadata_ddl : String?
-      @metadata_ddl.try(&.dup)
+      if @flattened_nested_binding
+        @metadata_ddl.try { |value| detached_string(value) }
+      else
+        @metadata_ddl.try(&.dup)
+      end
     end
 
     # Projection declarations are copied on both the collection and element
@@ -60,6 +75,63 @@ module CrystalClick
       raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
       resolve_typed_ddl_selection(column_name, allow_unsupported_exact: true)
       OfflineColumnSelection.new(self, column_name)
+    end
+
+    # Return a separate offline table view whose explicitly named Nested root
+    # is bound to W173's flattened physical representation. The original
+    # catalog table remains unchanged and retains ordinary reader semantics.
+    def with_flattened_nested(group_name : String) : OfflineTable
+      raise UnsupportedFormatError.new("offline table view is already bound to flattened Nested context") if @flattened_nested_binding
+      raise UnsupportedFormatError.new("synthetic system tables cannot bind flattened Nested storage") if @part_candidates_catalog
+
+      binding = OfflineFlattenedNestedBinding.from_table(@kind, @engine, @columns, @primary_key_column, group_name)
+      view = OfflineTable.new(
+        detached_string(@name),
+        @uuid.try { |value| detached_string(value) },
+        detached_string(@engine),
+        detached_columns,
+        detached_part_candidates,
+        @primary_key_column.try { |value| detached_string(value) },
+        nil,
+        @kind,
+        @metadata_ddl.try { |value| detached_string(value) },
+        @projections.map(&.copy)
+      )
+      view.install_flattened_nested_binding(binding)
+      view
+    end
+
+    protected def install_flattened_nested_binding(binding : OfflineFlattenedNestedBinding) : Nil
+      raise UnsupportedFormatError.new("offline table view is already bound to flattened Nested context") if @flattened_nested_binding
+      @flattened_nested_binding = binding
+    end
+
+    private def detached_string(value : String) : String
+      String.new(value.to_slice)
+    end
+
+    private def detached_columns : Array(OfflineColumn)
+      @columns.map do |column|
+        OfflineColumn.new(
+          detached_string(column.name),
+          detached_string(column.type),
+          column.alias_column,
+          column.key_candidate_column
+        )
+      end
+    end
+
+    private def detached_part_candidates : Array(OfflinePartCandidate)?
+      @part_candidates.try do |candidates|
+        candidates.map do |candidate|
+          OfflinePartCandidate.new(
+            detached_string(candidate.name),
+            detached_string(candidate.path),
+            candidate.info,
+            candidate.row_count
+          )
+        end
+      end
     end
 
     def materialize_selected_values(
@@ -1351,6 +1423,9 @@ module CrystalClick
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
       &block : WidePartTableBatch -> Nil
     ) : Nil
+      if @flattened_nested_binding
+        raise UnsupportedFormatError.new("flattened Nested table views require scan_typed")
+      end
       reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
@@ -1398,6 +1473,7 @@ module CrystalClick
 
       selected = Set(String).new
       expected_sources = Hash(String, {String, String, String, Bool}).new
+      flattened_context = @flattened_nested_binding.try(&.context)
       columns.each do |column_name|
         raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
         raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
@@ -1407,7 +1483,17 @@ module CrystalClick
         raise UnsupportedFormatError.new("selected column is not declared by table DDL") unless column
         source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name)
         object_root = !json_path && WidePart.json_type?(source_type)
-        unless object_root || (!json_path && (column.type == "UInt64" || QBitColumnType.for_type(column.type)))
+        flattened_root = if context = flattened_context
+                           column_name == context.group_name && !json_path && source_type == context.type_name
+                         else
+                           false
+                         end
+        if context = flattened_context
+          unless column_name == context.key_name || column_name == context.group_name
+            raise UnsupportedFormatError.new("flattened Nested table selection must name only its key or logical root")
+          end
+        end
+        unless flattened_root || object_root || (!json_path && (column.type == "UInt64" || QBitColumnType.for_type(column.type)))
           raise UnsupportedFormatError.new("selected table column is neither UInt64, canonical QBit nor normalized Object")
         end
         expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
@@ -1419,7 +1505,7 @@ module CrystalClick
       candidates = resolved_scan_parts
       return nil if candidates.empty?
 
-      reader = WidePartTable.open_selected_typed(candidates.map(&.path), columns)
+      reader = open_offline_typed_reader(candidates, columns)
       reader.column_types.each do |column_name, part_type|
         ddl_source = expected_sources[column_name]? || raise(CorruptPartError.new("selected column disappeared from table DDL"))
         unless ddl_source[2] == part_type
@@ -1452,6 +1538,9 @@ module CrystalClick
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
       &block : WidePartTableBatch -> Nil
     ) : Nil
+      if @flattened_nested_binding
+        raise UnsupportedFormatError.new("flattened Nested table views require scan_typed")
+      end
       reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
@@ -1585,6 +1674,12 @@ module CrystalClick
         raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
         selected << column_name
 
+        if context = @flattened_nested_binding.try(&.context)
+          unless column_name == context.key_name || column_name == context.group_name
+            raise UnsupportedFormatError.new("flattened Nested table selection must name only its key or logical root")
+          end
+        end
+
         source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name)
         object_root = !json_path && WidePart.json_type?(source_type)
         unless object_root || WidePart.supports_typed_type?(selected_type)
@@ -1596,7 +1691,7 @@ module CrystalClick
       candidates = resolved_scan_parts
       return nil if candidates.empty?
 
-      reader = WidePartTable.open_selected_typed(candidates.map(&.path), columns)
+      reader = open_offline_typed_reader(candidates, columns)
       reader.column_sources.each do |column_name, part_source_name, part_source_type|
         ddl_source = expected_sources[column_name]? || raise(CorruptPartError.new("selected column disappeared from table DDL"))
         if ddl_source[3]
@@ -1618,6 +1713,24 @@ module CrystalClick
         end
       end
       reader
+    end
+
+    private def open_offline_typed_reader(
+      candidates : Array(OfflinePartCandidate),
+      columns : Array(String),
+    ) : WidePartTable
+      if binding = @flattened_nested_binding
+        context = binding.context
+        WidePartTable.open_selected_flattened_nested_typed(
+          candidates.map(&.path),
+          columns,
+          context.key_name,
+          context.group_name,
+          context.type_name
+        )
+      else
+        WidePartTable.open_selected_typed(candidates.map(&.path), columns)
+      end
     end
 
     private def checked_materialized_value_rows(observed : UInt64, batch_rows : UInt64, expected : UInt64) : UInt64

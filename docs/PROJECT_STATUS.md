@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Latest capability checkpoint (W173, 2026-10-05): explicit flattened `Nested`
+Latest capability checkpoint (W174, 2026-10-05): W173's explicit flattened
+`Nested` profile now has typed table and separate offline DDL-bound consumers.
+The caller-bound UInt64 key and nominal root/type are validated across every
+selected part, including group-only and key-only selection. Full/window scans,
+bounded owned column `.values` and conservative UInt64-PK candidate granules
+reuse existing kernels; legacy numeric scans explicitly refuse the bound view.
+Ordinary unbound APIs and W173's paired part writer are unchanged. Exact
+two-column MergeTree DDL admission is not implicit Nested provenance or proof
+of server Active state; concurrent rewrites and general schema writing are not
+qualified.
+Root passes 212 DEBUG and 212 RELEASE examples across the same 37 unique specs,
+zero failures/errors/pending and actual child/guard exit 0. The independent
+literal consumer oracle checks 255 values/metadata/window/candidate relations
+on the unchanged 23-file stock-authored part. A one-field numeric control first
+fails before the entry guard is added; ordinary numeric and contextual typed
+positive controls pass afterward. A seeded expected-key bypass fails the
+unchanged assertion and exact source restoration passes. Scoped verdict:
+ROBUST within the explicit consumer boundary and finite three-leaf stock
+witness, not every leaf/layout product. No new native writer run is counted.
+The 57/46-line context/DDL owners each have their own file; physical parsing
+and materialization remain with existing owners. Reader/writer/table/offline
+facades remain 16,284/25,705/7,222/4,049 lines; overall architecture cleanup is
+unfinished. Implicit discovery, specialized Nested products, broader JSON/
+Dynamic/Variant layouts, AggregateFunction states, broader SAF, general MV/
+projection execution/storage and arbitrary-schema writing remain open.
+Memory/performance stays deferred. Fresh source `e9b645ed` is clean/shallow/
+unbuilt; the stock fixture was authored by separately pinned build `d9bcb5ab`.
+Exact scope, commands, evidence and decay:
+[FLATTENED_NESTED_CONSUMERS_FRONTIER.md](FLATTENED_NESTED_CONSUMERS_FRONTIER.md).
+
+Previous capability checkpoint (W173, 2026-10-05): explicit flattened `Nested`
 part reading/writing is paired for one UInt64 key and one group of direct
 scalar/Nullable leaves in Wide/LZ4. The caller supplies the root and nominal
 type; exact physical sibling order and shared size0 references are validated
@@ -1098,8 +1128,10 @@ source/runtime identities and executed evidence.
    Tuple/scalar storage plan and explicit part/table/offline entrypoints.
    Its native whole-part witness is one three-leaf profile, not every schema
    product. W173 pairs an explicit flattened shared-offset part view/writer for
-   direct scalar/Nullable leaves; implicit discovery and table/offline context
-   mapping remain unqualified. AggregateFunction state serialization and broader
+   direct scalar/Nullable leaves. W174 qualifies explicit typed table/offline
+   context mapping for the exact two-column DDL profile; implicit discovery and
+   general context mapping remain unqualified. AggregateFunction state
+   serialization and broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -1275,8 +1307,9 @@ source/runtime identities and executed evidence.
    existing ragged Tuple/scalar owners, including explicit table/offline
    consumers. W172 pairs nominal Nested binary descriptors/values/ordinary
    bulk with explicit specialized-product guards. W173 pairs explicit flattened
-   shared-offset part reading/writing for direct leaves; table/offline context
-   mapping and implicit discovery remain separate unresolved lanes.
+   shared-offset part reading/writing for direct leaves. W174 closes the explicit
+   typed table/offline consumer lane for that exact profile; implicit discovery,
+   specialized Nested products and general schema binding remain unresolved.
    AggregateFunction state serialization remains an unresolved family;
    a stored-value wrapper does not certify aggregate state execution.
    For MV/projections, prioritize declaration/dependency/TO-target inspection

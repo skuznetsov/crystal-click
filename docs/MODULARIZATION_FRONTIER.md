@@ -65,6 +65,19 @@ extraction or a reduced-coupling/performance certificate. Facades remain
 paired evidence are in
 [FLATTENED_NESTED_STORAGE_FRONTIER.md](FLATTENED_NESTED_STORAGE_FRONTIER.md).
 
+W174 adds a 57-line `FlattenedNestedTableContext` and a 46-line
+`OfflineFlattenedNestedBinding`, each in its own file. The first owns detached
+caller key/root/type identity and delegates physical validation to W173; the
+second admits the exact offline DDL surface and returns a separate bound view.
+Existing typed table/window/candidate kernels and bounded `.values` owners
+are reused. Legacy numeric entrypoints refuse the bound view rather than
+bypassing its group preflight; ordinary unbound APIs are unchanged.
+These are capability owners, not a neutral extraction or measured coupling/
+performance improvement. Reader/writer/table/offline facades remain
+16,284/25,705/7,222/4,049 lines; overall decomposition is unfinished. Scope
+and consumer evidence are in
+[FLATTENED_NESTED_CONSUMERS_FRONTIER.md](FLATTENED_NESTED_CONSUMERS_FRONTIER.md).
+
 The next bounded candidate is one Array-numeric staged-validation cohort:
 `validate_staged_array_numeric_part` has one public call at writer line 1286
 and a definition at 21250; `validate_staged_array_nullable_numeric_part` has
