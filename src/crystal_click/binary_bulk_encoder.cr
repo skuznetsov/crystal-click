@@ -144,6 +144,8 @@ module CrystalClick
         wire_bytes = 1_u64
       when BinaryDataType::TAG_BOOL, BinaryDataType::TAG_NOTHING
         wire_bytes = 1_u64
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        wire_bytes = BinaryAggregateCountStateCodec.encoded_size(value.count_state)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         count = value.element_count.to_u64
         child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs, dynamic_plan)
@@ -279,6 +281,8 @@ module CrystalClick
         wire_bytes = profile.with_size_stream? ? checked_add(8_u64, size) : checked_add(var_uint_size(size), size)
       when BinaryDataType::TAG_BOOL
         wire_bytes = 1_u64
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        wire_bytes = BinaryAggregateCountStateCodec.encoded_size(value.count_state)
       when BinaryDataType::TAG_NOTHING
         unless value.is_null?
           raise UnsupportedFormatError.new("Nothing bulk values must use the NULL sentinel")
@@ -382,6 +386,10 @@ module CrystalClick
       traversal.visit_node(depth)
 
       case type.tag
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        BinaryAggregateCountStateCodec.write_lane(value.count_state) do |byte|
+          write_byte(lanes, "#{path}.data", byte, budget)
+        end
       when BinaryDataType::TAG_STRING
         size = value.byte_size
         if profile.with_size_stream?
@@ -537,6 +545,10 @@ module CrystalClick
         write_byte(lanes, "#{path}.data", BoolValueCodec.encode(false), budget)
       when BinaryDataType::TAG_NOTHING
         write_byte(lanes, "#{path}.data", 0x30_u8, budget)
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        BinaryAggregateCountStateCodec.write_lane(0_u64) do |byte|
+          write_byte(lanes, "#{path}.data", byte, budget)
+        end
       when BinaryDataType::TAG_VARIANT
         write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)
       when BinaryDataType::TAG_DYNAMIC

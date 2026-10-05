@@ -142,7 +142,7 @@ module CrystalClick
         count
       when BinaryDataType::TAG_LOW_CARDINALITY
         2_u64
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         1_u64
       else
         if type.fixed_width
@@ -181,7 +181,7 @@ module CrystalClick
           count = checked_role_add(count, count_ordinary_roles(type.child_at(index)))
         end
         count
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         1_u64
       else
         if type.fixed_width
@@ -295,7 +295,7 @@ module CrystalClick
       when BinaryDataType::TAG_LOW_CARDINALITY
         roles << "#{path}.dictionary"
         roles << "#{path}.indexes"
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         roles << "#{path}.data"
       else
         if type.fixed_width
@@ -339,7 +339,7 @@ module CrystalClick
         type.child_count.times do |index|
           append_ordinary_roles(type.child_at(index), "#{path}.arm.#{index}", roles)
         end
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         roles << "#{path}.data"
       else
         if type.fixed_width

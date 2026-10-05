@@ -254,6 +254,13 @@ module CrystalClick
 
     private def validate_type(type : BinaryDataType, depth : Int) : Nil
       @context.record_type_node(depth)
+      if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT
+        if argument = type.aggregate_count_argument_type
+          @context.record_elements(1_u64)
+          validate_type(argument, depth + 1)
+        end
+        return nil
+      end
       metadata = type.metadata_entry_count
       @context.record_elements(metadata.to_u64) if metadata > 0
       child_count = type.child_count
@@ -350,7 +357,7 @@ module CrystalClick
           role_bytes = add_size(role_bytes, nested_roles)
           name_bytes = add_size(name_bytes, nested_names)
         end
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         role_bytes = add_size(role_length, 5_u64)
         name_bytes = name_length
       else
@@ -422,7 +429,7 @@ module CrystalClick
           arm_prefix = selected_names.append_escaped_arm_prefix(prefix, site, index)
           append_bindings(type.child_at(index), "#{role}.arm.#{index}", arm_prefix, array_level, names, selected_names)
         end
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         names["#{role}.data"] = String.new(prefix.to_slice)
       else
         unless type.fixed_width

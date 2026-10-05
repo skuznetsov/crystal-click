@@ -126,6 +126,15 @@ module CrystalClick
 
     def validate_type_tree(type : BinaryDataType, depth : Int = 1) : Nil
       visit_node(depth)
+      if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT
+        # Count's argument belongs to its descriptor grammar and budget, but
+        # is not a generic child that value/bulk walkers may recurse through.
+        if argument = type.aggregate_count_argument_type
+          preflight_children(1_u64)
+          validate_type_tree(argument, depth + 1)
+        end
+        return nil
+      end
       count = type.child_count.to_u64
       preflight_children(count) unless count == 0
       count.to_i.times do |index|

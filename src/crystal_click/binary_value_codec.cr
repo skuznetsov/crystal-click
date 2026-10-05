@@ -37,8 +37,8 @@ module CrystalClick
       allow_low_cardinality : Bool = true,
     ) : Bytes
       reject_dynamic_type!(value.type, context) unless allow_dynamic
-      BinaryDataTypeCodec.write_to(value.type, context)
       reject_borrowed_type!(value.type, context) unless allow_low_cardinality
+      BinaryDataTypeCodec.write_to(value.type, context)
       if value.type.tag == BinaryDataType::TAG_NOTHING
         unless value.is_null?
           context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
@@ -76,6 +76,9 @@ module CrystalClick
       unless budget.writing?
         raise ArgumentError.new("Dynamic bulk child encoder requires a write-direction budget")
       end
+      if value.type.contains_aggregate_count?
+        raise UnsupportedFormatError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
+      end
       budget.ensure_wire_bytes(reserved_wire_bytes)
       context = BinaryCodecContext.new(
         budget.limits,
@@ -110,6 +113,9 @@ module CrystalClick
     ) : Tuple(BinaryDataType, BinaryValue?)
       context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
       type = BinaryDataTypeCodec.read_from(context, depth)
+      if type.contains_aggregate_count?
+        context.unsupported!("AggregateFunction(count) is not admitted as a Dynamic actual type")
+      end
       value : BinaryValue? = if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(depth)
         nil
@@ -167,6 +173,11 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_NOTHING
         context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        unless depth == 1
+          context.unsupported!("AggregateFunction(count) is admitted only as a top-level value")
+        end
+        BinaryAggregateCountStateCodec.write(value.count_state, context)
       when BinaryDataType::TAG_STRING
         size = value.byte_size
         context.write_var_uint(size.to_u64)
@@ -255,6 +266,11 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_NOTHING
         context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        unless depth == 1
+          context.unsupported!("AggregateFunction(count) is admitted only as a top-level value")
+        end
+        BinaryValue.aggregate_count_state(type, BinaryAggregateCountStateCodec.read(context))
       when BinaryDataType::TAG_STRING
         length = context.read_var_uint
         raw = context.read_slice(length)
@@ -369,6 +385,9 @@ module CrystalClick
       end
       if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
         context.unsupported!("LowCardinality is outside the borrowed persisted-envelope profile")
+      end
+      if type.contains_aggregate_count?
+        context.unsupported!("AggregateFunction(count) is outside the borrowed persisted-envelope profile")
       end
     end
   end

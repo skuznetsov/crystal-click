@@ -80,6 +80,15 @@ module CrystalClick
       new(BinaryDataType.primitive("UInt64"), little_endian(value, 8))
     end
 
+    # Count is nominally distinct from UInt64 despite using the same owned
+    # little-endian carrier in memory.
+    def self.aggregate_count_state(type : BinaryDataType, count : UInt64) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_AGGREGATE_COUNT && type.aggregate_count_type
+        raise ArgumentError.new("AggregateFunction(count) state requires its nominal type")
+      end
+      new(type, little_endian(count, 8))
+    end
+
     def self.float32_bits(bits : UInt32) : BinaryValue
       new(BinaryDataType.primitive("Float32"), little_endian(bits.to_u64, 4))
     end
@@ -102,6 +111,9 @@ module CrystalClick
     def self.dynamic(type : BinaryDataType, child : BinaryValue? = nil) : BinaryValue
       unless type.tag == BinaryDataType::TAG_DYNAMIC
         raise ArgumentError.new("Dynamic value requires Dynamic type")
+      end
+      if child && child.type.contains_aggregate_count?
+        raise ArgumentError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
       end
       if child && child.type.tag == BinaryDataType::TAG_NOTHING
         unless child.is_null?
@@ -303,6 +315,11 @@ module CrystalClick
 
     def as_uint64 : UInt64
       require_tag(BinaryDataType::TAG_UINT64, "UInt64")
+      read_le_u64
+    end
+
+    def count_state : UInt64
+      require_tag(BinaryDataType::TAG_AGGREGATE_COUNT, "AggregateFunction(count)")
       read_le_u64
     end
 

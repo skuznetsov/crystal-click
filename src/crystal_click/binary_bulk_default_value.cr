@@ -58,7 +58,7 @@ module CrystalClick
                  end
                  Cost.new(nodes, edges, wire_bytes)
                end
-             when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+             when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
                Cost.new(1_u64, 0_u64, 1_u64)
              else
                if width = type.fixed_width
@@ -121,7 +121,7 @@ module CrystalClick
                  end
                  Cost.new(nodes, edges, wire_bytes)
                end
-             when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+             when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
                Cost.new(1_u64, 0_u64, 1_u64)
              else
                if width = type.fixed_width
@@ -139,6 +139,8 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_STRING
         BinaryValue.string("")
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        BinaryValue.aggregate_count_state(type, 0_u64)
       when BinaryDataType::TAG_BOOL
         BinaryValue.bool(false)
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_NULLABLE

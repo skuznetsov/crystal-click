@@ -1,5 +1,28 @@
 # CrystalClick project status
 
+Latest capability checkpoint (W175, 2026-10-05): paired logical
+`AggregateFunction(count)`, `AggregateFunction(count, UInt64)` and
+`AggregateFunction(count, Nullable(UInt64))` now retain nominal identity
+through descriptor, known-type scalar/envelope and ordinary normalized bulk
+codecs. Version 0/no parameters is the explicit profile; Count's state is
+VarUInt, not fixed-width UInt64 or a finalized-column alias. Descriptor
+arguments have separate budgeted metadata edges, not physical value children.
+Composition, borrowed JSON/shared and Dynamic products remain refused.
+Root passes 191 DEBUG and 191 RELEASE examples across the same 31 selected
+specs, zero failures/errors/pending and actual child/guard exit 0. Reciprocal
+pinned-stock RowBinary checks cover all three profiles and UInt64::MAX; two
+executed nominal/borrowed guard bypasses fail unchanged assertions, and exact
+restoration/input/log-hash reconciliation passes. Scoped verdict: ROBUST for
+canonical logical bytes, not all stock-accepted malformed inputs or complete
+parts. The 49-line nominal and 37-line state owners each have their own file.
+Count Wide parts/writer, table/catalog consumers and other aggregate states
+are next; broader recursive/layout types, general MV/projections and arbitrary
+schema writing remain open. Overall modularization is unfinished and memory/
+performance stays deferred. Fresh source `095fae58` is unbuilt and separate
+from the executed stock build `d9bcb5ab`. Exact boundary, roster, evidence,
+decay and continuation:
+[AGGREGATE_COUNT_FRONTIER.md](AGGREGATE_COUNT_FRONTIER.md).
+
 Latest architecture checkpoint (R1, 2026-10-05): staged scalar/nullable numeric
 Array validation now has one private stateless 106-line class/file. Both
 private writer signatures and public calls remain unchanged; the retained
@@ -11,14 +34,14 @@ fails both negative mark-readback assertions; exact restoration, input-hash
 reconciliation, formatting and diff checks pass. Scoped verdict: ROBUST for
 this ownership move, not new type/runtime or performance qualification.
 Writer/reader/table/offline facades remain 25,662/16,284/7,222/4,049 lines;
-overall decomposition is unfinished. The unrelated untracked W175
-AggregateFunction admission RED spec remains untouched and uncompiled.
+overall decomposition is unfinished. The W175 AggregateFunction admission
+RED spec was excluded from R1; its later qualification is recorded above.
 Fresh source `095fae58` is separately cloned, clean/shallow and unbuilt;
 source comparison is not a new stock-runtime certificate. Memory/performance
 remains deferred. Scope, rosters, commands and decay:
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md#active-architecture-cleanup--r1).
 
-Latest capability checkpoint (W174, 2026-10-05): W173's explicit flattened
+Previous capability checkpoint (W174, 2026-10-05): W173's explicit flattened
 `Nested` profile now has typed table and separate offline DDL-bound consumers.
 The caller-bound UInt64 key and nominal root/type are validated across every
 selected part, including group-only and key-only selection. Full/window scans,

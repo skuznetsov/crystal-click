@@ -38,6 +38,7 @@ module CrystalClick
     TAG_ARRAY            =     0x1e_u8
     TAG_UNNAMED_TUPLE    =     0x1f_u8
     TAG_NAMED_TUPLE      =     0x20_u8
+    TAG_AGGREGATE_COUNT  =     0x25_u8
     TAG_INTERVAL         =     0x22_u8
     TAG_LOW_CARDINALITY  =     0x26_u8
     TAG_NULLABLE         =     0x23_u8
@@ -64,6 +65,7 @@ module CrystalClick
     getter? contains_variant : Bool
     getter? contains_dynamic : Bool
     getter? contains_nested : Bool
+    getter? contains_aggregate_count : Bool
     getter dynamic_max_types : UInt8?
 
     @primitive_name : String?
@@ -74,6 +76,7 @@ module CrystalClick
     @enum_definition : BinaryEnumDefinition?
     @interval_type : BinaryIntervalType?
     @simple_aggregate_type : BinarySimpleAggregateType?
+    @aggregate_count_type : BinaryAggregateCountType?
 
     private def initialize(
       @tag : UInt8,
@@ -87,6 +90,7 @@ module CrystalClick
       @dynamic_max_types : UInt8? = nil,
       @interval_type : BinaryIntervalType? = nil,
       @simple_aggregate_type : BinarySimpleAggregateType? = nil,
+      @aggregate_count_type : BinaryAggregateCountType? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
@@ -94,6 +98,10 @@ module CrystalClick
       @contains_variant = @tag == TAG_VARIANT || @children.any?(&.contains_variant?)
       @contains_dynamic = @tag == TAG_DYNAMIC || @children.any?(&.contains_dynamic?)
       @contains_nested = @tag == TAG_NESTED || @children.any?(&.contains_nested?)
+      # AggregateFunction(count) arguments are separate descriptor metadata,
+      # not generic type/value composition children. This summary only marks
+      # Count itself and any physical composition child that illegally wraps it.
+      @contains_aggregate_count = @tag == TAG_AGGREGATE_COUNT || @children.any?(&.contains_aggregate_count?)
     end
 
     def self.primitive(name : String) : BinaryDataType
@@ -180,6 +188,7 @@ module CrystalClick
     end
 
     def self.array(child : BinaryDataType) : BinaryDataType
+      reject_aggregate_count_child!(child)
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
@@ -197,6 +206,7 @@ module CrystalClick
       function : BinarySimpleAggregateType::Function,
       storage_type : BinaryDataType = primitive("UInt64"),
     ) : BinaryDataType
+      reject_aggregate_count_child!(storage_type)
       storage_type_name = case storage_type.tag
                           when TAG_UINT8    then "UInt8"
                           when TAG_UINT16   then "UInt16"
@@ -244,6 +254,31 @@ module CrystalClick
       new(TAG_SIMPLE_AGGREGATE, nil, [storage_type] of BinaryDataType, [] of String, nil, nil, nil, nil, nil, nil, descriptor)
     end
 
+    # A top-level count state is nominally distinct from UInt64 despite using
+    # UInt64 as its owned in-memory carrier. Its descriptor signature admits
+    # only no argument, UInt64, or Nullable(UInt64); the caller's descriptor
+    # is reduced to that closed kind and never retained or aliased.
+    def self.aggregate_count(argument : BinaryDataType? = nil) : BinaryDataType
+      nominal = case argument
+                when nil
+                  BinaryAggregateCountType.new(BinaryAggregateCountType::Argument::None)
+                else
+                  case argument.tag
+                  when TAG_UINT64
+                    BinaryAggregateCountType.new(BinaryAggregateCountType::Argument::UInt64)
+                  when TAG_NULLABLE
+                    if argument.child_count == 1 && argument.child_at(0).tag == TAG_UINT64
+                      BinaryAggregateCountType.new(BinaryAggregateCountType::Argument::NullableUInt64)
+                    else
+                      raise ArgumentError.new("AggregateFunction(count) admits only Nullable(UInt64) as a nullable argument")
+                    end
+                  else
+                    raise ArgumentError.new("AggregateFunction(count) admits only UInt64 or Nullable(UInt64) arguments")
+                  end
+                end
+      new(TAG_AGGREGATE_COUNT, nil, [] of BinaryDataType, [] of String, nil, aggregate_count_type: nominal)
+    end
+
     def self.dynamic(max_types : Int = 32) : BinaryDataType
       unless 0 <= max_types <= 254
         raise ArgumentError.new("Dynamic max_types must be between 0 and 254")
@@ -252,6 +287,7 @@ module CrystalClick
     end
 
     def self.nullable(child : BinaryDataType) : BinaryDataType
+      reject_aggregate_count_child!(child)
       if child.tag == TAG_ARRAY || child.tag == TAG_NESTED || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
         raise ArgumentError.new("Nullable cannot directly contain Array, Nested, Map, Nullable, LowCardinality, Variant, or Dynamic")
       end
@@ -261,6 +297,7 @@ module CrystalClick
     # Normal Variant construction canonicalizes by bounded SQL display name;
     # binary decode uses the same helper with the enclosing operation's budget.
     def self.variant(arms : Array(BinaryDataType), limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryDataType
+      arms.each { |arm| reject_aggregate_count_child!(arm) }
       budget = BinaryCodecBudget.new(limits, true)
       canonical = BinaryVariantRoster.normalize(
         arms,
@@ -284,6 +321,7 @@ module CrystalClick
         raise ArgumentError.new("canonical Object Variant roster is outside the admitted size")
       end
       arms.each do |arm|
+        reject_aggregate_count_child!(arm)
         if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.tag == TAG_VARIANT || arm.tag == TAG_DYNAMIC
           raise ArgumentError.new("canonical Object Variant roster has a forbidden direct arm")
         end
@@ -302,6 +340,11 @@ module CrystalClick
       context : BinaryCodecContext,
       variant_depth : Int,
     ) : BinaryDataType
+      arms.each do |arm|
+        if arm.contains_aggregate_count?
+          context.corrupt!("AggregateFunction(count) cannot be nested in a Variant arm")
+        end
+      end
       canonical = begin
         BinaryVariantRoster.normalize(
           arms,
@@ -318,6 +361,7 @@ module CrystalClick
     end
 
     def self.low_cardinality(child : BinaryDataType) : BinaryDataType
+      reject_aggregate_count_child!(child)
       unless BinaryLowCardinalityTypePolicy.admitted_child?(child)
         raise ArgumentError.new("LowCardinality child type is not admitted by ClickHouse")
       end
@@ -326,6 +370,7 @@ module CrystalClick
 
     def self.tuple(children : Array(BinaryDataType), names : Array(String)? = nil) : BinaryDataType
       raise ArgumentError.new("Tuple arity exceeds ClickHouse's supported maximum") if children.size > MAX_TUPLE_ARITY
+      children.each { |child| reject_aggregate_count_child!(child) }
 
       if names
         raise ArgumentError.new("Tuple field-name count does not match arity") unless names.size == children.size
@@ -349,6 +394,8 @@ module CrystalClick
     end
 
     def self.map(key : BinaryDataType, value : BinaryDataType) : BinaryDataType
+      reject_aggregate_count_child!(key)
+      reject_aggregate_count_child!(value)
       if BinaryLowCardinalityTypePolicy.nullable_map_key?(key)
         raise ArgumentError.new("Map key type cannot be Nullable or LowCardinality(Nullable(...))")
       end
@@ -409,6 +456,25 @@ module CrystalClick
       @simple_aggregate_type
     end
 
+    def aggregate_count_type : BinaryAggregateCountType?
+      @aggregate_count_type
+    end
+
+    # Reconstruct the canonical argument descriptor on demand so neither the
+    # public constructor's input object nor a mutable caller reference is
+    # retained by the nominal Count owner.
+    def aggregate_count_argument_type : BinaryDataType?
+      descriptor = @aggregate_count_type || return nil
+      case descriptor.argument
+      when BinaryAggregateCountType::Argument::None
+        nil
+      when BinaryAggregateCountType::Argument::UInt64
+        BinaryDataType.primitive("UInt64")
+      when BinaryAggregateCountType::Argument::NullableUInt64
+        BinaryDataType.nullable(BinaryDataType.primitive("UInt64"))
+      end
+    end
+
     # Enum declarations are metadata edges/nodes in the binary budget, not
     # recursive DataType children and therefore do not increase tree depth.
     def metadata_entry_count : Int32
@@ -464,6 +530,8 @@ module CrystalClick
         "LowCardinality(#{@children[0].name})"
       when TAG_SIMPLE_AGGREGATE
         "SimpleAggregateFunction(#{@simple_aggregate_type.not_nil!.function_name}, #{@children[0].name})"
+      when TAG_AGGREGATE_COUNT
+        @aggregate_count_type.not_nil!.type_name
       when TAG_MAP
         "Map(#{@children[0].name}, #{@children[1].name})"
       when TAG_VARIANT
@@ -551,6 +619,7 @@ module CrystalClick
       return false unless @enum_definition == other.@enum_definition
       return false unless @interval_type == other.@interval_type
       return false unless @simple_aggregate_type == other.@simple_aggregate_type
+      return false unless @aggregate_count_type == other.@aggregate_count_type
       return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
@@ -561,7 +630,13 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @children, @field_names
+
+    private def self.reject_aggregate_count_child!(type : BinaryDataType) : Nil
+      if type.contains_aggregate_count?
+        raise ArgumentError.new("AggregateFunction(count) is admitted only as a top-level scalar type")
+      end
+    end
 
     private def format_field_name(value : String) : String
       bytes = value.to_slice

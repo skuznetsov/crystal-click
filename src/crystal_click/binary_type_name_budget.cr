@@ -9,6 +9,16 @@ module CrystalClick
       budget.visit_node(depth)
       child_count = type.child_count.to_u64
       budget.preflight_children(child_count) if child_count > 0_u64
+      aggregate_count_argument_bounds : Bounds? = nil
+      if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT
+        if argument = type.aggregate_count_argument_type
+          # Count's argument is descriptor metadata, not a generic child. It
+          # still consumes one edge, one node, and one depth level so callers
+          # using this public name-budget owner cannot bypass type-tree limits.
+          budget.preflight_children(1_u64)
+          aggregate_count_argument_bounds = measure(argument, budget, depth + 1)
+        end
+      end
       metadata_count = type.metadata_entry_count.to_u64
       if metadata_count > 0_u64
         budget.preflight_children(metadata_count)
@@ -44,6 +54,17 @@ module CrystalClick
                when BinaryDataType::TAG_SIMPLE_AGGREGATE
                  function_name_bytes = type.simple_aggregate_type.not_nil!.function_name.bytesize.to_u64
                  add(27_u64, add(function_name_bytes, children[0][0]))
+               when BinaryDataType::TAG_AGGREGATE_COUNT
+                 case type.aggregate_count_type.not_nil!.argument
+                 when BinaryAggregateCountType::Argument::None
+                   24_u64
+                 when BinaryAggregateCountType::Argument::UInt64
+                   32_u64
+                 when BinaryAggregateCountType::Argument::NullableUInt64
+                   42_u64
+                 else
+                   raise UnsupportedFormatError.new("AggregateFunction(count) name is outside the admitted profile")
+                 end
                when BinaryDataType::TAG_MAP
                  add(7_u64, add(children[0][0], children[1][0]))
                when BinaryDataType::TAG_VARIANT
@@ -85,6 +106,9 @@ module CrystalClick
 
       child_allocations = 0_u64
       children.each { |bounds| child_allocations = add(child_allocations, bounds[1]) }
+      if argument_bounds = aggregate_count_argument_bounds
+        child_allocations = add(child_allocations, argument_bounds[1])
+      end
       field_temporaries = 0_u64
       if type.named_tuple?
         type.child_count.times do |index|

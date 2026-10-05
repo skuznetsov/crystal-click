@@ -216,6 +216,8 @@ module CrystalClick
       dynamic_plan : BinaryDynamicBulkPlan?,
     ) : Nil
       case type.tag
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
           ensure_role_minimum(contexts, child_path(path, ".string_sizes", nil, budget, dynamic_plan), count, 8_u64)
@@ -293,6 +295,9 @@ module CrystalClick
       traversal.visit_node(depth)
 
       case type.tag
+      when BinaryDataType::TAG_AGGREGATE_COUNT
+        count = BinaryAggregateCountStateCodec.read(context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)))
+        BinaryValue.aggregate_count_state(type, count)
       when BinaryDataType::TAG_VARIANT
         discriminator = context_for(contexts, child_path(path, ".discriminators", nil, traversal.budget, dynamic_plan)).read_byte
         if discriminator == 0xff_u8

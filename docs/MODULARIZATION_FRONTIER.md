@@ -13,8 +13,9 @@ do not add a class hierarchy merely to reduce line counts.
 
 Status: VERIFIED within this behavior-preserving extraction (2026-10-05).
 Baseline: `7251c05`. Overall modularization remains IN_PROGRESS.
-Risk: CAUTION; one atomic local commit is the rollback boundary. Preserve the
-unrelated untracked W175 aggregate-admission spec; no push is authorized.
+Risk: CAUTION; one atomic local commit is the rollback boundary. R1 preserved
+the then-unrelated untracked W175 aggregate-admission spec; no push was
+authorized. Its subsequent Count qualification is a separate W175 certificate.
 
 Extracted only `validate_staged_array_numeric_part` and
 `validate_staged_array_nullable_numeric_part` into one private stateless
@@ -96,6 +97,16 @@ profile changes. Broader type/layout admission and the overall architecture
 remain open; callback performance/allocation overhead is not measured.
 
 ## Architecture roadmap
+
+W175 adds one 49-line `BinaryAggregateCountType` nominal class/file and one
+37-line `BinaryAggregateCountStateCodec` module/file. Function-argument metadata
+is separate from generic physical children; the shared codec/bulk visitors
+reuse existing budget and mark-window owners rather than adding per-signature
+storage kernels. This is a new logical capability seam, not a behavior-neutral
+extraction or reduced-coupling/performance certificate. Count complete-part
+and table orchestration remain open, and the large facades are unchanged.
+Scope, paired canonical-byte checks and explicit refusals are recorded in
+[AGGREGATE_COUNT_FRONTIER.md](AGGREGATE_COUNT_FRONTIER.md).
 
 The next larger seams are additional writer staged-validation cohorts and
 physical stream binding, followed by reader granule/column orchestration and
