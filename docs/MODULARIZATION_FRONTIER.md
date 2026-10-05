@@ -9,7 +9,32 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Latest responsibility separation — W176
+## Latest responsibility separation — W177
+
+Four Count consumer classes have separate files:
+`WideAggregateCountPairAdmission` (45 lines) owns hidden sibling admission;
+`WideAggregateCountTableMaterializer` (48) owns bounded nominal materialization;
+private `OfflineTable::AggregateCountOfflineAdmission` (86) binds parsed DDL and
+candidate identity; private
+`OfflineTable::AggregateCountOfflineValuesMaterializer` (42) owns retained
+state values. Existing facades keep dispatch/orchestration; new classes are
+responsibility-level owners, not one class per Count signature.
+
+Root passes 254 DEBUG and 254 RELEASE examples across the same 31 selected
+specs, zero failures/errors/pending and actual child/guard exit 0. An executed
+cross-part sibling identity bypass fails the unchanged assertion; exact
+restoration, independent stock literal consumer checks and immutable-input
+reconciliation pass. This qualifies the finite consumer capability, not
+reduced coupling, heap/RSS or performance. Exact API/scope/rosters and refresh
+triggers are in
+[AGGREGATE_COUNT_CONSUMERS_FRONTIER.md](AGGREGATE_COUNT_CONSUMERS_FRONTIER.md).
+
+Current direct file inventory: WidePart/WidePartWriter/WidePartTable/OfflineTable/
+OfflineCatalog are 16,357/25,781/7,312/4,065/1,560 lines. Overall architecture
+decomposition is unfinished. The stable separate owners make the new boundary
+readable; they do not close the remaining large-facade refactor.
+
+## Previous responsibility separation — W176
 
 The paired Count Wide/LZ4 capability uses five cohesive classes in separate
 files: `WideAggregateCountStoragePlan` (62 lines),

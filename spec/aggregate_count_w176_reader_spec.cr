@@ -275,12 +275,12 @@ describe "W176 AggregateFunction(count) Wide-part reader" do
       end
     end
 
-    it "keeps the typed table's unsupported Count route fail-closed before callbacks" do
+    it "keeps primitive numeric table scans closed over Count before callbacks" do
       w176_with_stock_copy("none", stock_root, "all_1_1_0") do |path|
         table = CrystalClick::WidePartTable.open_selected_typed([path], ["c"])
         callbacks = 0
         expect_raises(CrystalClick::UnsupportedFormatError) do
-          table.scan_typed do |_batch|
+          table.scan_numeric do |_batch|
             callbacks += 1
           end
         end

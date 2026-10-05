@@ -156,6 +156,7 @@ module CrystalClick
       end
       source_column = @columns.find { |entry| entry.name == source_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
       raise UnsupportedFormatError.new("ALIAS columns cannot be materialized") if source_column.alias_column
+      count_plan = AggregateCountOfflineAdmission.plan_for(self, [column_name])
       tuple_plan = WideTupleTypePlan.for_type(selected_type)
 
       expected_rows = 0_u64
@@ -165,6 +166,16 @@ module CrystalClick
           raise BoundsError.new("selected column materialization exceeds row limit")
         end
         expected_rows += candidate.row_count
+      end
+
+      if count_binding = count_plan
+        return AggregateCountOfflineValuesMaterializer.materialize(
+          self,
+          candidates,
+          column_name,
+          count_binding[2],
+          expected_rows
+        )
       end
 
       if object_root
@@ -1493,16 +1504,19 @@ module CrystalClick
             raise UnsupportedFormatError.new("flattened Nested table selection must name only its key or logical root")
           end
         end
-        unless flattened_root || object_root || (!json_path && (column.type == "UInt64" || QBitColumnType.for_type(column.type)))
-          raise UnsupportedFormatError.new("selected table column is neither UInt64, canonical QBit nor normalized Object")
+        count_column = !json_path && !column.alias_column && WideAggregateCountStoragePlan.for_type_name(column.type) != nil
+        unless flattened_root || object_root || (!json_path && (column.type == "UInt64" || QBitColumnType.for_type(column.type))) || count_column
+          raise UnsupportedFormatError.new("selected table column is not UInt64, canonical QBit, normalized Object, or admitted Count")
         end
         expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
       end
 
       key_column = @primary_key_column || raise(UnsupportedFormatError.new("table does not have a supported simple ascending UInt64 ORDER BY key"))
       raise UnsupportedFormatError.new("selected columns must include the ORDER BY key") unless selected.includes?(key_column)
+      count_plan = AggregateCountOfflineAdmission.plan_for(self, columns)
 
       candidates = resolved_scan_parts
+      AggregateCountOfflineAdmission.validate_candidates!(count_plan, candidates)
       return nil if candidates.empty?
 
       reader = open_offline_typed_reader(candidates, columns)
@@ -1688,7 +1702,9 @@ module CrystalClick
         expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
       end
 
+      count_plan = AggregateCountOfflineAdmission.plan_for(self, columns)
       candidates = resolved_scan_parts
+      AggregateCountOfflineAdmission.validate_candidates!(count_plan, candidates)
       return nil if candidates.empty?
 
       reader = open_offline_typed_reader(candidates, columns)

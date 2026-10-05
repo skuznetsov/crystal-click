@@ -30,7 +30,7 @@ module CrystalClick
                                                  Array(Array(Tuple(String, Array(Int32)))) | Array(Array(Tuple(String, Array(Int64)))) |
                                                  Array(Array(Tuple(String, Array(Float32)))) | Array(Array(Tuple(String, Array(Float64))))
 
-  alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 |
+  alias OfflineColumnValue = UInt8 | UInt16 | UInt32 | UInt64 | BinaryValue |
                              Int8 | Int16 | Int32 | Int64 | Int128 | UInt128 | WidePointValue | WideGeoArrayRow | WideGeometryRow |
                              Float32 | Float64 | Bool | String | UUIDValue | IPv4Value | IPv6Value | QBitValue? |
                              Int256Value | UInt256Value | Decimal256Value | BFloat16Value | BFloat16Value? |

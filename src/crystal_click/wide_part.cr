@@ -1552,6 +1552,17 @@ module CrystalClick
     getter source_column_type : String
     getter json_typed_path : Bool
     getter row_count : UInt64
+    @aggregate_count_key_column_name : String?
+
+    # The key sibling is retained from the exact parsed pair profile used to
+    # admit Count. It is exposed only as identity metadata; table readers keep
+    # its UInt64 values hidden unless callers explicitly selected that column.
+    def aggregate_count_key_column_name : String
+      value = @aggregate_count_key_column_name ||
+              raise UnsupportedFormatError.new("selected column is not an admitted AggregateFunction(count) state")
+      String.new(value.to_slice)
+    end
+
     getter data_path : String
     getter mark_path : String
     getter checksum_verification : ChecksumVerification
@@ -11376,7 +11387,7 @@ module CrystalClick
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
       @low_cardinality_string_state = nil
-      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, physical_streams = parse_metadata(requested_column, mode)
+      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_name, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
       geometry_plan = GeometryColumnType.for_type(@column_type)
       point_plan = PointColumnType.for_type(@column_type)
@@ -11597,7 +11608,7 @@ module CrystalClick
       @element_width = stream_element_width(primary_stream)
     end
 
-    private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, String, String, Bool, UInt64, Array(String)}
+    private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, String, String, Bool, UInt64, String?, Array(String)}
       columns_text = read_metadata_file("columns.txt")
       physical_columns = PartMetadataTextParser.parse_columns(columns_text)
       columns = physical_columns
@@ -11664,6 +11675,7 @@ module CrystalClick
       end
       row_count = parse_count_file("count.txt")
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
+      aggregate_count_key_column_name = nil.as(String?)
 
       json_paths = [] of {String, String}
       if geometry_plan
@@ -11734,7 +11746,7 @@ module CrystalClick
       elsif WidePart.supports_named_scalar_tuple_type?(column_type)
         validate_tuple_uint64_string_serialization(columns, selected, column_type, row_count)
       elsif !WideAggregateCountStoragePlan.for_type_name(column_type).nil?
-        validate_aggregate_count_serialization_profile(columns, selected, column_type, row_count)
+        aggregate_count_key_column_name = validate_aggregate_count_serialization_profile(columns, selected, column_type, row_count)
       elsif column_type == "Int128" || column_type == "UInt128" || column_type == "Int256" || column_type == "UInt256"
         validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
@@ -11753,7 +11765,7 @@ module CrystalClick
                          else
                            parse_substreams(columns, selected, column_type, source_column_name, json_paths)
                          end
-      {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, physical_streams}
+      {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, aggregate_count_key_column_name, physical_streams}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
     end
@@ -13199,7 +13211,7 @@ module CrystalClick
       count_column : String,
       count_type_name : String,
       row_count : UInt64,
-    ) : Nil
+    ) : String
       file = File.join(@path, "serialization.json")
       raise UnsupportedFormatError.new("serialization.json is required for AggregateFunction(count)") unless File.file?(file)
       raise CorruptPartError.new("serialization.json must not be a symbolic link") if File.symlink?(file)

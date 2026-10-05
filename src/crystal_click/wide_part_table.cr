@@ -354,6 +354,7 @@ module CrystalClick
     @geometry_rows : Hash(String, Slice(WideGeometryRow)) = Hash(String, Slice(WideGeometryRow)).new
     @object_documents : Hash(String, Slice(ObjectDocument)) = Hash(String, Slice(ObjectDocument)).new
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
+    @aggregate_count_state_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @string_values : Hash(String, Slice(String))
     @fixed_string_values : Hash(String, Slice(String))
     @nullable_values : Hash(String, WidePartNullableSlice)
@@ -716,6 +717,35 @@ module CrystalClick
              raise(UnsupportedFormatError.new("QBit accessor requires an exact canonical QBit column"))
       raise UnsupportedFormatError.new("QBit accessor requires a non-nullable QBit column") if plan.nullable
       @qbit_values[column]? || raise(UnsupportedFormatError.new("QBit column was not materialized in this batch"))
+    end
+
+    # Return nominal Count states only for the caller's exact admitted
+    # descriptor. The UInt64 payload carrier is not exposed through a numeric
+    # accessor, even though each BinaryValue stores that carrier internally.
+    def aggregate_count_states_for(column : String, expected_type : BinaryDataType) : Slice(BinaryValue)
+      index = column_index(column)
+      plan = WideAggregateCountStoragePlan.require(expected_type)
+      unless @column_types[index] == plan.type_name
+        raise UnsupportedFormatError.new("AggregateFunction(count) accessor does not match the selected descriptor")
+      end
+      @aggregate_count_state_values[column]? ||
+        raise UnsupportedFormatError.new("AggregateFunction(count) column was not materialized in this batch")
+    end
+
+    # Internal table-scan hook. The callback receives a view into the owned
+    # per-mark state array, matching the lifetime of other batch slices.
+    def install_aggregate_count_states(column : String, values : Slice(BinaryValue), expected_rows : Int) : Nil
+      index = column_index(column)
+      plan = WideAggregateCountStoragePlan.for_type_name(@column_types[index]) ||
+             raise(CorruptPartError.new("AggregateFunction(count) materializer received a non-Count column"))
+      raise CorruptPartError.new("AggregateFunction(count) batch slice row count mismatch") unless values.size == expected_rows
+      values.each do |value|
+        unless value.type == plan.data_type
+          raise CorruptPartError.new("AggregateFunction(count) batch value type differs from column declaration")
+        end
+      end
+      @aggregate_count_state_values[column] = values
+      nil
     end
 
     def nullable_qbits_for(column : String) : Slice(QBitValue?)
@@ -2404,6 +2434,7 @@ module CrystalClick
       getter row_count : UInt64
       getter mark_row_counts : Array(UInt64)
       getter readers : Array(ColumnReader)
+      getter aggregate_count_key_reader : ColumnReader?
       getter object_readers : Array(ObjectColumnReaderEntry)
       getter column_types : Array(String)
       getter column_sources : Array({String, String, String})
@@ -2414,6 +2445,7 @@ module CrystalClick
         @row_count : UInt64,
         @mark_row_counts : Array(UInt64),
         @readers : Array(ColumnReader),
+        @aggregate_count_key_reader : ColumnReader?,
         @object_readers : Array(ObjectColumnReaderEntry),
         @column_types : Array(String),
         @column_sources : Array({String, String, String}),
@@ -2693,6 +2725,7 @@ module CrystalClick
             # parts contract is not transactional; the actual aggregate is
             # checked again before callback exposure.
             preflight_string_bytes = 0_u64
+            preflight_aggregate_count_charges = Hash(String, UInt64).new
             preflight_simple_aggregate_text_bytes = Hash(String, UInt64).new
             preflight_qbit_charges = Hash(String, UInt64).new
             preflight_point_charges = Hash(String, UInt64).new
@@ -2757,7 +2790,14 @@ module CrystalClick
             preflight_map_string_nullable_string_charge_bytes = Hash(String, UInt64).new
             preflight_numeric_map_payload_charge = Hash(String, {UInt64, UInt64}).new
             part.readers.each do |selected|
-              if selected.column_type == "Dynamic"
+              if aggregate_count_plan = WideAggregateCountStoragePlan.for_type_name(selected.column_type)
+                expected_charge = WideAggregateCountTableMaterializer.preflight(
+                  mark_rows,
+                  MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
+                )
+                preflight_aggregate_count_charges[selected.name] = expected_charge
+                bytes = expected_charge
+              elsif selected.column_type == "Dynamic"
                 if selected.reader.dynamic_string_uint64_profile?
                   raw_bytes, charge_bytes = selected.reader.dynamic_string_uint64_mark_range_materialization_preflight(selected.name, mark_index, 1)
                   preflight_dynamic_string_uint64_raw_bytes[selected.name] = raw_bytes
@@ -3193,6 +3233,7 @@ module CrystalClick
             end
 
             numeric_values = Hash(String, WidePartNumericArray).new
+            aggregate_count_values = Hash(String, Array(BinaryValue)).new
             string_values = Hash(String, Array(String)).new
             fixed_string_values = Hash(String, Array(String)).new
             nullable_values = Hash(String, WidePartNullableArray).new
@@ -3248,7 +3289,23 @@ module CrystalClick
             object_documents = Hash(String, Array(ObjectDocument)).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
-              if GeometryColumnAdapter.type?(selected.column_type)
+              if count_plan = WideAggregateCountStoragePlan.for_type_name(selected.column_type)
+                expected_charge = preflight_aggregate_count_charges[selected.name]? ||
+                                  raise(CorruptPartError.new("selected AggregateFunction(count) mark was not preflighted"))
+                remaining_charge = MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                values, charge = WideAggregateCountTableMaterializer.materialize(
+                  selected.reader,
+                  selected.name,
+                  mark_index,
+                  mark_rows,
+                  count_plan.data_type,
+                  expected_charge,
+                  remaining_charge
+                )
+                actual_string_bytes += charge
+                aggregate_count_values[selected.name] = values
+                next
+              elsif GeometryColumnAdapter.type?(selected.column_type)
                 expected_charge = preflight_geometry_charges[selected.name]? ||
                                   raise(CorruptPartError.new("selected Geometry mark was not preflighted"))
                 values, charge = GeometryColumnAdapter.materialize_mark(
@@ -4819,6 +4876,7 @@ module CrystalClick
                      else
                        remaining < batch_rows.to_u64 ? remaining.to_i : batch_rows
                      end
+              aggregate_count_slices = Hash(String, Slice(BinaryValue)).new
               numeric_slices = Hash(String, WidePartNumericSlice).new
               string_slices = Hash(String, Slice(String)).new
               fixed_string_slices = Hash(String, Slice(String)).new
@@ -4872,7 +4930,9 @@ module CrystalClick
               numeric_map_uint64_slices = Hash(String, WidePartNumericMapSliceBase).new
               numeric_map_string_slices = Hash(String, WidePartNumericMapSliceBase).new
               part.readers.each do |selected|
-                if values = numeric_values[selected.name]?
+                if values = aggregate_count_values[selected.name]?
+                  aggregate_count_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                elsif values = numeric_values[selected.name]?
                   numeric_slices[selected.name] = slice_numeric_values(values, mark_row_offset.to_i, size)
                 elsif values = string_values[selected.name]?
                   string_slices[selected.name] = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
@@ -5058,7 +5118,9 @@ module CrystalClick
                 tuple_row_values: tuple_row_slices
               )
               part.readers.each do |selected|
-                if values = generic_array_tuple_slices[selected.name]?
+                if values = aggregate_count_slices[selected.name]?
+                  batch.install_aggregate_count_states(selected.name, values, size)
+                elsif values = generic_array_tuple_slices[selected.name]?
                   if WideNestedTypePlan.for_type(selected.column_type)
                     batch.install_nested_rows(selected.name, values, size)
                   else
@@ -6801,6 +6863,7 @@ module CrystalClick
       total_marks = 0_u64
       expected_column_types = nil.as(Array(String)?)
       expected_column_sources = nil.as(Array({String, String, String})?)
+      expected_aggregate_count_key_name = nil.as(String?)
 
       # selected_parts remains in caller order. The parsed identities above
       # are used only for the overlap guard; they do not imply Active status.
@@ -6809,6 +6872,8 @@ module CrystalClick
         name = selected_part[1]
         path = selected_read_paths[part_index]
         readers = Array(ColumnReader).new(@columns.size)
+        aggregate_count_key_reader = nil.as(ColumnReader?)
+        aggregate_count_key_name = nil.as(String?)
         object_readers = Array(ObjectColumnReaderEntry).new
         expected_mark_rows = nil.as(Array(UInt64)?)
         expected_row_count = nil.as(UInt64?)
@@ -6863,6 +6928,24 @@ module CrystalClick
               column_source = {column, reader.source_column_name, reader.source_column_type}
             end
             selected_checksum_names = reader.selected_checksum_names
+            if WideAggregateCountStoragePlan.for_type_name(column_type)
+              if projection_name
+                raise UnsupportedFormatError.new("AggregateFunction(count) is unsupported in typed projections")
+              end
+              count_pair = WideAggregateCountPairAdmission.open(
+                path,
+                reader,
+                checksums,
+                MAX_MARKS_PER_READER,
+                MAX_MARK_ROWS
+              )
+              count_key_name = count_pair.key_name
+              if prior_key_name = aggregate_count_key_name
+                raise CorruptPartError.new("selected AggregateFunction(count) columns disagree on their UInt64 sibling") unless prior_key_name == count_key_name
+              end
+              aggregate_count_key_name = count_key_name
+              aggregate_count_key_reader = ColumnReader.new(count_key_name, count_pair.key_reader)
+            end
             readers << ColumnReader.new(column, reader)
           end
 
@@ -6900,11 +6983,18 @@ module CrystalClick
         else
           expected_column_sources = current_column_sources
         end
+        if count_key_name = aggregate_count_key_name
+          if expected_key_name = expected_aggregate_count_key_name
+            raise CorruptPartError.new("AggregateFunction(count) UInt64 sibling name differs across parts") unless count_key_name == expected_key_name
+          else
+            expected_aggregate_count_key_name = count_key_name
+          end
+        end
 
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, object_readers, current_column_types, current_column_sources)
+        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32

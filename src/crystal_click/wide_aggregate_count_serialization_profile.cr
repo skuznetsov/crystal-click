@@ -24,7 +24,7 @@ module CrystalClick
       count_column : String,
       count_type_name : String,
       row_count : UInt64,
-    ) : Nil
+    ) : String
       plan = WideAggregateCountStoragePlan.for_type_name(count_type_name) ||
              raise(UnsupportedFormatError.new("unsupported AggregateFunction(count) descriptor"))
       unless part_columns.size == 2
@@ -61,7 +61,7 @@ module CrystalClick
       # The paired Crystal writer emits this exact normalized empty-list form.
       # Stock ClickHouse emits a pk-only Default statistics record; it does
       # not emit an AggregateFunction(count) serializer record.
-      return nil if serializers.empty?
+      return key_column if serializers.empty?
       unless serializers.size == 1
         raise UnsupportedFormatError.new("AggregateFunction(count) serializer metadata must be empty or one stock UInt64-key record")
       end
@@ -82,7 +82,7 @@ module CrystalClick
       if defaults < 0 || rows < 0 || defaults > rows || rows.to_u64 != row_count
         raise CorruptPartError.new("AggregateFunction(count) stock serializer counts differ from the part")
       end
-      nil
+      key_column
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
       raise CorruptPartError.new("serialization.json is malformed")
     end

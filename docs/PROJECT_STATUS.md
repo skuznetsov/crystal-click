@@ -1,6 +1,30 @@
 # CrystalClick project status
 
-Latest capability checkpoint (W176, 2026-10-05): the three W175 nominal Count
+Latest capability checkpoint (W177, 2026-10-05): the three exact Count state
+signatures now reach ordinary typed table scans, physical-row windows,
+whole candidate granules and offline column `.values`. Batches and retained
+values preserve the exact nominal BinaryValue descriptor; numeric aliases and
+Count projection payloads stay closed. Count-only selection eagerly checks
+the hidden UInt64 sibling's name and complete row/mark axes across all parts,
+before callbacks. Offline consumers bind the catalog's exact bare two-column
+MergeTree DDL and simple UInt64 ORDER BY key, even when no candidates exist.
+This is not server Active-state proof, generic aggregate execution/finalization,
+a new TUI renderer or whole-scan payload-error callback atomicity.
+Root passes 254 DEBUG and 254 RELEASE examples across the same 31 selected
+specs, zero failures/errors/pending, actual child/guard exit 0 and immutable
+inputs. The independent stock literal oracle checks all three profiles and
+165 two-part windows; paired library parts with different mark grids also
+pass. A seeded cross-part sibling-name bypass fails exactly the unchanged
+negative assertion; exact restoration, source/log and 39-file stock inventory
+hash reconciliation pass. Scoped verdict: ROBUST within the declared consumer
+profiles, not all AggregateFunction states/layouts. Four responsibility owners
+have separate files; large-facade decomposition remains unfinished. Memory/
+performance remains deferred. Fresh source `095fae58` is unbuilt and distinct
+from the reused executed stock `d9bcb5ab`; no new native writer run is counted.
+Exact API, scope, rosters, evidence, decay and continuation:
+[AGGREGATE_COUNT_CONSUMERS_FRONTIER.md](AGGREGATE_COUNT_CONSUMERS_FRONTIER.md).
+
+Previous capability checkpoint (W176, 2026-10-05): the three W175 nominal Count
 profiles now have paired complete Wide/LZ4 parts with one sorted UInt64 key.
 The dedicated reader consumes canonical VarUInt states independently per mark,
 verifies bounded Count frame checksums before decoding and limits one public
@@ -971,6 +995,14 @@ source/runtime identities and executed evidence.
 
 ## What is usable now
 
+- W175-W177 pair the three exact scalar Count state signatures through logical
+  codecs, complete two-column Wide/LZ4 parts, typed table/window/candidate
+  scans and exact DDL-bound offline `.values`. Use
+  `batch.aggregate_count_states_for(column, expected_type)` for nominal
+  BinaryValue states; the batch Slice is callback-borrowed, copied state
+  handles and `.values` are owned. Other argument/function/product/layout
+  profiles and Count projection payloads remain refused. See
+  [the W177 frontier](AGGREGATE_COUNT_CONSUMERS_FRONTIER.md).
 - `BinaryDataType.dynamic` and `BinaryValue.dynamic` provide nominal-cap
   identity and paired generic logical Dynamic values. W153 preserves selected
   type/value identity, recursive containers and typed NULL distinctions;
@@ -1197,10 +1229,11 @@ source/runtime identities and executed evidence.
    product. W173 pairs an explicit flattened shared-offset part view/writer for
    direct scalar/Nullable leaves. W174 qualifies explicit typed table/offline
    context mapping for the exact two-column DDL profile; implicit discovery and
-   general context mapping remain unqualified. W175/W176 pair the three exact
+   general context mapping remain unqualified. W175-W177 pair the three exact
    scalar Count state signatures through logical codecs and explicit Wide/LZ4
-   part readers/writers; table/catalog consumers and other AggregateFunction
-   states remain unqualified. Broader
+   part readers/writers, typed table/window/candidate scans and exact DDL-bound
+   offline `.values`; other AggregateFunction states and broader Count
+   arguments/products/layouts remain unqualified. Broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -1380,8 +1413,9 @@ source/runtime identities and executed evidence.
    shared-offset part reading/writing for direct leaves. W174 closes the explicit
    typed table/offline consumer lane for that exact profile; implicit discovery,
    specialized Nested products and general schema binding remain unresolved.
-   AggregateFunction state serialization remains an unresolved family;
-   a stored-value wrapper does not certify aggregate state execution.
+   W175-W177 close the three exact scalar Count state signatures through
+   logical codecs, parts and consumers, not the broader AggregateFunction
+   state family. A stored-value wrapper does not certify aggregate execution.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
 4. Only then reopen memory/performance work. No current claim of stock-reader
