@@ -21,9 +21,17 @@ code inputs. Both modes reproduce the 24 native-qualified QBit parts and
 budget bypass fails the unchanged assertion; exact source restoration and
 final gates pass. Scoped verdict: ROBUST for this bridge and finite paired
 witnesses, not arbitrary recursive QBit, the full repository or performance.
-The fresh source snapshot is clean/shallow/unbuilt
-`29e0e201`, distinct from executed stock build `d9bcb5ab`; twelve decisive
-QBit/Count/descriptor files are hash-identical to the previous source snapshot.
+The W179 source snapshot is clean/shallow/unbuilt `29e0e201`, distinct from
+executed stock build `d9bcb5ab`; twelve decisive QBit/Count/descriptor files
+are hash-identical to its previous source snapshot. A subsequent source-only
+refresh now pins public master `ef037e60` in a separate clean depth-1 checkout.
+Root compares six bounded directories and independently hash-checks 24 decisive
+JSON/Dynamic/QBit/Count/descriptor owners as unchanged. The new `uniq` state
+version and Native version-alignment changes are not a new qualified library
+capability. Three stock RowBinary probes expose the final-SKIP-prefix boundary
+before generic JSON implementation; they do not qualify a fresh-source build.
+See [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) for exact
+snapshot, scope, source anchors, observed probe values and decay conditions.
 Scope, exact roster, failed profile attempts, guard warning and current evidence:
 [QBIT_BINARY_KERNEL_FRONTIER.md](QBIT_BINARY_KERNEL_FRONTIER.md).
 

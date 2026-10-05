@@ -1,9 +1,127 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-05, ninth refresh)
+## Current source snapshot (2026-10-05, tenth refresh)
 
-Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-29e0e201`
-for new comparisons. The separate depth-1 checkout is clean, shallow and
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60`
+for new comparisons. Root queried public master before and after cloning;
+both lookups and checkout HEAD agree on
+`ef037e60fc7f5654c8c80eefb8be82e3c56f9a67`, committer timestamp
+`2026-10-05T22:03:55Z`. The separate checkout is clean, shallow, unbuilt and
+has one reachable commit. Existing source directories remain untouched.
+Freshness applies to this observation, not to subsequent upstream commits.
+
+Executed clone command, under the unchanged 600-second / 12,288-MB guard
+with `COGNI_RUN_SAFE_MIN_FREE_PCT=50` (preflight free memory 82%, guard exit 0):
+
+```sh
+git clone --depth 1 --single-branch --branch master --no-tags \
+  --no-recurse-submodules https://github.com/ClickHouse/ClickHouse.git \
+  /Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60
+```
+
+Root compared actual working-tree contents with `29e0e201` using
+`git diff --no-index --stat OLD/src/DIRECTORY NEW/src/DIRECTORY`.
+The bounded inventory is:
+
+| Directory | Changed files | Insertions / deletions |
+| --- | ---: | ---: |
+| DataTypes, including Serializations | 3 | 54 / 2 |
+| Columns, including its benchmark | 3 | 17 / 1 |
+| Compression | 0 | 0 / 0 |
+| Formats | 1 | 8 / 0 |
+| AggregateFunctions, including tests | 19 | 1,189 / 95 |
+| Storages/MergeTree | 2 | 39 / 7 |
+
+Compression returns diff exit 0; the other five directories return exit 1
+with the above differences, not an execution error. This is not a complete
+repository audit. A separate root SHA256 comparison finds 24 decisive owners
+unchanged: DataTypesBinaryEncoding (h/cpp); Object and Dynamic type,
+serialization and column owners (h/cpp each); QBit type, serialization and
+column owners (h/cpp each); AggregateFunctionCount (h/cpp); and
+SerializationAggregateFunction (h/cpp). Their unchanged contents do not
+certify every consumer or current-master runtime behavior.
+
+Root inspected all DataTypes, Columns, Formats and MergeTree changes. They
+include stricter AggregateFunction state-version equality and relabelling,
+preservation of column view/copy state versions, negotiated-version handling
+in ColumnBLOB, a missing in-memory subcolumn refusal, a benchmark launcher
+change, a table-disk drop hook and widening covering parts to include outdated
+parts. The latter affects restart/drop lifecycle; it is not qualification of
+this library's offline Active-state reconstruction.
+
+The decisive aggregate delta is a new versioned `uniq` state, not only a new
+type-family name. Root read `AggregateFunctionUniq.h:575-602,716-729` and
+`UniquesHashSet.h:929-1019,1055-1089`: unversioned persisted `uniq` retains
+default version 0; an explicitly versioned state or negotiated Native revision
+can use version 1. Version 1 adds flags and an optional 64-bit hash sample.
+`Core/ProtocolDefines.h:325` sets its Native revision boundary to 54493.
+`DataTypeAggregateFunction.cpp:179-187`, `ColumnAggregateFunction.cpp:815-832`,
+`ColumnBLOB.h:126-139` and `Formats/NativeReader.cpp:310-318` keep announced
+versions and payload handling aligned. No `uniq` reader/writer capability or
+fresh-source executable compatibility is claimed here. General aggregate
+states remain outside the library's qualified Count profile.
+
+Luna inventories all 19 changed AggregateFunctions files; root independently
+reads the decisive version-forwarding paths in `IAggregateFunction.cpp:21-30`,
+`Combinators/AggregateFunctionForEach.h:481-510`,
+`Combinators/AggregateFunctionMap.cpp:298-347` and
+`Combinators/AggregateFunctionTuple.cpp:95-116`. Pass-through wrappers must
+preserve the explicit nested state version and forward the selected version
+through both serialization directions; Tuple reports the maximum explicit
+child version. Other changes include malformed-state handling, not only
+version metadata. `ThetaSketchData.h:173-207` removes an explicit pre-read
+guard and translates parser exceptions, but the referenced datasketches-cpp
+submodule is absent from this no-submodules checkout: parser-side bounds
+validation remains unverified. No aggregate tests or fresh-source build ran.
+
+### JSON scalar boundary probe before widening the generic kernel
+
+The unchanged current `SerializationObject.cpp:84-99` does not implement an
+unconditional raw-prefix SKIP rule: its predecessor check requires
+`lower_bound(path)` to be neither `begin()` nor `end()`. Root challenged Luna's
+initial blanket prefix summary; Luna withdrew it, and root executed three
+hand-authored structured RowBinary probes independently. Each wire has one
+pair, a path string, UInt64 type tag 0x04 and little-endian value 7; schema is
+passed through `clickhouse local --structure`, with
+`--input-format RowBinary --input_format_binary_read_json_as_string=0`,
+`--max_threads 1`, a fresh private temporary path and
+`SELECT j FROM table FORMAT JSONEachRow`.
+
+| Schema | Wire path | Observed output |
+| --- | --- | --- |
+| `j JSON(SKIP k)` | `k` | `{"j":{}}` |
+| `j JSON(SKIP k)` | `k.x` | `{"j":{"k":{"x":7}}}` |
+| `j JSON(SKIP k, SKIP z)` | `k.x` | `{"j":{}}` |
+
+All three actual child exits are 0 with no signal or stderr; the unchanged
+serial guard exits 0 (preflight free memory 83%). Root verifies runtime SHA256
+before execution. Exact-path wire SHA256 is
+`cc3ad19e5f28f88fc77a360b251834ea25c974d196aa75ff97b99b2dca36bea9`;
+both identical `k.x` inputs are
+`29335e15baf1ca9e279b15cd8b7202b6adaf267477cdaff0eb012079c70496c8`.
+The native oracle is the existing separately pinned stock executable
+`26.10.1.1201`, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`;
+it is not a build of `ef037e60`.
+
+This falsifies the proposed unconditional-prefix model in that executed
+scalar profile, not all JSON parsing modes. Constructor typed-path conflict
+checks (`DataTypeObject.cpp:98-110`) and RE2 FullMatch are separate semantics;
+text parsing, duplicate handling, caps, skipped-value consumption and persisted
+Object layouts still need their own witnesses. General JSON descriptor/root
+RowBinary admission remains unimplemented. Next implementation must preserve
+or explicitly refuse unqualified profiles rather than silently treating Map,
+Tuple, JSON text or persisted Object lanes as an equivalent representation.
+
+Scoped audit result: ROBUST for snapshot identity, the bounded source inventory
+and the three observed stock probes. It is not a new library capability,
+whole-source/runtime qualification, or performance evidence. Refresh after
+relevant source/runtime identities, settings or admitted profiles change.
+
+## Previous source snapshot (2026-10-05, ninth refresh)
+
+W179 used `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-29e0e201`
+for its comparisons. The separate depth-1 checkout is clean, shallow and
 unbuilt; root rechecks HEAD `29e0e201c786933171818f17c0fefc2bb11ec0a2`,
 one reachable commit and committer timestamp `2026-10-05T18:29:14Z`.
 Older checkouts remain untouched. Freshness is scoped to this snapshot, not
