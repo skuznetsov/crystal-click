@@ -11,9 +11,9 @@ do not add a class hierarchy merely to reduce line counts.
 
 The next larger seams are additional writer staged-validation cohorts and
 physical stream binding, followed by reader granule/column orchestration and
-table adapters. W162 and W165 below extract scalar/nullable typed numeric and
-String staged-validation cohorts. The larger boundaries remain proposed. Each
-slice needs an explicit call-site inventory, retained-buffer/resource lifetime
+table adapters. W162, W165 and W167 below extract scalar/nullable typed numeric,
+String and FixedString staged-validation cohorts. The larger boundaries remain
+proposed. Each slice needs an explicit call-site inventory, retained-buffer/resource lifetime
 checks where relevant, baseline characterizations and affected consumer tests.
 Serialization bytes, pre-callback refusals and publication rollback remain
 invariants. A shorter facade by itself is not a modularity or speed certificate.
@@ -24,6 +24,100 @@ bulk/physical owners instead of adding a class for each Array/Tuple/Map
 combination. Declared actual-arm policy, codec composition, statistics and
 file I/O remain with their existing owners. This 174-line owner does not
 complete decomposition of the large reader/writer/table facades.
+
+## FixedString staged validator extraction — W167
+
+Status: VERIFIED within this behavior-preserving extraction (2026-10-05).
+Production baseline: clean `061db2843d622f4c72fd0f6e86cc2f0e5d16e9c4`.
+Risk: CAUTION; rollback is one atomic local commit, with no push.
+
+Move only the scalar and outer-Nullable FixedString validator bodies into
+one private stateless `WidePartWriter::StagedFixedStringPartValidator` in
+`wide_part_writer/staged_fixed_string_part_validator.cr`. Retain both private
+facade signatures and the two public writer call sites. Baseline `rg -n
+'validate_staged_.*fixed_string' src/crystal_click/wide_part_writer.cr`
+identifies these scalar/nullable calls at 1164/1204 and definitions at
+24967/25030; Array variants are excluded. Add one adjacent loader require.
+Pass synchronous checked-mark-count callbacks to both methods and the
+existing primary-index callback to Nullable only. Preserve scalar inline
+index checking and direct virtual WidePart readbacks. No owner retains
+buffers, readers, I/O handles or callbacks after return. Preflight, streams,
+checksums/metadata, staging and publication/cleanup remain unchanged.
+
+Strongest failure: apparently equal output hides bypassed readback or loss
+of NULL, exact width or zero-padding validation. Characterize both public
+writers before moving code: 2/2/1 marks, short/empty/binary/UTF-8 bytes, NULL,
+valid opposite profiles, and an injected mark-1 returned-value mismatch.
+Assert comparison rejection, observed marks 0/1 and no destination/stage leak.
+Qualify the test with a reversible comparison bypass that must fail an actual
+assertion; restore the exact owner before positive gates. Compare moved
+bodies with only declared callback substitutions and the full retained
+facade remainder against the baseline.
+
+DoD: serial guarded Crystal specs for the new characterization and affected
+FixedString writer/reader/table/catalog consumers in DEBUG/RELEASE, isolated
+caches and host linker; zero failures/errors/pending, child exit 0, unchanged
+inputs during each gate. Format/diff checks must pass. An exact body move
+does not renew native-format certificates or claim better performance.
+
+Executed evidence: the two existing FixedString writer specs pass seven
+baseline DEBUG examples. Adding the four characterization examples passes
+eleven examples on unchanged production. After extraction, bypassing both
+row-comparison loops produces two intended failures, zero errors/pending and
+child exit 1. The observed red signal is a trace assertion in `ensure`: reading
+incorrectly continues to mark 2 after the injected mark-1 mismatch. This
+control demonstrates test sensitivity, not a corruption exception. The exact
+owner is restored before all final gates; no bypass is retained.
+
+Root independently compares both same-signature facades, the moved bodies
+after the declared callback substitutions, and the entire retained writer
+remainder against the baseline. The remainder is byte-identical. There is
+one loader require, and the private 127-line owner has no instance fields,
+retained callbacks or resources. Both public call sites and virtual mark
+readbacks are unchanged. Reader/writer/table facades remain
+15,845/25,241/6,911 lines; overall decomposition is unfinished.
+
+Final root-owned gates pass 147 DEBUG and 147 RELEASE examples. Each mode
+uses the same 15 unique specs in two disjoint groups; names below denote
+`spec/<name>.cr`:
+
+1. **Writers — 31 examples:** `staged_fixed_string_validator_w167_spec`,
+   `wide_part_writer_fixed_string_spec`,
+   `wide_part_writer_nullable_fixed_string_spec`,
+   `staged_typed_string_validator_w165_spec`,
+   `staged_typed_numeric_validator_w162_spec`, `wide_part_writer_leaf_seam_spec`,
+   `wide_part_writer_typed_mark_readback_spec`, `wide_part_writer_metadata_w150_spec`.
+2. **Consumers — 116 examples:** `fixed_string_scan_spec`,
+   `nullable_fixed_string_scan_spec`, `offline_tui_page_source_spec`,
+   `offline_catalog_spec`, `part_checksums_spec`,
+   `wide_part_table_projection_w87_spec`, `offline_catalog_projection_w87_spec`.
+
+All positive children and guards exit 0 with zero failures/errors/pending.
+Root reconciles actual logs, membership, before/after input hashes and all 317
+current source/spec/support/page-adapter inputs across the four final gates.
+Consumer inventory finds both public writers in their two writer specs and
+the offline page-source spec; the remaining consumer group is existing
+reader/catalog/projection smoke evidence, not additional staged-validation
+certificates. No fresh native, benchmark or crash/power-loss job is counted.
+
+The serial command is `env COGNI_RUN_SAFE_MIN_FREE_PCT=50
+RUN_SAFE_PASSTHROUGH_STDIO=1
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+TMPDIR=/private/tmp /bin/bash
+/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby
+600 12288 /private/tmp/crystal-click-w167.2TIuye/run_gate.rb
+<fresh-label> <debug|release|red> <exact spec paths above>`.
+The runner calls `/opt/homebrew/bin/crystal spec` with isolated caches,
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`; RELEASE
+adds `--release --no-debug`. Format and diff checks pass.
+
+Scoped hostile verdict: ROBUST for the exact ownership move and declared
+affected consumers, not complete architecture or all-type compatibility.
+Refresh this evidence after changes to these bodies, dispatch, callbacks,
+publication/resource ownership, baseline or toolchain. Temporary logs and
+scripts are replay aids and may decay; missing evidence requires rerunning
+the recorded roster, not trusting its count alone. Callback overhead and
+coupling beyond this boundary are unmeasured; performance stays deferred.
 
 ## String staged validator extraction — W165
 

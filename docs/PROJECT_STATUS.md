@@ -1,6 +1,28 @@
 # CrystalClick project status
 
-Current architecture checkpoint (W165, 2026-10-05): scalar and Nullable(String)
+Current architecture checkpoint (W167, 2026-10-05): scalar and outer-Nullable
+FixedString staged validation now belongs to one private, stateless 127-line
+`StagedFixedStringPartValidator` class in its own file. Both private facade
+signatures, public call sites, direct virtual WidePart readbacks, exact width,
+NULL-map, zero-padding and index checks retain their existing order.
+The complete retained writer remainder is byte-identical to `061db28` after
+excluding the two sealed definitions; moved bodies are exact after only
+the declared synchronous callback substitutions. I/O, staging, metadata,
+checksums and publication/cleanup remain with their existing owners.
+Root passes 147 DEBUG and 147 affected RELEASE examples (15 unique specs per
+mode, two disjoint groups), all with zero failures/errors/pending and actual
+child/guard exit 0. Logs, rosters and all 317 current source/spec/support/page
+inputs independently reconcile. A temporary comparison-loop bypass produces
+two intended trace failures; exact restoration passes. Scoped hostile verdict:
+ROBUST within this ownership move. Format/diff checks pass; no new type/API,
+native-format, crash recovery or performance claim is admitted.
+Reader/writer/table facades remain 15,845/25,241/6,911 lines. The larger
+architecture refactor, remaining type/layout products and general MV/projection
+support remain open; memory/performance stays deferred. Exact scope, commands,
+consumer inventory and refresh conditions:
+[MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
+
+Previous architecture checkpoint (W165, 2026-10-05): scalar and Nullable(String)
 staged validation now belongs to one private, stateless 100-line
 `StagedTypedStringPartValidator` class in its own file. Same-signature facade
 entry points, direct virtual WidePart readbacks, exact nominal guards, mark
@@ -18,7 +40,7 @@ invalid type-guard fixture was corrected to use valid opposite profiles;
 its failed candidate is not counted as positive or seeded-control evidence.
 Scoped hostile verdict: ROBUST for this exact behavior-preserving ownership
 move and its affected writer/table/MV/projection/catalog consumers. No new
-stock or benchmark run was performed. The current reader/writer/table facades
+stock or benchmark run was performed. At W165 the reader/writer/table facades
 remain 15,845/25,313/6,911 lines; the overall architecture cleanup remains open.
 Remaining paired types and general MV/projection support are unchanged;
 memory/performance stays deferred. Scope, commands, inventory and decay:
@@ -924,7 +946,7 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,911 lines at W165; the reader/writer are now 15,845/25,313 lines.
+   is 6,911 lines at W167; the reader/writer are now 15,845/25,241 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -937,8 +959,9 @@ source/runtime identities and executed evidence.
    one private `TypedMarkReadback` owner. W162 now extracts the scalar and
    nullable numeric staged-validator cohort to a separate private owner,
    retaining same-signature facade entry points. W165 extracts scalar/Nullable
-   String staged validation into its own private owner, preserving direct
-   virtual WidePart readbacks without moving the I/O/publication lifecycle. Other validator
+   String staged validation into its own private owner; W167 does the same for
+   scalar/outer-Nullable FixedString, preserving direct virtual WidePart
+   readbacks without moving the I/O/publication lifecycle. Other validator
    cohorts and physical stream binding remain separate next seams.
    `Slice(T)`/`forall T`, module reopen overrides and
    supplied-reader virtual dispatch remain pinned. Numeric/nullable and
@@ -961,8 +984,8 @@ source/runtime identities and executed evidence.
    W163 extends those same owners with one centralized function/carrier law
    and semantic numeric gates, not a new hierarchy per pair. Physical I/O stays
    with the checked fixed-width reader and staging stays
-   with the existing typed writer. The qualified W162 numeric and W165 String
-   staged-validator boundaries, dispatch/lifetime/publication guards and the remaining
+   with the existing typed writer. The qualified W162 numeric, W165 String and
+   W167 FixedString staged-validator boundaries, dispatch/lifetime/publication guards and the remaining
    validator cohorts are recorded in
    [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md). Keep one
    cohesive class per file rather than one new class per type combination.
