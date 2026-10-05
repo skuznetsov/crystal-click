@@ -53,6 +53,32 @@ module CrystalClick
         read.call
       end
 
+      # Temporal SAF reads require the exact declared child token, including
+      # family, scale and timezone, plus the exact raw carrier and outer shape.
+      def self.read_temporal(
+        type_name : String,
+        function : BinarySimpleAggregateType::Function,
+        storage_type_name : String,
+        type : T.class,
+        &read : -> Array(T)
+      ) : Array(T) forall T
+        plan = SimpleAggregateTemporalStoragePlan.require(type_name, function, storage_type_name, false)
+        plan.validate_carrier!(type)
+        read.call
+      end
+
+      def self.read_nullable_temporal(
+        type_name : String,
+        function : BinarySimpleAggregateType::Function,
+        storage_type_name : String,
+        type : T.class,
+        &read : -> Array(T?)
+      ) : Array(T?) forall T
+        plan = SimpleAggregateTemporalStoragePlan.require(type_name, function, storage_type_name, true)
+        plan.validate_carrier!(type)
+        read.call
+      end
+
       # Retain the old UInt64 entry points as exact-carrier compatibility
       # guards, rather than allowing callers to reinterpret another child.
       def self.read_uint64(type_name : String, &read : -> Array(UInt64)) : Array(UInt64)

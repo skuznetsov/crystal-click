@@ -26,9 +26,30 @@ semantic readback separately from byte I/O and publication. These are new
 capability owners, not behavior-neutral extraction certificates; their paired
 stock evidence is recorded in
 [SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md](SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md).
-The W169 reader/writer/table facades remain 16,134/25,536/7,095 lines.
+W170 adds a shared 108-line `TemporalStorageType`, a 140-line
+`SimpleAggregateTemporalStoragePlan` and a private stateless 167-line
+`StagedSimpleAggregateTemporalPartValidator`, each in its own file. Exact
+function/family/scale/zone/carrier/shape admission and semantic mark readback
+remain separate from byte I/O and staging/publication. These are capability
+owners, not a behavior-neutral extraction certificate. Scope and paired
+evidence are in
+[SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md](SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md).
+The W170 reader/writer/table facades remain 16,174/25,647/7,152 lines.
 Additional validator cohorts and physical stream binding remain the next
 behavior-preserving extraction seams. The overall refactor is still open.
+
+The next bounded candidate is one Array-numeric staged-validation cohort:
+`validate_staged_array_numeric_part` has one public call at writer line 1286
+and a definition at 21250; `validate_staged_array_nullable_numeric_part` has
+one public call at 2253 and a definition at 22507 (W170 source coordinates).
+Keep both private facade signatures, public call sites, virtual readbacks,
+comparison order and cleanup/publication ownership. Pass only synchronous
+helper callbacks; do not retain borrowed input slices, readers or resources.
+Before moving bodies, add baseline scalar/nullable characterizations and
+readback-mismatch trace controls. Require exact moved-body comparison with
+declared callback substitutions, byte-identical retained facade remainder,
+and affected writer/table/catalog DEBUG/RELEASE gates. This seam is PROPOSED;
+W170 does not execute or certify the Array ownership move.
 
 W159 adds one cohesive `ObjectDeclaredDynamicSites` module/file for nominal
 site provenance and Object-depth coordinates. It reuses the generic Dynamic

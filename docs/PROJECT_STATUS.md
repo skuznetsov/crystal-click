@@ -1,6 +1,46 @@
 # CrystalClick project status
 
-Latest capability checkpoint (W169, 2026-10-05): canonical unary, non-parametric
+Latest capability checkpoint (W170, 2026-10-05): canonical unary, non-parametric
+SimpleAggregateFunction(any/anyLast/min/max, temporal leaf) is paired across
+descriptor/value/bulk/physical codecs, explicit scalar/outer-Nullable Wide
+writers/readers, table batches/windows and offline column `.values`.
+The six families are Date, Date32, DateTime, DateTime64, Time and Time64;
+function, exact leaf/scale/timezone token, signed raw carrier and shape remain
+nominal. Ordinary temporal/primitive accessors and inferred writers stay
+closed to SAF. The other five canonical functions refuse temporal children
+under an independently measured stock construction law, not width inference.
+Scales 0..9 and the inherited bounded timezone grammar are admitted; native
+witnesses cover 36 finite leaf forms, four functions and two shapes (288
+profiles), not every timezone/layout. This is raw stored-value access, not
+calendar conversion or aggregation execution.
+Root passes 503 DEBUG and 503 RELEASE examples in three disjoint groups per
+mode (43 unique specs), plus two actual native examples. All positive
+children/guards exit 0 with zero failures/errors/pending. Stock accepts all
+288 independently library-authored complete parts through ATTACH/CHECK;
+864 literal full/middle/empty RowBinary windows and all 289 native descriptors
+match. Three CHECK-valid timezone/scale/value mutants fail the unchanged
+original oracle. Independent native reconciliation matches 10,360 checks over
+322 raw processes; the separate construction law reconciles 650 checks over
+368 processes (288 accepted descriptors, 360 classified refusals and two
+forbidden-Time-timezone controls). Root independently reconciles final gate
+rosters/logs and all 358 current source/spec/support/page/script inputs.
+Separate scalar/Nullable staged-comparison bypasses each fail as intended;
+exact restoration passes five runtime examples. Scoped hostile verdict:
+ROBUST within this canonical logical stored-value profile. Size/presence
+checks do not certify content hashes; canonical bytes under NULL and
+whole-scan atomicity are not claimed.
+Shared temporal leaf, storage-plan and private stateless staged-validator
+owners have separate 108/140/167-line files. Reader/writer/table facades remain
+16,174/25,647/7,152 lines; overall architecture cleanup is unfinished. The
+next bounded neutral extraction candidate is the Array-numeric validator
+cohort. Broader SAF products, AggregateFunction states, shared Nested offsets,
+additional JSON/Dynamic/Variant layouts and general MV/projections remain
+open; memory/performance stays deferred. Fresh source `e9b645ed` is clean,
+shallow and unbuilt; executed stock remains separately pinned to `d9bcb5ab`.
+Exact scope, commands, evidence and decay:
+[SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md](SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md).
+
+Previous capability checkpoint (W169, 2026-10-05): canonical unary, non-parametric
 SimpleAggregateFunction with Decimal32/64/128/256 storage is paired through
 descriptor/value/bulk/physical codecs, explicit scalar/outer-Nullable Wide
 writers/readers, table batches/windows and offline column `.values`.
@@ -23,10 +63,11 @@ ROBUST within this canonical stored-value profile, not aggregation execution.
 Raw signed coefficients retain their complete carrier bits; no text-domain
 10^P magnitude guarantee or canonical bytes beneath NULL is claimed.
 The Decimal plan and private staged validator have separate 119/171-line
-owner files. Reader/writer/table facades remain 16,134/25,536/7,095 lines;
-overall architecture cleanup, temporal/broader SAF profiles, AggregateFunction
-states, shared Nested offsets, additional JSON/Dynamic layouts and general
-MV/projections remain open. Memory/performance remains deferred. Fresh source
+owner files. At W169 the reader/writer/table facades were 16,134/25,536/7,095
+lines; overall architecture cleanup, temporal/broader SAF profiles,
+AggregateFunction states, shared Nested offsets, additional JSON/Dynamic
+layouts and general MV/projections remained open. Memory/performance remains
+deferred. Fresh source
 `e9b645ed` is clean, shallow and unbuilt; executed stock is separately pinned
 to `d9bcb5ab`. Exact scope, commands, evidence and decay:
 [SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md](SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md).
@@ -971,10 +1012,14 @@ source/runtime identities and executed evidence.
    FixedString(N), scalar or outer Nullable, with finite stock width witnesses.
    W169 adds canonical Decimal(P, S) carriers under their separate five-function
    all-width / sum-only-128/256 law, with exact function/P/S/width/shape through
-   the same public consumers. Inner Nullable children, temporal carriers and
-   other functions/parameters/aliases remain outside the current certificate.
+   the same public consumers. W170 adds Date/Date32/DateTime/DateTime64/Time/
+   Time64 for any/anyLast/min/max, scalar or outer Nullable, retaining exact
+   temporal leaf/scale/zone and raw carrier identity. Inner Nullable children,
+   broader products and other functions/parameters/aliases remain outside the
+   current certificate; the other five canonical functions refuse temporal
+   children under the separately measured stock construction law.
    The latest finite gate state is recorded in
-   [SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md](SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md), not a claim of
+   [SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md](SIMPLE_AGGREGATE_TEMPORAL_FRONTIER.md), not a claim of
    complete SimpleAggregateFunction or AggregatingMergeTree execution support.
    W160 now pairs Interval descriptors, values,
    normalized bulk and generic physical composition plus independently authored
@@ -982,8 +1027,8 @@ source/runtime identities and executed evidence.
    not a public whole-part certificate for every composition.
    The general descriptor kernel still lacks AggregateFunction, Nested,
    Custom, JSON and QBit/QBitWithStride tags. SimpleAggregateFunction's tag is
-   now paired only within the W163/W164 numeric, W168 text and W169 Decimal
-   profiles.
+   now paired only within the W163/W164 numeric, W168 text, W169 Decimal and
+   W170 temporal profiles.
    This is not an inventory of wholly absent physical types: dedicated Object,
    geometry and QBit owners already cover narrower persisted profiles. Set and
    Function descriptors are also absent, but the current ClickHouse source
@@ -1013,8 +1058,8 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   was 6,911 lines at W167; W169 reader/writer/table facades are now
-   16,134/25,536/7,095 lines.
+   was 6,911 lines at W167; W170 reader/writer/table facades are now
+   16,174/25,647/7,152 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -1063,6 +1108,11 @@ source/runtime identities and executed evidence.
    validator cohorts are recorded in
    [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md). Keep one
    cohesive class per file rather than one new class per type combination.
+   W168/W169/W170 add separate text/Decimal/temporal declaration/storage-plan
+   and staged-validation capability owners; these are not neutral extraction
+   certificates. The next bounded ownership candidate is the existing scalar
+   and Nullable Array-numeric staged-validator cohort, with unchanged facade,
+   virtual readback, borrowed lifetime and publication boundaries.
 2. Extend paired Object declared fields beyond numeric primitives/Bool/String,
    bare Date/Date32, UUID/IPv4/IPv6, FixedString(N), Decimal(P, S), Enum8/Enum16
    and canonical DateTime/DateTime64/Time/Time64. W140 now admits canonical
@@ -1115,9 +1165,11 @@ source/runtime identities and executed evidence.
    W164 closes the raw UInt128/256, Int128/256 and BFloat16 numeric lane.
    W168 closes the bounded String/FixedString lane for four canonical functions
    with scalar/outer Nullable shape. W169 closes the canonical Decimal lane
-   under its separately measured function/result-type law. The next proposed
-   SimpleAggregateFunction lane is temporal carriers; its laws need separate
-   stock construction probes and paired physical qualification before admission.
+   under its separately measured function/result-type law. W170 closes the
+   canonical six-family temporal lane for any/anyLast/min/max under its separate
+   construction law and finite paired physical witnesses. Other SAF functions,
+   children, parameters, aliases and recursive products require their own
+   source/result-type laws and independent complete-part qualification.
    AggregateFunction state serialization and shared Nested offsets are separate
    unresolved families; a stored-value wrapper does not certify either.
    For MV/projections, prioritize declaration/dependency/TO-target inspection

@@ -3961,6 +3961,41 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
     end
 
+    # Temporal SimpleAggregateFunction writers keep the complete leaf name
+    # explicit. This prevents equal-width temporal families, scales, and
+    # timezone tokens from being inferred from an integer carrier.
+    def self.write_uint64_simple_aggregate_temporal_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(T),
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      type_name = SimpleAggregateTemporalStoragePlan.type_name(function, storage_type_name)
+      plan = SimpleAggregateTemporalStoragePlan.require(type_name, function, storage_type_name)
+      plan.validate_payload!(values, false)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_simple_aggregate_temporal_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(T?),
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String,
+      rows_per_mark : Int32 = 8192,
+    ) : String forall T
+      type_name = SimpleAggregateTemporalStoragePlan.type_name(function, storage_type_name, true)
+      plan = SimpleAggregateTemporalStoragePlan.require(type_name, function, storage_type_name, true)
+      plan.validate_payload!(values, true)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
     # Enum payloads retain a validated exact label/code declaration. Only
     # declared signed codes may be written; generic Int8/Int16 writes remain
     # ordinary numeric columns.
@@ -11707,6 +11742,24 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
+      {% if T == UInt16 || T == Int32 || T == UInt32 || T == Int64 %}
+        if temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          temporal_plan.validate_payload!(values, false)
+          validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+          return nil
+        end
+      {% elsif T == UInt16? || T == Int32? || T == UInt32? || T == Int64? %}
+        if temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          temporal_plan.validate_payload!(values, true)
+          validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+          return nil
+        end
+      {% else %}
+        if SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("temporal SimpleAggregateFunction requires its exact raw temporal carrier")
+        end
+      {% end %}
+
       {% if T == Int32 || T == Int64 || T == Int128 || T == Decimal256Value %}
         if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
           decimal_plan.validate_payload!(values, false)
@@ -11879,6 +11932,22 @@ module CrystalClick
       rows_per_mark : Int32,
       type_name : String,
     ) : Array(ChecksumRecord) forall T
+      {% if T == UInt16 || T == Int32 || T == UInt32 || T == Int64 %}
+        if temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          temporal_plan.validate_payload!(values, false)
+          return write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+        end
+      {% elsif T == UInt16? || T == Int32? || T == UInt32? || T == Int64? %}
+        if temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          temporal_plan.validate_payload!(values, true)
+          return write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+        end
+      {% else %}
+        if SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("temporal SimpleAggregateFunction requires its exact raw temporal carrier")
+        end
+      {% end %}
+
       {% if T == Int32 || T == Int64 || T == Int128 || T == Decimal256Value %}
         if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
           decimal_plan.validate_payload!(values, false)
@@ -12045,6 +12114,9 @@ module CrystalClick
     private def self.numeric_width(type_name : String) : Int32
       if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
         return decimal_plan.storage_width
+      end
+      if temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+        return temporal_plan.storage_width
       end
       if temporal_type = DateTimeColumnType.parse(type_name)
         return temporal_type.raw_width
@@ -25247,6 +25319,45 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
+      {% if T == UInt16 || T == Int32 || T == UInt32 || T == Int64 %}
+        if temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          temporal_plan.validate_payload!(values, false)
+          StagedSimpleAggregateTemporalPartValidator.validate_scalar(
+            stage,
+            key_name,
+            value_name,
+            keys,
+            values,
+            type_name,
+            rows_per_mark,
+            ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) }
+          )
+          return nil
+        end
+      {% elsif T == UInt16? || T == Int32? || T == UInt32? || T == Int64? %}
+        if temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          temporal_plan.validate_payload!(values, true)
+          StagedSimpleAggregateTemporalPartValidator.validate_nullable(
+            stage,
+            key_name,
+            value_name,
+            keys,
+            values,
+            type_name,
+            rows_per_mark,
+            ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
+            ->(validation_stage : String, checksums : PartChecksums, source_keys : Slice(UInt64), mark_size : Int32, marks : Int32) {
+              validate_staged_primary_index(validation_stage, checksums, source_keys, mark_size, marks)
+            }
+          )
+          return nil
+        end
+      {% else %}
+        if SimpleAggregateTemporalStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("staged temporal SimpleAggregateFunction requires its exact raw temporal carrier")
+        end
+      {% end %}
+
       {% if T == Int32 || T == Int64 || T == Int128 || T == Decimal256Value %}
         if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
           decimal_plan.validate_payload!(values, false)

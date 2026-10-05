@@ -1667,6 +1667,27 @@ module CrystalClick
       string_bytes : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if temporal_type = aggregate_type.temporal_storage_type
+        function = aggregate_type.function
+        storage_type_name = temporal_type.type_name
+        case temporal_type.family
+        when TemporalStorageType::Family::Date
+          selected_values = batch.simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, UInt16)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when TemporalStorageType::Family::Date32, TemporalStorageType::Family::Time
+          selected_values = batch.simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, Int32)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when TemporalStorageType::Family::DateTime
+          selected_values = batch.simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, UInt32)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when TemporalStorageType::Family::DateTime64, TemporalStorageType::Family::Time64
+          selected_values = batch.simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, Int64)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        else
+          raise UnsupportedFormatError.new("unsupported temporal SimpleAggregateFunction family")
+        end
+      end
+
       if decimal_type = aggregate_type.decimal_type
         function = aggregate_type.function
         case decimal_type.storage_width
@@ -1772,6 +1793,27 @@ module CrystalClick
       string_bytes : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if temporal_type = aggregate_type.temporal_storage_type
+        function = aggregate_type.function
+        storage_type_name = temporal_type.type_name
+        case temporal_type.family
+        when TemporalStorageType::Family::Date
+          selected_values = batch.nullable_simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, UInt16)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when TemporalStorageType::Family::Date32, TemporalStorageType::Family::Time
+          selected_values = batch.nullable_simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, Int32)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when TemporalStorageType::Family::DateTime
+          selected_values = batch.nullable_simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, UInt32)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when TemporalStorageType::Family::DateTime64, TemporalStorageType::Family::Time64
+          selected_values = batch.nullable_simple_aggregate_temporal_raw_values_for(column_name, function, storage_type_name, Int64)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        else
+          raise UnsupportedFormatError.new("unsupported Nullable temporal SimpleAggregateFunction family")
+        end
+      end
+
       if decimal_type = aggregate_type.decimal_type
         function = aggregate_type.function
         case decimal_type.storage_width

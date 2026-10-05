@@ -201,6 +201,13 @@ module CrystalClick
                           when TAG_FLOAT64  then "Float64"
                           when TAG_BFLOAT16 then "BFloat16"
                           when TAG_STRING   then "String"
+                          when TAG_DATE     then "Date"
+                          when TAG_DATE32   then "Date32"
+                          when TAG_TIME     then "Time"
+                          when TAG_DATETIME, TAG_DATETIME_ZONE,
+                               TAG_DATETIME64, TAG_DATETIME64_ZONE,
+                               TAG_TIME64
+                            storage_type.temporal_type.not_nil!.type_name
                           when TAG_FIXED_STRING
                             width = storage_type.fixed_size.not_nil!
                             unless width <= BinarySimpleAggregateType::MAX_FIXED_STRING_WIDTH

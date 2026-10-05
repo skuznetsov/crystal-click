@@ -948,6 +948,19 @@ module CrystalClick
       @column_values[index].as(Slice(Decimal256Value))
     end
 
+    def simple_aggregate_temporal_raw_values_for(
+      column : String,
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String,
+      type : T.class,
+    ) : Slice(T) forall T
+      index = column_index(column)
+      plan = SimpleAggregateTemporalStoragePlan.require(@column_types[index], function, storage_type_name)
+      plan.validate_carrier!(type)
+      return @typed_numeric_values[column].as(Slice(T)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(T))
+    end
+
     def simple_aggregate_strings_for(column : String) : Slice(String)
       index = column_index(column)
       plan = SimpleAggregateTextStoragePlan.for_type_name(@column_types[index])
@@ -2255,6 +2268,18 @@ module CrystalClick
       plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale, true)
       plan.validate_carrier!(Decimal256Value)
       @nullable_values[column]?.try(&.as(Slice(Decimal256Value?))) || raise(UnsupportedFormatError.new("Nullable Decimal SimpleAggregateFunction column was not materialized in this batch"))
+    end
+
+    def nullable_simple_aggregate_temporal_raw_values_for(
+      column : String,
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String,
+      type : T.class,
+    ) : Slice(T?) forall T
+      index = column_index(column)
+      plan = SimpleAggregateTemporalStoragePlan.require(@column_types[index], function, storage_type_name, true)
+      plan.validate_carrier!(type)
+      @nullable_values[column]?.try(&.as(Slice(T?))) || raise(UnsupportedFormatError.new("Nullable temporal SimpleAggregateFunction column was not materialized in this batch"))
     end
 
     def nullable_simple_aggregate_strings_for(column : String) : Slice(String?)
@@ -5242,6 +5267,22 @@ module CrystalClick
 
       if aggregate_type = SimpleAggregateColumnType.parse(type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+          if temporal_type = aggregate_type.temporal_storage_type
+            function = aggregate_type.function
+            storage_type_name = temporal_type.type_name
+            return case temporal_type.family
+            when TemporalStorageType::Family::Date
+              reader.read_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, UInt16)
+            when TemporalStorageType::Family::Date32, TemporalStorageType::Family::Time
+              reader.read_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, Int32)
+            when TemporalStorageType::Family::DateTime
+              reader.read_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, UInt32)
+            when TemporalStorageType::Family::DateTime64, TemporalStorageType::Family::Time64
+              reader.read_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, Int64)
+            else
+              raise UnsupportedFormatError.new("unsupported temporal SimpleAggregateFunction family")
+            end
+          end
           if decimal_type = aggregate_type.decimal_type
             function = aggregate_type.function
             return case decimal_type.storage_width
@@ -6523,6 +6564,22 @@ module CrystalClick
 
       if aggregate_type = SimpleAggregateColumnType.parse(type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          if temporal_type = aggregate_type.temporal_storage_type
+            function = aggregate_type.function
+            storage_type_name = temporal_type.type_name
+            return case temporal_type.family
+            when TemporalStorageType::Family::Date
+              reader.read_nullable_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, UInt16)
+            when TemporalStorageType::Family::Date32, TemporalStorageType::Family::Time
+              reader.read_nullable_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, Int32)
+            when TemporalStorageType::Family::DateTime
+              reader.read_nullable_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, UInt32)
+            when TemporalStorageType::Family::DateTime64, TemporalStorageType::Family::Time64
+              reader.read_nullable_simple_aggregate_temporal_raw_mark_range(selected.name, mark_index, 1, function, storage_type_name, Int64)
+            else
+              raise UnsupportedFormatError.new("unsupported Nullable temporal SimpleAggregateFunction family")
+            end
+          end
           if decimal_type = aggregate_type.decimal_type
             function = aggregate_type.function
             return case decimal_type.storage_width

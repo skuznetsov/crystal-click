@@ -2460,6 +2460,25 @@ module CrystalClick
       end
     end
 
+    # Temporal SAF values remain raw leaf codes/ticks. Callers must supply the
+    # exact stored temporal leaf name and function; the shared plan checks its
+    # family, scale, timezone, and UInt16/Int32/UInt32/Int64 carrier before a
+    # byte read begins.
+    def read_simple_aggregate_temporal_raw_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String,
+      type : T.class,
+    ) : Array(T) forall T
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_temporal(@column_type, function, storage_type_name, type) do
+        plan = SimpleAggregateTemporalStoragePlan.require(@column_type, function, storage_type_name)
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, plan.storage_width, type)
+      end
+    end
+
     # Read the exact stored SimpleAggregateFunction(String) child. The nominal
     # function remains gated before consuming variable-size streams; this does
     # not widen the ordinary String accessor.
@@ -2698,6 +2717,21 @@ module CrystalClick
         end
         raise CorruptPartError.new("Nullable Decimal values do not consume nested bytes") unless offset == encoded_values.size
         values
+      end
+    end
+
+    def read_nullable_simple_aggregate_temporal_raw_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String,
+      type : T.class,
+    ) : Array(T?) forall T
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_nullable_temporal(@column_type, function, storage_type_name, type) do
+        plan = SimpleAggregateTemporalStoragePlan.require(@column_type, function, storage_type_name, true)
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, plan.storage_width, type)
       end
     end
 
@@ -13955,6 +13989,12 @@ module CrystalClick
           stream_name == "#{@column}.null" ? 1 : decimal_plan.storage_width
         else
           decimal_plan.storage_width
+        end
+      elsif temporal_plan = SimpleAggregateTemporalStoragePlan.for_type_name(@column_type)
+        if temporal_plan.nullable?
+          stream_name == "#{@column}.null" ? 1 : temporal_plan.storage_width
+        else
+          temporal_plan.storage_width
         end
       elsif aggregate_type = SimpleAggregateColumnType.parse(@column_type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable

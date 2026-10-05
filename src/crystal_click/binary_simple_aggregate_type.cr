@@ -7,7 +7,9 @@ module CrystalClick
     # UInt64 constructor and constant.
     TYPE_SUFFIX               = ", UInt64)"
     DEFAULT_STORAGE_TYPE_NAME = "UInt64"
-    MAX_TYPE_BYTES            = 80
+    # Leaves room for the complete bounded timezone token while remaining a
+    # hard parser cap. The outer Nullable owner applies its own ten-byte shell.
+    MAX_TYPE_BYTES = 96
     # Existing local FixedString materialization limit; ClickHouse itself
     # permits wider declarations than this library profile admits.
     MAX_FIXED_STRING_WIDTH = 65_536
@@ -50,6 +52,12 @@ module CrystalClick
       DecimalType.parse(@storage_type_name)
     end
 
+    # Exact canonical temporal storage identity, when the storage child is one
+    # of the six scalar temporal leaves admitted by this profile.
+    def temporal_storage_type : TemporalStorageType?
+      TemporalStorageType.parse(@storage_type_name)
+    end
+
     def function_name : String
       case @function
       when Function::Any             then "any"
@@ -89,12 +97,11 @@ module CrystalClick
       return nil unless 3 <= function_name.bytesize <= 15
       return nil if storage_type_name.empty?
 
-      # Decimal is the only admitted storage leaf whose canonical name
-      # contains a comma. Its parser validates the complete leaf spelling,
-      # including that there are exactly two parameters. Every other storage
-      # type remains comma-free, so extra arguments and composite children stay
-      # outside this bounded profile.
-      unless DecimalType.parse(storage_type_name)
+      # Decimal and zoned temporal leaves are the only admitted storage leaves
+      # whose canonical names contain commas. Their exact leaf parsers validate
+      # complete spellings; extra arguments and composite children stay outside
+      # this bounded profile.
+      unless DecimalType.parse(storage_type_name) || TemporalStorageType.parse(storage_type_name)
         return nil if storage_type_name.includes?(',')
       end
 
@@ -196,6 +203,15 @@ module CrystalClick
           return decimal_type.storage_width >= 16
         when Function::GroupBitAnd, Function::GroupBitOr, Function::GroupBitXor
           return false
+        else
+          return false
+        end
+      end
+
+      if TemporalStorageType.parse(storage_type_name)
+        case function
+        when Function::Any, Function::AnyLast, Function::Min, Function::Max
+          return true
         else
           return false
         end

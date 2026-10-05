@@ -3,7 +3,8 @@ module CrystalClick
   # profile. The function name remains nominal metadata; the stored payload
   # retains the exact child representation and is never aggregated here.
   class SimpleAggregateColumnType
-    MAX_TYPE_BYTES = 80
+    # Covers the bounded scalar descriptor plus the outer Nullable shell.
+    MAX_TYPE_BYTES = 106
 
     enum Shape
       Scalar
@@ -98,6 +99,11 @@ module CrystalClick
     # canonical Decimal. `raw_width` intentionally remains numeric-only.
     def decimal_type : DecimalType?
       @simple_aggregate_type.decimal_type
+    end
+
+    # Exact canonical scalar temporal storage identity, when admitted.
+    def temporal_storage_type : TemporalStorageType?
+      @simple_aggregate_type.temporal_storage_type
     end
 
     def nullable? : Bool
