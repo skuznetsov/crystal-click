@@ -4,17 +4,22 @@ require "json"
 require "option_parser"
 require "../src/crystal_click"
 
-W171_ORACLE_VERSION          = "ClickHouse local version 26.10.1.1201 (official build)."
-W171_ORACLE_BINARY_SHA256    = "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
-W171_ORACLE_SOURCE_ROOT      = "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1"
-W171_ORACLE_SOURCE_REVISION  = "e9b645ed83ad3c07b64f09fbd014e8f770d8691b"
-W171_ORACLE_TYPE             = "Nested(a UInt64, b String, c Nullable(Int32))"
-W171_ORACLE_ARRAY_TUPLE_TYPE = "Array(Tuple(a UInt64, b String, c Nullable(Int32)))"
-W171_ORACLE_KEYS             = [7_u64, 13_u64, 22_u64, 31_u64, 50_u64]
-W171_ORACLE_SIZES            = [2_u64, 0_u64, 1_u64, 3_u64, 2_u64]
-W171_ORACLE_STARTS           = [0, 2, 2, 3, 6]
-W171_ORACLE_MARK_ROWS        = [2_u64, 2_u64, 1_u64, 0_u64]
-W171_ORACLE_STREAMS          = [
+W171_ORACLE_VERSION              = "ClickHouse local version 26.10.1.1201 (official build)."
+W171_ORACLE_BINARY_SHA256        = "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+W171_ORACLE_SOURCE_ROOT          = "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1"
+W171_ORACLE_SOURCE_REVISION      = "e9b645ed83ad3c07b64f09fbd014e8f770d8691b"
+W171_ORACLE_TYPE                 = "Nested(a UInt64, b String, c Nullable(Int32))"
+W171_ORACLE_ARRAY_TUPLE_TYPE     = "Array(Tuple(a UInt64, b String, c Nullable(Int32)))"
+W171_ORACLE_FLATTENED_COLUMNS    = "columns format version: 1\n4 columns:\n`pk` UInt64\n`nested.a` Array(UInt64)\n`nested.b` Array(String)\n`nested.c` Array(Nullable(Int32))\n"
+W171_ORACLE_FLATTENED_SUBSTREAMS = "columns substreams version: 1\n4 columns:\n1 substreams for column `pk`:\n\tpk\n" +
+                                   "2 substreams for column `nested.a`:\n\tnested.size0\n\tnested%2Ea\n" +
+                                   "3 substreams for column `nested.b`:\n\tnested.size0\n\tnested%2Eb.size\n\tnested%2Eb\n" +
+                                   "3 substreams for column `nested.c`:\n\tnested.size0\n\tnested%2Ec.null\n\tnested%2Ec\n"
+W171_ORACLE_KEYS      = [7_u64, 13_u64, 22_u64, 31_u64, 50_u64]
+W171_ORACLE_SIZES     = [2_u64, 0_u64, 1_u64, 3_u64, 2_u64]
+W171_ORACLE_STARTS    = [0, 2, 2, 3, 6]
+W171_ORACLE_MARK_ROWS = [2_u64, 2_u64, 1_u64, 0_u64]
+W171_ORACLE_STREAMS   = [
   "pk", "nested.size0", "nested%2Ea", "nested%2Eb.size", "nested%2Eb",
   "nested%2Ec.null", "nested%2Ec",
 ]
@@ -88,6 +93,45 @@ private def w171o_rowbinary(
       w171o_write_u64(io, a_values[leaf_index])
       w171o_write_string(io, W171_ORACLE_B[leaf_index])
       if value = W171_ORACLE_C[leaf_index]
+        io.write_byte(0_u8)
+        w171o_write_i32(io, value)
+      else
+        io.write_byte(1_u8)
+      end
+    end
+  end
+  io.to_slice.dup
+end
+
+private def w171o_flattened_rowbinary(
+  indexes : Array(Int32),
+  with_names_and_types : Bool,
+  a_values : Array(UInt64) = W171_ORACLE_A,
+) : Bytes
+  io = IO::Memory.new
+  if with_names_and_types
+    w171o_write_varuint(io, 4_u64)
+    {"pk", "nested.a", "nested.b", "nested.c"}.each { |name| w171o_write_string(io, name) }
+    {"UInt64", "Array(UInt64)", "Array(String)", "Array(Nullable(Int32))"}.each do |type|
+      w171o_write_string(io, type)
+    end
+  end
+  indexes.each do |row_index|
+    index = row_index.to_i
+    count = W171_ORACLE_SIZES[index].to_i
+    w171o_write_u64(io, W171_ORACLE_KEYS[index])
+    w171o_write_varuint(io, count.to_u64)
+    count.times do |element_index|
+      w171o_write_u64(io, a_values[W171_ORACLE_STARTS[index] + element_index])
+    end
+    w171o_write_varuint(io, count.to_u64)
+    count.times do |element_index|
+      w171o_write_string(io, W171_ORACLE_B[W171_ORACLE_STARTS[index] + element_index])
+    end
+    w171o_write_varuint(io, count.to_u64)
+    count.times do |element_index|
+      value = W171_ORACLE_C[W171_ORACLE_STARTS[index] + element_index]
+      if value
         io.write_byte(0_u8)
         w171o_write_i32(io, value)
       else
@@ -205,11 +249,16 @@ private def w171o_assert_part(
   type_name : String,
   raw : Hash(String, Bytes),
   stock : Bool,
+  flattened : Bool = false,
 ) : Nil
-  expected_columns = "columns format version: 1\n2 columns:\n`pk` UInt64\n`nested` #{type_name}\n"
-  expected_substreams = "columns substreams version: 1\n2 columns:\n1 substreams for column `pk`:\n\tpk\n" +
-                        "6 substreams for column `nested`:\n" +
-                        W171_ORACLE_STREAMS[1..].map { |stream| "\t#{stream}\n" }.join
+  expected_columns = flattened ? W171_ORACLE_FLATTENED_COLUMNS : "columns format version: 1\n2 columns:\n`pk` UInt64\n`nested` #{type_name}\n"
+  expected_substreams = if flattened
+                          W171_ORACLE_FLATTENED_SUBSTREAMS
+                        else
+                          "columns substreams version: 1\n2 columns:\n1 substreams for column `pk`:\n\tpk\n" +
+                            "6 substreams for column `nested`:\n" +
+                            W171_ORACLE_STREAMS[1..].map { |stream| "\t#{stream}\n" }.join
+                        end
   w171o_require(File.read(File.join(part, "columns.txt")) == expected_columns,
     "#{File.basename(part)} exact columns metadata differs")
   w171o_require(File.read(File.join(part, "columns_substreams.txt")) == expected_substreams,
@@ -290,6 +339,41 @@ private def w171o_assert_public_reader(part : String) : Nil
   nil
 end
 
+private def w171o_assert_public_flattened_reader(part : String) : Nil
+  reader = CrystalClick::WidePart.open_flattened_nested(part, "nested", W171_ORACLE_TYPE)
+  data = reader.read_nested_mark_range("nested", 0, reader.mark_count)
+  w171o_require(data.type_name == W171_ORACLE_TYPE, "flattened Nested reader lost the exact nominal type")
+  w171o_require(data.row_count == 5 && data.element_count == 8, "flattened Nested reader row/element counts differ")
+  w171o_require(data.row_sizes == W171_ORACLE_SIZES, "flattened Nested reader sibling outer offsets differ")
+  w171o_require(data.offsets == [0_u64, 2_u64, 2_u64, 3_u64, 6_u64, 8_u64],
+    "flattened Nested reader sibling prefix offsets differ")
+  cursor = 0
+  data.row_sizes.each_with_index do |size, row_index|
+    row = data.row(row_index)
+    w171o_require(row.size == size.to_i32, "flattened Nested reader row #{row_index} size differs")
+    size.to_i.times do |element_index|
+      element = row[element_index]
+      flat_index = cursor + element_index
+      w171o_require(element.value_as("a", UInt64) == W171_ORACLE_A[flat_index],
+        "flattened Nested reader UInt64 sibling differs at #{flat_index}")
+      w171o_require(element.value_as("b", String) == W171_ORACLE_B[flat_index],
+        "flattened Nested reader String sibling differs at #{flat_index}")
+      if value = W171_ORACLE_C[flat_index]
+        w171o_require(element.value_as("c", Int32) == value,
+          "flattened Nested reader nullable Int32 sibling differs at #{flat_index}")
+      else
+        w171o_require(element["c"].nil?, "flattened Nested reader NULL differs at #{flat_index}")
+      end
+    end
+    cursor += size.to_i
+  end
+  middle = reader.read_nested_mark_range("nested", 1, 1)
+  w171o_require(middle.row_sizes == [1_u64, 3_u64] &&
+                middle.row(1)[2].value_as("a", UInt64) == 311_u64,
+    "flattened Nested reader middle mark differs")
+  nil
+end
+
 private def w171o_profile(profiles : Array(JSON::Any), label : String) : JSON::Any
   profiles.find { |profile| profile["label"].as_s == label } || raise "source profile missing: #{label}"
 end
@@ -316,7 +400,13 @@ private def w171o_assert_source_profile_roster(profile : JSON::Any, run_root : S
   part
 end
 
-private def w171o_validate_source_manifest(path : String) : Tuple(String, String, String, String)
+private def w171o_validate_source_manifest(path : String, validate_flattened : Bool = false) : NamedTuple(
+  binary: String,
+  nested_flat0: String,
+  nested_flat1: String,
+  run_root: String,
+  manifest: String,
+)
   w171o_require(File.file?(path) && !File.symlink?(path), "source manifest is missing or symlinked")
   manifest = JSON.parse(File.read(path))
   w171o_require(manifest["clickhouse_binary_sha256_before"].as_s == W171_ORACLE_BINARY_SHA256 &&
@@ -375,12 +465,20 @@ private def w171o_validate_source_manifest(path : String) : Tuple(String, String
                 array_control["declared_type"].as_s == W171_ORACLE_ARRAY_TUPLE_TYPE,
     "stock source declarations differ")
   nested_path = w171o_assert_source_profile_roster(nested_flat0, run_root)
-  w171o_assert_source_profile_roster(nested_flat1, run_root)
+  nested_flat1_path = w171o_assert_source_profile_roster(nested_flat1, run_root)
   tuple_path = w171o_assert_source_profile_roster(array_control, run_root)
 
   stock_raw = w171o_expected_raw(W171_ORACLE_A, W171_ORACLE_C_STOCK)
   w171o_assert_part(nested_path, W171_ORACLE_TYPE, stock_raw, true)
   w171o_assert_public_reader(nested_path)
+  if validate_flattened
+    w171o_require(nested_flat1["part_metadata"]["columns.txt"]["contents"].as_s == W171_ORACLE_FLATTENED_COLUMNS,
+      "captured flatten_nested=1 columns metadata differs")
+    w171o_require(nested_flat1["part_metadata"]["columns_substreams.txt"]["contents"].as_s == W171_ORACLE_FLATTENED_SUBSTREAMS,
+      "captured flatten_nested=1 shared sibling-substream metadata differs")
+    w171o_assert_part(nested_flat1_path, W171_ORACLE_TYPE, stock_raw, true, true)
+    w171o_assert_public_flattened_reader(nested_flat1_path)
+  end
   tuple_raw = w171o_expected_raw(W171_ORACLE_A, W171_ORACLE_C_STOCK)
   w171o_assert_part(tuple_path, W171_ORACLE_ARRAY_TUPLE_TYPE, tuple_raw, true)
   W171_ORACLE_STREAMS.each do |stream|
@@ -388,37 +486,62 @@ private def w171o_validate_source_manifest(path : String) : Tuple(String, String
     {".bin", ".mrk2"}.each do |suffix|
       w171o_require(File.read(File.join(nested_path, base + suffix)) == File.read(File.join(tuple_path, base + suffix)),
         "Nested and Array(Tuple) source bytes differ for #{stream}#{suffix}")
+      if validate_flattened
+        w171o_require(File.read(File.join(nested_path, base + suffix)) == File.read(File.join(nested_flat1_path, base + suffix)),
+          "flatten_nested=0 and flatten_nested=1 source bytes differ for #{stream}#{suffix}")
+      end
     end
   end
-  flat1_size_stream = CrystalClick::StreamName.hash("nested.size0")
+
+  shared_size_stream = CrystalClick::StreamName.hash("nested.size0")
   w171o_require(
-    File.read(File.join(nested_path, "#{flat1_size_stream}.bin")) == File.read(File.join(w171o_assert_source_profile_roster(nested_flat1, run_root), "#{flat1_size_stream}.bin")),
-    "flatten_nested=1 sibling offset buffer is not shared with Nested.size0"
-  )
+    File.read(File.join(nested_path, shared_size_stream + ".bin")) ==
+    File.read(File.join(nested_flat1_path, shared_size_stream + ".bin")),
+    "flatten_nested=0 and flatten_nested=1 shared size stream bytes differ")
 
   commands.each do |command|
     label = command["label"].as_s
-    next unless {"nested-flat0", "array-tuple-flat0"}.any? { |prefix| label.starts_with?("#{prefix}-select-") }
-    profile_label = label.starts_with?("nested-flat0-") ? "nested-flat0" : "array-tuple-flat0"
+    accepted = label.starts_with?("nested-flat0-select-") || label.starts_with?("array-tuple-flat0-select-") ||
+               (validate_flattened && label.starts_with?("nested-flat1-select-"))
+    next unless accepted
+    profile_label = if label.starts_with?("nested-flat0-")
+                      "nested-flat0"
+                    elsif label.starts_with?("nested-flat1-")
+                      "nested-flat1"
+                    else
+                      "array-tuple-flat0"
+                    end
     selection_and_format = label.lchop("#{profile_label}-select-")
     selected_name, format_name = selection_and_format.split("-rowbinary", 2)
     selection = W171_ORACLE_SELECTIONS[selected_name]? || raise "unknown source selection #{label}"
     with_header = format_name == "withnamesandtypes"
     w171o_require(with_header || format_name == "", "unknown source format #{label}")
-    type = profile_label == "nested-flat0" ? W171_ORACLE_TYPE : W171_ORACLE_ARRAY_TUPLE_TYPE
-    expected = w171o_rowbinary(selection[1], type, with_header)
+    expected = if profile_label == "nested-flat1"
+                 w171o_flattened_rowbinary(selection[1], with_header)
+               else
+                 type = profile_label == "nested-flat0" ? W171_ORACLE_TYPE : W171_ORACLE_ARRAY_TUPLE_TYPE
+                 w171o_rowbinary(selection[1], type, with_header)
+               end
     output_path = command["files"]["stdout"].as_s
     w171o_require(File.read(output_path).to_slice == expected, "captured stock RowBinary differs from literal: #{label}")
   end
-  {manifest["clickhouse_binary"].as_s, nested_path, run_root, path}
+  {
+    binary:       manifest["clickhouse_binary"].as_s,
+    nested_flat0: nested_path,
+    nested_flat1: nested_flat1_path,
+    run_root:     run_root,
+    manifest:     path,
+  }
 end
 
 private class W171OracleCapture
   getter root : String
   getter binary : String
+  getter mode : String
+  getter flatten_nested : Int32
   getter command_record_paths = [] of String
 
-  def initialize(@root : String, @binary : String)
+  def initialize(@root : String, @binary : String, @mode : String = "nested-flat0", @flatten_nested : Int32 = 0)
     @command_dir = File.join(root, "commands")
     Dir.mkdir(@command_dir)
   end
@@ -438,15 +561,21 @@ private class W171OracleCapture
     stderr_bytes = stderr.to_slice.dup
     File.open(stdout_path, "wb") { |file| file.write(stdout_bytes) }
     File.open(stderr_path, "wb") { |file| file.write(stderr_bytes) }
+    argv_json = JSON.build do |json|
+      json.array { argv.each { |argument| json.string(argument) } }
+    end
     record_path = base + ".json"
     File.write(record_path, JSON.build do |json|
       json.object do
+        json.field "mode", mode
+        json.field "flatten_nested", flatten_nested
         json.field "label", label
         json.field "argv", argv
         json.field "sql", sql
         json.field "status" do
           json.object do
             json.field "exit_code", status.exit_code
+            json.field "exitstatus", status.exit_code
             json.field "success", status.success?
           end
         end
@@ -459,6 +588,7 @@ private class W171OracleCapture
         end
         json.field "sha256" do
           json.object do
+            json.field "argv_json", w171o_sha256(argv_json.to_slice)
             json.field "sql", sql ? w171o_sha256(sql.to_slice) : nil
             json.field "stdout", w171o_sha256(stdout_bytes)
             json.field "stderr", w171o_sha256(stderr_bytes)
@@ -474,7 +604,7 @@ private class W171OracleCapture
   end
 
   def sql(label : String, store : String, statement : String) : Bytes
-    query = "SET flatten_nested = 0;\n#{statement}"
+    query = "SET flatten_nested = #{flatten_nested};\n#{statement}"
     argv = [binary, "local", "--path", store, "--multiquery", "--max_threads=1", "--query", query] of String
     run(label, argv, query)
   end
@@ -483,36 +613,51 @@ private class W171OracleCapture
                      mutant_part : String, binary_sha_before : String, binary_sha_after : String) : Nil
     File.write(File.join(root, "manifest.json"), JSON.build do |json|
       json.object do
-        json.field "oracle", "W171 stock and independently authored Nested complete-part oracle"
+        json.field "oracle", mode == "nested-flat1" ? "W173 stock and independently authored flattened Nested complete-part oracle" : "W171 stock and independently authored Nested complete-part oracle"
+        json.field "mode", mode
+        json.field "flatten_nested", flatten_nested
         json.field "clickhouse_binary", binary
         json.field "clickhouse_binary_sha256_before", binary_sha_before
         json.field "clickhouse_binary_sha256_after", binary_sha_after
         json.field "expected_clickhouse_version", W171_ORACLE_VERSION
+        json.field "source_checkout_root", W171_ORACLE_SOURCE_ROOT
+        json.field "source_checkout_revision", W171_ORACLE_SOURCE_REVISION
+        json.field "source_runtime_version", W171_ORACLE_VERSION
+        json.field "source_runtime_binary_sha256", W171_ORACLE_BINARY_SHA256
         json.field "source_manifest", source_manifest
         json.field "source_nested_part", source_nested_part
         json.field "independent_writer_part", writer_part
         json.field "same_shape_value_mutant_part", mutant_part
         json.field "command_record_paths", command_record_paths
+        json.field "commands" do
+          json.array do
+            command_record_paths.each do |record_path|
+              JSON.parse(File.read(record_path)).to_json(json)
+            end
+          end
+        end
       end
     end)
   end
 end
 
-private def w171o_parse_options : Tuple(String, String, String)
+private def w171o_parse_options : Tuple(String, String, String, Bool)
   clickhouse = ENV["CLICKHOUSE_BIN"]? || "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped"
   source_manifest = ENV["W171_SOURCE_MANIFEST"]? || ""
   workdir = ENV["W171_ORACLE_WORKDIR"]? || ""
+  flattened = false
   parser = OptionParser.new do |options|
-    options.banner = "Usage: crystal scripts/check_nested_storage_w171_oracle.cr -- --clickhouse PATH --source-manifest PATH --workdir DIR"
+    options.banner = "Usage: crystal scripts/check_nested_storage_w171_oracle.cr -- [--flattened] --clickhouse PATH --source-manifest PATH --workdir DIR"
     options.on("--clickhouse PATH", "Pinned ClickHouse local executable") { |value| clickhouse = value }
     options.on("--source-manifest PATH", "Retained source-law capture manifest") { |value| source_manifest = value }
     options.on("--workdir DIR", "Existing scratch parent; a fresh child is retained") { |value| workdir = value }
+    options.on("--flattened", "Qualify flatten_nested=1 sibling Nested storage") { flattened = true }
   end
   parser.parse
   w171o_require(ARGV.empty?, "unexpected arguments: #{ARGV.inspect}")
   w171o_require(!source_manifest.empty?, "--source-manifest is required")
   w171o_require(!workdir.empty?, "--workdir is required")
-  {File.realpath(clickhouse), File.realpath(source_manifest), File.realpath(workdir)}
+  {File.realpath(clickhouse), File.realpath(source_manifest), File.realpath(workdir), flattened}
 end
 
 private def w171o_create_table(capture : W171OracleCapture, store : String, table : String) : Nil
@@ -537,6 +682,7 @@ private def w171o_attach_part(
   table : String,
   part : String,
   a_values : Array(UInt64) = W171_ORACLE_A,
+  flattened : Bool = false,
 ) : Nil
   path_bytes = capture.sql("data-path-#{table}", store,
     "SELECT data_paths[1] FROM system.tables WHERE database = 'default' AND name = '#{table}' FORMAT TSVRaw")
@@ -555,16 +701,35 @@ private def w171o_attach_part(
   w171o_require(checked == "all_1_1_0\t1", "#{table} ATTACH/CHECK rejected complete part: #{checked.inspect}")
   columns = String.new(capture.sql("columns-#{table}", store,
     "SELECT name || ' ' || type FROM system.columns WHERE database = 'default' AND table = '#{table}' ORDER BY position FORMAT TSVRaw"))
-  expected_columns = "pk UInt64\nnested #{W171_ORACLE_TYPE}\n"
+  expected_columns = flattened ? "pk UInt64\nnested.a Array(UInt64)\nnested.b Array(String)\nnested.c Array(Nullable(Int32))\n" : "pk UInt64\nnested #{W171_ORACLE_TYPE}\n"
   w171o_require(columns == expected_columns, "#{table} post-ATTACH nominal columns metadata differs: #{columns.inspect}")
-  W171_ORACLE_SELECTIONS.each do |selection_name, selection|
-    [false, true].each do |with_header|
-      format_name = with_header ? "RowBinaryWithNamesAndTypes" : "RowBinary"
-      sql = "SELECT pk, nested FROM default.#{table}#{selection[0]} ORDER BY pk FORMAT #{format_name}"
-      actual = capture.sql("select-#{table}-#{selection_name}-#{format_name.downcase}", store, sql)
-      expected = w171o_rowbinary(selection[1], W171_ORACLE_TYPE, with_header, a_values)
-      w171o_require(actual == expected,
-        "#{table} #{selection_name} #{format_name} differs from independent literal (actual #{actual.size}, expected #{expected.size})")
+  if flattened
+    W171_ORACLE_SELECTIONS.each do |selection_name, selection|
+      [false, true].each do |with_header|
+        format_name = with_header ? "RowBinaryWithNamesAndTypes" : "RowBinary"
+        sibling_sql = "SELECT pk, nested.a, nested.b, nested.c FROM default.#{table}#{selection[0]} ORDER BY pk FORMAT #{format_name}"
+        sibling_actual = capture.sql("select-#{table}-#{selection_name}-siblings-#{format_name.downcase}", store, sibling_sql)
+        sibling_expected = w171o_flattened_rowbinary(selection[1], with_header, a_values)
+        w171o_require(sibling_actual == sibling_expected,
+          "#{table} #{selection_name} sibling columns #{format_name} differ from independent literal (actual #{sibling_actual.size}, expected #{sibling_expected.size})")
+
+        reconstructed_sql = "SELECT pk, CAST(arrayMap((a, b, c) -> tuple(a, b, c), nested.a, nested.b, nested.c), '#{W171_ORACLE_ARRAY_TUPLE_TYPE}') AS nested FROM default.#{table}#{selection[0]} ORDER BY pk FORMAT #{format_name}"
+        reconstructed_actual = capture.sql("select-#{table}-#{selection_name}-reconstructed-#{format_name.downcase}", store, reconstructed_sql)
+        reconstructed_expected = w171o_rowbinary(selection[1], W171_ORACLE_ARRAY_TUPLE_TYPE, with_header, a_values)
+        w171o_require(reconstructed_actual == reconstructed_expected,
+          "#{table} #{selection_name} reconstructed Nested #{format_name} differs from independent logical literal (actual #{reconstructed_actual.size}, expected #{reconstructed_expected.size})")
+      end
+    end
+  else
+    W171_ORACLE_SELECTIONS.each do |selection_name, selection|
+      [false, true].each do |with_header|
+        format_name = with_header ? "RowBinaryWithNamesAndTypes" : "RowBinary"
+        sql = "SELECT pk, nested FROM default.#{table}#{selection[0]} ORDER BY pk FORMAT #{format_name}"
+        actual = capture.sql("select-#{table}-#{selection_name}-#{format_name.downcase}", store, sql)
+        expected = w171o_rowbinary(selection[1], W171_ORACLE_TYPE, with_header, a_values)
+        w171o_require(actual == expected,
+          "#{table} #{selection_name} #{format_name} differs from independent literal (actual #{actual.size}, expected #{expected.size})")
+      end
     end
   end
   nil
@@ -594,6 +759,30 @@ private def w171o_write_library_part(parent : String, label : String, a_values :
   )
 end
 
+private def w171o_write_flattened_library_part(parent : String, label : String, a_values : Array(UInt64)) : String
+  destination = File.join(parent, label)
+  columns = [
+    CrystalClick::WideTupleLeafColumn.new("a", a_values),
+    CrystalClick::WideTupleLeafColumn.new("b", W171_ORACLE_B),
+    CrystalClick::WideTupleLeafColumn.new(
+      "c",
+      CrystalClick::WideTupleLeafType.parse("Nullable(Int32)").not_nil!,
+      W171_ORACLE_C_PHYSICAL,
+      CrystalClick::ScalarNullMap.new(Bytes[1_u8, 0_u8, 0_u8, 0_u8, 0_u8, 1_u8, 0_u8, 0_u8], 8_u64)
+    ),
+  ] of CrystalClick::WideTupleLeafColumn
+  CrystalClick::WidePartWriter.write_uint64_flattened_nested_part(
+    destination,
+    "pk",
+    W171_ORACLE_KEYS.to_unsafe.to_slice(W171_ORACLE_KEYS.size),
+    "nested",
+    W171_ORACLE_TYPE,
+    W171_ORACLE_SIZES.to_unsafe.to_slice(W171_ORACLE_SIZES.size),
+    columns,
+    2
+  )
+end
+
 private def w171o_assert_query_mutant(capture : W171OracleCapture, store : String, table : String) : Nil
   query = "SELECT pk, nested FROM default.#{table} ORDER BY pk FORMAT RowBinaryWithNamesAndTypes"
   actual = capture.sql("select-#{table}-full-rowbinarywithnamesandtypes", store, query)
@@ -603,20 +792,44 @@ private def w171o_assert_query_mutant(capture : W171OracleCapture, store : Strin
   w171o_require(actual != expected_base, "same-shape semantic mutant escaped the unchanged independent literal oracle")
 end
 
+private def w171o_assert_flattened_query_mutant(capture : W171OracleCapture, store : String, table : String) : Nil
+  mutant_a = W171_ORACLE_A.dup
+  mutant_a[0] = 12_u64
+  base_siblings = w171o_flattened_rowbinary([0, 1, 2, 3, 4], true)
+  mutant_siblings = w171o_flattened_rowbinary([0, 1, 2, 3, 4], true, mutant_a)
+  sibling_sql = "SELECT pk, nested.a, nested.b, nested.c FROM default.#{table} ORDER BY pk FORMAT RowBinaryWithNamesAndTypes"
+  sibling_actual = capture.sql("select-#{table}-fixed-literal-mutation", store, sibling_sql)
+  w171o_require(sibling_actual == mutant_siblings,
+    "stock-accepted flattened same-shape value mutant differs from its independent sibling literal")
+  w171o_require(sibling_actual != base_siblings,
+    "flattened same-shape semantic mutant escaped the unchanged sibling literal oracle")
+
+  reconstructed_sql = "SELECT pk, CAST(arrayMap((a, b, c) -> tuple(a, b, c), nested.a, nested.b, nested.c), '#{W171_ORACLE_ARRAY_TUPLE_TYPE}') AS nested FROM default.#{table} ORDER BY pk FORMAT RowBinaryWithNamesAndTypes"
+  reconstructed_actual = capture.sql("select-#{table}-fixed-logical-literal-mutation", store, reconstructed_sql)
+  expected_mutant = w171o_rowbinary([0, 1, 2, 3, 4], W171_ORACLE_ARRAY_TUPLE_TYPE, true, mutant_a)
+  expected_base = w171o_rowbinary([0, 1, 2, 3, 4], W171_ORACLE_ARRAY_TUPLE_TYPE, true)
+  w171o_require(reconstructed_actual == expected_mutant,
+    "stock-accepted flattened value mutant differs from its independent reconstructed literal")
+  w171o_require(reconstructed_actual != expected_base,
+    "flattened semantic mutant escaped the unchanged reconstructed literal oracle")
+end
+
 private def w171o_run : Nil
-  clickhouse, source_manifest, workdir = w171o_parse_options
+  clickhouse, source_manifest_path, workdir, flattened = w171o_parse_options
   w171o_require(File.file?(clickhouse) && File::Info.executable?(clickhouse) && !File.symlink?(clickhouse),
     "ClickHouse binary is missing, non-executable, or symlinked")
   w171o_require(Dir.exists?(workdir) && !File.symlink?(workdir), "workdir is missing or symlinked")
   w171o_require(File.realpath(workdir) == File.expand_path(workdir), "workdir is not canonical")
   binary_sha_before = w171o_sha256_file(clickhouse)
   w171o_require(binary_sha_before == W171_ORACLE_BINARY_SHA256, "ClickHouse binary SHA differs before native oracle")
-  binary, source_nested_part, _source_run, source_manifest = w171o_validate_source_manifest(source_manifest)
-  w171o_require(File.realpath(binary) == clickhouse, "source manifest binary path differs from requested executable")
+  source = w171o_validate_source_manifest(source_manifest_path, flattened)
+  w171o_require(File.realpath(source[:binary]) == clickhouse, "source manifest binary path differs from requested executable")
+  source_nested_part = flattened ? source[:nested_flat1] : source[:nested_flat0]
 
-  run_root = File.join(workdir, "nested-storage-w171-oracle-#{Time.utc.to_unix}-#{Process.pid}")
+  mode = flattened ? "nested-flat1" : "nested-flat0"
+  run_root = File.join(workdir, "nested-storage-w171-oracle-#{mode}-#{Time.utc.to_unix}-#{Process.pid}")
   Dir.mkdir(run_root)
-  capture = W171OracleCapture.new(run_root, clickhouse)
+  capture = W171OracleCapture.new(run_root, clickhouse, mode, flattened ? 1 : 0)
   begin
     version = String.new(capture.run("runtime-version", [clickhouse, "local", "--version"])).strip
     w171o_require(version == W171_ORACLE_VERSION, "native runtime version differs: #{version.inspect}")
@@ -625,36 +838,59 @@ private def w171o_run : Nil
     parts = File.join(run_root, "library-parts")
     Dir.mkdir(parts)
 
-    writer_part = w171o_write_library_part(parts, "nested-base", W171_ORACLE_A)
-    writer_raw = w171o_expected_raw(W171_ORACLE_A, W171_ORACLE_C_PHYSICAL)
-    w171o_assert_part(writer_part, W171_ORACLE_TYPE, writer_raw, false)
-    w171o_assert_public_reader(writer_part)
     mutant_a = W171_ORACLE_A.dup
     mutant_a[0] = 12_u64
-    mutant_part = w171o_write_library_part(parts, "nested-value-mutant", mutant_a)
-    mutant_raw = w171o_expected_raw(mutant_a, W171_ORACLE_C_PHYSICAL)
-    w171o_assert_part(mutant_part, W171_ORACLE_TYPE, mutant_raw, false)
+    if flattened
+      writer_part = w171o_write_flattened_library_part(parts, "flattened-nested-base", W171_ORACLE_A)
+      writer_raw = w171o_expected_raw(W171_ORACLE_A, W171_ORACLE_C_PHYSICAL)
+      w171o_assert_part(writer_part, W171_ORACLE_TYPE, writer_raw, false, true)
+      w171o_assert_public_flattened_reader(writer_part)
+      mutant_part = w171o_write_flattened_library_part(parts, "flattened-nested-value-mutant", mutant_a)
+      mutant_raw = w171o_expected_raw(mutant_a, W171_ORACLE_C_PHYSICAL)
+      w171o_assert_part(mutant_part, W171_ORACLE_TYPE, mutant_raw, false, true)
 
-    {
-      {"w171_stock_nested", source_nested_part, W171_ORACLE_A},
-      {"w171_library_nested", writer_part, W171_ORACLE_A},
-      {"w171_library_value_mutant", mutant_part, mutant_a},
-    }.each do |table, part, a_values|
-      w171o_create_table(capture, store, table)
-      w171o_attach_part(capture, store, table, part, a_values)
+      {
+        {"w173_stock_nested_flat1", source_nested_part, W171_ORACLE_A},
+        {"w173_library_nested_flat1", writer_part, W171_ORACLE_A},
+        {"w173_library_nested_flat1_value_mutant", mutant_part, mutant_a},
+      }.each do |table, part, a_values|
+        w171o_create_table(capture, store, table)
+        w171o_attach_part(capture, store, table, part, a_values, true)
+      end
+      w171o_assert_flattened_query_mutant(capture, store, "w173_library_nested_flat1_value_mutant")
+    else
+      writer_part = w171o_write_library_part(parts, "nested-base", W171_ORACLE_A)
+      writer_raw = w171o_expected_raw(W171_ORACLE_A, W171_ORACLE_C_PHYSICAL)
+      w171o_assert_part(writer_part, W171_ORACLE_TYPE, writer_raw, false)
+      w171o_assert_public_reader(writer_part)
+      mutant_part = w171o_write_library_part(parts, "nested-value-mutant", mutant_a)
+      mutant_raw = w171o_expected_raw(mutant_a, W171_ORACLE_C_PHYSICAL)
+      w171o_assert_part(mutant_part, W171_ORACLE_TYPE, mutant_raw, false)
+
+      {
+        {"w171_stock_nested", source_nested_part, W171_ORACLE_A},
+        {"w171_library_nested", writer_part, W171_ORACLE_A},
+        {"w171_library_value_mutant", mutant_part, mutant_a},
+      }.each do |table, part, a_values|
+        w171o_create_table(capture, store, table)
+        w171o_attach_part(capture, store, table, part, a_values)
+      end
+      w171o_assert_query_mutant(capture, store, "w171_library_value_mutant")
     end
-    w171o_assert_query_mutant(capture, store, "w171_library_value_mutant")
 
     binary_sha_after = w171o_sha256_file(clickhouse)
     w171o_require(binary_sha_after == W171_ORACLE_BINARY_SHA256, "ClickHouse binary SHA changed during native oracle")
-    capture.write_manifest(source_manifest, source_nested_part, writer_part, mutant_part, binary_sha_before, binary_sha_after)
-    puts "PASS W171 Nested stock/library complete-part oracle: ATTACH/CHECK, exact part profile, literal RowBinary, value-mutant sensitivity"
-    puts "W171 oracle evidence retained at #{run_root}"
+    capture.write_manifest(source[:manifest], source_nested_part, writer_part, mutant_part, binary_sha_before, binary_sha_after)
+    label = flattened ? "W173 flattened Nested" : "W171 Nested"
+    puts "PASS #{label} stock/library complete-part oracle: ATTACH/CHECK, exact part profile, literal RowBinary, value-mutant sensitivity"
+    puts "#{label} oracle evidence retained at #{run_root}"
     puts "commands=#{capture.command_record_paths.size} binary_sha256=#{binary_sha_after}"
   rescue ex
     binary_sha_after = w171o_sha256_file(clickhouse)
-    capture.write_manifest(source_manifest, source_nested_part, File.join(run_root, "library-parts/nested-base"),
-      File.join(run_root, "library-parts/nested-value-mutant"), binary_sha_before, binary_sha_after)
+    base_label = flattened ? "flattened-nested-base" : "nested-base"
+    mutant_label = flattened ? "flattened-nested-value-mutant" : "nested-value-mutant"
+    capture.write_manifest(source[:manifest], source_nested_part, File.join(run_root, "library-parts/#{base_label}"),
+      File.join(run_root, "library-parts/#{mutant_label}"), binary_sha_before, binary_sha_after)
     raise ex
   end
 end

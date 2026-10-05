@@ -500,6 +500,35 @@ module CrystalClick
       )
     end
 
+    # Write the explicit flat sibling-Array representation of one nominal
+    # Nested view. One outer-size vector is serialized into each sibling block
+    # as a repeated reference to the shared root size stream.
+    def self.write_uint64_flattened_nested_part(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      group_name : String,
+      type_name : String,
+      row_sizes : Slice(UInt64),
+      columns : Array(WideTupleLeafColumn),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      infrastructure = build_tuple_part_infrastructure(
+        ->(parent : String) { create_stage(parent) },
+        ->(column : WideTupleLeafColumn) do
+          if column.leaf_type.nullable?
+            column.physical_values.as(Array(String))
+          else
+            column.string_values
+          end
+        end
+      )
+      ArrayTuplePartWriter.write_flattened_nested(
+        destination, key_name, keys, group_name, type_name, row_sizes, columns,
+        rows_per_mark, infrastructure
+      )
+    end
+
     # Write an outer Map whose ordered entries hold recursively named Tuple
     # values. Primary keys and Map row sizes share the outer-row axis; the
     # Map-key/value leaf buffers share the flattened-entry axis.

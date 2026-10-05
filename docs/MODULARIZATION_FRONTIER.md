@@ -53,6 +53,18 @@ the large facades remain unchanged. Scope and paired checks are recorded in
 Additional validator cohorts and physical stream binding remain the next
 behavior-preserving extraction seams. The overall refactor is still open.
 
+W173 adds one 249-line `WidePart::FlattenedNestedStoragePlan` class/file with
+a small detached Binding value. It owns caller declaration binding, exact
+physical sibling/substream rosters and the narrow shared-size exception.
+The reader facade handles bounded metadata I/O and context dispatch; the
+existing ArrayTuple writer owns leaf I/O, staging, semantic readback and
+publication. No per-child kernel, new publication lifecycle or general dotted
+Array inference is introduced. This is a capability owner, not a neutral
+extraction or a reduced-coupling/performance certificate. Facades remain
+16,284/25,705/7,175 lines; overall decomposition is unfinished. Scope and
+paired evidence are in
+[FLATTENED_NESTED_STORAGE_FRONTIER.md](FLATTENED_NESTED_STORAGE_FRONTIER.md).
+
 The next bounded candidate is one Array-numeric staged-validation cohort:
 `validate_staged_array_numeric_part` has one public call at writer line 1286
 and a definition at 21250; `validate_staged_array_nullable_numeric_part` has

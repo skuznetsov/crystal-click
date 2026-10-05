@@ -9,6 +9,7 @@ module CrystalClick
       getter keys : Array(UInt64)
       getter value_name : String
       getter type_plan : WideArrayTupleTypePlan
+      getter flattened_nested_context : WidePart::FlattenedNestedStoragePlan?
       getter row_sizes : Array(UInt64)
       getter leaf_buffers : Array(TupleLeafBuffers)
       getter leaf_null_maps : Array(Array(UInt8)?)
@@ -29,6 +30,7 @@ module CrystalClick
         @keys : Array(UInt64),
         @value_name : String,
         @type_plan : WideArrayTupleTypePlan,
+        @flattened_nested_context : WidePart::FlattenedNestedStoragePlan?,
         @row_sizes : Array(UInt64),
         @leaf_buffers : Array(TupleLeafBuffers),
         @leaf_null_maps : Array(Array(UInt8)?),

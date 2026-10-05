@@ -41,6 +41,25 @@ module CrystalClick
         )
       end
 
+      def self.write_flattened_nested(
+        destination : String,
+        key_name : String,
+        keys : Slice(UInt64),
+        group_name : String,
+        type_name : String,
+        row_sizes : Slice(UInt64),
+        columns : Array(WideTupleLeafColumn),
+        rows_per_mark : Int32,
+        infrastructure : TuplePartInfrastructure,
+      ) : String
+        context = WidePart::FlattenedNestedStoragePlan.for_type(group_name, type_name) ||
+                  raise ArgumentError.new("unsupported flattened Nested declaration or group name")
+        write_with_plan(
+          destination, key_name, keys, context.group_name, context.storage_plan,
+          row_sizes, columns, rows_per_mark, infrastructure, context
+        )
+      end
+
       private def self.write_with_plan(
         destination : String,
         key_name : String,
@@ -51,10 +70,11 @@ module CrystalClick
         columns : Array(WideTupleLeafColumn),
         rows_per_mark : Int32,
         infrastructure : TuplePartInfrastructure,
+        flattened_nested_context : WidePart::FlattenedNestedStoragePlan? = nil,
       ) : String
         input = preflight(
           destination, key_name, keys, value_name, type_plan, row_sizes,
-          columns, rows_per_mark, infrastructure
+          columns, rows_per_mark, infrastructure, flattened_nested_context
         )
         stage = infrastructure.stage_factory.call(input.parent)
         begin
@@ -121,11 +141,18 @@ module CrystalClick
         columns : Array(WideTupleLeafColumn),
         rows_per_mark : Int32,
         infrastructure : TuplePartInfrastructure,
+        flattened_nested_context : WidePart::FlattenedNestedStoragePlan? = nil,
       ) : ArrayTuplePartWriteInput
         raise ArgumentError.new("destination must not be empty") if destination.empty?
         infrastructure.validate_column_name(key_name)
         infrastructure.validate_column_name(value_name)
         raise ArgumentError.new("columns must be distinct") if key_name == value_name
+        if flattened_context = flattened_nested_context
+          unless type_plan.nested? && flattened_context.group_name == value_name &&
+                 flattened_context.type_name == type_plan.type_name
+            raise ArgumentError.new("flattened Nested context differs from the storage plan")
+          end
+        end
         raise ArgumentError.new("keys and outer sizes must have the same nonzero row count") if keys.empty? || row_sizes.size != keys.size
         raise ArgumentError.new("outer row count exceeds writer limit") if keys.size.to_u64 > WidePart::MAX_ROWS
         raise ArgumentError.new("outer row count exceeds staged reader materialization limit") if keys.size.to_u64 > WidePart::MAX_ARRAY_MARK_ROWS
@@ -260,8 +287,16 @@ module CrystalClick
           end
         end
 
-        columns_metadata = columns_metadata(key_name, value_name, type_plan)
-        substreams_metadata = substreams_metadata(key_name, value_name, value_streams)
+        columns_metadata = if flattened_context = flattened_nested_context
+                             flattened_context.columns_metadata(key_name)
+                           else
+                             columns_metadata(key_name, value_name, type_plan)
+                           end
+        substreams_metadata = if flattened_context = flattened_nested_context
+                                flattened_context.substreams_metadata(key_name)
+                              else
+                                substreams_metadata(key_name, value_name, value_streams)
+                              end
         serialization_metadata = serialization_metadata(key_name, keys_copy, type_plan)
         validate_metadata_limits(columns_metadata, substreams_metadata, serialization_metadata)
         validate_checksums_file_budget(
@@ -270,7 +305,7 @@ module CrystalClick
         )
 
         ArrayTuplePartWriteInput.new(
-          target, parent, key_name, keys_copy, value_name, type_plan, row_sizes_copy,
+          target, parent, key_name, keys_copy, value_name, type_plan, flattened_nested_context, row_sizes_copy,
           leaf_buffers, leaf_null_maps, logical_streams, compressed_sizes, raw_sizes,
           mark_count, rows_per_mark, schedule, columns_metadata, substreams_metadata,
           serialization_metadata
@@ -537,14 +572,26 @@ module CrystalClick
         expected_mark_rows = Array(UInt64).new(input.mark_count) do |mark_index|
           input.schedule.mark(mark_index, TupleLeafMarkSchedule::Axis::Outer).outer_rows.to_u64
         end
-        key_part = WidePart.open_typed(stage, input.key_name)
+        key_part = if flattened_context = input.flattened_nested_context
+                     WidePart.open_flattened_nested(
+                       stage, flattened_context.group_name, flattened_context.type_name, input.key_name
+                     )
+                   else
+                     WidePart.open_typed(stage, input.key_name)
+                   end
         keys = key_part.read_uint64_mark_range(input.key_name, 0, input.mark_count)
         raise CorruptPartError.new("staged UInt64 key readback differs") unless keys == input.keys
         unless key_part.mark_row_counts == expected_mark_rows
           raise CorruptPartError.new("staged UInt64 key mark schedule differs")
         end
 
-        part = WidePart.open_typed(stage, input.value_name)
+        part = if flattened_context = input.flattened_nested_context
+                 WidePart.open_flattened_nested(
+                   stage, flattened_context.group_name, flattened_context.type_name
+                 )
+               else
+                 WidePart.open_typed(stage, input.value_name)
+               end
         unless part.column_type == input.type_plan.type_name && part.row_count == input.keys.size.to_u64
           raise CorruptPartError.new("staged Array(Tuple) declaration or row count differs")
         end

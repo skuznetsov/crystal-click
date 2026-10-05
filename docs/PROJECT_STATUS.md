@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Latest capability checkpoint (W172, 2026-10-05): nominal `Nested(...)` is
+Latest capability checkpoint (W173, 2026-10-05): explicit flattened `Nested`
+part reading/writing is paired for one UInt64 key and one group of direct
+scalar/Nullable leaves in Wide/LZ4. The caller supplies the root and nominal
+type; exact physical sibling order and shared size0 references are validated
+before constructing an in-memory view. PK-only opening validates the full
+group envelope and key/root mark axes; ordinary readers are not widened.
+The existing ragged codecs, bounded preflight, staged semantic readback and
+exclusive publication are reused. This is not implicit Nested provenance,
+arbitrary-table admission or a concurrent-rewrite snapshot guarantee.
+Root passes 99 DEBUG and 99 RELEASE examples across 24 focused specs, zero
+failures/errors/pending and actual child/guard exit 0. The pinned stock
+runtime accepts the stock control, independent library base and CHECK-valid
+value mutant through ATTACH/CHECK. Root independently reconciles 66 actual
+native statuses, 50 exact sibling/reconstructed binary windows and three
+CHECK results. The unchanged unflattened mode also passes: 41 statuses,
+25 binary windows and three CHECK results. A seeded key/root axis bypass
+fails the unchanged guard; exact source restoration passes. Scoped verdict:
+ROBUST for this declared part profile, with a finite three-leaf native witness,
+not every inherited leaf/layout product. All-empty element marks and an empty
+first mark followed by a nonempty mark retain library-only evidence.
+One 249-line storage-plan owner keeps flattened metadata policy separate;
+reader/writer/table facades remain 16,284/25,705/7,175 lines. Overall
+modularization is unfinished. Explicit table/offline group-context mapping is
+next; general JSON/Dynamic/Variant products, AggregateFunction states, broader
+SAF, general MV/projection execution/storage and arbitrary-schema complete-part/
+table writing remain open. Memory/performance stays deferred. Fresh source
+`e9b645ed` is clean, shallow and unbuilt; executed stock is separately pinned
+to `d9bcb5ab`. Exact scope, commands, evidence and decay:
+[FLATTENED_NESTED_STORAGE_FRONTIER.md](FLATTENED_NESTED_STORAGE_FRONTIER.md).
+
+Previous capability checkpoint (W172, 2026-10-05): nominal `Nested(...)` is
 paired through the reusable binary descriptor, known-type row/envelope,
 ordinary logical bulk and physical-name APIs. Exact field metadata and the
 implicit named-Tuple child stay distinct from Array(Tuple); synthetic graph
@@ -1067,7 +1097,9 @@ source/runtime identities and executed evidence.
    W171 pairs nominal unflattened Nested through the inherited recursive
    Tuple/scalar storage plan and explicit part/table/offline entrypoints.
    Its native whole-part witness is one three-leaf profile, not every schema
-   product. Flattened shared Nested offsets, AggregateFunction state serialization and broader
+   product. W173 pairs an explicit flattened shared-offset part view/writer for
+   direct scalar/Nullable leaves; implicit discovery and table/offline context
+   mapping remain unqualified. AggregateFunction state serialization and broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -1092,7 +1124,9 @@ source/runtime identities and executed evidence.
    normalized bulk and generic physical composition plus independently authored
    scalar/Nullable whole parts. Recursive and LC Interval codec admission is
    not a public whole-part certificate for every composition.
-   The general descriptor kernel still lacks AggregateFunction, Nested,
+   W172 pairs the nominal Nested descriptor and ordinary logical value/bulk
+   kernel; specialized Nested LC/Variant/Dynamic products remain refused.
+   The general descriptor kernel still lacks AggregateFunction,
    Custom, JSON and QBit/QBitWithStride tags. SimpleAggregateFunction's tag is
    now paired only within the W163/W164 numeric, W168 text, W169 Decimal and
    W170 temporal profiles.
@@ -1239,8 +1273,10 @@ source/runtime identities and executed evidence.
    source/result-type laws and independent complete-part qualification.
    W171 closes the bounded unflattened nominal Nested storage lane using
    existing ragged Tuple/scalar owners, including explicit table/offline
-   consumers. Flattened shared-offset discovery/writing and general Nested
-   binary descriptors/values/bulk remain separate unresolved lanes.
+   consumers. W172 pairs nominal Nested binary descriptors/values/ordinary
+   bulk with explicit specialized-product guards. W173 pairs explicit flattened
+   shared-offset part reading/writing for direct leaves; table/offline context
+   mapping and implicit discovery remain separate unresolved lanes.
    AggregateFunction state serialization remains an unresolved family;
    a stored-value wrapper does not certify aggregate state execution.
    For MV/projections, prioritize declaration/dependency/TO-target inspection

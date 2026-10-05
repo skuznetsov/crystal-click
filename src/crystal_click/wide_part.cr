@@ -1592,6 +1592,33 @@ module CrystalClick
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
 
+    # Open one explicit in-memory Nested view over ClickHouse's flattened
+    # sibling Arrays. The caller supplies the group and nominal schema; no
+    # dotted-name inference is added to ordinary open methods.
+    def self.open_flattened_nested(
+      path : String,
+      group_name : String,
+      type_name : String,
+      selected_column : String? = nil,
+    ) : WidePart
+      context = FlattenedNestedStoragePlan.for_type(group_name, type_name) ||
+                raise UnsupportedFormatError.new("unsupported flattened Nested declaration or group name")
+      root_name = context.group_name
+      root = new(path, root_name, :typed, context)
+      key_name = root.flattened_nested_key_name
+      selected = selected_column || root_name
+      unless selected == root_name || selected == key_name
+        raise UnsupportedFormatError.new("flattened Nested selection must name its logical root or UInt64 key")
+      end
+      key = new(path, key_name, :typed, context)
+      unless root.row_count == key.row_count && root.mark_row_counts == key.mark_row_counts
+        raise CorruptPartError.new("flattened Nested key and group row-mark axes differ")
+      end
+      selected == root_name ? root : key
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot read part")
+    end
+
     def mark_count : Int
       @marks.size
     end
@@ -11308,8 +11335,14 @@ module CrystalClick
       end
     end
 
-    private def initialize(path : String, requested_column : String?, mode : Symbol)
+    private def initialize(
+      path : String,
+      requested_column : String?,
+      mode : Symbol,
+      flattened_nested_context : FlattenedNestedStoragePlan? = nil,
+    )
       @path = path
+      @flattened_nested_context = flattened_nested_context
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
       @low_cardinality_string_state = nil
@@ -11536,9 +11569,17 @@ module CrystalClick
 
     private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, String, String, Bool, UInt64, Array(String)}
       columns_text = read_metadata_file("columns.txt")
-      columns = PartMetadataTextParser.parse_columns(columns_text)
+      physical_columns = PartMetadataTextParser.parse_columns(columns_text)
+      columns = physical_columns
       if columns.empty?
         raise UnsupportedFormatError.new("columns.txt contains no columns")
+      end
+      flattened_binding = nil.as(FlattenedNestedStoragePlan::Binding?)
+      if flattened_context = @flattened_nested_context
+        binding = flattened_context.bind_columns(physical_columns, requested_column)
+        flattened_binding = binding
+        columns = binding.logical_columns
+        requested_column = binding.selected_column
       end
       if requested_column.nil? && columns.size > 1
         raise UnsupportedFormatError.new("column is required for a multi-column part")
@@ -11566,7 +11607,7 @@ module CrystalClick
       end
 
       codec = validate_default_codec
-      if (geometry_plan || geo_array_plan || point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_nested || generic_map_tuple ||
+      if (@flattened_nested_context || geometry_plan || geo_array_plan || point_plan || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_nested || generic_map_tuple ||
          WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
         message = if geo_array_plan
                     "Geo Array bounded profile requires CODEC(LZ4)"
@@ -11580,7 +11621,7 @@ module CrystalClick
                     "Array(Map) bounded profile requires CODEC(LZ4)"
                   elsif generic_array_tuple
                     "Array(Tuple) bounded profile requires CODEC(LZ4)"
-                  elsif generic_nested
+                  elsif generic_nested || @flattened_nested_context
                     "Nested bounded profile requires CODEC(LZ4)"
                   elsif generic_map_tuple
                     "Map(Tuple) bounded profile requires CODEC(LZ4)"
@@ -11616,6 +11657,12 @@ module CrystalClick
         validate_array_map_bool_leaf_serialization(columns, selected, column_type)
       elsif WidePart.supports_array_map_numeric_type?(column_type)
         validate_array_map_numeric_serialization(columns, selected, column_type)
+      elsif flattened_context = @flattened_nested_context
+        binding = flattened_binding.not_nil!
+        validate_nested_serialization_profile(
+          binding.logical_columns, flattened_context.group_name,
+          flattened_context.type_name, row_count
+        )
       elsif generic_nested
         validate_nested_serialization_profile(columns, selected, column_type, row_count)
       elsif generic_array_tuple
@@ -11662,7 +11709,16 @@ module CrystalClick
         validate_type_serialization_version(column_type)
       end
 
-      physical_streams = parse_substreams(columns, selected, column_type, source_column_name, json_paths)
+      physical_streams = if flattened_context = @flattened_nested_context
+                           binding = flattened_binding.not_nil!
+                           file = File.join(@path, "columns_substreams.txt")
+                           raise UnsupportedFormatError.new("columns_substreams.txt is required for flattened Nested") unless File.file?(file)
+                           flattened_context.physical_streams_for(
+                             read_metadata_file("columns_substreams.txt"), physical_columns, binding
+                           )
+                         else
+                           parse_substreams(columns, selected, column_type, source_column_name, json_paths)
+                         end
       {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, physical_streams}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
@@ -11910,6 +11966,13 @@ module CrystalClick
       end
       raise UnsupportedFormatError.new("trailing columns_substreams.txt data") unless cursor == bytes.size
       selected_streams || raise UnsupportedFormatError.new("selected column substreams are missing")
+    end
+
+    protected def flattened_nested_key_name : String
+      context = @flattened_nested_context ||
+                raise UnsupportedFormatError.new("reader has no flattened Nested context")
+      columns = PartMetadataTextParser.parse_columns(read_metadata_file("columns.txt"))
+      context.bind_columns(columns, context.group_name).key_name
     end
 
     private def expected_json_typed_path_substreams(column : String, paths : Array({String, String})) : Array(String)
