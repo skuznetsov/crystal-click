@@ -44,6 +44,12 @@ module CrystalClick
       String.new(@storage_type_name.to_slice)
     end
 
+    # Exact canonical Decimal(P, S) parameters, when this descriptor stores a
+    # Decimal leaf. This deliberately does not infer Decimal from a raw width.
+    def decimal_type : DecimalType?
+      DecimalType.parse(@storage_type_name)
+    end
+
     def function_name : String
       case @function
       when Function::Any             then "any"
@@ -77,12 +83,20 @@ module CrystalClick
       return nil if body_size <= 0
       body = type_name.byte_slice(body_start, body_size)
       separator = body.index(", ") || return nil
-      return nil if body.index(", ", separator + 2)
 
       function_name = body.byte_slice(0, separator)
       storage_type_name = body.byte_slice(separator + 2, body.bytesize - separator - 2)
       return nil unless 3 <= function_name.bytesize <= 15
       return nil if storage_type_name.empty?
+
+      # Decimal is the only admitted storage leaf whose canonical name
+      # contains a comma. Its parser validates the complete leaf spelling,
+      # including that there are exactly two parameters. Every other storage
+      # type remains comma-free, so extra arguments and composite children stay
+      # outside this bounded profile.
+      unless DecimalType.parse(storage_type_name)
+        return nil if storage_type_name.includes?(',')
+      end
 
       from_name(function_name, storage_type_name)
     end
@@ -168,6 +182,23 @@ module CrystalClick
     ) : Bool
       if string_storage?(storage_type_name) || fixed_string_width(storage_type_name) != nil
         return admitted_text_function?(function)
+      end
+
+      if decimal_type = DecimalType.parse(storage_type_name)
+        case function
+        when Function::Any, Function::AnyLast, Function::Min, Function::Max,
+             Function::SumWithOverflow
+          return true
+        when Function::Sum
+          # ClickHouse widens Decimal32/64 sums to Decimal128. Decimal128 and
+          # Decimal256 retain their carrier and pass its DataType equality
+          # check; precision itself is not part of that equality.
+          return decimal_type.storage_width >= 16
+        when Function::GroupBitAnd, Function::GroupBitOr, Function::GroupBitXor
+          return false
+        else
+          return false
+        end
       end
 
       return false unless storage_width(storage_type_name)

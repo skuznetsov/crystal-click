@@ -3878,6 +3878,89 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, "Nullable(#{decimal_type.type_name})", rows_per_mark)
     end
 
+    # Explicit Decimal SimpleAggregateFunction writers preserve exact function
+    # and P/S metadata while encoding the signed raw coefficient unchanged.
+    # They remain separate from inferred primitive writer admission.
+    def self.write_uint64_simple_aggregate_decimal32_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int32), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_simple_aggregate_decimal64_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int64), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_simple_aggregate_decimal128_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int128), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_simple_aggregate_decimal256_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Decimal256Value), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_simple_aggregate_decimal32_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int32?), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 9,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale, true)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_simple_aggregate_decimal64_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int64?), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 18,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale, true)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_simple_aggregate_decimal128_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Int128?), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 38,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale, true)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_simple_aggregate_decimal256_pair(
+      destination : String, key_name : String, keys : Slice(UInt64),
+      value_name : String, values : Slice(Decimal256Value?), function : BinarySimpleAggregateType::Function, scale : Int32,
+      rows_per_mark : Int32 = 8192,
+      *, precision : Int32 = 76,
+    ) : String
+      type_name = SimpleAggregateDecimalStoragePlan.type_name(function, precision, scale, true)
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
     # Enum payloads retain a validated exact label/code declaration. Only
     # declared signed codes may be written; generic Int8/Int16 writes remain
     # ordinary numeric columns.
@@ -11624,6 +11707,24 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
+      {% if T == Int32 || T == Int64 || T == Int128 || T == Decimal256Value %}
+        if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          decimal_plan.validate_payload!(values, false)
+          validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+          return nil
+        end
+      {% elsif T == Int32? || T == Int64? || T == Int128? || T == Decimal256Value? %}
+        if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          decimal_plan.validate_payload!(values, true)
+          validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+          return nil
+        end
+      {% else %}
+        if SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("Decimal SimpleAggregateFunction requires its exact signed coefficient carrier")
+        end
+      {% end %}
+
       {% if T == BFloat16Value %}
         if SimpleAggregateColumnType.parse(type_name)
           validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
@@ -11778,6 +11879,22 @@ module CrystalClick
       rows_per_mark : Int32,
       type_name : String,
     ) : Array(ChecksumRecord) forall T
+      {% if T == Int32 || T == Int64 || T == Int128 || T == Decimal256Value %}
+        if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          decimal_plan.validate_payload!(values, false)
+          return write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
+        end
+      {% elsif T == Int32? || T == Int64? || T == Int128? || T == Decimal256Value? %}
+        if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          decimal_plan.validate_payload!(values, true)
+          return write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+        end
+      {% else %}
+        if SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("Decimal SimpleAggregateFunction requires its exact signed coefficient carrier")
+        end
+      {% end %}
+
       {% if T == BFloat16Value %}
         if SimpleAggregateColumnType.parse(type_name)
           validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
@@ -11926,6 +12043,9 @@ module CrystalClick
     end
 
     private def self.numeric_width(type_name : String) : Int32
+      if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+        return decimal_plan.storage_width
+      end
       if temporal_type = DateTimeColumnType.parse(type_name)
         return temporal_type.raw_width
       end
@@ -25127,6 +25247,45 @@ module CrystalClick
       type_name : String,
       rows_per_mark : Int32,
     ) : Nil forall T
+      {% if T == Int32 || T == Int64 || T == Int128 || T == Decimal256Value %}
+        if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          decimal_plan.validate_payload!(values, false)
+          StagedSimpleAggregateDecimalPartValidator.validate_scalar(
+            stage,
+            key_name,
+            value_name,
+            keys,
+            values,
+            type_name,
+            rows_per_mark,
+            ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) }
+          )
+          return nil
+        end
+      {% elsif T == Int32? || T == Int64? || T == Int128? || T == Decimal256Value? %}
+        if decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          decimal_plan.validate_payload!(values, true)
+          StagedSimpleAggregateDecimalPartValidator.validate_nullable(
+            stage,
+            key_name,
+            value_name,
+            keys,
+            values,
+            type_name,
+            rows_per_mark,
+            ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
+            ->(validation_stage : String, checksums : PartChecksums, source_keys : Slice(UInt64), mark_size : Int32, marks : Int32) {
+              validate_staged_primary_index(validation_stage, checksums, source_keys, mark_size, marks)
+            }
+          )
+          return nil
+        end
+      {% else %}
+        if SimpleAggregateDecimalStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("Decimal SimpleAggregateFunction requires its exact signed coefficient carrier")
+        end
+      {% end %}
+
       {% if T == BFloat16Value? || T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Int256Value? || T == UInt256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == UInt64? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == UInt128? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% elsif T == String %}

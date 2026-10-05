@@ -466,7 +466,7 @@ module CrystalClick
           values,
           batch,
           column_name,
-          aggregate_type.storage_type_name,
+          aggregate_type,
           observed_rows,
           expected_rows,
           string_bytes,
@@ -1233,7 +1233,7 @@ module CrystalClick
           values,
           batch,
           column_name,
-          aggregate_type.storage_type_name,
+          aggregate_type,
           observed_rows,
           expected_rows,
           string_bytes,
@@ -1661,12 +1661,32 @@ module CrystalClick
       values : Array(OfflineColumnValue),
       batch : WidePartTableBatch,
       column_name : String,
-      storage_type_name : String,
+      aggregate_type : SimpleAggregateColumnType,
       observed_rows : UInt64,
       expected_rows : UInt64,
       string_bytes : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if decimal_type = aggregate_type.decimal_type
+        function = aggregate_type.function
+        case decimal_type.storage_width
+        when 4
+          selected_values = batch.simple_aggregate_decimal32_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when 8
+          selected_values = batch.simple_aggregate_decimal64_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when 16
+          selected_values = batch.simple_aggregate_decimal128_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when 32
+          selected_values = batch.simple_aggregate_decimal256_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        else
+          raise UnsupportedFormatError.new("unsupported Decimal SimpleAggregateFunction carrier")
+        end
+      end
+      storage_type_name = aggregate_type.storage_type_name
       case storage_type_name
       when "String"
         selected_values = batch.simple_aggregate_strings_for(column_name)
@@ -1746,12 +1766,32 @@ module CrystalClick
       values : Array(OfflineColumnValue),
       batch : WidePartTableBatch,
       column_name : String,
-      storage_type_name : String,
+      aggregate_type : SimpleAggregateColumnType,
       observed_rows : UInt64,
       expected_rows : UInt64,
       string_bytes : UInt64,
       max_string_bytes : UInt64,
     ) : {UInt64, UInt64}
+      if decimal_type = aggregate_type.decimal_type
+        function = aggregate_type.function
+        case decimal_type.storage_width
+        when 4
+          selected_values = batch.nullable_simple_aggregate_decimal32_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when 8
+          selected_values = batch.nullable_simple_aggregate_decimal64_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when 16
+          selected_values = batch.nullable_simple_aggregate_decimal128_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        when 32
+          selected_values = batch.nullable_simple_aggregate_decimal256_raw_for(column_name, function, decimal_type.precision, decimal_type.scale)
+          return {append_materialized_values(values, selected_values, observed_rows, expected_rows), string_bytes}
+        else
+          raise UnsupportedFormatError.new("unsupported Nullable Decimal SimpleAggregateFunction carrier")
+        end
+      end
+      storage_type_name = aggregate_type.storage_type_name
       case storage_type_name
       when "String"
         selected_values = batch.nullable_simple_aggregate_strings_for(column_name)

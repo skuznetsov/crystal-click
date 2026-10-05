@@ -916,6 +916,38 @@ module CrystalClick
       @column_values[index].as(Slice(T))
     end
 
+    def simple_aggregate_decimal32_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Int32)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale)
+      plan.validate_carrier!(Int32)
+      return @typed_numeric_values[column].as(Slice(Int32)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int32))
+    end
+
+    def simple_aggregate_decimal64_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Int64)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale)
+      plan.validate_carrier!(Int64)
+      return @typed_numeric_values[column].as(Slice(Int64)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int64))
+    end
+
+    def simple_aggregate_decimal128_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Int128)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale)
+      plan.validate_carrier!(Int128)
+      return @typed_numeric_values[column].as(Slice(Int128)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Int128))
+    end
+
+    def simple_aggregate_decimal256_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Decimal256Value)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale)
+      plan.validate_carrier!(Decimal256Value)
+      return @typed_numeric_values[column].as(Slice(Decimal256Value)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(Decimal256Value))
+    end
+
     def simple_aggregate_strings_for(column : String) : Slice(String)
       index = column_index(column)
       plan = SimpleAggregateTextStoragePlan.for_type_name(@column_types[index])
@@ -2195,6 +2227,34 @@ module CrystalClick
         raise UnsupportedFormatError.new("typed Nullable SimpleAggregateFunction accessor does not match selected carrier")
       end
       @nullable_values[column]?.try(&.as(Slice(T?))) || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction column was not materialized in this batch"))
+    end
+
+    def nullable_simple_aggregate_decimal32_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Int32?)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale, true)
+      plan.validate_carrier!(Int32)
+      @nullable_values[column]?.try(&.as(Slice(Int32?))) || raise(UnsupportedFormatError.new("Nullable Decimal SimpleAggregateFunction column was not materialized in this batch"))
+    end
+
+    def nullable_simple_aggregate_decimal64_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Int64?)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale, true)
+      plan.validate_carrier!(Int64)
+      @nullable_values[column]?.try(&.as(Slice(Int64?))) || raise(UnsupportedFormatError.new("Nullable Decimal SimpleAggregateFunction column was not materialized in this batch"))
+    end
+
+    def nullable_simple_aggregate_decimal128_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Int128?)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale, true)
+      plan.validate_carrier!(Int128)
+      @nullable_values[column]?.try(&.as(Slice(Int128?))) || raise(UnsupportedFormatError.new("Nullable Decimal SimpleAggregateFunction column was not materialized in this batch"))
+    end
+
+    def nullable_simple_aggregate_decimal256_raw_for(column : String, function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32) : Slice(Decimal256Value?)
+      index = column_index(column)
+      plan = SimpleAggregateDecimalStoragePlan.require(@column_types[index], function, precision, scale, true)
+      plan.validate_carrier!(Decimal256Value)
+      @nullable_values[column]?.try(&.as(Slice(Decimal256Value?))) || raise(UnsupportedFormatError.new("Nullable Decimal SimpleAggregateFunction column was not materialized in this batch"))
     end
 
     def nullable_simple_aggregate_strings_for(column : String) : Slice(String?)
@@ -5182,6 +5242,16 @@ module CrystalClick
 
       if aggregate_type = SimpleAggregateColumnType.parse(type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+          if decimal_type = aggregate_type.decimal_type
+            function = aggregate_type.function
+            return case decimal_type.storage_width
+            when  4 then reader.read_simple_aggregate_decimal32_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            when  8 then reader.read_simple_aggregate_decimal64_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            when 16 then reader.read_simple_aggregate_decimal128_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            when 32 then reader.read_simple_aggregate_decimal256_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            else         raise UnsupportedFormatError.new("unsupported Decimal SimpleAggregateFunction width")
+            end
+          end
           return case aggregate_type.storage_type_name
           when "UInt8"    then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt8)
           when "UInt16"   then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt16)
@@ -6453,6 +6523,16 @@ module CrystalClick
 
       if aggregate_type = SimpleAggregateColumnType.parse(type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+          if decimal_type = aggregate_type.decimal_type
+            function = aggregate_type.function
+            return case decimal_type.storage_width
+            when  4 then reader.read_nullable_simple_aggregate_decimal32_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            when  8 then reader.read_nullable_simple_aggregate_decimal64_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            when 16 then reader.read_nullable_simple_aggregate_decimal128_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            when 32 then reader.read_nullable_simple_aggregate_decimal256_raw_mark_range(selected.name, mark_index, 1, function, decimal_type.precision, decimal_type.scale)
+            else         raise UnsupportedFormatError.new("unsupported Nullable Decimal SimpleAggregateFunction width")
+            end
+          end
           return case aggregate_type.storage_type_name
           when "UInt8"    then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt8)
           when "UInt16"   then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt16)

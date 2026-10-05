@@ -18,6 +18,18 @@ checks where relevant, baseline characterizations and affected consumer tests.
 Serialization bytes, pre-callback refusals and publication rollback remain
 invariants. A shorter facade by itself is not a modularity or speed certificate.
 
+W168/W169 add text/Decimal SimpleAggregateFunction storage-plan and private
+staged-validation owners, each in its own file, rather than introducing a
+class for every function/type combination. W169's Decimal owners have
+119/171 lines and retain exact function/P/S/carrier/shape admission and public
+semantic readback separately from byte I/O and publication. These are new
+capability owners, not behavior-neutral extraction certificates; their paired
+stock evidence is recorded in
+[SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md](SIMPLE_AGGREGATE_DECIMAL_FRONTIER.md).
+The W169 reader/writer/table facades remain 16,134/25,536/7,095 lines.
+Additional validator cohorts and physical stream binding remain the next
+behavior-preserving extraction seams. The overall refactor is still open.
+
 W159 adds one cohesive `ObjectDeclaredDynamicSites` module/file for nominal
 site provenance and Object-depth coordinates. It reuses the generic Dynamic
 bulk/physical owners instead of adding a class for each Array/Tuple/Map

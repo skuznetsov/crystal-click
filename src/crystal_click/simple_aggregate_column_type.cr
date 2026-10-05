@@ -94,6 +94,12 @@ module CrystalClick
       @simple_aggregate_type.storage_type_name
     end
 
+    # Returns Decimal's exact SQL precision/scale when the stored leaf is a
+    # canonical Decimal. `raw_width` intentionally remains numeric-only.
+    def decimal_type : DecimalType?
+      @simple_aggregate_type.decimal_type
+    end
+
     def nullable? : Bool
       @shape == Shape::Nullable
     end

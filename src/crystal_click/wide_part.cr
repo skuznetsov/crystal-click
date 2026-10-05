@@ -2408,6 +2408,58 @@ module CrystalClick
       end
     end
 
+    # Decimal SAF readers retain the child coefficient and require the exact
+    # function and Decimal(P, S) declared by the caller. They intentionally do
+    # not flow through the generic numeric SimpleAggregate accessor.
+    def read_simple_aggregate_decimal32_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Int32)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_decimal(@column_type, function, precision, scale, false, Int32) do
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
+      end
+    end
+
+    def read_simple_aggregate_decimal64_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Int64)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_decimal(@column_type, function, precision, scale, false, Int64) do
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+      end
+    end
+
+    def read_simple_aggregate_decimal128_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Int128)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_decimal(@column_type, function, precision, scale, false, Int128) do
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
+      end
+    end
+
+    def read_simple_aggregate_decimal256_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Decimal256Value)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_decimal(@column_type, function, precision, scale, false, Decimal256Value) do
+        start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count, 32)
+        values = Array(Decimal256Value).new
+        each_mark_range_bytes(start_mark, end_mark, expected_bytes, 32) do |bytes|
+          offset = 0
+          while offset < bytes.size
+            values << Decimal256Value.from_words(u64(bytes, offset), u64(bytes, offset + 8), u64(bytes, offset + 16), u64(bytes, offset + 24))
+            offset += 32
+          end
+        end
+        values
+      end
+    end
+
     # Read the exact stored SimpleAggregateFunction(String) child. The nominal
     # function remains gated before consuming variable-size streams; this does
     # not widen the ordinary String accessor.
@@ -2587,6 +2639,65 @@ module CrystalClick
                        raise(UnsupportedFormatError.new("nullable numeric SimpleAggregateFunction accessor requires an admitted profile"))
       SimpleAggregateColumnReader.read_nullable_numeric(@column_type, type) do
         read_nullable_fixed_width_mark_range(column, first_mark, mark_count, aggregate_type.raw_width, type)
+      end
+    end
+
+    def read_nullable_simple_aggregate_decimal32_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Int32?)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_nullable_decimal(@column_type, function, precision, scale, Int32) do
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 4, Int32)
+      end
+    end
+
+    def read_nullable_simple_aggregate_decimal64_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Int64?)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_nullable_decimal(@column_type, function, precision, scale, Int64) do
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
+      end
+    end
+
+    def read_nullable_simple_aggregate_decimal128_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Int128?)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_nullable_decimal(@column_type, function, precision, scale, Int128) do
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 16, Int128)
+      end
+    end
+
+    def read_nullable_simple_aggregate_decimal256_raw_mark_range(
+      column : String, first_mark : Int, mark_count : Int,
+      function : BinarySimpleAggregateType::Function, precision : Int32, scale : Int32,
+    ) : Array(Decimal256Value?)
+      ensure_column(column)
+      SimpleAggregateColumnReader.read_nullable_decimal(@column_type, function, precision, scale, Decimal256Value) do
+        null_stream = @streams["#{column}.null"]
+        value_stream = @streams[column]
+        null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+        value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+        raise CorruptPartError.new("Nullable Decimal substream mark rows differ") unless rows == value_rows
+        null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+        null_map.each { |value| raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1 }
+        encoded_values = read_mark_range_bytes(value_stream, value_start, value_end, checked_byte_count(rows, 32), 32)
+        values = Array(Decimal256Value?).new(rows.to_i)
+        offset = 0
+        null_map.each do |is_null|
+          if is_null == 1
+            values << nil
+          else
+            values << Decimal256Value.from_words(u64(encoded_values, offset), u64(encoded_values, offset + 8), u64(encoded_values, offset + 16), u64(encoded_values, offset + 24))
+          end
+          offset += 32
+        end
+        raise CorruptPartError.new("Nullable Decimal values do not consume nested bytes") unless offset == encoded_values.size
+        values
       end
     end
 
@@ -13839,6 +13950,12 @@ module CrystalClick
         end
       elsif text_plan = SimpleAggregateTextStoragePlan.for_type_name(@column_type)
         text_plan.stream_width(@column, stream_name)
+      elsif decimal_plan = SimpleAggregateDecimalStoragePlan.for_type_name(@column_type)
+        if decimal_plan.nullable?
+          stream_name == "#{@column}.null" ? 1 : decimal_plan.storage_width
+        else
+          decimal_plan.storage_width
+        end
       elsif aggregate_type = SimpleAggregateColumnType.parse(@column_type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
           stream_name == "#{@column}.null" ? 1 : aggregate_type.raw_width

@@ -144,7 +144,7 @@ module CrystalClick
         begin
           BinaryDataType.simple_aggregate(simple_aggregate_type.function, child)
         rescue ex : ArgumentError
-          context.unsupported!("SimpleAggregateFunction function/storage pair is outside the admitted numeric profile")
+          context.unsupported!("SimpleAggregateFunction function/storage pair is outside the admitted storage profile")
         end
       when BinaryDataType::TAG_NULLABLE
         context.preflight_children(1_u64)

@@ -207,6 +207,14 @@ module CrystalClick
                               raise ArgumentError.new("SimpleAggregateFunction FixedString width exceeds the admitted library limit")
                             end
                             "FixedString(#{width})"
+                          when TAG_DECIMAL32, TAG_DECIMAL64, TAG_DECIMAL128, TAG_DECIMAL256
+                            binary_decimal = storage_type.decimal_type.not_nil!
+                            decimal = DecimalType.new(binary_decimal.precision, binary_decimal.scale)
+                            canonical_width_bits = decimal.storage_width * 8
+                            unless binary_decimal.width_bits == canonical_width_bits
+                              raise ArgumentError.new("SimpleAggregateFunction Decimal width does not match its canonical precision width")
+                            end
+                            decimal.type_name
                           else
                             # Reject from the exact tag before asking an
                             # arbitrary child to render a recursive SQL name.
