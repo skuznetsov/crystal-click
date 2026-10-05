@@ -184,10 +184,23 @@ module CrystalClick
       function : BinarySimpleAggregateType::Function,
       storage_type : BinaryDataType = primitive("UInt64"),
     ) : BinaryDataType
-      unless storage_type.tag == TAG_UINT64
-        raise ArgumentError.new("SimpleAggregateFunction storage type is outside the admitted UInt64 profile")
-      end
-      descriptor = BinarySimpleAggregateType.new(function)
+      storage_type_name = case storage_type.tag
+                          when TAG_UINT8   then "UInt8"
+                          when TAG_UINT16  then "UInt16"
+                          when TAG_UINT32  then "UInt32"
+                          when TAG_UINT64  then "UInt64"
+                          when TAG_INT8    then "Int8"
+                          when TAG_INT16   then "Int16"
+                          when TAG_INT32   then "Int32"
+                          when TAG_INT64   then "Int64"
+                          when TAG_FLOAT32 then "Float32"
+                          when TAG_FLOAT64 then "Float64"
+                          else
+                            # Reject from the exact tag before asking an
+                            # arbitrary child to render a recursive SQL name.
+                            raise ArgumentError.new("SimpleAggregateFunction storage type is outside the admitted numeric profile")
+                          end
+      descriptor = BinarySimpleAggregateType.new(function, storage_type_name)
       new(TAG_SIMPLE_AGGREGATE, nil, [storage_type] of BinaryDataType, [] of String, nil, nil, nil, nil, nil, nil, descriptor)
     end
 

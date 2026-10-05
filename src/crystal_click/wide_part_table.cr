@@ -896,11 +896,24 @@ module CrystalClick
     def simple_aggregate_uint64s_for(column : String) : Slice(UInt64)
       index = column_index(column)
       aggregate_type = SimpleAggregateColumnType.parse(@column_types[index])
-      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
+      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar && aggregate_type.storage_type_name == "UInt64"
         raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires an exact scalar UInt64 profile")
       end
       return @typed_numeric_values[column].as(Slice(UInt64)) if @typed_numeric_values.has_key?(column)
       @column_values[index].as(Slice(UInt64))
+    end
+
+    # Return raw stored children only when the requested primitive carrier is
+    # the exact declared SimpleAggregateFunction child, not merely equal width.
+    def simple_aggregate_values_for(column : String, type : T.class) : Slice(T) forall T
+      index = column_index(column)
+      aggregate_type = SimpleAggregateColumnType.parse(@column_types[index])
+      expected_storage = SimpleAggregateColumnType.storage_name(type)
+      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar && aggregate_type.storage_type_name == expected_storage
+        raise UnsupportedFormatError.new("typed SimpleAggregateFunction accessor does not match selected carrier")
+      end
+      return @typed_numeric_values[column].as(Slice(T)) if @typed_numeric_values.has_key?(column)
+      @column_values[index].as(Slice(T))
     end
 
     def time_seconds_for(column : String) : Slice(Int32)
@@ -2148,10 +2161,22 @@ module CrystalClick
     def nullable_simple_aggregate_uint64s_for(column : String) : Slice(UInt64?)
       index = column_index(column)
       aggregate_type = SimpleAggregateColumnType.parse(@column_types[index])
-      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
+      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable && aggregate_type.storage_type_name == "UInt64"
         raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires an exact Nullable scalar UInt64 profile")
       end
       @nullable_values[column]?.try(&.as(Slice(UInt64?))) || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction column was not materialized in this batch"))
+    end
+
+    # Nullable batch values preserve NULL independently from their exact raw
+    # carrier, and reject same-width aliases before any cast is attempted.
+    def nullable_simple_aggregate_values_for(column : String, type : T.class) : Slice(T?) forall T
+      index = column_index(column)
+      aggregate_type = SimpleAggregateColumnType.parse(@column_types[index])
+      expected_storage = SimpleAggregateColumnType.storage_name(type)
+      unless aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable && aggregate_type.storage_type_name == expected_storage
+        raise UnsupportedFormatError.new("typed Nullable SimpleAggregateFunction accessor does not match selected carrier")
+      end
+      @nullable_values[column]?.try(&.as(Slice(T?))) || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction column was not materialized in this batch"))
     end
 
     def nullable_time_seconds_for(column : String) : Slice(Int32?)
@@ -5053,7 +5078,19 @@ module CrystalClick
 
       if aggregate_type = SimpleAggregateColumnType.parse(type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
-          return reader.read_simple_aggregate_uint64_mark_range(selected.name, mark_index, 1)
+          return case aggregate_type.storage_type_name
+          when "UInt8"   then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt8)
+          when "UInt16"  then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt16)
+          when "UInt32"  then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt32)
+          when "UInt64"  then reader.read_simple_aggregate_uint64_mark_range(selected.name, mark_index, 1)
+          when "Int8"    then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int8)
+          when "Int16"   then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int16)
+          when "Int32"   then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int32)
+          when "Int64"   then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int64)
+          when "Float32" then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Float32)
+          when "Float64" then reader.read_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Float64)
+          else                raise UnsupportedFormatError.new("unsupported SimpleAggregateFunction carrier")
+          end
         end
       end
 
@@ -6307,7 +6344,19 @@ module CrystalClick
 
       if aggregate_type = SimpleAggregateColumnType.parse(type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
-          return reader.read_nullable_simple_aggregate_uint64_mark_range(selected.name, mark_index, 1)
+          return case aggregate_type.storage_type_name
+          when "UInt8"   then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt8)
+          when "UInt16"  then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt16)
+          when "UInt32"  then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, UInt32)
+          when "UInt64"  then reader.read_nullable_simple_aggregate_uint64_mark_range(selected.name, mark_index, 1)
+          when "Int8"    then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int8)
+          when "Int16"   then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int16)
+          when "Int32"   then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int32)
+          when "Int64"   then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Int64)
+          when "Float32" then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Float32)
+          when "Float64" then reader.read_nullable_simple_aggregate_numeric_mark_range(selected.name, mark_index, 1, Float64)
+          else                raise UnsupportedFormatError.new("unsupported Nullable SimpleAggregateFunction carrier")
+          end
         end
       end
 

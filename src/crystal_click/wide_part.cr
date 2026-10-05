@@ -2391,6 +2391,22 @@ module CrystalClick
       end
     end
 
+    # Read the exact stored SimpleAggregateFunction child without opening the
+    # primitive numeric API to semantic columns. Carrier identity is checked
+    # before decoding, including same-width signed/float mismatches.
+    def read_simple_aggregate_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(T) forall T
+      ensure_column(column)
+      storage_type_name = SimpleAggregateColumnType.storage_name(type)
+      SimpleAggregateColumnReader.read_numeric(@column_type, type) do
+        read_semantic_fixed_width_mark_range(column, first_mark, mark_count, numeric_type_width(storage_type_name), type)
+      end
+    end
+
     # Time uses signed raw Int32 seconds. The exact semantic type gate keeps
     # this distinct from a primitive Int32 declaration.
     def read_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
@@ -2470,6 +2486,21 @@ module CrystalClick
       ensure_column(column)
       SimpleAggregateColumnReader.read_nullable_uint64(@column_type) do
         read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, UInt64)
+      end
+    end
+
+    # Nullable counterpart to the exact-carrier scalar reader. NULL slots are
+    # preserved by the shared BASIC Nullable substream decoder.
+    def read_nullable_simple_aggregate_numeric_mark_range(
+      column : String,
+      first_mark : Int,
+      mark_count : Int,
+      type : T.class,
+    ) : Array(T?) forall T
+      ensure_column(column)
+      storage_type_name = SimpleAggregateColumnType.storage_name(type)
+      SimpleAggregateColumnReader.read_nullable_numeric(@column_type, type) do
+        read_nullable_fixed_width_mark_range(column, first_mark, mark_count, numeric_type_width(storage_type_name), type)
       end
     end
 

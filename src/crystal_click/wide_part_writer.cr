@@ -3997,18 +3997,18 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, counts, type_name, rows_per_mark)
     end
 
-    # Write a scalar SimpleAggregateFunction profile as its stored raw UInt64
-    # child. The function is preserved as nominal metadata only.
+    # Write a scalar SimpleAggregateFunction profile as its exact stored raw
+    # numeric child. The function is nominal metadata only.
     def self.write_uint64_simple_aggregate_pair(
       destination : String,
       key_name : String,
       keys : Slice(UInt64),
       value_name : String,
-      values : Slice(UInt64),
+      values : Slice(T),
       function : BinarySimpleAggregateType::Function,
       rows_per_mark : Int32 = 8192,
-    ) : String
-      type_name = SimpleAggregateColumnType.simple_aggregate(function).type_name
+    ) : String forall T
+      type_name = SimpleAggregateColumnType.simple_aggregate(function, SimpleAggregateColumnType.storage_name(T)).type_name
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
     end
 
@@ -4110,18 +4110,18 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, counts, type_name, rows_per_mark)
     end
 
-    # Write Nullable(SimpleAggregateFunction) as a null map plus its raw
-    # UInt64 child. The function is preserved as nominal metadata only.
+    # Write Nullable(SimpleAggregateFunction) as a null map plus its exact raw
+    # numeric child. NULL remains independent of the stored carrier bytes.
     def self.write_uint64_nullable_simple_aggregate_pair(
       destination : String,
       key_name : String,
       keys : Slice(UInt64),
       value_name : String,
-      values : Slice(UInt64?),
+      values : Slice(T?),
       function : BinarySimpleAggregateType::Function,
       rows_per_mark : Int32 = 8192,
-    ) : String
-      type_name = SimpleAggregateColumnType.nullable_simple_aggregate(function).type_name
+    ) : String forall T
+      type_name = SimpleAggregateColumnType.nullable_simple_aggregate(function, SimpleAggregateColumnType.storage_name(T)).type_name
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
     end
 
@@ -11523,6 +11523,31 @@ module CrystalClick
       {% end %}
     end
 
+    # Validate a semantic aggregate before the typed numeric payload path can
+    # use width-based encoding. `typed_type_name` is the existing exact map
+    # for the supplied Slice element type, including its Nullable wrapper.
+    private def self.validate_simple_aggregate_payload!(
+      type_name : String,
+      values : Slice(T),
+      expected_shape : SimpleAggregateColumnType::Shape,
+    ) : Nil forall T
+      aggregate_type = SimpleAggregateColumnType.parse(type_name) ||
+                       raise(UnsupportedFormatError.new("typed payload requires an admitted SimpleAggregateFunction profile"))
+      actual_type_name = typed_type_name(values)
+      actual_storage_type = if expected_shape == SimpleAggregateColumnType::Shape::Nullable
+                              unless actual_type_name.starts_with?("Nullable(") && actual_type_name.ends_with?(")")
+                                raise UnsupportedFormatError.new("Nullable SimpleAggregateFunction payload requires a Nullable carrier")
+                              end
+                              actual_type_name.byte_slice("Nullable(".bytesize, actual_type_name.bytesize - "Nullable()".bytesize)
+                            else
+                              actual_type_name
+                            end
+      unless aggregate_type.shape == expected_shape && aggregate_type.storage_type_name == actual_storage_type
+        raise UnsupportedFormatError.new("SimpleAggregateFunction payload does not match its exact declared carrier")
+      end
+      nil
+    end
+
     private def self.validate_typed_inputs(
       destination : String,
       key_name : String,
@@ -11595,16 +11620,24 @@ module CrystalClick
         unless type_name == "UInt64" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
           raise UnsupportedFormatError.new("UInt64 payload requires exact UInt64 or scalar SimpleAggregateFunction metadata")
         end
+        validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar) if aggregate_type
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == UInt64? %}
         aggregate_type = SimpleAggregateColumnType.parse(type_name)
         unless type_name == "Nullable(UInt64)" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
           raise UnsupportedFormatError.new("Nullable UInt64 payload requires exact Nullable(UInt64) or Nullable(SimpleAggregateFunction) metadata")
         end
+        validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable) if aggregate_type
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        end
         validate_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         validate_nullable_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
@@ -11683,16 +11716,24 @@ module CrystalClick
         unless type_name == "UInt64" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Scalar
           raise UnsupportedFormatError.new("UInt64 payload requires exact UInt64 or scalar SimpleAggregateFunction metadata")
         end
+        validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar) if aggregate_type
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == UInt64? %}
         aggregate_type = SimpleAggregateColumnType.parse(type_name)
         unless type_name == "Nullable(UInt64)" || aggregate_type && aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
           raise UnsupportedFormatError.new("Nullable UInt64 payload requires exact Nullable(UInt64) or Nullable(SimpleAggregateFunction) metadata")
         end
+        validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable) if aggregate_type
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Bool || T == UInt8 || T == UInt16 || T == UInt32 || T == Int8 || T == Int16 || T == Int32 || T == Int64 || T == Float32 || T == Float64 %}
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Scalar)
+        end
         write_typed_numeric_stream(stage, column, values, rows_per_mark, type_name)
       {% elsif T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Float32? || T == Float64? %}
+        if SimpleAggregateColumnType.parse(type_name)
+          validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
+        end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
         write_nullable_string_streams(stage, column, values, rows_per_mark)

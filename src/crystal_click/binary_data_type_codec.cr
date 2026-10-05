@@ -141,10 +141,11 @@ module CrystalClick
         context.preflight_children(1_u64)
         context.ensure_depth(depth + 1)
         child = read_from(context, depth + 1)
-        unless child.tag == BinaryDataType::TAG_UINT64
-          context.unsupported!("SimpleAggregateFunction storage type is outside the admitted UInt64 profile")
+        begin
+          BinaryDataType.simple_aggregate(simple_aggregate_type.function, child)
+        rescue ex : ArgumentError
+          context.unsupported!("SimpleAggregateFunction function/storage pair is outside the admitted numeric profile")
         end
-        BinaryDataType.simple_aggregate(simple_aggregate_type.function, child)
       when BinaryDataType::TAG_NULLABLE
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)

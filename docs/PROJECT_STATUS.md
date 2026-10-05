@@ -1,6 +1,34 @@
 # CrystalClick project status
 
-Current architecture checkpoint (W162, 2026-10-04 local / 2026-10-05 UTC):
+Current capability checkpoint (W163, 2026-10-04 local / 2026-10-05 UTC):
+the numeric SimpleAggregateFunction paired frontier is VERIFIED within its
+finite stored-value profile. Ten standard carriers now retain
+exact canonical function/carrier/shape identity through descriptors, values,
+bulk/physical codecs, scalar/outer Nullable public part writers/readers,
+table batches/windows and offline column values. The finite ClickHouse law
+admits 77 scalar pairs, 154 including outer Nullable; invalid narrow `sum`
+and floating bitwise pairs are not silently converted.
+Root passes 62 focused DEBUG and 785 affected RELEASE examples (68 unique
+specs in nine disjoint groups), with zero failures/errors/pending and exit 0.
+Two additional native-fixture examples pass. Actual log summaries, membership
+and all 738 source/spec/script inputs reconcile with the final code; separate
+scalar/Nullable carrier bypasses each fail and exact restoration passes.
+Pinned stock accepts all 154 independently library-authored complete parts
+through ATTACH/CHECK. Root separately confirms 462 literal library RowBinary
+windows, three native windows, all 155 native binary type descriptors and
+two CHECK-valid nominal/value mutants rejected by the unchanged oracle.
+Scoped hostile verdict: ROBUST within this finite matrix. Fresh shallow source
+`41b7bd50` is unbuilt, distinct from executed pinned stock build `d9bcb5ab`.
+Raw wide integers, BFloat16, additional functions/carriers, inner Nullable
+children and broader wrapper/layout products remain separate. This is
+stored-value interoperability, not aggregation execution. It reuses the
+existing cohesive owners rather than adding a class per function/type pair.
+The current reader/writer/table facades have 15,829/25,288/6,901 lines;
+overall architecture cleanup, general MV/projections and all-type completion
+remain open. Memory/performance stays deferred. Exact evidence and exclusions:
+[SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md](SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md).
+
+Previous architecture checkpoint (W162 at `c0d4c51`, 2026-10-04 local / 2026-10-05 UTC):
 scalar and nullable typed-numeric staged validation now has one private,
 stateless `StagedTypedNumericPartValidator` owner in its own 150-line file.
 Same-signature facade entry points and shared helpers retain semantic-reader
@@ -798,11 +826,13 @@ source/runtime identities and executed evidence.
    Shared Nested offsets, AggregateFunction state serialization and broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
-   interchangeable capabilities. W161 admits nine canonical unary,
-   non-parametric SimpleAggregateFunction identities with exact UInt64 storage,
-   scalar/Nullable Wide readers/writers and their table/catalog consumers.
-   The finite certificate is recorded in
-   [SIMPLE_AGGREGATE_FRONTIER.md](SIMPLE_AGGREGATE_FRONTIER.md), not a claim of
+   interchangeable capabilities. W163 extends W161's nine canonical unary,
+   non-parametric SimpleAggregateFunction identities to ten standard numeric
+   carriers under the exact 77-pair eligibility law, with scalar/outer Nullable
+   Wide readers/writers and their table/catalog consumers. Wide raw integers,
+   BFloat16, inner Nullable and other carriers/functions remain unqualified.
+   The finite evidence and current gate state are recorded in
+   [SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md](SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md), not a claim of
    complete SimpleAggregateFunction or AggregatingMergeTree execution support.
    W160 now pairs Interval descriptors, values,
    normalized bulk and generic physical composition plus independently authored
@@ -810,7 +840,7 @@ source/runtime identities and executed evidence.
    not a public whole-part certificate for every composition.
    The general descriptor kernel still lacks AggregateFunction, Nested,
    Custom, JSON and QBit/QBitWithStride tags. SimpleAggregateFunction's tag is
-   now paired only within W161's exact UInt64 profile.
+   now paired only within W163's exact numeric profile.
    This is not an inventory of wholly absent physical types: dedicated Object,
    geometry and QBit owners already cover narrower persisted profiles. Set and
    Function descriptors are also absent, but the current ClickHouse source
@@ -840,7 +870,7 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,852 lines at W162; the reader/writer are now 15,798/25,247 lines.
+   is 6,901 lines at W163; the reader/writer are now 15,829/25,288 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -871,7 +901,9 @@ source/runtime identities and executed evidence.
    thin table/catalog adapters. W160 adds exact Interval kind, column-grammar
    and semantic reader-gate owners; W161 adds three cohesive nominal-function,
    scalar/Nullable grammar and semantic-gate owners, each in its own file.
-   Physical I/O stays with the checked fixed-width reader and staging stays
+   W163 extends those same owners with one centralized function/carrier law
+   and semantic numeric gates, not a new hierarchy per pair. Physical I/O stays
+   with the checked fixed-width reader and staging stays
    with the existing typed writer. The qualified W162 numeric staged-validator
    boundary, its selector/lifetime/publication guards and the remaining
    validator cohorts are recorded in
@@ -926,6 +958,8 @@ source/runtime identities and executed evidence.
    widen layouts with their own stock-generated and library-owned evidence.
    Object declarations retain the stock maximum of 1,000 typed paths.
 3. Expand remaining paired type/profile and MV/projection frontiers.
+   Next SimpleAggregateFunction lane: raw UInt128/256, Int128/256 and BFloat16
+   carriers, preserving the proven function/result-type eligibility law.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
 4. Only then reopen memory/performance work. No current claim of stock-reader

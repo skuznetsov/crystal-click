@@ -25,6 +25,40 @@ combination. Declared actual-arm policy, codec composition, statistics and
 file I/O remain with their existing owners. This 174-line owner does not
 complete decomposition of the large reader/writer/table facades.
 
+## SimpleAggregateFunction numeric extension — W163
+
+W163 reuses the three W161 role-owned classes rather than adding a class for
+every aggregate function/carrier/Nullable combination. `BinarySimpleAggregateType`
+owns one finite canonical function/result-type eligibility law and exact
+carrier identity (159 lines). `SimpleAggregateColumnType` owns scalar/outer
+Nullable parsing and exact Crystal carrier mapping (112 lines).
+`WidePart::SimpleAggregateColumnReader` owns semantic admission before its
+synchronous fixed-width decoding callback (36 lines). Each remains in one
+source file with one loader import; no resource is retained by that gate.
+
+Public writer/readback, table and offline adapters select these semantic paths,
+while primitive accessors remain closed to nominal wrappers. The old UInt64
+signatures and semantic selector hooks remain compatible. W162's numeric
+staged-validation owner still checks complete type identity and bit-exact
+payloads through its inherited selectors; this is not another extraction.
+Physical I/O, budgets, K+1 marks, staging/checksums and publication stay with
+their existing checked owners. Temporary scalar and Nullable carrier-gate
+bypasses each trigger an actual expected wrong-carrier test failure; exact
+restoration passes. Root passes 62 focused DEBUG and 785 affected RELEASE
+examples, plus two actual native-fixture examples and 154 library-to-stock
+complete parts. All 738 final source/spec/script inputs reconcile. Scoped
+hostile verdict is ROBUST for the finite stored-value extension, not a new
+ownership extraction. Exact whole-part qualification and affected gates are in
+[SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md](SIMPLE_AGGREGATE_NUMERIC_FRONTIER.md).
+
+The current reader/writer/table facades have 15,829/25,288/6,901 lines.
+This capability slice makes no claim of smaller overall facades, complete
+responsibility-level decomposition or improved performance. Next architecture
+seams remain other staged-validator cohorts, physical stream binding, reader
+granule orchestration and thin table/catalog adapters. Serialization, inherited
+dispatch and retained-buffer lifetimes require separate characterization at
+each extraction boundary.
+
 ## SimpleAggregateFunction owners — W161
 
 W161 adds one nominal function/profile owner (`BinarySimpleAggregateType`,

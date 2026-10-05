@@ -106,7 +106,7 @@ private def w161_guard_change_mark_rows(part : String, stream : String, mark_ind
 end
 
 describe "W161 SimpleAggregateFunction negative admission and publication guards" do
-  it "rejects validly encoded nonzero parameters, bad arities, other functions and carriers" do
+  it "rejects validly encoded nonzero parameters, bad arities, unknown functions and wrappers" do
     W161_SIMPLE_AGGREGATE_TYPES.each do |name, _suffix, _function|
       # Field::UInt64 is 0x01 followed by VarUInt(1); the malformed profile is
       # otherwise structurally complete, so rejection is semantic, not truncation.
@@ -138,8 +138,6 @@ describe "W161 SimpleAggregateFunction negative admission and publication guards
       end
 
       [
-        [0x01_u8],          # UInt8
-        [0x0a_u8],          # Int64
         [0x15_u8],          # String
         [0x23_u8, 0x04_u8], # Nullable(UInt64), still unary
         [0x26_u8, 0x04_u8], # LowCardinality(UInt64), still unary
@@ -251,11 +249,8 @@ describe "W161 SimpleAggregateFunction negative admission and publication guards
     end
   end
 
-  it "rejects non-UInt64 constructors, wrong nominal children and LowCardinality wrapper admission" do
+  it "rejects unsupported constructors, wrong nominal children and LowCardinality wrapper admission" do
     function = CrystalClick::BinarySimpleAggregateType::Function::Min
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.simple_aggregate(function, CrystalClick::BinaryDataType.primitive("UInt8"))
-    end
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.simple_aggregate(function, CrystalClick::BinaryDataType.primitive("String"))
     end

@@ -1,7 +1,7 @@
 module CrystalClick
   # Exact scalar Wide-part identity for the admitted SimpleAggregateFunction
-  # UInt64 profile. The function name remains nominal metadata; the stored
-  # payload is the raw UInt64 child and is never aggregated by this layer.
+  # numeric profile. The function name remains nominal metadata; the stored
+  # payload is the raw fixed-width child and is never aggregated by this layer.
   class SimpleAggregateColumnType
     MAX_TYPE_BYTES = 80
 
@@ -13,35 +13,75 @@ module CrystalClick
     getter simple_aggregate_type : BinarySimpleAggregateType
     getter shape : Shape
 
-    def initialize(function : BinarySimpleAggregateType::Function, nullable : Bool = false)
-      @simple_aggregate_type = BinarySimpleAggregateType.new(function)
+    def initialize(
+      function : BinarySimpleAggregateType::Function,
+      nullable : Bool = false,
+      storage_type_name : String = BinarySimpleAggregateType::DEFAULT_STORAGE_TYPE_NAME,
+    )
+      @simple_aggregate_type = BinarySimpleAggregateType.new(function, storage_type_name)
       @shape = nullable ? Shape::Nullable : Shape::Scalar
     end
 
-    def self.simple_aggregate(function : BinarySimpleAggregateType::Function) : SimpleAggregateColumnType
-      new(function)
+    def self.simple_aggregate(
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String = BinarySimpleAggregateType::DEFAULT_STORAGE_TYPE_NAME,
+    ) : SimpleAggregateColumnType
+      new(function, false, storage_type_name)
     end
 
-    def self.nullable_simple_aggregate(function : BinarySimpleAggregateType::Function) : SimpleAggregateColumnType
-      new(function, true)
+    def self.nullable_simple_aggregate(
+      function : BinarySimpleAggregateType::Function,
+      storage_type_name : String = BinarySimpleAggregateType::DEFAULT_STORAGE_TYPE_NAME,
+    ) : SimpleAggregateColumnType
+      new(function, true, storage_type_name)
+    end
+
+    def self.storage_name(type : T.class) : String forall T
+      {% if T == UInt8 %}
+        "UInt8"
+      {% elsif T == UInt16 %}
+        "UInt16"
+      {% elsif T == UInt32 %}
+        "UInt32"
+      {% elsif T == UInt64 %}
+        "UInt64"
+      {% elsif T == Int8 %}
+        "Int8"
+      {% elsif T == Int16 %}
+        "Int16"
+      {% elsif T == Int32 %}
+        "Int32"
+      {% elsif T == Int64 %}
+        "Int64"
+      {% elsif T == Float32 %}
+        "Float32"
+      {% elsif T == Float64 %}
+        "Float64"
+      {% else %}
+        raise ArgumentError.new("SimpleAggregateFunction storage accessor is outside the admitted numeric profile")
+      {% end %}
     end
 
     def self.parse(type_name : String) : SimpleAggregateColumnType?
       return nil if type_name.bytesize > MAX_TYPE_BYTES
 
       if aggregate_type = BinarySimpleAggregateType.parse(type_name)
-        return new(aggregate_type.function)
+        return new(aggregate_type.function, false, aggregate_type.storage_type_name)
       end
 
       return nil unless type_name.starts_with?("Nullable(") && type_name.ends_with?(")")
 
       leaf = type_name.byte_slice("Nullable(".bytesize, type_name.bytesize - "Nullable()".bytesize)
       aggregate_type = BinarySimpleAggregateType.parse(leaf) || return nil
-      new(aggregate_type.function, true)
+      new(aggregate_type.function, true, aggregate_type.storage_type_name)
     end
 
     def function : BinarySimpleAggregateType::Function
       @simple_aggregate_type.function
+    end
+
+    def storage_type_name : String
+      @simple_aggregate_type.storage_type_name
     end
 
     def nullable? : Bool
@@ -49,7 +89,7 @@ module CrystalClick
     end
 
     def raw_width : Int32
-      8
+      BinarySimpleAggregateType.storage_width(storage_type_name).not_nil!
     end
 
     def type_name : String
@@ -57,7 +97,7 @@ module CrystalClick
     end
 
     def with_nullable(nullable : Bool) : SimpleAggregateColumnType
-      SimpleAggregateColumnType.new(function, nullable)
+      SimpleAggregateColumnType.new(function, nullable, storage_type_name)
     end
 
     def ==(other : self) : Bool
