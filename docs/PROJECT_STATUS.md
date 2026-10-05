@@ -1029,14 +1029,15 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-41b7bd50`, revision
-`41b7bd50051cc2017fe5ca5505fb35c9dc620000`.
+`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1`, revision
+`e9b645ed83ad3c07b64f09fbd014e8f770d8691b` (2026-10-05).
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Against the previous `895d13ea` snapshot,
-Serializations, Columns and Compression are content-identical. The bounded
-DataTypes, MergeTree and Formats diffs primarily replace recursive child
-traversal with TypeTree APIs; the inspected Interval and descriptor owners
-are unchanged. Unchanged serializers
+comparison and earlier identities. Against the previous `41b7bd50` snapshot,
+six files differ in the bounded DataTypes/Columns/MergeTree roster: Dynamic
+recursion guards, Object statistics reuse, empty part-metadata recovery and
+current-only merge/fetch cancellation. Compression, Formats, AggregateFunctions
+and binary descriptor owners are unchanged. No wire encoding change was found
+in that bounded comparison. Unchanged serializers
 do not imply unchanged framing, metadata or lifecycle behavior. This is
 source evidence only: no executable from this checkout has been built or
 qualified. Source identity and the separately pinned executable oracle must

@@ -1,6 +1,40 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-04, sixth refresh)
+## Current source snapshot (2026-10-05, seventh refresh)
+
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1` for new comparisons.
+Root cloned public HEAD with `--depth 1 --single-branch --no-recurse-submodules`;
+pre/post-clone upstream lookups and the checkout agree on
+`e9b645ed83ad3c07b64f09fbd014e8f770d8691b`. The checkout is clean, shallow,
+has one reachable commit, and records committer timestamp
+`2026-10-05T03:53:24Z`. Older source directories remain untouched.
+
+Direct content comparison against `41b7bd50` finds six changed existing files
+in the bounded DataTypes/Columns/Compression/Formats/MergeTree roster, with
+no additions or deletions: `SerializationDynamic.cpp` (3 added lines),
+`ColumnDynamic.cpp` and `ColumnObject.cpp` (32 added lines), and
+`IMergeTreeDataPart.cpp`, `MergeList.h`, `ReplicatedFetchList.h` (57 insertions,
+8 deletions). Compression, Formats and the AggregateFunctions tree are
+content-identical. The descriptor header/codec and inspected SAF/String/
+FixedString owners are unchanged.
+
+Root inspected all six diffs after Luna's read-only inventory. The delta adds
+data-driven recursion guards, compatible single-source Object statistics
+reuse, recovery of present-empty part metadata files, and current-only
+merge/fetch cancellation. Replicated/required column recovery remains gated
+on an existing empty columns file and validating substream metadata; absent
+columns files do not receive that exception. This comparison finds no wire
+encoding change, but changes in refusals and metadata recovery are meaningful.
+The unchanged enum still reserves removed timezone-bearing Time tags
+`0x33`/`0x35`; DateTime/DateTime64 timezone tags remain `0x12`/`0x14`.
+These historical removals are not new deltas between the two snapshots.
+
+This is source-inspection evidence, not runtime qualification. The new tree
+is unbuilt; the executed oracle remains separately pinned at build `d9bcb5ab`.
+Refresh after relevant source changes; neither a type-family name nor an
+unchanged binary descriptor proves every physical profile is compatible.
+
+## Previous source snapshot (2026-10-04, sixth refresh)
 
 Use `/Users/sergey/SrcArchives/clickhouse-2026-10-04-depth1-41b7bd50`
 for new source comparisons. Root observed public master revision
