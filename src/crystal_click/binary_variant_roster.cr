@@ -92,6 +92,9 @@ module CrystalClick
     end
 
     private def self.validate_direct_arm!(arm : BinaryDataType) : Nil
+      if arm.contains_qbit?
+        raise ArgumentError.new("QBit is not admitted in a Variant arm")
+      end
       if arm.tag == BinaryDataType::TAG_DYNAMIC
         raise ArgumentError.new("Variant cannot directly contain Dynamic")
       end

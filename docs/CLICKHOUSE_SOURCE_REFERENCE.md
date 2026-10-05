@@ -1,9 +1,36 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-05, eighth refresh)
+## Current source snapshot (2026-10-05, ninth refresh)
 
-Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-095fae58`
-for new comparisons. Root cloned public master with `--depth 1
+Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-29e0e201`
+for new comparisons. The separate depth-1 checkout is clean, shallow and
+unbuilt; root rechecks HEAD `29e0e201c786933171818f17c0fefc2bb11ec0a2`,
+one reachable commit and committer timestamp `2026-10-05T18:29:14Z`.
+Older checkouts remain untouched. Freshness is scoped to this snapshot, not
+a promise that upstream master stays at this revision.
+
+W178 records Luna's 16-file Count/factory/serialization comparison against
+`095fae58`, independently hash-checked by root. W179 separately rechecks 12
+explicit files: DataTypesBinaryEncoding (h/cpp), DataTypeQBit (h/cpp),
+SerializationQBit (h/cpp), ColumnQBit (h/cpp), AggregateFunctionCount (h/cpp)
+and DataTypeAggregateFunction (h/cpp). All 12 have identical SHA256s across
+the two snapshots. This is a bounded source comparison, not an audit of every
+upstream change or fresh-master runtime qualification.
+
+The executed W179 oracle remains the separately pinned stock executable
+`26.10.1.1201`, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+It is not a build of this checkout. Runtime evidence and source anchors must
+remain separately named; refresh the relevant certificate after either
+identity or the admitted serialization profile changes. The binary header
+still reserves removed timezone-bearing Time/Time64 tags 0x33/0x35; format
+admission is not a strictly append-only invariant.
+
+## Previous source snapshot (2026-10-05, eighth refresh)
+
+The previous comparison used
+`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-095fae58`.
+Root cloned public master with `--depth 1
 --single-branch --branch master --no-tags --no-recurse-submodules` under the
 serial memory guard (exit 0). Pre/post-clone upstream lookups and the clean
 checkout agree on `095fae5865df96627496345209d6bbf2013121f3`. The checkout is

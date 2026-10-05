@@ -23,9 +23,16 @@ module CrystalClick
         context.unsupported!("AggregateFunction(count) is admitted only as a top-level descriptor")
       end
       context.visit_node(depth)
-      context.write_byte(type.tag)
+      tag = type.tag
+      if type.tag == BinaryDataType::TAG_QBIT
+        descriptor = type.qbit_type || context.unsupported!("QBit descriptor metadata is missing")
+        tag = BinaryDataType::TAG_QBIT_STRIDE if descriptor.stride != descriptor.dimension
+      end
+      context.write_byte(tag)
 
       case type.tag
+      when BinaryDataType::TAG_QBIT
+        BinaryQBitTypeCodec.write(type, context, depth)
       when BinaryDataType::TAG_DYNAMIC
         context.write_byte(type.dynamic_max_types.not_nil!)
       when BinaryDataType::TAG_FIXED_STRING
@@ -120,6 +127,8 @@ module CrystalClick
       tag = context.read_byte
 
       case tag
+      when BinaryDataType::TAG_QBIT, BinaryDataType::TAG_QBIT_WITH_STRIDE
+        BinaryQBitTypeCodec.read(tag, context, depth)
       when BinaryDataType::TAG_NOTHING,
            BinaryDataType::TAG_UINT8, BinaryDataType::TAG_UINT16,
            BinaryDataType::TAG_UINT32, BinaryDataType::TAG_UINT64,
@@ -156,6 +165,9 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)
+        if child.contains_qbit?
+          context.unsupported!("QBit is outside the admitted Array profile")
+        end
         BinaryDataType.array(child)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         name_length = context.read_var_uint
@@ -286,6 +298,9 @@ module CrystalClick
         children = Array(BinaryDataType).new(count) do
           read_from(context, depth + 1)
         end
+        if children.any?(&.contains_qbit?)
+          context.unsupported!("QBit is outside the admitted Tuple profile")
+        end
         BinaryDataType.tuple(children)
       else
         context.ensure_depth(depth + 1) unless count == 0
@@ -374,7 +389,7 @@ module CrystalClick
 
     private def self.recognized_but_unsupported?(tag : UInt8) : Bool
       (tag >= 0x0f_u8 && tag <= 0x32_u8 && tag != BinaryDataType::TAG_INTERVAL) ||
-        tag == 0x34_u8 || tag == 0x36_u8 || tag == 0x37_u8
+        tag == 0x34_u8
     end
   end
 end

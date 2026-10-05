@@ -126,6 +126,14 @@ module CrystalClick
 
     def validate_type_tree(type : BinaryDataType, depth : Int = 1) : Nil
       visit_node(depth)
+      if type.tag == BinaryDataType::TAG_QBIT
+        # QBit's element DataType is descriptor metadata: charge the same
+        # edge/node/depth bounds as a recursive child without adding it to
+        # the generic child list traversed by value and physical walkers.
+        preflight_children(1_u64)
+        validate_type_tree(type.qbit_element_descriptor, depth + 1)
+        return nil
+      end
       if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT
         # Count's argument belongs to its descriptor grammar and budget, but
         # is not a generic child that value/bulk walkers may recurse through.

@@ -28,6 +28,9 @@ module CrystalClick
       cost = case type.tag
              when BinaryDataType::TAG_STRING
                Cost.new(1_u64, 0_u64, profile.with_size_stream? ? 8_u64 : 1_u64)
+             when BinaryDataType::TAG_QBIT
+               qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk default is missing its nominal type")
+               Cost.new(1_u64, 0_u64, multiply(qbit.plane_count.to_u64, qbit.plane_width.to_u64))
              when BinaryDataType::TAG_VARIANT
                # The sparse-bulk default is Variant NULL: one discriminator,
                # with no selected arm value or arm edge.
@@ -93,6 +96,9 @@ module CrystalClick
                Cost.new(0_u64, 0_u64, 0_u64)
              when BinaryDataType::TAG_STRING
                Cost.new(1_u64, 0_u64, profile.with_size_stream? ? 8_u64 : 1_u64)
+             when BinaryDataType::TAG_QBIT
+               qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk default is missing its nominal type")
+               Cost.new(1_u64, 0_u64, multiply(qbit.plane_count.to_u64, qbit.plane_width.to_u64))
              when BinaryDataType::TAG_VARIANT
                # Variant NULL has no ordinary child subtree to exclude.
                Cost.new(1_u64, 0_u64, 1_u64)
@@ -159,6 +165,14 @@ module CrystalClick
         BinaryValue.variant_null(type)
       when BinaryDataType::TAG_DYNAMIC
         BinaryValue.dynamic(type)
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk default is missing its nominal type")
+        begin
+          QBitColumnType.new(qbit).materialization_charge(1_u64)
+        rescue ex : ArgumentError
+          raise UnsupportedFormatError.new("QBit bulk default exceeds its bounded materialization range")
+        end
+        BinaryValue.qbit(QBitValue.new(qbit, Bytes.new(qbit.raw_row_bytes, 0_u8)))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         fields = Array(BinaryValue).new(type.child_count) do |index|
           build(type.child_at(index), dynamic_plan)
@@ -184,6 +198,13 @@ module CrystalClick
         raise UnsupportedFormatError.new("binary bulk default cost overflows UInt64")
       end
       left + right
+    end
+
+    private def self.multiply(left : UInt64, right : UInt64) : UInt64
+      if right != 0_u64 && left > UInt64::MAX // right
+        raise UnsupportedFormatError.new("binary bulk default cost overflows UInt64")
+      end
+      left * right
     end
   end
 end

@@ -61,13 +61,16 @@ describe "W147 generic Variant adversarial boundaries" do
       end
     end
 
-    # 0x37 is recognized upstream but not admitted by this kernel; it remains
-    # an unsupported feature, not a malformed/reserved tag.
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    # W179 admits the QBitWithStride tag. Missing element/dimension/stride
+    # metadata is corrupt; the Variant-QBit product remains unqualified.
+    expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x37_u8])
     end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x2a_u8, 0x01_u8, 0x37_u8])
+    end
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x2a_u8, 0x01, 0x36, 0x07, 0x03])
     end
 
     descriptor = Bytes[0x2a_u8, 0x02_u8, 0x15_u8, 0x04_u8]

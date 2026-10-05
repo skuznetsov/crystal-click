@@ -23,7 +23,7 @@ module CrystalClick
 
       traversal = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
       traversal.validate_type_tree(type)
-      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan)
+      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan, budget.limits, false)
       planned_role_count = plan.role_count
       ordinary_role_count = plan.ordinary_role_count
       low_cardinality_sites = plan.low_cardinality_sites
@@ -40,11 +40,13 @@ module CrystalClick
       traversal.preflight_children(metadata_records)
       metadata_records.times { budget.charge_node }
 
+      qbit_column = plan.qbit_column
       roles = plan.roles
       unless roles.size.to_u64 == planned_role_count
         corrupt!("binary bulk role plan changed while it was materialized")
       end
-      ordinary_roles = plan.ordinary_roles
+      # The admitted QBit roots have no separate stop-site roster.
+      ordinary_roles = qbit_column ? roles : plan.ordinary_roles
       unless streams.role_count == roles.size && streams.mark_count == real_marks
         corrupt!("binary bulk role set or mark domain is incomplete")
       end
@@ -65,6 +67,12 @@ module CrystalClick
       selected_count.times do |offset|
         count = rows_per_mark[selected_first + offset]
         selected_rows = checked_add(selected_rows, count)
+      end
+
+      qbit_roles = plan.qbit_plane_roles
+      qbit_role_offset = 0
+      if column = qbit_column
+        BinaryQBitBulkCodec.preflight_materialization!(column, selected_rows, budget.limits, false)
       end
 
       minimum = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, nil, dynamic_plan)
@@ -99,7 +107,7 @@ module CrystalClick
         mark = selected_first + window_offset
         root_count = rows_per_mark[mark].to_i32
         contexts = selected_contexts(streams, ordinary_roles, mark, budget)
-        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts, budget, dynamic_plan)
+        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset)
 
         traversal.ensure_future_nodes(type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : root_count.to_u64)
         traversal.ensure_depth(1) if root_count > 0
@@ -109,7 +117,7 @@ module CrystalClick
         end
         lc_cursors = Hash(String, Int32).new(0)
         values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan)
+          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
         end
         contexts.each_value(&.ensure_consumed)
         lc_values_for_mark.each do |path, mark_values|
@@ -214,8 +222,19 @@ module CrystalClick
       contexts : Hash(String, BinaryCodecContext),
       budget : BinaryCodecBudget,
       dynamic_plan : BinaryDynamicBulkPlan?,
+      qbit_roles : Array(String)? = nil,
+      qbit_role_offset : Int32 = 0,
     ) : Nil
       case type.tag
+      when BinaryDataType::TAG_QBIT
+        qbit_type = type.qbit_type || unsupported!("QBit bulk descriptor is missing its nominal type")
+        roles = qbit_roles || unsupported!("QBit bulk plane roles were not planned")
+        unless qbit_role_offset >= 0 && qbit_role_offset <= roles.size - qbit_type.plane_count
+          corrupt!("QBit bulk plane roles do not match their descriptor")
+        end
+        qbit_type.plane_count.times do |plane|
+          ensure_role_minimum(contexts, roles[qbit_role_offset + plane], count, qbit_type.plane_width.to_u64)
+        end
       when BinaryDataType::TAG_AGGREGATE_COUNT
         ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
       when BinaryDataType::TAG_STRING
@@ -234,7 +253,7 @@ module CrystalClick
         # The LC owner validates every mark and pays its full-state wire cost.
       when BinaryDataType::TAG_NULLABLE
         ensure_role_minimum(contexts, child_path(path, ".nulls", nil, budget, dynamic_plan), count, 1_u64)
-        ensure_minimum_count(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan)
+        ensure_minimum_count(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         ensure_minimum_count(type.child_at(0), path, count, profile, contexts, budget, dynamic_plan)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
@@ -278,6 +297,8 @@ module CrystalClick
       low_cardinality_values : Hash(String, Array(BinaryValue)),
       low_cardinality_cursors : Hash(String, Int32),
       dynamic_plan : BinaryDynamicBulkPlan?,
+      qbit_roles : Array(String)? = nil,
+      qbit_role_offset : Int32 = 0,
     ) : BinaryValue
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
         traversal.ensure_depth(depth)
@@ -295,6 +316,16 @@ module CrystalClick
       traversal.visit_node(depth)
 
       case type.tag
+      when BinaryDataType::TAG_QBIT
+        qbit_type = type.qbit_type || unsupported!("QBit bulk descriptor is missing its nominal type")
+        roles = qbit_roles || corrupt!("QBit bulk plane roles were not planned")
+        unless qbit_role_offset >= 0 && qbit_role_offset <= roles.size - qbit_type.plane_count
+          corrupt!("QBit bulk plane roles do not match their descriptor")
+        end
+        value = QBitPlaneCodec.decode_row(qbit_type) do |plane, _byte_index|
+          context_for(contexts, roles[qbit_role_offset + plane]).read_byte
+        end
+        BinaryValue.qbit(value)
       when BinaryDataType::TAG_AGGREGATE_COUNT
         count = BinaryAggregateCountStateCodec.read(context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)))
         BinaryValue.aggregate_count_state(type, count)
@@ -312,7 +343,7 @@ module CrystalClick
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
           ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
-          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
           BinaryValue.variant(type, discriminator.to_i, child)
         end
       when BinaryDataType::TAG_DYNAMIC
@@ -358,7 +389,7 @@ module CrystalClick
             traversal.preflight_children(1_u64)
             traversal.ensure_depth(depth + 1)
             ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
-            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
             BinaryValue.dynamic(type, child)
           end
         end
@@ -367,7 +398,7 @@ module CrystalClick
         traversal.preflight_children(1_u64)
         traversal.ensure_depth(depth + 1)
         ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
-        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
         BinaryValue.simple_aggregate(type, child)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
@@ -398,7 +429,7 @@ module CrystalClick
         ensure_minimum_count(type.child_at(0), elements_path, raw_count, profile, contexts, traversal.budget, dynamic_plan)
         child_type = type.child_at(0)
         elements = Array(BinaryValue).new(count) do
-          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
         end
         if type.tag == BinaryDataType::TAG_NESTED
           BinaryValue.nested(type, elements)
@@ -429,7 +460,7 @@ module CrystalClick
           fields = Array(BinaryValue).new(count) do |index|
             child_type = type.child_at(index)
             selected_path = child_path(path, ".field.", index, traversal.budget, dynamic_plan)
-            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
           end
           BinaryValue.tuple(type, fields)
         end
@@ -457,7 +488,7 @@ module CrystalClick
         entries = Array(BinaryValue).new(count) do |index|
           child_index = index.even? ? 0 : 1
           selected_path = child_index == 0 ? key_path : value_path
-          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
         end
         BinaryValue.map(type, entries)
       when BinaryDataType::TAG_NULLABLE
@@ -469,8 +500,8 @@ module CrystalClick
         traversal.ensure_depth(depth + 1)
         child_type = type.child_at(0)
         selected_path = child_path(path, ".nested", nil, traversal.budget, dynamic_plan)
-        ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan)
-        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan)
+        ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset)
+        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset)
         if flag == 1_u8
           BinaryValue.null(type)
         elsif child_type.tag == BinaryDataType::TAG_NOTHING

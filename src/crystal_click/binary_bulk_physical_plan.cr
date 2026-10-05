@@ -29,6 +29,7 @@ module CrystalClick
       context : PhysicalStreamPlanContext? = nil,
     )
       BinaryNestedType.reject_unqualified_specialized_bulk!(type)
+      BinaryQBitBulkCodec.column_type(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
@@ -45,6 +46,7 @@ module CrystalClick
       context : PhysicalStreamPlanContext?,
     )
       BinaryNestedType.reject_unqualified_specialized_bulk!(type)
+      BinaryQBitBulkCodec.column_type(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
@@ -54,7 +56,7 @@ module CrystalClick
 
     private def build_bindings(type : BinaryDataType, prefix : String) : Hash(String, String)
       validate_type(type, 0)
-      role_plan = BinaryBulkTypePlan.new(type, @profile)
+      role_plan = BinaryBulkTypePlan.new(type, @profile, nil, @context.limits)
       role_count = role_plan.role_count
       @context.record_elements(role_count)
       if type.contains_variant?
@@ -206,6 +208,7 @@ module CrystalClick
       context : PhysicalStreamPlanContext? = nil,
     ) : BinaryBulkPhysicalPlan
       BinaryNestedType.reject_unqualified_specialized_bulk!(type)
+      BinaryQBitBulkCodec.column_type(type)
       if type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")
       end
@@ -259,6 +262,11 @@ module CrystalClick
           @context.record_elements(1_u64)
           validate_type(argument, depth + 1)
         end
+        return nil
+      end
+      if type.tag == BinaryDataType::TAG_QBIT
+        @context.record_elements(1_u64)
+        validate_type(type.qbit_element_descriptor, depth + 1)
         return nil
       end
       metadata = type.metadata_entry_count
@@ -341,6 +349,19 @@ module CrystalClick
         role_bytes = add_size(role_bytes, add_size(role_length, 8_u64))  # .indexes
         name_bytes = add_size(name_bytes, add_size(name_length, 5_u64))  # .dict
         name_bytes = add_size(name_bytes, name_length)                   # indexes own prefix
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        plane = 0_u64
+        while plane < qbit.plane_count.to_u64
+          role_bytes = add_size(role_bytes, add_size(role_length, add_size(
+            BinaryQBitBulkCodec::ROLE_SUFFIX.bytesize.to_u64, digit_count(plane)
+          )))
+          physical_index = plane + 1_u64
+          name_bytes = add_size(name_bytes, add_size(name_length, add_size(
+            3_u64, digit_count(physical_index)
+          )))
+          plane += 1_u64
+        end
       when BinaryDataType::TAG_VARIANT
         names = variant_names || raise(UnsupportedFormatError.new("Variant SQL names were not preflighted"))
         site = names.next_measure_site
@@ -420,6 +441,13 @@ module CrystalClick
         # the dictionary type; LC's paired codec owns the complete lane grammar.
         names["#{role}.dictionary"] = PhysicalStreamName.append_literal(prefix, ".dict")
         names["#{role}.indexes"] = String.new(prefix.to_slice)
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        plane = 0
+        while plane < qbit.plane_count
+          names[BinaryQBitBulkCodec.plane_role(role, plane)] = PhysicalStreamName.append_literal(prefix, "%2E#{plane + 1}")
+          plane += 1
+        end
       when BinaryDataType::TAG_VARIANT
         selected_names = variant_names || raise(UnsupportedFormatError.new("Variant SQL names were not materialized"))
         names["#{role}.discriminators"] = PhysicalStreamName.append_literal(prefix, ".variant_discr")

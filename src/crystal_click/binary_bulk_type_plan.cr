@@ -7,6 +7,9 @@ module CrystalClick
     getter type : BinaryDataType
     getter profile : BinaryBulkProfile
     @dynamic_plan : BinaryDynamicBulkPlan?
+    @limits : BinaryCodecLimits
+    @writing : Bool
+    @qbit_column : QBitColumnType?
 
     struct LowCardinalitySite
       getter type : BinaryDataType
@@ -28,8 +31,14 @@ module CrystalClick
       @type : BinaryDataType,
       @profile : BinaryBulkProfile,
       @dynamic_plan : BinaryDynamicBulkPlan? = nil,
+      @limits : BinaryCodecLimits = BinaryCodecLimits.default,
+      @writing : Bool = true,
     )
       BinaryNestedType.reject_unqualified_specialized_bulk!(@type)
+      @qbit_column = BinaryQBitBulkCodec.column_type(@type)
+      if column = @qbit_column
+        BinaryQBitBulkCodec.preflight_role_metadata!(column, "root", @limits, @writing)
+      end
       if dynamic_plan = @dynamic_plan
         unless dynamic_plan.type == @type && dynamic_plan.profile == @profile
           raise ArgumentError.new("binary Dynamic bulk type plan does not match its descriptor profile")
@@ -39,8 +48,24 @@ module CrystalClick
       end
     end
 
+    def qbit_column : QBitColumnType?
+      @qbit_column
+    end
+
+    # Numeric group-major plane role order for the QBit bulk visitor. This is
+    # intentionally separate from the public lexically sorted role roster.
+    def qbit_plane_roles : Array(String)?
+      column = @qbit_column
+      return nil unless column
+      BinaryQBitBulkCodec.plane_roles(column, "root", @limits, @writing)
+    end
+
     def roles : Array(String)
       return @dynamic_plan.not_nil!.data_roles if @dynamic_plan
+      if column = @qbit_column
+        roles = BinaryQBitBulkCodec.roles(column, "root", @limits, @writing)
+        return roles.sort!
+      end
       collected = [] of String
       append_roles(@type, "root", collected)
       collected.sort!
@@ -75,6 +100,10 @@ module CrystalClick
 
     def ordinary_roles : Array(String)
       return @dynamic_plan.not_nil!.ordinary_roles if @dynamic_plan
+      if column = @qbit_column
+        roles = BinaryQBitBulkCodec.roles(column, "root", @limits, @writing)
+        return roles.sort!
+      end
       collected = [] of String
       append_ordinary_roles(@type, "root", collected)
       collected.sort!
@@ -142,6 +171,9 @@ module CrystalClick
         count
       when BinaryDataType::TAG_LOW_CARDINALITY
         2_u64
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        qbit.plane_count.to_u64
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         1_u64
       else
@@ -157,6 +189,9 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         0_u64
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        qbit.plane_count.to_u64
       when BinaryDataType::TAG_STRING
         @profile.with_size_stream? ? 2_u64 : 1_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE
@@ -295,6 +330,11 @@ module CrystalClick
       when BinaryDataType::TAG_LOW_CARDINALITY
         roles << "#{path}.dictionary"
         roles << "#{path}.indexes"
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        qbit.plane_count.times do |plane|
+          roles << BinaryQBitBulkCodec.plane_role(path, plane)
+        end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         roles << "#{path}.data"
       else
@@ -338,6 +378,11 @@ module CrystalClick
         roles << "#{path}.discriminators"
         type.child_count.times do |index|
           append_ordinary_roles(type.child_at(index), "#{path}.arm.#{index}", roles)
+        end
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        qbit.plane_count.times do |plane|
+          roles << BinaryQBitBulkCodec.plane_role(path, plane)
         end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_COUNT
         roles << "#{path}.data"

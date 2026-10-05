@@ -101,8 +101,10 @@ scoped source comparison, not a build or runtime certificate for fresh master.
 The current binary type header explicitly reserves 0x33/0x35 after removing
 timezone-bearing Time/Time64 forms. Thus append-only type admission is not an
 invariant. JSON descriptors are versioned, and QBit has separate 0x36/0x37
-tags; dedicated local QBit storage already supports stride, whereas its general
-recursive `BinaryDataType` descriptor remains absent. Set/Function are internal
+tags; at the W178 baseline, dedicated local QBit storage supported stride but
+the general `BinaryDataType` descriptor was absent. The later scoped bridge is
+tracked separately in [QBIT_BINARY_KERNEL_FRONTIER.md](QBIT_BINARY_KERNEL_FRONTIER.md).
+Set/Function are internal
 expression descriptors, not missing MergeTree column serializers.
 
 Root executed `scripts/check_aggregate_count_arguments_w178.rb`, SHA256

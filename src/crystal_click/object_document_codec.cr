@@ -278,6 +278,9 @@ module CrystalClick
       typed_schema.each_value do |type|
         # Bound raw schema recursion before contains_dynamic? traverses it.
         schema_context.validate_type_tree(type)
+        if type.contains_qbit?
+          raise UnsupportedFormatError.new("Object typed QBit descriptor is outside the persisted Object declaration grammar")
+        end
         if type.contains_dynamic?
           unless ObjectRecursiveDeclaration.account_descriptor(type, budget, budget.limits, 2)
             raise UnsupportedFormatError.new("Object typed Dynamic descriptor is outside the recursive declaration grammar")

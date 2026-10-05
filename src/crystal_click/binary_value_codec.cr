@@ -79,6 +79,9 @@ module CrystalClick
       if value.type.contains_aggregate_count?
         raise UnsupportedFormatError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
       end
+      if value.type.contains_qbit?
+        raise UnsupportedFormatError.new("QBit is not admitted as a Dynamic actual type")
+      end
       budget.ensure_wire_bytes(reserved_wire_bytes)
       context = BinaryCodecContext.new(
         budget.limits,
@@ -115,6 +118,9 @@ module CrystalClick
       type = BinaryDataTypeCodec.read_from(context, depth)
       if type.contains_aggregate_count?
         context.unsupported!("AggregateFunction(count) is not admitted as a Dynamic actual type")
+      end
+      if type.contains_qbit?
+        context.unsupported!("QBit is not admitted as a Dynamic actual type")
       end
       value : BinaryValue? = if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(depth)
@@ -185,6 +191,9 @@ module CrystalClick
         size.times { |index| context.write_byte(value.byte_at(index)) }
       when BinaryDataType::TAG_BOOL
         context.write_byte(BoolValueCodec.encode(value.as_bool))
+      when BinaryDataType::TAG_QBIT
+        qbit_type = type.qbit_type || context.unsupported!("QBit descriptor metadata is missing")
+        BinaryQBitValueCodec.write(value.qbit_value, qbit_type, context)
       when BinaryDataType::TAG_ARRAY
         count = value.element_count
         context.preflight_children(count.to_u64) unless count == 0
@@ -277,6 +286,9 @@ module CrystalClick
         BinaryValue.string(String.new(raw))
       when BinaryDataType::TAG_BOOL
         BinaryValue.bool(BoolValueCodec.decode(context.read_byte))
+      when BinaryDataType::TAG_QBIT
+        qbit_type = type.qbit_type || context.unsupported!("QBit descriptor metadata is missing")
+        BinaryValue.qbit(type, BinaryQBitValueCodec.read(qbit_type, context))
       when BinaryDataType::TAG_ARRAY
         raw_count = context.read_var_uint
         count = context.checked_count(raw_count, "Array element count")
@@ -388,6 +400,9 @@ module CrystalClick
       end
       if type.contains_aggregate_count?
         context.unsupported!("AggregateFunction(count) is outside the borrowed persisted-envelope profile")
+      end
+      if type.contains_qbit?
+        context.unsupported!("QBit is outside the borrowed persisted-envelope profile")
       end
     end
   end

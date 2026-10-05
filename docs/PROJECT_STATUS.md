@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current implementation (W178, 2026-10-05): ordinary Count now retains a bounded
+Current qualified capability (W179, 2026-10-05):
+QBit now bridges the existing dedicated reader/writer into nominal binary
+descriptors, owned exact-bit values, scalar RowBinary and normalized bulk
+planes. Int8/BFloat16/Float32/Float64 admit root QBit and direct Nullable(QBit),
+including nondefault stride. Three narrow codec owners have separate files;
+the existing plane codec remains the only bit-transposition owner. Container,
+Dynamic actual, borrowed/typed Object and Count-argument products stay closed,
+including empty selections. The typed Object boundary had an executed RED and
+now has narrow plan/read-schema guards.
+The separately pinned native runtime passes 24 profiles in each direction,
+with all 410 process records and 2,208 copied stock-file hashes reconciled by
+root. Fixtures explicitly pin the full existing W103 Wide/LZ4/plain-mark
+profile; current-server defaults and per-column serializers are not qualified.
+The same 78 selected specs pass 694 examples in DEBUG and 694 in RELEASE,
+partitioned into six disjoint serial cohorts per mode. All twelve actual
+child/guard exits are 0, with zero failures/errors/pending and 977 immutable
+code inputs. Both modes reproduce the 24 native-qualified QBit parts and
+63 native-qualified Count parts byte-for-byte. An executed physical-metadata
+budget bypass fails the unchanged assertion; exact source restoration and
+final gates pass. Scoped verdict: ROBUST for this bridge and finite paired
+witnesses, not arbitrary recursive QBit, the full repository or performance.
+The fresh source snapshot is clean/shallow/unbuilt
+`29e0e201`, distinct from executed stock build `d9bcb5ab`; twelve decisive
+QBit/Count/descriptor files are hash-identical to the previous source snapshot.
+Scope, exact roster, failed profile attempts, guard warning and current evidence:
+[QBIT_BINARY_KERNEL_FRONTIER.md](QBIT_BINARY_KERNEL_FRONTIER.md).
+
+Previous capability checkpoint (W178, 2026-10-05): ordinary Count now retains a bounded
 canonical argument descriptor instead of a closed three-signature discriminator.
 The argument is immutable nominal metadata, not a physical value child; Count
 keeps one VarUInt state lane. Separate grammar, canonical parse policy and
@@ -1024,6 +1051,16 @@ source/runtime identities and executed evidence.
 
 ## What is usable now
 
+- `BinaryDataType.qbit(QBitType)` and `BinaryValue.qbit(QBitValue)` bridge
+  dedicated QBit owners into descriptor/scalar/envelope and normalized bulk
+  codecs for root QBit/direct Nullable(QBit). `qbit_type`, `qbit_value` and exact
+  element/dimension/stride identity remain nominal, not numeric or Array
+  aliases. `BinaryBulkPhysicalPlan` binds zero-based logical plane roles to
+  one-based `payload%2E1` physical names; bulk planes are not scalar raw-element
+  bytes. Existing dedicated part/table/offline consumers remain unchanged.
+  Arbitrary-schema/container-QBit parts and QBit-in-Object remain refused.
+  Final paired gate status is in
+  [the W179 frontier](QBIT_BINARY_KERNEL_FRONTIER.md).
 - W178 pairs ordinary Count with bounded canonical argument metadata through
   logical codecs, complete two-column Wide/LZ4 parts, typed table/window/
   candidate scans and exact DDL-bound offline `.values`. The native certificate
@@ -1295,8 +1332,11 @@ source/runtime identities and executed evidence.
    W172 pairs the nominal Nested descriptor and ordinary logical value/bulk
    kernel; specialized Nested LC/Variant/Dynamic products remain refused.
    The general descriptor kernel admits AggregateFunction only for W178's
-   ordinary Count canonical-argument profile; other aggregate states, Custom,
-   JSON and QBit/QBitWithStride tags remain outside it. SimpleAggregateFunction's tag is
+   ordinary Count canonical-argument profile; other aggregate states, Custom
+   and general JSON remain outside it. W179 now pairs QBit/QBitWithStride tags,
+   scalar RowBinary and normalized bulk for root/direct Nullable only; its
+   finite native matrix does not admit container, borrowed Object or arbitrary
+   complete-part products. SimpleAggregateFunction's tag is
    now paired only within the W163/W164 numeric, W168 text, W169 Decimal and
    W170 temporal profiles.
    This is not an inventory of wholly absent physical types: dedicated Object,
@@ -1458,17 +1498,14 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-095fae58`, revision
-`095fae5865df96627496345209d6bbf2013121f3` (2026-10-05).
+`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-29e0e201`, revision
+`29e0e201c786933171818f17c0fefc2bb11ec0a2` (2026-10-05).
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Against the previous `e9b645ed` snapshot,
-DataTypes/Serializations, Columns, Compression, Formats and AggregateFunctions
-are content-identical. Seven MergeTree files differ: bounded part-local
-row-mask update coalescing, partition parsing/pruning checks, text-index
-caching and private reader accessor cleanup. No persisted type/schema
-serialization or storage-format version edit was found in that bounded
-comparison. Unchanged serializers
-do not imply unchanged framing, metadata or lifecycle behavior. This is
+comparison and earlier identities. Root independently hash-checks 12 explicit
+QBit, Count, aggregate descriptor and binary type encoding files against
+`095fae58`; all are content-identical. This is not an audit of every upstream
+change. Unchanged serializers do not imply unchanged framing, settings,
+metadata or lifecycle behavior. This is
 source evidence only: no executable from this checkout has been built or
 qualified. Source identity and the separately pinned executable oracle must
 not be conflated. Type families persisting across releases also does not

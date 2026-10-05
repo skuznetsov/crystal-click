@@ -19,6 +19,13 @@ module CrystalClick
           aggregate_count_argument_bounds = measure(argument, budget, depth + 1)
         end
       end
+      qbit_element_bounds : Bounds? = nil
+      if type.tag == BinaryDataType::TAG_QBIT
+        # Descriptor element metadata is a real bounded DataType visit, but
+        # not a generic physical/value child.
+        budget.preflight_children(1_u64)
+        qbit_element_bounds = measure(type.qbit_element_descriptor, budget, depth + 1)
+      end
       metadata_count = type.metadata_entry_count.to_u64
       if metadata_count > 0_u64
         budget.preflight_children(metadata_count)
@@ -95,6 +102,14 @@ module CrystalClick
                  type.interval_type.not_nil!.name_byte_size
                when BinaryDataType::TAG_FIXED_STRING
                  add(13_u64, digits(type.fixed_size.not_nil!.to_u64))
+               when BinaryDataType::TAG_QBIT
+                 descriptor = type.qbit_type.not_nil!
+                 total = add(8_u64, descriptor.element_type.bytesize.to_u64)
+                 total = add(total, digits(descriptor.dimension))
+                 if descriptor.stride != descriptor.dimension
+                   total = add(total, add(2_u64, digits(descriptor.stride)))
+                 end
+                 total
                else
                  16_u64
                end
@@ -103,6 +118,9 @@ module CrystalClick
       children.each { |bounds| child_allocations = add(child_allocations, bounds[1]) }
       if argument_bounds = aggregate_count_argument_bounds
         child_allocations = add(child_allocations, argument_bounds[1])
+      end
+      if element_bounds = qbit_element_bounds
+        child_allocations = add(child_allocations, element_bounds[1])
       end
       field_temporaries = 0_u64
       if type.named_tuple?

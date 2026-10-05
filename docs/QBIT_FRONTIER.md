@@ -6,6 +6,16 @@ scalar/Nullable profile below. The verified predecessor is
 The broader types, MV/projection, modularization and later performance goal
 remain active; this certificate does not close them.
 
+W179 separately bridges these dedicated owners into the generic nominal
+descriptor, scalar RowBinary and normalized bulk kernel for root QBit/direct
+Nullable only. It reuses the plane codec and does not broaden this complete-
+part envelope. The current 26.10 stock matrix pins the existing W103 Wide/LZ4/
+plain-mark and empty-column serializer profile explicitly; newer default
+metadata and compressed marks are not admitted by fixture qualification.
+Fresh source/runtime identities, final gate status and scope are recorded in
+[QBIT_BINARY_KERNEL_FRONTIER.md](QBIT_BINARY_KERNEL_FRONTIER.md). No new
+QBit-in-projection or general MV certificate is claimed.
+
 ## Source and measured anchor
 
 Source reference: ClickHouse shallow snapshot

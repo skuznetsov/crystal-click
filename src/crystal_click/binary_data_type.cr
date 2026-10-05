@@ -5,54 +5,57 @@ module CrystalClick
   # W117-W119 descriptor/value kernel. A familiar display name is not enough
   # to admit an otherwise unsupported type or imply broader part support.
   class BinaryDataType
-    TAG_NOTHING          =     0x00_u8
-    TAG_UINT8            =     0x01_u8
-    TAG_UINT16           =     0x02_u8
-    TAG_UINT32           =     0x03_u8
-    TAG_UINT64           =     0x04_u8
-    TAG_UINT128          =     0x05_u8
-    TAG_UINT256          =     0x06_u8
-    TAG_INT8             =     0x07_u8
-    TAG_INT16            =     0x08_u8
-    TAG_INT32            =     0x09_u8
-    TAG_INT64            =     0x0a_u8
-    TAG_INT128           =     0x0b_u8
-    TAG_INT256           =     0x0c_u8
-    TAG_FLOAT32          =     0x0d_u8
-    TAG_FLOAT64          =     0x0e_u8
-    TAG_DATE             =     0x0f_u8
-    TAG_DATE32           =     0x10_u8
-    TAG_DATETIME         =     0x11_u8
-    TAG_DATETIME_ZONE    =     0x12_u8
-    TAG_DATETIME64       =     0x13_u8
-    TAG_DATETIME64_ZONE  =     0x14_u8
-    TAG_STRING           =     0x15_u8
-    TAG_FIXED_STRING     =     0x16_u8
-    TAG_ENUM8            =     0x17_u8
-    TAG_ENUM16           =     0x18_u8
-    TAG_DECIMAL32        =     0x19_u8
-    TAG_DECIMAL64        =     0x1a_u8
-    TAG_DECIMAL128       =     0x1b_u8
-    TAG_DECIMAL256       =     0x1c_u8
-    TAG_UUID             =     0x1d_u8
-    TAG_ARRAY            =     0x1e_u8
-    TAG_UNNAMED_TUPLE    =     0x1f_u8
-    TAG_NAMED_TUPLE      =     0x20_u8
-    TAG_AGGREGATE_COUNT  =     0x25_u8
-    TAG_INTERVAL         =     0x22_u8
-    TAG_LOW_CARDINALITY  =     0x26_u8
-    TAG_NULLABLE         =     0x23_u8
-    TAG_MAP              =     0x27_u8
-    TAG_IPV4             =     0x28_u8
-    TAG_IPV6             =     0x29_u8
-    TAG_VARIANT          =     0x2a_u8
-    TAG_DYNAMIC          =     0x2b_u8
-    TAG_BOOL             =     0x2d_u8
-    TAG_SIMPLE_AGGREGATE =     0x2e_u8
-    TAG_NESTED           =     0x2f_u8
-    TAG_BFLOAT16         =     0x31_u8
-    TAG_TIME             =     0x32_u8
-    TAG_TIME64           =     0x34_u8
+    TAG_NOTHING          = 0x00_u8
+    TAG_UINT8            = 0x01_u8
+    TAG_UINT16           = 0x02_u8
+    TAG_UINT32           = 0x03_u8
+    TAG_UINT64           = 0x04_u8
+    TAG_UINT128          = 0x05_u8
+    TAG_UINT256          = 0x06_u8
+    TAG_INT8             = 0x07_u8
+    TAG_INT16            = 0x08_u8
+    TAG_INT32            = 0x09_u8
+    TAG_INT64            = 0x0a_u8
+    TAG_INT128           = 0x0b_u8
+    TAG_INT256           = 0x0c_u8
+    TAG_FLOAT32          = 0x0d_u8
+    TAG_FLOAT64          = 0x0e_u8
+    TAG_DATE             = 0x0f_u8
+    TAG_DATE32           = 0x10_u8
+    TAG_DATETIME         = 0x11_u8
+    TAG_DATETIME_ZONE    = 0x12_u8
+    TAG_DATETIME64       = 0x13_u8
+    TAG_DATETIME64_ZONE  = 0x14_u8
+    TAG_STRING           = 0x15_u8
+    TAG_FIXED_STRING     = 0x16_u8
+    TAG_ENUM8            = 0x17_u8
+    TAG_ENUM16           = 0x18_u8
+    TAG_DECIMAL32        = 0x19_u8
+    TAG_DECIMAL64        = 0x1a_u8
+    TAG_DECIMAL128       = 0x1b_u8
+    TAG_DECIMAL256       = 0x1c_u8
+    TAG_UUID             = 0x1d_u8
+    TAG_ARRAY            = 0x1e_u8
+    TAG_UNNAMED_TUPLE    = 0x1f_u8
+    TAG_NAMED_TUPLE      = 0x20_u8
+    TAG_AGGREGATE_COUNT  = 0x25_u8
+    TAG_INTERVAL         = 0x22_u8
+    TAG_LOW_CARDINALITY  = 0x26_u8
+    TAG_NULLABLE         = 0x23_u8
+    TAG_MAP              = 0x27_u8
+    TAG_IPV4             = 0x28_u8
+    TAG_IPV6             = 0x29_u8
+    TAG_VARIANT          = 0x2a_u8
+    TAG_DYNAMIC          = 0x2b_u8
+    TAG_BOOL             = 0x2d_u8
+    TAG_SIMPLE_AGGREGATE = 0x2e_u8
+    TAG_NESTED           = 0x2f_u8
+    TAG_BFLOAT16         = 0x31_u8
+    TAG_TIME             = 0x32_u8
+    TAG_TIME64           = 0x34_u8
+    TAG_QBIT             = 0x36_u8
+    TAG_QBIT_STRIDE      = 0x37_u8
+    TAG_QBIT_WITH_STRIDE = TAG_QBIT_STRIDE
     MAX_FIXED_STRING     = 0x00ff_ffff
     MAX_TUPLE_ARITY      =   1_000_000
 
@@ -66,6 +69,7 @@ module CrystalClick
     getter? contains_dynamic : Bool
     getter? contains_nested : Bool
     getter? contains_aggregate_count : Bool
+    getter? contains_qbit : Bool
     getter dynamic_max_types : UInt8?
 
     @primitive_name : String?
@@ -77,6 +81,7 @@ module CrystalClick
     @interval_type : BinaryIntervalType?
     @simple_aggregate_type : BinarySimpleAggregateType?
     @aggregate_count_type : BinaryAggregateCountType?
+    @qbit_type : QBitType?
 
     private def initialize(
       @tag : UInt8,
@@ -91,6 +96,7 @@ module CrystalClick
       @interval_type : BinaryIntervalType? = nil,
       @simple_aggregate_type : BinarySimpleAggregateType? = nil,
       @aggregate_count_type : BinaryAggregateCountType? = nil,
+      @qbit_type : QBitType? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
@@ -102,6 +108,7 @@ module CrystalClick
       # not generic type/value composition children. This summary only marks
       # Count itself and any physical composition child that illegally wraps it.
       @contains_aggregate_count = @tag == TAG_AGGREGATE_COUNT || @children.any?(&.contains_aggregate_count?)
+      @contains_qbit = @tag == TAG_QBIT || @children.any?(&.contains_qbit?)
     end
 
     def self.primitive(name : String) : BinaryDataType
@@ -187,8 +194,16 @@ module CrystalClick
       new(TAG_FIXED_STRING, nil, [] of BinaryDataType, [] of String, size.to_i32)
     end
 
+    # QBit's element type, dimension, and stride are descriptor metadata. The
+    # element descriptor is budgeted by the binary codec but is not a generic
+    # value/physical child.
+    def self.qbit(type : QBitType) : BinaryDataType
+      new(TAG_QBIT, nil, [] of BinaryDataType, [] of String, nil, qbit_type: type)
+    end
+
     def self.array(child : BinaryDataType) : BinaryDataType
       reject_aggregate_count_child!(child)
+      reject_qbit_child!(child)
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
@@ -207,6 +222,7 @@ module CrystalClick
       storage_type : BinaryDataType = primitive("UInt64"),
     ) : BinaryDataType
       reject_aggregate_count_child!(storage_type)
+      reject_qbit_child!(storage_type)
       storage_type_name = case storage_type.tag
                           when TAG_UINT8    then "UInt8"
                           when TAG_UINT16   then "UInt16"
@@ -258,6 +274,9 @@ module CrystalClick
     # UInt64 as its owned in-memory carrier. The optional argument is nominal
     # descriptor metadata and does not become a generic value child.
     def self.aggregate_count(argument : BinaryDataType? = nil) : BinaryDataType
+      if argument && argument.contains_qbit?
+        raise ArgumentError.new("AggregateFunction(count) arguments cannot contain QBit")
+      end
       nominal = BinaryAggregateCountType.new(argument)
       new(TAG_AGGREGATE_COUNT, nil, [] of BinaryDataType, [] of String, nil, aggregate_count_type: nominal)
     end
@@ -271,6 +290,9 @@ module CrystalClick
 
     def self.nullable(child : BinaryDataType) : BinaryDataType
       reject_aggregate_count_child!(child)
+      if child.contains_qbit? && child.tag != TAG_QBIT
+        raise ArgumentError.new("Nullable can contain QBit only as its direct scalar child")
+      end
       if child.tag == TAG_ARRAY || child.tag == TAG_NESTED || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
         raise ArgumentError.new("Nullable cannot directly contain Array, Nested, Map, Nullable, LowCardinality, Variant, or Dynamic")
       end
@@ -305,6 +327,7 @@ module CrystalClick
       end
       arms.each do |arm|
         reject_aggregate_count_child!(arm)
+        reject_qbit_child!(arm)
         if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.tag == TAG_VARIANT || arm.tag == TAG_DYNAMIC
           raise ArgumentError.new("canonical Object Variant roster has a forbidden direct arm")
         end
@@ -324,6 +347,9 @@ module CrystalClick
       variant_depth : Int,
     ) : BinaryDataType
       arms.each do |arm|
+        if arm.contains_qbit?
+          context.corrupt!("QBit is not admitted in a Variant arm")
+        end
         if arm.contains_aggregate_count?
           context.corrupt!("AggregateFunction(count) cannot be nested in a Variant arm")
         end
@@ -345,6 +371,7 @@ module CrystalClick
 
     def self.low_cardinality(child : BinaryDataType) : BinaryDataType
       reject_aggregate_count_child!(child)
+      reject_qbit_child!(child)
       unless BinaryLowCardinalityTypePolicy.admitted_child?(child)
         raise ArgumentError.new("LowCardinality child type is not admitted by ClickHouse")
       end
@@ -353,7 +380,10 @@ module CrystalClick
 
     def self.tuple(children : Array(BinaryDataType), names : Array(String)? = nil) : BinaryDataType
       raise ArgumentError.new("Tuple arity exceeds ClickHouse's supported maximum") if children.size > MAX_TUPLE_ARITY
-      children.each { |child| reject_aggregate_count_child!(child) }
+      children.each do |child|
+        reject_aggregate_count_child!(child)
+        reject_qbit_child!(child)
+      end
 
       if names
         raise ArgumentError.new("Tuple field-name count does not match arity") unless names.size == children.size
@@ -379,6 +409,8 @@ module CrystalClick
     def self.map(key : BinaryDataType, value : BinaryDataType) : BinaryDataType
       reject_aggregate_count_child!(key)
       reject_aggregate_count_child!(value)
+      reject_qbit_child!(key)
+      reject_qbit_child!(value)
       if BinaryLowCardinalityTypePolicy.nullable_map_key?(key)
         raise ArgumentError.new("Map key type cannot be Nullable or LowCardinality(Nullable(...))")
       end
@@ -441,6 +473,18 @@ module CrystalClick
 
     def aggregate_count_type : BinaryAggregateCountType?
       @aggregate_count_type
+    end
+
+    def qbit_type : QBitType?
+      @qbit_type
+    end
+
+    # The binary DataType grammar embeds QBit's element type as metadata. Keep
+    # that descriptor separate from #children so generic value/physical
+    # visitors do not mistake it for a stored value child.
+    def qbit_element_descriptor : BinaryDataType
+      descriptor = @qbit_type || raise ArgumentError.new("DataType is not QBit")
+      BinaryDataType.primitive(descriptor.element_type)
     end
 
     # Return the exact immutable descriptor held by Count's nominal metadata.
@@ -507,6 +551,8 @@ module CrystalClick
         "SimpleAggregateFunction(#{@simple_aggregate_type.not_nil!.function_name}, #{@children[0].name})"
       when TAG_AGGREGATE_COUNT
         @aggregate_count_type.not_nil!.type_name
+      when TAG_QBIT
+        @qbit_type.not_nil!.type_name
       when TAG_MAP
         "Map(#{@children[0].name}, #{@children[1].name})"
       when TAG_VARIANT
@@ -595,6 +641,7 @@ module CrystalClick
       return false unless @interval_type == other.@interval_type
       return false unless @simple_aggregate_type == other.@simple_aggregate_type
       return false unless @aggregate_count_type == other.@aggregate_count_type
+      return false unless @qbit_type == other.@qbit_type
       return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
@@ -605,11 +652,17 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @qbit_type, @children, @field_names
 
     private def self.reject_aggregate_count_child!(type : BinaryDataType) : Nil
       if type.contains_aggregate_count?
         raise ArgumentError.new("AggregateFunction(count) is admitted only as a top-level scalar type")
+      end
+    end
+
+    private def self.reject_qbit_child!(type : BinaryDataType) : Nil
+      if type.contains_qbit?
+        raise ArgumentError.new("QBit is admitted only as a root scalar or direct Nullable child")
       end
     end
 

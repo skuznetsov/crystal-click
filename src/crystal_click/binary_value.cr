@@ -9,6 +9,7 @@ module CrystalClick
     @elements : Array(BinaryValue)
     @null : Bool
     @variant_index : UInt8?
+    @qbit_value : QBitValue?
 
     private def initialize(
       @type : BinaryDataType,
@@ -16,6 +17,7 @@ module CrystalClick
       elements : Array(BinaryValue) = [] of BinaryValue,
       @null : Bool = false,
       @variant_index : UInt8? = nil,
+      @qbit_value : QBitValue? = nil,
     )
       @payload = payload.try { |bytes| Bytes.new(bytes.size) { |index| bytes[index] } }
       @elements = elements.dup
@@ -54,6 +56,19 @@ module CrystalClick
         raise ArgumentError.new("fixed binary payload width does not match its type")
       end
       new(type, bytes)
+    end
+
+    # Retain one immutable QBitValue owner instead of copying its potentially
+    # large raw row into the generic scalar payload buffer.
+    def self.qbit(value : QBitValue) : BinaryValue
+      qbit(BinaryDataType.qbit(value.type), value)
+    end
+
+    def self.qbit(type : BinaryDataType, value : QBitValue) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_QBIT && type.qbit_type == value.type
+        raise ArgumentError.new("QBit value type does not match its nominal descriptor")
+      end
+      new(type, nil, [] of BinaryValue, false, nil, value)
     end
 
     def self.string(value : String) : BinaryValue
@@ -114,6 +129,9 @@ module CrystalClick
       end
       if child && child.type.contains_aggregate_count?
         raise ArgumentError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
+      end
+      if child && child.type.contains_qbit?
+        raise ArgumentError.new("QBit is not admitted as a Dynamic actual type")
       end
       if child && child.type.tag == BinaryDataType::TAG_NOTHING
         unless child.is_null?
@@ -245,17 +263,30 @@ module CrystalClick
 
     # A detached payload snapshot. Container values have no scalar payload.
     def bytes : Bytes
+      return @qbit_value.not_nil!.raw_bytes if @qbit_value
       payload = @payload || raise ArgumentError.new("value has no scalar byte payload")
       Bytes.new(payload.size) { |index| payload[index] }
     end
 
     # Cheap size for preflight checks. It excludes any VarUInt/string header.
     def byte_size : Int32
+      return @qbit_value.not_nil!.raw_bytesize if @qbit_value
       @payload.try(&.size) || 0
     end
 
     def byte_at(index : Int) : UInt8
+      if value = @qbit_value
+        if index < 0 || index >= value.raw_bytesize
+          raise IndexError.new("QBit raw byte index is outside the row")
+        end
+        return value.raw_byte_at(index.to_i32)
+      end
       (@payload || raise ArgumentError.new("value has no scalar byte payload"))[index]
+    end
+
+    def qbit_value : QBitValue
+      require_tag(BinaryDataType::TAG_QBIT, "QBit")
+      @qbit_value || raise ArgumentError.new("QBit value has no owned raw row")
     end
 
     def elements : Array(BinaryValue)
@@ -280,6 +311,37 @@ module CrystalClick
 
     def is_null? : Bool
       @null
+    end
+
+    # QBit's owner supplies bit-exact equality. Preserve identity semantics for
+    # the pre-existing non-QBit BinaryValue cases while supporting the newly
+    # admitted QBit and Nullable(QBit) round trips.
+    def ==(other : BinaryValue) : Bool
+      return false unless @type == other.@type
+      return same?(other) unless @type.contains_qbit?
+      return false unless @null == other.@null
+      return true if @null
+      if @type.tag == BinaryDataType::TAG_QBIT
+        qbit_value == other.qbit_value
+      else
+        @elements.size == 1 && other.@elements.size == 1 && @elements[0] == other.@elements[0]
+      end
+    end
+
+    def hash(hasher)
+      unless @type.contains_qbit?
+        return object_id.hash(hasher)
+      end
+      hasher = @type.hash(hasher)
+      hasher = @null.hash(hasher)
+      unless @null
+        if @type.tag == BinaryDataType::TAG_QBIT
+          hasher = qbit_value.hash(hasher)
+        else
+          hasher = @elements[0].hash(hasher)
+        end
+      end
+      hasher
     end
 
     def variant_index? : UInt8?

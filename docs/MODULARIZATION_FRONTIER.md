@@ -9,7 +9,33 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility separation — W178
+## Current responsibility separation — W179
+
+Three cohesive QBit binary-kernel owners have separate files:
+`BinaryQBitTypeCodec` (59 lines) owns descriptor-only element metadata and
+canonical tag choice; `BinaryQBitValueCodec` (32) owns dimension/raw-element
+RowBinary framing; `BinaryQBitBulkCodec` (225) owns bounded root/Nullable
+admission, plane-role metadata and the bridge to the existing single
+`QBitPlaneCodec` transposition owner. General visitors retain dispatch and
+operation budgets; no separate serializer is added per carrier or shape.
+Typed Object schema owners explicitly refuse this unqualified persisted
+product, including empty selections. The bridge does not widen complete-part
+schema or projection admission.
+
+Native fixture layout is explicitly pinned to the existing W103 Wide/LZ4/
+plain-mark profile, rather than broadening reader admission to current-server
+defaults. Root qualifies the same 78 selected specs with 694 examples in each
+of DEBUG and RELEASE, zero failures/errors/pending, immutable inputs and
+actual child/guard exit 0. The paired 24+24 native matrix, byte-identical
+exports, executed guard falsifier and scoped ROBUST verdict are recorded in
+[QBIT_BINARY_KERNEL_FRONTIER.md](QBIT_BINARY_KERNEL_FRONTIER.md).
+This is a capability/ownership slice, not a behavior-neutral large-facade
+move or proof of lower coupling, total allocation/RSS or throughput. Facades
+remain 16,357/25,781/7,312/4,065/1,560 lines for reader/writer/table/offline table/
+offline catalog. Overall architecture cleanup remains IN_PROGRESS; memory/
+performance stays deferred until types and MV/projections.
+
+## Previous responsibility separation — W178
 
 Count argument admission now uses cohesive loaded owners in separate files:
 `BinaryAggregateCountArgumentNameReader` (362 lines) owns bounded recursive

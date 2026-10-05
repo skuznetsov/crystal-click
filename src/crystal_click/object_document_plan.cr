@@ -50,6 +50,9 @@ module CrystalClick
         # generic walk preserves the constructor's prior ordinary-field
         # admission policy while making the new recursive predicate finite.
         schema_context.validate_type_tree(type, 2)
+        if type.contains_qbit?
+          raise ArgumentError.new("typed Object QBit descriptor is outside the persisted Object declaration grammar")
+        end
         if structures.object.has_dynamic_path?(path)
           raise ArgumentError.new("typed and Dynamic Object paths must be disjoint")
         end
