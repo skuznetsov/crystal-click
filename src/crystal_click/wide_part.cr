@@ -2408,6 +2408,90 @@ module CrystalClick
       end
     end
 
+    # Read the exact stored SimpleAggregateFunction(String) child. The nominal
+    # function remains gated before consuming variable-size streams; this does
+    # not widen the ordinary String accessor.
+    def read_simple_aggregate_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String)
+      plan = ensure_simple_aggregate_text_plan(column)
+      raise UnsupportedFormatError.new("SimpleAggregateFunction(String) accessor requires scalar String metadata") unless plan.variable_string? && !plan.nullable?
+      read_simple_aggregate_string_values_with_raw_bytes(column, first_mark, mark_count)[0]
+    end
+
+    # Table scans use this form to compare decoded slots to the same variable-
+    # width size-lane byte count admitted during preflight.
+    def read_simple_aggregate_string_mark_range_with_raw_bytes(column : String, first_mark : Int, mark_count : Int) : {Array(String), UInt64}
+      plan = ensure_simple_aggregate_text_plan(column)
+      raise UnsupportedFormatError.new("SimpleAggregateFunction(String) accessor requires scalar String metadata") unless plan.variable_string? && !plan.nullable?
+      read_simple_aggregate_string_values_with_raw_bytes(column, first_mark, mark_count)
+    end
+
+    # Read the exact outer Nullable(SimpleAggregateFunction(String)) child.
+    # The nested String sizes and bytes are consumed even beneath NULL rows.
+    def read_nullable_simple_aggregate_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String?)
+      plan = ensure_simple_aggregate_text_plan(column)
+      raise UnsupportedFormatError.new("Nullable SimpleAggregateFunction(String) accessor requires outer Nullable metadata") unless plan.variable_string? && plan.nullable?
+      read_nullable_simple_aggregate_string_values_with_raw_bytes(column, first_mark, mark_count)[0]
+    end
+
+    # The payload size vector includes nested bytes underneath NULL rows; keep
+    # its total beside decoded values for table-budget verification.
+    def read_nullable_simple_aggregate_string_mark_range_with_raw_bytes(column : String, first_mark : Int, mark_count : Int) : {Array(String?), UInt64}
+      plan = ensure_simple_aggregate_text_plan(column)
+      raise UnsupportedFormatError.new("Nullable SimpleAggregateFunction(String) accessor requires outer Nullable metadata") unless plan.variable_string? && plan.nullable?
+      read_nullable_simple_aggregate_string_values_with_raw_bytes(column, first_mark, mark_count)
+    end
+
+    # FixedString SAF readers retain the nominal aggregate/function and child
+    # width checks while returning the same N-byte padded String carrier as
+    # the ordinary public FixedString accessor.
+    def read_simple_aggregate_fixed_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String)
+      plan = ensure_simple_aggregate_text_plan(column)
+      width = plan.fixed_string_width || raise(UnsupportedFormatError.new("SimpleAggregateFunction(FixedString) accessor requires a FixedString child"))
+      raise UnsupportedFormatError.new("SimpleAggregateFunction(FixedString) accessor requires scalar metadata") if plan.nullable?
+      read_fixed_string_values(column, first_mark, mark_count, width)
+    end
+
+    def read_nullable_simple_aggregate_fixed_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String?)
+      plan = ensure_simple_aggregate_text_plan(column)
+      width = plan.fixed_string_width || raise(UnsupportedFormatError.new("SimpleAggregateFunction(FixedString) accessor requires a FixedString child"))
+      raise UnsupportedFormatError.new("Nullable SimpleAggregateFunction(FixedString) accessor requires outer Nullable metadata") unless plan.nullable?
+      read_nullable_fixed_string_values(column, first_mark, mark_count, width)
+    end
+
+    # SAF-specific byte preflights keep String variable-width and FixedString
+    # explicitly width-bound, without routing either through numeric raw_width.
+    def simple_aggregate_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      plan = ensure_simple_aggregate_text_plan(column)
+      raise UnsupportedFormatError.new("SimpleAggregateFunction(String) preflight requires scalar String metadata") unless plan.variable_string? && !plan.nullable?
+      _, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      total_bytes
+    end
+
+    def nullable_simple_aggregate_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      plan = ensure_simple_aggregate_text_plan(column)
+      raise UnsupportedFormatError.new("Nullable SimpleAggregateFunction(String) preflight requires outer Nullable metadata") unless plan.variable_string? && plan.nullable?
+      _, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      total_bytes
+    end
+
+    def simple_aggregate_fixed_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      plan = ensure_simple_aggregate_text_plan(column)
+      width = plan.fixed_string_width || raise(UnsupportedFormatError.new("SimpleAggregateFunction(FixedString) preflight requires a FixedString child"))
+      raise UnsupportedFormatError.new("SimpleAggregateFunction(FixedString) preflight requires scalar metadata") if plan.nullable?
+      _, _, rows = checked_stream_mark_range(@streams[column], first_mark, mark_count)
+      checked_fixed_string_byte_count(rows, width).to_u64
+    end
+
+    def nullable_simple_aggregate_fixed_string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
+      plan = ensure_simple_aggregate_text_plan(column)
+      width = plan.fixed_string_width || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction(FixedString) preflight requires a FixedString child"))
+      raise UnsupportedFormatError.new("Nullable SimpleAggregateFunction(FixedString) preflight requires outer Nullable metadata") unless plan.nullable?
+      _, _, null_rows = checked_stream_mark_range(@streams["#{column}.null"], first_mark, mark_count)
+      _, _, value_rows = checked_stream_mark_range(@streams[column], first_mark, mark_count)
+      raise CorruptPartError.new("Nullable SimpleAggregateFunction(FixedString) substream mark rows differ") unless null_rows == value_rows
+      checked_fixed_string_byte_count(value_rows, width).to_u64
+    end
+
     # Time uses signed raw Int32 seconds. The exact semantic type gate keeps
     # this distinct from a primitive Int32 declaration.
     def read_time_seconds_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(Int32)
@@ -11215,6 +11299,8 @@ module CrystalClick
                                    stream_name == "#{@column}%2Ekeys.size" || stream_name == "#{@column}%2Ekeys" ||
                                      stream_name == "#{@column}%2Evalues.null" || stream_name == "#{@column}%2Evalues.size" ||
                                      stream_name == "#{@column}%2Evalues"
+                                 elsif text_plan = SimpleAggregateTextStoragePlan.for_type_name(@column_type)
+                                   text_plan.empty_payload_stream?(@column, stream_name)
                                  elsif tuple_plan = WideTupleTypePlan.for_type(@column_type)
                                    tuple_plan.raw_string_stream?(@column, stream_name)
                                  else
@@ -11661,6 +11747,8 @@ module CrystalClick
         ["#{column}.dynamic_structure", "#{column}.variant_discr", "#{column}.SharedVariant.size", "#{column}.SharedVariant", "#{column}.String.size", "#{column}.String"]
       elsif interval_type = IntervalColumnType.parse(type)
         interval_type.shape == IntervalColumnType::Shape::Nullable ? ["#{column}.null", column] : [column]
+      elsif text_plan = SimpleAggregateTextStoragePlan.for_type_name(type)
+        text_plan.physical_streams(column)
       elsif aggregate_type = SimpleAggregateColumnType.parse(type)
         aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable ? ["#{column}.null", column] : [column]
       elsif plan = GeometryColumnType.for_type(type)
@@ -13749,6 +13837,8 @@ module CrystalClick
         else
           interval_type.raw_width
         end
+      elsif text_plan = SimpleAggregateTextStoragePlan.for_type_name(@column_type)
+        text_plan.stream_width(@column, stream_name)
       elsif aggregate_type = SimpleAggregateColumnType.parse(@column_type)
         if aggregate_type.shape == SimpleAggregateColumnType::Shape::Nullable
           stream_name == "#{@column}.null" ? 1 : aggregate_type.raw_width
@@ -14632,6 +14722,86 @@ module CrystalClick
 
     private def ensure_column(column : String)
       raise UnsupportedFormatError.new("column is not present") unless column == @column
+    end
+
+    private def ensure_simple_aggregate_text_plan(column : String) : SimpleAggregateTextStoragePlan
+      ensure_column(column)
+      SimpleAggregateTextStoragePlan.for_type_name(@column_type) ||
+        raise(UnsupportedFormatError.new("accessor requires an admitted SimpleAggregateFunction String or FixedString child"))
+    end
+
+    private def read_simple_aggregate_string_values_with_raw_bytes(column : String, first_mark : Int, mark_count : Int) : {Array(String), UInt64}
+      string_stream = @streams[column]
+      sizes, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(string_stream, first_mark, mark_count)
+      raise CorruptPartError.new("SimpleAggregateFunction(String) payload mark rows differ from sizes") unless raw_rows == sizes.size.to_u64
+      raw_bytes = read_mark_range_bytes(string_stream, raw_start, raw_end, total_bytes.to_i, 1)
+      values = Array(String).new(sizes.size)
+      StringPayloadDecoder.each(sizes, raw_bytes, "SimpleAggregateFunction(String)") do |string_value, _index|
+        values << string_value
+        nil
+      end
+      {values, total_bytes}
+    end
+
+    private def read_nullable_simple_aggregate_string_values_with_raw_bytes(column : String, first_mark : Int, mark_count : Int) : {Array(String?), UInt64}
+      null_stream = @streams["#{column}.null"]
+      string_stream = @streams[column]
+      null_start, null_end, null_rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      sizes, total_bytes = read_string_sizes(column, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable SimpleAggregateFunction(String) null-map mark rows differ") unless null_rows == sizes.size.to_u64
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(null_rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      raw_start, raw_end, raw_rows = checked_stream_mark_range(string_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable SimpleAggregateFunction(String) payload mark rows differ from sizes") unless raw_rows == sizes.size.to_u64
+      raw_bytes = read_mark_range_bytes(string_stream, raw_start, raw_end, total_bytes.to_i, 1)
+      values = Array(String?).new(sizes.size)
+      offset = 0
+      sizes.each_with_index do |size, index|
+        length = size.to_i
+        values << (null_map[index] == 1 ? nil : String.new(raw_bytes[offset, length]))
+        offset += length
+      end
+      raise CorruptPartError.new("Nullable SimpleAggregateFunction(String) sizes do not consume payload bytes") unless offset == raw_bytes.size
+      {values, total_bytes}
+    end
+
+    private def read_fixed_string_values(column : String, first_mark : Int, mark_count : Int, width : Int32) : Array(String)
+      stream = @streams[column]
+      start_mark, end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
+      expected_bytes = checked_fixed_string_byte_count(rows, width)
+      raw_bytes = read_mark_range_bytes(stream, start_mark, end_mark, expected_bytes, width)
+      values = Array(String).new(rows.to_i)
+      offset = 0
+      rows.to_i.times do
+        values << String.new(raw_bytes[offset, width])
+        offset += width
+      end
+      raise CorruptPartError.new("SimpleAggregateFunction(FixedString) values do not consume payload bytes") unless offset == raw_bytes.size
+      values
+    end
+
+    private def read_nullable_fixed_string_values(column : String, first_mark : Int, mark_count : Int, width : Int32) : Array(String?)
+      null_stream = @streams["#{column}.null"]
+      value_stream = @streams[column]
+      null_start, null_end, rows = checked_stream_mark_range(null_stream, first_mark, mark_count)
+      value_start, value_end, value_rows = checked_stream_mark_range(value_stream, first_mark, mark_count)
+      raise CorruptPartError.new("Nullable SimpleAggregateFunction(FixedString) substream mark rows differ") unless rows == value_rows
+      null_map = read_mark_range_bytes(null_stream, null_start, null_end, checked_byte_count(rows, 1), 1)
+      null_map.each do |value|
+        raise CorruptPartError.new("Nullable null-map byte is not boolean") unless value == 0 || value == 1
+      end
+      nested_bytes = read_mark_range_bytes(value_stream, value_start, value_end, checked_fixed_string_byte_count(rows, width), width)
+      values = Array(String?).new(rows.to_i)
+      offset = 0
+      null_map.each do |is_null|
+        values << (is_null == 1 ? nil : String.new(nested_bytes[offset, width]))
+        offset += width
+      end
+      raise CorruptPartError.new("Nullable SimpleAggregateFunction(FixedString) values do not consume payload bytes") unless offset == nested_bytes.size
+      values
     end
 
     private def ensure_qbit_reader_type(column : String, nullable : Bool?) : QBitColumnType
@@ -15679,6 +15849,8 @@ module CrystalClick
                              elsif tuple_plan = WideTupleTypePlan.for_type(@column_type)
                                tuple_profile = true
                                tuple_plan.raw_string_stream?(@column, stream.name)
+                             elsif text_plan = SimpleAggregateTextStoragePlan.for_type_name(@column_type)
+                               text_plan.empty_payload_stream?(@column, stream.name)
                              else
                                stream.name == @column && (@column_type == "String" || WidePart.supports_nullable_string_type?(@column_type))
                              end

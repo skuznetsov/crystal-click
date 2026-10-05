@@ -106,7 +106,7 @@ private def w161_guard_change_mark_rows(part : String, stream : String, mark_ind
 end
 
 describe "W161 SimpleAggregateFunction negative admission and publication guards" do
-  it "rejects validly encoded nonzero parameters, bad arities, unknown functions and wrappers" do
+  it "rejects validly encoded nonzero parameters, bad arities, unknown functions and unsupported wrappers" do
     W161_SIMPLE_AGGREGATE_TYPES.each do |name, _suffix, _function|
       # Field::UInt64 is 0x01 followed by VarUInt(1); the malformed profile is
       # otherwise structurally complete, so rejection is semantic, not truncation.
@@ -137,10 +137,22 @@ describe "W161 SimpleAggregateFunction negative admission and publication guards
         CrystalClick::BinaryDataTypeCodec.decode(Bytes.new(multiple_arguments.size) { |i| multiple_arguments[i] })
       end
 
+      string_child = W161SimpleAggregateTestSupport.descriptor(name, arguments: [0x15_u8])
+      if name == "any" || name == "anyLast" || name == "min" || name == "max"
+        decoded_string = CrystalClick::BinaryDataTypeCodec.decode(
+          Bytes.new(string_child.size) { |i| string_child[i] }
+        )
+        decoded_string.name.should eq("SimpleAggregateFunction(#{name}, String)")
+        decoded_string.child_at(0).tag.should eq(CrystalClick::BinaryDataType::TAG_STRING)
+      else
+        expect_raises(CrystalClick::UnsupportedFormatError) do
+          CrystalClick::BinaryDataTypeCodec.decode(Bytes.new(string_child.size) { |i| string_child[i] })
+        end
+      end
+
       [
-        [0x15_u8],          # String
-        [0x23_u8, 0x04_u8], # Nullable(UInt64), still unary
-        [0x26_u8, 0x04_u8], # LowCardinality(UInt64), still unary
+        [0x23_u8, 0x04_u8], # Nullable(UInt64), still a wrapped child
+        [0x26_u8, 0x04_u8], # LowCardinality(UInt64), still a wrapped child
       ].each do |carrier|
         wrong_storage = W161SimpleAggregateTestSupport.descriptor(name, arguments: carrier)
         expect_raises(CrystalClick::UnsupportedFormatError) do
@@ -249,10 +261,17 @@ describe "W161 SimpleAggregateFunction negative admission and publication guards
     end
   end
 
-  it "rejects unsupported constructors, wrong nominal children and LowCardinality wrapper admission" do
+  it "admits eligible text storage while rejecting unsupported constructors, wrong children and wrappers" do
     function = CrystalClick::BinarySimpleAggregateType::Function::Min
+    string_type = CrystalClick::BinaryDataType.primitive("String")
+    string_minimum = CrystalClick::BinaryDataType.simple_aggregate(function, string_type)
+    string_minimum.name.should eq("SimpleAggregateFunction(min, String)")
+    string_minimum.child_at(0).should eq(string_type)
     expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.simple_aggregate(function, CrystalClick::BinaryDataType.primitive("String"))
+      CrystalClick::BinaryDataType.simple_aggregate(
+        CrystalClick::BinarySimpleAggregateType::Function::Sum,
+        string_type
+      )
     end
 
     minimum = CrystalClick::BinaryDataType.simple_aggregate(function)

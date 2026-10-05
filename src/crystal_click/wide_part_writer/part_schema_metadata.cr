@@ -437,6 +437,11 @@ module CrystalClick
       end
 
       def self.typed_substreams_metadata(key_name : String, value_name : String, type_name : String) : String
+        if plan = SimpleAggregateTextStoragePlan.for_type_name(type_name)
+          value_streams = plan.physical_streams(value_name)
+          return typed_substreams_metadata_for_streams(key_name, value_name, value_streams)
+        end
+
         value_streams = if type_name == "String"
                           ["#{value_name}.size", value_name]
                         elsif type_name == "Nullable(String)"
@@ -446,6 +451,14 @@ module CrystalClick
                         else
                           [value_name]
                         end
+        typed_substreams_metadata_for_streams(key_name, value_name, value_streams)
+      end
+
+      private def self.typed_substreams_metadata_for_streams(
+        key_name : String,
+        value_name : String,
+        value_streams : Array(String),
+      ) : String
         payload = IO::Memory.new
         payload << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
         payload << "#{value_streams.size} substreams for column `#{value_name}`:\n"
@@ -454,7 +467,9 @@ module CrystalClick
       end
 
       def self.typed_serialization_metadata(type_name : String) : String
-        versions = if type_name == "String"
+        versions = if plan = SimpleAggregateTextStoragePlan.for_type_name(type_name)
+                     plan.nullable? ? "\"nullable\":0,\"string\":1" : "\"string\":1"
+                   elsif type_name == "String"
                      "\"string\":1"
                    elsif type_name == "Nullable(String)"
                      "\"nullable\":0,\"string\":1"

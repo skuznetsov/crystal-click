@@ -916,6 +916,24 @@ module CrystalClick
       @column_values[index].as(Slice(T))
     end
 
+    def simple_aggregate_strings_for(column : String) : Slice(String)
+      index = column_index(column)
+      plan = SimpleAggregateTextStoragePlan.for_type_name(@column_types[index])
+      unless plan && !plan.nullable? && plan.variable_string?
+        raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires exact scalar String storage")
+      end
+      @string_values[column]? || raise(UnsupportedFormatError.new("SimpleAggregateFunction(String) column was not materialized in this batch"))
+    end
+
+    def simple_aggregate_fixed_strings_for(column : String) : Slice(String)
+      index = column_index(column)
+      plan = SimpleAggregateTextStoragePlan.for_type_name(@column_types[index])
+      unless plan && !plan.nullable? && !plan.fixed_string_width.nil?
+        raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires exact scalar FixedString(N) storage")
+      end
+      @fixed_string_values[column]? || raise(UnsupportedFormatError.new("SimpleAggregateFunction(FixedString) column was not materialized in this batch"))
+    end
+
     def time_seconds_for(column : String) : Slice(Int32)
       index = column_index(column)
       raise UnsupportedFormatError.new("Time accessor requires an exact Time column") unless @column_types[index] == "Time"
@@ -2179,6 +2197,24 @@ module CrystalClick
       @nullable_values[column]?.try(&.as(Slice(T?))) || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction column was not materialized in this batch"))
     end
 
+    def nullable_simple_aggregate_strings_for(column : String) : Slice(String?)
+      index = column_index(column)
+      plan = SimpleAggregateTextStoragePlan.for_type_name(@column_types[index])
+      unless plan && plan.nullable? && plan.variable_string?
+        raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires exact outer Nullable String storage")
+      end
+      @nullable_string_values[column]? || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction(String) column was not materialized in this batch"))
+    end
+
+    def nullable_simple_aggregate_fixed_strings_for(column : String) : Slice(String?)
+      index = column_index(column)
+      plan = SimpleAggregateTextStoragePlan.for_type_name(@column_types[index])
+      unless plan && plan.nullable? && !plan.fixed_string_width.nil?
+        raise UnsupportedFormatError.new("SimpleAggregateFunction accessor requires exact outer Nullable FixedString(N) storage")
+      end
+      @nullable_fixed_string_values[column]? || raise(UnsupportedFormatError.new("Nullable SimpleAggregateFunction(FixedString) column was not materialized in this batch"))
+    end
+
     def nullable_time_seconds_for(column : String) : Slice(Int32?)
       index = column_index(column)
       raise UnsupportedFormatError.new("Nullable(Time) accessor requires an exact Nullable(Time) column") unless @column_types[index] == "Nullable(Time)"
@@ -2526,6 +2562,7 @@ module CrystalClick
             # parts contract is not transactional; the actual aggregate is
             # checked again before callback exposure.
             preflight_string_bytes = 0_u64
+            preflight_simple_aggregate_text_bytes = Hash(String, UInt64).new
             preflight_qbit_charges = Hash(String, UInt64).new
             preflight_point_charges = Hash(String, UInt64).new
             preflight_geometry_charges = Hash(String, UInt64).new
@@ -2716,6 +2753,19 @@ module CrystalClick
                 )
                 preflight_map_tuple_reader_charges[selected.name] = charge
                 bytes = charge
+              elsif plan = SimpleAggregateTextStoragePlan.for_type_name(selected.column_type)
+                bytes = if plan.variable_string?
+                          if plan.nullable?
+                            selected.reader.nullable_simple_aggregate_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                          else
+                            selected.reader.simple_aggregate_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                          end
+                        elsif plan.nullable?
+                          selected.reader.nullable_simple_aggregate_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                        else
+                          selected.reader.simple_aggregate_fixed_string_mark_range_raw_bytes(selected.name, mark_index, 1)
+                        end
+                preflight_simple_aggregate_text_bytes[selected.name] = bytes
               elsif selected.column_type == "String" || WidePart.supports_nullable_string_type?(selected.column_type)
                 bytes = if selected.column_type == "String"
                           selected.reader.string_mark_range_raw_bytes(selected.name, mark_index, 1)
@@ -3528,6 +3578,60 @@ module CrystalClick
                 raise CorruptPartError.new("selected temporal Array mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
                 actual_string_bytes += bytes
                 array_numeric_values[selected.name] = values
+              when .starts_with?("SimpleAggregateFunction(")
+                if plan = SimpleAggregateTextStoragePlan.for_type_name(selected.column_type)
+                  expected_bytes = preflight_simple_aggregate_text_bytes[selected.name]? ||
+                                   raise(CorruptPartError.new("selected SimpleAggregateFunction text mark was not preflighted"))
+                  if plan.variable_string?
+                    values, bytes = selected.reader.read_simple_aggregate_string_mark_range_with_raw_bytes(selected.name, mark_index, 1)
+                    raise CorruptPartError.new("selected SimpleAggregateFunction(String) mark row count changed") unless values.size.to_u64 == mark_rows
+                    raise CorruptPartError.new("selected SimpleAggregateFunction(String) decoded bytes differ from preflight") unless bytes == expected_bytes
+                    raise CorruptPartError.new("selected SimpleAggregateFunction(String) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                    actual_string_bytes += bytes
+                    string_values[selected.name] = values
+                  else
+                    width = plan.fixed_string_width || raise(UnsupportedFormatError.new("unsupported SimpleAggregateFunction text storage"))
+                    values = selected.reader.read_simple_aggregate_fixed_string_mark_range(selected.name, mark_index, 1)
+                    raise CorruptPartError.new("selected SimpleAggregateFunction(FixedString) mark row count changed") unless values.size.to_u64 == mark_rows
+                    bytes = values.size.to_u64 * width.to_u64
+                    raise CorruptPartError.new("selected SimpleAggregateFunction(FixedString) decoded bytes differ from preflight") unless bytes == expected_bytes
+                    raise CorruptPartError.new("selected SimpleAggregateFunction(FixedString) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                    actual_string_bytes += bytes
+                    fixed_string_values[selected.name] = values
+                  end
+                else
+                  values = read_numeric_values(selected, mark_index)
+                  raise CorruptPartError.new("selected column mark row count changed") unless values.size.to_u64 == mark_rows
+                  numeric_values[selected.name] = values
+                end
+              when .starts_with?("Nullable(SimpleAggregateFunction(")
+                if plan = SimpleAggregateTextStoragePlan.for_type_name(selected.column_type)
+                  expected_bytes = preflight_simple_aggregate_text_bytes[selected.name]? ||
+                                   raise(CorruptPartError.new("selected Nullable SimpleAggregateFunction text mark was not preflighted"))
+                  if plan.variable_string?
+                    values, bytes = selected.reader.read_nullable_simple_aggregate_string_mark_range_with_raw_bytes(selected.name, mark_index, 1)
+                    raise CorruptPartError.new("selected Nullable SimpleAggregateFunction(String) mark row count changed") unless values.size.to_u64 == mark_rows
+                    raise CorruptPartError.new("selected Nullable SimpleAggregateFunction(String) decoded bytes differ from preflight") unless bytes == expected_bytes
+                    raise CorruptPartError.new("selected Nullable SimpleAggregateFunction(String) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                    actual_string_bytes += bytes
+                    nullable_string_values[selected.name] = values
+                  else
+                    width = plan.fixed_string_width || raise(UnsupportedFormatError.new("unsupported Nullable SimpleAggregateFunction text storage"))
+                    values = selected.reader.read_nullable_simple_aggregate_fixed_string_mark_range(selected.name, mark_index, 1)
+                    raise CorruptPartError.new("selected Nullable SimpleAggregateFunction(FixedString) mark row count changed") unless values.size.to_u64 == mark_rows
+                    # BASIC Nullable(FixedString(N)) stores one N-byte nested
+                    # slot for every row, including rows visible as NULL.
+                    bytes = values.size.to_u64 * width.to_u64
+                    raise CorruptPartError.new("selected Nullable SimpleAggregateFunction(FixedString) decoded bytes differ from preflight") unless bytes == expected_bytes
+                    raise CorruptPartError.new("selected Nullable SimpleAggregateFunction(FixedString) mark exceeds aggregate materialization limit") if bytes > MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+                    actual_string_bytes += bytes
+                    nullable_fixed_string_values[selected.name] = values
+                  end
+                else
+                  values = read_nullable_values(selected, mark_index)
+                  raise CorruptPartError.new("selected Nullable column mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
+                  nullable_values[selected.name] = values
+                end
               when "String"
                 values = selected.reader.read_string_mark_range(selected.name, mark_index, 1)
                 raise CorruptPartError.new("selected String mark row count changed") unless values.size.to_u64 == mark_rows

@@ -200,10 +200,17 @@ module CrystalClick
                           when TAG_FLOAT32  then "Float32"
                           when TAG_FLOAT64  then "Float64"
                           when TAG_BFLOAT16 then "BFloat16"
+                          when TAG_STRING   then "String"
+                          when TAG_FIXED_STRING
+                            width = storage_type.fixed_size.not_nil!
+                            unless width <= BinarySimpleAggregateType::MAX_FIXED_STRING_WIDTH
+                              raise ArgumentError.new("SimpleAggregateFunction FixedString width exceeds the admitted library limit")
+                            end
+                            "FixedString(#{width})"
                           else
                             # Reject from the exact tag before asking an
                             # arbitrary child to render a recursive SQL name.
-                            raise ArgumentError.new("SimpleAggregateFunction storage type is outside the admitted numeric profile")
+                            raise ArgumentError.new("SimpleAggregateFunction storage type is outside the admitted profile")
                           end
       descriptor = BinarySimpleAggregateType.new(function, storage_type_name)
       new(TAG_SIMPLE_AGGREGATE, nil, [storage_type] of BinaryDataType, [] of String, nil, nil, nil, nil, nil, nil, descriptor)

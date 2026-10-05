@@ -4012,6 +4012,36 @@ module CrystalClick
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
     end
 
+    # Write a nominal SimpleAggregateFunction(String) pair through the typed
+    # storage path. This explicit API does not change ordinary String inference.
+    def self.write_uint64_simple_aggregate_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String),
+      function : BinarySimpleAggregateType::Function,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_name = SimpleAggregateColumnType.simple_aggregate(function, "String").type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_simple_aggregate_fixed_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String),
+      width : Int32,
+      function : BinarySimpleAggregateType::Function,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_simple_aggregate_fixed_string_width!(width)
+      type_name = SimpleAggregateColumnType.simple_aggregate(function, "FixedString(#{width})").type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
     # Write Time as raw signed Int32 seconds, without text or timezone conversion.
     def self.write_uint64_time_pair(
       destination : String,
@@ -4122,6 +4152,36 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
     ) : String forall T
       type_name = SimpleAggregateColumnType.nullable_simple_aggregate(function, SimpleAggregateColumnType.storage_name(T)).type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    # Write outer Nullable(SimpleAggregateFunction(String)); nil remains
+    # separate from the nested String payload, including an empty String.
+    def self.write_uint64_nullable_simple_aggregate_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String?),
+      function : BinarySimpleAggregateType::Function,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      type_name = SimpleAggregateColumnType.nullable_simple_aggregate(function, "String").type_name
+      write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+    end
+
+    def self.write_uint64_nullable_simple_aggregate_fixed_string_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      values : Slice(String?),
+      width : Int32,
+      function : BinarySimpleAggregateType::Function,
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_simple_aggregate_fixed_string_width!(width)
+      type_name = SimpleAggregateColumnType.nullable_simple_aggregate(function, "FixedString(#{width})").type_name
       write_uint64_typed_pair_with_type(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
     end
 
@@ -11550,6 +11610,11 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_simple_aggregate_fixed_string_width!(width : Int32) : Nil
+      raise ArgumentError.new("FixedString width must be between 1 and 65536") if width < 1 || width > 65_536
+      nil
+    end
+
     private def self.validate_typed_inputs(
       destination : String,
       key_name : String,
@@ -11677,8 +11742,30 @@ module CrystalClick
           validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
         end
         validate_nullable_typed_numeric_inputs(destination, key_name, keys, value_name, values, type_name, rows_per_mark)
+      {% elsif T == String %}
+        plan = SimpleAggregateTextStoragePlan.for_type_name(type_name) ||
+               raise(UnsupportedFormatError.new("String typed writer requires an admitted SimpleAggregateFunction text profile"))
+        raise UnsupportedFormatError.new("scalar String typed writer requires scalar SimpleAggregateFunction metadata") if plan.nullable?
+        if plan.variable_string?
+          validate_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+        elsif width = plan.fixed_string_width
+          validate_fixed_string_inputs(destination, key_name, keys, value_name, values, width, rows_per_mark)
+        else
+          raise UnsupportedFormatError.new("String typed writer requires String or FixedString storage")
+        end
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
-        validate_nullable_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+        if plan = SimpleAggregateTextStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("Nullable String typed writer requires outer Nullable SimpleAggregateFunction metadata") unless plan.nullable?
+          if plan.variable_string?
+            validate_nullable_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+          elsif width = plan.fixed_string_width
+            validate_nullable_fixed_string_inputs(destination, key_name, keys, value_name, values, width, rows_per_mark)
+          else
+            raise UnsupportedFormatError.new("Nullable String typed writer requires String or FixedString storage")
+          end
+        else
+          validate_nullable_string_inputs(destination, key_name, keys, value_name, values, rows_per_mark)
+        end
       {% else %}
         raise UnsupportedFormatError.new("unsupported typed writer payload")
       {% end %}
@@ -11809,8 +11896,30 @@ module CrystalClick
           validate_simple_aggregate_payload!(type_name, values, SimpleAggregateColumnType::Shape::Nullable)
         end
         write_nullable_typed_numeric_streams(stage, column, values, rows_per_mark, type_name)
+      {% elsif T == String %}
+        plan = SimpleAggregateTextStoragePlan.for_type_name(type_name) ||
+               raise(UnsupportedFormatError.new("String typed writer requires an admitted SimpleAggregateFunction text profile"))
+        raise UnsupportedFormatError.new("scalar String typed writer requires scalar SimpleAggregateFunction metadata") if plan.nullable?
+        if plan.variable_string?
+          write_string_streams(stage, column, values, rows_per_mark)
+        elsif width = plan.fixed_string_width
+          write_fixed_string_stream(stage, column, values, width, rows_per_mark)
+        else
+          raise UnsupportedFormatError.new("String typed writer requires String or FixedString storage")
+        end
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
-        write_nullable_string_streams(stage, column, values, rows_per_mark)
+        if plan = SimpleAggregateTextStoragePlan.for_type_name(type_name)
+          raise UnsupportedFormatError.new("Nullable String typed writer requires outer Nullable SimpleAggregateFunction metadata") unless plan.nullable?
+          if plan.variable_string?
+            write_nullable_string_streams(stage, column, values, rows_per_mark)
+          elsif width = plan.fixed_string_width
+            write_nullable_fixed_string_streams(stage, column, values, width, rows_per_mark)
+          else
+            raise UnsupportedFormatError.new("Nullable String typed writer requires String or FixedString storage")
+          end
+        else
+          write_nullable_string_streams(stage, column, values, rows_per_mark)
+        end
       {% else %}
         raise UnsupportedFormatError.new("unsupported typed writer payload")
       {% end %}
@@ -25020,8 +25129,35 @@ module CrystalClick
     ) : Nil forall T
       {% if T == BFloat16Value? || T == UUIDValue? || T == IPv4Value? || T == IPv6Value? || T == Decimal256Value? || T == Int256Value? || T == UInt256Value? || T == Bool? || T == UInt8? || T == UInt16? || T == UInt32? || T == UInt64? || T == Int8? || T == Int16? || T == Int32? || T == Int64? || T == Int128? || T == UInt128? || T == Float32? || T == Float64? %}
         validate_staged_nullable_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
+      {% elsif T == String %}
+        StagedSimpleAggregateTextPartValidator.validate_scalar(
+          stage,
+          key_name,
+          value_name,
+          keys,
+          values,
+          type_name,
+          rows_per_mark,
+          ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) }
+        )
       {% elsif T.union_types.size == 2 && T.union_types.includes?(String) && T.union_types.includes?(Nil) %}
-        validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        if SimpleAggregateTextStoragePlan.for_type_name(type_name)
+          StagedSimpleAggregateTextPartValidator.validate_nullable(
+            stage,
+            key_name,
+            value_name,
+            keys,
+            values,
+            type_name,
+            rows_per_mark,
+            ->(row_count : Int32, mark_size : Int32) { checked_mark_count(row_count, mark_size) },
+            ->(validation_stage : String, checksums : PartChecksums, source_keys : Slice(UInt64), mark_size : Int32, marks : Int32) {
+              validate_staged_primary_index(validation_stage, checksums, source_keys, mark_size, marks)
+            }
+          )
+        else
+          validate_staged_nullable_string_part(stage, key_name, value_name, keys, values, rows_per_mark)
+        end
       {% else %}
         validate_staged_typed_numeric_part(stage, key_name, value_name, keys, values, type_name, rows_per_mark)
       {% end %}

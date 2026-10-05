@@ -1,7 +1,7 @@
 module CrystalClick
   # Exact scalar Wide-part identity for the admitted SimpleAggregateFunction
-  # numeric profile. The function name remains nominal metadata; the stored
-  # payload is the raw fixed-width child and is never aggregated by this layer.
+  # profile. The function name remains nominal metadata; the stored payload
+  # retains the exact child representation and is never aggregated here.
   class SimpleAggregateColumnType
     MAX_TYPE_BYTES = 80
 
@@ -98,8 +98,17 @@ module CrystalClick
       @shape == Shape::Nullable
     end
 
+    def string? : Bool
+      BinarySimpleAggregateType.string_storage?(storage_type_name)
+    end
+
+    def fixed_string_width : Int32?
+      BinarySimpleAggregateType.fixed_string_width(storage_type_name)
+    end
+
     def raw_width : Int32
-      BinarySimpleAggregateType.storage_width(storage_type_name).not_nil!
+      BinarySimpleAggregateType.storage_width(storage_type_name) ||
+        raise ArgumentError.new("SimpleAggregateFunction raw_width requires fixed-width numeric storage")
     end
 
     def type_name : String

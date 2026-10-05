@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current architecture checkpoint (W167, 2026-10-05): scalar and outer-Nullable
+Latest capability checkpoint (W168, 2026-10-05): canonical unary, non-parametric
+SimpleAggregateFunction(any/anyLast/min/max, String/FixedString(N)) is paired
+through descriptor/value/bulk codecs, public scalar/outer-Nullable Wide-part
+writer/reader, table batches/windows and offline column `.values`. Exact
+function, child width and outer shape remain nominal; ordinary text accessors
+and inferred writer admission do not widen. Library FixedString width is
+1..65536; finite stock whole-part qualification covers String and widths
+1, 3, 130 across all four functions and both shapes, not every width/layout.
+Root passes 290 DEBUG and 290 affected RELEASE examples in four disjoint
+groups per mode (33 unique specs), plus two actual native-fixture examples.
+All counted gates have zero failures/errors/pending and actual child/guard
+exit 0. Stock accepts 32 independently library-authored complete parts through
+ATTACH/CHECK; root recomputes 216 literal checks and three CHECK-valid negative
+controls without importing the worker oracle. Four additional complete String
+parts establish all-empty/all-NULL EOF zero and nonzero trailing-empty marks
+against stock, with 24 independent profile literal checks. All 341 final
+source/spec/support/page/script inputs reconcile with current files.
+An intentionally bypassed staged-value comparison fails; exact restoration
+passes. Scoped hostile verdict: ROBUST within this stored-value profile.
+Staged certification checks visible semantics, marks/metadata and raw lengths,
+not content hashes or canonical bytes beneath NULL. Numeric SAF admission is
+unchanged; Decimal/temporal SAF, other functions and broader products remain.
+The new text storage-plan and staged-validator owners each have their own file;
+reader/writer/table facades are still 16,017/25,377/7,015 lines. Architecture
+cleanup, remaining paired types and general MV/projections remain open.
+Memory/performance stays deferred. Source `e9b645ed` is a clean unbuilt shallow
+checkout, separate from executed stock build `d9bcb5ab`. Scope, exact commands,
+evidence and decay:
+[SIMPLE_AGGREGATE_TEXT_FRONTIER.md](SIMPLE_AGGREGATE_TEXT_FRONTIER.md).
+
+Latest behavior-preserving architecture checkpoint (W167, 2026-10-05): scalar and outer-Nullable
 FixedString staged validation now belongs to one private, stateless 127-line
 `StagedFixedStringPartValidator` class in its own file. Both private facade
 signatures, public call sites, direct virtual WidePart readbacks, exact width,
@@ -46,7 +76,7 @@ Remaining paired types and general MV/projection support are unchanged;
 memory/performance stays deferred. Scope, commands, inventory and decay:
 [MODULARIZATION_FRONTIER.md](MODULARIZATION_FRONTIER.md).
 
-Latest capability checkpoint (W164, 2026-10-05): the five remaining raw numeric
+Previous capability checkpoint (W164, 2026-10-05): the five remaining raw numeric
 SimpleAggregateFunction carriers are paired in the finite canonical-function
 matrix: UInt128, Int128, UInt256, Int256 and BFloat16. This adds 41 scalar pairs /
 82 with outer Nullable; the combined admitted matrix is 118 scalar pairs /
@@ -905,10 +935,12 @@ source/runtime identities and executed evidence.
    carriers under the exact 77-pair eligibility law, with scalar/outer Nullable
    Wide readers/writers and their table/catalog consumers. W164 adds raw wide
    integers and BFloat16 in 41 more scalar pairs, 82 with outer Nullable,
-   through those same owners. Inner Nullable children, text/Decimal/temporal
-   carriers and other functions/parameters remain outside this certificate.
-   The finite current gate state is recorded in
-   [SIMPLE_AGGREGATE_EXTENDED_NUMERIC_FRONTIER.md](SIMPLE_AGGREGATE_EXTENDED_NUMERIC_FRONTIER.md), not a claim of
+   through those same owners. W168 adds any/anyLast/min/max with String and
+   FixedString(N), scalar or outer Nullable, with finite stock width witnesses.
+   Inner Nullable children, Decimal/temporal carriers and other
+   functions/parameters/aliases remain outside the current certificate.
+   The latest finite gate state is recorded in
+   [SIMPLE_AGGREGATE_TEXT_FRONTIER.md](SIMPLE_AGGREGATE_TEXT_FRONTIER.md), not a claim of
    complete SimpleAggregateFunction or AggregatingMergeTree execution support.
    W160 now pairs Interval descriptors, values,
    normalized bulk and generic physical composition plus independently authored
@@ -916,7 +948,7 @@ source/runtime identities and executed evidence.
    not a public whole-part certificate for every composition.
    The general descriptor kernel still lacks AggregateFunction, Nested,
    Custom, JSON and QBit/QBitWithStride tags. SimpleAggregateFunction's tag is
-   now paired only within the W163/W164 exact numeric profile.
+   now paired only within the W163/W164 numeric and W168 text profiles.
    This is not an inventory of wholly absent physical types: dedicated Object,
    geometry and QBit owners already cover narrower persisted profiles. Set and
    Function descriptors are also absent, but the current ClickHouse source
@@ -946,7 +978,8 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   is 6,911 lines at W167; the reader/writer are now 15,845/25,241 lines.
+   was 6,911 lines at W167; W168 reader/writer/table facades are now
+   16,017/25,377/7,015 lines.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -961,7 +994,10 @@ source/runtime identities and executed evidence.
    retaining same-signature facade entry points. W165 extracts scalar/Nullable
    String staged validation into its own private owner; W167 does the same for
    scalar/outer-Nullable FixedString, preserving direct virtual WidePart
-   readbacks without moving the I/O/publication lifecycle. Other validator
+   readbacks without moving the I/O/publication lifecycle. W168 adds separate
+   text SAF storage-plan and staged-validator owners, reusing PartSchemaMetadata
+   for rendering rather than embedding another metadata owner in the facade.
+   Other validator
    cohorts and physical stream binding remain separate next seams.
    `Slice(T)`/`forall T`, module reopen overrides and
    supplied-reader virtual dispatch remain pinned. Numeric/nullable and
@@ -1039,8 +1075,9 @@ source/runtime identities and executed evidence.
    Object declarations retain the stock maximum of 1,000 typed paths.
 3. Expand remaining paired type/profile and MV/projection frontiers.
    W164 closes the raw UInt128/256, Int128/256 and BFloat16 numeric lane.
-   Next proposed SimpleAggregateFunction lanes are String/FixedString,
-   Decimal and temporal carriers. Their function/result-type laws need separate
+   W168 closes the bounded String/FixedString lane for four canonical functions
+   with scalar/outer Nullable shape. Next proposed SimpleAggregateFunction
+   lanes are Decimal and temporal carriers. Their function/result-type laws need separate
    stock construction probes and paired physical qualification before admission.
    AggregateFunction state serialization and shared Nested offsets are separate
    unresolved families; a stored-value wrapper does not certify either.

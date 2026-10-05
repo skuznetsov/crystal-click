@@ -1,6 +1,6 @@
 module CrystalClick
   # Exact canonical function and storage identity for the bounded
-  # SimpleAggregateFunction numeric descriptor profile.
+  # SimpleAggregateFunction descriptor profile.
   class BinarySimpleAggregateType
     TYPE_PREFIX = "SimpleAggregateFunction("
     # Retained as the default profile suffix for callers that use the legacy
@@ -8,6 +8,9 @@ module CrystalClick
     TYPE_SUFFIX               = ", UInt64)"
     DEFAULT_STORAGE_TYPE_NAME = "UInt64"
     MAX_TYPE_BYTES            = 80
+    # Existing local FixedString materialization limit; ClickHouse itself
+    # permits wider declarations than this library profile admits.
+    MAX_FIXED_STRING_WIDTH = 65_536
 
     enum Function
       Any
@@ -32,7 +35,7 @@ module CrystalClick
         raise ArgumentError.new("invalid SimpleAggregateFunction function")
       end
       unless self.class.admitted_function_storage?(@function, storage_type_name)
-        raise ArgumentError.new("SimpleAggregateFunction function/storage pair is outside the admitted numeric profile")
+        raise ArgumentError.new("SimpleAggregateFunction function/storage pair is outside the admitted profile")
       end
       @storage_type_name = String.new(storage_type_name.to_slice)
     end
@@ -126,10 +129,47 @@ module CrystalClick
       end
     end
 
+    # Returns a width only for the exact canonical FixedString(N) spelling
+    # admitted by this profile. String is variable-width and deliberately has
+    # no inferred raw_width.
+    def self.fixed_string_width(storage_type_name : String) : Int32?
+      prefix = "FixedString("
+      return nil unless storage_type_name.starts_with?(prefix) && storage_type_name.ends_with?(")")
+
+      digits = storage_type_name.byte_slice(prefix.bytesize, storage_type_name.bytesize - prefix.bytesize - 1)
+      return nil if digits.empty? || digits.bytesize > 5 || digits.byte_at(0) == '0'.ord.to_u8
+
+      width = 0
+      digits.each_byte do |byte|
+        return nil unless byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8
+        width = width * 10 + (byte - '0'.ord.to_u8).to_i
+      end
+      return nil unless width > 0 && width <= MAX_FIXED_STRING_WIDTH
+
+      width
+    end
+
+    def self.string_storage?(storage_type_name : String) : Bool
+      storage_type_name == "String"
+    end
+
+    private def self.admitted_text_function?(function : Function) : Bool
+      case function
+      when Function::Any, Function::AnyLast, Function::Min, Function::Max
+        true
+      else
+        false
+      end
+    end
+
     def self.admitted_function_storage?(
       function : Function,
       storage_type_name : String,
     ) : Bool
+      if string_storage?(storage_type_name) || fixed_string_width(storage_type_name) != nil
+        return admitted_text_function?(function)
+      end
+
       return false unless storage_width(storage_type_name)
 
       case function
