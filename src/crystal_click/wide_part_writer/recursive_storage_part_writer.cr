@@ -1,6 +1,6 @@
 module CrystalClick
   module WidePartWriter
-    # Publishes the admitted root-Tuple recursive column profile. Lane owners
+    # Publishes the admitted recursive column profile. Lane owners
     # are composed before publication; this class supplies the bounded part
     # envelope and staged readback only.
     private class RecursiveStoragePartWriter
@@ -117,8 +117,8 @@ module CrystalClick
         unless keys.size > 0 && keys.size.to_u64 <= WidePart::MAX_ROWS
           raise ArgumentError.new("a recursive part requires a bounded nonempty key stream")
         end
-        unless schema.tuple? && schema.has_json?
-          raise UnsupportedFormatError.new("recursive persisted columns require a root Tuple with a JSON leaf")
+        unless (schema.tuple? || schema.array?) && schema.has_json?
+          raise UnsupportedFormatError.new("recursive persisted columns require a root Tuple or Array with a JSON leaf")
         end
         unless granules.size > 0
           raise ArgumentError.new("a recursive part requires at least one real mark")
@@ -426,7 +426,7 @@ module CrystalClick
         unless actual.kind == expected.kind && actual.child_count == expected.child_count
           raise CorruptPartError.new("staged recursive value shape differs from input")
         end
-        if actual.tuple?
+        if actual.tuple? || actual.array?
           actual.child_count.times { |index| compare_storage_value!(actual.child_at(index), expected.child_at(index)) }
         elsif actual.object?
           compare_document!(actual.object_document, expected.object_document)

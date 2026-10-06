@@ -1,5 +1,5 @@
 module CrystalClick
-  # Complete, collision-checked physical roster for the first recursive Tuple
+  # Complete, collision-checked physical roster for the recursive Tuple/Array
   # storage profile. JSON sites retain their Object owner; JSON-free leaves
   # retain their BinaryBulk owner. The plan binds every structural site before
   # any row payload is encoded.
@@ -10,8 +10,9 @@ module CrystalClick
       getter schema : ObjectDocumentSchema
       getter object_plan : ObjectDocumentPlan
       getter physical : ObjectDocumentPhysicalPlan
+      getter array_level : UInt64
 
-      def initialize(@key : String, @prefix : String, @schema : ObjectDocumentSchema, @object_plan : ObjectDocumentPlan, @physical : ObjectDocumentPhysicalPlan)
+      def initialize(@key : String, @prefix : String, @schema : ObjectDocumentSchema, @object_plan : ObjectDocumentPlan, @physical : ObjectDocumentPhysicalPlan, @array_level : UInt64)
       end
     end
 
@@ -20,8 +21,19 @@ module CrystalClick
       getter prefix : String
       getter type : BinaryDataType
       getter physical : BinaryBulkPhysicalPlan
+      getter array_level : UInt64
 
-      def initialize(@key : String, @prefix : String, @type : BinaryDataType, @physical : BinaryBulkPhysicalPlan)
+      def initialize(@key : String, @prefix : String, @type : BinaryDataType, @physical : BinaryBulkPhysicalPlan, @array_level : UInt64)
+      end
+    end
+
+    struct ArraySite
+      getter key : String
+      getter prefix : String
+      getter array_level : UInt64
+      getter size_name : String
+
+      def initialize(@key : String, @prefix : String, @array_level : UInt64, @size_name : String)
       end
     end
 
@@ -29,6 +41,7 @@ module CrystalClick
     @schema : StorageColumnSchema
     @object_sites : Array(ObjectSite)
     @bulk_sites : Array(BulkSite)
+    @array_sites : Array(ArraySite)
     @physical_stream_names : Array(String)
     @file_names : Array(String)
     @file_roster : Hash(String, Tuple(String, String))
@@ -78,8 +91,11 @@ module CrystalClick
       @column_name = String.new(column_name.to_slice)
 
       @schema.validate_source_tree!(@limits)
-      # The root schema is a Tuple, so inspect actual admitted Object leaves
-      # rather than inventing a separate aggregate schema limit.
+      if @schema.has_array? && @mode != DynamicDiscriminatorCodec::BASIC_MODE
+        raise UnsupportedFormatError.new("recursive Array composition currently requires the BASIC Dynamic profile")
+      end
+      # Inspect actual admitted Object leaves rather than inventing a separate
+      # aggregate schema limit.
       @schema.each_json_site do |_key, object_schema|
         unless same_limits?(object_schema.limits, @limits)
           raise ArgumentError.new("recursive writer and Object schema codec limits must match")
@@ -109,17 +125,27 @@ module CrystalClick
       root_prefix = PhysicalStreamName.escape(@column_name, context)
       object_sites = [] of ObjectSite
       bulk_sites = [] of BulkSite
-      @schema.tuple? || raise(UnsupportedFormatError.new("recursive storage root must be a Tuple"))
-      build_sites(@schema, root_prefix, "root", detached_plans, context, object_sites, bulk_sites)
+      array_sites = [] of ArraySite
+      unless @schema.tuple? || @schema.array?
+        raise UnsupportedFormatError.new("recursive storage root must be a Tuple or Array")
+      end
+      build_sites(@schema, root_prefix, "root", 0_u64, detached_plans, context, object_sites, bulk_sites, array_sites)
 
       unless object_sites.map(&.key).sort! == expected_sites
         raise UnsupportedFormatError.new("recursive physical Object site roster differs from its schema")
       end
       @object_sites = object_sites
       @bulk_sites = bulk_sites
+      @array_sites = array_sites
+      unless @array_sites.map(&.key).sort! == @schema.array_site_keys.sort!
+        raise UnsupportedFormatError.new("recursive physical Array site roster differs from its schema")
+      end
 
       logical_names = [] of String
       seen_logical = Hash(String, Bool).new
+      @array_sites.each do |site|
+        append_unique_logical!(logical_names, seen_logical, site.size_name)
+      end
       @object_sites.each do |site|
         site.physical.stream_names.each do |name|
           append_unique_logical!(logical_names, seen_logical, name)
@@ -182,7 +208,7 @@ module CrystalClick
 
     def object_site_at(index : Int) : ObjectSite
       site = @object_sites[index]
-      ObjectSite.new(String.new(site.key.to_slice), String.new(site.prefix.to_slice), site.schema, site.object_plan, site.physical)
+      ObjectSite.new(String.new(site.key.to_slice), String.new(site.prefix.to_slice), site.schema, site.object_plan, site.physical, site.array_level)
     end
 
     def bulk_site_count : Int32
@@ -191,7 +217,16 @@ module CrystalClick
 
     def bulk_site_at(index : Int) : BulkSite
       site = @bulk_sites[index]
-      BulkSite.new(String.new(site.key.to_slice), String.new(site.prefix.to_slice), site.type, site.physical)
+      BulkSite.new(String.new(site.key.to_slice), String.new(site.prefix.to_slice), site.type, site.physical, site.array_level)
+    end
+
+    def array_site_count : Int32
+      @array_sites.size
+    end
+
+    def array_site_at(index : Int) : ArraySite
+      site = @array_sites[index]
+      ArraySite.new(String.new(site.key.to_slice), String.new(site.prefix.to_slice), site.array_level, String.new(site.size_name.to_slice))
     end
 
     def physical_stream_names : Array(String)
@@ -242,25 +277,43 @@ module CrystalClick
       schema : StorageColumnSchema,
       prefix : String,
       site_key : String,
+      array_level : UInt64,
       object_plans : Hash(String, ObjectDocumentPlan),
       context : PhysicalStreamPlanContext,
       objects : Array(ObjectSite),
       bulk : Array(BulkSite),
+      arrays : Array(ArraySite),
     ) : Nil
       if object_schema = schema.object_schema_or_nil
+        if array_level > 0_u64 && @mode != DynamicDiscriminatorCodec::BASIC_MODE
+          raise UnsupportedFormatError.new("Object sites composed below Array require the BASIC Dynamic profile")
+        end
         object_plan = object_plans[site_key]? || raise(ArgumentError.new("recursive JSON site has no Object plan"))
         object_schema.validate_plan(object_plan)
         physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(
-          prefix, object_plan, @profile, @shared_profile, @limits, 0_u64, context
+          prefix, object_plan, @profile, @shared_profile, @limits, array_level, context
         )
-        objects << ObjectSite.new(String.new(site_key.to_slice), String.new(prefix.to_slice), object_schema, object_plan, physical)
+        objects << ObjectSite.new(String.new(site_key.to_slice), String.new(prefix.to_slice), object_schema, object_plan, physical, array_level)
         return nil
       end
       if bulk_type = schema.bulk_type_or_nil
         physical = BinaryBulkPhysicalPlan.from_escaped_prefix(
-          bulk_type, prefix, @profile, @limits, context, 0_u64
+          bulk_type, prefix, @profile, @limits, context, array_level
         )
-        bulk << BulkSite.new(String.new(site_key.to_slice), String.new(prefix.to_slice), bulk_type, physical)
+        bulk << BulkSite.new(String.new(site_key.to_slice), String.new(prefix.to_slice), bulk_type, physical, array_level)
+        return nil
+      end
+
+      if schema.array?
+        if array_level > UInt64::MAX - 1_u64
+          raise UnsupportedFormatError.new("recursive Array-level coordinate overflows UInt64")
+        end
+        suffix = String.build { |io| io << ".size" << array_level }
+        size_name = PhysicalStreamName.append_literal(prefix, suffix, context)
+        context.charge_name_bytes(size_name.bytesize.to_u64)
+        arrays << ArraySite.new(String.new(site_key.to_slice), String.new(prefix.to_slice), array_level, size_name)
+        child_key = String.build { |io| io << site_key << "/array[0]" }
+        build_sites(schema.child_at(0), prefix, child_key, array_level + 1_u64, object_plans, context, objects, bulk, arrays)
         return nil
       end
 
@@ -271,7 +324,7 @@ module CrystalClick
         raw_field = schema.named_tuple? ? schema.field_name_at(index) : (index + 1).to_s
         child_prefix = PhysicalStreamName.append_escaped_field(prefix, raw_field, context)
         child_key = String.build { |io| io << site_key << "/tuple[" << index << ']' }
-        build_sites(schema.child_at(index), child_prefix, child_key, object_plans, context, objects, bulk)
+        build_sites(schema.child_at(index), child_prefix, child_key, array_level, object_plans, context, objects, bulk, arrays)
       end
       nil
     end

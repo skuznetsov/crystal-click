@@ -1,12 +1,138 @@
 # Recursive JSON storage frontier
 
-Status: PROPOSED complete storage composition; W186's recursive Tuple-with-JSON
-part/table path, W185's dedicated normalized Array(JSON) path and W184's internal
-paired occurrence-grid foundation are VERIFIED within their executed scopes below.
+Status: PROPOSED complete storage composition; W187's common recursive Array/Tuple
+part/table path, W186's Tuple-with-JSON path, W185's dedicated normalized Array(JSON)
+path and W184's internal paired occurrence-grid foundation are VERIFIED within
+their executed scopes below.
 Baseline: `4464ef3`. W182 scalar admission remains unchanged. No new generic
 Crystal JSON bulk admission or admission beneath every persisted wrapper.
 W183's finite stock physical discriminator is verified below; it does not
 complete the storage-admission DoD.
+
+## W187 implementation seal: common Array/Tuple composition
+
+Status: VERIFIED within the finite executed scope below. Baseline: clean
+`52ab3adcc3190f5d79acb2e887c05ee59955c1f3`. Extend the common recursive owner
+with one Array operation, reusable below/above Tuple and repeated Array edges.
+JSON-free subtrees retain their existing BinaryBulk physical admission laws.
+JSON leaves retain their Object owners and independent structural site plans.
+The dedicated W185 API remains compatible; it is not silently replaced.
+
+Risk: CAUTION (serialization, metadata, public values and publication).
+Rollback: exact task-owned paths in one atomic local feature commit; retain
+all stock inputs and generated evidence under task-owned `/private/tmp` roots.
+No push, source-data writes, benchmark or performance optimization.
+Likeliest failure: a correct total child count is assigned to the wrong mark
+or parent Array, or inherited Array levels alias a sibling's physical path.
+Guard: mixed zero-child marks, unequal per-row sizes, repeated Arrays, two
+equal nominal JSON sites with disjoint actual state, full/middle/zero windows,
+same-total schedule redistribution, malformed sizes and exact stream rosters.
+
+Design laws: every Array edge owns an independently checked size schedule and
+structural site ID; Tuple preserves the incoming occurrence domain. All lanes
+retain the physical root mark-row fields while codecs consume logical child
+occurrences, including zero groups. Object prefix/data/suffix state belongs to
+its site, not an Array element. Wrapper nodes/edges are preflighted from checked
+selected occurrence schedules before leaf materialization. Existing shared
+codec/name/transport boundaries must not reset at a wrapper edge. This does
+not establish full cross-domain accounting or RSS bounds.
+
+The Array frame keeps three coordinates distinct: positive root physical rows
+`P`, incoming logical parent occurrences `Q` (possibly zero below an Array),
+and checked child occurrences `C`. Its size lane contains exactly `Q` UInt64
+lengths per mark; children consume `C`, while physical marks always retain `P`.
+The next Array receives `Q=C` without replacing `P`. A same-total redistribution
+of lengths between parents within a mark can be a valid different Array value;
+do not claim that such a transformation is intrinsically corrupt. Inconsistent
+mark totals, nested incoming counts and leaf extents are the rejecting guards.
+
+Source-only corroboration at the unchanged `ef037e60` reference:
+`SerializationArray.cpp:255-295,297-327,330-340,352-396` composes size levels,
+child state and flattened ranges, including zero-child calls;
+`SerializationTuple.cpp:832-862` passes the child range unchanged to fields.
+Native evidence remains a separate executed-binary requirement. The qualified
+profile explicitly propagates nested serialization versions; default behavior
+must not be inferred from the top-level String/Object setting alone.
+
+Dynamic mode is another inherited serialization coordinate. The reference
+`MergeTreeSettings.cpp:298` defaults
+`use_compact_variant_discriminators_serialization` to true, and
+`SerializationVariant.cpp:211` selects COMPACT/BASIC from it. W187's child seam
+is BASIC-only: its paired runner explicitly disables that setting locally.
+The earlier stock-only layout witness did not establish BASIC behavior.
+W185/W186 settings remain unchanged; default COMPACT child admission is still
+guarded, not silently converted. Array-containing structural writer plans
+require the caller to choose BASIC before payload encoding or staging.
+
+Baseline behavioral RED: root executed `recursive_array_schema_w187_spec.cr`
+against unchanged production `52ab3ad`: four examples, three runtime
+`UnsupportedFormatError` errors, zero assertion failures/pending, actual
+child/guard exit 1. Common Array(JSON), Array(Tuple(JSON,JSON,UInt64)) and repeated
+Array edges are refused; ordinary Tuple admission/JSON-free refusal control
+passes. This is not a missing-method or compilation failure. Log:
+`/private/tmp/crystal-click-w187-recursive-array.yjTt9U/schema-red.log`, SHA-256
+`bfd0c835e74f902d1762b7b5284a9b7df25409822cda40753e94692d77c13699`.
+
+Execution/ownership: root first executes the common-schema behavioral RED on
+the baseline, then seals the precise seam after Luna's source inventory.
+Schema/value/plan/writer/files and publisher belong to the composition worker;
+reader/table/metadata belong to the consumer worker;
+Object site/grid seam, paired scripts and hostile source review belong to the
+bridge worker.
+New components have separate files; root owns this SDD, serial builds, native
+oracle, evidence reconciliation and commit. Preserve all other agents' edits.
+
+DoD: guarded serial focused and affected regression `crystal spec` runs in
+DEBUG and RELEASE (600 seconds, 12 GiB, >=50% free memory, one compiler thread,
+host linker, isolated caches); paired helper builds and stock CREATE/INSERT/
+CHECK plus library ATTACH/CHECK/exact-schema/full/middle literal checks in both
+modes. Require actual child/guard exits zero, no callback for zero selections,
+no publication on tested malformed shape/grid/cap/roster inputs, and retained
+ordinary Tuple/W185 controls. A parser-only or in-memory round trip cannot
+qualify persisted/public Array/Tuple support.
+
+Executed DoD: the same 66 selected spec files pass 392 DEBUG and 392 RELEASE
+examples, zero failures/errors/pending; both actual child/guard exits are 0.
+The final gates follow all production and fixture fixes. The 1,081 Crystal/Ruby
+input digest and 362-file production-source digest stay unchanged across these
+gates. Four new spec files contain 21 examples, including repeated Arrays,
+all-empty children, LowCardinality replay through an empty mark for a middle
+window, same-total valid size redistributions, exact frame caps, refreshed-
+checksum nested-Q corruption with no callback, and unchanged narrower offline
+UInt64-PK candidate refusal. Zero selection validates complete schedules but
+does not authenticate every unselected payload.
+
+Both rebuilt helper modes read stock and library-written
+`Array(Tuple(JSON,JSON,UInt64))` and
+`Array(Array(Tuple(JSON,JSON,UInt64)))` parts. Each has eight root rows, four
+two-row marks and leaf occurrence counts `[0,1,3,0]`; the repeated profile's
+inner Array receives parent counts `[0,2,3,0]`. Two equal nominal JSON sites
+have independent Int64/String Dynamic paths and nonempty shared MAP data.
+Direct readers and public typed-table full/middle/zero scans match authored
+literals. Pinned stock accepts both library parts with ATTACH/CHECK and returns
+the exact schemas and authored full/middle rows. Per mode, root independently
+checks all three process records, eight capture hashes/sizes, 196 stream-file
+hashes/sizes, 48 native literal row records and every raw physical mark-row
+field. The 114 generated library files and helper profile values match between
+DEBUG and RELEASE. This is finite two-profile evidence, not an exhaustive
+Cartesian-product certificate or fresh-master runtime build.
+
+Adversary verdict: ROBUST for these executed profiles and guards. Same-lineage
+Luna review is correlated; root's source checks, executed guards, independently
+authored literals and pinned native runtime are the qualifying evidence. The
+shared size-byte preflight precedes the complete size payload read; root-grid
+discovery inspects frame metadata without payload decoding. This does not
+establish RSS bounds. Retained failed attempts include staged Array-as-Bulk
+comparison, an invalid fixture part name, stock-default COMPACT refusal, and
+test-only Array-rank/empty-compressed-lane mistakes; none is reclassified as a
+successful format witness. Commands, pins, hashes, repairs and continuation:
+[json-array-tuple-parts-w187.json](../.landmark/evidence/json-array-tuple-parts-w187.json).
+
+Map/Nullable/Variant/Dynamic enclosing JSON, other JSON profiles, Compact and
+compressed marks, MV/projection completeness and <=10% performance parity
+remain open. Re-run affected gates on path, state, grid, codec, metadata or
+profile changes. The full thread goal and deferred optimization order remain
+unchanged.
 
 ## W186 implementation seal: recursive Tuple storage with JSON sites
 

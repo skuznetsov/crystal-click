@@ -254,6 +254,82 @@ module CrystalClick
       read_prepared(prepared)
     end
 
+    # Inspect an Object leaf beneath caller-owned Array/Tuple wrappers. The
+    # enclosing reader owns the array-size schedule and supplies its complete
+    # P/C occurrence grid; this method validates Object physical marks against
+    # P and never guesses or rereads a `.sizeN` stream.
+    def self.inspect_child_at_site(
+      source : PartStreamSource,
+      escaped_prefix : String,
+      typed_schema : Hash(String, BinaryDataType),
+      grid : StorageOccurrenceGrid,
+      codec_budget : BinaryCodecBudget,
+      name_context : PhysicalStreamPlanContext,
+      transport_budget : CompressedStreamBudget,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      initial_array_level : UInt64 = 0_u64,
+    ) : ObjectDocumentFileDescriptor
+      prepared = prepare_site_read(
+        source,
+        escaped_prefix,
+        typed_schema,
+        0,
+        0,
+        profile,
+        shared_profile,
+        hashed,
+        codec_budget,
+        name_context,
+        transport_budget,
+        true,
+        initial_array_level,
+        nil,
+        grid,
+      )
+      prepared.descriptor.not_nil!
+    end
+
+    # Read selected logical Object occurrences from a structural child site.
+    # Physical mark records are checked against `grid.physical_rows_at`; the
+    # codec receives `grid.logical_occurrences_at`. Array parent regrouping is
+    # deliberately left to the enclosing recursive storage reader.
+    def self.read_child_at_site(
+      source : PartStreamSource,
+      escaped_prefix : String,
+      typed_schema : Hash(String, BinaryDataType),
+      grid : StorageOccurrenceGrid,
+      codec_budget : BinaryCodecBudget,
+      name_context : PhysicalStreamPlanContext,
+      transport_budget : CompressedStreamBudget,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      initial_array_level : UInt64 = 0_u64,
+    ) : Array(Array(ObjectDocument))
+      prepared = prepare_site_read(
+        source,
+        escaped_prefix,
+        typed_schema,
+        first_mark,
+        mark_count,
+        profile,
+        shared_profile,
+        hashed,
+        codec_budget,
+        name_context,
+        transport_budget,
+        false,
+        initial_array_level,
+        nil,
+        grid,
+      )
+      read_prepared(prepared)
+    end
+
     private def self.prepare_site_read(
       source : PartStreamSource,
       escaped_prefix : String,
@@ -269,6 +345,7 @@ module CrystalClick
       build_descriptor : Bool,
       initial_array_level : UInt64,
       expected_mark_row_counts : Array(UInt64)?,
+      occurrence_grid_override : StorageOccurrenceGrid? = nil,
     ) : PreparedRead
       unless !codec_budget.writing? && !transport_budget.writing?
         raise ArgumentError.new("Object site reader requires read-direction budgets")
@@ -297,6 +374,7 @@ module CrystalClick
         codec_budget,
         transport_budget,
         name_context,
+        occurrence_grid_override,
       )
     end
 
@@ -320,6 +398,7 @@ module CrystalClick
       codec_budget_override : BinaryCodecBudget? = nil,
       transport_budget_override : CompressedStreamBudget? = nil,
       name_context_override : PhysicalStreamPlanContext? = nil,
+      occurrence_grid_override : StorageOccurrenceGrid? = nil,
     ) : PreparedRead
       validate_selection_arguments!(first_mark, mark_count)
       reject_json_schema!(typed_schema)
@@ -369,13 +448,24 @@ module CrystalClick
       if expected_rows = expected_outer_rows
         validate_expected_outer_rows!(outer_rows, expected_rows)
       end
+      if supplied_grid = occurrence_grid_override
+        supplied_grid.validate_for!(outer_rows.size, codec_budget)
+        outer_rows.each_with_index do |rows, mark_index|
+          unless rows == supplied_grid.physical_rows_at(mark_index)
+            raise CorruptPartError.new("Object physical marks disagree with the supplied occurrence grid")
+          end
+        end
+      end
       selected_count = validate_selection!(first_mark, mark_count, outer_rows.size)
 
-      occurrence_grid = nil.as(StorageOccurrenceGrid?)
+      occurrence_grid = occurrence_grid_override
       size_data_name = nil.as(String?)
       size_marks_name = nil.as(String?)
       size_grid = nil.as(CompressedMarkGrid?)
       if child_site
+        if occurrence_grid_override
+          raise ArgumentError.new("Object reader cannot infer and accept an occurrence grid simultaneously")
+        end
         size_data_name, size_marks_name, size_grid, child_rows = inspect_child_schedule!(
           source,
           column_name,

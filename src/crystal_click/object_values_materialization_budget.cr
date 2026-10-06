@@ -210,13 +210,20 @@ module CrystalClick
       )
 
       case value.kind
-      when StorageColumnValue::TUPLE
+      when StorageColumnValue::TUPLE, StorageColumnValue::ARRAY
         child_count = value.child_count.to_u64
-        usage = usage.add(
-          bytes: checked_multiply(child_count, sizeof(Pointer(StorageColumnValue)).to_u64),
-          cells: child_count,
-          elements: child_count,
-        )
+        usage = if value.kind == StorageColumnValue::TUPLE
+                  usage.add(
+                    bytes: checked_multiply(child_count, sizeof(Pointer(StorageColumnValue)).to_u64),
+                    cells: child_count,
+                    elements: child_count,
+                  )
+                else
+                  usage.add(
+                    bytes: checked_multiply(child_count, sizeof(Pointer(StorageColumnValue)).to_u64),
+                    elements: child_count,
+                  )
+                end
         if child_count > 0_u64
           raise BoundsError.new("Object retained value exceeds recursive depth limit") if depth >= @max_depth
           child_depth = depth + 1

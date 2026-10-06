@@ -495,14 +495,14 @@ module CrystalClick
       nil
     end
 
-    # Return values for a recursively admitted root Tuple containing JSON
-    # leaves. The outer slice is callback-scoped; immutable ObjectDocument
-    # handles and BinaryValue leaves may be retained by callers.
+    # Return values for a recursively admitted root Tuple/Array containing
+    # JSON leaves. The outer slice is callback-scoped; immutable nested values
+    # may be retained by callers.
     def recursive_values_for(column : String) : Slice(StorageColumnValue)
       index = column_index(column)
       schema = StorageColumnSchema.parse(@column_types[index])
-      unless schema.tuple? && schema.has_json? && schema.declaration == @column_types[index]
-        raise UnsupportedFormatError.new("recursive storage accessor requires an exact Tuple containing JSON")
+      unless (schema.tuple? || schema.array?) && schema.has_json? && schema.declaration == @column_types[index]
+        raise UnsupportedFormatError.new("recursive storage accessor requires an exact Tuple/Array containing JSON")
       end
       @recursive_values[column]? || raise(UnsupportedFormatError.new("recursive storage column was not materialized in this batch"))
     end
@@ -511,8 +511,8 @@ module CrystalClick
     def install_recursive_values(column : String, values : Slice(StorageColumnValue), expected_rows : Int) : Nil
       index = column_index(column)
       schema = StorageColumnSchema.parse(@column_types[index])
-      unless schema.tuple? && schema.has_json? && schema.declaration == @column_types[index]
-        raise CorruptPartError.new("recursive storage materializer received a non-admitted declaration")
+      unless (schema.tuple? || schema.array?) && schema.has_json? && schema.declaration == @column_types[index]
+        raise CorruptPartError.new("recursive storage materializer received a non-admitted Tuple/Array declaration")
       end
       raise CorruptPartError.new("recursive storage batch slice row count mismatch") unless values.size == expected_rows
       @recursive_values[column] = values

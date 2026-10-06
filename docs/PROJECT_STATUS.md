@@ -1,5 +1,27 @@
 # CrystalClick project status
 
+Current qualified capability (W187, 2026-10-06): a common recursive owner
+composes Array and Tuple edges around JSON sites and existing JSON-free Bulk
+leaves. Arrays derive checked incoming/child occurrence schedules while all
+lanes preserve root physical mark rows and inherited size levels. Equal nominal
+JSON siblings retain independent actual state. The writer, staged publisher,
+direct reader and typed table path use this plan; W185's dedicated Array(JSON)
+API and W186's root Tuple path remain compatible.
+The same 66 selected files pass 392 DEBUG and 392 RELEASE examples with zero
+failures/errors/pending and actual child/guard exits 0. Both helper modes read
+stock one/repeated-Array Tuple(JSON,JSON,UInt64) parts, and stock ATTACH/CHECK
+accepts their library-written counterparts with exact schemas and authored
+full/middle rows. Root independently reconciles each mode's three processes,
+eight captures, 196 stream-file hashes/sizes and 48 native literal row records;
+114 library files match between modes. Scoped verdict: ROBUST for these finite
+normalized hashed Wide/LZ4, plain-mrk2, Object-v3/shared-MAP BASIC profiles.
+Stock-default COMPACT below Array, other enclosing wrappers/layouts, remaining
+types, broader MV/projections and full table decomposition stay open. Logical
+owner budgets are not RSS limits; the narrower offline UInt64-PK candidate API
+is not widened. The larger goal is incomplete and performance remains deferred.
+Details and continuation:
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+
 Current qualified capability (W185, 2026-10-06): canonical `Array(JSON(...))`
 composes the existing Object owners in normalized hashed Wide/LZ4 parts with
 plain adaptive marks, one-bucket shared MAP and BASIC child Dynamic mode.

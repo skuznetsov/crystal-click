@@ -63,10 +63,10 @@ module CrystalClick
         when SelectedShape::RecursiveJson
           begin
             schema = StorageColumnSchema.parse(selected[1])
-            return nil unless schema.tuple? && schema.has_json?
+            return nil unless (schema.tuple? || schema.array?) && schema.has_json?
           rescue ex : UnsupportedFormatError
             # Ordinary supported Tuple/scalar declarations are left to the
-            # existing physical reader. Only the closed Tuple-with-JSON
+            # existing physical reader. Only the closed Tuple/Array-with-JSON
             # subset is a recursive Object dispatch candidate.
             return nil
           end

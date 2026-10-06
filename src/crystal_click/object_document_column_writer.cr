@@ -208,6 +208,77 @@ module CrystalClick
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
 
+    # Encodes an Object JSON leaf below one or more caller-owned structural
+    # wrappers. `grid` keeps the enclosing part's physical rows separate from
+    # this site's logical Object occurrences; no array-size lane is inferred
+    # here. The child seam is BASIC-only and leaves the root/Array APIs intact.
+    def self.encode_child_at_physical_site(
+      escaped_prefix : String,
+      plan : ObjectDocumentPlan,
+      physical_plan : ObjectDocumentPhysicalPlan,
+      grid : StorageOccurrenceGrid,
+      granules : Array(Array(ObjectDocument)),
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
+      hashed : Bool = false,
+      frame_bytes : Int = 4096,
+      initial_array_level : UInt64 = 0_u64,
+    ) : ObjectDocumentColumnFiles
+      if granules.empty?
+        raise ArgumentError.new("a physical Object child site requires at least one real mark")
+      end
+      if frame_bytes <= 0 || frame_bytes > Int32::MAX || frame_bytes < DynamicDiscriminatorCodec::HEADER_BYTES
+        raise ArgumentError.new("frame size must contain the complete Dynamic discriminator prefix")
+      end
+      unless codec_budget.writing?
+        raise ArgumentError.new("Object child-site codec budget must be write-direction")
+      end
+      transport_budget.ensure_direction(true)
+      unless mode == DynamicDiscriminatorCodec::BASIC_MODE
+        raise UnsupportedFormatError.new("Object child-site composition requires the BASIC Dynamic profile")
+      end
+      unless physical_plan.initial_array_level == initial_array_level
+        raise ArgumentError.new("Object physical child-site plan does not match the admitted Array level")
+      end
+
+      limits = codec_budget.limits
+      expected_physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(
+        escaped_prefix, plan, profile, shared_profile, limits, initial_array_level
+      )
+      unless expected_physical.stream_names == physical_plan.stream_names
+        raise UnsupportedFormatError.new("Object child-site plan differs from the supplied physical stream roster or Array-level binding")
+      end
+
+      file_roster = preflight_file_roster(physical_plan, hashed)
+      fresh_plan = ObjectDocumentStatistics.recompute_child_site_with_budget(
+        plan, granules, grid, codec_budget
+      )
+      streams = ObjectDocumentCodec.encode_child_site_with_budget(
+        fresh_plan,
+        granules,
+        grid,
+        codec_budget,
+        mode: mode,
+        profile: profile,
+        shared_profile: shared_profile
+      )
+
+      preflight_variant_prefixes!(physical_plan, fresh_plan, streams, codec_budget)
+      lanes = bind_lanes(physical_plan, fresh_plan, streams)
+      mark_records = grid.mark_count + 1
+      raw_sizes = Array(Int32).new(lanes.size) { |index| lanes[index].byte_size }
+      CompressedMarkWriter.preflight_batch(raw_sizes, mark_records, frame_bytes, transport_budget)
+
+      pairs = Hash(String, CompressedMarkFiles).new
+      lanes.each do |lane|
+        pairs[lane.name] = lane.encode_child_site(grid, frame_bytes, transport_budget)
+      end
+      ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
+    end
+
     private def self.preflight_file_roster(
       physical_plan : ObjectDocumentPhysicalPlan,
       hashed : Bool,

@@ -1,9 +1,10 @@
 module CrystalClick
-  # One logical row value in the bounded recursive storage profile. Tuple
-  # nodes own only their child-reference array; JSON documents and JSON-free
+  # One logical row value in the bounded recursive storage profile. Tuple and
+  # Array nodes own only child references; JSON documents and JSON-free
   # BinaryValue leaves remain owned by their existing immutable value types.
   class StorageColumnValue
     TUPLE  = :tuple
+    ARRAY  = :array
     OBJECT = :object
     BULK   = :bulk
 
@@ -19,13 +20,13 @@ module CrystalClick
       @bulk_value : BinaryValue? = nil,
     )
       @tuple_values = tuple_values.dup
-      unless @kind == TUPLE || @kind == OBJECT || @kind == BULK
+      unless @kind == TUPLE || @kind == ARRAY || @kind == OBJECT || @kind == BULK
         raise ArgumentError.new("unknown recursive storage value node")
       end
       case @kind
-      when TUPLE
+      when TUPLE, ARRAY
         unless @object_document.nil? && @bulk_value.nil?
-          raise ArgumentError.new("recursive storage Tuple value cannot retain a leaf value")
+          raise ArgumentError.new("recursive structural value cannot retain a leaf value")
         end
       when OBJECT
         unless @tuple_values.empty? && @object_document && @bulk_value.nil?
@@ -40,6 +41,10 @@ module CrystalClick
 
     def self.tuple(values : Array(StorageColumnValue)) : StorageColumnValue
       new(TUPLE, values)
+    end
+
+    def self.array(values : Array(StorageColumnValue)) : StorageColumnValue
+      new(ARRAY, values)
     end
 
     def self.object_document(document : ObjectDocument) : StorageColumnValue
@@ -58,6 +63,10 @@ module CrystalClick
       @kind == TUPLE
     end
 
+    def array? : Bool
+      @kind == ARRAY
+    end
+
     def object? : Bool
       @kind == OBJECT
     end
@@ -67,6 +76,11 @@ module CrystalClick
     end
 
     def tuple_values : Array(StorageColumnValue)
+      @tuple_values.dup
+    end
+
+    def array_values : Array(StorageColumnValue)
+      raise ArgumentError.new("recursive storage value is not an Array") unless @kind == ARRAY
       @tuple_values.dup
     end
 

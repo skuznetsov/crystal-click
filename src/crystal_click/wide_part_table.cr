@@ -4634,7 +4634,7 @@ module CrystalClick
               raise UnsupportedFormatError.new("Array(JSON) columns are unsupported in typed projections")
             end
             if projection_name && recursive_declaration
-              raise UnsupportedFormatError.new("recursive Tuple JSON columns are unsupported in typed projections")
+              raise UnsupportedFormatError.new("recursive Tuple/Array JSON columns are unsupported in typed projections")
             end
           end
 

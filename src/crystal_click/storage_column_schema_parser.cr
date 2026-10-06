@@ -1,6 +1,6 @@
 module CrystalClick
-  # Parser for the closed recursive-storage declaration subset. It admits a
-  # root Tuple, recursively admits Tuple edges, delegates exact JSON leaves to
+  # Parser for the closed recursive-storage declaration subset. It composes
+  # Tuple and Array edges, delegates exact JSON leaves to
   # ObjectDocumentSchemaParser, and delegates JSON-free subtrees to the
   # existing recursive declaration and physical-plan owners.
   class StorageColumnSchemaParser
@@ -39,15 +39,15 @@ module CrystalClick
         raise UnsupportedFormatError.new("recursive storage declaration exceeds configured byte limit")
       end
       first, after = trim(0, @bytes.size)
-      unless tuple_slice?(first, after)
-        unsupported!("recursive storage currently requires a root Tuple")
+      unless tuple_slice?(first, after) || array_slice?(first, after)
+        unsupported!("recursive storage currently requires a root Tuple or Array")
       end
 
       # Only the root retains exact source text. Canonical declarations and
-      # detached tuple names can still repeat nested suffixes once per Tuple
-      # ancestor, so reserve a depth-scaled upper bound before the first
-      # proportional schema/name allocation. JSON and BinaryBulk descriptor
-      # owners apply their own grammar-specific budgets as well.
+      # detached structural names can repeat nested suffixes, so reserve a
+      # depth-scaled upper bound before the first proportional schema/name
+      # allocation. JSON and BinaryBulk descriptor owners apply their own
+      # grammar-specific budgets as well.
       source_bytes = @bytes.size.to_u64
       depth_factor = checked_add(checked_multiply(@limits.max_depth.to_u64, 3_u64), 2_u64)
       expansion = checked_multiply(source_bytes, depth_factor)
@@ -55,8 +55,8 @@ module CrystalClick
       @budget.charge_wire_bytes(expansion)
 
       schema = parse_node(first, after, 1, true)
-      unless schema.tuple? && schema.has_json?
-        unsupported!("recursive storage root Tuple must contain a JSON leaf")
+      unless (schema.tuple? || schema.array?) && schema.has_json?
+        unsupported!("recursive storage root Tuple or Array must contain a JSON leaf")
       end
       schema
     rescue ex : ArgumentError
@@ -98,8 +98,20 @@ module CrystalClick
         return StorageColumnSchema.object(schema, retain_source ? declaration : "")
       end
 
+      if array_slice?(first, after)
+        @budget.visit_node(depth)
+        body_first = first + "Array(".bytesize
+        body_after = after - 1
+        child_first, child_after = trim(body_first, body_after)
+        unsupported!("empty Array declaration") if child_first >= child_after
+        @budget.preflight_children(1_u64)
+        source = retain_source ? text(first, after) : ""
+        child = parse_node(child_first, child_after, depth + 1)
+        return StorageColumnSchema.array(source, child)
+      end
+
       unless tuple_slice?(first, after)
-        unsupported!("JSON is admitted only as a direct Tuple field")
+        unsupported!("recursive JSON is admitted only below Tuple or Array structural fields")
       end
 
       @budget.visit_node(depth)
@@ -222,6 +234,12 @@ module CrystalClick
     private def tuple_slice?(first : Int32, after : Int32) : Bool
       after - first >= "Tuple()".bytesize &&
         slice_equals?(first, first + "Tuple(".bytesize, "Tuple(") &&
+        @bytes[after - 1] == ')'.ord.to_u8
+    end
+
+    private def array_slice?(first : Int32, after : Int32) : Bool
+      after - first >= "Array()".bytesize &&
+        slice_equals?(first, first + "Array(".bytesize, "Array(") &&
         @bytes[after - 1] == ')'.ord.to_u8
     end
 

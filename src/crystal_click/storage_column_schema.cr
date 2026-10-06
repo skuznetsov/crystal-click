@@ -1,9 +1,10 @@
 module CrystalClick
-  # Bounded logical tree for the first persisted recursive Tuple slice.
-  # Tuple nodes may contain JSON leaves and JSON-free BinaryBulk subtrees;
-  # JSON beneath every other structural wrapper remains outside this profile.
+  # Bounded logical tree for recursive Tuple/Array storage. Structural
+  # wrappers compose without creating a codec for each type product; JSON
+  # leaves and JSON-free BinaryBulk subtrees keep their existing owners.
   class StorageColumnSchema
     TUPLE  = :tuple
+    ARRAY  = :array
     OBJECT = :object
     BULK   = :bulk
 
@@ -31,7 +32,7 @@ module CrystalClick
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
       @field_displays = field_displays.map { |name| String.new(name.to_slice) }
-      unless @kind == TUPLE || @kind == OBJECT || @kind == BULK
+      unless @kind == TUPLE || @kind == ARRAY || @kind == OBJECT || @kind == BULK
         raise ArgumentError.new("unknown recursive storage schema node")
       end
       if @kind == TUPLE
@@ -42,6 +43,14 @@ module CrystalClick
           raise ArgumentError.new("recursive storage Tuple cannot retain a leaf descriptor")
         end
         @declaration = render_tuple
+      elsif @kind == ARRAY
+        unless @children.size == 1 && @field_names.empty? && @field_displays.empty? &&
+               !@named_tuple && !@object_schema && !@bulk_type
+          raise ArgumentError.new("recursive storage Array must retain exactly one structural child")
+        end
+        @declaration = String.build do |io|
+          io << "Array(" << @children[0].declaration << ')'
+        end
       elsif @kind == OBJECT
         unless @children.empty? && @field_names.empty? && @field_displays.empty? && @object_schema && !@bulk_type
           raise ArgumentError.new("recursive storage JSON leaf is inconsistent")
@@ -65,6 +74,10 @@ module CrystalClick
 
     def self.bulk(type : BinaryDataType, source : String) : StorageColumnSchema
       new(BULK, source, bulk_type: type)
+    end
+
+    def self.array(source : String, child : StorageColumnSchema) : StorageColumnSchema
+      new(ARRAY, source, [child] of StorageColumnSchema)
     end
 
     def self.tuple(
@@ -108,6 +121,10 @@ module CrystalClick
       @kind == TUPLE
     end
 
+    def array? : Bool
+      @kind == ARRAY
+    end
+
     def object? : Bool
       @kind == OBJECT
     end
@@ -118,7 +135,35 @@ module CrystalClick
 
     def has_json? : Bool
       return true if @kind == OBJECT
-      @kind == TUPLE && @children.any?(&.has_json?)
+      (@kind == TUPLE || @kind == ARRAY) && @children.any?(&.has_json?)
+    end
+
+    def has_array? : Bool
+      return true if @kind == ARRAY
+      (@kind == TUPLE || @kind == ARRAY) && @children.any?(&.has_array?)
+    end
+
+    # Number of structural Array sites in DFS order. This is allocation-free
+    # so operation owners can preflight per-site schedules before copying rows.
+    def array_site_count : Int32
+      if @kind == ARRAY
+        child_count = @children[0].array_site_count
+        if child_count == Int32::MAX
+          raise UnsupportedFormatError.new("recursive Array site count exceeds Int32")
+        end
+        return child_count + 1
+      end
+      return 0 unless @kind == TUPLE
+
+      count = 0
+      @children.each do |child|
+        child_count = child.array_site_count
+        if child_count > Int32::MAX - count
+          raise UnsupportedFormatError.new("recursive Array site count exceeds Int32")
+        end
+        count += child_count
+      end
+      count
     end
 
     def named_tuple? : Bool
@@ -189,6 +234,14 @@ module CrystalClick
       output
     end
 
+    # Structural Array identity is its node path; JSON identities below that
+    # node append `/array[0]`, so the schedule owner cannot alias a leaf owner.
+    def array_site_keys(prefix : String = "root") : Array(String)
+      output = Array(String).new
+      append_array_site_keys(prefix, output)
+      output
+    end
+
     def each_json_site(prefix : String = "root", &block : String, ObjectDocumentSchema -> Nil) : Nil
       sites = Array(Tuple(String, ObjectDocumentSchema)).new
       append_json_sites(prefix, sites)
@@ -237,6 +290,23 @@ module CrystalClick
           end
           child.append_json_site_keys(child_prefix, output)
         end
+      elsif @kind == ARRAY
+        child_prefix = String.build { |io| io << prefix << "/array[0]" }
+        @children[0].append_json_site_keys(child_prefix, output)
+      end
+      nil
+    end
+
+    protected def append_array_site_keys(prefix : String, output : Array(String)) : Nil
+      if @kind == ARRAY
+        output << String.new(prefix.to_slice)
+        child_prefix = String.build { |io| io << prefix << "/array[0]" }
+        @children[0].append_array_site_keys(child_prefix, output)
+      elsif @kind == TUPLE
+        @children.each_with_index do |child, index|
+          child_prefix = String.build { |io| io << prefix << "/tuple[" << index << ']' }
+          child.append_array_site_keys(child_prefix, output)
+        end
       end
       nil
     end
@@ -251,6 +321,9 @@ module CrystalClick
           end
           child.append_json_sites(child_prefix, output)
         end
+      elsif @kind == ARRAY
+        child_prefix = String.build { |io| io << prefix << "/array[0]" }
+        @children[0].append_json_sites(child_prefix, output)
       end
       nil
     end

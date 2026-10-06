@@ -1,5 +1,14 @@
 # General JSON Storage Frontier
 
+W185-W187 supersede the earlier wrapper guards only for their qualified
+normalized profiles: dedicated Array(JSON), recursive Tuple with JSON sites,
+and common Array/Tuple composition. W187's two paired persisted witnesses use
+explicit BASIC child Dynamic mode; stock-default COMPACT and other enclosing
+wrappers/layouts remain guarded. The current read/write/table scope and
+executed evidence are in
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+The historical gates below are not a claim of complete recursive compatibility.
+
 W184 adds an internal paired BASIC child occurrence-grid seam for existing
 Object/Dynamic owners and physical lane emission. Its selected DEBUG/RELEASE
 and file-backed evidence are in

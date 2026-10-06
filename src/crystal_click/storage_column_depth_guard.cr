@@ -21,7 +21,7 @@ module CrystalClick
       ensure_depth!(depth, limits, writing)
 
       case value.kind
-      when StorageColumnValue::TUPLE
+      when StorageColumnValue::TUPLE, StorageColumnValue::ARRAY
         if value.child_count > 0
           child_depth = next_depth(depth, writing)
           value.child_count.times do |index|
