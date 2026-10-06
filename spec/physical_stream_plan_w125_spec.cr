@@ -189,15 +189,29 @@ describe "W125 generic physical stream plans" do
     expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::ObjectDocumentPhysicalPlan.new("doc", logical, limits: limits) }
   end
 
-  it "rejects legacy and unadmitted Object layouts instead of borrowing MAP names" do
+  it "retains legacy Object V2 rejection and binds advanced lanes separately from MAP" do
     stats = CrystalClick::StructureStatistics.new([] of UInt64, [] of CrystalClick::StructureStatistic)
-    objects = [
-      CrystalClick::ObjectStructure.new([] of String, version: 2_u64, statistics: stats),
-      CrystalClick::ObjectStructure.new([] of String, shared_data_version: 3_u64, bucket_count: 2_u64),
-    ]
-    objects.each do |object|
-      logical = CrystalClick::ObjectDocumentPlan.new(CrystalClick::ObjectDynamicStructureSet.new(object, {} of String => CrystalClick::DynamicStructure), {} of String => CrystalClick::BinaryDataType)
-      expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::ObjectDocumentPhysicalPlan.new("doc", logical) }
+    legacy = CrystalClick::ObjectStructure.new([] of String, version: 2_u64, statistics: stats)
+    legacy_plan = CrystalClick::ObjectDocumentPlan.new(
+      CrystalClick::ObjectDynamicStructureSet.new(legacy, {} of String => CrystalClick::DynamicStructure),
+      {} of String => CrystalClick::BinaryDataType,
+    )
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::ObjectDocumentPhysicalPlan.new("doc", legacy_plan)
+    end
+
+    {2_u64, 3_u64}.each do |shared_version|
+      advanced = CrystalClick::ObjectStructure.new([] of String, shared_data_version: shared_version, bucket_count: 2_u64)
+      CrystalClick::ObjectSharedBucketLayout.validate!(advanced).should be_nil
+      logical = CrystalClick::ObjectDocumentPlan.new(
+        CrystalClick::ObjectDynamicStructureSet.new(advanced, {} of String => CrystalClick::DynamicStructure),
+        {} of String => CrystalClick::BinaryDataType,
+      )
+      physical = CrystalClick::ObjectDocumentPhysicalPlan.new("doc", logical)
+      physical.advanced_copy_stream_name("indexes").should eq("doc.object_shared_data.copy.paths_indexes")
+      physical.advanced_bucket_stream_name(0, "substreams").should eq("doc.object_shared_data.0.substreams")
+      physical.advanced_stream_name?("doc.object_shared_data.0.size0").should be_false
+      physical.advanced_stream_name?("doc.object_shared_data.1.values").should be_false
     end
   end
 

@@ -124,11 +124,45 @@ describe "W192 root-authored Copy adversaries" do
     end
   end
 
-  it "does not admit persisted advanced documents on the strength of Copy support" do
+  it "plans ADVANCED and CHUNKED Copy and bucket lanes without borrowing MAP roles" do
+    expected_lanes = [
+      "structure",
+      "data",
+      "paths_marks",
+      "substreams",
+      "substreams_marks",
+      "paths_substreams_metadata",
+    ]
     {2_u64, 3_u64}.each do |version|
-      structure = CrystalClick::ObjectStructure.new([] of String, shared_data_version: version, bucket_count: 1_u64)
-      CrystalClick::ObjectSharedBucketLayout.supported?(structure).should be_false
-      expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::ObjectSharedBucketLayout.validate!(structure) }
+      structure = CrystalClick::ObjectStructure.new([] of String, shared_data_version: version, bucket_count: 2_u64)
+      CrystalClick::ObjectSharedBucketLayout.supported?(structure).should be_true
+      CrystalClick::ObjectSharedBucketLayout.validate!(structure).should be_nil
+      plan = CrystalClick::ObjectDocumentPlan.new(
+        CrystalClick::ObjectDynamicStructureSet.new(
+          structure,
+          {} of String => CrystalClick::DynamicStructure,
+        ),
+        {} of String => CrystalClick::BinaryDataType,
+      )
+      physical = CrystalClick::ObjectDocumentPhysicalPlan.new("doc", plan)
+
+      physical.advanced_copy_stream_name("sizes").should eq("doc.object_shared_data.copy.sizes")
+      physical.advanced_copy_stream_name("indexes").should eq("doc.object_shared_data.copy.paths_indexes")
+      physical.advanced_copy_stream_name("values").should eq("doc.object_shared_data.copy.values")
+      physical.advanced_bucket_stream_name(0, "structure").should eq("doc.object_shared_data.0.structure")
+      physical.advanced_bucket_stream_name(1, "paths_substreams_metadata").should eq("doc.object_shared_data.1.paths_substreams_metadata")
+
+      expected_names = [
+        "doc.object_shared_data.copy.sizes",
+        "doc.object_shared_data.copy.paths_indexes",
+        "doc.object_shared_data.copy.values",
+      ]
+      2.times do |bucket|
+        expected_lanes.each { |lane| expected_names << "doc.object_shared_data.#{bucket}.#{lane}" }
+      end
+      physical.advanced_stream_names.should eq(expected_names.sort)
+      physical.advanced_stream_name?("doc.object_shared_data.0.size0").should be_false
+      physical.advanced_stream_name?("doc.object_shared_data.1.paths").should be_false
     end
   end
 end

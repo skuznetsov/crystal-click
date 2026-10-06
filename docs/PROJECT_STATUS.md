@@ -1,6 +1,35 @@
 # CrystalClick project status
 
-Current internal foundation (W194, 2026-10-06): paired schema-agnostic Wide
+Current qualified frontier (W195, 2026-10-06): paired complete Wide Object
+shared ADVANCED/ADVANCED_CHUNKED read/write composes the W192 Copy, W193 path
+Data and W194 physical bucket owners. Native qualification is finite: root
+JSON and Array(JSON), populated/empty shared storage, versions 2/3, and actual
+shared String/NULL values. Both fresh DEBUG and RELEASE runs independently
+ATTACH/CHECK 16 parts, compare 128 full and 64 middle rows, verify empty
+selections, and compare 192 direct path rows per mode. Whole-object and
+independent path reads both pass. All 312 generated files are byte-identical
+between modes. The same 106 affected spec files pass 664 examples per mode,
+zero failures/errors/pending, actual guarded exits 0.
+
+The native path falsifier exposed a composition defect, not missing String
+serde: part metadata advertised String version 0 while child path encoding
+used version 1. Explicit profile propagation fixes that boundary without
+changing the separate Copy framing selector or blindly bumping typed siblings.
+Offline reconciliation now respects exact Object statistics mark boundaries,
+stock/library metadata rosters and the producer's two-layer invocation records.
+Historical checkpoints below and in the frontier document describe earlier
+source states, not the current qualified result.
+
+Next: complete missing physical wrapper contracts for legal recursive types
+and qualify their paired writer/reader branches, including LowCardinality,
+Nested, QBit and JSON-as-Dynamic-actual per-path storage. Reuse existing child
+codecs; do not enumerate or implement a serializer per type product. Compact
+advanced parts, full types, broader MV/projections and repository-wide class
+decomposition remain open. Performance is deferred; the overall goal is
+incomplete. Details: [OBJECT_SHARED_ADVANCED_FRONTIER.md](OBJECT_SHARED_ADVANCED_FRONTIER.md),
+`.landmark/evidence/object-shared-advanced-parts-w195.json`.
+
+Previous internal foundation (W194, 2026-10-06): paired schema-agnostic Wide
 six-lane Object shared bucket read/write composes existing path Data/event
 tapes, not a scalar serializer per recursive type product. Separate public
 owners preserve physical parent rows, logical chunks, paths and actual compressed

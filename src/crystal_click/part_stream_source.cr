@@ -79,6 +79,13 @@ module CrystalClick
       )
     end
 
+    # Resolve one exact checksum-declared pair into the detached input owner
+    # consumed by the schema-agnostic Object shared physical decoder.
+    def physical_lane_input(data_name : String, marks_name : String) : ObjectSharedPhysicalLaneInput
+      data, marks = resolve_pair(data_name, marks_name)
+      ObjectSharedPhysicalLaneInput.new(data.path, marks.path, data.size, marks.size)
+    end
+
     private def resolve_pair(data_name : String, marks_name : String) : {ResolvedFile, ResolvedFile}
       {resolve(data_name), resolve(marks_name)}
     end

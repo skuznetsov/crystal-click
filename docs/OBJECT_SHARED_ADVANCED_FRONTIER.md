@@ -1,20 +1,23 @@
 # Object Advanced Shared Storage Frontier
 
-Document status: W191 verified metadata prerequisite and capture; W192 paired
-exact-Copy payload prerequisite qualified against the retained stock corpus.
-W193 paired per-path Compact Data/tape prerequisite is qualified against the
-retained stock String/NULL corpus; ordinary recursive arms have unit witnesses.
-Persisted ADVANCED/CHUNKED storage is not admitted.
-W194's schema-agnostic per-bucket Wide six-lane read/write prerequisite is
-qualified against the retained stock String/NULL corpus and fresh pinned-native
-decompression of both generated frame schedules. Internal coordinates resolve
-through actual compressed frames. Persisted document guards remain unchanged
-until complete paired parts pass ATTACH/CHECK and whole/path readbacks.
-Baseline: `c99c9cf` (W190), clean tree at entry, 2026-10-06.
+Document status: W195 paired complete Wide ADVANCED/ADVANCED_CHUNKED parts
+are qualified for the executed finite root JSON/Array(JSON), populated/empty,
+actual String/NULL corpus. Both freshly built modes pass stock-to-Crystal
+reads and Crystal-to-stock ATTACH/CHECK, whole-object and independent path
+reads. The exposed String profile composition defect is repaired; the retained
+falsifier and causal probe remain below as historical lineage. W191-W194
+prerequisites retain their original narrower claims. W195 baseline is clean
+`c71d76871701dd73d2afcc71c8335acd30da9abe`, 2026-10-06; this document began
+at W190 `c99c9cf`. See the final qualification section for current evidence.
 The full read/write types and MV/projections goal remains open. Performance is
 deferred until those capabilities are implemented and qualified.
 
 ## Required capability and current boundary
+
+W195 composes existing chunk, Copy, path and physical-bucket owners through
+the common document/column boundary. Its fresh full-part gates, not the W194
+prerequisite or self-round trips, qualify the finite persisted versions 2/3
+witnesses. The historical plan below is not evidence by itself.
 
 Extend the existing recursive Object storage owners to read and write Object
 V3 shared ADVANCED (version 2) and ADVANCED_CHUNKED (version 3) in normalized
@@ -22,11 +25,12 @@ Wide parts. Preserve the existing MAP and MAP_WITH_BUCKETS bytes and public
 APIs. A stock-to-Crystal reader without the corresponding stock-readable writer
 is an intermediate result, not completion of this capability.
 
-Currently admitted storage remains W190's finite MAP/MAP_WITH_BUCKETS profiles;
-see [OBJECT_SHARED_BUCKETS_FRONTIER.md](OBJECT_SHARED_BUCKETS_FRONTIER.md).
-Versions 2/3 remain rejected by the persisted document owners during this
-investigation. Compact parts, automatic roster inference, projection envelope
-writing, MV dependency execution and performance claims are not added here.
+W190's finite MAP/MAP_WITH_BUCKETS profiles remain qualified; see
+[OBJECT_SHARED_BUCKETS_FRONTIER.md](OBJECT_SHARED_BUCKETS_FRONTIER.md).
+W195 adds finite ADVANCED/ADVANCED_CHUNKED Wide witnesses, not universal
+recursive type compatibility. Compact parts, automatic roster inference,
+projection envelope writing, MV dependency execution and performance claims
+are not added here.
 
 The stock-authored physical capture now provides a discriminator:
 root JSON and Array(JSON), explicit ADVANCED versus ADVANCED_CHUNKED, forced
@@ -35,6 +39,25 @@ The capture exposes the actual version, bucket count, stream roster,
 structure records and whole-shared copy lanes. Chosen settings alone do not
 establish the resulting format. This probe prepares the read/write owners; it
 does not redefine the requested final state as a stock-only tool.
+
+## Recursive composition, not a serializer per type product
+
+Leaf codecs are reusable, but a persisted column is not generally a recursively
+wrapped scalar blob. Each enclosing serializer owns a physical composition
+contract: stream names, prefix/body/suffix state, child cardinality, marks and
+the inherited serialization profile. Array offsets change the child's row
+domain; LowCardinality owns dictionary/index state; Dynamic and Variant route
+values through type/discriminator metadata; Object additionally maintains
+typed, dynamic and shared Copy/path representations.
+
+Implement that contract once per enclosing layout and delegate child values
+to the existing recursive codecs. Do not implement or enumerate the Cartesian
+product of type schemas. Unsupported combinations identify a missing physical
+contract or an unqualified branch, not necessarily missing leaf serde. Native
+fixtures qualify the exercised branches; self-round trips alone cannot prove
+that ClickHouse consumes the same streams and state. In particular, the W195
+String defect required propagation of the part's existing profile through the
+child call chain, not another String serializer.
 
 ## Source and runtime anchors
 
@@ -700,3 +723,269 @@ ATTACH/CHECK plus whole-object AND independent path reads before admitting
 persisted shared versions 2/3. LowCardinality, Nested, QBit and JSON-as-Dynamic-
 actual path layouts stay guarded. Full types, broader MV/projections and the
 remaining large-class decomposition are open; performance remains deferred.
+
+## W195 composition and complete-part plan
+
+Risk: CAUTION (persistent serialization and shared reader/writer dispatch).
+Rollback: exact scoped local Git commit only after the declared gates, against
+clean `c71d768`; no push or remote-history change is authorized. Existing MAP
+and MAP_WITH_BUCKETS behavior and bytes remain regression requirements.
+
+The consumer inventory identifies one common composition boundary:
+`ObjectDocumentCodec` extracts shared rows, `ObjectDocumentStreams` retains
+them, `ObjectDocumentPhysicalPlan` enumerates filenames, and
+`ObjectDocumentColumnWriter` / `ObjectDocumentFileReader` bind physical lanes.
+Root, Array and recursive Array/Tuple part and table consumers already route
+through these owners. Do not add a scalar serializer per enclosing product.
+
+All advanced coordinators borrow the caller's existing codec and transport
+budgets. Codec accounting bounds cumulative logical operation work: physical
+lane materialization and later semantic Copy/path decoding are both charged.
+It is deliberately conservative, not a claim of unique wire bytes or resident
+memory. No child coordinator may silently reset the operation budget.
+
+1. Add `ObjectSharedAdvancedChunk` and `ObjectSharedAdvancedChunkCodec` as
+   separate owners. Encode each chunk's Copy through W192 and each bucketed
+   path's full row sequence through W193, including NULL holes for absent paths.
+   Writer documents omit untyped NULL entries, matching the existing Object
+   normalization. Avoid automatic type-roster inference; a normalized empty
+   Dynamic roster with scalar-envelope spill is a candidate writer policy,
+   subject to source and native qualification, not an assumed certificate.
+2. Add an outer reusable coordinator for chunkization, all-bucket schedule
+   equality, three concatenated Copy lanes and W194's six lanes per bucket.
+   Compare every bucket's chunk counts and row counts at every physical parent;
+   equal total row counts are insufficient. Compare Copy and independently
+   decoded path values at the same logical row before returning documents.
+3. Wire a deferred advanced shared representation into the common document,
+   physical-plan, writer and reader owners. Preserve physical parent rows
+   separately from logical Object occurrences, including positive physical
+   marks with zero Array children. Preserve v2's one-chunk-per-parent rule;
+   the normalized v3 writer uses target one logical row per chunk, retaining
+   one zero-row chunk for empty child marks. Test this physical schedule, not
+   only the resulting values. Do not infer
+   source chunk settings from a schema or equate physical and logical rows.
+4. Add `scripts/check_object_shared_advanced_parts_w195.cr` and `.rb` using the
+   existing bounded stock supervisor, immutable inventory and ATTACH flow.
+   Qualify all eight W191 root/Array, v2/v3, populated/empty profiles with
+   independently authored values. Run stock-to-library reads and
+   library-to-stock ATTACH/CHECK, exact schemas, whole-object AND independent
+   path projections; library direct/table full, middle and zero windows must
+   match the independent row oracle. Authenticate actual processes and parts,
+   not only copied summary fields or a helper exit code.
+
+First falsifiers: missing chunk/document API or current version refusal is
+measured RED before production edits. A same-total but redistributed bucket
+chunk schedule must reject. Swapping two valid equal-length per-path payloads
+while leaving valid Copy data unchanged must reject: whole-object success
+alone cannot certify path correctness. Empty child and absent/NULL controls,
+hash-bucket placement, exact stream rosters, malformed coordinates/counts and
+cumulative caller budgets remain guards.
+
+DoD: focused chunk/document falsifiers plus the inherited 100 affected spec
+files in DEBUG and RELEASE, with actual terminal/guard exits and input identity;
+fresh guarded builds and full native paired runs in both modes; independent
+literal/schema/part/process reconciliation, deliberate oracle/evidence
+mutations, formatting and scoped hostile review. All compiler/native work stays
+serial under the existing 600-second/12288-MiB/min-free-50-percent runner.
+If a native probe fails, retain the failed root and distinguish probe/runtime
+failure from a format rejection. Do not promote the persisted compatibility
+claim until the real paired gate passes.
+
+This advances the requested full read/write engine, not a narrower replacement
+goal. Unqualified recursive products, remaining types, MV/projection consumers
+and class decomposition remain open; performance work is still deferred.
+
+### W195 integration checkpoint
+
+The checkpoints below retain the evidence and claim boundaries at their source
+states. They are historical, not cumulative statements about the current diff;
+the final qualification section supersedes their continuation instructions.
+
+The first guarded chunk discriminator failed on the missing
+`ObjectSharedAdvancedChunkCodec`, and the corrected document discriminator
+failed on the existing persisted version-2/3 schema guard. Test-only literal
+annotations were repaired before accepting the latter as a valid RED signal.
+The first focused chunk GREEN passed 9 examples with zero failures, errors or
+pending cases and a terminal guard exit zero. It includes a recursive
+`Array(Nullable(Int64))` witness, absent/empty distinctions, Copy/path mismatch
+controls and caller-budget checks. A test assertion initially omitted one
+Nullable unwrap; its failed log is retained separately.
+
+Focused log root: `/private/tmp/crystal-click-w195-integration.HU42n4`;
+accepted logs: `chunk-red.log`, `document-red-valid.log`, and
+`chunk-green-debug-retry.log`. Source/spec identity at the focused GREEN:
+932 files, aggregate SHA-256
+`537cb77c2e1686badc9c91f558bf5252fc8f20523488104a89a495fa44cdb155`.
+This is a local composition check, not persisted native admission; subsequent
+source/spec edits require rerunning the affected gates.
+
+Continuation: finish the separately owned all-bucket Copy layout, document
+coordinator and existing consumer integration, then run the declared full
+paired gates. Copy index width must use the total path dictionary across all
+buckets, including the greater-than-256 threshold. Native Array(JSON) path
+queries must select actual subcolumns, not merely extract paths from a
+whole-object lambda result. Persisted v2/v3, the full types/MV/projections goal
+and performance remain open until their actual gates pass.
+
+### W195 native falsifier checkpoint
+
+The common advanced document/column implementation and four new focused spec
+files pass 659 examples in each affected DEBUG and RELEASE gate, with zero
+failures/errors/pending and actual guard exits zero. The final tested src/spec
+identity is 936 files, SHA-256
+`c7d81232c28782c460bc3e4a267caa6cfc80a4e2b53a19c93552dd2b8c586331`.
+These gates do not establish native per-path compatibility.
+
+The fresh DEBUG run at
+`/private/tmp/crystal-click-w195-native-debug-elements.nqASrY` successfully
+created targets, ran the Crystal helper, attached source and generated parts,
+and read whole/full/middle/zero Object values. The subsequent independent
+`dynamicElement(j.path, 'String')` queries read stock values correctly, but
+generated root-v2 `alpha` and `aa` returned only NULL and `beta` failed with
+`CANNOT_READ_ALL_DATA` (expected one byte). Thus whole-Object Copy success is
+not a certificate for the independently stored per-path Data representation.
+Scoped writer verdict at this checkpoint: BROKEN for native per-path reading.
+
+Earlier retained native roots distinguish probe repairs from this substantive
+falsifier: `.qHmmBS` failed before native execution on the empty-root lifecycle;
+`.Awoz2n` created targets then failed on the manifest's `part_name` field;
+`.0ahK4Y` and `.0hNgd0` failed generic Dynamic JSON/CAST dispatch on `Nothing`.
+Their complete root names are in the logs under the integration log root.
+The explicit typed-element query preserves per-PK authored literals and Array
+NULL/empty positions; it does not substitute expected values or relax a check.
+
+Next discriminator: source-backed per-path shared-variant framing/coordinate
+analysis, then a literal regression that fails before the minimal fix. Any
+production/spec edit expires the current gates and requires both affected
+modes, fresh helpers and new empty-root native runs. No W195 commit, blanket
+format-admission claim or performance work is justified by this checkpoint.
+
+### W195 profile-boundary diagnostic
+
+The root-owned guarded diagnostic at
+`/private/tmp/crystal-click-w195-beta-trace.TYA5A2/beta_trace_w195.json`
+independently decompresses six generated root-v2 bucket-1 lanes with the pinned
+native compressor. All four beta path Data payloads, callback names, raw mark
+pairs and resolved absolute/relative offsets match the retained W191 stock
+capture. This rules out a payload/tape-coordinate discrepancy for those four
+records, not every profile or recursive product.
+
+The generated part's `serialization.json` declares String version 0, while the
+stock part declares version 1 and `ObjectSharedPathCodec::COMPACT_PROFILE`
+encodes sized String lanes. `ObjectPartMetadata` derives the advertised version
+only from the outer profile. The pinned source selects distinct String readers
+from this metadata (`DataTypeString.cpp:36-39`,
+`SerializationString.cpp:322-329`). The inconsistent profile is an observed
+integration defect; its causality for the native failure is still a hypothesis.
+Do not blindly bump global metadata if ordinary typed String lanes retain
+version-0 framing. The next repair must compose one coherent profile through
+the child codecs and part metadata, followed by a fresh native direct-path gate.
+No production code or native-qualified fix was established by this diagnostic.
+
+The subsequent isolated causal probe at
+`/private/tmp/crystal-click-w195-profile-flip-final.rmZVd4/summary.json`
+compared two copies of the same failing root-v2 part. Only the String version
+in `serialization.json` differed; every data/mark file was byte-identical. With
+version 0, alpha/aa returned only NULL and beta exited 33. With version 1, all
+three independent path queries matched the authored eight-row per-PK oracle.
+This establishes the profile mismatch as the cause for this retained part,
+not a compatible writer repair: the probe intentionally did not run CHECK.
+The first diagnostic's hex-case oracle defect was independently detected by
+decoding the result hex to bytes, then corrected before the fresh probe above.
+
+### W195 profile repair contract (design-sealed, not qualified)
+
+Risk: CAUTION (serialization); rollback is the scoped repair diff on top of the
+retained W195 working state and baseline `c71d768`, never a whole-tree reset.
+The first discriminator is an isolated metadata-only String 0-to-1 flip on a
+copy of the failing part, with data/mark files unchanged and separate native
+alpha/aa/beta queries. This is a diagnosis, not an ATTACH/CHECK qualification.
+
+The intended repair passes the explicit nested String profile through path,
+physical bucket, advanced chunk/document and full-column owners. ADVANCED does
+not intrinsically require String version 1. Historical low-level sized-profile
+defaults remain compatible; complete-part calls must explicitly use the profile
+advertised by their existing metadata owner. The separate shared Copy/MAP
+framing selector must not be confused with this nested bulk String profile.
+Existing full-part nested-version propagation guards remain unchanged.
+
+New falsifiers: literal v0/v1 path payloads and callbacks, NULL-first mixed
+discriminators, recursive String children, and complete root/Array(JSON) parts
+with a typed String sibling. The sibling rejects a blind global metadata bump.
+DoD: guarded focused profile specs and the affected DEBUG/RELEASE roster, fresh
+helpers and fresh native paired part/path gates, offline reconciliation and
+the existing evidence-mutation controls. The repair must preserve correct
+Copy bytes, unrelated profiles, caller budgets and explicit corruption guards.
+
+### W195 final finite qualification
+
+The repair propagates the main `BinaryBulkProfile` through child path, physical
+bucket, chunk, document and complete-column owners. Historical low-level
+version-1 defaults preserve existing call arity; full parts explicitly use the
+profile advertised in their metadata. Shared Copy framing remains a separate
+selector. A typed String sibling prevents a global metadata-only workaround.
+
+The final 938-file src/spec identity is SHA-256
+`6798a0123619bb25ec799d13ac025835cfca7c9dea78d97923d871a6a008579f`,
+unchanged across focused tests, both affected modes, fresh helper builds and
+native runs. Root actually executed 23 focused examples and the same 106-file
+affected roster: 664 DEBUG and 664 RELEASE examples, zero failures, errors or
+pending, actual guarded exits 0. Fresh helpers and both native runners exited 0.
+
+Final roots:
+
+- DEBUG: `/private/tmp/crystal-click-w195-native-debug-final.D9TEgl`.
+- RELEASE: `/private/tmp/crystal-click-w195-native-release-final.f7gadI`.
+
+Each mode covers eight profiles: root JSON/Array(JSON), versions 2/3 and
+populated/empty shared data. The stock actual values are String/NULL. The helper
+compares authored full/middle/zero values through direct and table readers for
+both source and generated parts. The native gate ATTACH/CHECKs 16 parts,
+compares 128 full and 64 middle rows, verifies zero selections and compares
+192 independent alpha/aa/beta path rows, preserving each parent PK and Array
+NULL/empty position. All 312 generated metadata/data/mark/index files per mode
+are byte-identical across DEBUG/RELEASE, including after mutation restoration.
+This is a paired full-part qualification, not merely Copy self-round trips.
+
+Three offline consumer assumptions were falsified and narrowly repaired:
+
+- Only exact Object metadata owners (`j.object_structure` and
+  `a.object_structure`) use the independently decoded statistics boundary for
+  their four real marks, followed by EOF. Captured populated/empty bytes yield
+  offset 11 and EOF 30/13. Ordinary data and shared bucket structure streams
+  still start at decoded zero. Bounds, monotonicity, parent rows and valid EOF
+  coordinate aliases remain enforced; there is no suffix-based waiver.
+- Stock metadata has the exact nine-file roster, including `statistics.packed`;
+  this library writer has the exact eight-file roster without it. Both actual
+  native CHECK results passed. Missing, cross-role or extra files still fail.
+- The producer persists local invocation JSON before adding the pre-run binary
+  hash to the in-memory summary. Compare every common field exactly, require
+  all three summary pins to match, and omit only that one summary-only field
+  from snapshot comparison. The helper snapshot must match exactly. No
+  arbitrary missing fields or incorrect pre-run hash are accepted.
+
+The final offline CLI reconciles both retained roots without running native
+commands. Root executed 34 CLI mutation controls (17 per mode), all rejected
+with exit 1 and their expected diagnostic: pin/claim/roster drift, coherent
+mark corruption, literal/schema/cardinality/path substitution and both record
+layers. Exact byte restoration leaves the positive results unchanged. Offline
+verification binds retained bytes and reports; it cannot authenticate an
+unrecorded helper executable hash or resist coordinated rewriting of every
+artifact. Root separately records freshly built helper hashes. `checksums.txt`
+is byte-bound and backed by actual native CHECK, not independently decoded here.
+
+Scoped verdict: ROBUST for the finite paired Wide String/NULL profiles above.
+Same-lineage source review is correlated; actual root native runs, regression
+gates and artifact controls supply the discriminating evidence. Source checkout
+and native runtime remain separately pinned; the runtime was not built from
+that checkout. Main String profile 1 has unit and source-read witnesses, not
+a fresh generated-writer native qualification in this slice.
+
+LowCardinality/Nested/QBit/JSON actual per-path layouts remain explicitly
+unsupported. Implement their wrapper contracts once and reuse child serde for
+legal recursive schemas. Universal types, Compact advanced parts, broader
+MV/projections, repository-wide class decomposition, full-suite coverage,
+RSS and performance claims remain open. Any affected source/profile/fixture,
+source or runtime pin change expires this certificate and requires the relevant
+regression plus fresh paired native/path gates. Evidence index:
+`.landmark/evidence/object-shared-advanced-parts-w195.json`.

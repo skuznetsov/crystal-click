@@ -85,7 +85,32 @@ describe "W123 independent Object document composition" do
     CrystalClick::ObjectDocumentCodec.decode({} of String => CrystalClick::BinaryDataType, empty).should be_empty
   end
 
-  it "distinguishes a recognized unadmitted Object profile from malformed input" do
+  it "round-trips ADVANCED and CHUNKED shared rows without MAP lanes" do
+    {2_u64, 3_u64}.each do |version|
+      structure = CrystalClick::ObjectDynamicStructureSet.new(
+        CrystalClick::ObjectStructure.new([] of String, shared_data_version: version, bucket_count: 2_u64),
+        {} of String => CrystalClick::DynamicStructure
+      )
+      plan = CrystalClick::ObjectDocumentPlan.new(structure, {} of String => CrystalClick::BinaryDataType)
+      document = CrystalClick::ObjectDocument.new({
+        "shared.only" => CrystalClick::BinaryValue.string("advanced-#{version}"),
+      })
+      encoded = CrystalClick::ObjectDocumentCodec.encode(
+        plan,
+        [[document]] of Array(CrystalClick::ObjectDocument),
+      )
+
+      encoded.shared_bucket_count.should eq(0)
+      encoded.advanced_shared_mark_count.should eq(1)
+      encoded.advanced_shared_row_count_at(0).should eq(1)
+      encoded.advanced_shared_row_at(0, 0).entry_count.should eq(1)
+      decoded = CrystalClick::ObjectDocumentCodec.decode({} of String => CrystalClick::BinaryDataType, encoded)
+      decoded.size.should eq(1)
+      decoded[0][0].value_for("shared.only").as_string.should eq("advanced-#{version}")
+    end
+  end
+
+  it "rejects a missing advanced row grid as corrupt input" do
     structure = CrystalClick::ObjectDynamicStructureSet.new(
       CrystalClick::ObjectStructure.new([] of String, shared_data_version: 3_u64, bucket_count: 2_u64),
       {} of String => CrystalClick::DynamicStructure
@@ -94,9 +119,10 @@ describe "W123 independent Object document composition" do
     streams = CrystalClick::ObjectDocumentStreams.new(metadata, [] of UInt64,
       {} of String => CrystalClick::BinaryBulkStreams, {} of String => CrystalClick::DynamicValueStreams,
       CrystalClick::BinaryBulkStreams.new(0, {} of String => CrystalClick::BinaryBulkStream))
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    error = expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::ObjectDocumentCodec.decode({} of String => CrystalClick::BinaryDataType, streams)
     end
+    error.message.should eq("advanced shared Object rows do not match the outer mark grid")
   end
 
   it "decodes independent full lane literals and validates the last selected envelope before returning" do

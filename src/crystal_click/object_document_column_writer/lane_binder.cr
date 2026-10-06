@@ -12,7 +12,9 @@ module CrystalClick
           raise UnsupportedFormatError.new("Object document output has no real outer marks")
         end
         expected = Hash(String, Bool).new
-        physical_plan.stream_names.each { |name| expected[name] = false }
+        physical_plan.stream_names.each do |name|
+          expected[name] = false unless physical_plan.advanced_stream_name?(name)
+        end
         lanes = Array(ObjectDocumentColumnLane).new(expected.size)
         structures = streams.structures
         object_bytes = structures.borrowed_object
@@ -140,17 +142,23 @@ module CrystalClick
             streams.typed_dynamic_mode
           )
         end
-        unless streams.shared_bucket_count == physical_plan.shared_bucket_count
-          raise UnsupportedFormatError.new("shared Object bucket lanes do not match their physical plan")
-        end
-        physical_plan.shared_bucket_count.times do |bucket_index|
-          add_bulk_lanes!(
-            lanes,
-            expected,
-            physical_plan.shared_bucket(bucket_index),
-            streams.shared_bucket(bucket_index),
-            streams.mark_count
-          )
+        unless plan.structures.object.shared_data_version >= 2_u64
+          unless streams.shared_bucket_count == physical_plan.shared_bucket_count
+            raise UnsupportedFormatError.new("shared Object bucket lanes do not match their physical plan")
+          end
+          physical_plan.shared_bucket_count.times do |bucket_index|
+            add_bulk_lanes!(
+              lanes,
+              expected,
+              physical_plan.shared_bucket(bucket_index),
+              streams.shared_bucket(bucket_index),
+              streams.mark_count
+            )
+          end
+        else
+          unless streams.shared_bucket_count == 0 && streams.advanced_shared_mark_count == streams.mark_count
+            raise UnsupportedFormatError.new("advanced shared Object logical rows do not match the outer mark grid")
+          end
         end
 
         unless lanes.size == expected.size && expected.each_value.all? { |seen| seen }

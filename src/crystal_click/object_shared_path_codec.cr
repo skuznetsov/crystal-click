@@ -27,8 +27,9 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
       rows : Array(BinaryValue),
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      profile : BinaryBulkProfile = COMPACT_PROFILE,
     ) : ObjectSharedPathStreams
-      encode_with_budget(type, structures, rows, BinaryCodecBudget.new(limits, true))
+      encode_with_budget(type, structures, rows, BinaryCodecBudget.new(limits, true), profile)
     end
 
     def self.encode_with_budget(
@@ -36,6 +37,7 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
       rows : Array(BinaryValue),
       budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = COMPACT_PROFILE,
     ) : ObjectSharedPathStreams
       unless budget.writing?
         raise ArgumentError.new("Object shared path encode requires a write-direction budget")
@@ -50,16 +52,16 @@ module CrystalClick
         raise UnsupportedFormatError.new("Object shared path row count exceeds the supported domain")
       end
 
-      plan = BinaryDynamicBulkPlan.new_with_prefix_without_statistics(type, structures, budget, COMPACT_PROFILE)
+      plan = BinaryDynamicBulkPlan.new_with_prefix_without_statistics(type, structures, budget, profile)
       structure_streams = plan.encode_structure_prefix_streams_without_statistics(budget)
-      data_streams = BinaryBulkEncoder.encode(type, [rows] of Array(BinaryValue), budget, COMPACT_PROFILE, plan)
+      data_streams = BinaryBulkEncoder.encode(type, [rows] of Array(BinaryValue), budget, profile, plan)
       role_names = planned_roles(plan, budget)
       compact_lanes = prepare_compact_lanes(role_names, data_streams, budget)
       physical_lanes = write_compact_lanes(compact_lanes, budget)
 
       emissions = [] of Emission
       emit_prefix_type(type, "root", "", 0, plan, structure_streams, data_streams, physical_lanes, emissions, budget)
-      emit_type(type, "root", "", 0, plan, structure_streams, data_streams, physical_lanes, emissions, budget)
+      emit_type(type, "root", "", 0, plan, structure_streams, data_streams, physical_lanes, emissions, budget, profile)
       materialize(emissions, role_names, structure_streams, data_streams, physical_lanes, budget)
     end
 
@@ -69,8 +71,9 @@ module CrystalClick
       row_count : Int,
       type : BinaryDataType,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      profile : BinaryBulkProfile = COMPACT_PROFILE,
     ) : Array(BinaryValue)
-      decode_with_budget(data, events, row_count, type, BinaryCodecBudget.new(limits))
+      decode_with_budget(data, events, row_count, type, BinaryCodecBudget.new(limits), profile)
     end
 
     def self.decode_with_budget(
@@ -79,8 +82,9 @@ module CrystalClick
       row_count : Int,
       type : BinaryDataType,
       budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = COMPACT_PROFILE,
     ) : Array(BinaryValue)
-      decode_with_structures_with_budget(data, events, row_count, type, budget).rows
+      decode_with_structures_with_budget(data, events, row_count, type, budget, profile).rows
     end
 
     def self.decode_with_structures_with_budget(
@@ -89,6 +93,7 @@ module CrystalClick
       row_count : Int,
       type : BinaryDataType,
       budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = COMPACT_PROFILE,
     ) : ObjectSharedPathDecodeResult
       if budget.writing?
         raise ArgumentError.new("Object shared path decode requires a read-direction budget")
@@ -111,18 +116,18 @@ module CrystalClick
 
       reader = ObjectSharedPathTapeReader.new(data, events, budget)
       decode_prefix_type(type, "root", "", 0, 1, reader, budget)
-      decode_type(type, "root", "", 0, reader, budget)
+      decode_type(type, "root", "", 0, reader, budget, profile)
       reader.finish!
       structure_streams = reader.build_structure_streams
       plan = BinaryDynamicBulkPlan.decode_structure_prefix_streams_without_statistics(
         type,
         structure_streams,
         budget,
-        COMPACT_PROFILE,
+        profile,
       )
       lanes = reader.bulk_streams
       rows_per_mark = [count] of UInt64
-      decoded = BinaryBulkDecoder.decode(type, lanes, rows_per_mark, budget, 0, 1, COMPACT_PROFILE, plan)
+      decoded = BinaryBulkDecoder.decode(type, lanes, rows_per_mark, budget, 0, 1, profile, plan)
       unless decoded.size == 1 && decoded[0].size == row_count
         raise CorruptPartError.new("Object shared path root row count disagrees with the decoded value domain")
       end
@@ -196,6 +201,7 @@ module CrystalClick
       physical_lanes : Hash(String, Bytes),
       emissions : Array(Emission),
       budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_DYNAMIC
@@ -210,7 +216,7 @@ module CrystalClick
           else
             arm_prefix = append_type_component(physical_prefix, arm, budget)
           end
-          emit_type(arm, child, arm_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget)
+          emit_type(arm, child, arm_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget, profile)
         end
       when BinaryDataType::TAG_VARIANT
         role = logical_name(path, ".discriminators", budget)
@@ -220,21 +226,23 @@ module CrystalClick
           arm = type.child_at(index)
           child = indexed_path(path, ".arm.", index, budget)
           arm_prefix = append_type_component(physical_prefix, arm, budget)
-          emit_type(arm, child, arm_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget)
+          emit_type(arm, child, arm_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget, profile)
         end
       when BinaryDataType::TAG_STRING
-        add_lane_emission(emissions, append_name(physical_prefix, ".size", budget), logical_name(path, ".string_sizes", budget), streams, 0, budget)
+        if profile.with_size_stream?
+          add_lane_emission(emissions, append_name(physical_prefix, ".size", budget), logical_name(path, ".string_sizes", budget), streams, 0, budget)
+        end
         add_lane_emission(emissions, physical_prefix, logical_name(path, ".data", budget), streams, 0, budget)
       when BinaryDataType::TAG_ARRAY
         suffix = ".size#{array_level}"
         add_lane_emission(emissions, append_name(physical_prefix, suffix, budget), logical_name(path, ".sizes", budget), streams, 0, budget)
         child = logical_name(path, ".elements", budget)
-        emit_type(type.child_at(0), child, physical_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget)
+        emit_type(type.child_at(0), child, physical_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget, profile)
       when BinaryDataType::TAG_NULLABLE
         add_lane_emission(emissions, append_name(physical_prefix, ".null", budget), logical_name(path, ".nulls", budget), streams, 0, budget)
-        emit_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget)
+        emit_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget, profile)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        emit_type(type.child_at(0), path, physical_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget)
+        emit_type(type.child_at(0), path, physical_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget, profile)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           add_lane_emission(emissions, physical_prefix, logical_name(path, ".data", budget), streams, 0, budget)
@@ -242,7 +250,7 @@ module CrystalClick
           type.child_count.times do |index|
             field_prefix = append_tuple_field(physical_prefix, type, index, budget)
             child = indexed_path(path, ".field.", index, budget)
-            emit_type(type.child_at(index), child, field_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget)
+            emit_type(type.child_at(index), child, field_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget, profile)
           end
         end
       when BinaryDataType::TAG_MAP
@@ -250,10 +258,10 @@ module CrystalClick
         add_lane_emission(emissions, append_name(physical_prefix, suffix, budget), logical_name(path, ".sizes", budget), streams, 0, budget)
         key_path = logical_name(path, ".elements.field.0", budget)
         key_prefix = append_escaped_field(physical_prefix, "keys", budget)
-        emit_type(type.child_at(0), key_path, key_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget)
+        emit_type(type.child_at(0), key_path, key_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget, profile)
         value_path = logical_name(path, ".elements.field.1", budget)
         value_prefix = append_escaped_field(physical_prefix, "values", budget)
-        emit_type(type.child_at(1), value_path, value_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget)
+        emit_type(type.child_at(1), value_path, value_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget, profile)
       when BinaryDataType::TAG_LOW_CARDINALITY
         raise UnsupportedFormatError.new("LowCardinality per-path physical substreams are not admitted")
       when BinaryDataType::TAG_NESTED
@@ -398,6 +406,7 @@ module CrystalClick
       array_level : Int32,
       reader : ObjectSharedPathTapeReader,
       budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_DYNAMIC
@@ -413,7 +422,7 @@ module CrystalClick
           else
             arm_prefix = append_type_component(physical_prefix, arm, budget)
           end
-          decode_type(arm, child, arm_prefix, array_level, reader, budget)
+          decode_type(arm, child, arm_prefix, array_level, reader, budget, profile)
         end
       when BinaryDataType::TAG_VARIANT
         role = logical_name(path, ".discriminators", budget)
@@ -422,19 +431,21 @@ module CrystalClick
         type.child_count.times do |index|
           arm = type.child_at(index)
           child = indexed_path(path, ".arm.", index, budget)
-          decode_type(arm, child, append_type_component(physical_prefix, arm, budget), array_level, reader, budget)
+          decode_type(arm, child, append_type_component(physical_prefix, arm, budget), array_level, reader, budget, profile)
         end
       when BinaryDataType::TAG_STRING
-        reader.add_lane(logical_name(path, ".string_sizes", budget), reader.take(append_name(physical_prefix, ".size", budget)))
+        if profile.with_size_stream?
+          reader.add_lane(logical_name(path, ".string_sizes", budget), reader.take(append_name(physical_prefix, ".size", budget)))
+        end
         reader.add_lane(logical_name(path, ".data", budget), reader.take(physical_prefix))
       when BinaryDataType::TAG_ARRAY
         reader.add_lane(logical_name(path, ".sizes", budget), reader.take(append_name(physical_prefix, ".size#{array_level}", budget)))
-        decode_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, array_level + 1, reader, budget)
+        decode_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, array_level + 1, reader, budget, profile)
       when BinaryDataType::TAG_NULLABLE
         reader.add_lane(logical_name(path, ".nulls", budget), reader.take(append_name(physical_prefix, ".null", budget)))
-        decode_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, array_level, reader, budget)
+        decode_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, array_level, reader, budget, profile)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        decode_type(type.child_at(0), path, physical_prefix, array_level, reader, budget)
+        decode_type(type.child_at(0), path, physical_prefix, array_level, reader, budget, profile)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           reader.add_lane(logical_name(path, ".data", budget), reader.take(physical_prefix))
@@ -442,15 +453,15 @@ module CrystalClick
           type.child_count.times do |index|
             field_prefix = append_tuple_field(physical_prefix, type, index, budget)
             child = indexed_path(path, ".field.", index, budget)
-            decode_type(type.child_at(index), child, field_prefix, array_level, reader, budget)
+            decode_type(type.child_at(index), child, field_prefix, array_level, reader, budget, profile)
           end
         end
       when BinaryDataType::TAG_MAP
         reader.add_lane(logical_name(path, ".sizes", budget), reader.take(append_name(physical_prefix, ".size#{array_level}", budget)))
         key_path = logical_name(path, ".elements.field.0", budget)
-        decode_type(type.child_at(0), key_path, append_escaped_field(physical_prefix, "keys", budget), array_level + 1, reader, budget)
+        decode_type(type.child_at(0), key_path, append_escaped_field(physical_prefix, "keys", budget), array_level + 1, reader, budget, profile)
         value_path = logical_name(path, ".elements.field.1", budget)
-        decode_type(type.child_at(1), value_path, append_escaped_field(physical_prefix, "values", budget), array_level + 1, reader, budget)
+        decode_type(type.child_at(1), value_path, append_escaped_field(physical_prefix, "values", budget), array_level + 1, reader, budget, profile)
       when BinaryDataType::TAG_LOW_CARDINALITY
         raise UnsupportedFormatError.new("LowCardinality per-path physical substreams are not admitted")
       when BinaryDataType::TAG_NESTED

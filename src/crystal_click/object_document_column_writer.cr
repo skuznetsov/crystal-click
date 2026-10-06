@@ -68,6 +68,10 @@ module CrystalClick
       lanes.each do |lane|
         pairs[lane.name] = lane.encode(rows_per_mark, frame_bytes, transport_budget)
       end
+      append_advanced_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
 
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
@@ -139,6 +143,10 @@ module CrystalClick
       lanes.each do |lane|
         pairs[lane.name] = lane.encode(rows_per_mark, frame_bytes, transport_budget)
       end
+      append_advanced_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
 
@@ -204,6 +212,10 @@ module CrystalClick
       lanes.each do |lane|
         pairs[lane.name] = lane.encode(rows_per_mark, frame_bytes, transport_budget)
       end
+      append_advanced_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
 
@@ -276,6 +288,11 @@ module CrystalClick
       lanes.each do |lane|
         pairs[lane.name] = lane.encode_child_site(grid, frame_bytes, transport_budget)
       end
+      physical_rows = physical_rows_from_grid(grid, codec_budget)
+      append_advanced_pairs!(
+        pairs, physical_plan, fresh_plan, streams, physical_rows,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
 
@@ -325,6 +342,59 @@ module CrystalClick
       streams : ObjectDocumentStreams,
     ) : Array(ObjectDocumentColumnLane)
       LaneBinder.bind_lanes(physical_plan, plan, streams)
+    end
+
+    private def self.append_advanced_pairs!(
+      pairs : Hash(String, CompressedMarkFiles),
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+      physical_rows : Array(UInt64),
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+      frame_bytes : Int,
+      profile : BinaryBulkProfile,
+    ) : Nil
+      version = plan.structures.object.shared_data_version
+      return nil if version < 2_u64
+
+      rows = streams.advanced_shared_rows(codec_budget)
+      files = ObjectSharedAdvancedDocumentCodec.encode(
+        rows,
+        physical_rows,
+        version.to_i,
+        ObjectSharedBucketLayout.bucket_count(plan.structures.object),
+        codec_budget,
+        transport_budget,
+        frame_bytes,
+        profile: profile,
+      )
+      {"sizes", "indexes", "values"}.each do |lane|
+        pairs[physical_plan.advanced_copy_stream_name(lane)] = files.copy_lane(lane)
+      end
+      files.bucket_count.times do |bucket_index|
+        ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.each do |lane|
+          pairs[physical_plan.advanced_bucket_stream_name(bucket_index, lane)] =
+            files.bucket_at(bucket_index).lane(lane)
+        end
+      end
+      nil
+    end
+
+    private def self.physical_rows_from_grid(
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+    ) : Array(UInt64)
+      count = grid.mark_count.to_u64
+      budget.ensure_future_nodes(count)
+      budget.ensure_future_elements(count)
+      rows = Array(UInt64).new(grid.mark_count)
+      grid.mark_count.times do |index|
+        rows << grid.physical_rows_at(index)
+        budget.charge_node
+      end
+      budget.charge_elements(count)
+      rows
     end
 
     private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool

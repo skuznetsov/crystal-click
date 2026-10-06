@@ -7,7 +7,11 @@ module CrystalClick
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
       frame_bytes : Int = 4096,
+      profile : BinaryBulkProfile = ObjectSharedPathCodec::COMPACT_PROFILE,
     ) : ObjectSharedPhysicalBucketFiles
+      # Per-path String profile belongs to the opaque Data payloads. Bucket
+      # framing stores those bytes unchanged, but accepts the selector so a
+      # caller can propagate one profile across the complete object codec.
       ObjectSharedPhysicalBucketEncoder.encode(version, parents, codec_budget, transport_budget, frame_bytes)
     end
 
@@ -17,6 +21,7 @@ module CrystalClick
       expected_parent_rows : Array(UInt64),
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
+      profile : BinaryBulkProfile = ObjectSharedPathCodec::COMPACT_PROFILE,
     ) : Array(ObjectSharedPhysicalParentMark)
       ObjectSharedPhysicalBucketDecoder.decode(version, lane_inputs, expected_parent_rows, codec_budget, transport_budget)
     end

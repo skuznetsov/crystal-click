@@ -15,6 +15,7 @@ module CrystalClick
     @dynamic_paths : Hash(String, DynamicValueStreams)
     @dynamic_names : Array(String)
     @shared_buckets : Array(BinaryBulkStreams)
+    @advanced_shared_rows : Array(Array(ObjectSharedMapRow))
 
     def initialize(
       structures : ObjectDynamicStructureStreams,
@@ -26,6 +27,7 @@ module CrystalClick
       typed_dynamic_statistics_offsets : Hash(String, Int32) = Hash(String, Int32).new,
       typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32)) = Hash(String, Hash(String, Int32)).new,
       typed_dynamic_mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
+      advanced_shared_rows : Array(Array(ObjectSharedMapRow)) = [] of Array(ObjectSharedMapRow),
     )
       @structures = structures
       @rows_per_mark = rows_per_mark.dup
@@ -107,6 +109,18 @@ module CrystalClick
                         else
                           shared.dup
                         end
+      unless advanced_shared_rows.empty?
+        unless advanced_shared_rows.size == @rows_per_mark.size
+          raise ArgumentError.new("advanced shared Object rows must match the outer mark grid")
+        end
+        advanced_shared_rows.each_with_index do |rows, mark_index|
+          unless rows.size.to_u64 == @rows_per_mark[mark_index]
+            raise ArgumentError.new("advanced shared Object rows must match each mark's logical row count")
+          end
+        end
+      end
+      @advanced_shared_rows = Array(Array(ObjectSharedMapRow)).new(advanced_shared_rows.size)
+      advanced_shared_rows.each { |rows| @advanced_shared_rows << rows.dup }
     end
 
     def structures : ObjectDynamicStructureStreams
@@ -242,6 +256,43 @@ module CrystalClick
 
     def shared_bucket(index : Int) : BinaryBulkStreams
       @shared_buckets[index]? || raise(IndexError.new("Object shared bucket index is outside the lane roster"))
+    end
+
+    def advanced_shared_mark_count : Int32
+      @advanced_shared_rows.size
+    end
+
+    def advanced_shared_row_count_at(mark_index : Int) : Int32
+      @advanced_shared_rows[mark_index].size
+    end
+
+    def advanced_shared_row_at(mark_index : Int, row_index : Int) : ObjectSharedMapRow
+      @advanced_shared_rows[mark_index][row_index]
+    end
+
+    # Detached outer/mark arrays; ObjectSharedMapRow values are immutable and
+    # remain shared snapshots. The complete row-reference matrix is budgeted
+    # before any proportional array copy.
+    def advanced_shared_rows(budget : BinaryCodecBudget) : Array(Array(ObjectSharedMapRow))
+      mark_count = @advanced_shared_rows.size.to_u64
+      row_count = 0_u64
+      @advanced_shared_rows.each do |rows|
+        if rows.size.to_u64 > UInt64::MAX - row_count
+          raise UnsupportedFormatError.new("advanced shared Object row count overflows UInt64")
+        end
+        row_count += rows.size.to_u64
+      end
+      if row_count > UInt64::MAX - mark_count
+        raise UnsupportedFormatError.new("advanced shared Object row matrix overflows UInt64")
+      end
+      nodes = mark_count + row_count
+      budget.ensure_future_nodes(nodes)
+      budget.ensure_future_elements(nodes)
+      nodes.times { budget.charge_node }
+      budget.charge_elements(nodes)
+      output = Array(Array(ObjectSharedMapRow)).new(@advanced_shared_rows.size)
+      @advanced_shared_rows.each { |rows| output << rows.dup }
+      output
     end
 
     private def compare_paths(left : String, right : String) : Int32

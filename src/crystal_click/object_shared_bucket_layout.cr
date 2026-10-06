@@ -12,6 +12,8 @@ module CrystalClick
         object.bucket_count == 1_u64
       when 1_u64
         1_u64 <= object.bucket_count <= MAX_BUCKET_COUNT
+      when 2_u64, 3_u64
+        1_u64 <= object.bucket_count <= MAX_BUCKET_COUNT
       else
         false
       end
@@ -20,7 +22,7 @@ module CrystalClick
     def self.validate!(object : ObjectStructure) : Nil
       unless supported?(object)
         raise UnsupportedFormatError.new(
-          "Object composition supports only Object V3 MAP or MAP_WITH_BUCKETS with 1..256 buckets"
+          "Object composition supports only Object V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or CHUNKED with 1..256 buckets"
         )
       end
       nil

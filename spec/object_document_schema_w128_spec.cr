@@ -104,11 +104,15 @@ describe "W128 ObjectDocumentSchema" do
     end
   end
 
-  it "admits explicit bucketed metadata and rejects unadmitted shared layouts" do
+  it "admits MAP, MAP_WITH_BUCKETS, ADVANCED, and CHUNKED while rejecting unknown shared versions" do
     schema = CrystalClick::ObjectDocumentSchema.new({"t" => w128_schema_type("UInt64")})
+    schema.validate_plan(w128_schema_plan(shared_version: 0_u64, buckets: 1_u64)).should be_nil
     schema.validate_plan(w128_schema_plan(shared_version: 1_u64, buckets: 2_u64)).should be_nil
+    {2_u64, 3_u64}.each do |shared_version|
+      schema.validate_plan(w128_schema_plan(shared_version: shared_version, buckets: 2_u64)).should be_nil
+    end
     expect_raises(ArgumentError) do
-      schema.validate_plan(w128_schema_plan(shared_version: 2_u64, buckets: 2_u64))
+      w128_schema_plan(shared_version: 4_u64, buckets: 2_u64)
     end
   end
 end

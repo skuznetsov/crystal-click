@@ -115,6 +115,7 @@ module CrystalClick
       budget.ensure_future_elements(mark_count.to_u64)
       total_rows = 0_u64
       shared_entries = 0_u64
+      shared_path_bytes = 0_u64
       granules.each do |mark_rows|
         if mark_rows.empty? && occurrence_grid.nil?
           raise ArgumentError.new("Object document real marks must contain at least one row")
@@ -143,6 +144,7 @@ module CrystalClick
               raise UnsupportedFormatError.new("non-typed top-level Nullable values are outside the canonical profile")
             end
             shared_entries = checked_add(shared_entries, 1_u64, true)
+            shared_path_bytes = checked_add(shared_path_bytes, path.bytesize.to_u64, true)
           end
         end
       end
@@ -248,32 +250,60 @@ module CrystalClick
       shared_wrapper_nodes = checked_add(total_rows, checked_multiply(shared_entries, 3_u64, true), true)
       budget.ensure_future_nodes(shared_wrapper_nodes)
       budget.ensure_future_elements(checked_multiply(shared_entries, 3_u64, true))
-      shared_granules = Array(Array(Array(ObjectDocumentSharedCodec::Entry))).new(mark_count)
-      granules.each do |mark_rows|
-        shared_rows = Array(Array(ObjectDocumentSharedCodec::Entry)).new(mark_rows.size)
-        mark_rows.each do |document|
-          entries = Array(ObjectDocumentSharedCodec::Entry).new
-          document.path_count.times do |path_index|
-            path = document.path_at(path_index)
-            next if plan.has_typed_path?(path) || object.has_dynamic_path?(path)
-            value = document.value_for(path)
-            next if value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
-            entries << {path, value}
+      advanced_shared_rows = [] of Array(ObjectSharedMapRow)
+      shared_lanes : BinaryBulkStreams | Array(BinaryBulkStreams)
+      if object.shared_data_version >= 2_u64
+        # The path byte snapshots below are an additional retained owner. Admit
+        # the complete raw path copy set before constructing ObjectSharedMapEntry.
+        budget.ensure_wire_bytes(shared_path_bytes)
+        budget.charge_wire_bytes(shared_path_bytes)
+        advanced_shared_rows = Array(Array(ObjectSharedMapRow)).new(mark_count)
+        granules.each do |mark_rows|
+          shared_rows = Array(ObjectSharedMapRow).new(mark_rows.size)
+          mark_rows.each do |document|
+            entries = Array(ObjectSharedMapEntry).new
+            document.path_count.times do |path_index|
+              path = document.path_at(path_index)
+              next if plan.has_typed_path?(path) || object.has_dynamic_path?(path)
+              value = document.value_for(path)
+              next if value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
+              entries << ObjectSharedMapEntry.new(path.to_slice, value)
+            end
+            shared_rows << ObjectSharedMapRow.new(entries)
           end
-          shared_rows << entries
+          advanced_shared_rows << shared_rows
         end
-        shared_granules << shared_rows
+        # Part-level Copy and six bucket lanes are emitted only at the Wide
+        # physical boundary, where parent rows and transport budgets exist.
+        shared_lanes = [] of BinaryBulkStreams
+      else
+        shared_granules = Array(Array(Array(ObjectDocumentSharedCodec::Entry))).new(mark_count)
+        granules.each do |mark_rows|
+          shared_rows = Array(Array(ObjectDocumentSharedCodec::Entry)).new(mark_rows.size)
+          mark_rows.each do |document|
+            entries = Array(ObjectDocumentSharedCodec::Entry).new
+            document.path_count.times do |path_index|
+              path = document.path_at(path_index)
+              next if plan.has_typed_path?(path) || object.has_dynamic_path?(path)
+              value = document.value_for(path)
+              next if value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
+              entries << {path, value}
+            end
+            shared_rows << entries
+          end
+          shared_granules << shared_rows
+        end
+        shared_lanes = if object.shared_data_version == 0_u64
+                         ObjectDocumentSharedCodec.encode_with_budget(shared_granules, budget, shared_profile)
+                       else
+                         ObjectDocumentSharedBucketsCodec.encode_with_budget(
+                           shared_granules,
+                           ObjectSharedBucketLayout.bucket_count(object),
+                           budget,
+                           shared_profile
+                         )
+                       end
       end
-      shared_lanes = if object.shared_data_version == 0_u64
-                       ObjectDocumentSharedCodec.encode_with_budget(shared_granules, budget, shared_profile)
-                     else
-                       ObjectDocumentSharedBucketsCodec.encode_with_budget(
-                         shared_granules,
-                         ObjectSharedBucketLayout.bucket_count(object),
-                         budget,
-                         shared_profile
-                       )
-                     end
 
       ObjectDocumentStreams.new(
         metadata,
@@ -284,7 +314,8 @@ module CrystalClick
         typed_dynamic_lanes,
         typed_dynamic_statistics_offsets,
         typed_dynamic_site_statistics_offsets,
-        typed_dynamic_mode: mode
+        typed_dynamic_mode: mode,
+        advanced_shared_rows: advanced_shared_rows
       )
     end
 
@@ -423,13 +454,19 @@ module CrystalClick
           corrupt!("Dynamic Object lane is missing metadata path #{path.inspect}")
         end
       end
-      expected_shared_buckets = ObjectSharedBucketLayout.bucket_count(object)
-      unless streams.shared_bucket_count == expected_shared_buckets
-        corrupt!("shared Object bucket lane count does not match its metadata")
-      end
-      expected_shared_buckets.times do |bucket_index|
-        unless streams.shared_bucket(bucket_index).mark_count == real_marks
-          corrupt!("shared Object lane mark grid does not match the outer row grid")
+      if object.shared_data_version <= 1_u64
+        expected_shared_buckets = ObjectSharedBucketLayout.bucket_count(object)
+        unless streams.shared_bucket_count == expected_shared_buckets && streams.advanced_shared_mark_count == 0
+          corrupt!("shared Object lane roster does not match its metadata")
+        end
+        expected_shared_buckets.times do |bucket_index|
+          unless streams.shared_bucket(bucket_index).mark_count == real_marks
+            corrupt!("shared Object lane mark grid does not match the outer row grid")
+          end
+        end
+      else
+        unless streams.shared_bucket_count == 0 && streams.advanced_shared_mark_count == real_marks
+          corrupt!("advanced shared Object rows do not match the outer mark grid")
         end
       end
 
@@ -559,7 +596,7 @@ module CrystalClick
                         selected_count,
                         shared_profile
                       )
-                    else
+                    elsif object.shared_data_version == 1_u64
                       ObjectDocumentSharedBucketsCodec.decode_with_budget(
                         streams,
                         rows_per_mark,
@@ -569,6 +606,16 @@ module CrystalClick
                         selected_first,
                         selected_count,
                         shared_profile
+                      )
+                    else
+                      decode_advanced_shared_rows_with_budget(
+                        streams,
+                        rows_per_mark,
+                        object,
+                        typed_schema,
+                        budget,
+                        selected_first,
+                        selected_count
                       )
                     end
 
@@ -628,6 +675,81 @@ module CrystalClick
       result
     end
 
+    private def self.decode_advanced_shared_rows_with_budget(
+      streams : ObjectDocumentStreams,
+      rows_per_mark : Array(UInt64),
+      object : ObjectStructure,
+      typed_schema : Hash(String, BinaryDataType),
+      budget : BinaryCodecBudget,
+      first_mark : Int32,
+      selected_count : Int32,
+    ) : Array(Array(Array(ObjectDocumentSharedCodec::Entry)))
+      unless streams.advanced_shared_mark_count == rows_per_mark.size
+        corrupt!("advanced shared Object mark grid does not match the outer row grid")
+      end
+
+      row_count = 0_u64
+      entry_count = 0_u64
+      path_bytes = 0_u64
+      rows_per_mark.size.times do |mark_index|
+        expected = rows_per_mark[mark_index]
+        unless streams.advanced_shared_row_count_at(mark_index).to_u64 == expected
+          corrupt!("advanced shared Object rows do not match an outer mark")
+        end
+        next if mark_index < first_mark || mark_index >= first_mark + selected_count
+        row_count = checked_add(row_count, expected, false)
+        expected.to_i.times do |row_index|
+          row = streams.advanced_shared_row_at(mark_index, row_index)
+          row.entry_count.times do |entry_index|
+            entry = row.entry_at(entry_index)
+            value = entry.value
+            if value.type.tag == BinaryDataType::TAG_NOTHING || value.is_null?
+              corrupt!("advanced shared Object rows cannot contain top-level NULL values")
+            end
+            if value.type.tag == BinaryDataType::TAG_NULLABLE
+              corrupt!("advanced shared Object rows cannot contain top-level Nullable values")
+            end
+            if raw_path_conflicts?(entry, typed_schema, object)
+              corrupt!("shared Object path overlaps a typed or Dynamic path")
+            end
+            entry_count = checked_add(entry_count, 1_u64, false)
+            path_bytes = checked_add(path_bytes, entry.path_byte_size.to_u64, false)
+          end
+        end
+      end
+
+      # One output group, row array, and shared entry per retained element;
+      # admit all path snapshots and container work before allocating them.
+      nodes = checked_add(selected_count.to_u64, checked_add(row_count, entry_count, false), false)
+      edges = checked_add(selected_count.to_u64, checked_add(row_count, entry_count, false), false)
+      budget.ensure_future_nodes(nodes)
+      budget.ensure_future_elements(edges)
+      budget.ensure_wire_bytes(path_bytes)
+      nodes.times { budget.charge_node }
+      budget.charge_elements(edges)
+      budget.charge_wire_bytes(path_bytes)
+
+      output = Array(Array(Array(ObjectDocumentSharedCodec::Entry))).new(selected_count)
+      selected_count.times do |mark_offset|
+        mark_index = first_mark + mark_offset
+        rows = Array(Array(ObjectDocumentSharedCodec::Entry)).new(streams.advanced_shared_row_count_at(mark_index))
+        streams.advanced_shared_row_count_at(mark_index).times do |row_index|
+          source_row = streams.advanced_shared_row_at(mark_index, row_index)
+          entries = Array(ObjectDocumentSharedCodec::Entry).new(source_row.entry_count)
+          source_row.entry_count.times do |entry_index|
+            entry = source_row.entry_at(entry_index)
+            path = String.build(entry.path_byte_size) do |io|
+              entry.path_byte_size.times { |byte_index| io.write_byte(entry.path_byte_at(byte_index)) }
+            end
+            entries << {path, entry.value}
+          end
+          rows << entries
+        end
+        output << rows
+      end
+      output
+    end
+
     private def self.reject_json_plan!(plan : ObjectDocumentPlan) : Nil
       plan.typed_path_count.times do |index|
         path = plan.typed_path_at(index)
@@ -636,6 +758,29 @@ module CrystalClick
         end
       end
       nil
+    end
+
+    private def self.raw_path_conflicts?(
+      entry : ObjectSharedMapEntry,
+      typed_schema : Hash(String, BinaryDataType),
+      object : ObjectStructure,
+    ) : Bool
+      typed_schema.each_key do |path|
+        return true if raw_path_matches?(entry, path)
+      end
+      object.dynamic_path_count.times do |index|
+        return true if raw_path_matches?(entry, object.dynamic_path_at(index))
+      end
+      false
+    end
+
+    private def self.raw_path_matches?(entry : ObjectSharedMapEntry, path : String) : Bool
+      bytes = path.to_slice
+      return false unless bytes.size == entry.path_byte_size
+      bytes.size.times do |index|
+        return false unless bytes[index] == entry.path_byte_at(index)
+      end
+      true
     end
 
     private def self.validate_low_cardinality_typed_field!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil

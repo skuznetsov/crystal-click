@@ -51,6 +51,9 @@ module CrystalClick
       getter shared_profile : BinaryBulkProfile
       getter shared_data_version : UInt64
       getter shared_bucket_count : Int32
+      getter object_structure : ObjectStructure
+      getter advanced_copy_inputs : Hash(String, ObjectSharedPhysicalLaneInput)
+      getter advanced_bucket_inputs : Array(ObjectSharedPhysicalBucketLaneInputs)
       getter bulk_bindings : Array(BulkBinding)
       getter discriminator_bindings : Array(DiscriminatorBinding)
       getter codec_budget : BinaryCodecBudget
@@ -77,6 +80,9 @@ module CrystalClick
         @shared_profile : BinaryBulkProfile,
         @shared_data_version : UInt64,
         @shared_bucket_count : Int32,
+        @object_structure : ObjectStructure,
+        @advanced_copy_inputs : Hash(String, ObjectSharedPhysicalLaneInput),
+        @advanced_bucket_inputs : Array(ObjectSharedPhysicalBucketLaneInputs),
         @bulk_bindings : Array(BulkBinding),
         @discriminator_bindings : Array(DiscriminatorBinding),
         @codec_budget : BinaryCodecBudget,
@@ -622,6 +628,12 @@ module CrystalClick
       end
 
       physical_plan.preflight_shared_bucket_bindings!(hashed, codec_budget)
+      advanced_copy_inputs, advanced_bucket_inputs = if object.shared_data_version >= 2_u64
+                                                       resolve_advanced_shared_inputs!(source, physical_plan, hashed, codec_budget)
+                                                     else
+                                                       {Hash(String, ObjectSharedPhysicalLaneInput).new,
+                                                        [] of ObjectSharedPhysicalBucketLaneInputs}
+                                                     end
       bulk_bindings = collect_bulk_bindings(document_plan, physical_plan, hashed)
       discriminator_bindings = collect_discriminator_bindings(object, physical_plan, hashed)
       selected_wire_bytes = 0_u64
@@ -713,6 +725,9 @@ module CrystalClick
         shared_profile,
         object.shared_data_version,
         shared_bucket_count,
+        object,
+        advanced_copy_inputs,
+        advanced_bucket_inputs,
         bulk_bindings,
         discriminator_bindings,
         codec_budget,
@@ -738,6 +753,7 @@ module CrystalClick
       first_mark = prepared.first_mark
       selected_count = prepared.selected_count
       occurrence_grid = prepared.occurrence_grid
+      object_structure = prepared.object_structure
       profile = prepared.profile
       shared_profile = prepared.shared_profile
       shared_data_version = prepared.shared_data_version
@@ -766,6 +782,30 @@ module CrystalClick
       selected_rows = Array(UInt64).new(selected_count)
       selected_count.times do |index|
         selected_rows << logical_rows[first_mark + index]
+      end
+
+      advanced_shared_rows = [] of Array(ObjectSharedMapRow)
+      if shared_data_version >= 2_u64
+        full_advanced_rows = ObjectSharedAdvancedDocumentCodec.decode(
+          prepared.advanced_copy_inputs,
+          prepared.advanced_bucket_inputs,
+          outer_rows,
+          logical_rows,
+          shared_data_version.to_i,
+          prepared.shared_bucket_count,
+          codec_budget,
+          transport_budget,
+          profile: profile,
+        )
+        validate_advanced_shared_rows!(full_advanced_rows, schema_snapshot, object_structure, codec_budget)
+        advanced_first = replay_complete ? 0 : read_first
+        advanced_count = replay_complete ? full_advanced_rows.size : read_count
+        advanced_shared_rows = select_advanced_shared_rows(
+          full_advanced_rows,
+          advanced_first,
+          advanced_count,
+          codec_budget,
+        )
       end
       prefix_reads = [] of Tuple(String, Int32, Int32)
       bulk_bindings.each do |binding|
@@ -953,7 +993,7 @@ module CrystalClick
 
       shared_streams : BinaryBulkStreams | Array(BinaryBulkStreams) = if shared_data_version == 0_u64
         BinaryBulkStreams.new(read_count, shared_roles)
-      else
+      elsif shared_data_version == 1_u64
         bucket_streams = Array(BinaryBulkStreams).new(prepared.shared_bucket_count)
         prepared.shared_bucket_count.times do |bucket_index|
           codec_budget.charge_node
@@ -961,6 +1001,8 @@ module CrystalClick
         end
         prepared.shared_bucket_count.times { codec_budget.charge_node }
         bucket_streams
+      else
+        [] of BinaryBulkStreams
       end
       stream_rows = replay_complete ? logical_rows : selected_rows
       ordinary_schema = Hash(String, BinaryDataType).new
@@ -972,7 +1014,8 @@ module CrystalClick
         stream_rows,
         typed_streams,
         dynamic_streams,
-        shared_streams
+        shared_streams,
+        advanced_shared_rows: advanced_shared_rows,
       )
 
       result = if full_grid = occurrence_grid
@@ -1618,7 +1661,7 @@ module CrystalClick
       end
       if object.shared_data_version == 0_u64
         append_bulk_bindings!(bindings, :shared, "", "", physical.shared, hashed)
-      else
+      elsif object.shared_data_version == 1_u64
         physical.shared_bucket_count.times do |bucket_index|
           append_bulk_bindings!(
             bindings,
@@ -1632,6 +1675,152 @@ module CrystalClick
         end
       end
       bindings
+    end
+
+    private def self.resolve_advanced_shared_inputs!(
+      source : PartStreamSource,
+      physical : ObjectDocumentPhysicalPlan,
+      hashed : Bool,
+      budget : BinaryCodecBudget,
+    ) : Tuple(Hash(String, ObjectSharedPhysicalLaneInput), Array(ObjectSharedPhysicalBucketLaneInputs))
+      copy_count = ObjectSharedAdvancedDocumentCodec::COPY_LANES.size.to_u64
+      bucket_count = physical.shared_bucket_count.to_u64
+      owner_count = checked_add_u64(copy_count, bucket_count)
+      budget.ensure_future_nodes(owner_count)
+      budget.ensure_future_elements(owner_count)
+
+      copy_inputs = Hash(String, ObjectSharedPhysicalLaneInput).new(initial_capacity: copy_count.to_i)
+      ObjectSharedAdvancedDocumentCodec::COPY_LANES.each do |lane|
+        logical_name = physical.advanced_copy_stream_name(lane)
+        data_name, marks_name = file_pair(logical_name, hashed)
+        validate_physical_name!(data_name)
+        validate_physical_name!(marks_name)
+        copy_inputs[String.new(lane.to_slice)] = source.physical_lane_input(data_name, marks_name)
+        budget.charge_node
+      end
+
+      bucket_inputs = Array(ObjectSharedPhysicalBucketLaneInputs).new(physical.shared_bucket_count)
+      physical.shared_bucket_count.times do |bucket_index|
+        lanes = Hash(String, ObjectSharedPhysicalLaneInput).new(
+          initial_capacity: ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.size
+        )
+        ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.each do |lane|
+          logical_name = physical.advanced_bucket_stream_name(bucket_index, lane)
+          data_name, marks_name = file_pair(logical_name, hashed)
+          validate_physical_name!(data_name)
+          validate_physical_name!(marks_name)
+          lanes[String.new(lane.to_slice)] = source.physical_lane_input(data_name, marks_name)
+        end
+        bucket_inputs << ObjectSharedPhysicalBucketLaneInputs.new(lanes)
+        budget.charge_node
+      end
+      budget.charge_elements(owner_count)
+      {copy_inputs, bucket_inputs}
+    end
+
+    private def self.validate_advanced_shared_rows!(
+      rows_by_mark : Array(Array(ObjectSharedMapRow)),
+      schema : Hash(String, BinaryDataType),
+      object : ObjectStructure,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      entry_count = 0_u64
+      path_bytes = 0_u64
+      rows_by_mark.each do |rows|
+        rows.each do |row|
+          row.entry_count.times do |entry_index|
+            entry = row.entry_at(entry_index)
+            entry_count = checked_add_u64(entry_count, 1_u64)
+            path_bytes = checked_add_u64(path_bytes, entry.path_byte_size.to_u64)
+            value = entry.value
+            if value.type.tag == BinaryDataType::TAG_NOTHING || value.is_null? ||
+               value.type.tag == BinaryDataType::TAG_NULLABLE
+              raise CorruptPartError.new("advanced shared Object rows cannot contain top-level NULL values")
+            end
+          end
+        end
+      end
+
+      conflict_roster = checked_add_u64(schema.size.to_u64, object.dynamic_path_count.to_u64)
+      comparison_work = checked_add_u64(entry_count, checked_multiply_u64(path_bytes, conflict_roster))
+      # Compare raw path bytes against every typed and Dynamic declaration
+      # before selection, so an invalid unselected mark cannot hide a conflict.
+      # The bounded work is admitted before any data-dependent nested scan.
+      # The caller's codec budget has already paid for physical decoding; this
+      # additional pass is separately charged as semantic reconciliation.
+      budget.ensure_future_elements(comparison_work)
+      budget.charge_elements(comparison_work)
+      rows_by_mark.each do |rows|
+        rows.each do |row|
+          row.entry_count.times do |entry_index|
+            entry = row.entry_at(entry_index)
+            conflict = schema.each_key.any? { |path| raw_path_matches?(entry, path) }
+            if !conflict
+              object.dynamic_path_count.times do |path_index|
+                if raw_path_matches_dynamic?(entry, object, path_index)
+                  conflict = true
+                  break
+                end
+              end
+            end
+            if conflict
+              raise CorruptPartError.new("shared Object path overlaps a typed or Dynamic path")
+            end
+          end
+        end
+      end
+      nil
+    end
+
+    private def self.select_advanced_shared_rows(
+      source : Array(Array(ObjectSharedMapRow)),
+      first_mark : Int,
+      mark_count : Int,
+      budget : BinaryCodecBudget,
+    ) : Array(Array(ObjectSharedMapRow))
+      if first_mark < 0 || mark_count < 0 || first_mark > source.size || mark_count > source.size - first_mark
+        raise CorruptPartError.new("selected advanced shared Object window is outside the complete parent grid")
+      end
+      retained_rows = 0_u64
+      mark_count.times do |offset|
+        retained_rows = checked_add_u64(retained_rows, source[first_mark + offset].size.to_u64)
+      end
+      retained = checked_add_u64(mark_count.to_u64, retained_rows)
+      # This helper creates a selected outer/inner matrix and the streams
+      # constructor takes one detached snapshot of that matrix as a second
+      # owner. Preflight both before the first proportional array is allocated.
+      owners = checked_multiply_u64(retained, 2_u64)
+      budget.ensure_future_nodes(owners)
+      budget.ensure_future_elements(owners)
+      owners.times { budget.charge_node }
+      budget.charge_elements(owners)
+
+      selected = Array(Array(ObjectSharedMapRow)).new(mark_count)
+      mark_count.times do |offset|
+        selected << source[first_mark + offset].dup
+      end
+      selected
+    end
+
+    private def self.raw_path_matches?(entry : ObjectSharedMapEntry, path : String) : Bool
+      bytes = path.to_slice
+      return false unless bytes.size == entry.path_byte_size
+      bytes.size.times do |index|
+        return false unless bytes[index] == entry.path_byte_at(index)
+      end
+      true
+    end
+
+    private def self.raw_path_matches_dynamic?(
+      entry : ObjectSharedMapEntry,
+      object : ObjectStructure,
+      path_index : Int,
+    ) : Bool
+      return false unless object.dynamic_path_byte_size(path_index) == entry.path_byte_size
+      entry.path_byte_size.times do |index|
+        return false unless object.dynamic_path_byte_at(path_index, index) == entry.path_byte_at(index)
+      end
+      true
     end
 
     private def self.append_dynamic_bulk_bindings!(

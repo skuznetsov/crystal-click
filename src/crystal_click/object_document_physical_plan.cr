@@ -33,6 +33,9 @@ module CrystalClick
       getter typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
       getter dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
       getter shared_plans : Array(BinaryBulkPhysicalPlan)
+      getter shared_bucket_count : Int32
+      getter advanced_copy_stream_names : Hash(String, String)
+      getter advanced_bucket_stream_names : Array(Hash(String, String))
       getter stream_count : Int32
 
       def initialize(
@@ -43,6 +46,9 @@ module CrystalClick
         @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan),
         @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan)),
         @shared_plans : Array(BinaryBulkPhysicalPlan),
+        @shared_bucket_count : Int32,
+        @advanced_copy_stream_names : Hash(String, String),
+        @advanced_bucket_stream_names : Array(Hash(String, String)),
         @stream_count : Int32,
       )
       end
@@ -55,6 +61,10 @@ module CrystalClick
     @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
     @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
     @shared_plans : Array(BinaryBulkPhysicalPlan)
+    @shared_bucket_count : Int32
+    @advanced_copy_stream_names : Hash(String, String)
+    @advanced_bucket_stream_names : Array(Hash(String, String))
+    @advanced_stream_names : Array(String)
     @stream_count : Int32
     @shared_data_version : UInt64
     @initial_array_level : UInt64
@@ -250,6 +260,10 @@ module CrystalClick
       @typed_dynamic_plans = state.typed_dynamic_plans
       @dynamic_arm_plans = state.dynamic_arm_plans
       @shared_plans = state.shared_plans
+      @shared_bucket_count = state.shared_bucket_count
+      @advanced_copy_stream_names = state.advanced_copy_stream_names
+      @advanced_bucket_stream_names = state.advanced_bucket_stream_names
+      @advanced_stream_names = collect_advanced_names(state.advanced_copy_stream_names, state.advanced_bucket_stream_names)
       @stream_count = state.stream_count
       @shared_data_version = plan.structures.object.shared_data_version
     end
@@ -273,6 +287,10 @@ module CrystalClick
       @typed_dynamic_plans = state.typed_dynamic_plans
       @dynamic_arm_plans = state.dynamic_arm_plans
       @shared_plans = state.shared_plans
+      @shared_bucket_count = state.shared_bucket_count
+      @advanced_copy_stream_names = state.advanced_copy_stream_names
+      @advanced_bucket_stream_names = state.advanced_bucket_stream_names
+      @advanced_stream_names = collect_advanced_names(state.advanced_copy_stream_names, state.advanced_bucket_stream_names)
       @stream_count = state.stream_count
       @shared_data_version = plan.structures.object.shared_data_version
     end
@@ -423,31 +441,60 @@ module CrystalClick
         collect_plan_names!(typed_plan, seen_names)
       end
 
-      shared_type = BinaryDataType.array(
-        BinaryDataType.tuple(
-          [BinaryDataType.primitive("String"), BinaryDataType.primitive("String")],
-          ["paths", "values"]
-        )
-      )
       shared_bucket_count = ObjectSharedBucketLayout.bucket_count(object)
-      # MAP-0 keeps its historical planning-budget behavior; only the new
-      # bucket roster introduces one additional owner per configured bucket.
-      if object.shared_data_version == 1_u64
-        context.record_elements(shared_bucket_count.to_u64)
-      end
       shared_plans = Array(BinaryBulkPhysicalPlan).new(shared_bucket_count)
-      shared_bucket_count.times do |bucket_index|
-        shared_component = if object.shared_data_version == 0_u64
-                             ".object_shared_data"
-                           else
-                             ".object_shared_data.#{bucket_index}"
-                           end
-        shared_prefix = PhysicalStreamName.append_literal(column_prefix, shared_component, context)
-        shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
-          shared_type, shared_prefix, shared_profile, limits, context, initial_array_level
+      advanced_copy_stream_names = Hash(String, String).new
+      advanced_bucket_stream_names = Array(Hash(String, String)).new(shared_bucket_count)
+      if object.shared_data_version >= 2_u64
+        {"sizes" => "sizes", "indexes" => "paths_indexes", "values" => "values"}.each do |lane, physical_lane|
+          name = PhysicalStreamName.append_literal(
+            column_prefix,
+            ".object_shared_data.copy.#{physical_lane}",
+            context
+          )
+          context.charge_name_bytes(name.bytesize.to_u64)
+          reject_collision!(name, seen_names)
+          advanced_copy_stream_names[String.new(lane.to_slice)] = name
+        end
+        shared_bucket_count.times do |bucket_index|
+          names = Hash(String, String).new
+          ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.each do |lane|
+            name = PhysicalStreamName.append_literal(
+              column_prefix,
+              ".object_shared_data.#{bucket_index}.#{lane}",
+              context
+            )
+            context.charge_name_bytes(name.bytesize.to_u64)
+            reject_collision!(name, seen_names)
+            names[String.new(lane.to_slice)] = name
+          end
+          advanced_bucket_stream_names << names
+        end
+      else
+        shared_type = BinaryDataType.array(
+          BinaryDataType.tuple(
+            [BinaryDataType.primitive("String"), BinaryDataType.primitive("String")],
+            ["paths", "values"]
+          )
         )
-        collect_plan_names!(shared_plan, seen_names)
-        shared_plans << shared_plan
+        # MAP-0 keeps its historical planning-budget behavior; MAP_WITH_BUCKETS
+        # owns one BinaryBulk plan per configured bucket.
+        if object.shared_data_version == 1_u64
+          context.record_elements(shared_bucket_count.to_u64)
+        end
+        shared_bucket_count.times do |bucket_index|
+          shared_component = if object.shared_data_version == 0_u64
+                               ".object_shared_data"
+                             else
+                               ".object_shared_data.#{bucket_index}"
+                             end
+          shared_prefix = PhysicalStreamName.append_literal(column_prefix, shared_component, context)
+          shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
+            shared_type, shared_prefix, shared_profile, limits, context, initial_array_level
+          )
+          collect_plan_names!(shared_plan, seen_names)
+          shared_plans << shared_plan
+        end
       end
       PlanState.new(
         object_structure_stream,
@@ -457,6 +504,9 @@ module CrystalClick
         typed_dynamic_plans,
         dynamic_arm_plans,
         shared_plans,
+        shared_bucket_count,
+        advanced_copy_stream_names,
+        advanced_bucket_stream_names,
         seen_names.size.to_i32
       )
     end
@@ -501,11 +551,30 @@ module CrystalClick
     end
 
     def shared_bucket_count : Int32
-      @shared_plans.size
+      @shared_bucket_count
     end
 
     def shared_bucket(index : Int) : BinaryBulkPhysicalPlan
       @shared_plans[index]? || raise(IndexError.new("Object shared bucket index is outside the physical roster"))
+    end
+
+    def advanced_copy_stream_name(lane : String) : String
+      name = @advanced_copy_stream_names[lane]? || raise(KeyError.new("advanced shared Object Copy lane not found: #{lane.inspect}"))
+      String.new(name.to_slice)
+    end
+
+    def advanced_bucket_stream_name(bucket_index : Int, lane : String) : String
+      bucket = @advanced_bucket_stream_names[bucket_index]? || raise(IndexError.new("advanced shared Object bucket index is outside the physical roster"))
+      name = bucket[lane]? || raise(KeyError.new("advanced shared Object lane not found: #{lane.inspect}"))
+      String.new(name.to_slice)
+    end
+
+    def advanced_stream_names : Array(String)
+      @advanced_stream_names.map { |name| String.new(name.to_slice) }
+    end
+
+    def advanced_stream_name?(name : String) : Bool
+      @advanced_stream_names.any? { |candidate| candidate == name }
     end
 
     # Account the additional shared-lane binding records before the reader
@@ -568,6 +637,20 @@ module CrystalClick
       end
       @shared_plans.each do |physical|
         physical.stream_names.each_value { |name| names << String.new(name.to_slice) }
+      end
+      @advanced_stream_names.each { |name| names << String.new(name.to_slice) }
+      names.sort!
+      names
+    end
+
+    private def collect_advanced_names(
+      copy_names : Hash(String, String),
+      bucket_names : Array(Hash(String, String)),
+    ) : Array(String)
+      names = Array(String).new(copy_names.size + bucket_names.size * ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.size)
+      copy_names.each_value { |name| names << String.new(name.to_slice) }
+      bucket_names.each do |bucket|
+        bucket.each_value { |name| names << String.new(name.to_slice) }
       end
       names.sort!
       names

@@ -22,5 +22,20 @@ module CrystalClick
     def values : Bytes
       Bytes.new(@values.size) { |index| @values[index] }
     end
+
+    # Non-allocating extents let enclosing owners preflight detached lane
+    # snapshots before requesting the public byte getters. The Copy decoder
+    # remains responsible for the single wire-byte charge.
+    def sizes_size : Int32
+      @sizes.size
+    end
+
+    def indexes_size : Int32
+      @indexes.size
+    end
+
+    def values_size : Int32
+      @values.size
+    end
   end
 end
