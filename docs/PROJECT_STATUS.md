@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current internal foundation (W192, 2026-10-06): paired exact-chunk Object shared
+Current internal foundation (W193, 2026-10-06): paired exact-path Object shared
+Data serde composes existing recursive Dynamic/Bulk codecs with an explicit
+Compact prefix/body event schedule. Data/tape, getter event, tape reader,
+decode result and layout codec have separate files. Named no-statistics-prefix
+APIs preserve complete Dynamic metadata and the old public decode arity.
+Independent falsifiers cover prefix ordering, ArrayElements levels across
+Dynamic arms, escaped BASIC Map TupleElement names, early nested depth guards,
+detached ownership and cumulative budgets. The same 95 affected files pass
+585 DEBUG and 585 RELEASE examples, zero failures/errors/pending, actual guard
+exits 0, with unchanged 911-file source/spec identity across final gates.
+Both freshly rebuilt helpers exactly decode/reencode 34 path records from
+42 chunks/eight authenticated immutable W191 profiles: 1,347 original Data
+bytes, String actual values and NULL, including PLAIN and COMPACT granules.
+Ruby separately re-derives values, raw slices and event positions from retained
+native evidence, compressed metadata coordinates and W192/authored fixtures.
+All 32 final root controls pass, including forged input/output, actual CLI
+comparison enforcement and same-length raw SHA substitution. Scoped verdict:
+ROBUST for this exact-Data/event prerequisite, not all recursive products.
+Wire-work accounting includes intermediate copies and is not file size or RSS.
+No new native capture, full-part ATTACH/CHECK or persisted v2/v3 admission was
+run. Next: compositional physical lanes and compressed-offset mapping, then
+paired complete-part qualification with whole-object AND independent path reads.
+Full types, broader MV/projections and decomposition remain open; performance
+is deferred and the overall goal remains incomplete. Details and evidence:
+[OBJECT_SHARED_ADVANCED_FRONTIER.md](OBJECT_SHARED_ADVANCED_FRONTIER.md),
+`.landmark/evidence/object-shared-path-w193.json`.
+
+Previous internal foundation (W192, 2026-10-06): paired exact-chunk Object shared
 Copy serde delegates recursive actual values to the existing Dynamic child
 codec. Dictionary, detached streams and payload codec have separate files.
 Bucket-ordinal dictionaries, per-row UInt64 sizes, implicit index widths,

@@ -102,6 +102,22 @@ module CrystalClick
       new(prepared)
     end
 
+    # Paired Compact Object callers own a budget across the descriptor prefix
+    # and value lanes. This constructor plans actual sites without emitting the
+    # statistics suffix used by the complete Dynamic metadata profile.
+    def self.new_with_prefix_without_statistics(
+      type : BinaryDataType,
+      structures : Hash(String, DynamicStructure),
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : BinaryDynamicBulkPlan
+      unless budget.writing?
+        raise ArgumentError.new("Dynamic prefix plan requires a writing budget")
+      end
+      prepared = prepare_from_structures(type, structures, profile, budget.limits, budget, false, false)
+      new(prepared)
+    end
+
     private def initialize(prepared : Prepared)
       @type = prepared.type
       @profile = prepared.profile
@@ -141,11 +157,14 @@ module CrystalClick
     end
 
     # Byte offset of the statistics flag relative to this site's structure
-    # blob. Use only with exact decoded bytes or bytes emitted by this plan.
-    # Writer plans retain the offset from planning serialization; reader plans
-    # retain it from the exact per-site bytes parsed during discovery.
+    # blob. No-statistics prefix plans have no flag and reject this accessor.
+    # Complete writer plans retain the offset from planning serialization;
+    # complete reader plans retain it from the exact per-site bytes parsed.
     def statistics_offset_for(path : String) : Int32
       site = @sites[path]? || raise(KeyError.new("Dynamic site not found: #{path.inspect}"))
+      if site.statistics_offset < 0
+        raise ArgumentError.new("Dynamic structure prefix has no statistics flag")
+      end
       site.statistics_offset
     end
 
@@ -275,6 +294,21 @@ module CrystalClick
     # Encode only the per-occurrence Dynamic structure blobs under one caller
     # budget. Descriptor/value and physical bulk lanes remain separate owners.
     def encode_structure_streams(budget : BinaryCodecBudget) : BinaryDynamicStructureStreams
+      encode_structure_streams_internal(budget, false)
+    end
+
+    # Emits the exact Dynamic descriptor prefixes used by Compact Object
+    # substreams. The complete Dynamic metadata API above remains unchanged.
+    def encode_structure_prefix_streams_without_statistics(
+      budget : BinaryCodecBudget,
+    ) : BinaryDynamicStructureStreams
+      encode_structure_streams_internal(budget, true)
+    end
+
+    private def encode_structure_streams_internal(
+      budget : BinaryCodecBudget,
+      prefix_without_statistics : Bool,
+    ) : BinaryDynamicStructureStreams
       unless budget.writing?
         raise ArgumentError.new("Dynamic structure stream encode requires a writing budget")
       end
@@ -290,7 +324,11 @@ module CrystalClick
       @site_paths.each do |path|
         site = @sites[path]
         structure_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, true)
-        DynamicStructureCodec.write_to(site.structure, structure_context, site.depth, site.depth + 1)
+        if prefix_without_statistics
+          DynamicStructureCodec.write_prefix_without_statistics(site.structure, structure_context, site.depth, site.depth + 1)
+        else
+          DynamicStructureCodec.write_to(site.structure, structure_context, site.depth, site.depth + 1)
+        end
         context.preflight_children(1_u64)
         context.validate_type_tree(BinaryDataType.primitive("String"), site.depth + 1)
         encoded[copy_planned_path(context, path)] = structure_context.finish_bytes
@@ -307,6 +345,16 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : BinaryDynamicBulkPlan
+      decode_structure_streams_internal(type, streams, budget, profile, true)
+    end
+
+    private def self.decode_structure_streams_internal(
+      type : BinaryDataType,
+      streams : BinaryDynamicStructureStreams,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      include_statistics : Bool,
+    ) : BinaryDynamicBulkPlan
       if budget.writing?
         raise ArgumentError.new("Dynamic structure stream decode requires a reading budget")
       end
@@ -320,7 +368,7 @@ module CrystalClick
       context.validate_type_tree(type)
 
       sites = Hash(String, Site).new
-      discover_read_sites(type, "root", 1, streams, context, sites)
+      discover_read_sites(type, "root", 1, streams, context, sites, include_statistics)
       unless sites.size == streams.site_count
         context.corrupt!("Dynamic structure stream site set is incomplete")
       end
@@ -355,6 +403,17 @@ module CrystalClick
       new(Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count))
     end
 
+    # Parses the exact no-statistics prefixes under the caller's read budget.
+    # No writer plan or synthetic statistics flag is used to discover sites.
+    def self.decode_structure_prefix_streams_without_statistics(
+      type : BinaryDataType,
+      streams : BinaryDynamicStructureStreams,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : BinaryDynamicBulkPlan
+      decode_structure_streams_internal(type, streams, budget, profile, false)
+    end
+
     private def self.prepare_from_structures(
       type : BinaryDataType,
       structures : Hash(String, DynamicStructure),
@@ -362,6 +421,7 @@ module CrystalClick
       limits : BinaryCodecLimits,
       budget : BinaryCodecBudget? = nil,
       account_output_bytes : Bool = true,
+      include_statistics : Bool = true,
     ) : Prepared
       unless type.contains_dynamic?
         raise ArgumentError.new("Dynamic bulk plan requires at least one Dynamic site")
@@ -373,7 +433,7 @@ module CrystalClick
       context.validate_type_tree(type)
 
       sites = Hash(String, Site).new
-      discover_write_sites(type, "root", 1, structures, context, sites)
+      discover_write_sites(type, "root", 1, structures, context, sites, include_statistics)
       unless sites.size == structures.size
         raise ArgumentError.new("Dynamic structure site set is incomplete")
       end
@@ -414,6 +474,7 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
       context : BinaryCodecContext,
       sites : Hash(String, Site),
+      include_statistics : Bool,
     ) : Nil
       context.ensure_depth(depth)
       case type.tag
@@ -423,34 +484,39 @@ module CrystalClick
           raise ArgumentError.new("Dynamic structure site path is duplicated")
         end
 
-        statistics_offset = DynamicStructureCodec.write_with_statistics_offset(structure, context, depth, depth + 1)
+        statistics_offset = if include_statistics
+                              DynamicStructureCodec.write_with_statistics_offset(structure, context, depth, depth + 1)
+                            else
+                              DynamicStructureCodec.write_prefix_without_statistics(structure, context, depth, depth + 1)
+                              -1_i32
+                            end
         charge_shared_variant_arm(context, depth + 1)
         arms = canonical_arm_types(structure, context, depth + 1)
         sites[path] = Site.new(type, structure, depth, arms, statistics_offset)
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
-          discover_write_sites(arm, child, depth + 1, structures, context, sites)
+          discover_write_sites(arm, child, depth + 1, structures, context, sites, include_statistics)
         end
       when BinaryDataType::TAG_ARRAY
-        discover_write_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, structures, context, sites)
+        discover_write_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, structures, context, sites, include_statistics)
       when BinaryDataType::TAG_NULLABLE
-        discover_write_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, structures, context, sites)
+        discover_write_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, structures, context, sites, include_statistics)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        discover_write_sites(type.child_at(0), path, depth + 1, structures, context, sites)
+        discover_write_sites(type.child_at(0), path, depth + 1, structures, context, sites, include_statistics)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
-          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites)
+          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites, include_statistics)
         end
       when BinaryDataType::TAG_MAP
         key_path = child_path(context, path, ".elements.field.0")
-        discover_write_sites(type.child_at(0), key_path, depth + 1, structures, context, sites)
+        discover_write_sites(type.child_at(0), key_path, depth + 1, structures, context, sites, include_statistics)
         value_path = child_path(context, path, ".elements.field.1")
-        discover_write_sites(type.child_at(1), value_path, depth + 1, structures, context, sites)
+        discover_write_sites(type.child_at(1), value_path, depth + 1, structures, context, sites, include_statistics)
       when BinaryDataType::TAG_VARIANT
         type.child_count.times do |index|
           child = child_path(context, path, ".arm.", index)
-          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites)
+          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites, include_statistics)
         end
       end
       nil
@@ -463,6 +529,7 @@ module CrystalClick
       streams : BinaryDynamicStructureStreams,
       context : BinaryCodecContext,
       sites : Hash(String, Site),
+      include_statistics : Bool,
     ) : Nil
       context.ensure_depth(depth)
       case type.tag
@@ -476,37 +543,44 @@ module CrystalClick
 
         bytes = streams.structure_bytes_for(path)
         structure_context = BinaryCodecContext.new(context.limits, bytes, false, context.budget, false, false)
-        structure, statistics_offset = DynamicStructureCodec.read_with_statistics_offset(
-          structure_context, depth, depth + 1, true,
-        )
+        structure, statistics_offset = if include_statistics
+                                         DynamicStructureCodec.read_with_statistics_offset(
+                                           structure_context, depth, depth + 1, true,
+                                         )
+                                       else
+                                         parsed = DynamicStructureCodec.read_prefix_without_statistics(
+                                           structure_context, depth, depth + 1, true,
+                                         )
+                                         {parsed, -1_i32}
+                                       end
         structure_context.ensure_consumed
         charge_shared_variant_arm(context, depth + 1)
         arms = canonical_arm_types(structure, context, depth + 1)
         sites[path] = Site.new(type, structure, depth, arms, statistics_offset)
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(arm, child, depth + 1, streams, context, sites)
+          discover_read_sites(arm, child, depth + 1, streams, context, sites, include_statistics)
         end
       when BinaryDataType::TAG_ARRAY
-        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, streams, context, sites)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, streams, context, sites, include_statistics)
       when BinaryDataType::TAG_NULLABLE
-        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, streams, context, sites)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, streams, context, sites, include_statistics)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        discover_read_sites(type.child_at(0), path, depth + 1, streams, context, sites)
+        discover_read_sites(type.child_at(0), path, depth + 1, streams, context, sites, include_statistics)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, streams, context, sites)
+          discover_read_sites(type.child_at(index), child, depth + 1, streams, context, sites, include_statistics)
         end
       when BinaryDataType::TAG_MAP
         key_path = child_path(context, path, ".elements.field.0")
-        discover_read_sites(type.child_at(0), key_path, depth + 1, streams, context, sites)
+        discover_read_sites(type.child_at(0), key_path, depth + 1, streams, context, sites, include_statistics)
         value_path = child_path(context, path, ".elements.field.1")
-        discover_read_sites(type.child_at(1), value_path, depth + 1, streams, context, sites)
+        discover_read_sites(type.child_at(1), value_path, depth + 1, streams, context, sites, include_statistics)
       when BinaryDataType::TAG_VARIANT
         type.child_count.times do |index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, streams, context, sites)
+          discover_read_sites(type.child_at(index), child, depth + 1, streams, context, sites, include_statistics)
         end
       end
       nil

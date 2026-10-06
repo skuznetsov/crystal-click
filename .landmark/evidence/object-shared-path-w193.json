@@ -1,0 +1,448 @@
+{
+  "slice": "W193 paired exact-path Object shared Data and ordered getter-event prerequisite",
+  "baseline_commit": "53f08527e3c7f8604908017c97fb08a4442b470d",
+  "date": "2026-10-06",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Paired decompressed path/chunk payload and event tape over existing recursive Dynamic/Bulk value serde; exact retained stock String/NULL corpus independently re-derived and reconciled. Persisted ADVANCED v2/v3 is NOT admitted.",
+    "adversary_verdict": "ROBUST within this prerequisite and executed fixtures"
+  },
+  "design_document": "docs/OBJECT_SHARED_ADVANCED_FRONTIER.md",
+  "boundaries": {
+    "risk": "CAUTION: paired serialization and ordered physical events; no persisted admission expansion",
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/dynamic_structure_codec.cr",
+      "src/crystal_click/binary_dynamic_bulk_plan.cr",
+      "src/crystal_click/object_shared_path_substream_event.cr",
+      "src/crystal_click/object_shared_path_streams.cr",
+      "src/crystal_click/object_shared_path_decode_result.cr",
+      "src/crystal_click/object_shared_path_tape_reader.cr",
+      "src/crystal_click/object_shared_path_codec.cr",
+      "spec/dynamic_structure_prefix_w193_adversary_spec.cr",
+      "spec/object_shared_path_w193_spec.cr",
+      "spec/object_shared_path_w193_adversary_spec.cr",
+      "scripts/validate_object_shared_path_w193.cr",
+      "scripts/reconcile_object_shared_path_w193.rb",
+      "docs/OBJECT_SHARED_ADVANCED_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      ".landmark/evidence/object-shared-path-w193.json"
+    ],
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/dynamic_structure_codec.cr",
+      "src/crystal_click/binary_dynamic_bulk_plan.cr",
+      "src/crystal_click/object_shared_path_substream_event.cr",
+      "src/crystal_click/object_shared_path_streams.cr",
+      "src/crystal_click/object_shared_path_decode_result.cr",
+      "src/crystal_click/object_shared_path_tape_reader.cr",
+      "src/crystal_click/object_shared_path_codec.cr",
+      "spec/dynamic_structure_prefix_w193_adversary_spec.cr",
+      "spec/object_shared_path_w193_spec.cr",
+      "spec/object_shared_path_w193_adversary_spec.cr",
+      "scripts/validate_object_shared_path_w193.cr",
+      "scripts/reconcile_object_shared_path_w193.rb",
+      "docs/OBJECT_SHARED_ADVANCED_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      ".landmark/evidence/object-shared-path-w193.json"
+    ],
+    "rollback": "Revert only the scoped atomic W193 commit; preserve original and failed evidence roots.",
+    "preserved": [
+      "Complete Dynamic metadata/statistics bytes and old public three/four-argument decode API",
+      "Existing shared Bulk and discriminator framing accounting",
+      "Persisted ObjectSharedBucketLayout versions0/1 only",
+      "Distinct logical occurrences, chunk rows, physical-parent mark rows and transport coordinates"
+    ],
+    "nonclaims": [
+      "Full persisted ADVANCED/CHUNKED reader/writer or part ATTACH/CHECK",
+      "General recursive arm/native type-product qualification",
+      "LowCardinality/Nested/QBit/JSON-as-Dynamic-actual per-path layouts or bucketed Map",
+      "Complete compressed-coordinate assembly, Compact parts or fresh-master binary compatibility",
+      "New native capture, full repository suite, RSS or performance",
+      "Full types/MV/projections or overall goal completion"
+    ]
+  },
+  "external_reference": {
+    "source_root": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+    "source_head": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+    "source_shallow_clean_unbuilt": true,
+    "source_is_runtime_build": false,
+    "anchors": [
+      "src/DataTypes/Serializations/SerializationObjectSharedData.cpp:355-423",
+      "src/DataTypes/Serializations/SerializationObjectSharedData.cpp:1384-1385",
+      "src/DataTypes/Serializations/SerializationVariant.cpp:204-226",
+      "src/DataTypes/Serializations/SerializationArray.cpp:297-304",
+      "src/DataTypes/Serializations/ISerialization.cpp:313-359",
+      "src/DataTypes/DataTypeMap.cpp:123-140"
+    ],
+    "runtime_path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+    "runtime_version": "26.10.1.1201",
+    "runtime_build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "inputs": {
+    "source_and_spec_files": 911,
+    "encoding": "Ruby compact JSON of sorted [path,byte_size,SHA256] tuples",
+    "source_and_spec_sha256": "36a729f3b769ed75593cbf546174e048b89ff156e3cc3d133a94c7bf9f29b422",
+    "source_and_spec_pre_post_match": true,
+    "scope": "All src/spec .cr inputs frozen across final DEBUG/RELEASE gates and helper/control execution. Helper-only Int64 and Hash API repairs occur before both final helper builds and change no production/spec inputs.",
+    "verification_inputs": [
+      {
+        "path": "scripts/reconcile_object_shared_path_w193.rb",
+        "byte_size": 44414,
+        "sha256": "415b3e5688e86e818f195a476fd419852a6ac2b31a250fa6288ba17d9c1d965f"
+      },
+      {
+        "path": "scripts/validate_object_shared_path_w193.cr",
+        "byte_size": 28109,
+        "sha256": "e1a02236bcee0a6d00d38cef3a5f128adcadcf038745f99dbd3a21e7b97fa621"
+      },
+      {
+        "path": "scripts/reconcile_object_shared_copy_w192.rb",
+        "byte_size": 34061,
+        "sha256": "7b1bcb092aa0a823537d5bd81a7a8c3ee6ffe5ef6954f7efb3aef4d9c42ba64d"
+      },
+      {
+        "path": "scripts/reconcile_object_shared_advanced_w191.rb",
+        "byte_size": 47519,
+        "sha256": "e70ffb31dc249177c91b296159f85fad0f523682ee1bb67ac830b68ee91406e5"
+      },
+      {
+        "path": "scripts/probe_object_shared_advanced_w191.rb",
+        "byte_size": 36222,
+        "sha256": "6f1c09719570c17699cb5076f63c5095ea53ca0426e7feba3d9b1edada85859d"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w193-path.EibkDh/path-manifest-root.json",
+        "byte_size": 60620,
+        "sha256": "2fc623cbe9d9a6bd52d8a4d5526185f901e6fe3449a748ee98ef2f1b463cdd05"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug.json",
+        "byte_size": 30583,
+        "sha256": "6a4704087d7eb40cfdeb7d48d18a931fd12a28ce13b299a5ddfe80e6f346ac77"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w193-path.EibkDh/path-helper-release.json",
+        "byte_size": 30583,
+        "sha256": "6a4704087d7eb40cfdeb7d48d18a931fd12a28ce13b299a5ddfe80e6f346ac77"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w193-path.EibkDh/path-reconciliation-final.json",
+        "byte_size": 1327,
+        "sha256": "0f7996e7def5592e14bf33c774d258c2ac7895788705fc23efb69725dd0624ce"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w193-path.EibkDh/root-controls-final.rb",
+        "byte_size": 6964,
+        "sha256": "7e00bf964bb2f2de5bce25dae1ea7dda1c34743594860b36369833d09c34347d"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w193-controls.Un5aVh/root-controls-final.json",
+        "byte_size": 30645,
+        "sha256": "a2fe16890ecd272fb93abebe78c728c34601930d074475ca92509e2b325f9474"
+      }
+    ],
+    "capture_summary_sha256": "62b83024ce27497cd118e2da39815ab37568dfb5691ba42c2026d6a337dd5541"
+  },
+  "verification": {
+    "definition_of_done": "Preimplementation missing-API RED; independent source-derived layout/depth falsifiers; 95 affected files DEBUG/RELEASE; fresh helpers; independently derived raw/authored byte/value/event reconciliation; seeded input/output/raw/CLI controls; final input/format/path checks and scoped hostile review.",
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "timeout_seconds": 600,
+      "memory_limit_mib": 12288,
+      "min_free_percent": 50,
+      "serial_compiler_and_native": true,
+      "compiler_threads": 1,
+      "crystal_version": "1.21.0",
+      "llvm_version": "22.1.8"
+    },
+    "red": [
+      {
+        "log": "/private/tmp/crystal-click-w193-path.EibkDh/missing-api-red.log",
+        "actual_exit": 1,
+        "guard_exit": 1,
+        "signal": "Undefined DynamicStructureCodec.encode_prefix_without_statistics before production implementation"
+      },
+      {
+        "log": "/private/tmp/crystal-click-w193-path.EibkDh/path-array-level-red.log",
+        "command": "set -o pipefail; env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w193-path.EibkDh/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_path_w193_spec.cr spec/object_shared_path_w193_adversary_spec.cr spec/dynamic_structure_prefix_w193_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w193-path.EibkDh/path-array-level-red.log",
+        "actual_exit": 1,
+        "guard_exit": 1,
+        "examples": 17,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "signal": "Nested ArrayElements level reset across Dynamic arm"
+      },
+      {
+        "log": "/private/tmp/crystal-click-w193-path.EibkDh/path-map-name-red.log",
+        "command": "set -o pipefail; env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w193-path.EibkDh/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_path_w193_spec.cr spec/object_shared_path_w193_adversary_spec.cr spec/dynamic_structure_prefix_w193_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w193-path.EibkDh/path-map-name-red.log",
+        "actual_exit": 1,
+        "guard_exit": 1,
+        "examples": 20,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "signal": "BASIC Map named TupleElement streams wrongly used literal dots"
+      }
+    ],
+    "focused": {
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w193-path.EibkDh/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_path_w193_spec.cr spec/object_shared_path_w193_adversary_spec.cr spec/dynamic_structure_prefix_w193_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w193-path.EibkDh/path-map-name-green.log",
+      "log": "/private/tmp/crystal-click-w193-path.EibkDh/path-map-name-green.log",
+      "actual_exit": 0,
+      "guard_exit": 0,
+      "examples": 20,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "affected_spec_files": [
+      "spec/array_object_column_core_w185_spec.cr",
+      "spec/array_object_dynamic_w185_spec.cr",
+      "spec/array_object_low_cardinality_w185_spec.cr",
+      "spec/array_object_part_w185_spec.cr",
+      "spec/binary_bulk_physical_prefix_w151_spec.cr",
+      "spec/binary_bulk_w122_spec.cr",
+      "spec/binary_dynamic_physical_w156_adversary_spec.cr",
+      "spec/binary_dynamic_physical_w156_red_spec.cr",
+      "spec/binary_dynamic_physical_w156_spec.cr",
+      "spec/binary_low_cardinality_physical_w145_spec.cr",
+      "spec/binary_variant_physical_w149_adversary_spec.cr",
+      "spec/binary_variant_physical_w149_spec.cr",
+      "spec/bulk_budget_w122_adversary_spec.cr",
+      "spec/bulk_dynamic_w122_adversary_spec.cr",
+      "spec/bulk_nominal_w122_spec.cr",
+      "spec/bulk_string_size_w122_spec.cr",
+      "spec/dynamic_child_compact_w188_spec.cr",
+      "spec/dynamic_discriminator_w121_budget_spec.cr",
+      "spec/dynamic_discriminator_w121_spec.cr",
+      "spec/dynamic_values_w122_adversary_spec.cr",
+      "spec/dynamic_values_w122_spec.cr",
+      "spec/json_nested_scalar_w182_guards_spec.cr",
+      "spec/json_recursive_scalar_w181_guards_spec.cr",
+      "spec/object_at_site_w186_spec.cr",
+      "spec/object_catalog_w129_root_spec.cr",
+      "spec/object_catalog_w129_spec.cr",
+      "spec/object_child_compact_w188_spec.cr",
+      "spec/object_child_occurrences_w184_spec.cr",
+      "spec/object_child_site_physical_w187_spec.cr",
+      "spec/object_column_lane_binder_refactor_spec.cr",
+      "spec/object_column_reader_w129_spec.cr",
+      "spec/object_column_writer_w127_root_spec.cr",
+      "spec/object_column_writer_w127_spec.cr",
+      "spec/object_declared_dynamic_w158_adversary_spec.cr",
+      "spec/object_declared_dynamic_w158_red_spec.cr",
+      "spec/object_declared_dynamic_w158_spec.cr",
+      "spec/object_declared_low_cardinality_w146_spec.cr",
+      "spec/object_declared_variant_w151_spec.cr",
+      "spec/object_documents_w123_adversary_spec.cr",
+      "spec/object_documents_w123_root_spec.cr",
+      "spec/object_documents_w123_spec.cr",
+      "spec/object_file_reader_w126_root_spec.cr",
+      "spec/object_offline_table_w130_spec.cr",
+      "spec/object_part_writer_w128_root_spec.cr",
+      "spec/object_part_writer_w128_spec.cr",
+      "spec/object_recursive_consumers_w140_spec.cr",
+      "spec/object_recursive_dynamic_w159_adversary_spec.cr",
+      "spec/object_recursive_dynamic_w159_red_spec.cr",
+      "spec/object_recursive_dynamic_w159_spec.cr",
+      "spec/object_recursive_w140_root_spec.cr",
+      "spec/object_table_w130_root_spec.cr",
+      "spec/object_table_w130_spec.cr",
+      "spec/offline_catalog_w95_tuple_values_spec.cr",
+      "spec/recursive_array_schema_w187_spec.cr",
+      "spec/recursive_array_table_w187_spec.cr",
+      "spec/recursive_storage_array_w187_spec.cr",
+      "spec/recursive_storage_column_w186_spec.cr",
+      "spec/recursive_storage_compact_w188_spec.cr",
+      "spec/recursive_storage_reader_budget_w186_spec.cr",
+      "spec/recursive_storage_table_w186_spec.cr",
+      "spec/recursive_storage_values_budget_w186_spec.cr",
+      "spec/storage_column_depth_guard_w186_spec.cr",
+      "spec/storage_occurrence_grid_w184_spec.cr",
+      "spec/wide_part_metadata_parser_refactor_spec.cr",
+      "spec/wide_part_reader_compositional_tuple_spec.cr",
+      "spec/wide_part_table_projection_w87_spec.cr",
+      "spec/wide_part_table_w95_tuple_spec.cr",
+      "spec/wide_part_writer_compositional_tuple_spec.cr",
+      "spec/wide_part_writer_metadata_w150_spec.cr",
+      "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+      "spec/object_typed_dynamic_compact_w189_spec.cr",
+      "spec/object_typed_dynamic_compact_w189_adversary_spec.cr",
+      "spec/object_dynamic_structure_w120_spec.cr",
+      "spec/object_dynamic_structure_w120_budget_spec.cr",
+      "spec/object_statistics_w127_spec.cr",
+      "spec/physical_stream_plan_w125_spec.cr",
+      "spec/object_document_schema_w128_spec.cr",
+      "spec/object_document_schema_w140_spec.cr",
+      "spec/clickhouse_sip_hash_w190_spec.cr",
+      "spec/object_shared_buckets_w190_spec.cr",
+      "spec/object_shared_buckets_w190_adversary_spec.cr",
+      "spec/object_shared_chunk_structure_w191_spec.cr",
+      "spec/object_shared_copy_w192_spec.cr",
+      "spec/object_shared_copy_w192_adversary_spec.cr",
+      "spec/dynamic_structure_roster_w154_red_spec.cr",
+      "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+      "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr",
+      "spec/binary_dynamic_statistics_offsets_w157_spec.cr",
+      "spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr",
+      "spec/dynamic_descriptor_consumer_guards_w152_spec.cr",
+      "spec/binary_nested_w172_guards_spec.cr",
+      "spec/binary_variant_value_w147_adversary_spec.cr",
+      "spec/dynamic_structure_prefix_w193_adversary_spec.cr",
+      "spec/object_shared_path_w193_spec.cr",
+      "spec/object_shared_path_w193_adversary_spec.cr"
+    ],
+    "debug": {
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w193-path.EibkDh/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/array_object_column_core_w185_spec.cr spec/array_object_dynamic_w185_spec.cr spec/array_object_low_cardinality_w185_spec.cr spec/array_object_part_w185_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/binary_variant_physical_w149_adversary_spec.cr spec/binary_variant_physical_w149_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/bulk_dynamic_w122_adversary_spec.cr spec/bulk_nominal_w122_spec.cr spec/bulk_string_size_w122_spec.cr spec/dynamic_child_compact_w188_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr spec/dynamic_discriminator_w121_spec.cr spec/dynamic_values_w122_adversary_spec.cr spec/dynamic_values_w122_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/object_at_site_w186_spec.cr spec/object_catalog_w129_root_spec.cr spec/object_catalog_w129_spec.cr spec/object_child_compact_w188_spec.cr spec/object_child_occurrences_w184_spec.cr spec/object_child_site_physical_w187_spec.cr spec/object_column_lane_binder_refactor_spec.cr spec/object_column_reader_w129_spec.cr spec/object_column_writer_w127_root_spec.cr spec/object_column_writer_w127_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_declared_dynamic_w158_red_spec.cr spec/object_declared_dynamic_w158_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/object_documents_w123_adversary_spec.cr spec/object_documents_w123_root_spec.cr spec/object_documents_w123_spec.cr spec/object_file_reader_w126_root_spec.cr spec/object_offline_table_w130_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_part_writer_w128_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_w140_root_spec.cr spec/object_table_w130_root_spec.cr spec/object_table_w130_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/recursive_array_schema_w187_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_compact_w188_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_table_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/storage_column_depth_guard_w186_spec.cr spec/storage_occurrence_grid_w184_spec.cr spec/wide_part_metadata_parser_refactor_spec.cr spec/wide_part_reader_compositional_tuple_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/wide_part_table_w95_tuple_spec.cr spec/wide_part_writer_compositional_tuple_spec.cr spec/wide_part_writer_metadata_w150_spec.cr spec/binary_bulk_discriminator_framing_w189_spec.cr spec/object_typed_dynamic_compact_w189_spec.cr spec/object_typed_dynamic_compact_w189_adversary_spec.cr spec/object_dynamic_structure_w120_spec.cr spec/object_dynamic_structure_w120_budget_spec.cr spec/object_statistics_w127_spec.cr spec/physical_stream_plan_w125_spec.cr spec/object_document_schema_w128_spec.cr spec/object_document_schema_w140_spec.cr spec/clickhouse_sip_hash_w190_spec.cr spec/object_shared_buckets_w190_spec.cr spec/object_shared_buckets_w190_adversary_spec.cr spec/object_shared_chunk_structure_w191_spec.cr spec/object_shared_copy_w192_spec.cr spec/object_shared_copy_w192_adversary_spec.cr spec/dynamic_structure_roster_w154_red_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr spec/binary_dynamic_statistics_offsets_w157_spec.cr spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr spec/dynamic_descriptor_consumer_guards_w152_spec.cr spec/binary_nested_w172_guards_spec.cr spec/binary_variant_value_w147_adversary_spec.cr spec/dynamic_structure_prefix_w193_adversary_spec.cr spec/object_shared_path_w193_spec.cr spec/object_shared_path_w193_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w193-path.EibkDh/affected-debug-final-map.log",
+      "exit": 0,
+      "examples": 585,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "guard_exit": 0,
+      "log": "/private/tmp/crystal-click-w193-path.EibkDh/affected-debug-final-map.log"
+    },
+    "release": {
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w193-path.EibkDh/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/array_object_column_core_w185_spec.cr spec/array_object_dynamic_w185_spec.cr spec/array_object_low_cardinality_w185_spec.cr spec/array_object_part_w185_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/binary_variant_physical_w149_adversary_spec.cr spec/binary_variant_physical_w149_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/bulk_dynamic_w122_adversary_spec.cr spec/bulk_nominal_w122_spec.cr spec/bulk_string_size_w122_spec.cr spec/dynamic_child_compact_w188_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr spec/dynamic_discriminator_w121_spec.cr spec/dynamic_values_w122_adversary_spec.cr spec/dynamic_values_w122_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/object_at_site_w186_spec.cr spec/object_catalog_w129_root_spec.cr spec/object_catalog_w129_spec.cr spec/object_child_compact_w188_spec.cr spec/object_child_occurrences_w184_spec.cr spec/object_child_site_physical_w187_spec.cr spec/object_column_lane_binder_refactor_spec.cr spec/object_column_reader_w129_spec.cr spec/object_column_writer_w127_root_spec.cr spec/object_column_writer_w127_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_declared_dynamic_w158_red_spec.cr spec/object_declared_dynamic_w158_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/object_documents_w123_adversary_spec.cr spec/object_documents_w123_root_spec.cr spec/object_documents_w123_spec.cr spec/object_file_reader_w126_root_spec.cr spec/object_offline_table_w130_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_part_writer_w128_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_w140_root_spec.cr spec/object_table_w130_root_spec.cr spec/object_table_w130_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/recursive_array_schema_w187_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_compact_w188_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_table_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/storage_column_depth_guard_w186_spec.cr spec/storage_occurrence_grid_w184_spec.cr spec/wide_part_metadata_parser_refactor_spec.cr spec/wide_part_reader_compositional_tuple_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/wide_part_table_w95_tuple_spec.cr spec/wide_part_writer_compositional_tuple_spec.cr spec/wide_part_writer_metadata_w150_spec.cr spec/binary_bulk_discriminator_framing_w189_spec.cr spec/object_typed_dynamic_compact_w189_spec.cr spec/object_typed_dynamic_compact_w189_adversary_spec.cr spec/object_dynamic_structure_w120_spec.cr spec/object_dynamic_structure_w120_budget_spec.cr spec/object_statistics_w127_spec.cr spec/physical_stream_plan_w125_spec.cr spec/object_document_schema_w128_spec.cr spec/object_document_schema_w140_spec.cr spec/clickhouse_sip_hash_w190_spec.cr spec/object_shared_buckets_w190_spec.cr spec/object_shared_buckets_w190_adversary_spec.cr spec/object_shared_chunk_structure_w191_spec.cr spec/object_shared_copy_w192_spec.cr spec/object_shared_copy_w192_adversary_spec.cr spec/dynamic_structure_roster_w154_red_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr spec/binary_dynamic_statistics_offsets_w157_spec.cr spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr spec/dynamic_descriptor_consumer_guards_w152_spec.cr spec/binary_nested_w172_guards_spec.cr spec/binary_variant_value_w147_adversary_spec.cr spec/dynamic_structure_prefix_w193_adversary_spec.cr spec/object_shared_path_w193_spec.cr spec/object_shared_path_w193_adversary_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w193-path.EibkDh/affected-release-final-map.log",
+      "exit": 0,
+      "examples": 585,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "guard_exit": 0,
+      "log": "/private/tmp/crystal-click-w193-path.EibkDh/affected-release-final-map.log"
+    },
+    "helpers": {
+      "debug_build": {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w193-path.EibkDh/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/validate_object_shared_path_w193.cr -o /private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug-build-final.log",
+        "exit": 0,
+        "guard_exit": 0,
+        "log": "/private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug-build-final.log"
+      },
+      "release_build": {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w193-path.EibkDh/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/validate_object_shared_path_w193.cr -o /private/tmp/crystal-click-w193-path.EibkDh/path-helper-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w193-path.EibkDh/path-helper-release-build-final.log",
+        "exit": 0,
+        "guard_exit": 0,
+        "log": "/private/tmp/crystal-click-w193-path.EibkDh/path-helper-release-build-final.log"
+      },
+      "debug_run": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug 600 12288 /private/tmp/crystal-click-w193-path.EibkDh/path-manifest-root.json > /private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug.json 2> /private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug-run.log",
+        "actual_exit": 0,
+        "guard_exit": 0,
+        "log": "/private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug-run.log"
+      },
+      "release_run": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w193-path.EibkDh/path-helper-release 600 12288 /private/tmp/crystal-click-w193-path.EibkDh/path-manifest-root.json > /private/tmp/crystal-click-w193-path.EibkDh/path-helper-release.json 2> /private/tmp/crystal-click-w193-path.EibkDh/path-helper-release-run.log",
+        "actual_exit": 0,
+        "guard_exit": 0,
+        "log": "/private/tmp/crystal-click-w193-path.EibkDh/path-helper-release-run.log"
+      }
+    },
+    "actual_reconciliation": {
+      "command": "ruby scripts/reconcile_object_shared_path_w193.rb --capture-root /private/tmp/crystal-click-w191-native-final.BxiDQd --manifest /private/tmp/crystal-click-w193-path.EibkDh/path-manifest-root.json --debug-output /private/tmp/crystal-click-w193-path.EibkDh/path-helper-debug.json --release-output /private/tmp/crystal-click-w193-path.EibkDh/path-helper-release.json > /private/tmp/crystal-click-w193-path.EibkDh/path-reconciliation-final.json 2> /private/tmp/crystal-click-w193-path.EibkDh/path-reconciliation-final.stderr",
+      "exit": 0,
+      "status": "reconciled_w193_stock_path_data",
+      "profiles": 8,
+      "chunks": 42,
+      "paths": 34,
+      "manifest_sha256": "2fc623cbe9d9a6bd52d8a4d5526185f901e6fe3449a748ee98ef2f1b463cdd05",
+      "exact_debug_release_and_raw_data_match": true,
+      "report": "/private/tmp/crystal-click-w193-path.EibkDh/path-reconciliation-final.json",
+      "data_bytes": 1347,
+      "plain_records": 14,
+      "compact_records": 20,
+      "null_paths": 14,
+      "null_rows": 16,
+      "native_actual_types": [
+        "String"
+      ],
+      "read_budget": {
+        "node_count": 1042,
+        "element_count": 14545,
+        "wire_byte_count": 27904
+      },
+      "write_budget": {
+        "node_count": 1416,
+        "element_count": 14114,
+        "wire_byte_count": 22765
+      },
+      "budget_scope": "One caller read and one caller write budget over all records. Wire work includes recursive/normalized/framed and copy work; it is neither final file size nor RSS.",
+      "source_checks": {
+        "w191_raw_part_streams_authenticated": true,
+        "w192_copy_slices_bound_to_authored_sql_and_literals": true,
+        "path_values_independently_decoded_from_raw_data": true,
+        "string_null_plain_and_compact_capture_coverage": true,
+        "shared_variant_actual_type": "String",
+        "structure_chunk_count": 42,
+        "path_record_count": 34,
+        "physical_data_byte_count": 1347,
+        "invocation_count": 100
+      },
+      "new_native_capture": false,
+      "full_part_attach_check": false
+    },
+    "root_controls": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 /private/tmp/crystal-click-w193-path.EibkDh/root-controls-final.rb /private/tmp/crystal-click-w193-path.EibkDh /private/tmp/crystal-click-w191-native-final.BxiDQd /private/tmp/crystal-click-w193-controls.Un5aVh > /private/tmp/crystal-click-w193-controls.Un5aVh/root-controls-final.json 2> /private/tmp/crystal-click-w193-controls.Un5aVh/root-controls-final.stderr",
+      "actual_exit": 0,
+      "guard_exit": 0,
+      "total": 32,
+      "passed": 32,
+      "failures": 0,
+      "report": "/private/tmp/crystal-click-w193-controls.Un5aVh/root-controls-final.json",
+      "log": "/private/tmp/crystal-click-w193-controls.Un5aVh/root-controls-final.stderr",
+      "breakdown": {
+        "helper_input_checks": 22,
+        "helper_output_checks": 7,
+        "actual_cli_check": 1,
+        "positive_report_check": 1,
+        "raw_sha_substitution_check": 1
+      },
+      "original_capture_unchanged": true
+    },
+    "final_checks": [
+      "Crystal format --check on all changed .cr files: exit0",
+      "Ruby syntax check: exit0",
+      "git diff --check: exit0",
+      "Reverified clean shallow source revision and guard/runtime/capture-summary SHA values",
+      "Same 911-file source/spec input identity after all final actual gates"
+    ]
+  },
+  "failed_routes": [
+    "Sorted logical role names are not physical event order; all recursive state prefixes must precede bodies.",
+    "ArrayElements level belongs to the complete substream path and must not reset across Dynamic/Variant arms.",
+    "BASIC Map keys/values are escaped TupleElement names, not literal suffixes; root actual RED precedes narrow repair.",
+    "Added public decoder fifth argument broke instrumented existing consumers; private shared implementation and named prefix API restore public arity. Retained compiler RED: /private/tmp/crystal-click-w193-path.EibkDh/affected-debug-final.log",
+    "Root identity-based BinaryValue assertions were invalid; explicit shape/type/value checks repaired tests without production equality changes.",
+    "Accounting-suppression proposal was rejected; wire-work counters are cumulative operation work, not physical file sizes.",
+    "Two helper-only compilation REDs: Int32 JSON as_i vs Int64 contract, then Ruby-only one-argument Hash fetch. Both final helper builds follow repairs.",
+    "Initial 30-control matrix had28passes: UInt64MAX was rejected by JSON Int64 parsing before Data-offset guard. Separate parser-overflow and Int64-domain offset checks produce final32controls without production changes."
+  ],
+  "retained_roots": {
+    "stock_capture": "/private/tmp/crystal-click-w191-native-final.BxiDQd",
+    "w193": "/private/tmp/crystal-click-w193-path.EibkDh",
+    "final_controls": "/private/tmp/crystal-click-w193-controls.Un5aVh",
+    "initial_control_report": "/private/tmp/crystal-click-w193-path.EibkDh/root-controls.json"
+  },
+  "adversary": {
+    "verdict": "ROBUST within declared prerequisite",
+    "correlation": "Luna implementation/source/review reports are same-lineage support, not independent model evidence. Root inspected source, executed guarded gates, independently derived raw/value/event witnesses and ran input/output/raw/CLI attacks.",
+    "residual": "Ordinary recursive arms have source-derived unit witnesses, not stock native certificates. Retained native values are String/NULL; complete part and path seek behavior remain unqualified."
+  },
+  "continuation": {
+    "active_goal": "Full paired types plus MV/projections; performance deferred",
+    "next": "Compose schema-agnostic physical lanes and return internal-offset compressed coordinates from existing framing; keep parent/chunk/bucket/path axes distinct.",
+    "next_falsifier": "Path/getter at compressed-frame threshold including same-offset callbacks and legal frame-end aliases, followed by paired stock ATTACH/CHECK plus whole-object AND independent path reads.",
+    "persisted_v2_v3_guards": "Remain rejected",
+    "goal_status": "active/incomplete"
+  },
+  "evidence_semantics": {
+    "packet": "Curated index, not execution proof by JSON/field presence",
+    "lineage": "Pinned source plus separately pinned retained runtime capture plus frozen library/helper/reconciler inputs",
+    "decay_trigger": "Changes to production/spec/helper/reconciler inputs, immutable capture, source/runtime pins or fixture settings",
+    "refresh": "Rerun affected actual gates and independent reconciliation in a fresh evidence/control root",
+    "failure_policy": "Reopen dependent claims; do not widen persisted guards"
+  }
+}

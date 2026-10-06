@@ -2,6 +2,8 @@
 
 Document status: W191 verified metadata prerequisite and capture; W192 paired
 exact-Copy payload prerequisite qualified against the retained stock corpus.
+W193 paired per-path Compact Data/tape prerequisite is qualified against the
+retained stock String/NULL corpus; ordinary recursive arms have unit witnesses.
 Persisted ADVANCED/CHUNKED storage is not admitted.
 Baseline: `c99c9cf` (W190), clean tree at entry, 2026-10-06.
 The full read/write types and MV/projections goal remains open. Performance is
@@ -378,3 +380,192 @@ dictionary state and compressed/decompressed marks distinct. The next decisive
 falsifier is a library-written advanced part whose whole Object reads correctly
 but whose independent stock path read does not. Do not widen v2/v3 admission
 until that paired reader/writer boundary is actually qualified.
+
+## W193 per-path Compact payload contract and plan
+
+Baseline: clean `53f0852`, 2026-10-06. The next dependency owns one path in one
+already bounded bucket/chunk. Its paired API consumes the nominal Dynamic type,
+explicit actual-type structures, logical rows and the caller's codec budget;
+it produces or reads exactly one decompressed Data slice plus ordered
+`{name, relative_offset}` substream-getter events. These relative offsets are
+not compressed-file marks. Duplicate names are retained in event order;
+ClickHouse's eventual name-to-mark lookup is last-wins. Physical parent rows,
+chunk selection, file compression and persisted version admission stay outside
+this dependency.
+
+The source profile is position-independent, specialized prefixes/suffixes,
+Compact Variant discriminators, Dynamic V3 and Object V3 with statistics NONE.
+NONE omits the statistics flag itself; it is not PREFIX_EMPTY's zero flag.
+The layout owner orders structure, discriminator and recursively selected
+child prefix/body/suffix events while reusing existing BinaryDynamic/BinaryBulk
+value serde. Sorted logical lane names are not a physical event schedule.
+Existing complete Dynamic-structure APIs must retain byte-identical framing.
+Any new no-statistics prefix API is explicitly named and does not strip or
+inject bytes after encoding with a new budget.
+
+The callback-name profile is not the ordinary physical-file-name profile.
+`SerializationObjectSharedData.cpp:393-394,1384-1385` explicitly disables
+Variant arm escaping on both sides: `.Array(Int64)` remains literal, not
+`.Array%28Int64%29`. `ISerialization.cpp:335-359` still escapes the leading
+Tuple field dot together with the field name; `a.b` and `a%2Eb` must remain
+distinct `%2Ea%2Eb` and `%2Ea%252Eb` suffixes. Reuse bounded name builders with
+these explicit settings; do not change the ordinary physical-plan grammar.
+BASIC Map uses an internal Array(Tuple) whose `keys` and `values` are named
+TupleElement children (`DataTypeMap.cpp:137-140`), so the same rule yields
+`%2Ekeys` and `%2Evalues`, not `.keys` and `.values`. The array level follows
+the complete substream path across Dynamic/Variant arms; entering an arm does
+not reset it. This contract does not admit bucketed Map serialization.
+
+Read-side plans assembled from decoded structures must validate and charge
+the original read-direction budget, preserving unsupported-versus-corrupt
+errors. Nested Dynamic sites require explicit actual-type rosters, not an
+inference from nominal capacity. Unsupported layouts remain explicit refusals.
+No v2/v3 persisted guard changes are permitted from this dependency alone.
+
+Risk: CAUTION (paired serialization and ordered physical events). Rollback is
+an exact scoped atomic commit after gates. The strongest local failure is a
+successful value round trip with a wrong prefix/event position, causing an
+independent path/subcolumn consumer to seek the wrong bytes.
+
+Execution and DoD:
+
+1. Luna owns `src/crystal_click/object_shared_path_*.cr`,
+   `spec/object_shared_path_w193_spec.cr`, minimal paired seams in
+   `dynamic_structure_codec.cr` and `binary_dynamic_bulk_plan.cr`, and their
+   main require lines. Write the missing-API RED before production edits;
+   root executes it under the existing serial compiler guard.
+2. Root owns this contract, independent adversary checks, guarded serial
+   compilation/native execution and reconciliation coordination. Source/raw
+   inventory must resolve exact getter names/order and no-statistics bytes.
+3. Focused tests cover exact prefixes/events, recursive scalar lanes,
+   absent/empty/null values, malformed/trailing bodies, duplicate-name lookup,
+   detached ownership, caller-budget exhaustion and explicit nested rosters.
+   Preserve ordinary complete-structure and persisted refusal regressions.
+4. Rerun the inherited 84 affected files plus new specs in DEBUG and RELEASE
+   with actual exit 0 and no pending examples. Fresh helper modes must decode
+   authenticated retained stock Data slices, compare values with authored
+   inputs and Copy, and reencode exact original bytes and event positions.
+   Helper agreement alone is insufficient. Pin implementation/spec inputs.
+5. Attack prefix modes, counts, event offsets/names and budget directions with
+   independent negative controls. Reconcile raw provenance before recording
+   a bounded hostile verdict and evidence index.
+
+Shared-seam consumer inventory: `rg -n 'DynamicStructureCodec\\.|BinaryDynamicBulkPlan\\.(new_with_budget|decode_structure_streams)' src spec scripts --glob '*.cr'`
+finds the ordinary bulk plan/codec, Object dynamic/declared/document owners and
+physical reader, plus direct structure/plan/statistics/descriptor suites.
+Therefore the inherited 84 files are supplemented by
+`dynamic_structure_roster_w154_red_spec.cr`,
+`binary_dynamic_bulk_plan_w154_spec.cr`,
+`binary_dynamic_bulk_plan_w154_adversary_spec.cr`,
+`binary_dynamic_statistics_offsets_w157_spec.cr`,
+`binary_dynamic_statistics_offsets_w157_adversary_spec.cr`,
+`dynamic_descriptor_consumer_guards_w152_spec.cr`,
+`binary_nested_w172_guards_spec.cr` and
+`binary_variant_value_w147_adversary_spec.cr`. The corresponding gate is
+`run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec <affected files>
+--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`, repeated
+with `--release --no-debug`; expected signal is zero failures/errors/pending
+and actual exit 0 at identical production/spec inputs.
+
+Budget pivot: an implementation proposal introduced accounting-suppression
+flags into shared Bulk encode/decode and discriminator framing, to force the
+counter to equal final file bytes. That is not the requested contract and can
+remove preallocation guards while normalized lanes are materialized. Keep
+those shared owners unchanged instead. Charge existing recursive logical and
+normalized/framed work cumulatively, plus enclosing physical slices/copies;
+the measured wire-work counter is neither final file size nor RSS. Tight
+aggregate-limit tests use actually measured operation work, not an equality
+to Data size. LowCardinality accounting is not silently bypassed; layouts
+without a sourced event schedule remain explicitly unsupported.
+
+Compressed-coordinate mapping and complete paired physical assembly follow
+this exact-slice owner. Only stock-authored reads plus library-authored
+ATTACH/CHECK, whole-object AND independent path/subcolumn readback can admit
+the combined ADVANCED/CHUNKED implementation. This dependency is not a
+replacement for that final discriminator or the larger types/MV/projections
+goal. No memory/performance optimization is introduced here.
+
+## W193 executed qualification and continuation
+
+The paired exact-path codec delegates actual value serialization to the existing
+recursive Dynamic/Bulk owners. Data/event streams, immutable getter events,
+tape cursor, decode result and layout codec each have their own file. A named
+no-statistics-prefix seam preserves the complete Dynamic metadata API and its
+statistics offsets. The no-statistics plan refuses a statistics-offset lookup
+rather than inventing one. The old public three/four-argument structure decode
+method remains unchanged, including existing test instrumentation consumers.
+
+The missing-API RED precedes production changes. Independent source-derived
+falsifiers exposed incorrect prefix/body interleaving, ArrayElements levels
+reset at Dynamic arms, and literal Map `.keys`/`.values` names. The corrected
+walk runs all recursive prefixes before bodies, carries the full array level
+through arms, and uses escaped TupleElement Map names. The read-side depth
+guard runs before nested structure parsing/materialization. These are layout
+repairs over shared value serde, not per-schema serializers.
+
+The final 95 affected files pass 585 DEBUG and 585 RELEASE examples, zero
+failures/errors/pending, with actual terminal and guard exits 0. All 911
+source/spec inputs retain fingerprint
+`36a729f3b769ed75593cbf546174e048b89ff156e3cc3d133a94c7bf9f29b422`
+before and after both gates and helper/control execution. The focused final
+gate passes 20 examples. This is not a full repository-suite claim.
+
+Both fresh helper modes decode and exactly reencode the same 34 per-path Data
+records, including NULL values, derived from 42 chunks across eight immutable
+W191 profiles. Original Data contributes 1,347 bytes: 14 PLAIN and 20 COMPACT
+SharedVariant records. Fourteen paths include NULL and there are sixteen NULL
+rows. Ruby independently resolves compressed metadata coordinates to original
+decompressed slices and ordered getter events, authenticates retained process
+and physical stream evidence, and binds values to the W192/authored fixtures.
+Actual raw bytes, decoded values, structure rosters and reencoded events match
+both helper modes. This is a retained stock String-actual witness; recursive
+ordinary-arm unit cases are not native interoperability certificates.
+
+One read and one write budget span all path records. Measured wire work is
+27,904 read bytes and 22,765 write bytes, including recursive/normalized/framed
+and physical-copy work, not merely the 1,347 output bytes. These counters are
+neither an RSS bound nor a performance result. Accounting-suppression flags
+were rejected; shared Bulk/framing owners retain their existing accounting.
+
+All 32 final root controls pass: eleven input mutations in each helper mode,
+seven poisoned-output cases, actual missing-helper CLI rejection, substantive
+positive-report inspection, and same-length raw-file substitution detected by
+the original stdout SHA verifier. The original capture remains unchanged.
+No new native capture, full-part ATTACH/CHECK or persisted admission was run.
+
+Retained failed routes and test corrections:
+
+- An optional fifth argument on the public structure decoder broke existing
+  instrumented consumers at compile time. A private shared implementation plus
+  separately named prefix API preserves the original public arity; the final
+  affected gates run after that repair.
+- Root initially compared recursive BinaryValue objects by identity. Explicit
+  type/shape/value assertions corrected those tests without changing equality.
+- Fresh helper compilation found Int32 `JSON::Any#as_i` used in an Int64
+  validator and Ruby-style one-argument Hash fetch calls. Helper-only repairs
+  use `as_i64` and checked lookups; both final helpers were rebuilt afterward.
+- The first 30-control matrix had 28 passes: UInt64::MAX was rejected by the
+  helper's JSON Int64 parser before the expected Data-offset check. The final
+  matrix separately checks JSON integer overflow and an Int64-domain offset
+  beyond Data. This corrects the probe, not production behavior. Failed logs
+  and copies are retained separately from the final 32-control root.
+
+Scoped hostile verdict: ROBUST for the declared exact-Data/event prerequisite
+and executed fixtures. Commands, source/input digests, failures and controls
+are indexed in `.landmark/evidence/object-shared-path-w193.json`. Structural
+packet validation is an index check, not execution proof. Evidence decays when
+code/spec/helper/reconciler inputs, retained capture, source/runtime pins or
+fixture settings change; refresh the affected actual gates.
+
+Continuation: the full paired-types/MV/projections goal remains active, with
+performance deferred. Next compose path Data/events, chunk structures and
+PathsMarks/Substreams/SubstreamsMarks/PathsSubstreamsMetadata in one
+schema-agnostic physical-lane owner. Keep physical-parent rows, chunks, bucket
+identity and logical paths distinct. Reuse CompressedMarkWriter framing and
+return internal-offset coordinates from that same calculation rather than
+duplicate its private physical_position arithmetic; CompressedFrameIndex is
+the read-side resolver. The next falsifier places a path/getter at a compressed
+frame boundary, including equal-offset callbacks and legal frame-end aliases.
+Only the assembled paired reader/writer, stock ATTACH/CHECK and whole-object
+AND independent path readbacks can admit persisted versions 2/3. LowCardinality,
+Nested, QBit and JSON-as-Dynamic-actual per-path layouts remain explicit guards.

@@ -21,6 +21,28 @@ module CrystalClick
       structure
     end
 
+    # Compact Object Dynamic V3 stores only the descriptor prefix in the
+    # substream; unlike the complete metadata blob, it omits the statistics
+    # flag as well as any statistics payload.
+    def self.encode_prefix_without_statistics(
+      structure : DynamicStructure,
+      limits : BinaryCodecLimits = BinaryCodecLimits.default,
+    ) : Bytes
+      context = BinaryCodecContext.new(limits, nil, true)
+      write_prefix_without_statistics(structure, context)
+      context.finish_bytes
+    end
+
+    def self.decode_prefix_without_statistics(
+      bytes : Bytes,
+      limits : BinaryCodecLimits = BinaryCodecLimits.default,
+    ) : DynamicStructure
+      context = BinaryCodecContext.new(limits, bytes)
+      structure = read_prefix_without_statistics(context)
+      context.ensure_consumed
+      structure
+    end
+
     # Internal shared-budget entry point. Descriptor trees begin at depth one;
     # this structure envelope does not add a recursive descriptor level.
     def self.write_to(
@@ -41,9 +63,28 @@ module CrystalClick
       structure_depth : Int = 1,
       type_depth : Int = 1,
     ) : Int32
+      parse_start = context.output_size
+      write_prefix_without_statistics(structure, context, structure_depth, type_depth)
+      statistics_offset = context.output_size - parse_start
+      if statistics = structure.statistics
+        context.write_byte(1_u8)
+        StructureStatisticsCodec.write(statistics, context, structure.canonical_variant_count)
+      else
+        context.write_byte(0_u8)
+      end
+      statistics_offset
+    end
+
+    # Writes only the version and ordinary descriptor roster. The caller owns
+    # framing/finish and may continue writing the surrounding Compact stream.
+    def self.write_prefix_without_statistics(
+      structure : DynamicStructure,
+      context : BinaryCodecContext,
+      structure_depth : Int = 1,
+      type_depth : Int = 1,
+    ) : Nil
       reject_json_actual_types!(structure, context)
 
-      parse_start = context.output_size
       context.visit_node(structure_depth)
       write_u64_le(context, 4_u64)
 
@@ -57,15 +98,7 @@ module CrystalClick
       type_count.times do |index|
         BinaryDataTypeCodec.write_to(structure.type_at(index), context, type_depth)
       end
-
-      statistics_offset = context.output_size - parse_start
-      if statistics = structure.statistics
-        context.write_byte(1_u8)
-        StructureStatisticsCodec.write(statistics, context, structure.canonical_variant_count)
-      else
-        context.write_byte(0_u8)
-      end
-      statistics_offset
+      nil
     end
 
     # Internal shared-budget entry point for a paired structure operation.
@@ -87,6 +120,43 @@ module CrystalClick
       preflight_type_names : Bool = false,
     ) : Tuple(DynamicStructure, Int32)
       parse_start = context.input_offset
+      profile, types = read_prefix_without_statistics_internal(context, structure_depth, type_depth, preflight_type_names)
+      statistics_offset = (context.input_offset - parse_start).to_i32
+      statistics = case context.read_byte
+                   when 0_u8
+                     nil
+                   when 1_u8
+                     StructureStatisticsCodec.read(context, profile.canonical_variant_count)
+                   else
+                     context.corrupt!("Dynamic statistics flag must be zero or one")
+                   end
+
+      begin
+        structure = DynamicStructure.new(types, statistics)
+        {structure, statistics_offset}
+      rescue ex : ArgumentError
+        context.corrupt!("invalid Dynamic V3 statistics: #{ex.message}")
+      end
+    end
+
+    # Reads only the descriptor roster and leaves the cursor at the first byte
+    # following that prefix. This is the paired Compact-profile path; callers
+    # decide the exact bounded slice and final-consumption rule.
+    def self.read_prefix_without_statistics(
+      context : BinaryCodecContext,
+      structure_depth : Int = 1,
+      type_depth : Int = 1,
+      preflight_type_names : Bool = false,
+    ) : DynamicStructure
+      read_prefix_without_statistics_internal(context, structure_depth, type_depth, preflight_type_names)[0]
+    end
+
+    private def self.read_prefix_without_statistics_internal(
+      context : BinaryCodecContext,
+      structure_depth : Int,
+      type_depth : Int,
+      preflight_type_names : Bool,
+    ) : Tuple(DynamicStructure, Array(BinaryDataType))
       context.visit_node(structure_depth)
       version = read_u64_le(context)
       case version
@@ -159,23 +229,7 @@ module CrystalClick
       rescue ex : ArgumentError
         context.corrupt!("invalid Dynamic V3 alternative roster: #{ex.message}")
       end
-
-      statistics_offset = (context.input_offset - parse_start).to_i32
-      statistics = case context.read_byte
-                   when 0_u8
-                     nil
-                   when 1_u8
-                     StructureStatisticsCodec.read(context, profile.canonical_variant_count)
-                   else
-                     context.corrupt!("Dynamic statistics flag must be zero or one")
-                   end
-
-      begin
-        structure = DynamicStructure.new(types, statistics)
-        {structure, statistics_offset}
-      rescue ex : ArgumentError
-        context.corrupt!("invalid Dynamic V3 statistics: #{ex.message}")
-      end
+      {profile, types}
     end
 
     private def self.read_u64_le(context : BinaryCodecContext) : UInt64
