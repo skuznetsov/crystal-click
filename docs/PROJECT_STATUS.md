@@ -1,6 +1,32 @@
 # CrystalClick project status
 
-Current qualified frontier (W196, 2026-10-06): Object shared-path LowCardinality
+Current finite internal frontier (W197, 2026-10-06): ordinary Nested actual
+arms now compose the existing Array/implicit named Tuple owners across Dynamic
+bulk planning, physical stream binding and Object shared-path prefix/body
+serde. The nominal Nested descriptor is preserved; no serializer per recursive
+type product was introduced. Specialized Nested children (LowCardinality,
+Variant, Dynamic) and QBit/JSON actual-path guards remain unchanged.
+
+Focused DEBUG passes 20 examples. The same 129 affected files pass 855 DEBUG
+and 855 RELEASE examples, zero failures/errors/pending, actual exits 0, with
+unchanged 942-file source/spec identity across final gates. Fresh helpers in
+both modes read two stock Wide CHUNKED v3 parts (Nested and Array(named Tuple)
+control), preserve populated/pathless/empty rows and re-encode four Data/event
+records per mode byte-for-byte. Root authenticates literal bytes, callbacks,
+nominal identity and schedules; four report mutations per mode are rejected.
+Both reports are identical and all 86 source part files remain unchanged.
+Separate stock CHECK, whole-Object, dynamicType and direct-path queries pass.
+Scoped verdict: ROBUST for this finite internal adapter corpus, not complete
+library-written Nested actual parts or all recursive products.
+
+Next: remaining specialized wrapper/site schedules and their complete-part
+read/write certificates, including QBit and JSON-as-Dynamic-actual per-path
+storage. Full types, broader MV/projections and repository-wide class
+decomposition remain open. Performance stays deferred; the overall goal is
+incomplete. Details: [OBJECT_SHARED_NESTED_FRONTIER.md](OBJECT_SHARED_NESTED_FRONTIER.md),
+`.landmark/evidence/object-shared-nested-w197.json`.
+
+Previous qualified frontier (W196, 2026-10-06): Object shared-path LowCardinality
 reuses the recursive bulk/storage codec with explicit prefix/body callbacks
 and an additional-keys-only dictionary policy. Standalone bulk encoding keeps
 its part-global default; no serializer per recursive type product was added.
@@ -24,12 +50,13 @@ getter requires LC flags followed by inline additional keys, not concatenated
 standalone dictionary/index lanes. The explicit storage policy fixes that
 contract while retaining shared scalar encoding, traversal and caller budgets.
 
-Next: remaining recursive physical wrapper contracts, including Nested, QBit
-and JSON-as-Dynamic-actual per-path storage. The ordinary Object dynamic-path
-facade guard, legacy Dynamic profiles, Compact advanced parts, insertion/merge
-roster policy, full types, broader MV/projections and repository-wide class
-decomposition remain open. Performance is deferred; the overall goal remains
-incomplete. Details: [OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md](OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md),
+The next work at W196 was to qualify remaining recursive physical wrapper
+contracts, including Nested, QBit and JSON-as-Dynamic-actual per-path storage.
+Its ordinary Object dynamic-path facade guard was a separate boundary, not a
+claim that always-spill SharedVariant cannot carry Nested envelopes. Legacy
+Dynamic profiles, Compact advanced parts, insertion/merge roster policy, full
+types, broader MV/projections and repository-wide class decomposition remained
+open. Details: [OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md](OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md),
 `.landmark/evidence/object-shared-low-cardinality-w196.json`.
 
 Previous qualified frontier (W195, 2026-10-06): paired complete Wide Object

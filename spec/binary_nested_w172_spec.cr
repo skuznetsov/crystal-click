@@ -282,7 +282,7 @@ describe "W172 nominal Nested binary codec" do
     restored_inner.element_at(0).child_at(0).as_uint64.should eq(7_u64)
   end
 
-  it "rejects Array(Tuple) substitution and unqualified Dynamic actual Nested rosters" do
+  it "keeps Nested distinct from Array(Tuple) and admits ordinary Dynamic Nested rosters" do
     uint64 = CrystalClick::BinaryDataType.primitive("UInt64")
     nested = CrystalClick::BinaryDataType.nested([uint64] of CrystalClick::BinaryDataType, ["id"] of String)
     tuple_type = nested.child_at(0)
@@ -301,10 +301,10 @@ describe "W172 nominal Nested binary codec" do
       CrystalClick::BinaryBulkCodec.encode(array_type, [[nested_value]] of Array(CrystalClick::BinaryValue))
     end
 
-    dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 1)
     structure = CrystalClick::DynamicStructure.new([nested] of CrystalClick::BinaryDataType)
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDynamicBulkPlan.new(dynamic, {"root" => structure})
-    end
+    dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 2)
+    plan = CrystalClick::BinaryDynamicBulkPlan.new(dynamic, {"root" => structure})
+    plan.data_roles.should contain("root.arm.0.sizes")
+    plan.data_roles.should contain("root.arm.0.elements.field.0.data")
   end
 end

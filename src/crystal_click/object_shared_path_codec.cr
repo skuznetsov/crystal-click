@@ -241,9 +241,12 @@ module CrystalClick
           add_lane_emission(emissions, append_name(physical_prefix, ".size", budget), logical_name(path, ".string_sizes", budget), streams, 0, budget)
         end
         add_lane_emission(emissions, physical_prefix, logical_name(path, ".data", budget), streams, 0, budget)
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         suffix = ".size#{array_level}"
         add_lane_emission(emissions, append_name(physical_prefix, suffix, budget), logical_name(path, ".sizes", budget), streams, 0, budget)
+        # Nested is an Array of its implicit named Tuple. Carry that Tuple
+        # through the ordinary recursive lane owner; it is not a replacement
+        # Tuple descriptor or a second value serializer.
         child = logical_name(path, ".elements", budget)
         emit_type(type.child_at(0), child, physical_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget, profile)
       when BinaryDataType::TAG_NULLABLE
@@ -276,8 +279,6 @@ module CrystalClick
         dictionary_name = append_name(physical_prefix, ".dict", budget)
         add_lane_emission(emissions, dictionary_name, dictionary_role, streams, LOW_CARDINALITY_VERSION_BYTES, budget)
         add_lane_emission(emissions, physical_prefix, indexes_role, streams, 0, budget)
-      when BinaryDataType::TAG_NESTED
-        raise UnsupportedFormatError.new("Nested per-path physical substreams are not admitted")
       when BinaryDataType::TAG_QBIT
         raise UnsupportedFormatError.new("QBit per-path physical substreams are not admitted")
       when BinaryDataType::TAG_JSON
@@ -331,7 +332,7 @@ module CrystalClick
           arm_prefix = append_type_component(physical_prefix, arm, budget)
           emit_prefix_type(arm, child, arm_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget)
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         emit_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget)
       when BinaryDataType::TAG_NULLABLE
         emit_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, array_level, plan, structures, streams, physical_lanes, emissions, budget)
@@ -397,7 +398,7 @@ module CrystalClick
           child = indexed_path(path, ".arm.", index, budget)
           decode_prefix_type(arm, child, append_type_component(physical_prefix, arm, budget), array_level, depth + 1, reader, budget)
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         decode_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, array_level + 1, depth + 1, reader, budget)
       when BinaryDataType::TAG_NULLABLE
         decode_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, array_level, depth + 1, reader, budget)
@@ -458,7 +459,7 @@ module CrystalClick
           reader.add_lane(logical_name(path, ".string_sizes", budget), reader.take(append_name(physical_prefix, ".size", budget)))
         end
         reader.add_lane(logical_name(path, ".data", budget), reader.take(physical_prefix))
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         reader.add_lane(logical_name(path, ".sizes", budget), reader.take(append_name(physical_prefix, ".size#{array_level}", budget)))
         decode_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, array_level + 1, reader, budget, profile)
       when BinaryDataType::TAG_NULLABLE
@@ -488,8 +489,6 @@ module CrystalClick
         reader.add_low_cardinality_dictionary_body(dictionary_role, dictionary_name)
         indexes_role = logical_name(path, ".indexes", budget)
         reader.add_lane(indexes_role, reader.take(physical_prefix))
-      when BinaryDataType::TAG_NESTED
-        raise UnsupportedFormatError.new("Nested per-path physical substreams are not admitted")
       when BinaryDataType::TAG_QBIT
         raise UnsupportedFormatError.new("QBit per-path physical substreams are not admitted")
       when BinaryDataType::TAG_JSON
@@ -502,6 +501,9 @@ module CrystalClick
 
     private def self.canonical_arms(structure : DynamicStructure, budget : BinaryCodecBudget) : Array(BinaryDataType)
       count = structure.canonical_variant_count
+      structure.type_count.times do |index|
+        BinaryNestedType.reject_unqualified_specialized_bulk!(structure.type_at(index))
+      end
       budget.ensure_future_elements(count.to_u64)
       budget.charge_elements(count.to_u64)
       arms = Array(BinaryDataType?).new(count, nil)

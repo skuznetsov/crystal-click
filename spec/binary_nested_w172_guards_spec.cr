@@ -236,19 +236,22 @@ describe "W172 Nested logical binary adversarial guards" do
       CrystalClick::BinaryBulkCodec.decode(nested_low_cardinality, valid_empty_control, [] of UInt64)
     end
 
-    # Valid V3 metadata may describe Nested, but the specialized Dynamic
-    # bulk planner must refuse that actual roster in the read direction too.
+    # A plain Nested actual uses the shared Array/implicit-Tuple carrier in
+    # both structure-plan directions.
     actual = CrystalClick::DynamicStructure.new([ordinary_nested] of CrystalClick::BinaryDataType)
     structure_streams = CrystalClick::BinaryDynamicStructureStreams.new({
       "root" => CrystalClick::DynamicStructureCodec.encode(actual),
     })
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDynamicBulkPlan.decode_structure_streams(
-        CrystalClick::BinaryDataType.dynamic(1),
-        structure_streams,
-        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
-      )
-    end
+    dynamic = CrystalClick::BinaryDataType.dynamic(1)
+    write_plan = CrystalClick::BinaryDynamicBulkPlan.new(dynamic, {"root" => actual})
+    read_plan = CrystalClick::BinaryDynamicBulkPlan.decode_structure_streams(
+      dynamic,
+      structure_streams,
+      CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
+    )
+    read_plan.data_roles.should eq(write_plan.data_roles)
+    read_plan.data_roles.should contain("root.arm.0.sizes")
+    read_plan.data_roles.should contain("root.arm.0.elements.field.0.data")
   end
 
   it "retains Nested through ordinary Array, Tuple, and Map row and bulk composition" do

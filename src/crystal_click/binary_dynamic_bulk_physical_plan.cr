@@ -327,7 +327,7 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         add_data_role(path, ".data")
         add_data_role(path, ".string_sizes") if @prepared.profile.with_size_stream?
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         add_data_role(path, ".sizes")
         scan_type(type.child_at(0), child_path(path, ".elements"), depth + 1)
       when BinaryDataType::TAG_NULLABLE
@@ -391,7 +391,7 @@ module CrystalClick
         if @prepared.profile.with_size_stream?
           add_physical_name(add_size(prefix_length, 5_u64))
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         add_physical_name(add_size(prefix_length, add_size(5_u64, digit_count(array_level))))
         measure_bindings(type.child_at(0), child_path(path, ".elements"), prefix_length, add_size(array_level, 1_u64))
       when BinaryDataType::TAG_NULLABLE
@@ -492,7 +492,7 @@ module CrystalClick
         if @prepared.profile.with_size_stream?
           add_data_binding("#{path}.string_sizes", PhysicalStreamName.append_literal(prefix, ".size"))
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         add_data_binding("#{path}.sizes", PhysicalStreamName.append_literal(prefix, ".size#{array_level}"))
         append_bindings(type.child_at(0), child_path(path, ".elements"), prefix, add_size(array_level, 1_u64))
       when BinaryDataType::TAG_NULLABLE

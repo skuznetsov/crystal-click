@@ -215,8 +215,11 @@ module CrystalClick
           return true if contains_low_cardinality?(arm_type(path, index), child, context)
         end
         false
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
-        suffix = type.tag == BinaryDataType::TAG_ARRAY ? ".elements" : ".nested"
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE
+        suffix = case type.tag
+                 when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED then ".elements"
+                 else                                                            ".nested"
+                 end
         contains_low_cardinality?(type.child_at(0), contextual_generated_name(context, path, suffix), context)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         contains_low_cardinality?(type.child_at(0), path, context)
@@ -366,6 +369,7 @@ module CrystalClick
       preflight_external_site_count(context, streams.site_count, "Dynamic structure stream site count")
       budget.charge_wire_bytes(streams.total_input_byte_size)
       context.validate_type_tree(type)
+      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
 
       sites = Hash(String, Site).new
       discover_read_sites(type, "root", 1, streams, context, sites, include_statistics)
@@ -431,6 +435,7 @@ module CrystalClick
       context = BinaryCodecContext.new(limits, nil, true, operation_budget, false, account_output_bytes)
       preflight_external_site_count(context, structures.size, "Dynamic structure site count")
       context.validate_type_tree(type)
+      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
 
       sites = Hash(String, Site).new
       discover_write_sites(type, "root", 1, structures, context, sites, include_statistics)
@@ -497,7 +502,7 @@ module CrystalClick
           child = child_path(context, path, ".arm.", index)
           discover_write_sites(arm, child, depth + 1, structures, context, sites, include_statistics)
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         discover_write_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, structures, context, sites, include_statistics)
       when BinaryDataType::TAG_NULLABLE
         discover_write_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, structures, context, sites, include_statistics)
@@ -561,7 +566,7 @@ module CrystalClick
           child = child_path(context, path, ".arm.", index)
           discover_read_sites(arm, child, depth + 1, streams, context, sites, include_statistics)
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, streams, context, sites, include_statistics)
       when BinaryDataType::TAG_NULLABLE
         discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, streams, context, sites, include_statistics)
@@ -594,17 +599,15 @@ module CrystalClick
       count = structure.canonical_variant_count
       context.preflight_metadata(count.to_u64, maximum_count: 255_u64, label: "Dynamic canonical arm count")
 
-      # The Dynamic site walker has its own actual-roster grammar. Until that
-      # specialized owner models Nested's shared sibling offsets, reject it
-      # before canonical-name measurement or any arm/role roster allocation.
+      # Nested is carried by the same size-plus-implicit-Tuple recursion as an
+      # Array. Specialized descendants still need their own sibling-row
+      # schedule and remain rejected before names or role rosters are built.
       structure.type_count.times do |index|
         actual_type = structure.type_at(index)
         if actual_type.contains_json?
           context.unsupported!("JSON in Dynamic actual rosters is outside the admitted bulk profile")
         end
-        if actual_type.contains_nested?
-          context.unsupported!("Nested in Dynamic actual rosters is outside the admitted bulk profile")
-        end
+        BinaryNestedType.reject_unqualified_specialized_bulk!(actual_type)
       end
 
       name_work_bytes = 0_u64
@@ -764,7 +767,7 @@ module CrystalClick
         count
       when BinaryDataType::TAG_STRING
         profile.with_size_stream? ? 2_u64 : 1_u64
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = child_path(context, path, ".elements")
         checked_role_add(1_u64, count_type_roles(type.child_at(0), child, sites, profile, context))
       when BinaryDataType::TAG_NULLABLE
@@ -830,7 +833,7 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         append_role(context, path, ".data", roles)
         append_role(context, path, ".string_sizes", roles) if profile.with_size_stream?
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_role(context, path, ".sizes", roles)
         child = child_path(context, path, ".elements")
         append_type_roles(type.child_at(0), child, sites, profile, context, roles)
@@ -896,7 +899,7 @@ module CrystalClick
         0_u64
       when BinaryDataType::TAG_STRING
         profile.with_size_stream? ? 2_u64 : 1_u64
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = child_path(context, path, ".elements")
         checked_role_add(1_u64, count_ordinary_type_roles(type.child_at(0), child, sites, profile, context))
       when BinaryDataType::TAG_NULLABLE
@@ -954,8 +957,11 @@ module CrystalClick
           count = checked_role_add(count, count_low_cardinality_sites(arm, child, sites, context))
         end
         count
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
-        suffix = type.tag == BinaryDataType::TAG_ARRAY ? ".elements" : ".nested"
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE
+        suffix = case type.tag
+                 when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED then ".elements"
+                 else                                                            ".nested"
+                 end
         count_low_cardinality_sites(type.child_at(0), child_path(context, path, suffix), sites, context)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         count_low_cardinality_sites(type.child_at(0), path, sites, context)
@@ -996,7 +1002,7 @@ module CrystalClick
           count = checked_role_add(count, child[:count])
         end
         {contains: contains, count: count}
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = count_ancestor_size_roles(type.child_at(0), child_path(context, path, ".elements"), sites, context)
         {contains: child[:contains], count: child[:contains] ? checked_role_add(1_u64, child[:count]) : 0_u64}
       when BinaryDataType::TAG_NULLABLE
@@ -1053,7 +1059,7 @@ module CrystalClick
         else
           {contains: false, grids: 0_u64, shape_roles: 0_u64}
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = low_cardinality_schedule_metrics(type.child_at(0), child_path(context, path, ".elements"), sites, context)
         if child[:contains]
           {contains: true, grids: checked_role_add(child[:grids], 1_u64), shape_roles: checked_role_add(child[:shape_roles], 1_u64)}
@@ -1109,7 +1115,7 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         append_role(context, path, ".data", roles)
         append_role(context, path, ".string_sizes", roles) if profile.with_size_stream?
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_role(context, path, ".sizes", roles)
         append_ordinary_type_roles(type.child_at(0), child_path(context, path, ".elements"), sites, profile, context, roles)
       when BinaryDataType::TAG_NULLABLE
@@ -1161,8 +1167,11 @@ module CrystalClick
         site.arms.each_with_index do |arm, index|
           append_low_cardinality_sites(arm, child_path(context, path, ".arm.", index), sites_by_path, context, result)
         end
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE
-        suffix = type.tag == BinaryDataType::TAG_ARRAY ? ".elements" : ".nested"
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE
+        suffix = case type.tag
+                 when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED then ".elements"
+                 else                                                            ".nested"
+                 end
         append_low_cardinality_sites(type.child_at(0), child_path(context, path, suffix), sites_by_path, context, result)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         append_low_cardinality_sites(type.child_at(0), path, sites_by_path, context, result)
@@ -1196,7 +1205,7 @@ module CrystalClick
           found = found || child_found
         end
         found
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         found = append_ancestor_size_roles(type.child_at(0), child_path(context, path, ".elements"), sites, context, roles)
         append_role(context, path, ".sizes", roles) if found
         found
@@ -1244,7 +1253,7 @@ module CrystalClick
           end
         end
         append_role(context, path, ".discriminators", roles) if contains
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child_path_value = child_path(context, path, ".elements")
         child_metrics = low_cardinality_schedule_metrics(type.child_at(0), child_path_value, sites, context)
         if child_metrics[:contains]
