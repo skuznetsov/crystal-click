@@ -1,5 +1,25 @@
 # CrystalClick project status
 
+Current internal foundation (W191, 2026-10-06): a detached, byte-ordered Object
+shared chunk metadata owner and paired codec compose under one caller-owned
+budget. They preserve UInt64 row/transport coordinates, opaque paths, zero-row
+records and exact-blob consumption, with count/suffix preflight before path
+materialization. Each owner has its own file. The same 82 affected files pass
+503 DEBUG and 503 RELEASE examples, zero failures/errors/pending, actual guard
+exits 0. Both rebuilt helper modes decode and exactly reencode 64 actual stock
+ADVANCED/CHUNKED records across eight root/Array and empty-control profiles.
+Root separately reconciles 100 retained invocations, 248 stream-file hashes,
+16 available metadata hashes, 92 compressed frames and 3,362 raw structure
+bytes against both helper outputs; ten helper controls pass in both modes.
+Scoped verdict: ROBUST for this metadata prerequisite and finite capture, not
+persisted ADVANCED read/write admission or general part integrity. Other
+nonstream metadata is roster/literal checked, not individually hash-certified.
+The version-2/3 document guards remain strict. Full paired advanced payload
+owners and stock whole-object plus independent path readback are next;
+remaining types, broader MV/projections and decomposition stay open.
+Performance is deferred and the larger goal remains incomplete. Details:
+[OBJECT_SHARED_ADVANCED_FRONTIER.md](OBJECT_SHARED_ADVANCED_FRONTIER.md).
+
 Current qualified capability (W190, 2026-10-06): Object-v3 shared
 MAP_WITH_BUCKETS reuses the existing Array(Tuple(String,String)) codec with
 explicit per-site 1..256 bucket state, zero-key ClickHouse SipHash64 placement,
