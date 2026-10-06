@@ -1,0 +1,66 @@
+{
+  "kind": "curated_evidence_index_not_proof",
+  "slice": "W182 nested nominal JSON scalar composition",
+  "baseline": "682765f",
+  "claim": "VERIFIED within shared-budget laws, selected regression controls and 15 finite paired scalar witnesses",
+  "verdict": "ROBUST within scope after root execution and reconciliation; same-lineage reviews correlated",
+  "excluded": ["full repository suite", "all recursive products", "new persisted JSON layouts", "fresh-source runtime build", "MV/projection execution", "performance"],
+  "source": {
+    "revision": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+    "clean": true,
+    "shallow": true,
+    "built": false
+  },
+  "runtime": {
+    "version": "26.10.1.1201",
+    "revision": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "observations": {
+    "specs_per_mode": 47,
+    "examples_debug": 335,
+    "examples_release": 335,
+    "spec_child_guard_exit_zero_pairs": 12,
+    "paired_child_guard_exit_zero_pairs": 9,
+    "code_inputs_immutable": 1035,
+    "repository_fixture_files_immutable": 1369,
+    "actual_helper_outputs_equal_between_modes": 30,
+    "native_profiles": 15,
+    "native_processes_exit_zero": 32,
+    "native_artifact_input_hash_checks": 222,
+    "indexed_evidence_files": 407,
+    "mutation_examples": 7,
+    "mutation_failures": 4,
+    "mutation_errors_pending": 0
+  },
+  "receipt_root": "/private/tmp/crystal-click-json-nested-w182.3EaKEV",
+  "native_root": "/private/tmp/crystal-click-w182-native.1khWtp",
+  "library_roots": {
+    "debug": "/private/tmp/crystal-click-w182-debug-fixtures.SMLIE9",
+    "release": "/private/tmp/crystal-click-w182-release-fixtures.ZQKWB7"
+  },
+  "receipt_sha256": {
+    "reconciled.json": "e8fc70dc552252a83f4877ab67d95807e0e089af8ab5a33193336c4f5fe057e8",
+    "final2-debug-guards.json": "815237e9ed03712fc296d0d00a1c49240b8410dc6dbd70bf04c4787f6e81ac0a",
+    "final2-release-guards.json": "8b569fdc1dd3d0844f9bcbe6e95024430cae4bb8046b24e2ade3fef24f735f12",
+    "paired-guards.json": "be0ec7d88a38fedc26aa8cb9e868b22f280a3b5332e521cfc969fa64e622beec",
+    "baseline-red.json": "02199537c6622be8e2990ca5e89bed28df37582f5146a81198a1958804a027da",
+    "nested-budget-mutant.json": "dba9ad258c5161cc34e25f147895bf83e21522f7aec38379168873eb6e1e66cd"
+  },
+  "native_summary_sha256": "72af395adea1137368c9468a5d37217809c9f17e8c14e6ba316525f22dcdd753",
+  "helper_sha256": {
+    "debug": "42dfcab6378b3cff0a26778c88223c36de410def29ba5214a5b289c0b34bb08d",
+    "release": "0a174eca5a09de6e29dfd68bf67e6d959843860fb5547257728dedc4f3c3a8ce"
+  },
+  "known_failed_attempts": [
+    "Baseline: 8 admission errors with unchanged new positive tests, actual child/guard exit 1",
+    "Native Nested default flatten_nested=1 normalization failed the nominal witness; explicit flatten_nested=0 control passed",
+    "Two zero-window DynamicBulk fixtures initially lacked a Dynamic site; corrected legal-site controls passed",
+    "Skipped nested row preflight mutation produced 4 failures, no errors/pending, actual child/guard exit 1; exact source restored"
+  ],
+  "warning": "One DEBUG verify-library resource guard emitted child setpgid Operation not permitted; all observed jobs/statuses reconcile, perfect process-group containment not claimed",
+  "validator": "Repository packet templates and graph validator absent; no structural-validator success claimed",
+  "lineage": "Actual build/emit/verify receipts join identical source maps and helper hashes to fresh emitted outputs and native before/after hashes; standalone stock checker does not attest the supplied bytes' producer",
+  "decay": "Refresh affected gates after constructor, codec, admission, budget, consumer, source semantics or runtime/settings changes; missing temporary artifacts require a fresh run rather than index-only revalidation"
+}

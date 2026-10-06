@@ -148,7 +148,7 @@ describe "W180 JSON binary profile guards and malformed boundaries" do
     end
   end
 
-  it "keeps JSON fenced from generic parents, Dynamic, bulk, and borrowed envelopes" do
+  it "admits scalar JSON wrappers without widening the physical, Object, or borrowed profiles" do
     json_type = CrystalClick::BinaryDataType.json(max_dynamic_paths: 0, max_dynamic_types: 0)
     empty_value = CrystalClick::BinaryValue.json(
       json_type,
@@ -158,47 +158,63 @@ describe "W180 JSON binary profile guards and malformed boundaries" do
       ),
     )
 
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.array(json_type) }
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.nullable(json_type) }
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.tuple([json_type] of CrystalClick::BinaryDataType)
-    end
+    array_type = CrystalClick::BinaryDataType.array(json_type)
+    nullable_type = CrystalClick::BinaryDataType.nullable(json_type)
+    tuple_type = CrystalClick::BinaryDataType.tuple([json_type] of CrystalClick::BinaryDataType)
+    array_type.child_at(0).should eq(json_type)
+    nullable_type.child_at(0).should eq(json_type)
+    tuple_type.child_at(0).should eq(json_type)
+
+    # Legality is determined by each wrapper's actual child capability, not
+    # by a blanket JSON ban. Array admits Nullable(JSON), but Array itself is
+    # not legal under Nullable, and LC(JSON) remains outside the type profile.
+    nullable_tuple_type = CrystalClick::BinaryDataType.nullable(tuple_type)
+    nullable_tuple_type.child_at(0).should eq(tuple_type)
+    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.nullable(array_type) }
+    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.low_cardinality(json_type) }
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.aggregate_count(json_type) }
     nested_typed_paths = Hash(String, CrystalClick::BinaryDataType).new
     nested_typed_paths["nested"] = json_type
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.json(typed_paths: nested_typed_paths)
-    end
-    nested_json_descriptor = Bytes[
-      CrystalClick::BinaryDataType::TAG_ARRAY,
-      CrystalClick::BinaryDataType::TAG_JSON, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ]
-    nested_error = expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDataTypeCodec.decode(nested_json_descriptor)
-    end
-    nested_error.message.to_s.should contain("JSON")
+    nested_json_type = CrystalClick::BinaryDataType.json(typed_paths: nested_typed_paths)
+    nested_json_type.json_type.not_nil!.typed_type_for("nested").should eq(json_type)
+    nested_json_descriptor = CrystalClick::BinaryDataTypeCodec.encode(nested_json_type)
+    CrystalClick::BinaryDataTypeCodec.decode(nested_json_descriptor).should eq(nested_json_type)
 
     dynamic_type = CrystalClick::BinaryDataType.dynamic(max_types: 0)
-    dynamic_error = expect_raises(ArgumentError) do
-      CrystalClick::BinaryValue.dynamic(dynamic_type, empty_value)
-    end
-    dynamic_error.message.to_s.should contain("JSON")
+    dynamic_value = CrystalClick::BinaryValue.dynamic(dynamic_type, empty_value)
+    dynamic_row = CrystalClick::BinaryValueCodec.encode_value(dynamic_value)
+    decoded_dynamic = CrystalClick::BinaryValueCodec.decode_value(dynamic_type, dynamic_row)
+    decoded_dynamic.child_at(0).type.should eq(json_type)
+    decoded_dynamic.child_at(0).json_row.empty?.should be_true
+
     structure_error = expect_raises(ArgumentError) do
       CrystalClick::DynamicStructure.new([json_type] of CrystalClick::BinaryDataType)
     end
     structure_error.message.to_s.should contain("JSON")
+
+    object_error = expect_raises(ArgumentError) do
+      # This schema-only probe is intentionally zero-row: persisted Object
+      # declarations retain their narrower grammar than scalar RowBinary.
+      CrystalClick::ObjectDocumentSchema.new({"nested" => array_type})
+    end
+    object_error.message.to_s.should contain("JSON")
+
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryBulkTypePlan.new(array_type, CrystalClick::BinaryBulkProfile.single_stream)
+    end
     bulk_error = expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryBulkCodec.encode(
-        json_type,
+        array_type,
         [] of Array(CrystalClick::BinaryValue),
       )
     end
     bulk_error.message.to_s.should contain("JSON")
 
-    full_wire = CrystalClick::BinaryValueCodec.encode(empty_value)
+    wrapped_empty = CrystalClick::BinaryValue.array(array_type, [empty_value] of CrystalClick::BinaryValue)
+    full_wire = CrystalClick::BinaryValueCodec.encode(wrapped_empty)
     borrowed_encode_error = expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.encode_borrowed(
-        empty_value,
+        wrapped_empty,
         CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default, true),
       )
     end
@@ -212,7 +228,7 @@ describe "W180 JSON binary profile guards and malformed boundaries" do
     borrowed_decode_error.message.to_s.should contain("JSON")
     dynamic_bulk_encode_error = expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.encode_dynamic_bulk_child(
-        empty_value,
+        wrapped_empty,
         CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS, true),
         1,
       )
@@ -220,7 +236,7 @@ describe "W180 JSON binary profile guards and malformed boundaries" do
     dynamic_bulk_encode_error.message.to_s.should contain("JSON")
     dynamic_bulk_decode_error = expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.decode_dynamic_bulk_child(
-        full_wire,
+        CrystalClick::BinaryDataTypeCodec.encode(array_type),
         CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS),
         1,
       )

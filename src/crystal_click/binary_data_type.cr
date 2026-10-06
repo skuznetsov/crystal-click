@@ -218,7 +218,6 @@ module CrystalClick
     def self.array(child : BinaryDataType) : BinaryDataType
       reject_aggregate_count_child!(child)
       reject_qbit_child!(child)
-      reject_json_child!(child)
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
@@ -312,7 +311,6 @@ module CrystalClick
       if child.contains_qbit? && child.tag != TAG_QBIT
         raise ArgumentError.new("Nullable can contain QBit only as its direct scalar child")
       end
-      reject_json_child!(child)
       if child.tag == TAG_ARRAY || child.tag == TAG_NESTED || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
         raise ArgumentError.new("Nullable cannot directly contain Array, Nested, Map, Nullable, LowCardinality, Variant, or Dynamic")
       end
@@ -324,7 +322,6 @@ module CrystalClick
     def self.variant(arms : Array(BinaryDataType), limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryDataType
       arms.each do |arm|
         reject_aggregate_count_child!(arm)
-        reject_json_child!(arm)
       end
       budget = BinaryCodecBudget.new(limits, true)
       canonical = BinaryVariantRoster.normalize(
@@ -377,9 +374,6 @@ module CrystalClick
         if arm.contains_aggregate_count?
           context.corrupt!("AggregateFunction(count) cannot be nested in a Variant arm")
         end
-        if arm.contains_json?
-          context.unsupported!("JSON is not admitted in a Variant arm")
-        end
       end
       canonical = begin
         BinaryVariantRoster.normalize(
@@ -411,7 +405,6 @@ module CrystalClick
       children.each do |child|
         reject_aggregate_count_child!(child)
         reject_qbit_child!(child)
-        reject_json_child!(child)
       end
 
       if names
@@ -440,8 +433,6 @@ module CrystalClick
       reject_aggregate_count_child!(value)
       reject_qbit_child!(key)
       reject_qbit_child!(value)
-      reject_json_child!(key)
-      reject_json_child!(value)
       if BinaryLowCardinalityTypePolicy.nullable_map_key?(key)
         raise ArgumentError.new("Map key type cannot be Nullable or LowCardinality(Nullable(...))")
       end
@@ -706,7 +697,7 @@ module CrystalClick
 
     private def self.reject_json_child!(type : BinaryDataType) : Nil
       if type.contains_json?
-        raise ArgumentError.new("JSON is admitted only as a root nominal descriptor")
+        raise ArgumentError.new("JSON is not admitted as a child of this DataType owner")
       end
     end
 

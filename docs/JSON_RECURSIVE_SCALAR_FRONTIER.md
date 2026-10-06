@@ -1,5 +1,9 @@
 # JSON recursive scalar composition frontier
 
+W182 removes the historical root-only nominal JSON restriction in
+[JSON_NESTED_SCALAR_FRONTIER.md](JSON_NESTED_SCALAR_FRONTIER.md). Its nested
+scalar witnesses do not widen the separately qualified persisted layouts.
+
 Document status: W181, VERIFIED within the bounded scalar laws, selected
 regressions and finite paired native witnesses below (2026-10-05).
 Baseline: `f2c2e17`, the W180 nominal JSON descriptor and scalar kernel.
@@ -53,9 +57,10 @@ qualified. These wrappers may still occur legally inside recursive children.
 
 ## Residual rejected surface
 
-- Nested JSON descriptors and JSON inside Dynamic are still guarded by the
-  existing root-only descriptor/constructor boundary. ClickHouse supports such
-  shapes; removing this boundary requires its own complete consumer inventory.
+- Historical W181 boundary: nested JSON descriptors and JSON inside Dynamic
+  were guarded by the root-only descriptor/constructor rule. W182 supersedes
+  that scalar restriction after a consumer inventory and separate gates;
+  physical/bulk/persisted restrictions remain.
 - AggregateFunction(count) beneath JSON is still guarded by the existing
   top-level-only scalar/descriptor contract. Static typed AggregateFunction is
   also rejected by ClickHouse's JSON schema tree. Runtime tagged aggregate

@@ -1,5 +1,5 @@
 module CrystalClick
-  # Bounded root-JSON DataType descriptor codec. SKIP and regexp metadata are
+  # Bounded JSON DataType descriptor codec. SKIP and regexp metadata are
   # deliberately refused until their independent semantics are qualified.
   module BinaryJsonTypeCodec
     VERSION = 0_u8
@@ -101,7 +101,7 @@ module CrystalClick
       begin
         BinaryDataType.json(max_dynamic_paths.to_i, max_dynamic_types.to_i, typed_paths)
       rescue ex : ArgumentError
-        context.unsupported!("JSON descriptor is outside the admitted root JSON profile")
+        context.unsupported!("JSON descriptor is outside the admitted JSON scalar profile")
       end
     end
 

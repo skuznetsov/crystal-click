@@ -1,5 +1,10 @@
 # JSON Binary Kernel Frontier
 
+W182 adds recursive nominal JSON scalar composition in
+[JSON_NESTED_SCALAR_FRONTIER.md](JSON_NESTED_SCALAR_FRONTIER.md), superseding
+the historical root-only parent/Dynamic restriction below. Persisted consumer
+certificates remain unchanged.
+
 W181 extends the recursive scalar child grammar and separates static typed
 schema from runtime admission in
 [JSON_RECURSIVE_SCALAR_FRONTIER.md](JSON_RECURSIVE_SCALAR_FRONTIER.md).

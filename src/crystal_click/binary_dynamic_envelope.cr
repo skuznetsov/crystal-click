@@ -17,9 +17,6 @@ module CrystalClick
         if selected.type.contains_qbit?
           context.unsupported!("QBit is not admitted as a Dynamic actual type")
         end
-        if selected.type.contains_json?
-          context.unsupported!("JSON is not admitted as a Dynamic actual type")
-        end
         context.preflight_children(1_u64)
         BinaryDataTypeCodec.write_to(selected.type, context, depth + 1)
         context.preflight_children(1_u64)
@@ -38,9 +35,6 @@ module CrystalClick
       selected_type = BinaryDataTypeCodec.read_from(context, depth + 1)
       if selected_type.contains_qbit?
         context.unsupported!("QBit is not admitted as a Dynamic actual type")
-      end
-      if selected_type.contains_json?
-        context.unsupported!("JSON is not admitted as a Dynamic actual type")
       end
       if selected_type.tag == BinaryDataType::TAG_NOTHING
         BinaryValue.dynamic(type)

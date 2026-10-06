@@ -1,5 +1,5 @@
 module CrystalClick
-  # Structured RowBinary profile for a root JSON value. This is intentionally
+  # Structured RowBinary profile for one JSON scalar value. This is intentionally
   # separate from persisted Object shared-map and physical bulk encodings.
   # Value callbacks re-enter BinaryValueCodec's private scalar visitor with
   # the same budget and rebased depth.

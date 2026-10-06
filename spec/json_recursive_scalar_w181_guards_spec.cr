@@ -400,25 +400,41 @@ describe "W181 recursive scalar JSON RowBinary guards" do
     json_type = profile.type
     value = profile.value
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.aggregate_count(json_type) }
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.array(json_type) }
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.nullable(json_type) }
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.tuple([json_type] of CrystalClick::BinaryDataType)
-    end
-    expect_raises(ArgumentError) { CrystalClick::BinaryValue.dynamic(CrystalClick::BinaryDataType.dynamic, value) }
+
+    # JSON remains a nominal scalar when ordinary RowBinary products compose
+    # it. The separate Object/physical profiles below stay narrower.
+    array_type = CrystalClick::BinaryDataType.array(json_type)
+    nullable_type = CrystalClick::BinaryDataType.nullable(json_type)
+    tuple_type = CrystalClick::BinaryDataType.tuple([json_type] of CrystalClick::BinaryDataType)
+    array_type.child_at(0).should eq(json_type)
+    nullable_type.child_at(0).should eq(json_type)
+    tuple_type.child_at(0).should eq(json_type)
+    nullable_tuple = CrystalClick::BinaryDataType.nullable(tuple_type)
+    nullable_tuple.child_at(0).should eq(tuple_type)
+    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.nullable(array_type) }
+
+    dynamic_type = CrystalClick::BinaryDataType.dynamic(max_types: 0)
+    dynamic_value = CrystalClick::BinaryValue.dynamic(dynamic_type, value)
+    dynamic_row = CrystalClick::BinaryValueCodec.encode_value(dynamic_value)
+    decoded_dynamic = CrystalClick::BinaryValueCodec.decode_value(dynamic_type, dynamic_row)
+    decoded_dynamic.child_at(0).type.should eq(json_type)
+    decoded_dynamic.child_at(0).json_row.path_at(0).should eq("item")
+    decoded_dynamic.child_at(0).json_row.value_at(0).type.name.should eq("LowCardinality(String)")
 
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryBulkCodec.encode(json_type, [] of Array(CrystalClick::BinaryValue))
     end
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.encode_borrowed(
-        value,
+        CrystalClick::BinaryValue.array(array_type, [value] of CrystalClick::BinaryValue),
         CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default, true),
       )
     end
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.decode_borrowed(
-        CrystalClick::BinaryValueCodec.encode(value),
+        CrystalClick::BinaryValueCodec.encode(
+          CrystalClick::BinaryValue.array(array_type, [value] of CrystalClick::BinaryValue),
+        ),
         CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default),
       )
     end

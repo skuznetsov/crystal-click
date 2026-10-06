@@ -1,5 +1,9 @@
 # General JSON Storage Frontier
 
+W182 permits nested nominal JSON in the scalar descriptor/value kernel; see
+[JSON_NESTED_SCALAR_FRONTIER.md](JSON_NESTED_SCALAR_FRONTIER.md). It does not
+admit new persisted stream layouts or relax the storage gates below.
+
 W180 is the separately governed nominal JSON descriptor / structured scalar
 RowBinary prerequisite in [JSON_BINARY_KERNEL_FRONTIER.md](JSON_BINARY_KERNEL_FRONTIER.md).
 Its bounded scalar admission does not widen any persisted certificate below.

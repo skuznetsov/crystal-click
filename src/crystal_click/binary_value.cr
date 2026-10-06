@@ -144,9 +144,6 @@ module CrystalClick
       if child && child.type.contains_qbit?
         raise ArgumentError.new("QBit is not admitted as a Dynamic actual type")
       end
-      if child && child.type.contains_json?
-        raise ArgumentError.new("JSON is not admitted as a Dynamic actual type")
-      end
       if child && child.type.tag == BinaryDataType::TAG_NOTHING
         unless child.is_null?
           raise ArgumentError.new("Dynamic Nothing child must be NULL")

@@ -1,6 +1,26 @@
 # CrystalClick project status
 
-Current qualified capability (W181, 2026-10-05): JSON structured scalar paths
+Current qualified capability (W182, 2026-10-06): nominal JSON composes through
+the existing recursive scalar visitors beneath Array/Tuple/Map/Nullable/
+Variant/Nested, inside JSON typed/runtime paths and as a Dynamic actual type.
+Nested path metadata and values share enclosing budgets at rebased depths;
+repeated shared owners are charged per occurrence. Upstream child-admission
+laws and physical/bulk/borrowed/persisted Object guards remain separate.
+The same 47 selected specs pass 335 DEBUG and 335 RELEASE examples in six serial
+cohorts per mode, with all twelve actual child/guard exits 0 and no failures/
+errors/pending. Root reconciles 1,035 immutable Crystal/Ruby inputs and 1,369
+fixture files. Thirty actual helper-output files match between modes; pinned
+stock passes 15 paired scalar profiles with 32 successful process records and
+222 native artifact/input hash checks. Both helper modes consume and re-encode
+actual stock captures. A seeded skipped nested preflight fails four unchanged
+guards before exact restoration and final gates. Scoped verdict: ROBUST for
+these laws and finite witnesses, not every recursive product, the full suite,
+new JSON parts, fresh-master runtime or performance. Remaining persisted
+layouts/path semantics, types and broader MV/projections stay open; performance
+remains deferred. Exact scope, commands, failed attempts, warning and evidence:
+[JSON_NESTED_SCALAR_FRONTIER.md](JSON_NESTED_SCALAR_FRONTIER.md).
+
+Previous capability checkpoint (W181, 2026-10-05): JSON structured scalar paths
 reuse the existing recursive codec for LC, Variant, Dynamic, Nested and supported
 SimpleAggregateFunction wrappers. Static typed-schema admission is distinct
 from runtime tagged admission; static Interval/BFloat16/Nullable(Nothing) and
@@ -17,7 +37,8 @@ modes consume and re-encode the actual stock captures. A seeded omitted Dynamic
 descriptor visit fails two unchanged constructor guards before exact restoration
 and final gates. Scoped verdict: ROBUST for these witnesses and budget laws,
 not all recursive products, the full suite, new JSON parts or a fresh-master
-runtime build. Nested nominal JSON and persisted layout/state work remain open,
+runtime build. Nested nominal JSON was open at W181 and is superseded by W182;
+persisted layout/state work remains open,
 as do remaining types and broader MV/projections; performance remains deferred.
 Scope, exact gates, failed attempts, source/runtime pins and evidence decay:
 [JSON_RECURSIVE_SCALAR_FRONTIER.md](JSON_RECURSIVE_SCALAR_FRONTIER.md).

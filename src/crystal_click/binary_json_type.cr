@@ -1,5 +1,5 @@
 module CrystalClick
-  # Nominal parameters for the root JSON DataType descriptor. Typed path types
+  # Nominal parameters for one JSON DataType descriptor. Typed path types
   # are descriptor metadata: they are not generic DataType/value children.
   class BinaryJsonType
     DEFAULT_MAX_DYNAMIC_PATHS =  1_024
@@ -234,10 +234,20 @@ module CrystalClick
         raise ArgumentError.new("JSON path type exceeds the admitted recursive limits")
       end
 
-      if type.tag == BinaryDataType::TAG_JSON ||
-         type.tag == BinaryDataType::TAG_AGGREGATE_COUNT ||
+      if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT ||
          type.tag == BinaryDataType::TAG_QBIT
         reject_type!(typed)
+      end
+
+      if type.tag == BinaryDataType::TAG_JSON
+        # JSON is a nominal scalar here. Its declared paths are descriptor
+        # children of their own and always use the static typed-schema policy,
+        # even when this JSON descriptor arrived through a runtime path.
+        descriptor = type.json_type || reject_type!(typed)
+        descriptor.typed_path_count.times do |index|
+          validate_type_node!(descriptor.typed_type_at(index), depth + 1, true, false, false)
+        end
+        return nil
       end
 
       if !typed && root

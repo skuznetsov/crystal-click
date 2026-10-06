@@ -147,6 +147,51 @@ module CrystalClick
     private def preflight_value_tree!(value : BinaryValue, context : BinaryCodecContext, depth : Int) : Nil
       context.visit_node(depth)
       type = value.type
+      if type.tag == BinaryDataType::TAG_JSON
+        row = value.json_row
+        descriptor = type.json_type || context.unsupported!("JSON descriptor metadata is missing")
+        count = row.path_count.to_u64
+        if count > 0_u64
+          context.preflight_children(count) # flattened path metadata records
+          context.visit_metadata_nodes(count, depth)
+          context.preflight_children(count) # one value edge per path
+          context.ensure_depth(depth + 1)
+
+          # Bound the complete nested path roster before path_at materializes
+          # any retained-name copies. Values are immutable, so this pass can
+          # inspect byte sizes without escaping the row owner.
+          path_wire_bytes = 0_u64
+          row.path_count.times do |index|
+            next_bytes = BinaryJsonType.path_wire_size(row.path_byte_size(index).to_u64)
+            if path_wire_bytes > UInt64::MAX - next_bytes
+              context.unsupported!("JSON row path metadata size overflows UInt64")
+            end
+            path_wire_bytes += next_bytes
+          end
+          context.budget.charge_wire_bytes(path_wire_bytes)
+        end
+
+        row.path_count.times do |index|
+          path = row.path_at(index) # only after aggregate path-byte preflight
+          child = row.value_at(index)
+          unless descriptor.typed_type_for(path)
+            # Typed child descriptors were traversed from the enclosing JSON
+            # type tree. Untyped paths carry an inline runtime descriptor and
+            # must consume this same budget at the row's rebased depth.
+            context.validate_type_tree(child.type, depth + 1)
+            unless child.type.tag == BinaryDataType::TAG_NOTHING
+              begin
+                BinaryJsonType.validate_runtime_type!(child.type)
+              rescue ex : ArgumentError
+                raise ArgumentError.new("JSON runtime value type is outside the admitted scalar/container profile")
+              end
+            end
+          end
+          preflight_value_tree!(child, context, depth + 1)
+        end
+        return nil
+      end
+
       if type.tag == BinaryDataType::TAG_DYNAMIC
         if value.is_null?
           # A NULL Dynamic still carries the descriptor-only Nothing sentinel.
