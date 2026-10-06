@@ -3,6 +3,11 @@
 W180 is the separately governed nominal JSON descriptor / structured scalar
 RowBinary prerequisite in [JSON_BINARY_KERNEL_FRONTIER.md](JSON_BINARY_KERNEL_FRONTIER.md).
 Its bounded scalar admission does not widen any persisted certificate below.
+W181 reuses the existing recursive scalar grammar for additional JSON path
+wrappers and corrects static schema admission in
+[JSON_RECURSIVE_SCALAR_FRONTIER.md](JSON_RECURSIVE_SCALAR_FRONTIER.md).
+Its paired RowBinary witnesses do not certify dictionary/sparse/shared stream
+schedules, a new persisted JSON layout, or a whole-part writer.
 
 Current frontier (2026-10-03): W128 checkpoint `1c5bab4` qualifies complete
 library-owned normalized Object parts; W129 adds bounded whole-Object catalog

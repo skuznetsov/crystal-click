@@ -207,49 +207,105 @@ module CrystalClick
       false
     end
 
-    # The paired generic scalar codec is reused only for this explicit closed
-    # grammar. A traversal cap prevents schema construction from recursively
-    # rendering or validating an arbitrarily deep caller-built type graph.
+    # The paired generic scalar codec is reused only for the represented
+    # scalar/container grammar. Typed JSON declarations additionally follow
+    # ClickHouse's static JSON schema gate; runtime-tagged descriptors retain
+    # the broader generic profile where the tagged RowBinary path represents it.
     def self.validate_typed_type!(type : BinaryDataType) : Nil
-      validate_type_node!(type, 1, false)
+      validate_type_node!(type, 1, true, true, false)
       nil
     end
 
-    private def self.validate_type_node!(type : BinaryDataType, depth : Int, allow_nothing : Bool) : Nil
+    # A Nothing descriptor is handled separately as the runtime NULL sentinel.
+    # Dynamic's selected actual type uses this same bounded runtime-top policy.
+    def self.validate_runtime_type!(type : BinaryDataType) : Nil
+      validate_type_node!(type, 1, false, true, false)
+      nil
+    end
+
+    private def self.validate_type_node!(
+      type : BinaryDataType,
+      depth : Int,
+      typed : Bool,
+      root : Bool,
+      allow_nothing : Bool,
+    ) : Nil
       if depth > BinaryCodecLimits::DEFAULT_MAX_DEPTH
-        raise ArgumentError.new("JSON typed path type exceeds the admitted recursive limits")
+        raise ArgumentError.new("JSON path type exceeds the admitted recursive limits")
       end
-      if type.contains_json? || type.contains_aggregate_count? || type.contains_qbit? ||
-         type.contains_dynamic? || type.contains_variant? || type.contains_low_cardinality? ||
-         type.contains_nested?
-        raise ArgumentError.new("JSON typed path type is outside the admitted scalar/container profile")
+
+      if type.tag == BinaryDataType::TAG_JSON ||
+         type.tag == BinaryDataType::TAG_AGGREGATE_COUNT ||
+         type.tag == BinaryDataType::TAG_QBIT
+        reject_type!(typed)
+      end
+
+      if !typed && root
+        top_variant = type.tag == BinaryDataType::TAG_VARIANT
+        top_dynamic = type.tag == BinaryDataType::TAG_DYNAMIC
+        top_nullable = type.tag == BinaryDataType::TAG_NULLABLE
+        top_nullable_low_cardinality = type.tag == BinaryDataType::TAG_LOW_CARDINALITY &&
+                                       type.child_at(0).tag == BinaryDataType::TAG_NULLABLE
+        if top_variant || top_dynamic || top_nullable || top_nullable_low_cardinality
+          reject_type!(false)
+        end
       end
 
       case type.tag
       when BinaryDataType::TAG_ARRAY
-        validate_type_node!(type.child_at(0), depth + 1, false)
+        validate_type_node!(type.child_at(0), depth + 1, typed, false, false)
       when BinaryDataType::TAG_NULLABLE
         child = type.child_at(0)
-        return if child.tag == BinaryDataType::TAG_NOTHING
-        validate_type_node!(child, depth + 1, false)
+        if child.tag == BinaryDataType::TAG_NOTHING
+          # ClickHouse's typed JSON schema gate rejects Nullable(Nothing).
+          # Runtime tagged values retain it only below a container; a NULL
+          # value has no child scalar to serialize.
+          reject_type!(typed) if typed || root
+          validate_type_node!(child, depth + 1, typed, false, true)
+        else
+          validate_type_node!(child, depth + 1, typed, false, false)
+        end
       when BinaryDataType::TAG_MAP
-        validate_type_node!(type.child_at(0), depth + 1, false)
-        validate_type_node!(type.child_at(1), depth + 1, false)
-      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        key = type.child_at(0)
+        if typed && !(key.tag == BinaryDataType::TAG_STRING ||
+           (key.tag == BinaryDataType::TAG_LOW_CARDINALITY &&
+           key.child_at(0).tag == BinaryDataType::TAG_STRING))
+          reject_type!(true)
+        end
+        validate_type_node!(key, depth + 1, typed, false, false)
+        validate_type_node!(type.child_at(1), depth + 1, typed, false, false)
+      when BinaryDataType::TAG_NESTED
+        validate_type_node!(BinaryNestedType.tuple_for(type), depth + 1, typed, false, false)
+      when BinaryDataType::TAG_LOW_CARDINALITY, BinaryDataType::TAG_SIMPLE_AGGREGATE
+        validate_type_node!(type.child_at(0), depth + 1, typed, false, false)
+      when BinaryDataType::TAG_DYNAMIC
+        # The Dynamic actual descriptor is a value-time edge, not a static
+        # child of this DataType. Row preflight validates that edge separately.
+        return nil
+      when BinaryDataType::TAG_VARIANT,
+           BinaryDataType::TAG_UNNAMED_TUPLE,
+           BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
-          validate_type_node!(type.child_at(index), depth + 1, false)
+          validate_type_node!(type.child_at(index), depth + 1, typed, false, false)
         end
       else
-        if type.tag == BinaryDataType::TAG_NOTHING && allow_nothing
-          return
-        elsif type.tag == BinaryDataType::TAG_STRING ||
-              type.tag == BinaryDataType::TAG_BOOL || !type.fixed_width.nil?
-          return
-        else
-          raise ArgumentError.new("JSON typed path type is outside the admitted scalar/container profile")
+        return if type.tag == BinaryDataType::TAG_NOTHING && allow_nothing
+        if typed && (type.tag == BinaryDataType::TAG_INTERVAL ||
+           type.tag == BinaryDataType::TAG_BFLOAT16 ||
+           type.tag == BinaryDataType::TAG_NOTHING)
+          reject_type!(true)
+        end
+        unless type.tag == BinaryDataType::TAG_STRING ||
+               type.tag == BinaryDataType::TAG_BOOL || !type.fixed_width.nil?
+          reject_type!(typed)
         end
       end
       nil
+    end
+
+    private def self.reject_type!(typed : Bool) : Nil
+      profile = typed ? "typed JSON schema" : "runtime JSON value"
+      raise ArgumentError.new("DataType is outside the admitted #{profile} profile")
     end
 
     private def self.var_uint_size(value : UInt64) : UInt64

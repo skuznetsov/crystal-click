@@ -57,7 +57,7 @@ module CrystalClick
             # a wide/deep shared DAG before the operation limits can reject it.
             context.validate_type_tree(value.type, 2)
             begin
-              BinaryJsonType.validate_typed_type!(value.type)
+              BinaryJsonType.validate_runtime_type!(value.type)
             rescue ex : ArgumentError
               raise ArgumentError.new("JSON runtime value type is outside the admitted scalar/container profile")
             end
@@ -147,12 +147,39 @@ module CrystalClick
     private def preflight_value_tree!(value : BinaryValue, context : BinaryCodecContext, depth : Int) : Nil
       context.visit_node(depth)
       type = value.type
+      if type.tag == BinaryDataType::TAG_DYNAMIC
+        if value.is_null?
+          # A NULL Dynamic still carries the descriptor-only Nothing sentinel.
+          context.preflight_children(1_u64)
+          context.validate_type_tree(BinaryDataType.primitive("Nothing"), depth + 1)
+        else
+          selected = value.child_at(0)
+          context.preflight_children(1_u64) # inline actual-type descriptor
+          context.validate_type_tree(selected.type, depth + 1)
+          begin
+            BinaryJsonType.validate_runtime_type!(selected.type)
+          rescue ex : ArgumentError
+            raise ArgumentError.new("JSON Dynamic actual type is outside the admitted runtime profile")
+          end
+          context.preflight_children(1_u64) # selected actual value
+          context.ensure_depth(depth + 1)
+          preflight_value_tree!(selected, context, depth + 1)
+        end
+        return nil
+      end
+
       count = case type.tag
               when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_UNNAMED_TUPLE,
-                   BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
+                   BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP,
+                   BinaryDataType::TAG_NESTED
                 value.element_count
               when BinaryDataType::TAG_NULLABLE
                 value.is_null? ? 0 : value.element_count
+              when BinaryDataType::TAG_LOW_CARDINALITY,
+                   BinaryDataType::TAG_SIMPLE_AGGREGATE
+                value.element_count
+              when BinaryDataType::TAG_VARIANT
+                value.is_null? ? 0 : 1
               when BinaryDataType::TAG_NOTHING
                 0
               else

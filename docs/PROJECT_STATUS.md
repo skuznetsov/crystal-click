@@ -1,6 +1,28 @@
 # CrystalClick project status
 
-Current qualified capability (W180, 2026-10-05): a root nominal JSON v0
+Current qualified capability (W181, 2026-10-05): JSON structured scalar paths
+reuse the existing recursive codec for LC, Variant, Dynamic, Nested and supported
+SimpleAggregateFunction wrappers. Static typed-schema admission is distinct
+from runtime tagged admission; static Interval/BFloat16/Nullable(Nothing) and
+non-String Map keys are corrected from W180 false admissions, without banning
+their represented runtime routes. Wrapper values and Dynamic actual descriptors
+share constructor and codec budgets/depth; no physical admission is widened.
+The same 42 selected specs pass 309 DEBUG and 309 RELEASE examples in six serial
+cohorts per mode; all twelve actual child/guard exits are 0 with zero failures/
+errors/pending, 1,000 unchanged Crystal inputs and 1,369 fixture files. Actual
+DEBUG/RELEASE outputs match across 31 fixture files. Pinned stock passes 15 paired
+scalar profiles and ten exactly classified expected refusals; root reconciles
+42 actual process statuses and 243 native artifact/input hashes. Both helper
+modes consume and re-encode the actual stock captures. A seeded omitted Dynamic
+descriptor visit fails two unchanged constructor guards before exact restoration
+and final gates. Scoped verdict: ROBUST for these witnesses and budget laws,
+not all recursive products, the full suite, new JSON parts or a fresh-master
+runtime build. Nested nominal JSON and persisted layout/state work remain open,
+as do remaining types and broader MV/projections; performance remains deferred.
+Scope, exact gates, failed attempts, source/runtime pins and evidence decay:
+[JSON_RECURSIVE_SCALAR_FRONTIER.md](JSON_RECURSIVE_SCALAR_FRONTIER.md).
+
+Previous capability checkpoint (W180, 2026-10-05): a root nominal JSON v0
 descriptor and owned flattened structured RowBinary row now have paired codecs.
 Four narrow owners have separate files; typed-path metadata remains distinct
 from generic value children and from the older persisted ObjectDocument profile.

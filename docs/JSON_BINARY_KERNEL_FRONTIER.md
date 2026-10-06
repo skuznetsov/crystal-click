@@ -1,6 +1,13 @@
 # JSON Binary Kernel Frontier
 
-Current transition: W180, VERIFIED within the bounded descriptor/scalar laws,
+W181 extends the recursive scalar child grammar and separates static typed
+schema from runtime admission in
+[JSON_RECURSIVE_SCALAR_FRONTIER.md](JSON_RECURSIVE_SCALAR_FRONTIER.md).
+It corrects W180's static Interval/BFloat16/Nullable(Nothing)/non-String Map
+false admissions. Historical admission statements below are not the current
+validator contract; persisted certificates are not widened by either slice.
+
+Previous transition: W180, VERIFIED within the bounded descriptor/scalar laws,
 selected regression controls and seven paired stock witnesses, over clean base
 `9cf21d3`. This is not qualification of every admitted recursive value product.
 The target remains full read/write type compatibility and broader MV/projection

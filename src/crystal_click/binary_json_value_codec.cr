@@ -103,7 +103,7 @@ module CrystalClick
               context.unsupported!("top-level Nullable is outside the admitted JSON runtime-value profile")
             end
             begin
-              BinaryJsonType.validate_typed_type!(path_type)
+              BinaryJsonType.validate_runtime_type!(path_type)
             rescue ex : ArgumentError
               context.unsupported!("JSON runtime DataType is outside the admitted scalar/container profile")
             end
