@@ -18,5 +18,23 @@ module CrystalClick
     def events : Array(ObjectSharedPathSubstreamEvent)
       @events.dup
     end
+
+    # Non-allocating inspection lets outer physical owners preflight aggregate
+    # work before requesting detached Data or tape snapshots.
+    def data_size : Int32
+      @data.size
+    end
+
+    def event_count : Int32
+      @events.size
+    end
+
+    def data_byte_at(index : Int) : UInt8
+      @data[index]
+    end
+
+    def event_at(index : Int) : ObjectSharedPathSubstreamEvent
+      @events[index]
+    end
   end
 end

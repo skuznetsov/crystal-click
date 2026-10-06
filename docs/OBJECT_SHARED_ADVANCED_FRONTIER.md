@@ -5,6 +5,11 @@ exact-Copy payload prerequisite qualified against the retained stock corpus.
 W193 paired per-path Compact Data/tape prerequisite is qualified against the
 retained stock String/NULL corpus; ordinary recursive arms have unit witnesses.
 Persisted ADVANCED/CHUNKED storage is not admitted.
+W194's schema-agnostic per-bucket Wide six-lane read/write prerequisite is
+qualified against the retained stock String/NULL corpus and fresh pinned-native
+decompression of both generated frame schedules. Internal coordinates resolve
+through actual compressed frames. Persisted document guards remain unchanged
+until complete paired parts pass ATTACH/CHECK and whole/path readbacks.
 Baseline: `c99c9cf` (W190), clean tree at entry, 2026-10-06.
 The full read/write types and MV/projections goal remains open. Performance is
 deferred until those capabilities are implemented and qualified.
@@ -569,3 +574,129 @@ frame boundary, including equal-offset callbacks and legal frame-end aliases.
 Only the assembled paired reader/writer, stock ATTACH/CHECK and whole-object
 AND independent path readbacks can admit persisted versions 2/3. LowCardinality,
 Nested, QBit and JSON-as-Dynamic-actual per-path layouts remain explicit guards.
+
+## W194 physical-lane plan (executed prerequisite)
+
+Risk: CAUTION (serialization and shared transport API). Rollback is the clean
+`beca3d2` baseline plus an atomic local commit after the actual gates; no remote
+write is authorized. The existing `CompressedMarkWriter.encode` call shape,
+ordinary output bytes, first-prefix mark identity and counters are preserved.
+The bounded consumer search finds 43 encode/preflight call sites in `src/spec`.
+
+1. `compressed_mark_writer.cr` and a separate position-result owner expose a
+   named encode-with-positions operation. Arbitrarily ordered/duplicate logical
+   query offsets are mapped by the same frame measurement used for outer marks.
+   Query EOF uses physical EOF; an outer first-prefix EOF mark retains its
+   existing frame-zero identity. Query records/result bytes are budgeted before
+   allocation; they are not charged as physical file bytes.
+2. Separate `object_shared_physical_*` owners assemble/decode a bucket's Wide
+   Structure, Data, PathsMarks, Substreams, SubstreamsMarks and metadata lanes.
+   Input chunks are grouped by physical parent marks. Parent rows, logical
+   chunk rows, bucket identity and opaque path values remain separate. Wide
+   Structure intervals bound the chunk sequence; there is no inferred equality
+   between parent rows and Object occurrences, and no extra chunk-count field.
+3. Qualify against authenticated W191 stream files using independently derived
+   W193 paths/events and authored Copy values. Generated compressed bytes need
+   not match stock compressor choices; decoded fields, resolved offsets,
+   ordered callback tapes and parent grids must match. No round-trip-only gate.
+
+DoD: measured missing-API RED before production edits; focused DEBUG/RELEASE
+physical/coordinate falsifiers and the affected transport/Object regressions
+with zero failures/errors/pending; fresh helper against the retained native
+corpus plus root mutations of coordinate, count, path, grid and raw-byte
+evidence. Capture guard exit and actual command exit separately. Evidence is
+scoped to this foundation, not complete-part ATTACH/CHECK or all CH types.
+
+Strongest failure: an internal pointer resolves to a plausible but incorrect
+path body after a compression boundary, particularly repeated callbacks or
+zero-occurrence children. Guards cover canonical EOF and legal frame-end
+aliases, out-of-frame pairs, monotone extents, complete consumption, detached
+ownership, aggregate shared budgets and count-derived preflight. Persisted
+versions 2/3 and unqualified actual layouts stay rejected; full-part assembly
+with Copy, stock ATTACH/CHECK and independent-path reads remains the next gate.
+
+## W194 physical-lane qualification (2026-10-06)
+
+The public bucket coordinator composes separate lane input, bucket input, path,
+chunk, physical-parent, detached output, encoder, decoder, reader and cursor
+owners. Public owners have separate files; private layout-measurement structs
+remain implementation details. It consumes W193's opaque path Data/event tape,
+not a new scalar serializer or a serializer per recursive type product. Existing
+Dynamic/Bulk codecs remain responsible for actual values. This does not claim
+the repository-wide decomposition is complete.
+
+`CompressedMarkWriter.encode_with_positions` maps arbitrary and duplicate
+logical offsets through the existing writer's frame measurement. EOF queries
+use canonical physical EOF, while ordinary prefix-mark identity and zero-query
+bytes/counters are preserved. Batch preflight includes the aggregate query
+records and retained coordinate pairs before output allocation. Queries consume
+result/record work, not file-byte work.
+
+The physical owner pairs Structure, Data, PathsMarks, Substreams,
+SubstreamsMarks and PathsSubstreamsMetadata for one bucket. Structure outer-mark
+intervals delimit v2's single chunk or v3's chunk sequence. Physical parent rows
+are not logical Object occurrences: Array fixtures include zero-occurrence and
+multi-chunk parents. Pathless chunks, empty no-frame lanes, repeated callback
+names/equal offsets, canonical EOF and legal previous-frame-end aliases survive.
+Malformed coordinates, enormous counts, tails, inconsistent parent grids,
+direction/depth failures and cumulative limits reject. The read-side header
+index preflights logical wire bytes before payload decoding, then the existing
+paired reader verifies marks and checksums; mmap lifetimes remain scoped.
+This is logical work accounting, not a cumulative all-lane RSS guarantee.
+
+Actual final gates:
+
+- The same 100 affected spec files pass 640 DEBUG and 640 RELEASE examples,
+  zero failures/errors/pending, with actual process and guard exits 0. All 927
+  files under `src/spec` have unchanged identity across final gates; this count
+  and NUL-delimited digest encoding differ from W193's `.cr`-only fingerprint.
+- Fresh DEBUG/RELEASE helpers authenticate and decode 72 source lanes across
+  eight profiles, 12 buckets, 48 physical parents and 64 bucket chunk records.
+  Both encode and reread frame sizes 17/37 under the same four cumulative caller
+  budgets. Actual stdout equals the saved JSON, both modes match, and all 288
+  generated stream files plus one JSON per mode are size/hash/tree checked.
+- Fresh pinned ClickHouse decompression succeeds for every nonempty generated
+  lane: 208 actual processes and 1,040 retained argv/stdin/stdout/stderr/record
+  artifacts. Actual inputs are bound to generated files; pins, exit/signal,
+  timeouts, process errors, guard settings, clean stderr and capture bytes/hashes
+  are checked. Each frame schedule has 12,189 logical stream bytes per mode.
+- Independent Ruby reparsing checks structure prefixes, resolves all three
+  transport pairs through actual target-lane frame headers, and compares the
+  resulting paths, values and ordered callbacks with authenticated source and
+  authored W191/W192 fixtures. Recompressed suffix bytes need not match: their
+  compressed coordinates change while logical positions must remain equal.
+- All 33 root controls pass: eleven malformed manifests in each helper mode,
+  substantive positive comparison, six forged output cases, actual CLI bypass
+  rejection/comparison enforcement, native input/artifact binding and a
+  same-length native stdout substitution rejected by the original SHA verifier.
+
+Read/write codec wire work is 36,567/24,378 bytes. Derived lower bounds reject
+counter resets after the source read, two writes and two generated rereads;
+these observations do not certify exact arbitrary-workload counts or memory
+usage. The native actual-value corpus remains String/NULL; recursive unit arms
+are not general persisted type-product certificates.
+
+Retained corrections: manifest derivation initially treated a captured mark
+count String as an Integer and omitted the enclosing chunk's logical row count;
+intermediate lane rosters were incomplete. Helper-only Crystal call syntax and
+Hash API repairs, formatting and deprecated-path API cleanup precede both final
+builds. A native attempt failed before its first process because the probe
+module was instantiated instead of its nested class; the failed root/log is
+retained separately. Syntax/self-tests alone did not detect that constructor
+error. Root also corrected its counter-poison probe to call the substantive
+budget verifier, not merely the output-schema validator. No production/spec
+inputs changed during these helper/reconciler repairs.
+
+Scoped hostile verdict: ROBUST for this paired six-lane prerequisite and the
+executed finite corpus. `.landmark/evidence/object-shared-physical-w194.json`
+indexes commands, identities, retained logs and controls. The packet is an
+evidence index, not proof by field presence. Evidence decays when source/spec,
+helper/reconciler, fixture/capture, source/runtime pins or settings change, or
+retained artifacts disappear; rerun the affected actual gates.
+
+Continuation: compose W192 Copy and W194 physical buckets into complete paired
+Wide parts, enforce cross-bucket logical schedules, and qualify stock
+ATTACH/CHECK plus whole-object AND independent path reads before admitting
+persisted shared versions 2/3. LowCardinality, Nested, QBit and JSON-as-Dynamic-
+actual path layouts stay guarded. Full types, broader MV/projections and the
+remaining large-class decomposition are open; performance remains deferred.

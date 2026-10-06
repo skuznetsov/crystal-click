@@ -1,6 +1,31 @@
 # CrystalClick project status
 
-Current internal foundation (W193, 2026-10-06): paired exact-path Object shared
+Current internal foundation (W194, 2026-10-06): paired schema-agnostic Wide
+six-lane Object shared bucket read/write composes existing path Data/event
+tapes, not a scalar serializer per recursive type product. Separate public
+owners preserve physical parent rows, logical chunks, paths and actual compressed
+coordinates. The named transport position API shares writer frame arithmetic;
+query-aware batch preflight, early depth/wire guards, EOF aliases, repeated
+callbacks, complete consumption and detached ownership have falsifiers.
+The same 100 affected files pass 640 DEBUG and 640 RELEASE examples, zero
+failures/errors/pending, actual guard exits 0, with unchanged 927-file src/spec
+identity. Fresh helpers authenticate 72 source lanes/eight profiles/12 buckets,
+then write and reread two frame schedules under cumulative caller budgets;
+all 289 output files per mode are checked and DEBUG equals RELEASE. Independent
+pinned native decompression succeeds for all nonempty generated lanes: 208
+processes and 1,040 authenticated artifacts. Ruby independently resolves the
+recompressed pointers and compares paths, values and callbacks with stock and
+authored fixtures. All 33 root controls pass, including same-length native
+stdout substitution. Scoped verdict: ROBUST for this finite String/NULL
+physical-lane prerequisite, not all recursive products or complete parts.
+No full-part ATTACH/CHECK or persisted v2/v3 admission was run; those guards
+stay unchanged. Next: combine Copy and physical buckets into paired parts,
+then qualify whole-object AND independent path readbacks. Full types, broader
+MV/projections and decomposition remain open; performance is deferred and the
+overall goal is incomplete. Details: [OBJECT_SHARED_ADVANCED_FRONTIER.md](OBJECT_SHARED_ADVANCED_FRONTIER.md),
+`.landmark/evidence/object-shared-physical-w194.json`.
+
+Previous internal foundation (W193, 2026-10-06): paired exact-path Object shared
 Data serde composes existing recursive Dynamic/Bulk codecs with an explicit
 Compact prefix/body event schedule. Data/tape, getter event, tape reader,
 decode result and layout codec have separate files. Named no-statistics-prefix

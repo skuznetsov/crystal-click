@@ -12,9 +12,47 @@ module CrystalClick
       frame_bytes : Int = 4096,
       budget : CompressedStreamBudget = CompressedStreamBudget.write_default,
     ) : CompressedMarkFiles
+      files, _positions = encode_internal(bytes, offsets, rows_per_mark, prefix_size, frame_bytes, budget, nil)
+      files
+    end
+
+    # Encodes the ordinary paired files while mapping arbitrary logical byte
+    # coordinates into the same physical frame position space as the marks.
+    # Query results consume record/result budget but are not file bytes.
+    def self.encode_with_positions(
+      bytes : Bytes,
+      offsets : Array(UInt64),
+      rows_per_mark : Array(UInt64),
+      position_queries : Array(UInt64),
+      prefix_size : Int = 0,
+      frame_bytes : Int = 4096,
+      budget : CompressedStreamBudget = CompressedStreamBudget.write_default,
+    ) : CompressedMarkPositionFiles
+      files, positions = encode_internal(bytes, offsets, rows_per_mark, prefix_size, frame_bytes, budget, position_queries)
+      CompressedMarkPositionFiles.new(files, positions.not_nil!)
+    end
+
+    private def self.encode_internal(
+      bytes : Bytes,
+      offsets : Array(UInt64),
+      rows_per_mark : Array(UInt64),
+      prefix_size : Int,
+      frame_bytes : Int,
+      budget : CompressedStreamBudget,
+      position_queries : Array(UInt64)?,
+    ) : Tuple(CompressedMarkFiles, Array(Tuple(UInt64, UInt64))?)
       budget.ensure_direction(true)
       validate_frame_bytes(frame_bytes)
       validate_grid(bytes, offsets, rows_per_mark, prefix_size, frame_bytes)
+
+      query_count = 0_i64
+      if queries = position_queries
+        query_count = queries.size.to_i64
+      end
+      if query_count > Int64::MAX // 16_i64
+        raise UnsupportedFormatError.new("compressed position result size overflows")
+      end
+      query_result_bytes = query_count * 16_i64
 
       mark_count = offsets.size.to_i64
       if mark_count > Int32::MAX.to_i64 // MARK_RECORD_SIZE
@@ -22,9 +60,31 @@ module CrystalClick
       end
 
       frame_count = frame_count_for(bytes.size.to_i64, frame_bytes.to_i64)
+      base_record_count = frame_count + mark_count
+      if query_count > Int64::MAX - base_record_count
+        raise UnsupportedFormatError.new("compressed position record count overflows")
+      end
+
+      # Query count and result storage are known from the caller's array size.
+      # Reject a capacity failure before traversing an attacker-sized query
+      # list; these checks are non-consumptive, and the normal reservations
+      # below still happen only after query values pass domain validation.
+      if position_queries
+        budget.preflight_records(base_record_count + query_count)
+        budget.preflight_result_bytes(query_result_bytes)
+      end
+      if queries = position_queries
+        queries.each do |query|
+          if query > bytes.size.to_u64
+            raise ArgumentError.new("compressed position query is outside the logical byte domain")
+          end
+        end
+      end
+
       # Reserve known work before traversing a potentially highly-fragmented
       # logical stream. Frame sizes are measured arithmetically in O(1).
-      budget.reserve_records(frame_count + mark_count)
+      # Position-query records are included before allocating their result.
+      budget.reserve_records(base_record_count + query_count)
       budget.reserve_decoded_bytes(bytes.size.to_i64)
 
       _measured_frame_count, data_size, full_frame_size = measure_frames(bytes.size.to_i64, frame_bytes.to_i64, budget.limits)
@@ -36,15 +96,34 @@ module CrystalClick
       ensure_output_domain(data_size, "compressed data")
       ensure_output_domain(mark_size, "adaptive marks")
       ensure_output_domain(total_size, "paired output")
+      if query_result_bytes > Int64::MAX - total_size
+        raise UnsupportedFormatError.new("compressed position result size overflows")
+      end
+      total_result_size = total_size + query_result_bytes
 
       # Account for every known record and byte before creating either output.
       budget.reserve_file_bytes(total_size)
-      budget.reserve_result_bytes(total_size)
+      budget.reserve_result_bytes(total_result_size)
 
       data = encode_data(bytes, frame_bytes.to_i64, data_size, budget.limits)
       marks = encode_marks(offsets, rows_per_mark, bytes.size.to_i64, prefix_size.to_i64,
         frame_bytes.to_i64, full_frame_size, data_size, mark_size.to_i)
-      CompressedMarkFiles.new(data, marks)
+      positions = nil.as(Array(Tuple(UInt64, UInt64))?)
+      if queries = position_queries
+        encoded_positions = Array(Tuple(UInt64, UInt64)).new(queries.size)
+        queries.each do |query|
+          compressed_offset, decompressed_offset = physical_position(
+            query.to_i64,
+            bytes.size.to_i64,
+            frame_bytes.to_i64,
+            full_frame_size,
+            data_size,
+          )
+          encoded_positions << {compressed_offset.to_u64, decompressed_offset.to_u64}
+        end
+        positions = encoded_positions
+      end
+      {CompressedMarkFiles.new(data, marks), positions}
     end
 
     # Encodes Object/Dynamic structure metadata whose repeated real marks name
@@ -119,8 +198,38 @@ module CrystalClick
       frame_bytes : Int,
       budget : CompressedStreamBudget,
     ) : Nil
+      preflight_batch_internal(raw_sizes, mark_count, 0_i64, frame_bytes, budget)
+    end
+
+    # Side-effect-free aggregate guard for paired lanes plus caller-owned
+    # physical-position query results. Query records and their retained
+    # coordinates share the same budget as the paired transport.
+    def self.preflight_batch_with_positions(
+      raw_sizes : Array(Int32),
+      mark_count : Int,
+      position_query_count : Int64,
+      frame_bytes : Int,
+      budget : CompressedStreamBudget,
+    ) : Nil
+      preflight_batch_internal(raw_sizes, mark_count, position_query_count, frame_bytes, budget)
+    end
+
+    private def self.preflight_batch_internal(
+      raw_sizes : Array(Int32),
+      mark_count : Int,
+      position_query_count : Int64,
+      frame_bytes : Int,
+      budget : CompressedStreamBudget,
+    ) : Nil
       budget.ensure_direction(true)
       validate_frame_bytes(frame_bytes)
+      if position_query_count < 0
+        raise ArgumentError.new("compressed position query count must be nonnegative")
+      end
+      if position_query_count > Int64::MAX // 16_i64
+        raise UnsupportedFormatError.new("compressed position result size overflows")
+      end
+      query_result_bytes = position_query_count * 16_i64
       unless mark_count >= 2 && mark_count <= Int32::MAX
         raise ArgumentError.new("paired output requires at least one real mark and one terminal")
       end
@@ -152,10 +261,17 @@ module CrystalClick
         total_output_bytes += data_size + mark_bytes
       end
 
-      budget.preflight_records(total_records)
+      if position_query_count > Int64::MAX - total_records
+        raise UnsupportedFormatError.new("compressed position record count overflows")
+      end
+      if query_result_bytes > Int64::MAX - total_output_bytes
+        raise UnsupportedFormatError.new("compressed position result size overflows")
+      end
+
+      budget.preflight_records(total_records + position_query_count)
       budget.preflight_decoded_bytes(total_decoded_bytes)
       budget.preflight_file_bytes(total_output_bytes)
-      budget.preflight_result_bytes(total_output_bytes)
+      budget.preflight_result_bytes(total_output_bytes + query_result_bytes)
       nil
     end
 
