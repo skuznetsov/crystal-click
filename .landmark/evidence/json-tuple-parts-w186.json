@@ -1,0 +1,748 @@
+{
+  "slice": "W186 normalized recursive Tuple-with-JSON storage composition",
+  "baseline": "fdb8d57c2cad46d5339fb06a9a173ed4a70227ca",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Root Tuple trees with ObjectDocument JSON sites and JSON-free BinaryBulk subtrees within their existing physical profiles; normalized hashed Wide/LZ4, plain marks, Object V3/BASIC/one-bucket shared MAP native witness.",
+    "statement": "Recursive plan/reader/writer, staged part publication and public typed batches compose existing Object/Bulk serializers with independently bound structural sites. Full persisted wrapper composition is not complete."
+  },
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/json-tuple-parts-w186.json",
+      "docs/JSON_RECURSIVE_STORAGE_FRONTIER.md",
+      "scripts/check_recursive_json_tuple_parts_w186.cr",
+      "scripts/check_recursive_json_tuple_parts_w186.rb",
+      "scripts/probe_recursive_json_tuple_w186_red.cr",
+      "spec/object_at_site_w186_spec.cr",
+      "spec/recursive_storage_column_w186_spec.cr",
+      "spec/recursive_storage_reader_budget_w186_spec.cr",
+      "spec/recursive_storage_table_w186_spec.cr",
+      "spec/recursive_storage_values_budget_w186_spec.cr",
+      "spec/storage_column_depth_guard_w186_spec.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_bulk_physical_prefix_adapter.cr",
+      "src/crystal_click/object_document_column_writer.cr",
+      "src/crystal_click/object_document_file_reader.cr",
+      "src/crystal_click/object_document_physical_plan.cr",
+      "src/crystal_click/object_values_materialization_budget.cr",
+      "src/crystal_click/physical_stream_name.cr",
+      "src/crystal_click/recursive_storage_column_files.cr",
+      "src/crystal_click/recursive_storage_column_plan.cr",
+      "src/crystal_click/recursive_storage_column_reader.cr",
+      "src/crystal_click/recursive_storage_column_writer.cr",
+      "src/crystal_click/storage_column_depth_guard.cr",
+      "src/crystal_click/storage_column_schema.cr",
+      "src/crystal_click/storage_column_schema_parser.cr",
+      "src/crystal_click/storage_column_value.cr",
+      "src/crystal_click/wide_part.cr",
+      "src/crystal_click/wide_part/selected_json_metadata_probe.cr",
+      "src/crystal_click/wide_part_table.cr",
+      "src/crystal_click/wide_part_table/recursive_column_adapter.cr",
+      "src/crystal_click/wide_part_table/wide_part_table_batch.cr",
+      "src/crystal_click/wide_part_writer.cr",
+      "src/crystal_click/wide_part_writer/recursive_storage_part_metadata.cr",
+      "src/crystal_click/wide_part_writer/recursive_storage_part_writer.cr"
+    ],
+    "changed_paths": [
+      ".landmark/evidence/json-tuple-parts-w186.json",
+      "docs/JSON_RECURSIVE_STORAGE_FRONTIER.md",
+      "scripts/check_recursive_json_tuple_parts_w186.cr",
+      "scripts/check_recursive_json_tuple_parts_w186.rb",
+      "scripts/probe_recursive_json_tuple_w186_red.cr",
+      "spec/object_at_site_w186_spec.cr",
+      "spec/recursive_storage_column_w186_spec.cr",
+      "spec/recursive_storage_reader_budget_w186_spec.cr",
+      "spec/recursive_storage_table_w186_spec.cr",
+      "spec/recursive_storage_values_budget_w186_spec.cr",
+      "spec/storage_column_depth_guard_w186_spec.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_bulk_physical_prefix_adapter.cr",
+      "src/crystal_click/object_document_column_writer.cr",
+      "src/crystal_click/object_document_file_reader.cr",
+      "src/crystal_click/object_document_physical_plan.cr",
+      "src/crystal_click/object_values_materialization_budget.cr",
+      "src/crystal_click/physical_stream_name.cr",
+      "src/crystal_click/recursive_storage_column_files.cr",
+      "src/crystal_click/recursive_storage_column_plan.cr",
+      "src/crystal_click/recursive_storage_column_reader.cr",
+      "src/crystal_click/recursive_storage_column_writer.cr",
+      "src/crystal_click/storage_column_depth_guard.cr",
+      "src/crystal_click/storage_column_schema.cr",
+      "src/crystal_click/storage_column_schema_parser.cr",
+      "src/crystal_click/storage_column_value.cr",
+      "src/crystal_click/wide_part.cr",
+      "src/crystal_click/wide_part/selected_json_metadata_probe.cr",
+      "src/crystal_click/wide_part_table.cr",
+      "src/crystal_click/wide_part_table/recursive_column_adapter.cr",
+      "src/crystal_click/wide_part_table/wide_part_table_batch.cr",
+      "src/crystal_click/wide_part_writer.cr",
+      "src/crystal_click/wide_part_writer/recursive_storage_part_metadata.cr",
+      "src/crystal_click/wide_part_writer/recursive_storage_part_writer.cr"
+    ],
+    "temporary_evidence": "Task-owned /private/tmp roots only; stock-generated fixtures are immutable inputs, not user production data.",
+    "external_actions": "No push, source data mutation or server deployment."
+  },
+  "source_only": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+    "head": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+    "clean": true,
+    "shallow": true,
+    "built": false,
+    "anchor": "src/DataTypes/Serializations/SerializationTuple.cpp:794-832",
+    "boundary": "Source audit is separate from the executed stock runtime."
+  },
+  "runtime": {
+    "path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "source_states": {
+    "integration_preformat": {
+      "source_count": 360,
+      "source_sha256": "27e29a209ad1f3609027411884d26adc14bd373774c49e6f9da36291dbad7767"
+    },
+    "post_format_integration": {
+      "input_count": 1072,
+      "input_sha256": "884e6c839013bc25ea6fa0901892d5fe70826e1f9c1f952f15629b88ffd15bc0",
+      "source_count": 360,
+      "source_sha256": "3a82da7cdfb98105a9a5018385bbb73d5bb3984969f8c832c41f8fc81524467f"
+    },
+    "budget_red": {
+      "input_count": 1073,
+      "input_sha256": "3a13ef9ec9f78050849c1c7258058c79dc13766ee0f05967cda984dde53a981a",
+      "source_count": 360,
+      "source_sha256": "3a82da7cdfb98105a9a5018385bbb73d5bb3984969f8c832c41f8fc81524467f"
+    },
+    "postbudget-final": {
+      "input_count": 1073,
+      "input_sha256": "ae45b8a6c7422f45ac4b6a75ed4e411514c3754d493fcf8d855afb2a2391ecb0",
+      "source_count": 360,
+      "source_sha256": "d8f0a3151e13fbf3a0059a44e0853fdc0c58cafa6577fc19b18398791d5f24eb"
+    },
+    "lineage": "First twelve regression cohorts precede whitespace-only formatting in four production files. Controls and initial W186 focus follow that formatting. The only later production edit is selected StorageColumnValue node/Tuple-edge reservation in recursive_storage_column_reader.cr; final focused specs and native helpers were rebuilt/executed on that state. Earlier cohorts cover unchanged paths; not all cohorts have identical source bytes.",
+    "formatting_transfer": [
+      {
+        "path": "src/crystal_click/storage_column_schema.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      },
+      {
+        "path": "src/crystal_click/storage_column_schema_parser.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      },
+      {
+        "path": "src/crystal_click/storage_column_value.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/recursive_storage_part_metadata.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      },
+      {
+        "path": "spec/recursive_storage_column_w186_spec.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      },
+      {
+        "path": "spec/storage_column_depth_guard_w186_spec.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      },
+      {
+        "path": "scripts/check_recursive_json_tuple_parts_w186.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      },
+      {
+        "path": "scripts/probe_recursive_json_tuple_w186_red.cr",
+        "changed": true,
+        "non_whitespace_unchanged": true
+      }
+    ],
+    "final_inputs_algorithm": "SHA256 of JSON-encoded sorted [relative path, SHA256] pairs for {src,spec,scripts,examples}/**/*.{cr,rb}",
+    "final_inputs_unchanged_during_final_gates": true
+  },
+  "environment": {
+    "crystal": "1.21.0",
+    "llvm": "22.1.8",
+    "target": "aarch64-apple-darwin25.6.0",
+    "guard": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "guard_sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+    "timeout_seconds": 600,
+    "memory_limit_mib": 12288,
+    "min_free_memory_pct": 50,
+    "observed_free_memory_pct": 83,
+    "heavy_jobs": "Serial; isolated caches; compiler threads 1; host linker; no guard relaxation.",
+    "native_bounds": "One thread; stock query memory 512 MiB; child timeout 10 seconds plus 2 seconds grace; bounded captures; helper constrained by outer guard."
+  },
+  "verification": {
+    "final_focus": {
+      "files": 6,
+      "examples_per_mode": 24,
+      "modes": [
+        "debug",
+        "release"
+      ],
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "integration_regressions_and_controls": {
+      "files": 56,
+      "examples_per_mode": 347,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "source_state_boundary": "Executed before final reader-only budget reservation; same covered paths remain unchanged."
+    },
+    "passing_cohorts": 18,
+    "checks": [
+      "Crystal formatter on exact changed .cr paths exit 0",
+      "Ruby syntax check exit 0",
+      "git diff --check exit 0",
+      "final input/source anchor matches before/after final gates"
+    ],
+    "spec_rosters": {
+      "focused": [
+        "spec/array_object_part_w185_spec.cr",
+        "spec/array_object_column_core_w185_spec.cr",
+        "spec/array_object_low_cardinality_w185_spec.cr",
+        "spec/array_object_dynamic_w185_spec.cr"
+      ],
+      "foundation": [
+        "spec/storage_occurrence_grid_w184_spec.cr",
+        "spec/object_child_occurrences_w184_spec.cr",
+        "spec/dynamic_discriminator_w121_spec.cr",
+        "spec/dynamic_discriminator_w121_budget_spec.cr",
+        "spec/dynamic_values_w122_spec.cr",
+        "spec/dynamic_values_w122_adversary_spec.cr",
+        "spec/object_documents_w123_spec.cr",
+        "spec/object_documents_w123_root_spec.cr",
+        "spec/object_documents_w123_adversary_spec.cr"
+      ],
+      "physical": [
+        "spec/object_column_writer_w127_spec.cr",
+        "spec/object_column_writer_w127_root_spec.cr",
+        "spec/object_column_lane_binder_refactor_spec.cr",
+        "spec/object_file_reader_w126_root_spec.cr",
+        "spec/object_column_reader_w129_spec.cr",
+        "spec/object_recursive_consumers_w140_spec.cr",
+        "spec/object_recursive_w140_root_spec.cr"
+      ],
+      "composition": [
+        "spec/object_declared_dynamic_w158_spec.cr",
+        "spec/object_declared_dynamic_w158_red_spec.cr",
+        "spec/object_declared_dynamic_w158_adversary_spec.cr",
+        "spec/object_recursive_dynamic_w159_spec.cr",
+        "spec/object_recursive_dynamic_w159_red_spec.cr",
+        "spec/object_recursive_dynamic_w159_adversary_spec.cr",
+        "spec/object_declared_low_cardinality_w146_spec.cr",
+        "spec/object_declared_variant_w151_spec.cr",
+        "spec/json_nested_scalar_w182_guards_spec.cr",
+        "spec/json_recursive_scalar_w181_guards_spec.cr"
+      ],
+      "table": [
+        "spec/object_part_writer_w128_spec.cr",
+        "spec/object_part_writer_w128_root_spec.cr",
+        "spec/object_table_w130_spec.cr",
+        "spec/object_table_w130_root_spec.cr",
+        "spec/object_offline_table_w130_spec.cr",
+        "spec/object_catalog_w129_spec.cr",
+        "spec/object_catalog_w129_root_spec.cr"
+      ],
+      "names": [
+        "spec/binary_bulk_physical_prefix_w151_spec.cr",
+        "spec/binary_dynamic_physical_w156_spec.cr",
+        "spec/binary_dynamic_physical_w156_adversary_spec.cr",
+        "spec/binary_dynamic_physical_w156_red_spec.cr",
+        "spec/binary_low_cardinality_physical_w145_spec.cr",
+        "spec/binary_variant_physical_w149_spec.cr",
+        "spec/binary_variant_physical_w149_adversary_spec.cr",
+        "spec/wide_part_metadata_parser_refactor_spec.cr",
+        "spec/wide_part_writer_metadata_w150_spec.cr"
+      ],
+      "focused_w186": [
+        "spec/object_at_site_w186_spec.cr",
+        "spec/recursive_storage_values_budget_w186_spec.cr",
+        "spec/storage_column_depth_guard_w186_spec.cr",
+        "spec/recursive_storage_column_w186_spec.cr",
+        "spec/recursive_storage_table_w186_spec.cr"
+      ],
+      "controls": [
+        "spec/wide_part_reader_compositional_tuple_spec.cr",
+        "spec/wide_part_writer_compositional_tuple_spec.cr",
+        "spec/wide_part_table_w95_tuple_spec.cr",
+        "spec/offline_catalog_w95_tuple_values_spec.cr",
+        "spec/wide_part_table_projection_w87_spec.cr",
+        "spec/binary_bulk_w122_spec.cr",
+        "spec/bulk_budget_w122_adversary_spec.cr",
+        "spec/bulk_dynamic_w122_adversary_spec.cr",
+        "spec/bulk_nominal_w122_spec.cr",
+        "spec/bulk_string_size_w122_spec.cr"
+      ],
+      "focused_postbudget": [
+        "spec/object_at_site_w186_spec.cr",
+        "spec/recursive_storage_values_budget_w186_spec.cr",
+        "spec/storage_column_depth_guard_w186_spec.cr",
+        "spec/recursive_storage_column_w186_spec.cr",
+        "spec/recursive_storage_table_w186_spec.cr",
+        "spec/recursive_storage_reader_budget_w186_spec.cr"
+      ]
+    },
+    "cohorts": [
+      {
+        "mode": "debug",
+        "group": "focused",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-focused-frozen.log",
+        "sha256": "7541c4b3bcbfd735de4d19f9290edacb6bfc1cf203ccc5310ffa7c5c94fb1e84",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 9,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-focused-frozen"
+      },
+      {
+        "mode": "debug",
+        "group": "foundation",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-foundation-frozen.log",
+        "sha256": "debdbbd50572bfb5d96ce6c2fdb55cf532271da466c03ea19b55a5ec66e35769",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 64,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-foundation-frozen"
+      },
+      {
+        "mode": "debug",
+        "group": "physical",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-physical-frozen.log",
+        "sha256": "2df70a7ff4dd2e2cfdffad14f9b1a8e0d61f814eb5bb74f5d813002c693be417",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 52,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-physical-frozen"
+      },
+      {
+        "mode": "debug",
+        "group": "composition",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-composition-frozen.log",
+        "sha256": "8bdaed7f5755d9ffdd0458b660403360e4c5a15548b039a4d449961f94c9680b",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 65,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-composition-frozen"
+      },
+      {
+        "mode": "debug",
+        "group": "table",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-table-frozen.log",
+        "sha256": "6bae683c68ad4a6642d1152c0bb6ad66fdbb1323e703d6e14135803d994a1319",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 52,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-table-frozen"
+      },
+      {
+        "mode": "debug",
+        "group": "names",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-names-frozen.log",
+        "sha256": "6180c5930f7bbf3c73b7b01a09b1117aded93f83feeea703bfb9e64b5e4236c4",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 54,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-names-frozen"
+      },
+      {
+        "mode": "release",
+        "group": "focused",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-focused-frozen.log",
+        "sha256": "e2b33d8af7641619dc16ac86dcb9c331312b873be11821555d173862cefee9f5",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 9,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-focused-frozen"
+      },
+      {
+        "mode": "release",
+        "group": "foundation",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-foundation-frozen.log",
+        "sha256": "8f3fa6062106cae61830717b0b7bcd78e04223a830e600bbc5c80d110d079bd3",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 64,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-foundation-frozen"
+      },
+      {
+        "mode": "release",
+        "group": "physical",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-physical-frozen.log",
+        "sha256": "a3e10d867ce6a14a9678948de42cfd014aad9c3bdd053d9cb20f091c6775ff7c",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 52,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-physical-frozen"
+      },
+      {
+        "mode": "release",
+        "group": "composition",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-composition-frozen.log",
+        "sha256": "26b71e291181f4d963eaaf62e71050bec3d8608ecfe31325c3b2f3521bcaa4bf",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 65,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-composition-frozen"
+      },
+      {
+        "mode": "release",
+        "group": "table",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-table-frozen.log",
+        "sha256": "f98a771c9a2e385d5eebb4966ebe18b84b45dae0a246189f2a20bb67011b16b7",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 52,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-table-frozen"
+      },
+      {
+        "mode": "release",
+        "group": "names",
+        "source_state": "integration_preformat",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-names-frozen.log",
+        "sha256": "41fb713f1a4d4f14159f3e610b016cf0107ee7bde123e4c40c58d99ffe68aa04",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 54,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-names-frozen"
+      },
+      {
+        "mode": "debug",
+        "group": "focused_w186",
+        "source_state": "post_format_integration",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-focused_w186-final-v2.log",
+        "sha256": "8f00e109de3c0ddc4b1acd660e98f7626491f2be0ba6c615db62b0d9bdd82b86",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 21,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-focused_w186-final-v2"
+      },
+      {
+        "mode": "debug",
+        "group": "controls",
+        "source_state": "post_format_integration",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-controls-final-v2.log",
+        "sha256": "f0dde4401357b12f6af6d4714e58d8520f1b4cebf074bae98013b348390abbf9",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 51,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-controls-final-v2"
+      },
+      {
+        "mode": "release",
+        "group": "focused_w186",
+        "source_state": "post_format_integration",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-focused_w186-final-v2.log",
+        "sha256": "5a7b3df21da6a7c81c3a3be1d421cdc66bd2414b0eb3d021df0c522033bbfb9d",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 21,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-focused_w186-final-v2"
+      },
+      {
+        "mode": "release",
+        "group": "controls",
+        "source_state": "post_format_integration",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-controls-final-v2.log",
+        "sha256": "6222abcdec4aa9b51231c6487c471f0eef114283a7fd663ff36b652c221d6a98",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 51,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-controls-final-v2"
+      },
+      {
+        "mode": "debug",
+        "group": "focused_postbudget",
+        "source_state": "postbudget-final",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-focused-postbudget.log",
+        "sha256": "87966697d717ca08cb8820ce82972cd01777cfa12b030c2f4a2ccfebf2a70a87",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 24,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-debug-focused-postbudget"
+      },
+      {
+        "mode": "release",
+        "group": "focused_postbudget",
+        "source_state": "postbudget-final",
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/release-focused-postbudget.log",
+        "sha256": "3e447440842ab549d7fe9187d8e006362119bc9bd0ad6fc2b467ea2ba6df7420",
+        "guard_exit": 0,
+        "child_exit": 0,
+        "examples": 24,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "cache": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-release-focused-postbudget"
+      }
+    ],
+    "baseline_red": {
+      "source_revision": "fdb8d57c2cad46d5339fb06a9a173ed4a70227ca",
+      "helper": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/red-helper",
+      "helper_sha256": "26b2cb77669cdd7e9cb3d6bcd15968a02eec3080e50c8cf99448cba4d6c7c6e5",
+      "build_log_sha256": "ae6cd3f9708593ebdb226288419235ad09b5cb5c9452c3b1fe0517a43e0ff8d2",
+      "summary": "/private/tmp/crystal-click-w186-stock-red-fixed.VOAXJd/summary.json",
+      "summary_sha256": "f5fa3814694ffaa6dd6ce13bfef1b1c26a2e2f4913a41324d1290181f8ccb8b5",
+      "outer_log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/stock-red-fixed.log",
+      "guard_exit": 0,
+      "child_exit": 0,
+      "status": "stock_tuple_json_observed_and_existing_reader_rejected",
+      "error": "CrystalClick::UnsupportedFormatError: unsupported exact typed column",
+      "boundary": "Retained helper was compiled before feature edits. Current RED helper source against the new library is not a baseline refusal witness."
+    },
+    "budget_red": {
+      "source_state": "budget_red",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-reader-budget-red-split-v2 SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_storage_reader_budget_w186_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-reader-budget-red-split-v2.log 2>&1",
+      "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-reader-budget-red-split-v2.log",
+      "sha256": "3fd58665d9a0b2b68987cd8e4cfc80fbcc66ed25e8b5aeeccc294dda0371d2ec",
+      "guard_exit": 1,
+      "child_exit": 1,
+      "examples": 3,
+      "failures": 2,
+      "errors": 0,
+      "pending": 0,
+      "discriminator": "Both node/edge expect_raises failed because no exception occurred; open and zero-window succeeded and generous literal control passed.",
+      "fix": "Checked selected-row structural node/edge reservation on shared codec budget before all Object/Bulk site reads."
+    },
+    "invalid_or_corrected_probes": [
+      {
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-focused_w186-final.log",
+        "cause": "Test asserted .dictionary rather than the existing stock physical .dict/bare-index convention; oracle corrected, production unchanged.",
+        "counts": "21 examples, 1 failure, 0 errors",
+        "counted_as_green": false
+      },
+      {
+        "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/debug-reader-budget-red-split.log",
+        "sha256": "612b1b882b57ed79f7b878c53b7a85d32faa948a6e4ba1fb4657c30001f8f261",
+        "cause": "Undefined local depth in newly split literal control; test corrected before valid split RED.",
+        "counted_as_semantic_red": false
+      }
+    ],
+    "native": {
+      "witness": "Tuple(l JSON(max_dynamic_types=1,max_dynamic_paths=1,t UInt8), r same JSON, n UInt64); equal nominal schemas, left Int64 a_left and right String b_right, nonempty rare z_shared values.",
+      "rows": 8,
+      "real_marks": 4,
+      "terminal_mark_rows": 0,
+      "oracle": "Independent Ruby source literals; exact stream rosters and schema; stock CREATE/INSERT/CHECK, Crystal direct/public full+middle stock/library reads, library write, stock ATTACH/CHECK/full+middle reads.",
+      "runs": [
+        {
+          "root": "/private/tmp/crystal-click-w186-paired-debug-final.g8X0Zh",
+          "status": "paired_tuple_json_observed",
+          "summary": "/private/tmp/crystal-click-w186-paired-debug-final.g8X0Zh/summary.json",
+          "summary_sha256": "76a9f688031875d7bc1a9dfd32994bdc205a4ee1170c4d0c63c467915f50bef2",
+          "invocations": [
+            {
+              "record": "/private/tmp/crystal-click-w186-paired-debug-final.g8X0Zh/invocations/tuple_json_attach_and_check.json",
+              "sha256": "5022e4025f8fc7e41b101d5b71c16d52d44d6cb9bd62749a71b20b9e258442c3",
+              "exit": 0,
+              "signal": null,
+              "timed_out": false,
+              "capture_errors": false
+            },
+            {
+              "record": "/private/tmp/crystal-click-w186-paired-debug-final.g8X0Zh/invocations/tuple_json_crystal_helper.json",
+              "sha256": "ce1d8efa1d7a908026dda36b39926b509da2879a5b5b4f275235323f513a34f7",
+              "exit": 0,
+              "signal": null,
+              "timed_out": false,
+              "capture_errors": false
+            },
+            {
+              "record": "/private/tmp/crystal-click-w186-paired-debug-final.g8X0Zh/invocations/tuple_json_source.json",
+              "sha256": "8f071b01c8b1158626ca865177212fe026cf5d322d246d519a0abcc752a781ab",
+              "exit": 0,
+              "signal": null,
+              "timed_out": false,
+              "capture_errors": false
+            }
+          ],
+          "reconciled_captures_and_streams": 98,
+          "mode": "debug",
+          "build": {
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-paired-debug-final SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_json_tuple_parts_w186.cr -o /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-debug-final --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-debug-final-build.log 2>&1",
+            "helper": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-debug-final",
+            "helper_sha256": "4b9c416135a96db580d7e6818583cf3a3d35229c54e21eeacebc9663471e1895",
+            "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-debug-final-build.log",
+            "log_sha256": "23a066bdbf7940bada5e98ec4483da8751e37eea3fba95a8225d98bf0734d41c",
+            "guard_exit": 0,
+            "child_exit": 0
+          },
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_recursive_json_tuple_parts_w186.rb --evidence-root /private/tmp/crystal-click-w186-paired-debug-final.g8X0Zh --crystal-probe /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-debug-final > /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-debug-final-native.log 2>&1",
+          "outer_log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-debug-final-native.log",
+          "outer_log_sha256": "d8d79d41da7f149bcd33d171e7d8364ec54a45bcae76f210700be31f31476940",
+          "guard_exit": 0,
+          "child_exit": 0,
+          "source_state": "postbudget-final"
+        },
+        {
+          "root": "/private/tmp/crystal-click-w186-paired-release-final.qp5F2w",
+          "status": "paired_tuple_json_observed",
+          "summary": "/private/tmp/crystal-click-w186-paired-release-final.qp5F2w/summary.json",
+          "summary_sha256": "1b3b3f87eefbe8cf3ced368c3835cf1bf6dd8c0b0de69af838b8000d33621cee",
+          "invocations": [
+            {
+              "record": "/private/tmp/crystal-click-w186-paired-release-final.qp5F2w/invocations/tuple_json_attach_and_check.json",
+              "sha256": "2029fb3bad120db07856f6a625a8f13f5827d1430365bf3c070a227e63beb65a",
+              "exit": 0,
+              "signal": null,
+              "timed_out": false,
+              "capture_errors": false
+            },
+            {
+              "record": "/private/tmp/crystal-click-w186-paired-release-final.qp5F2w/invocations/tuple_json_crystal_helper.json",
+              "sha256": "3b74d0254fe8db17557706a55cf2d834d350036d78392d79b7e4301b1888f893",
+              "exit": 0,
+              "signal": null,
+              "timed_out": false,
+              "capture_errors": false
+            },
+            {
+              "record": "/private/tmp/crystal-click-w186-paired-release-final.qp5F2w/invocations/tuple_json_source.json",
+              "sha256": "6a2d1cb27cd9d463190c6098fae14c6267b2730ba1ee04539bec84189e1bb840",
+              "exit": 0,
+              "signal": null,
+              "timed_out": false,
+              "capture_errors": false
+            }
+          ],
+          "reconciled_captures_and_streams": 98,
+          "mode": "release",
+          "build": {
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w186-tuple-json.T1l4rz/cache-paired-release-final SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_json_tuple_parts_w186.cr -o /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-release-final --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-release-final-build.log 2>&1",
+            "helper": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-release-final",
+            "helper_sha256": "e3f50dcef742777ca4025a467a3bb41f5fed0cad9d3e365f09de59f602d99b9f",
+            "log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-release-final-build.log",
+            "log_sha256": "40c63665d00d05cf7a511cb2c63a88f37424c62cbd6d9e0fde2e7f2612e12024",
+            "guard_exit": 0,
+            "child_exit": 0
+          },
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_recursive_json_tuple_parts_w186.rb --evidence-root /private/tmp/crystal-click-w186-paired-release-final.qp5F2w --crystal-probe /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-release-final > /private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-release-final-native.log 2>&1",
+          "outer_log": "/private/tmp/crystal-click-w186-tuple-json.T1l4rz/paired-release-final-native.log",
+          "outer_log_sha256": "c5908cc803c711b5b2c0d6bfd4e38bcdba675e6e35acf4e72d8a5e575f1d153c",
+          "guard_exit": 0,
+          "child_exit": 0,
+          "source_state": "postbudget-final"
+        }
+      ],
+      "hash_reconciliation": {
+        "captures_and_streams": 196,
+        "helper_values_equal_between_modes": true,
+        "library_stream_files_compared": 46,
+        "library_stream_digests_equal_between_modes": true,
+        "boundary": "Compares .bin/.mrk2 stream bytes and helper values, not every metadata file byte."
+      }
+    },
+    "spec_recipe": {
+      "template": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR={cache} SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec {spec_rosters[group]} --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace {mode_flags} > {log} 2>&1",
+      "mode_flags": {
+        "debug": "",
+        "release": "--release --no-debug"
+      },
+      "boundary": "One shared recipe reconstructs each executed cohort's argv and environment from its roster/cache/mode/log; redundant shell whitespace is not preserved."
+    }
+  },
+  "adversary": {
+    "verdict": "ROBUST",
+    "scope": "Finite normalized Tuple slice, selected node/edge bypass, naming/state/profile/publication guards and paired native witnesses.",
+    "attacks": [
+      "Equal nominal JSON siblings must not alias actual Dynamic/shared state.",
+      "Literal dotted field and nested Tuple prefix collision must refuse.",
+      "Missing/extra JSON site plan keys, public malformed schema factories and >10 site lexical ordering.",
+      "Late sibling transport overflow and unsupported persisted shared profile must leave no stage.",
+      "Nested structural nodes/edges must not bypass shared codec caps.",
+      "LC replay must retain full state while counting wrappers only for selected rows.",
+      "Root Object/Array/ordinary Tuple/scalar controls must retain existing admission."
+    ],
+    "independence": "Luna source reviews are correlated same-lineage hypotheses. Root inspected live source and executed regression/native gates; stock ClickHouse behavior and independently authored row literals are the external discriminator."
+  },
+  "residual_risks": [
+    "JSON beneath other generic wrappers remains guarded; W185 Array(JSON) remains its dedicated qualified path.",
+    "Not every scalar-supported JSON-free type has a persisted Bulk physical plan; standalone Dynamic Bulk sibling guard remains.",
+    "Nested Tuple/LC/Variant have local tests; current native witness is direct Tuple(JSON,JSON,UInt64), not every recursive product.",
+    "Inherited runtime depth is rejected after delegated leaf materialization, before exposure; not a preallocation depth guarantee.",
+    "Separate bounded metadata/name/codec/transport contexts do not prove one cross-domain operation or RSS bound.",
+    "Logical ownership accounting does not cap transient decoder workspace or caller retention.",
+    "Immutable parts required; no whole-scan atomic payload validation or public-table configurable tiny-cap proof.",
+    "Compact/compressed marks, other JSON shared/layout profiles, MV/projection completeness and performance parity remain open.",
+    "New owners have separate files; broader table-facade decomposition remains incomplete.",
+    "No full-repository suite or performance benchmark."
+  ],
+  "continuation": {
+    "next": "Generalize Array wrapper occurrence transformation in the common recursive planner by reusing W185/W184, then other CH-legal wrapper operations with state/cardinality/name laws.",
+    "full_goal": "Unchanged; memory/performance work deferred until full types and MV/projections.",
+    "decay_trigger": "Codec, naming, metadata, state/grid/profile changes or deletion of temporary evidence.",
+    "refresh": "Rerun affected guarded DEBUG/RELEASE specs and paired stock/library oracle on the changed source state before refreshing admission."
+  },
+  "packet_boundary": "Curated index to observed evidence, not self-proving validation. Repository lacks the skill's graph template/validator; JSON parse, claim/source linkage, roster/receipt checks and live evidence dereferences are used as scoped fallback."
+}

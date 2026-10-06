@@ -71,6 +71,33 @@ module CrystalClick
       )
     end
 
+    # Publishes one bounded recursive Tuple value column. Object plans are
+    # addressed by structural JSON site keys such as `root/tuple[0]`; each
+    # granule contains parent rows, each represented by StorageColumnValue.
+    def self.write_uint64_recursive_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      schema : StorageColumnSchema,
+      object_plans : Hash(String, ObjectDocumentPlan),
+      granules : Array(Array(StorageColumnValue)),
+      rows_per_mark : Int32 = 8192,
+      mode : UInt64 = ObjectDocumentCodec::DEFAULT_MODE,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : String
+      RecursiveStoragePartWriter.write(
+        destination, key_name, keys, value_name, schema, object_plans,
+        granules, rows_per_mark, mode, profile, shared_profile,
+        frame_bytes, metadata_version, limits, transport_limits
+      )
+    end
+
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values

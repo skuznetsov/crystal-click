@@ -109,11 +109,45 @@ module CrystalClick
       nil
     end
 
+    # Validate a rendered prefix that will be reused by a nested site. Every
+    # escaped byte must be canonical: bytes normally emitted literally by
+    # `escape` may not be hidden behind `%HH`. Structural dots remain literal.
+    def self.validate_canonical_escaped_prefix(prefix : String) : Nil
+      if prefix.empty?
+        raise ArgumentError.new("escaped physical site prefix must not be empty")
+      end
+      validate_escaped_prefix(prefix)
+      bytes = prefix.to_slice
+      index = 0
+      while index < bytes.size
+        if bytes[index] == '%'.ord.to_u8
+          decoded = (hex_value(bytes[index + 1]) << 4) | hex_value(bytes[index + 2])
+          if word_byte?(decoded)
+            raise ArgumentError.new("escaped physical prefix is not canonically encoded")
+          end
+          index += 3
+        else
+          index += 1
+        end
+      end
+      nil
+    end
+
     private def self.word_byte?(byte : UInt8) : Bool
       (byte >= 'A'.ord.to_u8 && byte <= 'Z'.ord.to_u8) ||
         (byte >= 'a'.ord.to_u8 && byte <= 'z'.ord.to_u8) ||
         (byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8) ||
         byte == '_'.ord.to_u8
+    end
+
+    private def self.hex_value(byte : UInt8) : UInt8
+      if byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8
+        byte - '0'.ord.to_u8
+      elsif byte >= 'A'.ord.to_u8 && byte <= 'F'.ord.to_u8
+        byte - 'A'.ord.to_u8 + 10_u8
+      else
+        raise ArgumentError.new("escaped physical prefix contains a malformed percent escape")
+      end
     end
 
     private def self.uppercase_hex?(byte : UInt8) : Bool

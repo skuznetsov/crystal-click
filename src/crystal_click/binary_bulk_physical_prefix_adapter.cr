@@ -4,10 +4,10 @@ module CrystalClick
   class BinaryBulkPhysicalPrefixAdapter
     PREFIX_BYTES = 8_i32
 
-    # Charges the aggregate Variant header bytes and every detached coordinate
-    # array returned by write_lane before any caller asks for an adapted lane.
-    # Production only invokes this adapter for typed Variant discriminators;
-    # ordinary and LowCardinality dictionary lanes retain their existing path.
+    # Charges aggregate Variant header bytes and every detached coordinate
+    # array returned by write_lane before any caller asks for a lane. Recursive
+    # storage preflights every role; the legacy Object path preflights Variant
+    # discriminator lanes only.
     def self.preflight_write(
       lanes : Array(Tuple(String, BinaryBulkStream, Int32)),
       budget : BinaryCodecBudget,
@@ -22,9 +22,8 @@ module CrystalClick
         role, stream, prefix = lane
         kind = classify(role, prefix, true)
         validate_write_grid!(stream, kind)
-        # write_lane returns a detached coordinate array for every role.
-        # Count it even for a no-header direct caller; the Object writer avoids
-        # introducing these copies by adapting only discriminator lanes.
+        # write_lane returns a detached coordinate array for every role. Count
+        # it even when the lane has no physical header.
         copied_coordinates = checked_add(copied_coordinates, stream.offset_count.to_u64, true)
         if kind == :variant_discriminator
           header_bytes = checked_add(header_bytes, PREFIX_BYTES.to_u64, true)

@@ -1,12 +1,182 @@
 # Recursive JSON storage frontier
 
-Status: PROPOSED complete storage composition; W185's dedicated normalized
-Array(JSON) part/table path and W184's internal paired occurrence-grid foundation
-are VERIFIED within their executed scopes below.
+Status: PROPOSED complete storage composition; W186's recursive Tuple-with-JSON
+part/table path, W185's dedicated normalized Array(JSON) path and W184's internal
+paired occurrence-grid foundation are VERIFIED within their executed scopes below.
 Baseline: `4464ef3`. W182 scalar admission remains unchanged. No new generic
 Crystal JSON bulk admission or admission beneath every persisted wrapper.
 W183's finite stock physical discriminator is verified below; it does not
 complete the storage-admission DoD.
+
+## W186 implementation seal: recursive Tuple storage with JSON sites
+
+Status: VERIFIED within the finite executed scope below. Baseline: clean `fdb8d57`. This step
+implements an exercised recursive stored-column owner, not a serializer or row
+class for each Cartesian product. Existing W185 admission remains unchanged.
+
+The admitted target is a Tuple tree whose JSON leaves delegate to the
+existing Object owners and whose JSON-free subtrees delegate to the existing
+bulk owners. Each JSON site preserves its exact nominal declaration and has an
+independent actual Object/Dynamic plan keyed by structural occurrence address.
+JSON-free Bulk leaves remain subject to their existing physical admission
+profiles; this is not a promise that every scalar-supported subtree can be
+persisted here. In particular, a standalone Dynamic Bulk sibling retains its
+existing physical guard, while Dynamic within admitted Object sites keeps its
+qualified Object serialization path.
+The public logical owner is `StorageColumnValue`, paired with an immutable
+`StorageColumnSchema` tree. JSON leaves retain `ObjectDocument` and exact
+`ObjectDocumentSchema`; JSON-free subtrees retain existing `BinaryValue` and
+`BinaryDataType`. The scalar `BinaryJsonRow` path grammar is narrower than the
+persisted Object schema (notably dotted/quoted typed paths), so it is not a
+lossless substitute and its semantics remain unchanged. Required typed fields,
+typed Nullable NULL, untyped Nothing/absence, caps and runtime tags must retain
+their declared semantics. Structural site IDs belong to the composition plan,
+not to shared nominal descriptors or duplicated per-row filename strings.
+
+Tuple edges preserve the row domain and Array level while deriving qualified
+escaped field prefixes. Parent metadata is resolved once; its declared stream
+roster must equal the union of child-site streams. Reader and writer must use
+the same structural plan. Array/Map/Nullable/Variant edges enclosing JSON stay
+rejected in this step until their own cardinality and state transformations are
+implemented and exercised. This does not narrow the existing Object inner
+grammar or globally relax the scalar bulk JSON guards.
+
+Risk: CAUTION (serialization, public materialization and staged publication).
+Rollback: one atomic local feature commit from the clean baseline; generated
+native stores and parts remain task-owned `/private/tmp` evidence. No push.
+Likeliest failure: equal nominal JSON siblings alias actual state, or a literal
+column prefix is escaped twice when used as a structural child prefix. Guard:
+two equal-schema JSON sites with disjoint actual dynamic paths and nonempty
+shared data, plus an escaped-field naming control and full mark-grid checks.
+
+Execution order and ownership:
+
+1. Root executes a stock CREATE/INSERT/CHECK discriminator and the old typed
+   table API's behavioral refusal before production changes. A compilation
+   failure does not count as the missing behavior signal.
+2. Core Object physical/read/write owners gain prefix-aware site entry points;
+   root and W185 Array entry points retain their admission and error precedence.
+3. A generic recursive column plan/reader/writer/files owner composes Tuple
+   edges and delegates existing leaves. The part publisher and typed table
+   adapter actually consume it; no unused foundation is a completion signal.
+4. Root executes focused and affected regression specs, then paired stock and
+   library part checks against independently authored full/middle row literals.
+
+Ownership paths: core `object_document_physical_plan.cr`,
+`object_document_file_reader.cr`, `object_document_column_writer.cr` and any
+Object-site bridge/context owner; integration `recursive_storage_column_*.cr`,
+`wide_part_writer`, `wide_part_table`, its batch/adapter and central require;
+native `scripts/check_recursive_json_tuple_parts_w186.{cr,rb}` and behavioral
+RED helper. New classes have separate files. Root owns this spec and evidence.
+
+DoD: guarded serial `crystal spec` runs on the W186 composition/public specs
+and affected Object, ArrayObject, bulk, Tuple and table regressions in DEBUG
+and RELEASE; guarded helper builds in both modes; the W186 Ruby paired runner
+using the pinned stock binary and an empty task-owned evidence root. Expected:
+actual child/guard exits 0; stock parts read through the public table; library
+parts pass ATTACH/CHECK, exact schema and literal full/middle reads; independently
+bound siblings, nested Tuple and zero selections behave correctly. Writer
+preflight rejects malformed rosters, key/granule grids, unpersistable shared
+profiles and existing destinations without publication. Direct-reader node and
+edge caps reject selected materialization; table ownership accounting rejects
+before callback exposure. These are distinct checks, not a public-table tiny-cap
+proof or whole-scan atomic payload validation.
+Root reviews the actual diff and attacks naming/state/cardinality assumptions
+before admitting the slice. Heavy jobs retain 600s/12GiB/50%-free bounds, run
+serially with one compiler thread, isolated caches and the host linker.
+
+Source-shape evidence is pinned to `ef037e60fc7f5654c8c80eefb8be82e3c56f9a67`;
+native evidence must identify the separately pinned executed build. Untested
+profiles, Compact/compressed marks, broader JSON wrappers, full cross-domain
+budget/RSS bounds, MV/projection completeness and performance parity remain
+open. The full thread objective is unchanged; optimization remains deferred.
+
+Inherited runtime depth is checked before writer site encoding and before
+reader results are exposed. On reads, the guard runs after delegated leaf
+decoding; an over-depth value may already have been materialized when rejected.
+This does not establish inherited-depth admission before every child allocation.
+
+## W186 executed scope and continuation
+
+Public composition boundary:
+
+- `StorageColumnSchema.parse` retains the exact root source and canonical
+  declaration, structural Tuple tree, Object leaf schemas and Bulk subtree types.
+- `RecursiveStorageColumnPlan` binds independent Object plans by structural site
+  ID and collision-checks the union of logical/hashed/file names before payloads.
+- `RecursiveStorageColumnWriter.encode` and
+  `RecursiveStorageColumnReader.open(...).read_marks(...)` compose existing
+  Object/Bulk owners rather than adding a codec for each type combination.
+- `WidePartWriter.write_uint64_recursive_pair` publishes a checksummed staged
+  part after exact readback. Typed batches expose callback-scoped
+  `recursive_values_for(column)` slices. Ordinary Tuple/scalar dispatch and
+  W185's dedicated Array(JSON) path remain qualified by their existing controls.
+
+Root executed 296 affected regression examples plus 51 ordinary Tuple, bulk and
+table controls per mode during integration, with zero failures/errors/pending.
+The first 296 ran before whitespace-only formatting of four production files;
+the 51 controls ran afterwards. The final reader-only change reserves all
+selected StorageColumnValue nodes and Tuple child edges before site decoding.
+After that change, all six W186 specs ran again: 24 DEBUG and 24 RELEASE examples,
+zero failures/errors/pending, actual child/guard exits 0. Earlier regression
+cohorts cover unchanged production paths, not identical final source bytes.
+No full-repository suite or performance benchmark was run.
+
+Local coverage includes a persisted nested Tuple(JSON, UInt64), a JSON sibling
+of a JSON-free Tuple containing LowCardinality(String), Variant and UInt64,
+middle/zero mark windows, retained LC state, eleven separately addressed JSON
+sites, dotted-field/prefix collisions, malformed factories, missing site plans,
+unpersistable shared profiles, key/granule grid failures and no overwrite/stage
+on tested writer failures. Atomic materialization-budget failure is tested on
+the owner primitive; no public-table configurable tiny-cap proof is claimed.
+
+The old typed API compiled against the clean baseline and refused a genuine
+stock-written Tuple(JSON, JSON, UInt64) with `unsupported exact typed column`.
+A later hostile review found that the new reader initially omitted the outer
+StorageColumnValue nodes/edges from the shared codec budget. Independent node
+and edge cap tests both failed behaviorally while open, zero-window and generous
+literal controls passed; the selected-shape preflight fixes that bypass. A split
+test's undefined local variable and an incorrect `.dictionary` filename oracle
+were invalid probes, corrected without changing their intended behavior. These
+failed runs are retained but never counted as passing evidence.
+
+Final DEBUG and RELEASE helpers each read freshly stock-written parts through
+both direct and public table APIs, write their own library part, and require
+pinned stock ATTACH/CHECK, exact schema and independently authored full/middle
+row literals. The native witness is a direct named Tuple with two equal nominal
+JSON schemas, disjoint observed Dynamic paths and nonempty shared-MAP values;
+nested Tuple and LC/Variant composition have local tests, not this native witness.
+Each part has eight parent rows, four real marks and a zero-row terminal mark.
+Object V3, BASIC Dynamic, one-bucket shared MAP, global String size-stream
+version 1, hashed Wide/LZ4 and plain `.mrk2` are the finite native profile.
+All six native/helper invocations exit 0 without signal, timeout or capture
+error. Root reconciles 196 captured/stream hashes and compares helper values and
+all 46 generated `.bin`/`.mrk2` stream files between build modes; equality of
+all other metadata file bytes is not inferred from this comparison.
+
+Final 1,073 Crystal/Ruby inputs have aggregate SHA-256
+`ae45b8a6c7422f45ac4b6a75ed4e411514c3754d493fcf8d855afb2a2391ecb0`
+(sorted relative-path/SHA-256 pairs, JSON encoding). That input set was unchanged
+during final focused gates, helper builds and paired native runs. Formatter,
+Ruby syntax and diff-whitespace checks pass. Resource bounds remain unchanged.
+New schema/value/plan/reader/writer/files, table adapter and part metadata/publisher
+owners have separate files; the larger table-facade decomposition remains open.
+
+Scoped hostile verdict: ROBUST for this normalized Tuple slice and its tested
+guards. Luna source reviews are correlated same-lineage evidence; root's executed
+stock oracle, literal checks and hash reconciliation supply the external
+discriminator. Curated evidence:
+[json-tuple-parts-w186.json](../.landmark/evidence/json-tuple-parts-w186.json).
+
+Next frontier: generalize wrapper operations using the existing occurrence-grid
+foundation, preserving each wrapper's cardinality, null/discriminator state,
+Array level and stream path; first reuse the qualified Array(JSON) behavior in
+the common recursive planner. Admit only combinations legal in stock ClickHouse.
+Remaining JSON layouts, full cross-domain metadata/name/codec/transport accounting,
+Compact/compressed marks, MV/projection completeness and performance parity stay
+open. Parts must remain immutable during reads. Refresh the affected gates after
+codec, naming, metadata, state/grid or profile changes; removal of retained
+temporary evidence invalidates its file links. The full thread goal is unchanged.
 
 ## Why scalar recursion is not the missing abstraction
 
@@ -212,6 +382,11 @@ Source-only reference: clean shallow, unbuilt
 - `SerializationArray.cpp:297-327,352-395`: child prefix/suffix/data use the
   enclosing settings under ArrayElements; the empty-range branch still invokes
   nested serialization.
+- `SerializationTuple.cpp:794-832`: prefix/suffix recursion delegates to each
+  child while retaining a separate state vector entry per Tuple occurrence.
+- `DataTypeDynamic.h:24`, `DataTypeVariant.h:43`,
+  `DataTypeNullable.cpp:32-35`: not every nominal Cartesian product is legal
+  in stock ClickHouse; recursive composition preserves its type admission laws.
 - `SerializationObject.cpp:712-842`: ObjectStructure prefix state is cached
   using the current full substream path, before typed/dynamic/shared recursion.
 - `MergeTreeDataPartWriterWide.cpp:568-585,590-615,864-868`: runtime Object/Dynamic

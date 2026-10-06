@@ -1516,6 +1516,14 @@ module CrystalClick
       SelectedJsonMetadataProbe.read_array_json(part_path, column_name)
     end
 
+    # Return the exact source declaration for the closed root-Tuple recursive
+    # storage slice when it contains at least one JSON leaf. Name resolution
+    # remains shared with the Object probes, including dotted-literal versus
+    # virtual JSON-path ambiguity detection.
+    def self.selected_recursive_json_declaration(part_path : String, column_name : String) : String?
+      SelectedJsonMetadataProbe.read_recursive_json(part_path, column_name)
+    end
+
     # Parse the intentionally small JSON typed-path declaration grammar used
     # by this reader: simple top-level identifiers with exact primitive
     # numeric or String types. Unsupported declarations fail closed.

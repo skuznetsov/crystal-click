@@ -2,6 +2,19 @@ module CrystalClick
   # Binds the W125 Object metadata, typed paths, Dynamic alternatives, and
   # shared MAP lanes into one collision-checked physical filename roster.
   class ObjectDocumentPhysicalPlan
+    private struct EscapedPrefix
+      getter value : String
+
+      private def initialize(value : String)
+        PhysicalStreamName.validate_canonical_escaped_prefix(value)
+        @value = String.new(value.to_slice)
+      end
+
+      def self.validated(value : String) : EscapedPrefix
+        new(value)
+      end
+    end
+
     private struct TypedDynamicNameShape
       getter count : UInt64
       getter path_bytes : UInt64
@@ -9,6 +22,29 @@ module CrystalClick
       getter sql_name_work_bytes : UInt64
 
       def initialize(@count : UInt64, @path_bytes : UInt64, @physical_name_bytes : UInt64, @sql_name_work_bytes : UInt64)
+      end
+    end
+
+    private struct PlanState
+      getter object_structure_stream : String
+      getter dynamic_structure_streams : Hash(String, String)
+      getter discriminator_streams : Hash(String, String)
+      getter typed_plans : Hash(String, BinaryBulkPhysicalPlan)
+      getter typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
+      getter dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
+      getter shared_plan : BinaryBulkPhysicalPlan
+      getter stream_count : Int32
+
+      def initialize(
+        @object_structure_stream : String,
+        @dynamic_structure_streams : Hash(String, String),
+        @discriminator_streams : Hash(String, String),
+        @typed_plans : Hash(String, BinaryBulkPhysicalPlan),
+        @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan),
+        @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan)),
+        @shared_plan : BinaryBulkPhysicalPlan,
+        @stream_count : Int32,
+      )
       end
     end
 
@@ -108,24 +144,155 @@ module CrystalClick
       names
     end
 
+    # Site-aware counterpart to root-column name discovery. The prefix is an
+    # already escaped structural path (for example `pair%2Eleft`); only the
+    # typed Object path is appended as a new escaped component.
+    def self.typed_dynamic_structure_names_at_site(
+      escaped_prefix : String,
+      typed_path : String,
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+    ) : Hash(String, String)
+      limits = budget.limits
+      unless type.contains_dynamic?
+        raise UnsupportedFormatError.new("typed Dynamic structure-name discovery requires a declared Dynamic site")
+      end
+      unless ObjectRecursiveDeclaration.account_descriptor(type, budget, limits, 2)
+        raise UnsupportedFormatError.new("typed Object Dynamic descriptor is outside the Object recursive declaration grammar")
+      end
+      site_shape = ObjectDeclaredDynamicSites.shape_for(type, limits, 2)
+      if site_shape.count == 0_u64
+        raise UnsupportedFormatError.new("typed Dynamic descriptor has no canonical sites")
+      end
+      if site_shape.count > Int32::MAX.to_u64
+        raise UnsupportedFormatError.new("typed Dynamic structure-name roster exceeds the in-memory domain")
+      end
+      budget.ensure_future_nodes(site_shape.count)
+      budget.preflight_children(site_shape.count)
+
+      PhysicalStreamName.validate_canonical_escaped_prefix(escaped_prefix)
+      raw_input_bytes = typed_dynamic_checked_add(escaped_prefix.bytesize.to_u64, typed_path.bytesize.to_u64)
+      budget.ensure_wire_bytes(raw_input_bytes)
+      typed_component_bytes = PhysicalStreamName.escaped_size(typed_path)
+      root_prefix_bytes = typed_dynamic_checked_add(
+        escaped_prefix.bytesize.to_u64,
+        typed_dynamic_checked_add(1_u64, typed_component_bytes)
+      )
+      measured = measure_typed_dynamic_names(type, "root".bytesize.to_u64, root_prefix_bytes, 2, budget)
+      unless measured.count == site_shape.count && measured.path_bytes == site_shape.path_bytes
+        raise UnsupportedFormatError.new("typed Dynamic structure-name preflight disagrees with the declared site roster")
+      end
+
+      path_work_bound = typed_dynamic_checked_multiply(
+        site_shape.path_bytes,
+        typed_dynamic_checked_add(limits.max_depth.to_u64, 1_u64)
+      )
+      prefix_copy_factor = typed_dynamic_checked_add(limits.max_depth.to_u64, 2_u64)
+      physical_prefix_copies = typed_dynamic_checked_multiply(measured.physical_name_bytes, prefix_copy_factor)
+      physical_work_bound = typed_dynamic_checked_add(physical_prefix_copies, measured.sql_name_work_bytes)
+      allocation_bound = typed_dynamic_checked_add(path_work_bound, physical_work_bound)
+      allocation_bound = typed_dynamic_checked_add(allocation_bound, raw_input_bytes)
+      budget.ensure_wire_bytes(allocation_bound)
+      budget.ensure_future_nodes(site_shape.count)
+      budget.charge_wire_bytes(allocation_bound)
+      site_shape.count.times { budget.charge_node }
+
+      prefix = PhysicalStreamName.append_escaped_component(escaped_prefix, typed_path)
+      names = Hash(String, String).new(initial_capacity: measured.count.to_i)
+      physical_seen = Hash(String, Bool).new(initial_capacity: measured.count.to_i)
+      collect_typed_dynamic_names(type, "root", prefix, names, physical_seen)
+      unless names.size.to_u64 == measured.count
+        raise UnsupportedFormatError.new("typed Dynamic structure-name roster changed after preflight")
+      end
+      names
+    end
+
+    # Construct a physical plan below a previously escaped structural site.
+    # A shared context lets all sibling sites consume one name-work budget.
+    def self.from_escaped_prefix(
+      escaped_prefix : String,
+      plan : ObjectDocumentPlan,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      initial_array_level : UInt64 = 0_u64,
+      context : PhysicalStreamPlanContext? = nil,
+    ) : ObjectDocumentPhysicalPlan
+      PhysicalStreamName.validate_canonical_escaped_prefix(escaped_prefix)
+      unless escaped_prefix.bytesize.to_u64 <= limits.max_bytes.to_u64 &&
+             escaped_prefix.bytesize <= Int32::MAX
+        raise UnsupportedFormatError.new("physical Object site prefix exceeds configured name bound")
+      end
+      if selected = context
+        unless same_limits?(selected.limits, limits)
+          raise ArgumentError.new("Object physical name context limits differ from the site limits")
+        end
+      end
+      new(EscapedPrefix.validated(escaped_prefix), plan, profile, shared_profile, limits, initial_array_level, context)
+    end
+
     def initialize(
       column_name : String,
       plan : ObjectDocumentPlan,
-      @profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       initial_array_level : UInt64 = 0_u64,
     )
+      state = build_plan(column_name, nil, plan, profile, shared_profile, limits, initial_array_level, nil)
+      @profile = profile
+      @initial_array_level = initial_array_level
+      @object_structure_stream = state.object_structure_stream
+      @dynamic_structure_streams = state.dynamic_structure_streams
+      @discriminator_streams = state.discriminator_streams
+      @typed_plans = state.typed_plans
+      @typed_dynamic_plans = state.typed_dynamic_plans
+      @dynamic_arm_plans = state.dynamic_arm_plans
+      @shared_plan = state.shared_plan
+      @stream_count = state.stream_count
+    end
+
+    private def initialize(
+      escaped_prefix : EscapedPrefix,
+      plan : ObjectDocumentPlan,
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      limits : BinaryCodecLimits,
+      initial_array_level : UInt64,
+      context : PhysicalStreamPlanContext?,
+    )
+      state = build_plan(nil, escaped_prefix.value, plan, profile, shared_profile, limits, initial_array_level, context)
+      @profile = profile
+      @initial_array_level = initial_array_level
+      @object_structure_stream = state.object_structure_stream
+      @dynamic_structure_streams = state.dynamic_structure_streams
+      @discriminator_streams = state.discriminator_streams
+      @typed_plans = state.typed_plans
+      @typed_dynamic_plans = state.typed_dynamic_plans
+      @dynamic_arm_plans = state.dynamic_arm_plans
+      @shared_plan = state.shared_plan
+      @stream_count = state.stream_count
+    end
+
+    private def build_plan(
+      column_name : String?,
+      escaped_prefix : String?,
+      plan : ObjectDocumentPlan,
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      limits : BinaryCodecLimits,
+      initial_array_level : UInt64,
+      provided_context : PhysicalStreamPlanContext?,
+    ) : PlanState
       if initial_array_level > UInt64::MAX - limits.max_depth.to_u64
         raise UnsupportedFormatError.new("physical Object initial Array level overflows the name coordinate")
       end
-      @initial_array_level = initial_array_level
       object = plan.structures.object
       unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
         raise UnsupportedFormatError.new("physical Object planning admits only V3 MAP with one shared-data bucket")
       end
 
-      context = PhysicalStreamPlanContext.new(limits)
+      context = provided_context || PhysicalStreamPlanContext.new(limits)
       typed_dynamic_budget = BinaryCodecBudget.new(limits, true)
       typed_dynamic_write_plans = Hash(String, BinaryDynamicBulkPlan).new
       total_records = add_size(plan.typed_path_count.to_u64, object.dynamic_path_count.to_u64)
@@ -142,7 +309,7 @@ module CrystalClick
             type,
             structures,
             typed_dynamic_budget,
-            @profile,
+            profile,
             2
           )
         elsif type.contains_dynamic?
@@ -150,17 +317,23 @@ module CrystalClick
         end
       end
 
-      context.preflight_name_bytes(PhysicalStreamName.escaped_size(column_name))
-      column_prefix = PhysicalStreamName.escape(column_name)
+      column_prefix = if escaped_prefix
+                        context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
+                        escaped_prefix
+                      else
+                        raw_column_name = column_name.not_nil!
+                        context.preflight_name_bytes(PhysicalStreamName.escaped_size(raw_column_name))
+                        PhysicalStreamName.escape(raw_column_name)
+                      end
       seen_names = Hash(String, Bool).new
 
-      @object_structure_stream = PhysicalStreamName.append_literal(column_prefix, ".object_structure", context)
-      context.charge_name_bytes(@object_structure_stream.bytesize.to_u64)
-      reject_collision!(@object_structure_stream, seen_names)
+      object_structure_stream = PhysicalStreamName.append_literal(column_prefix, ".object_structure", context)
+      context.charge_name_bytes(object_structure_stream.bytesize.to_u64)
+      reject_collision!(object_structure_stream, seen_names)
 
-      @dynamic_structure_streams = Hash(String, String).new
-      @discriminator_streams = Hash(String, String).new
-      @dynamic_arm_plans = Hash(String, Hash(String, BinaryBulkPhysicalPlan)).new
+      dynamic_structure_streams = Hash(String, String).new
+      discriminator_streams = Hash(String, String).new
+      dynamic_arm_plans = Hash(String, Hash(String, BinaryBulkPhysicalPlan)).new
       object.dynamic_path_count.times do |index|
         preflight_object_path(object, index, column_prefix.bytesize.to_u64, context)
         raw_path = object.dynamic_path_at(index)
@@ -170,8 +343,8 @@ module CrystalClick
         context.charge_name_bytes(add_size(structure_name.bytesize.to_u64, discriminator_name.bytesize.to_u64))
         reject_collision!(structure_name, seen_names)
         reject_collision!(discriminator_name, seen_names)
-        @dynamic_structure_streams[String.new(raw_path.to_slice)] = structure_name
-        @discriminator_streams[String.new(raw_path.to_slice)] = discriminator_name
+        dynamic_structure_streams[String.new(raw_path.to_slice)] = structure_name
+        discriminator_streams[String.new(raw_path.to_slice)] = discriminator_name
 
         dynamic = plan.structures.dynamic_for(raw_path)
         context.record_elements(dynamic.canonical_variant_count.to_u64)
@@ -179,7 +352,7 @@ module CrystalClick
         shared_string = BinaryDataType.primitive("String")
         shared_prefix = PhysicalStreamName.append_escaped_component(path_prefix, DynamicStructure::SHARED_VARIANT_NAME, context)
         shared_arm = BinaryBulkPhysicalPlan.from_escaped_prefix(
-          shared_string, shared_prefix, @profile, limits, context, @initial_array_level
+          shared_string, shared_prefix, profile, limits, context, initial_array_level
         )
         arm_plans[String.new(DynamicStructure::SHARED_VARIANT_NAME.to_slice)] = shared_arm
         collect_plan_names!(shared_arm, seen_names)
@@ -205,16 +378,16 @@ module CrystalClick
           end
           arm_prefix = PhysicalStreamName.append_escaped_component(path_prefix, arm_name, context)
           arm_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
-            type, arm_prefix, @profile, limits, context, @initial_array_level
+            type, arm_prefix, profile, limits, context, initial_array_level
           )
           arm_plans[String.new(arm_name.to_slice)] = arm_plan
           collect_plan_names!(arm_plan, seen_names)
         end
-        @dynamic_arm_plans[String.new(raw_path.to_slice)] = arm_plans
+        dynamic_arm_plans[String.new(raw_path.to_slice)] = arm_plans
       end
 
-      @typed_plans = Hash(String, BinaryBulkPhysicalPlan).new
-      @typed_dynamic_plans = Hash(String, BinaryDynamicBulkPhysicalPlan).new
+      typed_plans = Hash(String, BinaryBulkPhysicalPlan).new
+      typed_dynamic_plans = Hash(String, BinaryDynamicBulkPhysicalPlan).new
       plan.typed_path_count.times do |index|
         preflight_typed_path(plan, index, column_prefix.bytesize.to_u64, context)
         raw_path = plan.typed_path_at(index)
@@ -223,9 +396,9 @@ module CrystalClick
         if plan.has_typed_dynamic?(raw_path)
           prepared = typed_dynamic_write_plans[raw_path]
           typed_dynamic_plan = BinaryDynamicBulkPhysicalPlan.from_escaped_prefix(
-            prepared, path_prefix, limits, context, @initial_array_level
+            prepared, path_prefix, limits, context, initial_array_level
           )
-          @typed_dynamic_plans[String.new(raw_path.to_slice)] = typed_dynamic_plan
+          typed_dynamic_plans[String.new(raw_path.to_slice)] = typed_dynamic_plan
           collect_plan_names!(typed_dynamic_plan, seen_names)
           next
         end
@@ -241,9 +414,9 @@ module CrystalClick
           raise UnsupportedFormatError.new("physical Object typed LowCardinality fields are not admitted")
         end
         typed_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
-          type, path_prefix, @profile, limits, context, @initial_array_level
+          type, path_prefix, profile, limits, context, initial_array_level
         )
-        @typed_plans[String.new(raw_path.to_slice)] = typed_plan
+        typed_plans[String.new(raw_path.to_slice)] = typed_plan
         collect_plan_names!(typed_plan, seen_names)
       end
 
@@ -254,11 +427,25 @@ module CrystalClick
         )
       )
       shared_prefix = PhysicalStreamName.append_literal(column_prefix, ".object_shared_data", context)
-      @shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
-        shared_type, shared_prefix, shared_profile, limits, context, @initial_array_level
+      shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
+        shared_type, shared_prefix, shared_profile, limits, context, initial_array_level
       )
-      collect_plan_names!(@shared_plan, seen_names)
-      @stream_count = seen_names.size.to_i32
+      collect_plan_names!(shared_plan, seen_names)
+      PlanState.new(
+        object_structure_stream,
+        dynamic_structure_streams,
+        discriminator_streams,
+        typed_plans,
+        typed_dynamic_plans,
+        dynamic_arm_plans,
+        shared_plan,
+        seen_names.size.to_i32
+      )
+    end
+
+    private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
     end
 
     def object_structure_stream : String

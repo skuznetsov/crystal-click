@@ -21,6 +21,7 @@ module CrystalClick
     @geometry_rows : Hash(String, Slice(WideGeometryRow)) = Hash(String, Slice(WideGeometryRow)).new
     @object_documents : Hash(String, Slice(ObjectDocument)) = Hash(String, Slice(ObjectDocument)).new
     @array_object_documents : Hash(String, Slice(Array(ObjectDocument))) = Hash(String, Slice(Array(ObjectDocument))).new
+    @recursive_values : Hash(String, Slice(StorageColumnValue)) = Hash(String, Slice(StorageColumnValue)).new
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @aggregate_count_state_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @string_values : Hash(String, Slice(String))
@@ -491,6 +492,30 @@ module CrystalClick
       end
       raise CorruptPartError.new("Array(JSON) batch slice row count mismatch") unless values.size == expected_rows
       @array_object_documents[column] = values
+      nil
+    end
+
+    # Return values for a recursively admitted root Tuple containing JSON
+    # leaves. The outer slice is callback-scoped; immutable ObjectDocument
+    # handles and BinaryValue leaves may be retained by callers.
+    def recursive_values_for(column : String) : Slice(StorageColumnValue)
+      index = column_index(column)
+      schema = StorageColumnSchema.parse(@column_types[index])
+      unless schema.tuple? && schema.has_json? && schema.declaration == @column_types[index]
+        raise UnsupportedFormatError.new("recursive storage accessor requires an exact Tuple containing JSON")
+      end
+      @recursive_values[column]? || raise(UnsupportedFormatError.new("recursive storage column was not materialized in this batch"))
+    end
+
+    # Internal table-scan hook for one borrowed parent-row slice.
+    def install_recursive_values(column : String, values : Slice(StorageColumnValue), expected_rows : Int) : Nil
+      index = column_index(column)
+      schema = StorageColumnSchema.parse(@column_types[index])
+      unless schema.tuple? && schema.has_json? && schema.declaration == @column_types[index]
+        raise CorruptPartError.new("recursive storage materializer received a non-admitted declaration")
+      end
+      raise CorruptPartError.new("recursive storage batch slice row count mismatch") unless values.size == expected_rows
+      @recursive_values[column] = values
       nil
     end
 

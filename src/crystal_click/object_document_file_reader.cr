@@ -131,6 +131,41 @@ module CrystalClick
       prepared.descriptor.not_nil!
     end
 
+    # Inspect one Object JSON site nested below a caller-owned storage column.
+    # Public part metadata is intentionally not reopened here: `source`, the
+    # budgets, and the escaped prefix belong to the enclosing operation.
+    def self.inspect_at_site(
+      source : PartStreamSource,
+      escaped_prefix : String,
+      typed_schema : Hash(String, BinaryDataType),
+      codec_budget : BinaryCodecBudget,
+      name_context : PhysicalStreamPlanContext,
+      transport_budget : CompressedStreamBudget,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      initial_array_level : UInt64 = 0_u64,
+      expected_mark_row_counts : Array(UInt64)? = nil,
+    ) : ObjectDocumentFileDescriptor
+      prepared = prepare_site_read(
+        source,
+        escaped_prefix,
+        typed_schema,
+        0,
+        0,
+        profile,
+        shared_profile,
+        hashed,
+        codec_budget,
+        name_context,
+        transport_budget,
+        true,
+        initial_array_level,
+        expected_mark_row_counts,
+      )
+      prepared.descriptor.not_nil!
+    end
+
     def self.read(
       part_path : String,
       column_name : String,
@@ -183,6 +218,88 @@ module CrystalClick
       group_child_documents(prepared, flat)
     end
 
+    # Reads selected marks from one Object JSON site using parent physical
+    # rows. No child `.size0` schedule is inferred or consumed here.
+    def self.read_at_site(
+      source : PartStreamSource,
+      escaped_prefix : String,
+      typed_schema : Hash(String, BinaryDataType),
+      codec_budget : BinaryCodecBudget,
+      name_context : PhysicalStreamPlanContext,
+      transport_budget : CompressedStreamBudget,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      initial_array_level : UInt64 = 0_u64,
+      expected_mark_row_counts : Array(UInt64)? = nil,
+    ) : Array(Array(ObjectDocument))
+      prepared = prepare_site_read(
+        source,
+        escaped_prefix,
+        typed_schema,
+        first_mark,
+        mark_count,
+        profile,
+        shared_profile,
+        hashed,
+        codec_budget,
+        name_context,
+        transport_budget,
+        false,
+        initial_array_level,
+        expected_mark_row_counts,
+      )
+      read_prepared(prepared)
+    end
+
+    private def self.prepare_site_read(
+      source : PartStreamSource,
+      escaped_prefix : String,
+      typed_schema : Hash(String, BinaryDataType),
+      first_mark : Int,
+      mark_count : Int?,
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      hashed : Bool,
+      codec_budget : BinaryCodecBudget,
+      name_context : PhysicalStreamPlanContext,
+      transport_budget : CompressedStreamBudget,
+      build_descriptor : Bool,
+      initial_array_level : UInt64,
+      expected_mark_row_counts : Array(UInt64)?,
+    ) : PreparedRead
+      unless !codec_budget.writing? && !transport_budget.writing?
+        raise ArgumentError.new("Object site reader requires read-direction budgets")
+      end
+      unless same_limits?(codec_budget.limits, name_context.limits)
+        raise ArgumentError.new("Object site read and physical-name limits differ")
+      end
+      transport_budget.ensure_direction(false)
+      prepare_read(
+        "",
+        "",
+        typed_schema,
+        first_mark,
+        mark_count,
+        profile,
+        shared_profile,
+        hashed,
+        codec_budget.limits,
+        transport_budget.limits,
+        build_descriptor,
+        false,
+        initial_array_level,
+        source,
+        escaped_prefix,
+        expected_mark_row_counts,
+        codec_budget,
+        transport_budget,
+        name_context,
+      )
+    end
+
     private def self.prepare_read(
       part_path : String,
       column_name : String,
@@ -197,24 +314,44 @@ module CrystalClick
       build_descriptor : Bool,
       child_site : Bool = false,
       initial_array_level : UInt64 = 0_u64,
+      source_override : PartStreamSource? = nil,
+      escaped_prefix_override : String? = nil,
+      expected_outer_rows : Array(UInt64)? = nil,
+      codec_budget_override : BinaryCodecBudget? = nil,
+      transport_budget_override : CompressedStreamBudget? = nil,
+      name_context_override : PhysicalStreamPlanContext? = nil,
     ) : PreparedRead
       validate_selection_arguments!(first_mark, mark_count)
       reject_json_schema!(typed_schema)
-      codec_budget = BinaryCodecBudget.new(limits)
-      transport_budget = CompressedStreamBudget.new(transport_limits)
-      column_prefix = preflight_column_name!(column_name, hashed, limits)
+      codec_budget = codec_budget_override || BinaryCodecBudget.new(limits)
+      transport_budget = transport_budget_override || CompressedStreamBudget.new(transport_limits)
+      column_prefix = if site_prefix = escaped_prefix_override
+                        preflight_escaped_prefix!(site_prefix, hashed, limits)
+                      else
+                        preflight_column_name!(column_name, hashed, limits)
+                      end
       schema_snapshot = preflight_and_copy_schema!(typed_schema, column_prefix, hashed, limits, codec_budget)
       replay_complete = schema_snapshot.each_value.any? do |type|
         BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
       end
-      typed_dynamic_metadata_names = discover_typed_dynamic_metadata_names!(
-        column_name,
-        schema_snapshot,
-        limits,
-        hashed,
-        codec_budget
-      )
-      source = PartStreamSource.new(part_path)
+      typed_dynamic_metadata_names = if escaped_prefix_override
+                                       discover_typed_dynamic_metadata_names_at_site!(
+                                         column_prefix,
+                                         schema_snapshot,
+                                         limits,
+                                         hashed,
+                                         codec_budget
+                                       )
+                                     else
+                                       discover_typed_dynamic_metadata_names!(
+                                         column_name,
+                                         schema_snapshot,
+                                         limits,
+                                         hashed,
+                                         codec_budget
+                                       )
+                                     end
+      source = source_override || PartStreamSource.new(part_path)
 
       object_name = PhysicalStreamName.append_literal(column_prefix, ".object_structure")
       object_data_name, object_marks_name = file_pair(object_name, hashed)
@@ -229,6 +366,9 @@ module CrystalClick
       validate_metadata_grid!(object_grid, object_statistics_offset, object_bytes.size)
       charge_source_roster!(object_grid, codec_budget)
       outer_rows = copy_outer_rows(object_grid)
+      if expected_rows = expected_outer_rows
+        validate_expected_outer_rows!(outer_rows, expected_rows)
+      end
       selected_count = validate_selection!(first_mark, mark_count, outer_rows.size)
 
       occurrence_grid = nil.as(StorageOccurrenceGrid?)
@@ -343,14 +483,26 @@ module CrystalClick
         typed_dynamic_direct_structures,
         recursive_typed_dynamic_structures
       )
-      physical_plan = ObjectDocumentPhysicalPlan.new(
-        column_name,
-        document_plan,
-        profile,
-        shared_profile,
-        limits,
-        initial_array_level
-      )
+      physical_plan = if site_prefix = escaped_prefix_override
+                        ObjectDocumentPhysicalPlan.from_escaped_prefix(
+                          site_prefix,
+                          document_plan,
+                          profile,
+                          shared_profile,
+                          limits,
+                          initial_array_level,
+                          name_context_override,
+                        )
+                      else
+                        ObjectDocumentPhysicalPlan.new(
+                          column_name,
+                          document_plan,
+                          profile,
+                          shared_profile,
+                          limits,
+                          initial_array_level
+                        )
+                      end
 
       typed_dynamic_metadata_names.each do |path, names|
         physical = physical_plan.typed_dynamic(path)
@@ -976,6 +1128,15 @@ module CrystalClick
       PhysicalStreamName.escape(column_name)
     end
 
+    private def self.preflight_escaped_prefix!(prefix : String, hashed : Bool, limits : BinaryCodecLimits) : String
+      PhysicalStreamName.validate_canonical_escaped_prefix(prefix)
+      object_marks_size = checked_add_u64(prefix.bytesize.to_u64, ".object_structure.mrk2".bytesize.to_u64)
+      ensure_name_size!(prefix.bytesize.to_u64, limits)
+      ensure_name_size!(object_marks_size, limits)
+      ensure_unhashed_name_size!(object_marks_size, hashed)
+      String.new(prefix.to_slice)
+    end
+
     private def self.preflight_and_copy_schema!(
       schema : Hash(String, BinaryDataType),
       column_prefix : String,
@@ -1100,6 +1261,66 @@ module CrystalClick
       names_by_field
     end
 
+    private def self.discover_typed_dynamic_metadata_names_at_site!(
+      escaped_prefix : String,
+      schema : Hash(String, BinaryDataType),
+      limits : BinaryCodecLimits,
+      hashed : Bool,
+      budget : BinaryCodecBudget,
+    ) : Hash(String, Hash(String, String))
+      shapes = Hash(String, ObjectDeclaredDynamicSites::Shape).new
+      total_sites = 0_u64
+      total_path_bytes = 0_u64
+      schema.each do |path, type|
+        next unless type.contains_dynamic?
+        shape = ObjectDeclaredDynamicSites.shape_for(type, limits, 2)
+        if shape.count == 0_u64
+          raise UnsupportedFormatError.new("typed Object Dynamic descriptor has no declared Dynamic site")
+        end
+        total_sites = checked_add_u64(total_sites, shape.count)
+        total_path_bytes = checked_add_u64(total_path_bytes, shape.path_bytes)
+        shapes[String.new(path.to_slice)] = shape
+      end
+      return Hash(String, Hash(String, String)).new if total_sites == 0_u64
+
+      if total_sites > limits.max_nodes.to_u64 || total_sites > limits.max_elements.to_u64
+        raise CorruptPartError.new("typed Object Dynamic site roster exceeds codec limits")
+      end
+      budget.ensure_future_nodes(total_sites)
+      budget.ensure_future_elements(total_sites)
+      depth_factor = checked_add_u64(limits.max_depth.to_u64, 1_u64)
+      path_work_bytes = checked_multiply_u64(total_path_bytes, depth_factor)
+      budget.ensure_wire_bytes(path_work_bytes)
+
+      names_by_field = Hash(String, Hash(String, String)).new(initial_capacity: shapes.size)
+      total_name_bytes = 0_u64
+      shapes.each do |path, shape|
+        type = schema[path]? || raise(CorruptPartError.new("typed Object Dynamic schema changed during metadata discovery"))
+        names = ObjectDocumentPhysicalPlan.typed_dynamic_structure_names_at_site(
+          escaped_prefix,
+          path,
+          type,
+          budget
+        )
+        unless names.size.to_u64 == shape.count
+          raise CorruptPartError.new("typed Dynamic metadata names do not match the declared site count")
+        end
+        names.each do |_site_path, logical_name|
+          ensure_name_size!(logical_name.bytesize.to_u64, limits)
+          data_name_bytes = checked_add_u64(logical_name.bytesize.to_u64, ".bin".bytesize.to_u64)
+          marks_name_bytes = checked_add_u64(logical_name.bytesize.to_u64, ".mrk2".bytesize.to_u64)
+          ensure_name_size!(data_name_bytes, limits)
+          ensure_name_size!(marks_name_bytes, limits)
+          ensure_unhashed_name_size!(data_name_bytes, hashed)
+          ensure_unhashed_name_size!(marks_name_bytes, hashed)
+          total_name_bytes = checked_add_u64(total_name_bytes, logical_name.bytesize.to_u64)
+          ensure_name_size!(total_name_bytes, limits)
+        end
+        names_by_field[String.new(path.to_slice)] = names
+      end
+      names_by_field
+    end
+
     private def self.parse_object_metadata(
       bytes : Bytes,
       limits : BinaryCodecLimits,
@@ -1170,6 +1391,18 @@ module CrystalClick
       outer_rows.size.times do |index|
         unless grid.row_count_at(index) == outer_rows[index]
           raise CorruptPartError.new("physical lane row grid does not match the Object outer grid")
+        end
+      end
+      nil
+    end
+
+    private def self.validate_expected_outer_rows!(actual : Array(UInt64), expected : Array(UInt64)) : Nil
+      unless actual.size == expected.size
+        raise CorruptPartError.new("Object site mark count differs from its parent physical grid")
+      end
+      actual.size.times do |index|
+        unless actual[index] == expected[index]
+          raise CorruptPartError.new("Object site row grid differs from its parent physical grid")
         end
       end
       nil
@@ -1538,6 +1771,11 @@ module CrystalClick
         raise CorruptPartError.new("Object file reader size accounting overflows UInt64")
       end
       left + right
+    end
+
+    private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
     end
   end
 end

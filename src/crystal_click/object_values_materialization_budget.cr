@@ -91,6 +91,27 @@ module CrystalClick
       admit_usage(usage, workspace_bytes)
     end
 
+    # Charge a decoded recursive storage value atomically. Tuple wrapper depth
+    # is inherited by its children and by the existing Object/BinaryValue
+    # visitors, so nested storage does not restart the value-depth allowance.
+    def charge_storage_value(value : StorageColumnValue, workspace_bytes : UInt64 = 0_u64) : Nil
+      ensure_base_reserved!
+      usage = measure_storage_value(value, 1, Usage.new)
+      admit_usage(usage, workspace_bytes)
+    end
+
+    # Charge every sibling occurrence as one transaction. Repeated object
+    # identities are charged per occurrence because each occupies a retained
+    # slot in the decoded result tree.
+    def charge_storage_values(values : Array(StorageColumnValue), workspace_bytes : UInt64 = 0_u64) : Nil
+      ensure_base_reserved!
+      usage = Usage.new
+      values.each do |value|
+        usage = measure_storage_value(value, 1, usage)
+      end
+      admit_usage(usage, workspace_bytes)
+    end
+
     private def admit_usage(usage : Usage, workspace_bytes : UInt64) : Nil
       retained = checked_add(@retained_logical_bytes, usage.bytes)
       strings = checked_add(@string_payload_bytes, usage.string_bytes)
@@ -152,7 +173,7 @@ module CrystalClick
       end
     end
 
-    private def measure_document(document : ObjectDocument, usage : Usage) : Usage
+    private def measure_document(document : ObjectDocument, usage : Usage, value_depth : Int32 = 1) : Usage
       path_count = document.path_count.to_u64
       usage = usage.add(
         bytes: instance_sizeof(ObjectDocument).to_u64 +
@@ -173,7 +194,42 @@ module CrystalClick
         path_bytes = document.path_byte_size_at(index).to_u64
         usage = usage.add(bytes: checked_add(instance_sizeof(String).to_u64, checked_add(path_bytes, 1_u64)))
         path = document.path_at(index)
-        usage = measure_value(document.value_for(path), 1, usage)
+        usage = measure_value(document.value_for(path), value_depth, usage)
+      end
+      usage
+    end
+
+    private def measure_storage_value(value : StorageColumnValue, depth : Int32, usage : Usage) : Usage
+      ensure_depth!(depth)
+      usage = usage.add(
+        bytes: checked_add(
+          instance_sizeof(StorageColumnValue).to_u64,
+          instance_sizeof(Array(StorageColumnValue)).to_u64,
+        ),
+        nodes: 1_u64,
+      )
+
+      case value.kind
+      when StorageColumnValue::TUPLE
+        child_count = value.child_count.to_u64
+        usage = usage.add(
+          bytes: checked_multiply(child_count, sizeof(Pointer(StorageColumnValue)).to_u64),
+          cells: child_count,
+          elements: child_count,
+        )
+        if child_count > 0_u64
+          raise BoundsError.new("Object retained value exceeds recursive depth limit") if depth >= @max_depth
+          child_depth = depth + 1
+          value.child_count.times do |index|
+            usage = measure_storage_value(value.child_at(index), child_depth, usage)
+          end
+        end
+      when StorageColumnValue::OBJECT
+        usage = measure_document(value.object_document, usage, depth)
+      when StorageColumnValue::BULK
+        usage = measure_value(value.bulk_value, depth, usage)
+      else
+        raise BoundsError.new("unknown recursive storage value node")
       end
       usage
     end
@@ -195,7 +251,7 @@ module CrystalClick
       usage = measure_type(value.type, depth, usage)
 
       value.element_count.times do |index|
-        usage = measure_value(value.element_at(index), depth + 1, usage)
+        usage = measure_value(value.element_at(index), next_depth(depth), usage)
       end
       usage
     end
@@ -261,7 +317,7 @@ module CrystalClick
       end
 
       type.child_count.times do |index|
-        usage = measure_type(type.child_at(index), depth + 1, usage)
+        usage = measure_type(type.child_at(index), next_depth(depth), usage)
       end
       usage
     end
@@ -292,6 +348,11 @@ module CrystalClick
 
     private def ensure_depth!(depth : Int32) : Nil
       raise BoundsError.new("Object retained value exceeds recursive depth limit") if depth <= 0 || depth > @max_depth
+    end
+
+    private def next_depth(depth : Int32) : Int32
+      raise BoundsError.new("Object retained value exceeds recursive depth limit") if depth == Int32::MAX
+      depth + 1
     end
 
     private def ensure_base_reserved! : Nil

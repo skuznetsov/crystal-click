@@ -7,6 +7,7 @@ module CrystalClick
       private enum SelectedShape
         Object
         ArrayObject
+        RecursiveJson
       end
 
       def self.read(part_path : String, requested_column : String) : String?
@@ -15,6 +16,10 @@ module CrystalClick
 
       def self.read_array_json(part_path : String, requested_column : String) : String?
         read_matching_shape(part_path, requested_column, SelectedShape::ArrayObject)
+      end
+
+      def self.read_recursive_json(part_path : String, requested_column : String) : String?
+        read_matching_shape(part_path, requested_column, SelectedShape::RecursiveJson)
       end
 
       private def self.read_matching_shape(
@@ -55,6 +60,16 @@ module CrystalClick
         when SelectedShape::ArrayObject
           schema = ArrayObjectColumnReader.schema_for_source_declaration(selected[1])
           return nil unless schema && selected[1] == "Array(#{schema.declaration})"
+        when SelectedShape::RecursiveJson
+          begin
+            schema = StorageColumnSchema.parse(selected[1])
+            return nil unless schema.tuple? && schema.has_json?
+          rescue ex : UnsupportedFormatError
+            # Ordinary supported Tuple/scalar declarations are left to the
+            # existing physical reader. Only the closed Tuple-with-JSON
+            # subset is a recursive Object dispatch candidate.
+            return nil
+          end
         end
         String.new(selected[1].to_slice)
       rescue ex : IO::Error

@@ -54,6 +54,16 @@ module CrystalClick
       end
     end
 
+    private struct RecursiveColumnReaderEntry
+      getter name : String
+      getter reader : RecursiveStorageColumnReader
+      getter schema : StorageColumnSchema
+      getter column_type : String
+
+      def initialize(@name : String, @reader : RecursiveStorageColumnReader, @schema : StorageColumnSchema, @column_type : String)
+      end
+    end
+
     private struct PartEntry
       getter name : String
       getter path : String
@@ -63,6 +73,7 @@ module CrystalClick
       getter aggregate_count_key_reader : ColumnReader?
       getter object_readers : Array(ObjectColumnReaderEntry)
       getter array_object_readers : Array(ArrayObjectColumnReaderEntry)
+      getter recursive_readers : Array(RecursiveColumnReaderEntry)
       getter column_types : Array(String)
       getter column_sources : Array({String, String, String})
 
@@ -75,6 +86,7 @@ module CrystalClick
         @aggregate_count_key_reader : ColumnReader?,
         @object_readers : Array(ObjectColumnReaderEntry),
         @array_object_readers : Array(ArrayObjectColumnReaderEntry),
+        @recursive_readers : Array(RecursiveColumnReaderEntry),
         @column_types : Array(String),
         @column_sources : Array({String, String, String}),
       )
@@ -164,7 +176,7 @@ module CrystalClick
     # alias the current mark arrays and must not be retained past the callback.
     def scan(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 scan requires exact UInt64 columns")
       end
 
@@ -175,7 +187,7 @@ module CrystalClick
     # complete candidate granule; skipped marks still advance physical row
     # offsets and are never materialized.
     def scan_candidate_marks(mark_indices : Array(Array(Int32)), & : WidePartTableBatch -> Nil) : Nil
-      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 candidate scan requires exact UInt64 columns")
       end
       raise BoundsError.new("candidate mark list does not match selected parts") unless mark_indices.size == @entries.size
@@ -268,7 +280,7 @@ module CrystalClick
     # retrieved from each batch with values_for(column, CrystalType).
     def scan_numeric(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
         raise UnsupportedFormatError.new("numeric scan requires exact primitive numeric columns")
       end
 
@@ -317,6 +329,7 @@ module CrystalClick
       # overflow cannot surface after an earlier callback escapes. This is
       # intentionally not a whole-scan atomicity promise for other codecs.
       validate_complete_array_object_schedules
+      validate_complete_recursive_schedules
       preflight_coordinate_selected_marks(candidate_marks, window_rows)
       preflight_array_map_leaf_selected_marks(candidate_marks, window_rows)
 
@@ -864,6 +877,17 @@ module CrystalClick
               remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
               bytes = ArrayObjectColumnAdapter.preflight_owner(
                 selected.reader,
+                mark_index.to_i32,
+                mark_rows,
+                remaining_bytes
+              )
+              preflight_string_bytes += bytes
+            end
+            part.recursive_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
+              bytes = RecursiveColumnAdapter.preflight_owner(
+                selected.reader,
+                selected.schema,
                 mark_index.to_i32,
                 mark_rows,
                 remaining_bytes
@@ -2519,6 +2543,22 @@ module CrystalClick
               actual_string_bytes += charge
               array_object_documents[selected.name] = values
             end
+            recursive_values = Hash(String, Array(StorageColumnValue)).new
+            part.recursive_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+              values, charge = RecursiveColumnAdapter.materialize_mark(
+                selected.reader,
+                selected.schema,
+                mark_index.to_i32,
+                mark_rows,
+                remaining_bytes
+              )
+              if charge > remaining_bytes
+                raise CorruptPartError.new("selected recursive Tuple mark exceeds aggregate materialization limit")
+              end
+              actual_string_bytes += charge
+              recursive_values[selected.name] = values
+            end
 
             mark_row_offset = selected_mark_row_start
             first_whole_mark_batch = whole_marks
@@ -2808,6 +2848,12 @@ module CrystalClick
                 selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 batch.install_array_object_documents(selected.name, selected_slice, size)
               end
+              part.recursive_readers.each do |selected|
+                values = recursive_values[selected.name]? ||
+                         raise(CorruptPartError.new("selected recursive Tuple column was not materialized"))
+                selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                batch.install_recursive_values(selected.name, selected_slice, size)
+              end
               yield batch
               mark_row_offset &+= size.to_u64
               break if whole_marks
@@ -2837,6 +2883,21 @@ module CrystalClick
             raise CorruptPartError.new("selected Array(JSON) outer grid differs from its part")
           end
           ArrayObjectColumnAdapter.validate_complete_schedule(reader)
+        end
+      end
+      nil
+    end
+
+    private def validate_complete_recursive_schedules : Nil
+      @entries.each do |part|
+        part.recursive_readers.each do |selected|
+          reader = selected.reader
+          unless reader.row_count == part.row_count.to_u64 &&
+                 reader.mark_count == part.mark_row_counts.size &&
+                 reader.mark_row_counts == part.mark_row_counts
+            raise CorruptPartError.new("selected recursive Tuple grid differs from its part")
+          end
+          RecursiveColumnAdapter.validate_complete_schedule(reader)
         end
       end
       nil
@@ -4551,6 +4612,7 @@ module CrystalClick
         aggregate_count_key_name = nil.as(String?)
         object_readers = Array(ObjectColumnReaderEntry).new
         array_object_readers = Array(ArrayObjectColumnReaderEntry).new
+        recursive_readers = Array(RecursiveColumnReaderEntry).new
         expected_mark_rows = nil.as(Array(UInt64)?)
         expected_row_count = nil.as(UInt64?)
         current_column_types = Array(String).new(@columns.size)
@@ -4560,14 +4622,19 @@ module CrystalClick
         @columns.each do |column|
           object_declaration = nil.as(String?)
           array_object_declaration = nil.as(String?)
+          recursive_declaration = nil.as(String?)
           if @typed_mode && !@numeric_mode && flattened_context.nil?
             object_declaration = WidePart.selected_json_declaration(path, column)
             array_object_declaration = WidePart.selected_array_json_declaration(path, column)
+            recursive_declaration = WidePart.selected_recursive_json_declaration(path, column)
             if projection_name && object_declaration
               raise UnsupportedFormatError.new("Object columns are unsupported in typed projections")
             end
             if projection_name && array_object_declaration
               raise UnsupportedFormatError.new("Array(JSON) columns are unsupported in typed projections")
+            end
+            if projection_name && recursive_declaration
+              raise UnsupportedFormatError.new("recursive Tuple JSON columns are unsupported in typed projections")
             end
           end
 
@@ -4595,6 +4662,17 @@ module CrystalClick
             column_source = {column, column, array_object_reader.source_declaration}
             selected_checksum_names = array_object_reader.selected_checksum_names
             array_object_readers << ArrayObjectColumnReaderEntry.new(column, array_object_reader, column_type)
+          elsif source_declaration = recursive_declaration
+            recursive_schema = RecursiveColumnAdapter.schema_for_source_declaration(source_declaration)
+            recursive_reader = RecursiveColumnAdapter.open(path, column, recursive_schema, source_declaration)
+            RecursiveColumnAdapter.validate_complete_schedule(recursive_reader)
+            mark_rows = recursive_reader.mark_row_counts
+            raise BoundsError.new("mark count exceeds per-reader limit") if mark_rows.size > MAX_MARKS_PER_READER
+            column_row_count = recursive_reader.row_count
+            column_type = recursive_reader.schema_declaration
+            column_source = {column, column, recursive_reader.source_declaration}
+            selected_checksum_names = recursive_reader.selected_checksum_names
+            recursive_readers << RecursiveColumnReaderEntry.new(column, recursive_reader, recursive_schema, column_type)
           else
             reader = if context = flattened_context
                        context.open_reader(path, column)
@@ -4685,7 +4763,7 @@ module CrystalClick
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, array_object_readers, current_column_types, current_column_sources)
+        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, array_object_readers, recursive_readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32
