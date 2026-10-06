@@ -871,4 +871,4 @@ module ReconcileObjectSharedAdvancedW191
   end
 end
 
-exit ReconcileObjectSharedAdvancedW191.main(ARGV)
+exit ReconcileObjectSharedAdvancedW191.main(ARGV) if $PROGRAM_NAME == __FILE__

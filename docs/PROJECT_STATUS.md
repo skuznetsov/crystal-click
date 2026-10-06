@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current internal foundation (W191, 2026-10-06): a detached, byte-ordered Object
+Current internal foundation (W192, 2026-10-06): paired exact-chunk Object shared
+Copy serde delegates recursive actual values to the existing Dynamic child
+codec. Dictionary, detached streams and payload codec have separate files.
+Bucket-ordinal dictionaries, per-row UInt64 sizes, implicit index widths,
+outer String frames, opaque paths and cumulative caller budgets are checked
+before count-derived allocations. Valid-but-unadmitted child types remain
+unsupported rather than being mislabeled as corrupt. The same 84 affected
+files pass 524 DEBUG and 524 RELEASE examples, zero failures/errors/pending,
+actual guard exits 0, with unchanged source/spec identities across both gates.
+Fresh helper builds exactly decode/reencode 42 chunks from the authenticated
+immutable W191 stock capture: eight profiles, 40 logical rows and 36 entries.
+Ruby separately derives chunk slices, binds literals to fixed fixture constants
+and authenticated native SQL, and compares both helpers with raw bytes and
+authored rows. Read wire is 4,116 bytes including metadata; Copy-only write wire
+is 754 bytes. All 26 root controls pass, including mutated raw bytes, reset wire
+counters, poisoned values and a real CLI self-test/comparison bypass falsifier.
+Scoped verdict: ROBUST for this normalized exact-Copy prerequisite and finite
+corpus. Native actual values here are String; recursive unit cases do not
+certify every persisted type/layout product. No new native capture or full-part
+ATTACH/CHECK was run for W192. Persisted advanced v2/v3 remains rejected.
+Next: per-path Data/substream state and compressed-coordinate mapping, then
+paired part qualification with whole-object AND independent path reads.
+Full types, broader MV/projections and decomposition remain open; performance
+is deferred and the overall goal is incomplete. Details and evidence:
+[OBJECT_SHARED_ADVANCED_FRONTIER.md](OBJECT_SHARED_ADVANCED_FRONTIER.md),
+`.landmark/evidence/object-shared-copy-w192.json`.
+
+Previous internal foundation (W191, 2026-10-06): a detached, byte-ordered Object
 shared chunk metadata owner and paired codec compose under one caller-owned
 budget. They preserve UInt64 row/transport coordinates, opaque paths, zero-row
 records and exact-blob consumption, with count/suffix preflight before path

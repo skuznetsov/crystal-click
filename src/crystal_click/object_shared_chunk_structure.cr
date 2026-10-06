@@ -39,6 +39,16 @@ module CrystalClick
       String.new(@paths[index].to_slice)
     end
 
+    # Byte-wise access lets enclosing codecs preflight opaque path work without
+    # first creating the detached String returned by `path_at`.
+    def path_byte_size(index : Int) : Int32
+      @paths[index].bytesize
+    end
+
+    def path_byte_at(index : Int, byte_index : Int) : UInt8
+      @paths[index].to_slice[byte_index]
+    end
+
     def ==(other : ObjectSharedChunkStructure) : Bool
       @row_count == other.@row_count &&
         @paths == other.@paths &&

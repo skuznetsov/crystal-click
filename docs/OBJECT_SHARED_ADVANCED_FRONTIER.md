@@ -1,7 +1,8 @@
 # Object Advanced Shared Storage Frontier
 
-Document status: W191 verified metadata prerequisite and capture; persisted
-ADVANCED/CHUNKED storage is not admitted.
+Document status: W191 verified metadata prerequisite and capture; W192 paired
+exact-Copy payload prerequisite qualified against the retained stock corpus.
+Persisted ADVANCED/CHUNKED storage is not admitted.
 Baseline: `c99c9cf` (W190), clean tree at entry, 2026-10-06.
 The full read/write types and MV/projections goal remains open. Performance is
 deferred until those capabilities are implemented and qualified.
@@ -97,9 +98,12 @@ fixture profiles change; refresh in a new empty root and preserve old failures.
 The next implementation is a reusable single-bucket, single-chunk metadata
 owner, not a new serializer for each enclosing Array/Tuple/JSON combination.
 `ObjectSharedChunkStructure` and `ObjectSharedChunkStructureCodec` each live in
-their own file. A record contains a UInt64 row count, a strictly byte-ordered
+their own file. A record contains a UInt64-domain row count encoded as VarUInt,
+a strictly byte-ordered
 unique list of opaque path strings, and three pairs of UInt64 compressed and
-decoded transport offsets. Zero-row/zero-path records and nonzero offsets are
+decoded transport offsets encoded as fixed little-endian UInt64 values.
+The path count and each path length also use VarUInt.
+Zero-row/zero-path records and nonzero offsets are
 valid metadata; actual target-stream bounds belong to the eventual storage
 owner. The record owns detached path bytes. Context-based read/write entry
 points inherit one caller budget; complete-blob entry points reject trailing
@@ -222,3 +226,155 @@ together, retain separate physical-parent/logical-child/chunk coordinates and
 caller budgets, then qualify stock-authored reads and library-authored
 ATTACH/CHECK with whole-object AND independent path readback. Do not widen the
 persisted version guard on the strength of this metadata prerequisite alone.
+
+## W192 paired Copy payload plan
+
+Baseline: clean `b6af51c`, 2026-10-06. This is the next production dependency
+of the complete advanced layout, not a substitute for per-path payloads or a
+relaxation of persisted admission. Reuse scalar envelopes; do not duplicate
+their recursive serde for each enclosing schema.
+
+The exact local API consumes one chunk's already decoded bucket structures
+and three fully decompressed, exactly bounded Copy slices. A dictionary owner
+validates equal logical row counts across buckets, byte-sorted unique paths
+within each bucket, unique combined paths and deterministic bucket placement.
+Dictionary order is bucket ordinal followed by each bucket's path order, not
+global lexical order. Rows remain in their original byte-sorted path order.
+The Copy owner uses position-independent UInt64 per-row entry counts, implicit
+dictionary-size-dependent UInt8/UInt16/UInt32 indexes, and outer binary Strings
+containing the existing scalar Dynamic envelopes. Cumulative Array offsets
+and other serialization profiles are not admitted by this API.
+
+An initial source-inventory claim confused reconstructed Array offsets with
+physical sizes. Root read the retained stock decompressor output directly:
+`invocations/decompress_root_advanced_v2_2b2b60b9885bd841f8fc17c78f094c03.stdout`
+has SHA-256 `493c238f320b0c861040b1c683dd4f3ba02617e92db016df26d8bf1d01991a8a`
+and UInt64 values `[1,2,1,2,2,1,1,3]`, not cumulative offsets. The source
+`SerializationArray.cpp:329-349` selects sizes when
+`position_independent_encoding` is true; `ISerialization.h` defaults it to
+true. Preserve the contradicted route as an explicit framing falsifier.
+
+New owners each have a separate file:
+`object_shared_copy_dictionary.cr`, `object_shared_copy_streams.cr`, and
+`object_shared_copy_codec.cr`. The paired exact-slice and caller-budget APIs
+reuse `ObjectSharedMapRow`/`ObjectSharedMapEntry` and
+`BinaryValueCodec.encode_dynamic_bulk_child`/`decode_dynamic_bulk_child`.
+The inherited Dynamic actual-type restrictions remain explicit; this does
+not claim arbitrary JSON/QBit/aggregate-state envelopes. Bucket, path, row,
+entry, recursive value and wire work all share the caller's budget, including
+consecutive chunks. Count and byte lower bounds must precede count-derived
+allocations. Zero-child chunks keep their metadata slot, and pathless positive
+rows still have zero-valued size records. Physical parent marks are outside
+this exact-slice codec, not replaced by logical row counts.
+
+The Copy wire budget charges only its three lanes: already decoded structure
+bytes belong to the enclosing owner. Dictionary and repeated per-entry path
+bytes are charged as logical element work before copies or count-derived
+collections. This prevents tiny Copy bodies from amplifying repeated large
+paths without falsely describing the logical budget as an RSS measurement.
+
+Risk is CAUTION (paired persistent payload framing). Rollback is the scoped
+atomic Git commit after gates. The strongest local failure is an apparently
+valid index sequence bound to the wrong dictionary or using cumulative counts.
+The unchanged v2/v3 document/physical refusal is the guard against mistaking a
+Copy-only implementation for complete advanced support.
+
+The recursive child codec's error distinction is part of composition:
+valid-but-unadmitted actual types retain `UnsupportedFormatError`; malformed
+descriptors and broken framing retain `CorruptPartError`. A broad conversion
+from unsupported to corrupt failed a root-authored valid-JSON-envelope RED and
+was removed. This preserves the child contract rather than changing admission.
+
+Execution and DoD:
+
+1. `spec/object_shared_copy_w192_spec.cr` and root-authored
+   `spec/object_shared_copy_w192_adversary_spec.cr`: run the missing-API RED before
+   production edits. Then exact stock-derived literals, recursive scalar
+   children, dictionary/row disagreement, misplaced/duplicate paths, index
+   overflow, truncation/trailing bytes, opaque ownership, zero/empty rows,
+   shared budget exhaustion and 256/257 plus 65536/65537 width boundaries.
+2. `src/crystal_click.cr` requires the three new owners. Do not edit persisted
+   Object admission or existing MAP serde. Both new methods are paired and
+   direction checked; they create no fresh budget in compositional calls.
+3. `scripts/validate_object_shared_copy_w192.cr` is freshly compiled in DEBUG
+   and RELEASE. `scripts/reconcile_object_shared_copy_w192.rb` derives chunks,
+   dictionaries and exact Copy slices from authenticated retained W191 raw
+   streams, compares logical rows against authored literals, and compares both
+   helper reencodings with original bytes. It must detect seeded framing,
+   dictionary/index and raw-artifact mutations. Reusing immutable stock input
+   is declared; this is not a new full-part ATTACH/CHECK witness.
+4. Run the inherited 82 affected W191 specs and both new specs in DEBUG and
+   RELEASE under the same serial 600-second/12288-MiB/50-percent-free guard.
+   Require actual terminal exit 0, no pending examples, root-authored adversary
+   controls, independently checked source/input digests and hostile review.
+
+After this dependency, complete the per-path Data/substream metadata owner and
+paired compressed-coordinate transport mapping. Only the combined advanced
+reader/writer with stock whole-object AND independent path readback may widen
+the persisted version guard. Full type coverage, MV/projections and the final
+performance target remain open.
+
+## W192 executed qualification and continuation
+
+The missing-API RED precedes production implementation. A separate
+root-authored RED demonstrates that a valid scalar JSON envelope was wrongly
+reported as corrupt by the enclosing Copy decoder; removing the broad rescue
+restores the child's unsupported-versus-corrupt contract without admitting JSON
+actual values. The final 84 affected files pass 524 examples in DEBUG and 524
+in RELEASE, with zero failures/errors/pending and actual guard exits 0.
+All 903 source/spec files have the same input fingerprint across both gates.
+These are affected regressions, not a full repository-suite result.
+
+Both newly built helper modes consume the same 42 combined chunks derived
+from the immutable W191 capture. The independently re-derived manifest agrees
+with the implementation worker's manifest exactly. Ruby authenticates the
+retained process/part/stream evidence, independently parses the outer and inner
+String frames, and binds authored literals to fixed probe constants AND the
+authenticated captured SQL stdin. It then compares decoded values and exact
+reencoded Copy slices with original raw bytes, not just helper agreement.
+There are eight profiles, 40 logical rows and 36 entries: 320 size bytes,
+36 index bytes and 398 value bytes. The shared read budget includes 3,362
+metadata bytes plus 754 Copy bytes; the shared write budget charges only the
+754 Copy bytes. Empty child and pathless chunk slots remain in the corpus.
+Native actual values in this capture are String. Recursive non-String cases
+are unit witnesses, not native qualification of all combinations.
+
+Root's 26 controls pass: nine malformed-input cases in each helper mode,
+five poisoned helper-output cases, a real CLI check that `--self-test` cannot
+bypass missing compare inputs, substantive positive-report inspection, and
+same-length raw-byte substitution at the file-read seam. The last check
+executes the actual provenance verifier and rejects the changed stdout hash;
+the original capture remains unchanged. No new native capture or full-part
+ATTACH/CHECK was performed in W192.
+
+Retained failed routes:
+
+- Crystal helper arguments needed parentheses around `value || raise ...`
+  inside another call. This helper-only repair leaves production/spec gates
+  unchanged; both final helpers were built afterward.
+- The CLI initially treated consumed `ARGV` plus `--self-test` as a self-test-only
+  request, returning exit 0 even for a nonexistent DEBUG output. Root observed
+  that bypass and fixed dispatch to distinguish the supplied option set. The
+  final actual report contains `reconciled_observation_only`, eight profiles,
+  42 chunks and raw/authored checks; the same malformed CLI now exits 1 with
+  no stdout. Exit 0 alone was never accepted as raw reconciliation evidence.
+- Logical UInt64-domain structure row counts are VarUInt on the wire in both
+  source and runtime capture. Only transport pairs and Copy sizes use fixed
+  little-endian UInt64. Do not infer an encoding difference from API types.
+
+Scoped hostile verdict: ROBUST for the exact-Copy prerequisite and executed
+fixtures, not complete advanced storage. Source/runtime pins are still
+different revisions; fresh-master binary compatibility is not claimed.
+Commands, digests, failures and controls are indexed in
+`.landmark/evidence/object-shared-copy-w192.json`. As in W191, packet JSON and
+path/digest checks are a curated evidence index, not proof by field presence.
+Evidence decays if production/spec/helper/reconciliation inputs, the immutable
+capture, pins or fixtures change; rerun the corresponding actual gates.
+
+Continuation: retain the active full paired-types/MV/projections goal. Start
+the per-path Data/substream owner from authenticated captured bytes and existing
+Dynamic bulk serde; keep physical-parent rows, logical occurrences, chunks,
+dictionary state and compressed/decompressed marks distinct. The next decisive
+falsifier is a library-written advanced part whose whole Object reads correctly
+but whose independent stock path read does not. Do not widen v2/v3 admission
+until that paired reader/writer boundary is actually qualified.
