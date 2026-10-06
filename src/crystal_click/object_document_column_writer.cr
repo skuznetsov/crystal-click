@@ -211,7 +211,8 @@ module CrystalClick
     # Encodes an Object JSON leaf below one or more caller-owned structural
     # wrappers. `grid` keeps the enclosing part's physical rows separate from
     # this site's logical Object occurrences; no array-size lane is inferred
-    # here. The child seam is BASIC-only and leaves the root/Array APIs intact.
+    # here. The Dynamic discriminator mode remains site-local and leaves the
+    # root/Array row-domain guards intact.
     def self.encode_child_at_physical_site(
       escaped_prefix : String,
       plan : ObjectDocumentPlan,
@@ -237,8 +238,8 @@ module CrystalClick
         raise ArgumentError.new("Object child-site codec budget must be write-direction")
       end
       transport_budget.ensure_direction(true)
-      unless mode == DynamicDiscriminatorCodec::BASIC_MODE
-        raise UnsupportedFormatError.new("Object child-site composition requires the BASIC Dynamic profile")
+      unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
+        raise UnsupportedFormatError.new("unsupported Dynamic discriminator write mode")
       end
       unless physical_plan.initial_array_level == initial_array_level
         raise ArgumentError.new("Object physical child-site plan does not match the admitted Array level")

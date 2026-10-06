@@ -8,64 +8,80 @@ module CheckRecursiveJSONArrayTuplePartsW187
   TupleType = "Tuple(l #{JsonType}, r #{JsonType}, n UInt64)"
   OneType   = "Array(#{TupleType})"
   TwoType   = "Array(Array(#{TupleType}))"
+  CompactJsonType  = "JSON(max_dynamic_types=2, max_dynamic_paths=1, t UInt8)"
+  CompactTupleType = "Tuple(l #{CompactJsonType}, r #{CompactJsonType}, n UInt64)"
+  CompactOneType   = "Array(#{CompactTupleType})"
+  CompactTwoType   = "Array(Array(#{CompactTupleType}))"
 
   COLUMN        = "a"
   KEY           = "pk"
   ROWS_PER_MARK = 2
 
   def usage : NoReturn
-    STDERR.puts "usage: check_recursive_json_array_tuple_parts_w187 STOCK_ONE STOCK_TWO LIBRARY_ONE LIBRARY_TWO"
+    STDERR.puts "usage: check_recursive_json_array_tuple_parts_w187 [--dynamic-mode basic|compact] [--stock-only] STOCK_ONE STOCK_TWO [LIBRARY_ONE LIBRARY_TWO]"
     exit 64
   end
 
   private def object_plan(
     schema : CrystalClick::ObjectDocumentSchema,
     dynamic_path : String,
-    dynamic_type : CrystalClick::BinaryDataType,
+    dynamic_types : Array(CrystalClick::BinaryDataType),
   ) : CrystalClick::ObjectDocumentPlan
     object = CrystalClick::ObjectStructure.new([dynamic_path] of String)
     dynamics = {
-      dynamic_path => CrystalClick::DynamicStructure.new([dynamic_type] of CrystalClick::BinaryDataType),
+      dynamic_path => CrystalClick::DynamicStructure.new(dynamic_types),
     } of String => CrystalClick::DynamicStructure
     structures = CrystalClick::ObjectDynamicStructureSet.new(object, dynamics)
     CrystalClick::ObjectDocumentPlan.new(structures, schema.typed_paths)
   end
 
-  private def json_document(index : Int32, left : Bool, occurrence : Int32) : CrystalClick::ObjectDocument
+  private def json_document(index : Int32, left : Bool, occurrence : Int32, compact : Bool) : CrystalClick::ObjectDocument
     typed = CrystalClick::BinaryValue.fixed(
       CrystalClick::BinaryDataType.primitive("UInt8"),
       Bytes[index.to_u8]
     )
     values = {"t" => typed} of String => CrystalClick::BinaryValue
     if left
-      values["a_left"] = CrystalClick::BinaryValue.int64((occurrence + 10).to_i64)
+      values["a_left"] = if compact && occurrence == 3
+                            CrystalClick::BinaryValue.null
+                          elsif compact && occurrence == 4
+                            CrystalClick::BinaryValue.string("left-#{occurrence}")
+                          else
+                            CrystalClick::BinaryValue.int64((occurrence + 10).to_i64)
+                          end
       values["z_shared"] = CrystalClick::BinaryValue.string("left-shared") if occurrence == 1
     else
-      values["b_right"] = CrystalClick::BinaryValue.string("right-#{occurrence}")
+      values["b_right"] = if compact && occurrence == 3
+                             CrystalClick::BinaryValue.null
+                           elsif compact && occurrence == 4
+                             CrystalClick::BinaryValue.int64((occurrence + 20).to_i64)
+                           else
+                             CrystalClick::BinaryValue.string("right-#{occurrence}")
+                           end
       values["z_shared"] = CrystalClick::BinaryValue.string("right-shared") if occurrence == 1
     end
     CrystalClick::ObjectDocument.new(values)
   end
 
-  private def tuple_value(index : Int32) : CrystalClick::StorageColumnValue
-    left = CrystalClick::StorageColumnValue.object_document(json_document(index, true, index))
-    right = CrystalClick::StorageColumnValue.object_document(json_document(index + 20, false, index))
+  private def tuple_value(index : Int32, compact : Bool) : CrystalClick::StorageColumnValue
+    left = CrystalClick::StorageColumnValue.object_document(json_document(index, true, index, compact))
+    right = CrystalClick::StorageColumnValue.object_document(json_document(index + 20, false, index, compact))
     number = CrystalClick::StorageColumnValue.bulk(CrystalClick::BinaryValue.uint64(index.to_u64 * 100_u64))
     CrystalClick::StorageColumnValue.tuple([left, right, number] of CrystalClick::StorageColumnValue)
   end
 
-  private def one_row(pk : Int32) : CrystalClick::StorageColumnValue
+  private def one_row(pk : Int32, compact : Bool) : CrystalClick::StorageColumnValue
     indexes = case pk
               when 4 then [1]
               when 5 then [2, 3]
               when 6 then [4]
               else        [] of Int32
               end
-    children = indexes.map { |index| tuple_value(index) }
+    children = indexes.map { |index| tuple_value(index, compact) }
     CrystalClick::StorageColumnValue.array(children)
   end
 
-  private def two_row(pk : Int32) : CrystalClick::StorageColumnValue
+  private def two_row(pk : Int32, compact : Bool) : CrystalClick::StorageColumnValue
     groups = case pk
              when 3 then [[] of Int32]
              when 4 then [[1]]
@@ -74,19 +90,19 @@ module CheckRecursiveJSONArrayTuplePartsW187
              else        [] of Array(Int32)
              end
     outer = groups.map do |group|
-      inner = group.map { |index| tuple_value(index) }
+      inner = group.map { |index| tuple_value(index, compact) }
       CrystalClick::StorageColumnValue.array(inner)
     end
     CrystalClick::StorageColumnValue.array(outer)
   end
 
-  private def granules(one : Bool) : Array(Array(CrystalClick::StorageColumnValue))
+  private def granules(one : Bool, compact : Bool) : Array(Array(CrystalClick::StorageColumnValue))
     result = [] of Array(CrystalClick::StorageColumnValue)
     4.times do |mark|
       rows = [] of CrystalClick::StorageColumnValue
       2.times do |offset|
         pk = mark * ROWS_PER_MARK + offset + 1
-        rows << (one ? one_row(pk) : two_row(pk))
+        rows << (one ? one_row(pk, compact) : two_row(pk, compact))
       end
       result << rows
     end
@@ -104,10 +120,17 @@ module CheckRecursiveJSONArrayTuplePartsW187
   private def object_plans(
     schema : CrystalClick::ObjectDocumentSchema,
     array_depth : Int32,
+    compact : Bool,
   ) : Hash(String, CrystalClick::ObjectDocumentPlan)
+    left_types = [CrystalClick::BinaryDataType.primitive("Int64")] of CrystalClick::BinaryDataType
+    right_types = [CrystalClick::BinaryDataType.primitive("String")] of CrystalClick::BinaryDataType
+    if compact
+      left_types << CrystalClick::BinaryDataType.primitive("String")
+      right_types << CrystalClick::BinaryDataType.primitive("Int64")
+    end
     {
-      site_key(array_depth, 0) => object_plan(schema, "a_left", CrystalClick::BinaryDataType.primitive("Int64")),
-      site_key(array_depth, 1) => object_plan(schema, "b_right", CrystalClick::BinaryDataType.primitive("String")),
+      site_key(array_depth, 0) => object_plan(schema, "a_left", left_types),
+      site_key(array_depth, 1) => object_plan(schema, "b_right", right_types),
     } of String => CrystalClick::ObjectDocumentPlan
   end
 
@@ -115,14 +138,16 @@ module CheckRecursiveJSONArrayTuplePartsW187
     destination : String,
     declaration : String,
     array_depth : Int32,
+    compact : Bool,
   ) : Nil
     schema = CrystalClick::StorageColumnSchema.parse(declaration)
     expected_sites = [site_key(array_depth, 0), site_key(array_depth, 1)].sort!
     unless schema.canonical_declaration == declaration && schema.json_site_keys.sort! == expected_sites
       raise CrystalClick::UnsupportedFormatError.new("recursive Array/Tuple JSON site identities differ")
     end
-    object_schema = CrystalClick::ObjectDocumentSchema.parse_declaration(JsonType)
-    unless object_schema.declaration == JsonType
+    json_type = compact ? CompactJsonType : JsonType
+    object_schema = CrystalClick::ObjectDocumentSchema.parse_declaration(json_type)
+    unless object_schema.declaration == json_type
       raise CrystalClick::UnsupportedFormatError.new("JSON leaf declaration changed during planning")
     end
     keys = (1_u64..8_u64).to_a
@@ -132,10 +157,10 @@ module CheckRecursiveJSONArrayTuplePartsW187
       Slice(UInt64).new(keys.size) { |index| keys[index] },
       COLUMN,
       schema,
-      object_plans(object_schema, array_depth),
-      granules(array_depth == 1),
+      object_plans(object_schema, array_depth, compact),
+      granules(array_depth == 1, compact),
       rows_per_mark: ROWS_PER_MARK,
-      mode: CrystalClick::DynamicDiscriminatorCodec::BASIC_MODE,
+      mode: compact ? CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE : CrystalClick::DynamicDiscriminatorCodec::BASIC_MODE,
       profile: CrystalClick::BinaryBulkProfile.with_size_stream,
       shared_profile: CrystalClick::BinaryBulkProfile.single_stream,
       frame_bytes: 64,
@@ -164,15 +189,19 @@ module CheckRecursiveJSONArrayTuplePartsW187
     document.paths.each do |path|
       value = document.value_for(path)
       type_name = (typed[path]? || value.type).name
-      fields[path] = case type_name
-                     when "String"
-                       JSON::Any.new(value.as_string)
-                     when "Int64"
-                       JSON::Any.new(value.as_int64)
-                     when "UInt8"
-                       JSON::Any.new(value.bytes[0].to_i64)
+      fields[path] = if value.is_null?
+                       JSON::Any.new(nil)
                      else
-                       raise CrystalClick::CorruptPartError.new("unexpected recursive JSON field type #{type_name}")
+                       case type_name
+                       when "String"
+                         JSON::Any.new(value.as_string)
+                       when "Int64"
+                         JSON::Any.new(value.as_int64)
+                       when "UInt8"
+                         JSON::Any.new(value.bytes[0].to_i64)
+                       else
+                         raise CrystalClick::CorruptPartError.new("unexpected recursive JSON field type #{type_name}")
+                       end
                      end
     end
     JSON::Any.new(fields)
@@ -322,8 +351,9 @@ module CheckRecursiveJSONArrayTuplePartsW187
     library_part : String,
     declaration : String,
     array_depth : Int32,
+    compact : Bool,
   ) : Hash(String, JSON::Any)
-    write_library_part(library_part, declaration, array_depth)
+    write_library_part(library_part, declaration, array_depth, compact)
     schema = CrystalClick::StorageColumnSchema.parse(declaration)
     stock_table = CrystalClick::WidePartTable.open_selected_typed([stock_part], [KEY, COLUMN])
     library_table = CrystalClick::WidePartTable.open_selected_typed([library_part], [KEY, COLUMN])
@@ -341,9 +371,48 @@ module CheckRecursiveJSONArrayTuplePartsW187
     } of String => JSON::Any
   end
 
-  private def run(stock_one : String, stock_two : String, library_one : String, library_two : String) : Nil
-    one = profile_record(stock_one, library_one, OneType, 1)
-    two = profile_record(stock_two, library_two, TwoType, 2)
+  private def stock_refusal(part : String, declaration : String) : Hash(String, JSON::Any)
+    schema = CrystalClick::StorageColumnSchema.parse(declaration)
+    begin
+      reader = CrystalClick::RecursiveStorageColumnReader.open(part, COLUMN, schema)
+      reader.read_marks(0, reader.mark_count)
+      {
+        "status" => JSON::Any.new("reader_succeeded"),
+        "error_class" => JSON::Any.new(""),
+        "message" => JSON::Any.new(""),
+      } of String => JSON::Any
+    rescue ex : CrystalClick::UnsupportedFormatError
+      {
+        "status" => JSON::Any.new("unsupported"),
+        "error_class" => JSON::Any.new(ex.class.to_s),
+        "message" => JSON::Any.new(ex.message || ""),
+      } of String => JSON::Any
+    end
+  end
+
+  private def run_stock_only(stock_one : String, stock_two : String) : Nil
+    one = stock_refusal(stock_one, CompactOneType)
+    two = stock_refusal(stock_two, CompactTwoType)
+    puts({
+      "status" => "baseline_reader_refusal_observed",
+      "profiles" => {"one" => one, "two" => two},
+    }.to_json)
+  end
+
+  private def run(
+    stock_one : String,
+    stock_two : String,
+    library_one : String,
+    library_two : String,
+    compact : Bool,
+  ) : Nil
+    if compact
+      one = profile_record(stock_one, library_one, CompactOneType, 1, true)
+      two = profile_record(stock_two, library_two, CompactTwoType, 2, true)
+    else
+      one = profile_record(stock_one, library_one, OneType, 1, false)
+      two = profile_record(stock_two, library_two, TwoType, 2, false)
+    end
     puts({
       "status"        => "observed",
       "library_parts" => {
@@ -355,8 +424,38 @@ module CheckRecursiveJSONArrayTuplePartsW187
   end
 
   def main(args : Array(String)) : Nil
-    usage unless args.size == 4
-    run(args[0], args[1], args[2], args[3])
+    dynamic_mode = "basic"
+    stock_only = false
+    positional = [] of String
+    index = 0
+    while index < args.size
+      case args[index]
+      when "--dynamic-mode"
+        index += 1
+        raise ArgumentError.new("--dynamic-mode requires basic or compact") if index >= args.size
+        dynamic_mode = args[index]
+      when "--stock-only"
+        stock_only = true
+      else
+        if args[index].starts_with?("--")
+          raise ArgumentError.new("unknown helper option #{args[index]}")
+        end
+        positional << args[index]
+      end
+      index += 1
+    end
+    unless dynamic_mode == "basic" || dynamic_mode == "compact"
+      raise ArgumentError.new("dynamic mode must be basic or compact")
+    end
+    if stock_only
+      unless dynamic_mode == "compact" && positional.size == 2
+        usage
+      end
+      run_stock_only(positional[0], positional[1])
+    else
+      usage unless positional.size == 4
+      run(positional[0], positional[1], positional[2], positional[3], dynamic_mode == "compact")
+    end
   rescue ex : Exception
     STDERR.puts "W187 recursive Array/Tuple JSON helper failed: #{ex.class}: #{ex.message}"
     exit 1

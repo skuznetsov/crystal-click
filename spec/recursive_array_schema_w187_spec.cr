@@ -42,21 +42,20 @@ describe "W187 common Array/Tuple storage schema" do
     end
   end
 
-  it "rejects COMPACT Array composition before payload encoding while admitting BASIC" do
+  it "admits the default COMPACT Array plan and retains explicit BASIC planning" do
     object_schema = CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(t UInt8)")
     schema = CrystalClick::StorageColumnSchema.parse("Array(#{object_schema.declaration})")
     plans = {"root/array[0]" => w187_recursive_object_plan(object_schema)}
 
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::RecursiveStorageColumnPlan.for_column(
-        "payload", schema, plans,
-        mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
-      )
-    end
+    default_plan = CrystalClick::RecursiveStorageColumnPlan.for_column("payload", schema, plans)
+    default_plan.mode.should eq(CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE)
+    default_plan.array_site_count.should eq(1)
+
     plan = CrystalClick::RecursiveStorageColumnPlan.for_column(
       "payload", schema, plans,
       mode: CrystalClick::DynamicDiscriminatorCodec::BASIC_MODE,
     )
+    plan.mode.should eq(CrystalClick::DynamicDiscriminatorCodec::BASIC_MODE)
     plan.array_site_count.should eq(1)
   end
 

@@ -167,7 +167,10 @@ module CrystalClick
         @ordinary_profile,
         BinaryBulkProfile.single_stream,
         true,
-        expected_schema.has_array? ? DynamicDiscriminatorCodec::BASIC_MODE : ObjectDocumentCodec::DEFAULT_MODE,
+        # This is a read-side physical roster plan, not a prediction of the
+        # encoded Dynamic body mode. The Object child reader validates the
+        # persisted mode header and decodes BASIC or COMPACT accordingly.
+        ObjectDocumentCodec::DEFAULT_MODE,
         4096,
         @limits,
         @transport_limits,

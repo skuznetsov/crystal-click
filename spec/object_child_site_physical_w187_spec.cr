@@ -214,12 +214,11 @@ describe "W187 explicit-grid Object child-site composition" do
     end
   end
 
-  it "keeps the child BASIC-only contract and supports nonzero Array-level naming" do
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      w187_child_files(mode: CrystalClick::ObjectDocumentCodec::DEFAULT_MODE)
-    end
-
-    files = w187_child_files(array_level: 2_u64)
+  it "supports COMPACT child marks and nonzero Array-level naming" do
+    files = w187_child_files(
+      mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
+      array_level: 2_u64,
+    )
     files.physical.initial_array_level.should eq(2_u64)
     files.stream_names.includes?("pair%2Eleft.size2").should be_false
     files.stream_names.includes?("pair%2Eleft.object_shared_data.size2").should be_true

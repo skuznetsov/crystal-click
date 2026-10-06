@@ -36,9 +36,9 @@ module CrystalClick
       encode_core_with_budget(structure, granules, budget, mode, profile, nil)
     end
 
-    # BASIC-only child-site entry point. Zero-length granules are accepted
-    # only when their logical counts are supplied by an immutable occurrence
-    # grid; all arm codecs continue to share the caller's budget.
+    # Child-site entry point. Zero-length granules are accepted only when
+    # their logical counts are supplied by an immutable occurrence grid; all
+    # arm codecs continue to share the caller's budget.
     def self.encode_child_site_with_budget(
       structure : DynamicStructure,
       granules : Array(Array(BinaryValue)),
@@ -65,9 +65,6 @@ module CrystalClick
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
       end
       if grid = occurrence_grid
-        unless mode == DynamicDiscriminatorCodec::BASIC_MODE
-          raise UnsupportedFormatError.new("child-site Dynamic values require the BASIC profile")
-        end
         grid.validate_for!(granules.size, budget)
       end
 
@@ -142,7 +139,9 @@ module CrystalClick
       end
 
       discriminator = if grid = occurrence_grid
-                        DynamicDiscriminatorCodec.encode_child_site_with_budget(structure, tags, grid, budget)
+                        DynamicDiscriminatorCodec.encode_child_site_with_budget(
+                          structure, tags, grid, budget, mode: mode
+                        )
                       else
                         DynamicDiscriminatorCodec.encode_with_budget(structure, tags, budget, mode: mode)
                       end
@@ -207,8 +206,8 @@ module CrystalClick
       decode_core_with_budget(structure, streams, budget, first_mark, mark_count, profile, nil)
     end
 
-    # BASIC-only child-site decoder that validates its complete physical/logical
-    # mark grid even when the requested window contains no marks.
+    # Child-site decoder that validates its complete physical/logical mark grid
+    # even when the requested window contains no marks.
     def self.decode_child_site_with_budget(
       structure : DynamicStructure,
       streams : DynamicValueStreams,

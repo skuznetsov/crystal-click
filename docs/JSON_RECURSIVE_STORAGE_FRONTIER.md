@@ -1,6 +1,7 @@
 # Recursive JSON storage frontier
 
-Status: PROPOSED complete storage composition; W187's common recursive Array/Tuple
+Status: PROPOSED complete storage composition; W188's COMPACT child extension,
+W187's common recursive Array/Tuple
 part/table path, W186's Tuple-with-JSON path, W185's dedicated normalized Array(JSON)
 path and W184's internal paired occurrence-grid foundation are VERIFIED within
 their executed scopes below.
@@ -8,6 +9,145 @@ Baseline: `4464ef3`. W182 scalar admission remains unchanged. No new generic
 Crystal JSON bulk admission or admission beneath every persisted wrapper.
 W183's finite stock physical discriminator is verified below; it does not
 complete the storage-admission DoD.
+
+## W188 implementation seal: COMPACT Dynamic discriminators below Array
+
+Status: VERIFIED within the finite executed scope below. Baseline: clean
+`a3213f8247d5343bbc521902f553368e5a93704c`. Extend W187's BASIC child admission
+with the mode-specific COMPACT body contract. Extend the
+existing recursive Array/Tuple owner and existing Object/Dynamic codecs;
+do not introduce a serializer for each type combination.
+
+Risk: CAUTION (persisted serialization and staged publication). Rollback:
+one atomic local feature commit of exact owned paths after DoD; retain native
+inputs and probe captures in task-owned `/private/tmp` directories. No push,
+source-data mutation, performance optimization or Compact-part admission.
+COMPACT here means Variant/Dynamic discriminator mode, not the part format.
+
+Design laws:
+
+- Preserve physical root mark rows `P`, per-Array parent occurrences `Q`,
+  child occurrences `C`, structural site identity and inherited Array level.
+  The discriminator's logical mark rows are `C`; physical `.mrk2` rows stay `P`.
+- A child stream has one UInt64 mode prefix. For `C=0`, both BASIC and COMPACT
+  emit no per-mark discriminator body. For `C>0`, BASIC emits `C` tags;
+  COMPACT emits the child count, a supported format and uniform/plain tags.
+  Every COMPACT declared count must equal `C`, with exact body extent.
+- Empty marks keep repeated offsets. Do not synthesize a COMPACT zero-count
+  frame. This source-derived law is qualified by the stock/library captures
+  below: pinned `SerializationArray.cpp:380-394` passes the
+  derived child range, and `SerializationVariant.cpp:326-345` returns before
+  writing a discriminator body when the range is empty.
+- Thread the selected mode through Object and Dynamic child encoding. Read
+  mode from the stream prefix; do not infer it from the enclosing declaration
+  or reset state at an Array edge. A shared mode-aware body validator must
+  cover the complete in-memory child stream and physical writer lane binding,
+  including zero selections, before rows are exposed. The file reader retains
+  W187's complete physical-grid / selected-payload contract; zero selection
+  does not authenticate every unselected discriminator body or arm payload.
+- Keep root no-grid positive-mark rules and the separate declared typed
+  Dynamic BASIC restriction. This slice qualifies untyped Dynamic paths in
+  the admitted Object profile, not every typed Dynamic or JSON layout.
+
+Likeliest failure: treating discriminator byte length as logical row count,
+or writing a zero-child COMPACT frame that stock does not write. Guards:
+`C=[0,1,3,0]`, uniform and mixed Int64/NULL/String groups, repeated Arrays,
+independent equal-nominal JSON sites, full/middle/zero windows, malformed
+inner counts, formats, extents and terminal marks, plus unchanged BASIC and
+typed-Dynamic refusal controls.
+
+Execution plan and ownership:
+
+1. Root executes new existing-API child behavioral RED on unchanged production
+   and a stock-default-equivalent COMPACT source-part witness. A compiler
+   failure is not a behavior signal. The native source must CHECK successfully,
+   and its actual discriminator bytes must qualify the mode and group formats.
+2. Core worker owns `dynamic_discriminator_codec.cr`, `dynamic_value_codec.cr`
+   and the new direct child spec. Object worker owns Object codec, column
+   writer, lane and file-reader integration. Recursive/native worker owns
+   recursive plan/reader, persisted specs and the existing W187 paired scripts.
+   All preserve other workers' edits; root owns serial execution and this seal.
+3. Root runs focused and affected regression specs in DEBUG and RELEASE,
+   rebuilds both helpers, and executes paired stock read plus library write /
+   native ATTACH/CHECK/exact-schema/literal checks in COMPACT and BASIC modes.
+   Reuse the bounded native runner and BASIC fixture; do not duplicate it.
+
+DoD commands: guarded serial `crystal spec` and helper `crystal build` with
+600 seconds, 12 GiB, >=50% free memory, one compiler thread, host linker and
+isolated caches; existing Ruby paired runner with explicit `--dynamic-mode`
+and pinned native binary (one thread, 512 MiB query cap, 10-second deadline,
+two-second grace). Require actual child/guard exits zero, empty-group extents
+zero, both positive group formats observed, authored full/middle literals,
+no zero-selection callback, and no publication on the tested corrupt inputs.
+Root reconciles captures and source/input hashes and performs hostile review
+before any admission or commit. Current oracle pins and finite profiles are
+not a proof of fresh-master execution or the entire type Cartesian product.
+
+### W188 executed evidence and continuation (2026-10-06)
+
+On unchanged production, six direct child examples produce two assertion
+failures and four runtime BASIC-only refusals. The Object RED is two examples,
+one runtime refusal; its first compiler-error attempt is retained but is not
+behavioral evidence. A stock-only source witness CHECKs both Array/Tuple
+profiles and captures the actual COMPACT mode before the old prebuilt helper
+reports the expected reader refusal. The original native expectation wrongly
+retained an untyped NULL path on read: preserve NULL INSERT input, but compare
+against a separately authored canonical read value that omits the path.
+
+The shared `DynamicDiscriminatorBodyValidator` validates the persisted mode,
+minimal bounded VarUInt count, format and exact extent without a tag-vector
+allocation. Child encoding forwards its chosen mode through existing Dynamic
+and Object owners. The common recursive plan removes two BASIC-only fences;
+its read-side roster plan does not predict or override the persisted mode.
+Root positive-mark guards, the dedicated W185 BASIC-only writer and declared
+typed-Dynamic BASIC-only guards remain unchanged.
+
+Root executes the same 69 selected spec files: **404 DEBUG and 404 RELEASE
+examples**, zero failures/errors/pending, actual child and guard exits 0.
+Focused direct/Object and recursive cohorts also pass. Obsolete BASIC-only
+refusal expectations were replaced by plan and round-trip controls; failing attempts
+remain distinguishable from final evidence. All 1,085 Crystal/Ruby inputs,
+including 363 production sources, have identical pre/post fingerprints.
+
+Both rebuilt helpers qualify one-Array and repeated-Array
+`Tuple(JSON,JSON,UInt64)` parts in COMPACT and retained BASIC mode. Stock creates
+and CHECKs source parts; the library reads full/middle/zero windows and public
+table rows, writes counterparts, then stock ATTACH/CHECKs them and returns exact
+schemas and authored full/middle literals. COMPACT fixtures use typed `t UInt8`,
+two actual Int64/String alternatives, genuine NULL input and nonempty shared
+MAP data. Each stock **and library** discriminator lane has header mode 1,
+`C=[0,1,3,0]`, offsets `[8,8,11,16,16]`, extents `[0,3,5,0]`, singleton format 1
+and mixed format 0; raw physical mark rows stay `[2,2,2,2,0]`.
+
+Root separately reconciles each COMPACT mode's eleven actual process records,
+24 output/SQL captures, eight utility input captures, 220 stream-file hashes
+and 48 native literal rows. Each BASIC mode has three processes, eight captures,
+196 stream-file hashes and 48 native literal rows. Actual raw mark bytes and
+decompressed stock/library discriminator literals are checked independently.
+All **126 COMPACT** and **114 BASIC** generated library files match between
+DEBUG and RELEASE; BASIC's 114 files also match the previous W187 output.
+Two-frame coordinate normalization passes a synthetic-header control and
+rejects four adversarial cases. This is a runner test, not a native multi-frame
+compression witness. Utility decompression has no query-memory setting: bound
+input to 64 KiB and aggregate header-declared output to 1 MiB before launching,
+under the 12 GiB outer guard and ten-second process deadline.
+
+Source-only reference remains clean shallow `ef037e60fc7f5654c8c80eefb8be82e3c56f9a67`;
+executed stock is separately pinned 26.10.1.1201,
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Evidence, exact selected paths,
+commands, hashes, retained failures and root reconciliation are indexed in
+[json-child-compact-w188.json](../.landmark/evidence/json-child-compact-w188.json).
+
+Scoped adversary verdict: **ROBUST** for these normalized hashed Wide/LZ4,
+plain-mrk2, Object-v3/one-bucket-MAP profiles and the tested guards. File reads
+validate the full physical grid but authenticate selected payloads only; an
+empty selection does not prove all unselected body/tag/arm bytes are valid.
+Logical budgets do not cap RSS or decoder workspace. Remaining frontier:
+declared typed-Dynamic COMPACT, further persisted wrapper/state composition,
+other JSON layouts, remaining types, MV/projections and class decomposition.
+Compact parts and performance remain unqualified; the larger goal is incomplete.
+Refresh after codec/grid, naming, state, metadata or profile changes; removal of
+temporary evidence invalidates its links. Parts must stay immutable during reads.
 
 ## W187 implementation seal: common Array/Tuple composition
 

@@ -217,7 +217,7 @@ describe "W187 recursive Array/Tuple publication" do
     end
   end
 
-  it "rejects malformed shapes, leaf types, COMPACT mode, and colliding names before creating a stage" do
+  it "rejects malformed shapes, leaf types, and colliding names before creating a stage" do
     object_schema = CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(t UInt8)")
     schema = CrystalClick::StorageColumnSchema.parse(
       "Array(Array(Tuple(l #{object_schema.declaration}, r #{object_schema.declaration}, n UInt64)))"
@@ -256,16 +256,6 @@ describe "W187 recursive Array/Tuple publication" do
     empty_granules = [[empty_root]] of Array(CrystalClick::StorageColumnValue)
 
     with_w187_recursive_array_part_parent("fail-before-stage") do |parent|
-      compact_target = File.join(parent, "compact")
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::WidePartWriter.write_uint64_recursive_pair(
-          compact_target, "pk", keys, "payload", schema, plans, one_mark,
-          rows_per_mark: 1,
-          mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
-        )
-      end
-      Dir.children(parent).should be_empty
-
       malformed_target = File.join(parent, "malformed")
       expect_raises(ArgumentError) do
         CrystalClick::WidePartWriter.write_uint64_recursive_pair(

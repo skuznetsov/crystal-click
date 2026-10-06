@@ -38,8 +38,8 @@ module CrystalClick
       encode_core_with_budget(structure, tags, budget, mode, nil)
     end
 
-    # BASIC-only child-site entry point. Empty groups are meaningful only with
-    # the explicit physical/logical grid that owns their mark coordinates.
+    # Child-site entry point. Empty groups are meaningful only with the
+    # explicit physical/logical grid that owns their mark coordinates.
     def self.encode_child_site_with_budget(
       structure : DynamicStructure,
       tags : Array(Array(UInt8)),
@@ -64,9 +64,6 @@ module CrystalClick
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
       end
       if grid = occurrence_grid
-        unless mode == BASIC_MODE
-          raise UnsupportedFormatError.new("child-site Dynamic discriminators require the BASIC profile")
-        end
         grid.validate_for!(tags.size, budget)
       end
 
@@ -111,6 +108,8 @@ module CrystalClick
 
         bytes_for_granule = if mode == BASIC_MODE
                               granule.size.to_u64
+                            elsif granule.empty?
+                              0_u64
                             else
                               var_uint_size(granule.size.to_u64) + 1_u64 + (uniform ? 1_u64 : granule.size.to_u64)
                             end
@@ -143,7 +142,7 @@ module CrystalClick
             wire[cursor] = tag
             cursor += 1
           end
-        else
+        elsif !granule.empty?
           cursor = write_var_uint(wire, cursor, granule.size.to_u64)
           if uniform
             wire[cursor] = 1_u8
@@ -188,8 +187,9 @@ module CrystalClick
       decode_core_with_budget(structure, stream, budget, first_mark, mark_count, nil)
     end
 
-    # BASIC-only child-site decoder. The complete grid is checked, including
-    # marks outside the requested window and a zero-mark selection.
+    # Child-site decoder. The complete grid is structurally checked, including
+    # marks outside the requested window and a zero-mark selection; tag values
+    # remain selected-window scoped.
     def self.decode_child_site_with_budget(
       structure : DynamicStructure,
       stream : DynamicDiscriminatorStream,
@@ -238,22 +238,23 @@ module CrystalClick
       budget.ensure_future_elements(minimum_elements)
 
       budget.ensure_wire_bytes(HEADER_BYTES)
-      if stream.byte_size < HEADER_BYTES.to_i
-        corrupt!("Dynamic discriminator stream is shorter than its mode header")
+      mode = DynamicDiscriminatorBodyValidator.read_mode(stream)
+
+      all_compact_prefix_bytes = if grid = occurrence_grid
+                                   mode == COMPACT_MODE ? compact_prefix_bytes_for(grid, 0_u64, grid.mark_count.to_u64) : 0_u64
+                                 else
+                                   0_u64
+                                 end
+      if all_compact_prefix_bytes > UInt64::MAX - HEADER_BYTES
+        corrupt!("Dynamic COMPACT structural byte count overflows UInt64")
       end
-      mode = 0_u64
-      8.times do |index|
-        mode |= stream.byte_at(index).to_u64 << (index * 8)
-      end
-      unless mode == BASIC_MODE || mode == COMPACT_MODE
-        corrupt!("unknown Dynamic discriminator mode")
-      end
-      if occurrence_grid && mode != BASIC_MODE
-        raise UnsupportedFormatError.new("child-site Dynamic discriminators require the BASIC profile")
-      end
+      # Child COMPACT framing is structurally inspected across the whole grid,
+      # including an empty selection. Reserve those small framing prefixes
+      # before traversing bodies; payload bytes remain selected-window scoped.
+      budget.ensure_wire_bytes(HEADER_BYTES + all_compact_prefix_bytes)
 
       selected_rows, first_row = if grid = occurrence_grid
-                                   validate_occurrence_grid(stream, grid, selected_first, selected_marks)
+                                   validate_occurrence_grid(stream, grid, selected_first, selected_marks, mode)
                                  else
                                    validate_grid(stream, real_marks, selected_first, selected_marks)
                                  end
@@ -270,6 +271,16 @@ module CrystalClick
                           after_offset - first_offset
                         end
       selected_wire_bytes = HEADER_BYTES + selected_extent
+      if grid = occurrence_grid
+        if mode == COMPACT_MODE
+          selected_prefix_bytes = compact_prefix_bytes_for(grid, selected_first, selected_marks)
+          unselected_prefix_bytes = all_compact_prefix_bytes - selected_prefix_bytes
+          if selected_wire_bytes > UInt64::MAX - unselected_prefix_bytes
+            corrupt!("Dynamic COMPACT selected byte count overflows UInt64")
+          end
+          selected_wire_bytes += unselected_prefix_bytes
+        end
+      end
       budget.ensure_wire_bytes(selected_wire_bytes)
 
       charge_work(budget, mark_records, selected_rows, total_elements)
@@ -327,6 +338,28 @@ module CrystalClick
         end
       end
       first
+    end
+
+    private def self.compact_prefix_bytes_for(
+      grid : StorageOccurrenceGrid,
+      first_mark : UInt64,
+      mark_count : UInt64,
+    ) : UInt64
+      selected_end = first_mark + mark_count
+      total = 0_u64
+      grid.mark_count.times do |mark_index|
+        index = mark_index.to_u64
+        next if index < first_mark || index >= selected_end
+        rows = grid.logical_occurrences_at(mark_index).to_u64
+        next if rows == 0_u64
+
+        prefix = var_uint_size(rows) + 1_u64
+        if total > UInt64::MAX - prefix
+          corrupt!("Dynamic COMPACT structural byte count overflows UInt64")
+        end
+        total += prefix
+      end
+      total
     end
 
     private def self.validate_grid(
@@ -391,6 +424,7 @@ module CrystalClick
       grid : StorageOccurrenceGrid,
       selected_first : UInt64,
       selected_marks : UInt64,
+      mode : UInt64,
     ) : Tuple(UInt64, UInt64)
       real_marks = grid.mark_count.to_u64
       unless stream.mark_count == grid.mark_count + 1
@@ -422,9 +456,8 @@ module CrystalClick
         unless mark.rows == expected_rows
           corrupt!("child Dynamic discriminator rows disagree with the occurrence grid")
         end
-        unless following.offset - mark.offset == expected_rows
-          corrupt!("child Dynamic BASIC body extent does not equal its child occurrences")
-        end
+        body = stream.borrowed_slice(mark.offset.to_i32, (following.offset - mark.offset).to_i32)
+        DynamicDiscriminatorBodyValidator.inspect_body(mode, body, expected_rows)
 
         if mark_index.to_u64 == selected_first
           first_row = total_rows
@@ -451,85 +484,19 @@ module CrystalClick
     end
 
     private def self.decode_body(mode : UInt64, body : Bytes, expected_rows : UInt64, variant_count : UInt64) : Array(UInt8)
-      if mode == BASIC_MODE
-        unless body.size.to_u64 == expected_rows
-          corrupt!("Dynamic BASIC body extent does not equal its mark rows")
-        end
-        tags = Array(UInt8).new(expected_rows.to_i32)
-        body.each do |tag|
-          unless valid_tag?(tag, variant_count)
-            corrupt!("Dynamic discriminator tag is outside the canonical roster")
-          end
-          tags << tag
-        end
-        return tags
-      end
+      layout = DynamicDiscriminatorBodyValidator.inspect_body(mode, body, expected_rows)
+      format, _offset = layout
+      return [] of UInt8 if format == DynamicDiscriminatorBodyValidator::COMPACT_EMPTY
 
-      cursor = 0
-      inner_rows, cursor = read_var_uint(body, cursor)
-      unless inner_rows == expected_rows
-        corrupt!("Dynamic COMPACT row count does not equal its outer mark")
-      end
-      if cursor >= body.size
-        corrupt!("Dynamic COMPACT body is missing its format")
-      end
-      format = body[cursor]
-      cursor += 1
-      case format
-      when 0_u8
-        remaining = body.size - cursor
-        unless remaining.to_u64 == expected_rows
-          corrupt!("Dynamic COMPACT row-tag body has an inexact extent")
-        end
-        tags = Array(UInt8).new(expected_rows.to_i32)
-        while cursor < body.size
-          tag = body[cursor]
-          unless valid_tag?(tag, variant_count)
-            corrupt!("Dynamic discriminator tag is outside the canonical roster")
-          end
-          tags << tag
-          cursor += 1
-        end
-        tags
-      when 1_u8
-        unless body.size - cursor == 1
-          corrupt!("Dynamic COMPACT uniform body has an inexact extent")
-        end
-        tag = body[cursor]
+      tags = Array(UInt8).new(expected_rows.to_i32)
+      expected_rows.to_i.times do |row_index|
+        tag = DynamicDiscriminatorBodyValidator.tag_at(body, layout, row_index)
         unless valid_tag?(tag, variant_count)
           corrupt!("Dynamic discriminator tag is outside the canonical roster")
         end
-        Array(UInt8).new(expected_rows.to_i32, tag)
-      else
-        corrupt!("unknown Dynamic COMPACT granule format")
+        tags << tag
       end
-    end
-
-    private def self.read_var_uint(bytes : Bytes, cursor : Int32) : Tuple(UInt64, Int32)
-      value = 0_u64
-      10.times do |index|
-        if cursor >= bytes.size
-          corrupt!("Dynamic COMPACT row count is truncated")
-        end
-        byte = bytes[cursor]
-        cursor += 1
-        payload = (byte & 0x7f_u8).to_u64
-        if index == 9 && payload > 1_u64
-          corrupt!("Dynamic COMPACT row count overflows UInt64")
-        end
-        value |= payload << (index * 7)
-        continuing = (byte & 0x80_u8) != 0_u8
-        unless continuing
-          if index > 0 && payload == 0_u64
-            corrupt!("Dynamic COMPACT row count is nonminimal")
-          end
-          return {value, cursor}
-        end
-        if index == 9
-          corrupt!("Dynamic COMPACT row count is too long")
-        end
-      end
-      corrupt!("Dynamic COMPACT row count is too long")
+      tags
     end
 
     private def self.write_var_uint(bytes : Bytes, cursor : Int32, original : UInt64) : Int32

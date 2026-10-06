@@ -29,8 +29,9 @@ module CrystalClick
     end
 
     # Explicit child-site composition keeps the parent physical row grid
-    # separate from these flattened logical Object occurrences. This seam is
-    # BASIC-only; the ordinary root API and its nonempty-mark guard are intact.
+    # separate from these flattened logical Object occurrences. The outer
+    # discriminator header carries the selected mode; the ordinary root API
+    # and its nonempty-mark guard are intact.
     def self.encode_child_site_with_budget(
       plan : ObjectDocumentPlan,
       granules : Array(Array(ObjectDocument)),
@@ -66,9 +67,6 @@ module CrystalClick
       reject_json_plan!(plan)
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
-      end
-      if occurrence_grid && mode != DynamicDiscriminatorCodec::BASIC_MODE
-        raise UnsupportedFormatError.new("child-site Object composition requires the BASIC Dynamic profile")
       end
       if plan.typed_dynamic_count > 0 && mode != DynamicDiscriminatorCodec::BASIC_MODE
         raise UnsupportedFormatError.new("declared Object Dynamic fields require the BASIC Dynamic profile")
@@ -233,6 +231,7 @@ module CrystalClick
             dynamic_granules,
             grid,
             budget,
+            mode: mode,
             profile: profile
           )
         else

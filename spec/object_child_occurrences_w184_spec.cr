@@ -367,11 +367,12 @@ describe "W184 paired recursive child occurrences" do
     one_row_grid = CrystalClick::StorageOccurrenceGrid.new(
       [2_u64], [1_u64], w184c_binary_budget(true)
     )
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::DynamicValueCodec.decode_child_site_with_budget(
-        populated_structure, compact, one_row_grid, w184c_binary_budget(false)
-      )
-    end
+    compact_child = CrystalClick::DynamicValueCodec.decode_child_site_with_budget(
+      populated_structure, compact, one_row_grid, w184c_binary_budget(false)
+    )
+    compact_child.size.should eq(1)
+    compact_child[0].size.should eq(1)
+    compact_child[0][0].as_string.should eq("value")
     expect_raises(ArgumentError) do
       CrystalClick::DynamicDiscriminatorCodec.encode_child_site_with_budget(
         populated_structure,
@@ -641,7 +642,7 @@ describe "W184 paired recursive child occurrences" do
     end
     root_error.message.should eq("Object document real marks must contain at least one row")
 
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    typed_dynamic_error = expect_raises(CrystalClick::UnsupportedFormatError) do
       _schema, child_plan, child_grid, child_budget, child_granules = w184c_fixture
       CrystalClick::ObjectDocumentCodec.encode_child_site_with_budget(
         child_plan,
@@ -651,6 +652,9 @@ describe "W184 paired recursive child occurrences" do
         mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
       )
     end
+    typed_dynamic_error.message.not_nil!.should contain(
+      "declared Object Dynamic fields require the BASIC Dynamic profile"
+    )
 
     source = CrystalClick::BinaryBulkStream.new(Bytes[0xaa_u8, 0xbb_u8], [0_u64, 2_u64])
     variant_lane = CrystalClick::ObjectDocumentColumnLane.new(

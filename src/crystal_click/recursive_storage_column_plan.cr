@@ -91,9 +91,6 @@ module CrystalClick
       @column_name = String.new(column_name.to_slice)
 
       @schema.validate_source_tree!(@limits)
-      if @schema.has_array? && @mode != DynamicDiscriminatorCodec::BASIC_MODE
-        raise UnsupportedFormatError.new("recursive Array composition currently requires the BASIC Dynamic profile")
-      end
       # Inspect actual admitted Object leaves rather than inventing a separate
       # aggregate schema limit.
       @schema.each_json_site do |_key, object_schema|
@@ -285,9 +282,6 @@ module CrystalClick
       arrays : Array(ArraySite),
     ) : Nil
       if object_schema = schema.object_schema_or_nil
-        if array_level > 0_u64 && @mode != DynamicDiscriminatorCodec::BASIC_MODE
-          raise UnsupportedFormatError.new("Object sites composed below Array require the BASIC Dynamic profile")
-        end
         object_plan = object_plans[site_key]? || raise(ArgumentError.new("recursive JSON site has no Object plan"))
         object_schema.validate_plan(object_plan)
         physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(

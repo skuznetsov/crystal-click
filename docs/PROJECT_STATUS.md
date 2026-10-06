@@ -1,6 +1,29 @@
 # CrystalClick project status
 
-Current qualified capability (W187, 2026-10-06): a common recursive owner
+Current qualified capability (W188, 2026-10-06): the common recursive Array/Tuple
+JSON path admits COMPACT as well as BASIC child Dynamic discriminators, without
+a separate serializer per type combination. A shared non-allocating validator
+checks mode-specific framing and preserves physical parent rows separately from
+logical child counts. Empty child groups emit no body; persisted mode is read
+from bytes rather than inferred from the outer schema. Root and declared typed
+Dynamic guards remain strict; the dedicated W185 writer remains BASIC-only.
+The same 69 affected spec files pass 404 DEBUG and 404 RELEASE examples with
+zero failures/errors/pending and actual child/guard exits 0. Both helper modes
+read stock and write parts accepted by stock ATTACH/CHECK in COMPACT and BASIC,
+with exact schemas, authored rows and full/middle/zero public-table windows.
+Root independently reconciles actual process/capture/stream evidence and stock
+plus library COMPACT discriminator literals/physical marks. All 126 COMPACT and
+114 BASIC generated library files match between DEBUG and RELEASE; BASIC also
+matches W187 byte-for-byte. Scoped verdict: ROBUST for finite normalized hashed
+Wide/LZ4, plain-mrk2, Object-v3/one-bucket shared-MAP profiles, not every recursive
+product or the full suite. Unselected payload authenticity, RSS bounds and
+fresh-master runtime compatibility are not claimed. Typed-Dynamic COMPACT,
+other wrappers/layouts, remaining types, broader MV/projections and class
+decomposition remain open; performance is deferred and the larger goal is
+incomplete. Details and continuation:
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+
+Previous qualified capability (W187, 2026-10-06): a common recursive owner
 composes Array and Tuple edges around JSON sites and existing JSON-free Bulk
 leaves. Arrays derive checked incoming/child occurrence schedules while all
 lanes preserve root physical mark rows and inherited size levels. Equal nominal

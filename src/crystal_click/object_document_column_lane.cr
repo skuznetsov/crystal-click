@@ -96,8 +96,8 @@ module CrystalClick
 
     # Emits one physical lane for an explicit recursive child site. Bulk byte
     # offsets delimit logical child data, while adaptive row fields retain the
-    # positive physical parent-row counts. Dynamic discriminator offsets are
-    # additionally checked against the logical child grid (BASIC only).
+    # positive physical parent-row counts. Dynamic discriminator bodies are
+    # checked against the logical child grid in their mode-specific format.
     def encode_child_site(
       grid : StorageOccurrenceGrid,
       frame_bytes : Int,
@@ -168,16 +168,7 @@ module CrystalClick
       source : DynamicDiscriminatorStream,
       grid : StorageOccurrenceGrid,
     ) : Nil
-      if source.byte_size < DynamicDiscriminatorCodec::HEADER_BYTES.to_i
-        raise UnsupportedFormatError.new("child Dynamic discriminator is shorter than its BASIC header")
-      end
-      mode = 0_u64
-      8.times do |index|
-        mode |= source.byte_at(index).to_u64 << (index * 8)
-      end
-      unless mode == DynamicDiscriminatorCodec::BASIC_MODE
-        raise UnsupportedFormatError.new("child Dynamic discriminator lane requires BASIC mode")
-      end
+      mode = DynamicDiscriminatorBodyValidator.read_mode(source, writing: true)
 
       byte_size = source.byte_size.to_u64
       previous_end = DynamicDiscriminatorCodec::HEADER_BYTES
@@ -191,9 +182,9 @@ module CrystalClick
         if following.offset < mark.offset || following.offset > byte_size || mark.offset > byte_size
           raise UnsupportedFormatError.new("child Dynamic discriminator offsets are outside the lane")
         end
-        unless following.offset - mark.offset == expected_rows
-          raise UnsupportedFormatError.new("child Dynamic BASIC body extent does not equal its child occurrences")
-        end
+        body_size = following.offset - mark.offset
+        body = source.borrowed_slice(mark.offset.to_i, body_size.to_i)
+        DynamicDiscriminatorBodyValidator.inspect_body(mode, body, expected_rows, writing: true)
         previous_end = following.offset
       end
 
@@ -202,7 +193,7 @@ module CrystalClick
         raise UnsupportedFormatError.new("child Dynamic discriminator terminal mark is invalid")
       end
       if grid.mark_count == 0 && terminal.offset != DynamicDiscriminatorCodec::HEADER_BYTES
-        raise UnsupportedFormatError.new("empty child Dynamic discriminator must contain only its BASIC header")
+        raise UnsupportedFormatError.new("empty child Dynamic discriminator must contain only its mode header")
       end
       nil
     end

@@ -194,7 +194,7 @@ module CrystalClick
       read_prepared(prepared)
     end
 
-    # BASIC child-site value path. Returns one mark of parent rows, each with
+    # Child-site value path. Returns one mark of parent rows, each with
     # its own decoded child document list. The complete .size0 schedule is
     # validated during preparation, including for an empty selection.
     def self.read_child_site(
