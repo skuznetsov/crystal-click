@@ -1,6 +1,38 @@
 # CrystalClick project status
 
-Current qualified frontier (W195, 2026-10-06): paired complete Wide Object
+Current qualified frontier (W196, 2026-10-06): Object shared-path LowCardinality
+reuses the recursive bulk/storage codec with explicit prefix/body callbacks
+and an additional-keys-only dictionary policy. Standalone bulk encoding keeps
+its part-global default; no serializer per recursive type product was added.
+The same 117 affected files pass 772 DEBUG and 772 RELEASE examples, zero
+failures/errors/pending, with actual guarded exits 0 and unchanged 941-file
+source/spec identity across final suites, fresh helper builds and native runs.
+
+Finite native qualification covers root JSON shared ADVANCED v2/CHUNKED v3,
+String profiles 0/1, actual LowCardinality(String) and Array(LC(UInt8)) paths,
+missing paths, empty strings/arrays and default values. Both modes ATTACH/CHECK
+eight stock/library Wide parts, compare 64 full and 32 middle whole-Object
+rows, authenticate zero selections, and compare 96 independent direct-path
+result rows. All 168 generated files and normalized helper observations agree
+between modes. Root checks authenticate process/byte provenance and reject
+11 mutations per mode plus same-length stdout substitution. Scoped verdict:
+ROBUST for this corpus, not all recursive layouts or arbitrary LC schedules.
+
+The native RED demonstrated why base serde alone is insufficient: Copy and
+CHECK passed while direct path reads failed. JSON's aliased Compact-style Data
+getter requires LC flags followed by inline additional keys, not concatenated
+standalone dictionary/index lanes. The explicit storage policy fixes that
+contract while retaining shared scalar encoding, traversal and caller budgets.
+
+Next: remaining recursive physical wrapper contracts, including Nested, QBit
+and JSON-as-Dynamic-actual per-path storage. The ordinary Object dynamic-path
+facade guard, legacy Dynamic profiles, Compact advanced parts, insertion/merge
+roster policy, full types, broader MV/projections and repository-wide class
+decomposition remain open. Performance is deferred; the overall goal remains
+incomplete. Details: [OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md](OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md),
+`.landmark/evidence/object-shared-low-cardinality-w196.json`.
+
+Previous qualified frontier (W195, 2026-10-06): paired complete Wide Object
 shared ADVANCED/ADVANCED_CHUNKED read/write composes the W192 Copy, W193 path
 Data and W194 physical bucket owners. Native qualification is finite: root
 JSON and Array(JSON), populated/empty shared storage, versions 2/3, and actual
@@ -20,7 +52,7 @@ stock/library metadata rosters and the producer's two-layer invocation records.
 Historical checkpoints below and in the frontier document describe earlier
 source states, not the current qualified result.
 
-Next: complete missing physical wrapper contracts for legal recursive types
+The next work at W195 was to complete physical wrapper contracts for legal recursive types
 and qualify their paired writer/reader branches, including LowCardinality,
 Nested, QBit and JSON-as-Dynamic-actual per-path storage. Reuse existing child
 codecs; do not enumerate or implement a serializer per type product. Compact

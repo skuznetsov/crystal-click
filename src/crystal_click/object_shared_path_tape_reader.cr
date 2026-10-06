@@ -1,4 +1,6 @@
 module CrystalClick
+  OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES = 8_i32
+
   # Bounded cursor for the ordered, decompressed Data substream callback tape.
   # It keeps lane slices borrowed until each lane's detached owner is
   # preflighted and constructed.
@@ -11,6 +13,7 @@ module CrystalClick
     @structure_bytes : Hash(String, Bytes)
     @structures : Hash(String, DynamicStructure)
     @discriminator_prefixes : Hash(String, Bytes)
+    @low_cardinality_prefixes : Hash(String, Bytes)
     @lanes : Hash(String, BinaryBulkStream)
 
     def initialize(
@@ -23,6 +26,7 @@ module CrystalClick
       @structure_bytes = Hash(String, Bytes).new
       @structures = Hash(String, DynamicStructure).new
       @discriminator_prefixes = Hash(String, Bytes).new
+      @low_cardinality_prefixes = Hash(String, Bytes).new
       @lanes = Hash(String, BinaryBulkStream).new
 
       previous = 0_u64
@@ -149,6 +153,63 @@ module CrystalClick
       nil
     end
 
+    def add_low_cardinality_dictionary_prefix(role : String, prefix_name : String) : Nil
+      if @low_cardinality_prefixes.has_key?(role)
+        raise CorruptPartError.new("Object shared path LowCardinality dictionary prefix is duplicated")
+      end
+      if @lanes.has_key?(role)
+        raise CorruptPartError.new("Object shared path LowCardinality dictionary lane is duplicated")
+      end
+
+      prefix = take(prefix_name)
+      unless prefix.size == OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES
+        raise CorruptPartError.new("Object shared path LowCardinality dictionary prefix is not eight bytes")
+      end
+
+      # Retain only the borrowed eight-byte prefix. Bound the pending-site
+      # table and role key before making the entry visible to the body pass.
+      retained_work = role.bytesize.to_u64 + 1_u64
+      @budget.ensure_future_nodes(1_u64)
+      @budget.ensure_future_elements(retained_work)
+      @budget.charge_node
+      @budget.charge_elements(retained_work)
+      @low_cardinality_prefixes[role] = prefix
+      nil
+    end
+
+    def add_low_cardinality_dictionary_body(role : String, body_name : String) : Nil
+      prefix = @low_cardinality_prefixes[role]? || raise(CorruptPartError.new("Object shared path LowCardinality dictionary body has no prefix"))
+      if @lanes.has_key?(role)
+        raise CorruptPartError.new("Object shared path LowCardinality dictionary lane is duplicated")
+      end
+
+      body = take(body_name)
+      if body.size > Int32::MAX - prefix.size
+        raise CorruptPartError.new("Object shared path LowCardinality dictionary lane exceeds the supported byte domain")
+      end
+      physical_size = prefix.size + body.size
+      physical_bytes = physical_size.to_u64
+      lane_work = physical_bytes + 2_u64
+      total_wire_work = physical_bytes * 2_u64
+      total_element_work = lane_work * 2_u64
+
+      # The join buffer and BinaryBulkStream's detached owner are both
+      # proportional allocations. Preflight both before constructing either;
+      # add_lane performs the second charge after the first buffer exists.
+      @budget.ensure_wire_bytes(total_wire_work)
+      @budget.ensure_future_elements(total_element_work)
+      @budget.charge_wire_bytes(physical_bytes)
+      @budget.charge_elements(lane_work)
+
+      physical = Bytes.new(physical_size) do |index|
+        index < prefix.size ? prefix[index] : body[index - prefix.size]
+      end
+      offsets = [OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES.to_u64, physical_size.to_u64] of UInt64
+      add_lane(role, physical, offsets)
+      @low_cardinality_prefixes.delete(role)
+      nil
+    end
+
     def add_lane(role : String, bytes : Bytes) : Nil
       if @lanes.has_key?(role)
         raise CorruptPartError.new("Object shared path lane role is duplicated")
@@ -163,6 +224,9 @@ module CrystalClick
       end
       unless @discriminator_prefixes.empty?
         raise CorruptPartError.new("Object shared path discriminator prefix has no matching body")
+      end
+      unless @low_cardinality_prefixes.empty?
+        raise CorruptPartError.new("Object shared path LowCardinality dictionary prefix has no matching body")
       end
       nil
     end

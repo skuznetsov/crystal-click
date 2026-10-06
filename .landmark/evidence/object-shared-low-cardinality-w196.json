@@ -1,0 +1,376 @@
+{
+  "slice": "W196 Object shared-path LowCardinality",
+  "baseline_commit": "c8ba1c9953de58471c685b15a4624116190f0989",
+  "date": "2026-10-06",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Finite root JSON shared ADVANCED v2/ADVANCED_CHUNKED v3 profiles with String versions 0/1, actual LowCardinality(String) and Array(LowCardinality(UInt8)) paths. Paired stock-to-Crystal reads, generated Wide parts, native ATTACH/CHECK, whole-Object and independent direct-path full/middle/zero queries.",
+    "adversary_verdict": "ROBUST within the executed finite corpus",
+    "review_limitation": "Luna static review is same-lineage and correlated; root independently ran suites, native qualification, literal/provenance controls and byte comparisons.",
+    "evidence_is_index_not_proof": true
+  },
+  "design_document": "docs/OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md",
+  "boundaries": {
+    "risk": "CAUTION: recursive physical serialization and cumulative caller budgets",
+    "rollback": "Revert only the scoped atomic W196 feature commit; do not reset unrelated repository work.",
+    "strongest_failure": "Copy/whole-object reads and CHECK pass while direct Data-stream path reads remain incompatible.",
+    "guard": "Separate typed path-only SELECTs for full/middle/zero windows, exact stored actual-arm rosters, LC flags/key tables/IDs, full pathless-chunk schedules and literal values.",
+    "implementation": "Reuse scalar serde, recursive bulk LC sites and the existing LC storage owner. Add explicit PartGlobalDictionary/default and AdditionalKeysOnly policies; only ObjectSharedPathCodec selects the latter. Retain distinct prefix/body callback roles.",
+    "preserved": [
+      "Standalone global dictionary bytes/default policy and cumulative budgets",
+      "Existing decoder grammar and supplied Dynamic roster semantics",
+      "Ordinary Object dynamic-path facade and legacy Dynamic guards",
+      "Distinction between Wide outer parts and Compact-style internal Data getters"
+    ],
+    "nonclaims": [
+      "All legal recursive products or arbitrary LowCardinality dictionary/index schedules",
+      "Nested/QBit/JSON actual per-path admission",
+      "CH insertion/merge roster or dictionary policy emulation",
+      "Compact whole-part advanced publication or ordinary dynamic-path facade admission",
+      "Full repository suite, full types, MV execution or broader projection support",
+      "RSS/performance improvements or repository-wide class decomposition",
+      "Overall goal completion"
+    ],
+    "transient_accounting_caveat": "Unique scalar candidate keys may be copied before their cumulative node/element charge; complete key-byte census is preflighted against max_bytes, and all emitted wire work is preflighted/charged before output."
+  },
+  "external_reference": {
+    "source_root": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+    "source_head": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+    "source_clean_unbuilt": true,
+    "source_is_runtime_build": false,
+    "runtime_path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+    "runtime_version": "26.10.1.1201",
+    "runtime_build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+    "source_anchors": [
+      "src/DataTypes/Serializations/SerializationObjectSharedData.cpp:375-380 sets Compact, position-independent and dictionary-size-zero path settings",
+      "src/DataTypes/Serializations/SerializationLowCardinality.cpp:598-626 writes flags, optional dictionary keys, additional keys, row count and IDs"
+    ],
+    "guard_path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "guard_sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+    "guard_limits": "ROOT-only serial compiler/native jobs, 600 seconds, 12288 MiB, minimum free memory 50%"
+  },
+  "identity": {
+    "source_spec_pre": {
+      "files": 941,
+      "sha256": "a7b506e1ab71ac728948e278b7206e585dba3aa59a4a818aedd694adaa324536"
+    },
+    "source_spec_post": {
+      "files": 941,
+      "sha256": "a7b506e1ab71ac728948e278b7206e585dba3aa59a4a818aedd694adaa324536"
+    },
+    "pre_post_match": true,
+    "encoding": "SHA256 over sorted src/spec relative path + NUL + per-file SHA256 hex + newline; regular files only",
+    "changed_file_sha256": {
+      "src/crystal_click.cr": "6f9c56ad70bc120329b4da1fe54086de4409ac9ef6652af684d78bb8f50bf052",
+      "src/crystal_click/binary_bulk_encoder.cr": "04a5b1f9d7352fef1663df32cac3d4a5d2a4daf794bc0756fc4c0f501ec44532",
+      "src/crystal_click/binary_bulk_low_cardinality_site_encoder.cr": "c39f33c3916ba358fd5ed1e368c1c0e990c799c056cec9cbddfb87ee7fa9607a",
+      "src/crystal_click/binary_low_cardinality_storage_encoder.cr": "bcc047d7b8f68a215634b22acd79565df1ca99c1ea62f696df76ab7d7555229c",
+      "src/crystal_click/binary_low_cardinality_storage_policy.cr": "8db35bc9a0f826cc153b6283d743416f9b70449d1b9a78e8ab93bc1e35bdda84",
+      "src/crystal_click/object_shared_path_codec.cr": "f6ce1c8684e74dab1f13b815bfb68fa996f0c6172235037583dde5668e04e55a",
+      "src/crystal_click/object_shared_path_tape_reader.cr": "a874b3eb0eaab7f5f66609e3ef7064781444eecc9d6cb2e57748c13fee75e258",
+      "scripts/check_object_shared_low_cardinality_w196.cr": "dae671208e6ad4c2f05b520c7d68c8228dcd86a24a97d0f0d28d3934dcce2e25",
+      "scripts/check_object_shared_low_cardinality_w196.rb": "42f257692071bd92ea0d7c9ee0ff2eae23c4085229fdfac3b0f8e55a8dd598b3",
+      "scripts/object_shared_low_cardinality_paired_reconciler_w196.rb": "83c11caca47aa4041ec7e95d72c54f68054b57b0565451e1a1bcac786010083b",
+      "spec/object_shared_path_low_cardinality_w196_spec.cr": "5555918bde06380f404347931cdbfe23b62895e18a4454c1e4fcbf7cfce6643a",
+      "spec/object_shared_path_low_cardinality_w196_adversary_spec.cr": "5734c0791e42e0bbfcf0e9b4c0c535b1ff5cd36eaeb2da049a4fa441b4af5591",
+      "docs/OBJECT_SHARED_LOW_CARDINALITY_FRONTIER.md": "5c550ef7c585adb9f1ae643dc97a7d4bf739cb2f51d10d7a5b718f61884ad54c",
+      "docs/PROJECT_STATUS.md": "555cdd937c72307b755d0b2557a2c1dde82eaa347559d82b2c31744b3e938182"
+    },
+    "controlled_fresh_helper_sha256": {
+      "debug": "975290f0dbc1e6c7c2255794171d7e7d1ad8a10fbf83f93bba5e57dcb1381083",
+      "release": "48eabab148aa031e3e2297d06d39100d052786634c9a91eec80fabf65857f627"
+    }
+  },
+  "verification": {
+    "suites": {
+      "files": 117,
+      "debug": {
+        "examples": 772,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "actual_guarded_exit": 0
+      },
+      "release": {
+        "examples": 772,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "actual_guarded_exit": 0
+      }
+    },
+    "native_per_mode": {
+      "profiles": [
+        "v2_string0",
+        "v2_string1",
+        "v3_string0",
+        "v3_string1"
+      ],
+      "actual_paths": {
+        "p": "LowCardinality(String)",
+        "a": "Array(LowCardinality(UInt8))"
+      },
+      "fixture_rows": 8,
+      "parent_marks": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "physical_marks": 5,
+      "buckets": 2,
+      "outer_part_type": "Wide",
+      "compression": "LZ4",
+      "marks": "plain mrk2",
+      "stock_and_library_parts_checked": 8,
+      "attached_whole_full_rows": 64,
+      "attached_whole_middle_rows": 32,
+      "attached_whole_zero_rows": 0,
+      "attached_direct_full_middle_rows": 96,
+      "zero_queries_authenticated": true,
+      "debug_root": "/private/tmp/crystal-click-w196-policy-native-debug.jIQbji",
+      "release_root": "/private/tmp/crystal-click-w196-policy-native-release.dFagst",
+      "status": "paired_native_helper_observed",
+      "actual_outer_exit_each": 0
+    },
+    "root_controls": {
+      "real_observation_rejections_each_mode": 11,
+      "positive_before_after_each_mode": true,
+      "provenance": "Six exact process records per mode; raw argv/stdin/stdout/stderr SHA and sizes, process errors/exits, executable pins, helper hash before/after and exact summary enrichment authenticated",
+      "summary_enrichment": "The W185 wrapper adds binary_sha_before after writing lower-level raw metadata; root requires exactly this pinned extra field, not blanket metadata equality or blanket ignored fields.",
+      "same_length_stdout_substitution_rejected_each_mode": true,
+      "generated_files_byte_identical": 168,
+      "total_generated_bytes_per_mode": 44819,
+      "normalized_helper_observations_equal": true,
+      "final_format_check_exit": 0,
+      "strict_and_paired_and_legacy_ruby_self_tests_exit": 0
+    },
+    "commands": [
+      {
+        "name": "affected_debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w196-verify.EcihAM/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec 'spec/array_object_column_core_w185_spec.cr' 'spec/array_object_dynamic_w185_spec.cr' 'spec/array_object_low_cardinality_w185_spec.cr' 'spec/array_object_part_w185_spec.cr' 'spec/binary_bulk_discriminator_framing_w189_spec.cr' 'spec/binary_bulk_physical_prefix_w151_spec.cr' 'spec/binary_bulk_w122_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_spec.cr' 'spec/binary_dynamic_bulk_shared_context_w155_spec.cr' 'spec/binary_dynamic_bulk_values_w155_adversary_spec.cr' 'spec/binary_dynamic_bulk_values_w155_red_spec.cr' 'spec/binary_dynamic_bulk_values_w155_spec.cr' 'spec/binary_dynamic_physical_w156_adversary_spec.cr' 'spec/binary_dynamic_physical_w156_red_spec.cr' 'spec/binary_dynamic_physical_w156_spec.cr' 'spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr' 'spec/binary_dynamic_statistics_offsets_w157_spec.cr' 'spec/binary_low_cardinality_bulk_w143_spec.cr' 'spec/binary_low_cardinality_float_bulk_w144_spec.cr' 'spec/binary_low_cardinality_physical_w145_spec.cr' 'spec/binary_low_cardinality_storage_w142_spec.cr' 'spec/binary_low_cardinality_w141_spec.cr' 'spec/binary_nested_w172_guards_spec.cr' 'spec/binary_variant_physical_w149_adversary_spec.cr' 'spec/binary_variant_physical_w149_spec.cr' 'spec/binary_variant_value_w147_adversary_spec.cr' 'spec/bulk_budget_w122_adversary_spec.cr' 'spec/bulk_dynamic_w122_adversary_spec.cr' 'spec/bulk_nominal_w122_spec.cr' 'spec/bulk_string_size_w122_spec.cr' 'spec/clickhouse_sip_hash_w190_spec.cr' 'spec/compressed_mark_positions_w194_spec.cr' 'spec/compressed_mark_transport_w124_root_spec.cr' 'spec/compressed_mark_transport_w124_spec.cr' 'spec/dynamic_child_compact_w188_spec.cr' 'spec/dynamic_descriptor_consumer_guards_w152_spec.cr' 'spec/dynamic_discriminator_w121_budget_spec.cr' 'spec/dynamic_discriminator_w121_spec.cr' 'spec/dynamic_structure_prefix_w193_adversary_spec.cr' 'spec/dynamic_structure_roster_w154_red_spec.cr' 'spec/dynamic_values_w122_adversary_spec.cr' 'spec/dynamic_values_w122_spec.cr' 'spec/json_nested_scalar_w182_guards_spec.cr' 'spec/json_recursive_scalar_w181_guards_spec.cr' 'spec/object_at_site_w186_spec.cr' 'spec/object_catalog_w129_root_spec.cr' 'spec/object_catalog_w129_spec.cr' 'spec/object_child_compact_w188_spec.cr' 'spec/object_child_occurrences_w184_spec.cr' 'spec/object_child_site_physical_w187_spec.cr' 'spec/object_column_lane_binder_refactor_spec.cr' 'spec/object_column_reader_w129_spec.cr' 'spec/object_column_writer_w127_root_spec.cr' 'spec/object_column_writer_w127_spec.cr' 'spec/object_declared_dynamic_w158_adversary_spec.cr' 'spec/object_declared_dynamic_w158_red_spec.cr' 'spec/object_declared_dynamic_w158_spec.cr' 'spec/object_declared_low_cardinality_w146_spec.cr' 'spec/object_declared_variant_w151_spec.cr' 'spec/object_document_schema_w128_spec.cr' 'spec/object_document_schema_w140_spec.cr' 'spec/object_documents_w123_adversary_spec.cr' 'spec/object_documents_w123_root_spec.cr' 'spec/object_documents_w123_spec.cr' 'spec/object_dynamic_structure_w120_budget_spec.cr' 'spec/object_dynamic_structure_w120_spec.cr' 'spec/object_file_reader_w126_root_spec.cr' 'spec/object_low_cardinality_consumers_w146_spec.cr' 'spec/object_offline_table_w130_spec.cr' 'spec/object_part_writer_w128_root_spec.cr' 'spec/object_part_writer_w128_spec.cr' 'spec/object_recursive_consumers_w140_spec.cr' 'spec/object_recursive_dynamic_w159_adversary_spec.cr' 'spec/object_recursive_dynamic_w159_red_spec.cr' 'spec/object_recursive_dynamic_w159_spec.cr' 'spec/object_recursive_w140_root_spec.cr' 'spec/object_shared_advanced_chunk_w195_adversary_spec.cr' 'spec/object_shared_advanced_chunk_w195_spec.cr' 'spec/object_shared_advanced_copy_layout_w195_spec.cr' 'spec/object_shared_advanced_document_w195_spec.cr' 'spec/object_shared_advanced_profile_w195_spec.cr' 'spec/object_shared_buckets_w190_adversary_spec.cr' 'spec/object_shared_buckets_w190_spec.cr' 'spec/object_shared_chunk_structure_w191_spec.cr' 'spec/object_shared_copy_w192_adversary_spec.cr' 'spec/object_shared_copy_w192_spec.cr' 'spec/object_shared_path_low_cardinality_w196_adversary_spec.cr' 'spec/object_shared_path_low_cardinality_w196_spec.cr' 'spec/object_shared_path_profile_w195_spec.cr' 'spec/object_shared_path_w193_adversary_spec.cr' 'spec/object_shared_path_w193_spec.cr' 'spec/object_shared_physical_w194_adversary_spec.cr' 'spec/object_shared_physical_w194_spec.cr' 'spec/object_statistics_w127_spec.cr' 'spec/object_table_w130_root_spec.cr' 'spec/object_table_w130_spec.cr' 'spec/object_typed_dynamic_compact_w189_adversary_spec.cr' 'spec/object_typed_dynamic_compact_w189_spec.cr' 'spec/offline_catalog_w95_tuple_values_spec.cr' 'spec/physical_stream_plan_w125_spec.cr' 'spec/recursive_array_schema_w187_spec.cr' 'spec/recursive_array_table_w187_spec.cr' 'spec/recursive_storage_array_w187_spec.cr' 'spec/recursive_storage_column_w186_spec.cr' 'spec/recursive_storage_compact_w188_spec.cr' 'spec/recursive_storage_reader_budget_w186_spec.cr' 'spec/recursive_storage_table_w186_spec.cr' 'spec/recursive_storage_values_budget_w186_spec.cr' 'spec/storage_column_depth_guard_w186_spec.cr' 'spec/storage_occurrence_grid_w184_spec.cr' 'spec/wide_part_metadata_parser_refactor_spec.cr' 'spec/wide_part_reader_compositional_tuple_spec.cr' 'spec/wide_part_table_projection_w87_spec.cr' 'spec/wide_part_table_w95_tuple_spec.cr' 'spec/wide_part_writer_compositional_tuple_spec.cr' 'spec/wide_part_writer_metadata_w150_spec.cr' --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w196-verify.EcihAM/policy-117-debug.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "affected_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w196-verify.EcihAM/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec 'spec/array_object_column_core_w185_spec.cr' 'spec/array_object_dynamic_w185_spec.cr' 'spec/array_object_low_cardinality_w185_spec.cr' 'spec/array_object_part_w185_spec.cr' 'spec/binary_bulk_discriminator_framing_w189_spec.cr' 'spec/binary_bulk_physical_prefix_w151_spec.cr' 'spec/binary_bulk_w122_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_spec.cr' 'spec/binary_dynamic_bulk_shared_context_w155_spec.cr' 'spec/binary_dynamic_bulk_values_w155_adversary_spec.cr' 'spec/binary_dynamic_bulk_values_w155_red_spec.cr' 'spec/binary_dynamic_bulk_values_w155_spec.cr' 'spec/binary_dynamic_physical_w156_adversary_spec.cr' 'spec/binary_dynamic_physical_w156_red_spec.cr' 'spec/binary_dynamic_physical_w156_spec.cr' 'spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr' 'spec/binary_dynamic_statistics_offsets_w157_spec.cr' 'spec/binary_low_cardinality_bulk_w143_spec.cr' 'spec/binary_low_cardinality_float_bulk_w144_spec.cr' 'spec/binary_low_cardinality_physical_w145_spec.cr' 'spec/binary_low_cardinality_storage_w142_spec.cr' 'spec/binary_low_cardinality_w141_spec.cr' 'spec/binary_nested_w172_guards_spec.cr' 'spec/binary_variant_physical_w149_adversary_spec.cr' 'spec/binary_variant_physical_w149_spec.cr' 'spec/binary_variant_value_w147_adversary_spec.cr' 'spec/bulk_budget_w122_adversary_spec.cr' 'spec/bulk_dynamic_w122_adversary_spec.cr' 'spec/bulk_nominal_w122_spec.cr' 'spec/bulk_string_size_w122_spec.cr' 'spec/clickhouse_sip_hash_w190_spec.cr' 'spec/compressed_mark_positions_w194_spec.cr' 'spec/compressed_mark_transport_w124_root_spec.cr' 'spec/compressed_mark_transport_w124_spec.cr' 'spec/dynamic_child_compact_w188_spec.cr' 'spec/dynamic_descriptor_consumer_guards_w152_spec.cr' 'spec/dynamic_discriminator_w121_budget_spec.cr' 'spec/dynamic_discriminator_w121_spec.cr' 'spec/dynamic_structure_prefix_w193_adversary_spec.cr' 'spec/dynamic_structure_roster_w154_red_spec.cr' 'spec/dynamic_values_w122_adversary_spec.cr' 'spec/dynamic_values_w122_spec.cr' 'spec/json_nested_scalar_w182_guards_spec.cr' 'spec/json_recursive_scalar_w181_guards_spec.cr' 'spec/object_at_site_w186_spec.cr' 'spec/object_catalog_w129_root_spec.cr' 'spec/object_catalog_w129_spec.cr' 'spec/object_child_compact_w188_spec.cr' 'spec/object_child_occurrences_w184_spec.cr' 'spec/object_child_site_physical_w187_spec.cr' 'spec/object_column_lane_binder_refactor_spec.cr' 'spec/object_column_reader_w129_spec.cr' 'spec/object_column_writer_w127_root_spec.cr' 'spec/object_column_writer_w127_spec.cr' 'spec/object_declared_dynamic_w158_adversary_spec.cr' 'spec/object_declared_dynamic_w158_red_spec.cr' 'spec/object_declared_dynamic_w158_spec.cr' 'spec/object_declared_low_cardinality_w146_spec.cr' 'spec/object_declared_variant_w151_spec.cr' 'spec/object_document_schema_w128_spec.cr' 'spec/object_document_schema_w140_spec.cr' 'spec/object_documents_w123_adversary_spec.cr' 'spec/object_documents_w123_root_spec.cr' 'spec/object_documents_w123_spec.cr' 'spec/object_dynamic_structure_w120_budget_spec.cr' 'spec/object_dynamic_structure_w120_spec.cr' 'spec/object_file_reader_w126_root_spec.cr' 'spec/object_low_cardinality_consumers_w146_spec.cr' 'spec/object_offline_table_w130_spec.cr' 'spec/object_part_writer_w128_root_spec.cr' 'spec/object_part_writer_w128_spec.cr' 'spec/object_recursive_consumers_w140_spec.cr' 'spec/object_recursive_dynamic_w159_adversary_spec.cr' 'spec/object_recursive_dynamic_w159_red_spec.cr' 'spec/object_recursive_dynamic_w159_spec.cr' 'spec/object_recursive_w140_root_spec.cr' 'spec/object_shared_advanced_chunk_w195_adversary_spec.cr' 'spec/object_shared_advanced_chunk_w195_spec.cr' 'spec/object_shared_advanced_copy_layout_w195_spec.cr' 'spec/object_shared_advanced_document_w195_spec.cr' 'spec/object_shared_advanced_profile_w195_spec.cr' 'spec/object_shared_buckets_w190_adversary_spec.cr' 'spec/object_shared_buckets_w190_spec.cr' 'spec/object_shared_chunk_structure_w191_spec.cr' 'spec/object_shared_copy_w192_adversary_spec.cr' 'spec/object_shared_copy_w192_spec.cr' 'spec/object_shared_path_low_cardinality_w196_adversary_spec.cr' 'spec/object_shared_path_low_cardinality_w196_spec.cr' 'spec/object_shared_path_profile_w195_spec.cr' 'spec/object_shared_path_w193_adversary_spec.cr' 'spec/object_shared_path_w193_spec.cr' 'spec/object_shared_physical_w194_adversary_spec.cr' 'spec/object_shared_physical_w194_spec.cr' 'spec/object_statistics_w127_spec.cr' 'spec/object_table_w130_root_spec.cr' 'spec/object_table_w130_spec.cr' 'spec/object_typed_dynamic_compact_w189_adversary_spec.cr' 'spec/object_typed_dynamic_compact_w189_spec.cr' 'spec/offline_catalog_w95_tuple_values_spec.cr' 'spec/physical_stream_plan_w125_spec.cr' 'spec/recursive_array_schema_w187_spec.cr' 'spec/recursive_array_table_w187_spec.cr' 'spec/recursive_storage_array_w187_spec.cr' 'spec/recursive_storage_column_w186_spec.cr' 'spec/recursive_storage_compact_w188_spec.cr' 'spec/recursive_storage_reader_budget_w186_spec.cr' 'spec/recursive_storage_table_w186_spec.cr' 'spec/recursive_storage_values_budget_w186_spec.cr' 'spec/storage_column_depth_guard_w186_spec.cr' 'spec/storage_occurrence_grid_w184_spec.cr' 'spec/wide_part_metadata_parser_refactor_spec.cr' 'spec/wide_part_reader_compositional_tuple_spec.cr' 'spec/wide_part_table_projection_w87_spec.cr' 'spec/wide_part_table_w95_tuple_spec.cr' 'spec/wide_part_writer_compositional_tuple_spec.cr' 'spec/wide_part_writer_metadata_w150_spec.cr' --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release > /private/tmp/crystal-click-w196-verify.EcihAM/policy-117-release.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "helper_debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w196-verify.EcihAM/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_object_shared_low_cardinality_w196.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-debug > /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-build-debug.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "helper_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w196-verify.EcihAM/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_object_shared_low_cardinality_w196.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release -o /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-release > /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-build-release.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "native_debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_object_shared_low_cardinality_w196.rb --paired --binary /private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped --helper /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-debug --evidence-root /private/tmp/crystal-click-w196-policy-native-debug.jIQbji > /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-native-debug.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "native_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_object_shared_low_cardinality_w196.rb --paired --binary /private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped --helper /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-release --evidence-root /private/tmp/crystal-click-w196-policy-native-release.dFagst > /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-native-release.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "debug_controls",
+        "command": "ruby /private/tmp/crystal-click-w196-verify.EcihAM/root_paired_controls.rb /private/tmp/crystal-click-w196-policy-native-debug.jIQbji/generated/input.json /private/tmp/crystal-click-w196-policy-native-debug.jIQbji/invocations/paired_crystal_helper.stdout > /private/tmp/crystal-click-w196-verify.EcihAM/policy-debug-root-controls.json 2> /private/tmp/crystal-click-w196-verify.EcihAM/policy-debug-root-controls.stderr",
+        "actual_exit": 0
+      },
+      {
+        "name": "release_controls",
+        "command": "ruby /private/tmp/crystal-click-w196-verify.EcihAM/root_paired_controls.rb /private/tmp/crystal-click-w196-policy-native-release.dFagst/generated/input.json /private/tmp/crystal-click-w196-policy-native-release.dFagst/invocations/paired_crystal_helper.stdout > /private/tmp/crystal-click-w196-verify.EcihAM/policy-release-root-controls.json 2> /private/tmp/crystal-click-w196-verify.EcihAM/policy-release-root-controls.stderr",
+        "actual_exit": 0
+      },
+      {
+        "name": "debug_provenance",
+        "command": "ruby /private/tmp/crystal-click-w196-verify.EcihAM/root_paired_provenance.rb /private/tmp/crystal-click-w196-policy-native-debug.jIQbji /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-debug 975290f0dbc1e6c7c2255794171d7e7d1ad8a10fbf83f93bba5e57dcb1381083 > /private/tmp/crystal-click-w196-verify.EcihAM/policy-debug-root-provenance.json 2> /private/tmp/crystal-click-w196-verify.EcihAM/policy-debug-root-provenance.stderr",
+        "actual_exit": 0
+      },
+      {
+        "name": "release_provenance",
+        "command": "ruby /private/tmp/crystal-click-w196-verify.EcihAM/root_paired_provenance.rb /private/tmp/crystal-click-w196-policy-native-release.dFagst /private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-release 48eabab148aa031e3e2297d06d39100d052786634c9a91eec80fabf65857f627 > /private/tmp/crystal-click-w196-verify.EcihAM/policy-release-root-provenance.json 2> /private/tmp/crystal-click-w196-verify.EcihAM/policy-release-root-provenance.stderr",
+        "actual_exit": 0
+      },
+      {
+        "name": "mode_comparison",
+        "command": "ruby /private/tmp/crystal-click-w196-verify.EcihAM/root_paired_mode_comparison.rb /private/tmp/crystal-click-w196-policy-native-debug.jIQbji /private/tmp/crystal-click-w196-policy-native-release.dFagst > /private/tmp/crystal-click-w196-verify.EcihAM/policy-root-mode-comparison.json 2> /private/tmp/crystal-click-w196-verify.EcihAM/policy-root-mode-comparison.stderr",
+        "actual_exit": 0
+      },
+      {
+        "name": "final_format_check",
+        "command": "/opt/homebrew/bin/crystal tool format --check 'src/crystal_click.cr' 'src/crystal_click/binary_low_cardinality_storage_policy.cr' 'src/crystal_click/binary_low_cardinality_storage_encoder.cr' 'src/crystal_click/binary_bulk_encoder.cr' 'src/crystal_click/binary_bulk_low_cardinality_site_encoder.cr' 'src/crystal_click/object_shared_path_codec.cr' 'src/crystal_click/object_shared_path_tape_reader.cr' 'scripts/check_object_shared_low_cardinality_w196.cr' 'spec/object_shared_path_low_cardinality_w196_spec.cr' 'spec/object_shared_path_low_cardinality_w196_adversary_spec.cr' > /private/tmp/crystal-click-w196-verify.EcihAM/policy-final-format-check.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "ruby_strict",
+        "command": "ruby -r ./scripts/object_shared_low_cardinality_paired_reconciler_w196 -e 'abort unless ObjectSharedLowCardinalityPairedReconcilerW196.self_test!; puts \"strict self-test passed\"' > /private/tmp/crystal-click-w196-verify.EcihAM/policy-ruby-strict-self-test.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "ruby_paired",
+        "command": "ruby scripts/check_object_shared_low_cardinality_w196.rb --paired-self-test > /private/tmp/crystal-click-w196-verify.EcihAM/policy-ruby-paired-self-test.log 2>&1",
+        "actual_exit": 0
+      },
+      {
+        "name": "ruby_legacy",
+        "command": "ruby scripts/check_object_shared_low_cardinality_w196.rb --self-test > /private/tmp/crystal-click-w196-verify.EcihAM/policy-ruby-legacy-self-test.log 2>&1",
+        "actual_exit": 0
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-117-debug.log",
+        "bytes": 907,
+        "sha256": "381ba7ddffff9c2645e2904f1d7a90b1e9339092ba43de7c5325548963997725"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-117-release.log",
+        "bytes": 908,
+        "sha256": "8a2c28dbf4081e202f93496bedd9c05b3a056907018f48de0df223f121daa626"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-build-debug.log",
+        "bytes": 61,
+        "sha256": "4bd4feb89ec5e2576ec993dd4100e36346286bcde97c2bedd1fa56053ed5916b"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-helper-build-release.log",
+        "bytes": 62,
+        "sha256": "4607975f055c0b19b6c8d4608a2c558dc8436cbcff88c1708562d6e48c8c141d"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-native-debug.log",
+        "bytes": 189,
+        "sha256": "3d694c9deeb532091cb39a16fa941ddba4c4c6d176d180b3687986532ae2f6ae"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/w196-policy-native-release.log",
+        "bytes": 191,
+        "sha256": "8a74e8382f0000c734cf5501e8eef7f433f329a458793ddcef821db141ee7540"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-debug-root-controls.json",
+        "bytes": 2337,
+        "sha256": "55a3425b0581ca76a92eeeee66db8c6f789156c7adaadb2a86af35a7090699e5"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-release-root-controls.json",
+        "bytes": 2337,
+        "sha256": "f8fce618c3e6854582af3ac4d65dc546043eaae1f352ba0546877e9cedc39d8f"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-debug-root-provenance.json",
+        "bytes": 2438,
+        "sha256": "7406a676d7f56a87f3654d0a1e85a8ac813cab7d6ea5f2c1a88d55cfe6463dd3"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-release-root-provenance.json",
+        "bytes": 2440,
+        "sha256": "28a7441b6a01099a0644bef97c2b08a40b1b425751dab2554cafc69b2d3237c1"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-root-mode-comparison.json",
+        "bytes": 33519,
+        "sha256": "d5bc89b243bbade086d7986aa511911abc67a78374ea7a35ea2316b296ff18da"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/root_paired_controls.rb",
+        "bytes": 4586,
+        "sha256": "2260b1f443221a803f2fa8e460efd8b0a92f32edfdd5b95e9f0c5d4523833588"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/root_paired_provenance.rb",
+        "bytes": 5031,
+        "sha256": "8ff9bf189b2bad1f81b9804a2bf27105689fa52021c513105a3952aabdf429e0"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/root_paired_mode_comparison.rb",
+        "bytes": 2470,
+        "sha256": "a0be3740c2e23262e4010660d0f341e8e6b4539f309a79a8e1ab5a475998b2bc"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-final-format-check.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-ruby-strict-self-test.log",
+        "bytes": 24,
+        "sha256": "00607f45127d398e454b46d735dfb3383f9587b13fb3f693713aeb49c7dca0ab"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-ruby-paired-self-test.log",
+        "bytes": 457,
+        "sha256": "8562a43053df1bcf51fbdbd6f14b6b77497eac61e4b51b094cd06ef9cf9f4765"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/policy-ruby-legacy-self-test.log",
+        "bytes": 262,
+        "sha256": "c9e4a71fa24f0a7ae20cd5fdb01e4d9ad8dbc006a863a127246d06452b4a4a8a"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/additional-policy-red.log",
+        "bytes": 755,
+        "sha256": "61ebc88260c67527ab9c0f3914204be433d95fdd6173e22a587301dbd59e7f0a"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-verify.EcihAM/w196-qualified-debug.log",
+        "bytes": 208,
+        "sha256": "96dcc4a42221b8166bb439a096197966c7ebe02daee3f80478fc03413da5ab2b"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-qualified-debug.TTa9JW/summary.json",
+        "bytes": 13295,
+        "sha256": "c54baf52aa66ba28838a3dcc065c182cb4f71a48f756d8ce72e223c46658ff3c"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-policy-native-debug.jIQbji/summary.json",
+        "bytes": 455158,
+        "sha256": "eda1e194e673569bc2eec9298fe7552458df00e3ce8ddd41d676080e54128664"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w196-policy-native-release.dFagst/summary.json",
+        "bytes": 455292,
+        "sha256": "0bf53b3dfaa009080203eebb85e56d23cdf1259c04d0c023d13008f3d1c46fed"
+      }
+    ]
+  },
+  "refuted_routes": [
+    {
+      "route": "Concatenate standalone global-dictionary body and index lanes for aliased Object Data",
+      "observation": "Stock creation/reads, all eight ATTACH/CHECK and whole-Object windows passed, but library_v2_string0 direct j.p read exited 117: No additional keys found.",
+      "actual_outer_exit": 1,
+      "evidence_root": "/private/tmp/crystal-click-w196-qualified-debug.TTa9JW",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_object_shared_low_cardinality_w196.rb --paired --binary /private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped --helper /private/tmp/crystal-click-w196-verify.EcihAM/w196-formatted-helper-debug --evidence-root /private/tmp/crystal-click-w196-qualified-debug.TTa9JW > /private/tmp/crystal-click-w196-verify.EcihAM/w196-qualified-debug.log 2>&1",
+      "discriminator": "A Compact getter aliases dictionary/index callbacks; index flags must precede keys. Whole-object Copy reads did not exercise Data.",
+      "pivot": "Explicit AdditionalKeysOnly write policy inside the existing LC storage encoder; keep standalone default unchanged."
+    },
+    {
+      "route": "Old Object path writer retains nonempty global dictionary body",
+      "observation": "Independent runtime policy RED expected empty .dict body and inline flags 0x600; 5 examples, 1 failure, 0 errors/pending before production changes.",
+      "actual_exit": 1,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w196-verify.EcihAM/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_path_low_cardinality_w196_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w196-verify.EcihAM/additional-policy-red.log 2>&1",
+      "evidence": "/private/tmp/crystal-click-w196-verify.EcihAM/additional-policy-red.log"
+    }
+  ],
+  "continuity": {
+    "active_goal": "Full paired type coverage and MV/projection support before memory/performance qualification",
+    "confirmed_frontier": "W196 finite LC shared-path profile qualified; broader types and top-level facade boundaries remain open",
+    "next_falsifier": "Capture stock Nested/QBit/JSON-as-Dynamic-actual paths with exact stored roster and callbacks, then pair writer output with native whole-object AND direct-path reads.",
+    "authority": "In-scope reversible local work, serialized resource-guarded tests, atomic local commit. No push or history rewrite.",
+    "decay_triggers": [
+      "Changes to source/runtime/guard pins",
+      "Changes to Object path/tape adapters, recursive bulk/LC owner, profile propagation or caller-budget semantics",
+      "Changes to fixture/probe/reconciliation code or loss/mutation of retained evidence",
+      "Expansion beyond the four literal profiles"
+    ],
+    "refresh": "Re-run frozen affected DEBUG/RELEASE suites, fresh helper builds and fresh pinned native roots; authenticate raw process artifacts, rerun mutation controls and compare mode bytes.",
+    "failure_policy": "Reopen or narrow the qualified claim on drift; preserve unsupported guards and do not infer compatibility from self-roundtrip, CHECK or Copy alone."
+  }
+}

@@ -1,7 +1,8 @@
 module CrystalClick
-  # Canonical bounded writer for the shared LowCardinality dictionary/index
-  # lanes. It emits one part-global dictionary and one aligned index record per
-  # nonempty mark; it does not claim arbitrary ClickHouse split-record support.
+  # Bounded writer for shared LowCardinality dictionary/index lanes. The
+  # default is one part-global dictionary; an explicit additional-keys-only
+  # policy inlines the staged key table into each nonempty mark. Neither policy
+  # claims arbitrary ClickHouse split-record support.
   module BinaryLowCardinalityStorageEncoder
     include BinaryLowCardinalityStorageStreams
 
@@ -9,8 +10,9 @@ module CrystalClick
       type : BinaryDataType,
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
+      policy : BinaryLowCardinalityStoragePolicy = BinaryLowCardinalityStoragePolicy::PartGlobalDictionary,
     ) : BinaryBulkStreams
-      encode_internal(type, granules, budget, false)
+      encode_internal(type, granules, budget, false, policy)
     end
 
     # Bulk integration has already validated the complete recursive type tree
@@ -20,8 +22,9 @@ module CrystalClick
       type : BinaryDataType,
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
+      policy : BinaryLowCardinalityStoragePolicy = BinaryLowCardinalityStoragePolicy::PartGlobalDictionary,
     ) : BinaryBulkStreams
-      encode_internal(type, granules, budget, true)
+      encode_internal(type, granules, budget, true, policy)
     end
 
     private def self.encode_internal(
@@ -29,6 +32,7 @@ module CrystalClick
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
       prevalidated_type : Bool,
+      policy : BinaryLowCardinalityStoragePolicy,
     ) : BinaryBulkStreams
       unless budget.writing?
         raise ArgumentError.new("LowCardinality storage encoder requires a write-direction budget")
@@ -40,6 +44,7 @@ module CrystalClick
       traversal = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
       nullable, scalar_type = BinaryLowCardinalityStorageStreams.ensure_root_type(type, traversal)
       traversal.validate_type_tree(type) unless prevalidated_type
+      additional_keys_only = policy == BinaryLowCardinalityStoragePolicy::AdditionalKeysOnly
 
       mark_count = granules.size
       total_rows = 0_u64
@@ -104,10 +109,19 @@ module CrystalClick
       reserve_slots = nullable ? 2_u64 : 1_u64
       reserve_wire = mul(reserve_slots, default_scalar_wire_size(scalar_type))
       min_nonempty_marks = granules.count { |rows| !rows.empty? }.to_u64
-      min_index_wire = add(mul(min_nonempty_marks, 16_u64), total_rows)
+      min_index_wire = if additional_keys_only
+                         add(mul(min_nonempty_marks, add(24_u64, reserve_wire)), total_rows)
+                       else
+                         add(mul(min_nonempty_marks, 16_u64), total_rows)
+                       end
       budget.ensure_future_nodes(reserve_slots)
       budget.ensure_future_elements(reserve_slots)
-      budget.ensure_wire_bytes(add(add(16_u64, reserve_wire), min_index_wire))
+      minimum_wire = if additional_keys_only
+                       add(8_u64, min_index_wire)
+                     else
+                       add(add(16_u64, reserve_wire), min_index_wire)
+                     end
+      budget.ensure_wire_bytes(minimum_wire)
       budget.charge_elements(reserve_slots)
       reserve_slots.times { budget.charge_node }
 
@@ -173,22 +187,30 @@ module CrystalClick
       width = BinaryLowCardinalityStorageStreams.width_for_code(width_code)
 
       dictionary_size = 8_u64
+      dictionary_keys_size = 0_u64
       if has_dictionary
-        dictionary_size = add(dictionary_size, 8_u64)
         dictionary_values.each do |value|
-          dictionary_size = add(dictionary_size, scalar_wire_size(scalar_type, value))
+          dictionary_keys_size = add(dictionary_keys_size, scalar_wire_size(scalar_type, value))
+        end
+        unless additional_keys_only
+          dictionary_size = add(dictionary_size, 8_u64)
+          dictionary_size = add(dictionary_size, dictionary_keys_size)
         end
       end
       indexes_size = 0_u64
       ids_by_mark.each do |ids|
         next if ids.empty?
-        indexes_size = add(indexes_size, add(16_u64, mul(ids.size.to_u64, width.to_u64)))
+        record_size = add(16_u64, mul(ids.size.to_u64, width.to_u64))
+        if additional_keys_only
+          record_size = add(record_size, add(8_u64, dictionary_keys_size))
+        end
+        indexes_size = add(indexes_size, record_size)
       end
       budget.ensure_wire_bytes(add(dictionary_size, indexes_size))
 
       dictionary_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, true)
       BinaryLowCardinalityStorageStreams.write_u64(dictionary_context, BinaryLowCardinalityStorageStreams::VERSION)
-      if has_dictionary
+      if has_dictionary && !additional_keys_only
         BinaryLowCardinalityStorageStreams.write_u64(dictionary_context, dictionary_values.size.to_u64)
         dictionary_values.each do |value|
           BinaryLowCardinalityStorageStreams.write_scalar(scalar_type, value, dictionary_context)
@@ -199,11 +221,22 @@ module CrystalClick
       index_offsets = [0_u64]
       ids_by_mark.each_with_index do |ids, mark|
         unless ids.empty?
-          flags = width_code | BinaryLowCardinalityStorageStreams::GLOBAL_BIT
-          if first_nonempty_mark == mark
+          flags = width_code
+          if additional_keys_only
+            flags |= BinaryLowCardinalityStorageStreams::ADDITIONAL_BIT
+          else
+            flags |= BinaryLowCardinalityStorageStreams::GLOBAL_BIT
+          end
+          if additional_keys_only || first_nonempty_mark == mark
             flags |= BinaryLowCardinalityStorageStreams::UPDATE_BIT
           end
           BinaryLowCardinalityStorageStreams.write_u64(index_context, flags)
+          if additional_keys_only
+            BinaryLowCardinalityStorageStreams.write_u64(index_context, dictionary_values.size.to_u64)
+            dictionary_values.each do |value|
+              BinaryLowCardinalityStorageStreams.write_scalar(scalar_type, value, index_context)
+            end
+          end
           BinaryLowCardinalityStorageStreams.write_u64(index_context, ids.size.to_u64)
           ids.each { |id| BinaryLowCardinalityStorageStreams.write_index(index_context, id, width) }
         end

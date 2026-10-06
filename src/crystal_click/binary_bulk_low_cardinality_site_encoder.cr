@@ -8,6 +8,7 @@ module CrystalClick
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
       dynamic_plan : BinaryDynamicBulkPlan? = nil,
+      policy : BinaryLowCardinalityStoragePolicy = BinaryLowCardinalityStoragePolicy::PartGlobalDictionary,
     ) : Hash(String, BinaryBulkStream)
       encoded = Hash(String, BinaryBulkStream).new
       return encoded if sites.empty?
@@ -16,7 +17,7 @@ module CrystalClick
       # this exact fast path makes its W142 budget identical to standalone.
       if sites.size == 1 && sites[0].path == "root"
         site = sites[0]
-        streams = BinaryLowCardinalityStorageEncoder.encode_prevalidated(site.type, granules, budget)
+        streams = BinaryLowCardinalityStorageEncoder.encode_prevalidated(site.type, granules, budget, policy)
         encoded[site.dictionary_role] = streams.stream(BinaryLowCardinalityStorageStreams::DICTIONARY_ROLE)
         encoded[site.indexes_role] = streams.stream(BinaryLowCardinalityStorageStreams::INDEX_ROLE)
         return encoded
@@ -91,7 +92,7 @@ module CrystalClick
       end
 
       nested_sites.each do |site|
-        site_streams = BinaryLowCardinalityStorageEncoder.encode_prevalidated(site.type, buckets[site.path], budget)
+        site_streams = BinaryLowCardinalityStorageEncoder.encode_prevalidated(site.type, buckets[site.path], budget, policy)
         encoded[site.dictionary_role] = site_streams.stream(BinaryLowCardinalityStorageStreams::DICTIONARY_ROLE)
         encoded[site.indexes_role] = site_streams.stream(BinaryLowCardinalityStorageStreams::INDEX_ROLE)
       end

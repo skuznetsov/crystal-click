@@ -3,7 +3,8 @@ module CrystalClick
   # discriminators, and ordinary recursive lanes share one caller budget and
   # are emitted in the source callback order rather than sorted role order.
   module ObjectSharedPathCodec
-    COMPACT_PROFILE = BinaryBulkProfile.with_size_stream
+    COMPACT_PROFILE               = BinaryBulkProfile.with_size_stream
+    LOW_CARDINALITY_VERSION_BYTES = OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES
 
     private struct Emission
       getter name : String
@@ -54,7 +55,14 @@ module CrystalClick
 
       plan = BinaryDynamicBulkPlan.new_with_prefix_without_statistics(type, structures, budget, profile)
       structure_streams = plan.encode_structure_prefix_streams_without_statistics(budget)
-      data_streams = BinaryBulkEncoder.encode(type, [rows] of Array(BinaryValue), budget, profile, plan)
+      data_streams = BinaryBulkEncoder.encode(
+        type,
+        [rows] of Array(BinaryValue),
+        budget,
+        profile,
+        plan,
+        low_cardinality_policy: BinaryLowCardinalityStoragePolicy::AdditionalKeysOnly,
+      )
       role_names = planned_roles(plan, budget)
       compact_lanes = prepare_compact_lanes(role_names, data_streams, budget)
       physical_lanes = write_compact_lanes(compact_lanes, budget)
@@ -263,7 +271,11 @@ module CrystalClick
         value_prefix = append_escaped_field(physical_prefix, "values", budget)
         emit_type(type.child_at(1), value_path, value_prefix, array_level + 1, plan, structures, streams, physical_lanes, emissions, budget, profile)
       when BinaryDataType::TAG_LOW_CARDINALITY
-        raise UnsupportedFormatError.new("LowCardinality per-path physical substreams are not admitted")
+        dictionary_role = logical_name(path, ".dictionary", budget)
+        indexes_role = logical_name(path, ".indexes", budget)
+        dictionary_name = append_name(physical_prefix, ".dict", budget)
+        add_lane_emission(emissions, dictionary_name, dictionary_role, streams, LOW_CARDINALITY_VERSION_BYTES, budget)
+        add_lane_emission(emissions, physical_prefix, indexes_role, streams, 0, budget)
       when BinaryDataType::TAG_NESTED
         raise UnsupportedFormatError.new("Nested per-path physical substreams are not admitted")
       when BinaryDataType::TAG_QBIT
@@ -334,6 +346,10 @@ module CrystalClick
       when BinaryDataType::TAG_MAP
         emit_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), array_level + 1, plan, structures, streams, physical_lanes, emissions, budget)
         emit_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), array_level + 1, plan, structures, streams, physical_lanes, emissions, budget)
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        role = logical_name(path, ".dictionary", budget)
+        prefix_name = append_name(physical_prefix, ".dict_prefix", budget)
+        add_low_cardinality_prefix_emission(emissions, prefix_name, role, streams, budget)
       end
       nil
     end
@@ -395,6 +411,10 @@ module CrystalClick
       when BinaryDataType::TAG_MAP
         decode_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), array_level + 1, depth + 1, reader, budget)
         decode_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), array_level + 1, depth + 1, reader, budget)
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        role = logical_name(path, ".dictionary", budget)
+        prefix_name = append_name(physical_prefix, ".dict_prefix", budget)
+        reader.add_low_cardinality_dictionary_prefix(role, prefix_name)
       end
       nil
     end
@@ -463,7 +483,11 @@ module CrystalClick
         value_path = logical_name(path, ".elements.field.1", budget)
         decode_type(type.child_at(1), value_path, append_escaped_field(physical_prefix, "values", budget), array_level + 1, reader, budget, profile)
       when BinaryDataType::TAG_LOW_CARDINALITY
-        raise UnsupportedFormatError.new("LowCardinality per-path physical substreams are not admitted")
+        dictionary_role = logical_name(path, ".dictionary", budget)
+        dictionary_name = append_name(physical_prefix, ".dict", budget)
+        reader.add_low_cardinality_dictionary_body(dictionary_role, dictionary_name)
+        indexes_role = logical_name(path, ".indexes", budget)
+        reader.add_lane(indexes_role, reader.take(physical_prefix))
       when BinaryDataType::TAG_NESTED
         raise UnsupportedFormatError.new("Nested per-path physical substreams are not admitted")
       when BinaryDataType::TAG_QBIT
@@ -536,6 +560,22 @@ module CrystalClick
       end
       reserve_emission(emissions, prefix_name, budget)
       emissions << Emission.new(prefix_name, role, nil, 0, BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES)
+      nil
+    end
+
+    private def self.add_low_cardinality_prefix_emission(
+      emissions : Array(Emission),
+      prefix_name : String,
+      role : String,
+      streams : BinaryBulkStreams,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      stream = streams.stream(role)
+      if stream.byte_size < LOW_CARDINALITY_VERSION_BYTES
+        raise UnsupportedFormatError.new("LowCardinality dictionary lane is shorter than its version prefix")
+      end
+      reserve_emission(emissions, prefix_name, budget)
+      emissions << Emission.new(prefix_name, role, nil, 0, LOW_CARDINALITY_VERSION_BYTES)
       nil
     end
 

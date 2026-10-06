@@ -7,6 +7,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
       dynamic_plan : BinaryDynamicBulkPlan? = nil,
+      low_cardinality_policy : BinaryLowCardinalityStoragePolicy = BinaryLowCardinalityStoragePolicy::PartGlobalDictionary,
     ) : BinaryBulkStreams
       unless budget.writing?
         raise ArgumentError.new("binary bulk encoder requires a write-direction budget")
@@ -95,7 +96,14 @@ module CrystalClick
       end
 
       low_cardinality_sites = plan.low_cardinality_sites
-      low_cardinality_streams = BinaryBulkLowCardinalitySiteEncoder.encode(type, low_cardinality_sites, granules, budget, dynamic_plan)
+      low_cardinality_streams = BinaryBulkLowCardinalitySiteEncoder.encode(
+        type,
+        low_cardinality_sites,
+        granules,
+        budget,
+        dynamic_plan,
+        low_cardinality_policy,
+      )
       low_cardinality_streams.each do |role, stream|
         streams[role] = stream
       end
