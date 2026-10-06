@@ -1,5 +1,26 @@
 # CrystalClick project status
 
+Current qualified capability (W185, 2026-10-06): canonical `Array(JSON(...))`
+composes the existing Object owners in normalized hashed Wide/LZ4 parts with
+plain adaptive marks, one-bucket shared MAP and BASIC child Dynamic mode.
+Separate parent rows and child occurrences preserve empty arrays and nonzero
+read origins. New column reader/writer/files, staged publisher/metadata and
+typed table adapter have separate files; root metadata parsing is shared while
+its declaration-first error contract remains unchanged. Batches expose
+`array_object_documents_for(column)` without implicit flattening.
+The same 46 selected specs pass 296 DEBUG and 296 RELEASE examples in six serial
+cohorts per mode, all twelve actual child/guard exits 0. Both rebuilt helper
+modes read stock mixed/all-empty parts, publish a part accepted by stock
+ATTACH/CHECK, and match authored full/middle rows and exact schema. Root
+reconciles six process statuses, 134 hashes and identical values plus all 22
+generated library files between modes. Scoped verdict: ROBUST for this finite
+slice, not every recursive product or the full suite. Logical codec/grid budgets
+remain distinct from bounded metadata/name/transport contexts; they do not cap
+RSS or decoder workspace. General persisted wrappers/layouts, remaining types,
+broader MV/projections and full table decomposition stay open; performance is
+deferred. The larger objective is not complete. Details and continuation:
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+
 Current internal foundation (W184, 2026-10-06): `StorageOccurrenceGrid` separates
 positive physical parent rows from nonnegative logical child counts. Explicit
 paired Object/Dynamic/discriminator child APIs reuse existing owners and one

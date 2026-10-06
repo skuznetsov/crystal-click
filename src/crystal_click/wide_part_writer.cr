@@ -45,6 +45,32 @@ module CrystalClick
         metadata_version, limits, transport_limits)
     end
 
+    # Publishes one bounded Array(JSON) value column over recursively
+    # scheduled Object children. Granules are marks → parent rows → JSON docs.
+    def self.write_uint64_array_object_pair(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      schema : ObjectDocumentSchema,
+      plan : ObjectDocumentPlan,
+      granules : Array(Array(Array(ObjectDocument))),
+      rows_per_mark : Int32 = 8192,
+      mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : String
+      ArrayObjectPartWriter.write(
+        destination, key_name, keys, value_name, schema, plan, granules,
+        rows_per_mark, mode, profile, shared_profile, frame_bytes,
+        metadata_version, limits, transport_limits
+      )
+    end
+
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values

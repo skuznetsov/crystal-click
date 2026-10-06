@@ -33,8 +33,38 @@ module CrystalClick
       granules : Array(Array(ObjectDocument)),
       budget : BinaryCodecBudget,
     ) : ObjectDocumentPlan
+      recompute_core_with_budget(plan, granules, budget, nil)
+    end
+
+    # Child-site statistics preserve empty child groups only when an explicit
+    # parent/occurrence grid certifies their cardinality. The root entry point
+    # above deliberately retains its nonempty-real-mark contract.
+    def self.recompute_child_site_with_budget(
+      plan : ObjectDocumentPlan,
+      granules : Array(Array(ObjectDocument)),
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+    ) : ObjectDocumentPlan
+      recompute_core_with_budget(plan, granules, budget, grid)
+    end
+
+    private def self.recompute_core_with_budget(
+      plan : ObjectDocumentPlan,
+      granules : Array(Array(ObjectDocument)),
+      budget : BinaryCodecBudget,
+      occurrence_grid : StorageOccurrenceGrid?,
+    ) : ObjectDocumentPlan
       unless budget.writing?
         raise ArgumentError.new("Object statistics recomputation requires a writing budget")
+      end
+
+      if grid = occurrence_grid
+        grid.validate_for!(granules.size, budget)
+        granules.each_with_index do |mark_rows, mark_index|
+          unless mark_rows.size.to_u64 == grid.logical_occurrences_at(mark_index)
+            raise UnsupportedFormatError.new("Object child rows disagree with the occurrence grid")
+          end
+        end
       end
 
       object = plan.structures.object
@@ -59,7 +89,9 @@ module CrystalClick
       # invoking BinaryDataType#name.
       routings = build_routings(plan, dynamic_paths, budget)
 
-      total_rows, total_paths, document_path_bytes = inspect_grid(granules, budget)
+      total_rows, total_paths, document_path_bytes = inspect_grid(
+        granules, budget, occurrence_grid != nil
+      )
       base_nodes = checked_add(granules.size.to_u64, total_rows)
       base_nodes = checked_add(base_nodes, total_paths)
       base_elements = checked_add(granules.size.to_u64, total_paths)
@@ -360,6 +392,7 @@ module CrystalClick
     private def self.inspect_grid(
       granules : Array(Array(ObjectDocument)),
       budget : BinaryCodecBudget,
+      allow_empty_marks : Bool = false,
     ) : Tuple(UInt64, UInt64, UInt64)
       if granules.size >= Int32::MAX
         raise UnsupportedFormatError.new("Object document mark grid exceeds the supported domain")
@@ -374,7 +407,7 @@ module CrystalClick
       paths = 0_u64
       path_bytes = 0_u64
       granules.each do |mark_rows|
-        if mark_rows.empty?
+        if mark_rows.empty? && !allow_empty_marks
           raise ArgumentError.new("Object document real marks must contain at least one row")
         end
         if mark_rows.size > Int32::MAX

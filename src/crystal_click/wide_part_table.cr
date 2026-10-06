@@ -1,5 +1,4 @@
 module CrystalClick
-
   # A correctness-first reader over caller-selected immutable Wide-part paths.
   # It does not discover active parts or execute a query language. Each mark is
   # materialized for selected columns, checked for row alignment, then exposed
@@ -46,6 +45,15 @@ module CrystalClick
       end
     end
 
+    private struct ArrayObjectColumnReaderEntry
+      getter name : String
+      getter reader : ArrayObjectColumnReader
+      getter column_type : String
+
+      def initialize(@name : String, @reader : ArrayObjectColumnReader, @column_type : String)
+      end
+    end
+
     private struct PartEntry
       getter name : String
       getter path : String
@@ -54,6 +62,7 @@ module CrystalClick
       getter readers : Array(ColumnReader)
       getter aggregate_count_key_reader : ColumnReader?
       getter object_readers : Array(ObjectColumnReaderEntry)
+      getter array_object_readers : Array(ArrayObjectColumnReaderEntry)
       getter column_types : Array(String)
       getter column_sources : Array({String, String, String})
 
@@ -65,6 +74,7 @@ module CrystalClick
         @readers : Array(ColumnReader),
         @aggregate_count_key_reader : ColumnReader?,
         @object_readers : Array(ObjectColumnReaderEntry),
+        @array_object_readers : Array(ArrayObjectColumnReaderEntry),
         @column_types : Array(String),
         @column_sources : Array({String, String, String}),
       )
@@ -154,7 +164,7 @@ module CrystalClick
     # alias the current mark arrays and must not be retained past the callback.
     def scan(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 scan requires exact UInt64 columns")
       end
 
@@ -165,7 +175,7 @@ module CrystalClick
     # complete candidate granule; skipped marks still advance physical row
     # offsets and are never materialized.
     def scan_candidate_marks(mark_indices : Array(Array(Int32)), & : WidePartTableBatch -> Nil) : Nil
-      unless @entries.all? { |part| part.object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 candidate scan requires exact UInt64 columns")
       end
       raise BoundsError.new("candidate mark list does not match selected parts") unless mark_indices.size == @entries.size
@@ -258,7 +268,7 @@ module CrystalClick
     # retrieved from each batch with values_for(column, CrystalType).
     def scan_numeric(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.object_readers.empty? && part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
         raise UnsupportedFormatError.new("numeric scan requires exact primitive numeric columns")
       end
 
@@ -306,6 +316,7 @@ module CrystalClick
       # including later marks, so their corruption or combined nested-charge
       # overflow cannot surface after an earlier callback escapes. This is
       # intentionally not a whole-scan atomicity promise for other codecs.
+      validate_complete_array_object_schedules
       preflight_coordinate_selected_marks(candidate_marks, window_rows)
       preflight_array_map_leaf_selected_marks(candidate_marks, window_rows)
 
@@ -849,6 +860,16 @@ module CrystalClick
               bytes = ObjectColumnAdapter.preflight_owner(mark_rows, remaining_bytes)
               preflight_string_bytes += bytes
             end
+            part.array_object_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
+              bytes = ArrayObjectColumnAdapter.preflight_owner(
+                selected.reader,
+                mark_index.to_i32,
+                mark_rows,
+                remaining_bytes
+              )
+              preflight_string_bytes += bytes
+            end
 
             numeric_values = Hash(String, WidePartNumericArray).new
             aggregate_count_values = Hash(String, Array(BinaryValue)).new
@@ -905,6 +926,7 @@ module CrystalClick
             geo_array_rows = Hash(String, Array(WideGeoArrayRow)).new
             geometry_rows = Hash(String, Array(WideGeometryRow)).new
             object_documents = Hash(String, Array(ObjectDocument)).new
+            array_object_documents = Hash(String, Array(Array(ObjectDocument))).new
             actual_string_bytes = 0_u64
             part.readers.each do |selected|
               if count_plan = WideAggregateCountStoragePlan.for_type_name(selected.column_type)
@@ -2483,6 +2505,20 @@ module CrystalClick
               actual_string_bytes += charge
               object_documents[selected.name] = values
             end
+            part.array_object_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+              values, charge = ArrayObjectColumnAdapter.materialize_mark(
+                selected.reader,
+                mark_index.to_i32,
+                mark_rows,
+                remaining_bytes
+              )
+              if charge > remaining_bytes
+                raise CorruptPartError.new("selected Array(JSON) mark exceeds aggregate materialization limit")
+              end
+              actual_string_bytes += charge
+              array_object_documents[selected.name] = values
+            end
 
             mark_row_offset = selected_mark_row_start
             first_whole_mark_batch = whole_marks
@@ -2766,6 +2802,12 @@ module CrystalClick
                 selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 batch.install_object_documents(selected.name, selected_slice, size)
               end
+              part.array_object_readers.each do |selected|
+                values = array_object_documents[selected.name]? ||
+                         raise(CorruptPartError.new("selected Array(JSON) column was not materialized"))
+                selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                batch.install_array_object_documents(selected.name, selected_slice, size)
+              end
               yield batch
               mark_row_offset &+= size.to_u64
               break if whole_marks
@@ -2782,6 +2824,21 @@ module CrystalClick
       end
 
       raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count
+      nil
+    end
+
+    private def validate_complete_array_object_schedules : Nil
+      @entries.each do |part|
+        part.array_object_readers.each do |selected|
+          reader = selected.reader
+          unless reader.row_count == part.row_count.to_u64 &&
+                 reader.mark_count == part.mark_row_counts.size &&
+                 reader.mark_row_counts == part.mark_row_counts
+            raise CorruptPartError.new("selected Array(JSON) outer grid differs from its part")
+          end
+          ArrayObjectColumnAdapter.validate_complete_schedule(reader)
+        end
+      end
       nil
     end
 
@@ -4493,6 +4550,7 @@ module CrystalClick
         aggregate_count_key_reader = nil.as(ColumnReader?)
         aggregate_count_key_name = nil.as(String?)
         object_readers = Array(ObjectColumnReaderEntry).new
+        array_object_readers = Array(ArrayObjectColumnReaderEntry).new
         expected_mark_rows = nil.as(Array(UInt64)?)
         expected_row_count = nil.as(UInt64?)
         current_column_types = Array(String).new(@columns.size)
@@ -4501,10 +4559,15 @@ module CrystalClick
 
         @columns.each do |column|
           object_declaration = nil.as(String?)
+          array_object_declaration = nil.as(String?)
           if @typed_mode && !@numeric_mode && flattened_context.nil?
             object_declaration = WidePart.selected_json_declaration(path, column)
+            array_object_declaration = WidePart.selected_array_json_declaration(path, column)
             if projection_name && object_declaration
               raise UnsupportedFormatError.new("Object columns are unsupported in typed projections")
+            end
+            if projection_name && array_object_declaration
+              raise UnsupportedFormatError.new("Array(JSON) columns are unsupported in typed projections")
             end
           end
 
@@ -4522,6 +4585,16 @@ module CrystalClick
             column_source = {column, column, object_reader.schema_declaration}
             selected_checksum_names = object_reader.selected_checksum_names
             object_readers << ObjectColumnReaderEntry.new(column, object_reader, column_type)
+          elsif source_declaration = array_object_declaration
+            array_object_reader = ArrayObjectColumnAdapter.open(path, column, source_declaration)
+            ArrayObjectColumnAdapter.validate_complete_schedule(array_object_reader)
+            mark_rows = array_object_reader.mark_row_counts
+            raise BoundsError.new("mark count exceeds per-reader limit") if mark_rows.size > MAX_MARKS_PER_READER
+            column_row_count = array_object_reader.row_count
+            column_type = array_object_reader.schema_declaration
+            column_source = {column, column, array_object_reader.source_declaration}
+            selected_checksum_names = array_object_reader.selected_checksum_names
+            array_object_readers << ArrayObjectColumnReaderEntry.new(column, array_object_reader, column_type)
           else
             reader = if context = flattened_context
                        context.open_reader(path, column)
@@ -4612,7 +4685,7 @@ module CrystalClick
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, current_column_types, current_column_sources)
+        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, array_object_readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32

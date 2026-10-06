@@ -20,6 +20,7 @@ module CrystalClick
     @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
     @shared_plan : BinaryBulkPhysicalPlan
     @stream_count : Int32
+    @initial_array_level : UInt64
 
     # Discover only declared Dynamic structure basenames, without constructing
     # a dummy BinaryDynamicBulkPlan. This is used before metadata is available;
@@ -113,7 +114,12 @@ module CrystalClick
       @profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      initial_array_level : UInt64 = 0_u64,
     )
+      if initial_array_level > UInt64::MAX - limits.max_depth.to_u64
+        raise UnsupportedFormatError.new("physical Object initial Array level overflows the name coordinate")
+      end
+      @initial_array_level = initial_array_level
       object = plan.structures.object
       unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
         raise UnsupportedFormatError.new("physical Object planning admits only V3 MAP with one shared-data bucket")
@@ -172,7 +178,9 @@ module CrystalClick
         arm_plans = Hash(String, BinaryBulkPhysicalPlan).new
         shared_string = BinaryDataType.primitive("String")
         shared_prefix = PhysicalStreamName.append_escaped_component(path_prefix, DynamicStructure::SHARED_VARIANT_NAME, context)
-        shared_arm = BinaryBulkPhysicalPlan.from_escaped_prefix(shared_string, shared_prefix, @profile, limits, context)
+        shared_arm = BinaryBulkPhysicalPlan.from_escaped_prefix(
+          shared_string, shared_prefix, @profile, limits, context, @initial_array_level
+        )
         arm_plans[String.new(DynamicStructure::SHARED_VARIANT_NAME.to_slice)] = shared_arm
         collect_plan_names!(shared_arm, seen_names)
 
@@ -196,7 +204,9 @@ module CrystalClick
             raise UnsupportedFormatError.new("Dynamic alternatives collide on SQL display name")
           end
           arm_prefix = PhysicalStreamName.append_escaped_component(path_prefix, arm_name, context)
-          arm_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(type, arm_prefix, @profile, limits, context)
+          arm_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
+            type, arm_prefix, @profile, limits, context, @initial_array_level
+          )
           arm_plans[String.new(arm_name.to_slice)] = arm_plan
           collect_plan_names!(arm_plan, seen_names)
         end
@@ -213,7 +223,7 @@ module CrystalClick
         if plan.has_typed_dynamic?(raw_path)
           prepared = typed_dynamic_write_plans[raw_path]
           typed_dynamic_plan = BinaryDynamicBulkPhysicalPlan.from_escaped_prefix(
-            prepared, path_prefix, limits, context
+            prepared, path_prefix, limits, context, @initial_array_level
           )
           @typed_dynamic_plans[String.new(raw_path.to_slice)] = typed_dynamic_plan
           collect_plan_names!(typed_dynamic_plan, seen_names)
@@ -230,7 +240,9 @@ module CrystalClick
            ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
           raise UnsupportedFormatError.new("physical Object typed LowCardinality fields are not admitted")
         end
-        typed_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(type, path_prefix, @profile, limits, context)
+        typed_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
+          type, path_prefix, @profile, limits, context, @initial_array_level
+        )
         @typed_plans[String.new(raw_path.to_slice)] = typed_plan
         collect_plan_names!(typed_plan, seen_names)
       end
@@ -242,7 +254,9 @@ module CrystalClick
         )
       )
       shared_prefix = PhysicalStreamName.append_literal(column_prefix, ".object_shared_data", context)
-      @shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(shared_type, shared_prefix, shared_profile, limits, context)
+      @shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
+        shared_type, shared_prefix, shared_profile, limits, context, @initial_array_level
+      )
       collect_plan_names!(@shared_plan, seen_names)
       @stream_count = seen_names.size.to_i32
     end
@@ -276,6 +290,10 @@ module CrystalClick
 
     def shared : BinaryBulkPhysicalPlan
       @shared_plan
+    end
+
+    def initial_array_level : UInt64
+      @initial_array_level
     end
 
     # Scalar count from the collision-checked construction roster. This lets

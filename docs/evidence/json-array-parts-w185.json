@@ -1,0 +1,435 @@
+{
+  "slice": "W185 normalized Array(JSON) storage composition",
+  "baseline": "3ecec3fc05f5707cb439b7807525b1546e932c88",
+  "claim": "Dedicated canonical Array(JSON) reader/writer and typed table integration compose existing Object owners over distinct parent-row and child-occurrence coordinates. Finite stock whole-part compatibility is paired in both build modes; generic persisted recursion is not complete.",
+  "source_only": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+    "head": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+    "clean": true,
+    "shallow": true,
+    "built": false,
+    "boundary": "Separate source audit, not the executed binary."
+  },
+  "runtime": {
+    "path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "final_inputs": {
+    "count": 1053,
+    "sha256": "4040dc35c5455f83d201fc426dba29a0df8969d506421f1803d1aa3c8bb0efce",
+    "algorithm": "SHA256 of JSON-encoded sorted [relative path, SHA256] pairs for {src,spec,scripts,examples}/**/*.{cr,rb}",
+    "unchanged_during_final_gates": true
+  },
+  "executed_environment": {
+    "crystal": "1.21.0",
+    "llvm": "22.1.8",
+    "target": "aarch64-apple-darwin25.6.0",
+    "guard": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "guard_sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+    "timeout_seconds": 600,
+    "memory_limit_mib": 12288,
+    "min_free_memory_pct": 50,
+    "observed_free_memory_pct": 83,
+    "heavy_jobs": "Serial, isolated caches, compiler threads 1; no resource limit relaxation",
+    "native_child_bounds": "One thread, 512 MiB query setting, 10-second process timeout plus 2-second grace; bounded captures"
+  },
+  "totals": {
+    "spec_files": 46,
+    "examples_per_mode": 296,
+    "failures": 0,
+    "errors": 0,
+    "pending": 0,
+    "cohort_guard_and_child_exits": 12
+  },
+  "spec_rosters": {
+    "focused": [
+      "spec/array_object_part_w185_spec.cr",
+      "spec/array_object_column_core_w185_spec.cr",
+      "spec/array_object_low_cardinality_w185_spec.cr",
+      "spec/array_object_dynamic_w185_spec.cr"
+    ],
+    "foundation": [
+      "spec/storage_occurrence_grid_w184_spec.cr",
+      "spec/object_child_occurrences_w184_spec.cr",
+      "spec/dynamic_discriminator_w121_spec.cr",
+      "spec/dynamic_discriminator_w121_budget_spec.cr",
+      "spec/dynamic_values_w122_spec.cr",
+      "spec/dynamic_values_w122_adversary_spec.cr",
+      "spec/object_documents_w123_spec.cr",
+      "spec/object_documents_w123_root_spec.cr",
+      "spec/object_documents_w123_adversary_spec.cr"
+    ],
+    "physical": [
+      "spec/object_column_writer_w127_spec.cr",
+      "spec/object_column_writer_w127_root_spec.cr",
+      "spec/object_column_lane_binder_refactor_spec.cr",
+      "spec/object_file_reader_w126_root_spec.cr",
+      "spec/object_column_reader_w129_spec.cr",
+      "spec/object_recursive_consumers_w140_spec.cr",
+      "spec/object_recursive_w140_root_spec.cr"
+    ],
+    "composition": [
+      "spec/object_declared_dynamic_w158_spec.cr",
+      "spec/object_declared_dynamic_w158_red_spec.cr",
+      "spec/object_declared_dynamic_w158_adversary_spec.cr",
+      "spec/object_recursive_dynamic_w159_spec.cr",
+      "spec/object_recursive_dynamic_w159_red_spec.cr",
+      "spec/object_recursive_dynamic_w159_adversary_spec.cr",
+      "spec/object_declared_low_cardinality_w146_spec.cr",
+      "spec/object_declared_variant_w151_spec.cr",
+      "spec/json_nested_scalar_w182_guards_spec.cr",
+      "spec/json_recursive_scalar_w181_guards_spec.cr"
+    ],
+    "table": [
+      "spec/object_part_writer_w128_spec.cr",
+      "spec/object_part_writer_w128_root_spec.cr",
+      "spec/object_table_w130_spec.cr",
+      "spec/object_table_w130_root_spec.cr",
+      "spec/object_offline_table_w130_spec.cr",
+      "spec/object_catalog_w129_spec.cr",
+      "spec/object_catalog_w129_root_spec.cr"
+    ],
+    "names": [
+      "spec/binary_bulk_physical_prefix_w151_spec.cr",
+      "spec/binary_dynamic_physical_w156_spec.cr",
+      "spec/binary_dynamic_physical_w156_adversary_spec.cr",
+      "spec/binary_dynamic_physical_w156_red_spec.cr",
+      "spec/binary_low_cardinality_physical_w145_spec.cr",
+      "spec/binary_variant_physical_w149_spec.cr",
+      "spec/binary_variant_physical_w149_adversary_spec.cr",
+      "spec/wide_part_metadata_parser_refactor_spec.cr",
+      "spec/wide_part_writer_metadata_w150_spec.cr"
+    ]
+  },
+  "cohorts": [
+    {
+      "mode": "debug",
+      "group": "focused",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-debug-focused-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/array_object_part_w185_spec.cr spec/array_object_column_core_w185_spec.cr spec/array_object_low_cardinality_w185_spec.cr spec/array_object_dynamic_w185_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace  > /private/tmp/crystal-click-w185-array-json.iqePFl/debug-focused-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/debug-focused-polished.log",
+      "sha256": "5ef4d77f3c10e511a0173d31989e53a56046b85693fd9137068ab18f1cd89d07",
+      "examples": 9,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "debug",
+      "group": "foundation",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-debug-foundation-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/storage_occurrence_grid_w184_spec.cr spec/object_child_occurrences_w184_spec.cr spec/dynamic_discriminator_w121_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr spec/dynamic_values_w122_spec.cr spec/dynamic_values_w122_adversary_spec.cr spec/object_documents_w123_spec.cr spec/object_documents_w123_root_spec.cr spec/object_documents_w123_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace  > /private/tmp/crystal-click-w185-array-json.iqePFl/debug-foundation-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/debug-foundation-polished.log",
+      "sha256": "71030d2400aed84fb3ff8845f2214db0ba5baa632c59a4a5f26b9025a10655fd",
+      "examples": 64,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "debug",
+      "group": "physical",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-debug-physical-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_column_writer_w127_spec.cr spec/object_column_writer_w127_root_spec.cr spec/object_column_lane_binder_refactor_spec.cr spec/object_file_reader_w126_root_spec.cr spec/object_column_reader_w129_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_recursive_w140_root_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace  > /private/tmp/crystal-click-w185-array-json.iqePFl/debug-physical-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/debug-physical-polished.log",
+      "sha256": "1899b8ce47ffc04b756d3bb9924951c1d4f92772abdabb6c82fc56a3f156b245",
+      "examples": 52,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "debug",
+      "group": "composition",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-debug-composition-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_declared_dynamic_w158_spec.cr spec/object_declared_dynamic_w158_red_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace  > /private/tmp/crystal-click-w185-array-json.iqePFl/debug-composition-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/debug-composition-polished.log",
+      "sha256": "b06310e7b640c39e8c63d1e7f8318819d96759fd08dff93bf4667e0f295f49da",
+      "examples": 65,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "debug",
+      "group": "table",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-debug-table-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_part_writer_w128_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_table_w130_spec.cr spec/object_table_w130_root_spec.cr spec/object_offline_table_w130_spec.cr spec/object_catalog_w129_spec.cr spec/object_catalog_w129_root_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace  > /private/tmp/crystal-click-w185-array-json.iqePFl/debug-table-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/debug-table-polished.log",
+      "sha256": "b5d80d3e5407ffc13f6c19f8821e384313773fb9735b969d0aab99ade3bb63a9",
+      "examples": 52,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "debug",
+      "group": "names",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-debug-names-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/binary_variant_physical_w149_spec.cr spec/binary_variant_physical_w149_adversary_spec.cr spec/wide_part_metadata_parser_refactor_spec.cr spec/wide_part_writer_metadata_w150_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace  > /private/tmp/crystal-click-w185-array-json.iqePFl/debug-names-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/debug-names-polished.log",
+      "sha256": "8ab5a1e0a285cbdbebe8472694d849a7f0677288a731143c138589365991b966",
+      "examples": 54,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "release",
+      "group": "focused",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-release-focused-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/array_object_part_w185_spec.cr spec/array_object_column_core_w185_spec.cr spec/array_object_low_cardinality_w185_spec.cr spec/array_object_dynamic_w185_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w185-array-json.iqePFl/release-focused-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/release-focused-polished.log",
+      "sha256": "9db2644de20ef704ff0f879f0ef2d8d007a1374e4d3e531b9b1b0a70fd55877a",
+      "examples": 9,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "release",
+      "group": "foundation",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-release-foundation-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/storage_occurrence_grid_w184_spec.cr spec/object_child_occurrences_w184_spec.cr spec/dynamic_discriminator_w121_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr spec/dynamic_values_w122_spec.cr spec/dynamic_values_w122_adversary_spec.cr spec/object_documents_w123_spec.cr spec/object_documents_w123_root_spec.cr spec/object_documents_w123_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w185-array-json.iqePFl/release-foundation-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/release-foundation-polished.log",
+      "sha256": "a6cca0657b537450ad42f483e1cad17d82f5182fb31d76f6be4a1009d071764a",
+      "examples": 64,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "release",
+      "group": "physical",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-release-physical-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_column_writer_w127_spec.cr spec/object_column_writer_w127_root_spec.cr spec/object_column_lane_binder_refactor_spec.cr spec/object_file_reader_w126_root_spec.cr spec/object_column_reader_w129_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_recursive_w140_root_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w185-array-json.iqePFl/release-physical-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/release-physical-polished.log",
+      "sha256": "741c67c6bf5ce235d4a8f9e1b32e8621cf456b2749d81c712ec0db37a4112a61",
+      "examples": 52,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "release",
+      "group": "composition",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-release-composition-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_declared_dynamic_w158_spec.cr spec/object_declared_dynamic_w158_red_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w185-array-json.iqePFl/release-composition-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/release-composition-polished.log",
+      "sha256": "bf25511a29f6e3190af24859ac4861abacb5072a818ee8e5820953566eb1481c",
+      "examples": 65,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "release",
+      "group": "table",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-release-table-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_part_writer_w128_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_table_w130_spec.cr spec/object_table_w130_root_spec.cr spec/object_offline_table_w130_spec.cr spec/object_catalog_w129_spec.cr spec/object_catalog_w129_root_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w185-array-json.iqePFl/release-table-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/release-table-polished.log",
+      "sha256": "4657a1a63ea3916cbb000770fdfa7897c166768395cf7b4429fb1e07a53af1a3",
+      "examples": 52,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "mode": "release",
+      "group": "names",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-release-names-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/binary_variant_physical_w149_spec.cr spec/binary_variant_physical_w149_adversary_spec.cr spec/wide_part_metadata_parser_refactor_spec.cr spec/wide_part_writer_metadata_w150_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w185-array-json.iqePFl/release-names-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/release-names-polished.log",
+      "sha256": "c977001da8ae75bad82dd1230420e5d68bf48ff9eeb3980dfc311194323e2b74",
+      "examples": 54,
+      "guard_exit": 0,
+      "child_exit": 0,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    }
+  ],
+  "native_gates": [
+    {
+      "kind": "build",
+      "mode": "debug",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-helper-debug-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_array_json_parts_w185.cr -o /private/tmp/crystal-click-w185-array-json.iqePFl/helper-debug-polished  --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w185-array-json.iqePFl/helper-debug-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/helper-debug-polished.log",
+      "log_sha256": "bbe9e9d8dbdb09cf805bd52bf11b25ad1a296aa81f599159e5e6923384b86a96",
+      "evidence_root": null,
+      "guard_exit": 0,
+      "child_exit": 0
+    },
+    {
+      "kind": "native",
+      "mode": "debug",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_array_json_parts_w185.rb --binary /private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped --crystal-probe /private/tmp/crystal-click-w185-array-json.iqePFl/helper-debug-polished --evidence-root /private/tmp/crystal-click-w185-native-debug-polished.BtEsdW > /private/tmp/crystal-click-w185-array-json.iqePFl/native-debug-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/native-debug-polished.log",
+      "log_sha256": "34ba879c922897904c3d6eac53b80e69f95329bfd8ed6630806b912971ab5b01",
+      "evidence_root": "/private/tmp/crystal-click-w185-native-debug-polished.BtEsdW",
+      "guard_exit": 0,
+      "child_exit": 0,
+      "summary": {
+        "path": "/private/tmp/crystal-click-w185-native-debug-polished.BtEsdW/summary.json",
+        "sha256": "67f102335410dca92c37fa408a44a0a0b0cdae79a88b71ab1738dfc90ea6e9e0"
+      },
+      "process_count": 3,
+      "process_exits": [
+        0,
+        0,
+        0
+      ],
+      "signals": [
+        null,
+        null,
+        null
+      ],
+      "timeouts": [
+        false,
+        false,
+        false
+      ],
+      "capture_errors": false
+    },
+    {
+      "kind": "build",
+      "mode": "release",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-helper-release-frozen SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_array_json_parts_w185.cr -o /private/tmp/crystal-click-w185-array-json.iqePFl/helper-release-polished --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w185-array-json.iqePFl/helper-release-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/helper-release-polished.log",
+      "log_sha256": "b39f077fb567f5dbfc56bb1b5c9441c4d05e3a56eb76aaa6de578c3f2cc3f9c9",
+      "evidence_root": null,
+      "guard_exit": 0,
+      "child_exit": 0
+    },
+    {
+      "kind": "native",
+      "mode": "release",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_array_json_parts_w185.rb --binary /private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped --crystal-probe /private/tmp/crystal-click-w185-array-json.iqePFl/helper-release-polished --evidence-root /private/tmp/crystal-click-w185-native-release-polished.2YZ7qN > /private/tmp/crystal-click-w185-array-json.iqePFl/native-release-polished.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/native-release-polished.log",
+      "log_sha256": "c801d615c52def61a4bcb543f42988fcd4492bae76828b8124157b7272df75c1",
+      "evidence_root": "/private/tmp/crystal-click-w185-native-release-polished.2YZ7qN",
+      "guard_exit": 0,
+      "child_exit": 0,
+      "summary": {
+        "path": "/private/tmp/crystal-click-w185-native-release-polished.2YZ7qN/summary.json",
+        "sha256": "ab1fa909a516ecbd4b539a6f5ae9d2f5a89f47854a02bef8207e688d02902064"
+      },
+      "process_count": 3,
+      "process_exits": [
+        0,
+        0,
+        0
+      ],
+      "signals": [
+        null,
+        null,
+        null
+      ],
+      "timeouts": [
+        false,
+        false,
+        false
+      ],
+      "capture_errors": false
+    }
+  ],
+  "root_receipt": {
+    "path": "/private/tmp/crystal-click-w185-array-json.iqePFl/root-receipt.json",
+    "sha256": "b71ac54fd88bfd94c8fbebd2c3448f61b96fc10c786a357da917a1682fa23800",
+    "size": 246,
+    "verifier": {
+      "path": "/private/tmp/crystal-click-w185-array-json.iqePFl/root_verify.rb",
+      "sha256": "82d5c2565931835de8a800813d9dfe034f8df701b7fd8743da19acb7a53f794b",
+      "size": 4471
+    },
+    "actual_exit": 0,
+    "hash_checks": 134,
+    "process_count": 6,
+    "library_file_count": 22,
+    "modes_equal": true,
+    "checks": "Actual capture/runtime/stream hashes and sizes, P mark fields, exact schema/CHECK results, authored full/middle rows, nonempty shared size1, all-empty parents and all generated library files between modes"
+  },
+  "example": {
+    "build": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w185-array-json.iqePFl/cache-example SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build examples/read_array_json_w185.cr -o /private/tmp/crystal-click-w185-array-json.iqePFl/read-array-json-example --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w185-array-json.iqePFl/example-build.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/example-build.log",
+      "sha256": "ae6cd3f9708593ebdb226288419235ad09b5cb5c9452c3b1fe0517a43e0ff8d2",
+      "guard_exit": 0,
+      "child_exit": 0
+    },
+    "run": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w185-array-json.iqePFl/read-array-json-example 600 12288 /private/tmp/crystal-click-w185-native-debug-polished.BtEsdW/stores/native/store/759/759ca3f5-5e90-4b2b-9eb3-5d2bdc926943/all_1_1_0/ a > /private/tmp/crystal-click-w185-array-json.iqePFl/example-run.log 2>&1",
+      "log": "/private/tmp/crystal-click-w185-array-json.iqePFl/example-run.log",
+      "sha256": "1d75258b8241b37a7071c6658eed8592d0f6b4ff8b9b504f5a8ee4c1e08c4cb3",
+      "guard_exit": 0,
+      "child_exit": 0,
+      "observed": "Eight P rows, four real P=2 marks, row C counts [0,1,0,0,2,0,0,0], typed t=7/11/13 and shared red/blue/green"
+    }
+  },
+  "baseline_red": {
+    "log": {
+      "path": "/private/tmp/crystal-click-w185-array-json.iqePFl/baseline2.log",
+      "sha256": "6dd9b479564e5c3d5bf03f51b277162a4d32cd9922397748d746c053cfec27cc",
+      "size": 1009
+    },
+    "actual_exit": 1,
+    "observed": "The pre-change public typed-table API compiled then refused a stock-written ArrayJSON column as an unsupported exact typed column.",
+    "invalid_probe": "The preceding row_count probe did not compile; it is not the behavioral RED."
+  },
+  "retained_failures": [
+    "Initial sandbox process-isolation refusal; retry used the same unchanged guard limits.",
+    "Integration compile/test errors: require order, initializer inference, reserved enum identifier, over-recursive flatten, empty fixture shape and direct-test unhashed/hashed roster mismatch.",
+    "Ruby 2.6 filter_map runner error after one successful stock source process; fixed with map/compact.",
+    {
+      "regression": {
+        "path": "/private/tmp/crystal-click-w185-array-json.iqePFl/debug-physical.log",
+        "sha256": "2b270b796232692604feb3bbd63e25494c7c540e41cb0a5e7092a5cb7b844a15",
+        "size": 2824
+      },
+      "examples": 52,
+      "failures": 1,
+      "fix": "Metadata extraction changed root declaration-versus-roster error precedence. A source-declaration validator restores old ordering; the existing W129 assertion is unchanged."
+    },
+    "Final formatting changed only spacing at two numeric constants; all 12 spec gates and both helper/native gates were repeated afterward."
+  ],
+  "adversary": {
+    "verdict": "ROBUST within declared slice",
+    "checks": [
+      "Same-total size0 redistribution with refreshed checksums and a late selected mark rejects before callback",
+      "P-grid disagreement rejects before callback",
+      "All-empty groups and zero read windows",
+      "Existing destination remains unchanged on refused publication",
+      "Exact schema caps and Array wrapper depth",
+      "Unicode inner type declaration and physical Array-level rebasing",
+      "LowCardinality dictionary state after an empty middle mark",
+      "Two separately bound runtime Dynamic paths",
+      "Root Object strict guards and source-declaration error precedence"
+    ],
+    "review_lineage": "Luna read-only review is correlated same-lineage; root execution and pinned stock oracle supply distinct discriminating evidence."
+  },
+  "limitations": [
+    "Only normalized hashed Wide/LZ4, plain adaptive marks, Object V3/one-bucket MAP, BASIC child Dynamic and the existing supported inner Object grammar.",
+    "Native ArrayJSON witness is typed t UInt8 plus nonempty shared String; Crystal LC/Dynamic controls do not prove every composite profile against stock.",
+    "No generic JSON bulk/wrapper admission, Compact parts, compressed marks, broader shared-data/path layouts or new ArrayJSON projections/MV execution.",
+    "Codec/grid/statistics/value work shares a budget. Names/rosters, part metadata and compressed transport have separately bounded contexts; a single full cross-domain budget law remains open.",
+    "Logical work/materialization limits are not RSS, transient decoder workspace or caller-retention guarantees.",
+    "Small selections still check the complete parent-size schedule and can hit whole-part logical caps. The typed adapter uses default schema limits.",
+    "Part paths must stay immutable; no server Active-state, snapshot or post-open mutation guarantee.",
+    "Same-total corruption refusal is scoped to the selected schedule, not whole-scan atomicity for arbitrary inner payloads.",
+    "No full repository suite, new performance benchmark or completed table-facade refactor."
+  ],
+  "next_frontier": "General site/state/profile storage composition beneath remaining wrappers and layouts; full cross-domain accounting and broader types/MV/projections. Performance remains deferred.",
+  "decay": "Refresh affected gates after codec, grid/state, physical naming, metadata, profile or executed-runtime changes. Loss of task-owned temporary evidence invalidates its artifact links; source-only audit never substitutes for a runtime gate."
+}

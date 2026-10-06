@@ -1,9 +1,10 @@
 # Recursive JSON storage frontier
 
-Status: PROPOSED complete storage composition; W184's internal paired
-occurrence-grid foundation is VERIFIED within the executed scope below.
+Status: PROPOSED complete storage composition; W185's dedicated normalized
+Array(JSON) part/table path and W184's internal paired occurrence-grid foundation
+are VERIFIED within their executed scopes below.
 Baseline: `4464ef3`. W182 scalar admission remains unchanged. No new generic
-Crystal JSON bulk, part or table-reader admission.
+Crystal JSON bulk admission or admission beneath every persisted wrapper.
 W183's finite stock physical discriminator is verified below; it does not
 complete the storage-admission DoD.
 
@@ -44,15 +45,143 @@ does not implement this storage composition.
    those child counts; empty child ranges are legal when the parent is real.
 5. Physical stream naming must receive the enclosing path and array level.
    Concatenating a root Object filename prefix is not sufficient evidence.
-6. Metadata discovery, actual rosters, child values and generated names consume
-   one enclosing bounded operation budget. A JSON edge cannot reset it.
+6. Target for complete composition: metadata discovery, actual rosters, child
+   values and generated names consume one enclosing bounded operation budget.
+   A JSON edge cannot reset it. W185 shares a codec budget for parent/child grid,
+   statistics and values, but names/rosters, part metadata and compressed
+   transport retain separate bounded contexts. It does not close this full
+   cross-domain budget law or establish a process-RSS bound.
 7. Reuse the current Object structure/value owners behind a site-aware seam.
    Do not globally relax root mark validation to admit empty child groups.
 8. Keep schema admission, serialization profiles and runtime state separate.
    In particular, nested Map serialization-info propagation is not the same
    setting as ObjectStructure/shared-data versions.
 
-Risk for production widening: CAUTION (serialization and mark/state ownership).
+## W185 implementation seal (VERIFIED within the finite scope below)
+
+Baseline: clean `3ecec3f`. This vertical step composes `Array(JSON)` in
+normalized hashed Wide/LZ4 parts with plain adaptive marks, using the existing
+Object V3 / one-bucket shared MAP owner. This is an execution step toward the
+full type/MV/projection objective, not a replacement objective or a claim that
+every JSON layout is supported. Performance remains deferred.
+
+The inner `ObjectDocumentSchema` retains its exact caps and supported typed
+field grammar. Existing root codecs, supported typed fields and strict root
+nonempty-mark validation must remain intact. Do not add a separate serializer
+for each Cartesian product or infer an actual dynamic roster from nominal caps.
+
+Public composition boundary:
+
+- `ArrayObjectColumnWriter.encode`: granules -> parent rows -> Object documents;
+  an owned file roster composes outer sizes with the existing child lanes.
+- `ArrayObjectColumnReader.open`: exact inner schema plus literal Array wrapper;
+  `read_marks` restores one document array per parent row, including empty rows.
+- `WidePartWriter.write_uint64_array_object_pair`: full checksummed staged part
+  publication, canonical `Array(inner JSON)` metadata and staged reopen.
+- Typed table batches expose `array_object_documents_for(column)`; no scalar-reader
+  fall-through, projection admission or implicit flattening.
+
+Risk: CAUTION (serialization and public table materialization). Rollback:
+one isolated atomic feature commit from the clean baseline; retained stock
+parts are read-only and every generated part/store is task-owned temporary data.
+Likeliest failure: child counts have the correct sum but are distributed across
+the wrong marks/parent rows. Guard: derive the complete child schedule from
+checked serialized sizes before value callbacks; attack same-total redistribution,
+zero child marks, nonzero origins, truncation, suffixes, caps and path/state collisions.
+
+Execution order / ownership:
+
+1. Root observes an existing-public-API behavioral refusal on a stock-written
+   W183 ArrayJSON part before production edits. A probe compilation error is
+   not the behavioral RED.
+2. Core owners thread site/array level and checked occurrence coordinates through
+   existing Object state, statistics, physical plan and reader/writer composition.
+3. Part publisher and table adapter consume the composed column rather than
+   duplicating its serializers; new owners have their own files.
+4. Independent authored row literals drive paired stock/library whole-part tests.
+
+DoD commands: resource-bounded `crystal spec` on W185 core/public/integration
+specs plus affected root Object/bulk/table regressions, in DEBUG and RELEASE;
+resource-bounded builds of the W185 Crystal oracle helper in both modes;
+`ruby scripts/check_array_json_parts_w185.rb` with the pinned stock executable,
+built helper and an empty task-owned `/private/tmp` evidence directory. Expected:
+all selected specs pass, stock-written mixed/all-empty parts reopen through
+Crystal, library-owned parts pass stock ATTACH/CHECK and exact schema/full/middle
+reads, and public table batches preserve per-parent arrays. A nonempty shared
+MAP witness must prove the nested `size1` path, not only empty file inventories.
+The native gate must record actual exit/signal/timeout status under the existing
+resource bounds. Root performs diff review and hostile checks before admission.
+
+Rejected surface remains: other JSON physical layouts, Compact parts, compressed
+marks, generic persisted JSON under every wrapper, unqualified projections and
+MV execution. The existing root supported grammar is not narrowed to make the
+first finite native witness easier. Unexecuted or partial gates leave W185 open.
+
+## W185 executed scope and continuation
+
+Root executes the same 46 selected specs in six serial cohorts per mode:
+296 DEBUG and 296 RELEASE examples, zero failures/errors/pending, all twelve
+actual child/guard exits 0. The nine new examples cover public publication and
+typed batches, full/middle/zero windows, all-empty child groups, unchanged
+overwrite targets, exact schema caps, wrapper depth, Unicode type labels,
+rebased typed/shared names, retained LowCardinality dictionary state and two
+separately bound runtime Dynamic paths. A same-total `.size0` redistribution
+with refreshed checksums is rejected before a callback for a late selected
+mark; this is not whole-scan atomic validation of every inner payload.
+
+Both helper modes consume newly stock-written mixed/all-empty ArrayJSON parts
+and a root JSON control. Mixed child counts are `1,0,2,0` while every stream's
+physical mark rows remain `2,2,2,2,0`. Nonempty shared String values prove
+`a.object_shared_data.size1`, not merely an empty filename inventory. Each
+mode writes its own complete library part; pinned stock ATTACH/CHECK, exact
+schema, full rows and a middle PK range match independently authored literals.
+All six recorded native/helper processes exit 0 without signal, timeout or
+capture error. Root reconciles 134 captured/runtime/stream hashes and compares
+actual helper values plus all 22 library files byte-for-byte between modes.
+This is a finite stock compatibility witness, not every typed/runtime product.
+
+The final 1,053 Crystal/Ruby inputs have aggregate SHA-256
+`4040dc35c5455f83d201fc426dba29a0df8969d506421f1803d1aa3c8bb0efce`
+(sorted relative-path/SHA-256 pairs, JSON encoding). The 600-second/12-GiB
+guard and 50% free-memory preflight are unchanged; heavy jobs run serially
+with one compiler thread. The new example builds and reads all eight stock
+rows with the correct per-parent child counts. Formatter, Ruby syntax and
+diff-whitespace checks pass. No full-repository suite or benchmark was run.
+
+The behavioral baseline compiled and refused the stock ArrayJSON through the
+old typed table path. Retained failed attempts include an invalid initial probe,
+Crystal compile/test errors during integration, a Ruby 2.6 `filter_map` runner
+error and a real root-reader error-precedence regression caused by metadata
+extraction. The latter is fixed by validating the source declaration before
+parsing the substream roster; the old W129 assertion is unchanged. These failed
+runs are not counted as green. Final gates were repeated after formatting.
+
+Architecture: separate Array reader/writer/files, part metadata/publisher and
+table adapter owners compose existing Object serializers. The shared
+`ObjectColumnPartMetadata` parser is extracted without changing root admission.
+This does not complete the larger table-facade decomposition.
+
+Read/materialization limits count logical work and containers, not peak RSS,
+transient decoder workspace or caller retention. A selected read still checks
+the complete parent-size schedule and may hit whole-part logical caps. The
+table adapter uses its default schema caps; this is not an unbounded lazy
+reader. Parts must be immutable throughout selection and reading.
+
+Scoped hostile verdict: ROBUST for this normalized BASIC ArrayJSON slice,
+selected regression guards and finite paired stock witnesses. Luna's read-only
+review is correlated same-lineage evidence; root's executed native oracle and
+literal/hash reconciliation provide the external discriminator.
+Curated evidence: [json-array-parts-w185.json](evidence/json-array-parts-w185.json).
+Usage: [read_array_json_w185.cr](../examples/read_array_json_w185.cr).
+
+Next frontier: general persisted site/state/profile composition beneath the
+remaining wrappers; nested JSON physical layouts, full cross-domain accounting,
+Compact/compressed marks, additional JSON shared-data/path semantics and broader
+MV/projection compatibility remain open. Performance is deferred. Refresh the
+affected gates after codec, naming, metadata, state/grid or runtime-profile
+changes; deleting retained temporary evidence also invalidates its file links.
+
+Risk for future production widening: CAUTION (serialization and mark/state ownership).
 Rollback: an isolated atomic feature commit; no source parts or remote changes.
 Likeliest failure: conflating outer rows with flattened child occurrences, or
 sharing a structure state between two sites with the same nominal type.
@@ -64,10 +193,12 @@ qualified. Existing W182 nominal scalar composition remains qualified only
 within its own evidence. Generic bulk planners, persisted Object declarations,
 borrowed Dynamic and unqualified consumers retain their recursive JSON guards.
 
-Guard-only next physical slice: `Array(JSON(..., t UInt8))` in normalized Wide
-parts, with a real all-empty mark, mixed zero/one/multiple child counts and an
-empty trailing mark. This is a discriminator and first implementation target,
-not a restriction of the overall full-type/MV/projection objective.
+W185 admits the dedicated canonical `Array(JSON(...))` typed column path in
+normalized hashed Wide/LZ4 parts with plain adaptive marks, Object V3,
+one-bucket shared MAP, BASIC child Dynamic mode and the existing supported
+inner Object grammar. Its finite stock witness uses typed `t UInt8` and shared
+String values; it does not restrict the overall full-type/MV/projection
+objective or qualify every recursive product.
 
 No new Compact, bucketed/ADVANCED shared JSON, SKIP/REGEXP, Map version, projection,
 MV execution or performance claim follows from this probe.

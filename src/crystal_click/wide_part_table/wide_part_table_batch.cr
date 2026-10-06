@@ -20,6 +20,7 @@ module CrystalClick
     @geo_array_rows : Hash(String, Slice(WideGeoArrayRow)) = Hash(String, Slice(WideGeoArrayRow)).new
     @geometry_rows : Hash(String, Slice(WideGeometryRow)) = Hash(String, Slice(WideGeometryRow)).new
     @object_documents : Hash(String, Slice(ObjectDocument)) = Hash(String, Slice(ObjectDocument)).new
+    @array_object_documents : Hash(String, Slice(Array(ObjectDocument))) = Hash(String, Slice(Array(ObjectDocument))).new
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @aggregate_count_state_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @string_values : Hash(String, Slice(String))
@@ -467,6 +468,29 @@ module CrystalClick
       raise CorruptPartError.new("Object materializer received a non-JSON column") unless WidePart.json_type?(@column_types[index])
       raise CorruptPartError.new("Object batch slice row count mismatch") unless values.size == expected_rows
       @object_documents[column] = values
+      nil
+    end
+
+    # Return one Array(JSON) row (an owned child-document Array); the outer
+    # Slice is callback-scoped, while the nested immutable documents may be
+    # retained under the same rules as Object document handles.
+    def array_object_documents_for(column : String) : Slice(Array(ObjectDocument))
+      index = column_index(column)
+      unless ArrayObjectColumnReader.schema_for_source_declaration(@column_types[index])
+        raise UnsupportedFormatError.new("Array(JSON) accessor requires an exact normalized declaration")
+      end
+      @array_object_documents[column]? || raise(UnsupportedFormatError.new("Array(JSON) column was not materialized in this batch"))
+    end
+
+    # Internal table-scan hook for a borrowed outer-row slice. Each row keeps
+    # its own child array and no Array(JSON) occurrence state is shared.
+    def install_array_object_documents(column : String, values : Slice(Array(ObjectDocument)), expected_rows : Int) : Nil
+      index = column_index(column)
+      unless ArrayObjectColumnReader.schema_for_source_declaration(@column_types[index])
+        raise CorruptPartError.new("Array(JSON) materializer received a non-admitted declaration")
+      end
+      raise CorruptPartError.new("Array(JSON) batch slice row count mismatch") unless values.size == expected_rows
+      @array_object_documents[column] = values
       nil
     end
 

@@ -36,7 +36,7 @@ module CrystalClick
       @prefix_sizes = Hash(String, Int32).new
       @context.preflight_name_bytes(PhysicalStreamName.escaped_size(column_name))
       prefix = PhysicalStreamName.escape(column_name)
-      @names = build_bindings(type, prefix)
+      @names = build_bindings(type, prefix, 0_u64)
     end
 
     private def initialize(
@@ -45,6 +45,7 @@ module CrystalClick
       @profile : BinaryBulkProfile,
       limits : BinaryCodecLimits,
       context : PhysicalStreamPlanContext?,
+      initial_array_level : UInt64,
     )
       reject_json_type!(type)
       BinaryNestedType.reject_unqualified_specialized_bulk!(type)
@@ -52,17 +53,18 @@ module CrystalClick
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
+      validate_initial_array_level!(initial_array_level, limits)
       @context.preflight_name_bytes(escaped_prefix.value.bytesize.to_u64)
-      @names = build_bindings(type, escaped_prefix.value)
+      @names = build_bindings(type, escaped_prefix.value, initial_array_level)
     end
 
-    private def build_bindings(type : BinaryDataType, prefix : String) : Hash(String, String)
+    private def build_bindings(type : BinaryDataType, prefix : String, initial_array_level : UInt64) : Hash(String, String)
       validate_type(type, 0)
       role_plan = BinaryBulkTypePlan.new(type, @profile, nil, @context.limits)
       role_count = role_plan.role_count
       @context.record_elements(role_count)
       if type.contains_variant?
-        return build_variant_bindings(type, prefix, role_plan, role_count)
+        return build_variant_bindings(type, prefix, role_plan, role_count, initial_array_level)
       end
 
       site_count, temporary_path_bytes, prefix_role_bytes = measure_dictionary_prefix_metadata(type, "root".bytesize.to_u64)
@@ -81,12 +83,12 @@ module CrystalClick
       if site_count > 0_u64
         @context.charge_name_bytes(add_size(temporary_path_bytes, prefix_role_bytes))
       end
-      role_bytes, rendered_name_bytes = measure_bindings(type, 4_u64, prefix.bytesize.to_u64, 0_u64)
+      role_bytes, rendered_name_bytes = measure_bindings(type, 4_u64, prefix.bytesize.to_u64, initial_array_level)
       @context.preflight_name_bytes(add_size(role_bytes, rendered_name_bytes))
 
       roles = role_plan.roles
       names = Hash(String, String).new
-      append_bindings(type, "root", prefix, 0_u64, names)
+      append_bindings(type, "root", prefix, initial_array_level, names)
       unless names.keys.sort == roles
         raise UnsupportedFormatError.new("binary bulk physical roles do not match the admitted role grammar")
       end
@@ -128,6 +130,7 @@ module CrystalClick
       prefix : String,
       role_plan : BinaryBulkTypePlan,
       role_count : UInt64,
+      initial_array_level : UInt64,
     ) : Hash(String, String)
       variant_names = BinaryBulkVariantNamePlan.new(type, @context.limits, @context)
       site_count, temporary_path_bytes, prefix_role_bytes = measure_dictionary_prefix_metadata(
@@ -150,7 +153,7 @@ module CrystalClick
       end
 
       role_bytes, rendered_name_bytes = measure_bindings(
-        type, 4_u64, prefix.bytesize.to_u64, 0_u64, variant_names
+        type, 4_u64, prefix.bytesize.to_u64, initial_array_level, variant_names
       )
       variant_names.finish_measurement!
       conservative_roster_bytes = add_size(role_bytes, rendered_name_bytes)
@@ -174,7 +177,7 @@ module CrystalClick
       variant_names.materialize!
 
       names = Hash(String, String).new
-      append_bindings(type, "root", prefix, 0_u64, names, variant_names)
+      append_bindings(type, "root", prefix, initial_array_level, names, variant_names)
       variant_names.finish_binding!
       unless @prefix_sizes.size.to_u64 == prefix_entries
         raise UnsupportedFormatError.new("binary bulk Variant prefix roster changed after preflight")
@@ -214,6 +217,7 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       context : PhysicalStreamPlanContext? = nil,
+      initial_array_level : UInt64 = 0_u64,
     ) : BinaryBulkPhysicalPlan
       if type.contains_json?
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
@@ -225,7 +229,13 @@ module CrystalClick
       end
       selected_context = context || PhysicalStreamPlanContext.new(limits)
       selected_context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
-      new(type, EscapedPrefix.validated(escaped_prefix), profile, limits, selected_context)
+      new(type, EscapedPrefix.validated(escaped_prefix), profile, limits, selected_context, initial_array_level)
+    end
+
+    private def validate_initial_array_level!(level : UInt64, limits : BinaryCodecLimits) : Nil
+      if level > UInt64::MAX - limits.max_depth.to_u64
+        raise UnsupportedFormatError.new("binary bulk initial Array level overflows the physical name coordinate")
+      end
     end
 
     # A detached role-to-basename snapshot. Neither keys nor values alias the

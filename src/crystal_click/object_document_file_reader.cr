@@ -52,6 +52,9 @@ module CrystalClick
       getter transport_budget : CompressedStreamBudget
       getter descriptor : ObjectDocumentFileDescriptor?
       getter replay_complete : Bool
+      getter occurrence_grid : StorageOccurrenceGrid?
+      getter size_data_name : String?
+      getter size_marks_name : String?
 
       def initialize(
         @source : PartStreamSource,
@@ -72,6 +75,9 @@ module CrystalClick
         @transport_budget : CompressedStreamBudget,
         @descriptor : ObjectDocumentFileDescriptor?,
         @replay_complete : Bool,
+        @occurrence_grid : StorageOccurrenceGrid?,
+        @size_data_name : String?,
+        @size_marks_name : String?,
       )
       end
     end
@@ -105,6 +111,26 @@ module CrystalClick
       prepared.descriptor.not_nil!
     end
 
+    # Child-site metadata path used by an Array wrapper. `limits` are already
+    # reduced by the wrapper's depth contribution; initial_array_level is a
+    # separate physical-name coordinate and does not reduce logical depth.
+    def self.inspect_child_site(
+      part_path : String,
+      column_name : String,
+      typed_schema : Hash(String, BinaryDataType),
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : ObjectDocumentFileDescriptor
+      prepared = prepare_read(
+        part_path, column_name, typed_schema, 0, 0, profile, shared_profile,
+        hashed, limits, transport_limits, true, true, 1_u64
+      )
+      prepared.descriptor.not_nil!
+    end
+
     def self.read(
       part_path : String,
       column_name : String,
@@ -133,6 +159,30 @@ module CrystalClick
       read_prepared(prepared)
     end
 
+    # BASIC child-site value path. Returns one mark of parent rows, each with
+    # its own decoded child document list. The complete .size0 schedule is
+    # validated during preparation, including for an empty selection.
+    def self.read_child_site(
+      part_path : String,
+      column_name : String,
+      typed_schema : Hash(String, BinaryDataType),
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : Array(Array(Array(ObjectDocument)))
+      prepared = prepare_read(
+        part_path, column_name, typed_schema, first_mark, mark_count,
+        profile, shared_profile, hashed, limits, transport_limits, false,
+        true, 1_u64
+      )
+      flat = read_prepared(prepared)
+      group_child_documents(prepared, flat)
+    end
+
     private def self.prepare_read(
       part_path : String,
       column_name : String,
@@ -145,6 +195,8 @@ module CrystalClick
       limits : BinaryCodecLimits,
       transport_limits : CompressedStreamLimits,
       build_descriptor : Bool,
+      child_site : Bool = false,
+      initial_array_level : UInt64 = 0_u64,
     ) : PreparedRead
       validate_selection_arguments!(first_mark, mark_count)
       reject_json_schema!(typed_schema)
@@ -178,6 +230,24 @@ module CrystalClick
       charge_source_roster!(object_grid, codec_budget)
       outer_rows = copy_outer_rows(object_grid)
       selected_count = validate_selection!(first_mark, mark_count, outer_rows.size)
+
+      occurrence_grid = nil.as(StorageOccurrenceGrid?)
+      size_data_name = nil.as(String?)
+      size_marks_name = nil.as(String?)
+      size_grid = nil.as(CompressedMarkGrid?)
+      if child_site
+        size_data_name, size_marks_name, size_grid, child_rows = inspect_child_schedule!(
+          source,
+          column_name,
+          column_prefix,
+          outer_rows,
+          hashed,
+          limits,
+          codec_budget,
+          transport_budget,
+        )
+        occurrence_grid = StorageOccurrenceGrid.new(outer_rows, child_rows, codec_budget)
+      end
 
       preflight_dynamic_metadata_names!(object, column_prefix, hashed, limits, codec_budget)
       dynamic_bytes = Hash(String, Bytes).new(initial_capacity: object.dynamic_path_count)
@@ -278,7 +348,8 @@ module CrystalClick
         document_plan,
         profile,
         shared_profile,
-        limits
+        limits,
+        initial_array_level
       )
 
       typed_dynamic_metadata_names.each do |path, names|
@@ -321,6 +392,15 @@ module CrystalClick
         end
       end
 
+      if grid = size_grid
+        logical_lane_bytes = checked_add_u64(logical_lane_bytes, grid.logical_size.to_u64)
+        unless build_descriptor
+          first = replay_complete ? 0 : first_mark
+          count = replay_complete ? outer_rows.size : selected_count
+          selected_wire_bytes = checked_add_u64(selected_wire_bytes, selected_extent(grid, first, count, 0))
+        end
+      end
+
       # The declared Dynamic lane uses the generic plan's BASIC physical
       # discriminator prefix. Validate that header after every complete grid
       # has been admitted, but before selected value windows are read.
@@ -341,6 +421,7 @@ module CrystalClick
           hashed,
           limits,
           codec_budget,
+          child_site ? size_stream_name(column_prefix, limits) : nil,
         )
         descriptor = ObjectDocumentFileDescriptor.new(
           document_plan,
@@ -348,6 +429,7 @@ module CrystalClick
           logical_names,
           checksum_names,
           logical_read_bytes,
+          occurrence_grid,
         )
       end
 
@@ -371,6 +453,9 @@ module CrystalClick
         transport_budget,
         descriptor,
         replay_complete,
+        occurrence_grid,
+        size_data_name,
+        size_marks_name,
       )
     end
 
@@ -385,6 +470,7 @@ module CrystalClick
       outer_rows = prepared.outer_rows
       first_mark = prepared.first_mark
       selected_count = prepared.selected_count
+      occurrence_grid = prepared.occurrence_grid
       profile = prepared.profile
       shared_profile = prepared.shared_profile
       bulk_bindings = prepared.bulk_bindings
@@ -394,6 +480,25 @@ module CrystalClick
       replay_complete = prepared.replay_complete
       read_first = replay_complete ? 0 : first_mark
       read_count = replay_complete ? outer_rows.size : selected_count
+      logical_rows = outer_rows
+      if grid = occurrence_grid
+        count = grid.mark_count.to_u64
+        codec_budget.ensure_future_nodes(count)
+        codec_budget.ensure_future_elements(count)
+        count.times { codec_budget.charge_node }
+        codec_budget.charge_elements(count)
+        logical_rows = Array(UInt64).new(grid.mark_count) do |index|
+          grid.logical_occurrences_at(index)
+        end
+        codec_budget.ensure_future_nodes(selected_count.to_u64)
+        codec_budget.ensure_future_elements(selected_count.to_u64)
+        selected_count.times { codec_budget.charge_node }
+        codec_budget.charge_elements(selected_count.to_u64)
+      end
+      selected_rows = Array(UInt64).new(selected_count)
+      selected_count.times do |index|
+        selected_rows << logical_rows[first_mark + index]
+      end
       prefix_reads = [] of Tuple(String, Int32, Int32)
       bulk_bindings.each do |binding|
         next unless (binding.kind == :typed || binding.kind == :typed_dynamic) &&
@@ -521,7 +626,11 @@ module CrystalClick
           DynamicDiscriminatorCodec::HEADER_BYTES.to_i,
           transport_budget
         )
-        discriminator = discriminator_stream(window)
+        discriminator = discriminator_stream(
+          window,
+          occurrence_grid ? logical_rows : nil,
+          occurrence_grid ? read_first : 0
+        )
         arms = Hash(String, BinaryBulkStreams).new
         if arm_roles = dynamic_roles[binding.path]?
           arm_roles.each do |arm, roles|
@@ -532,11 +641,7 @@ module CrystalClick
       end
 
       shared_streams = BinaryBulkStreams.new(read_count, shared_roles)
-      selected_rows = Array(UInt64).new(selected_count)
-      selected_count.times do |index|
-        selected_rows << outer_rows[first_mark + index]
-      end
-      stream_rows = replay_complete ? outer_rows : selected_rows
+      stream_rows = replay_complete ? logical_rows : selected_rows
       ordinary_schema = Hash(String, BinaryDataType).new
       schema_snapshot.each do |path, type|
         ordinary_schema[path] = type unless type.contains_dynamic?
@@ -549,15 +654,33 @@ module CrystalClick
         shared_streams
       )
 
-      result = ObjectDocumentCodec.decode_with_budget(
-        ordinary_schema,
-        streams,
-        codec_budget,
-        first_mark: replay_complete ? first_mark : 0,
-        mark_count: selected_count,
-        profile: profile,
-        shared_profile: shared_profile
-      )
+      result = if full_grid = occurrence_grid
+                 decode_grid = if replay_complete
+                                 full_grid
+                               else
+                                 selected_occurrence_grid(full_grid, read_first, read_count, codec_budget)
+                               end
+                 ObjectDocumentCodec.decode_child_site_with_budget(
+                   ordinary_schema,
+                   streams,
+                   decode_grid,
+                   codec_budget,
+                   first_mark: replay_complete ? first_mark : 0,
+                   mark_count: selected_count,
+                   profile: profile,
+                   shared_profile: shared_profile
+                 )
+               else
+                 ObjectDocumentCodec.decode_with_budget(
+                   ordinary_schema,
+                   streams,
+                   codec_budget,
+                   first_mark: replay_complete ? first_mark : 0,
+                   mark_count: selected_count,
+                   profile: profile,
+                   shared_profile: shared_profile
+                 )
+               end
       typed_dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
       typed_dynamic_data.each do |path, data|
         type = schema_snapshot[path]? || raise(CorruptPartError.new("typed Dynamic value stream has no declared schema"))
@@ -595,6 +718,232 @@ module CrystalClick
         raise ArgumentError.new("mark count must be nonnegative") if count < 0
       end
       nil
+    end
+
+    private def self.inspect_child_schedule!(
+      source : PartStreamSource,
+      column_name : String,
+      column_prefix : String,
+      outer_rows : Array(UInt64),
+      hashed : Bool,
+      limits : BinaryCodecLimits,
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+    ) : Tuple(String, String, CompressedMarkGrid, Array(UInt64))
+      if outer_rows.empty?
+        raise CorruptPartError.new("Array(JSON) part has no real parent marks")
+      end
+
+      size_name = size_stream_name(column_prefix, limits)
+      data_name, marks_name = file_pair(size_name, hashed)
+      validate_physical_name!(data_name)
+      validate_physical_name!(marks_name)
+
+      total_parents = 0_u64
+      outer_rows.each do |rows|
+        total_parents = checked_add_u64(total_parents, rows)
+      end
+      if total_parents > Int32::MAX.to_u64
+        raise CorruptPartError.new("Array(JSON) parent schedule exceeds the supported domain")
+      end
+      # Reading .size0 scans one UInt64 per parent, even when the requested
+      # value window is empty. Charge that complete part-level work before the
+      # decoded size buffer or occurrence-count array is allocated.
+      codec_budget.ensure_future_nodes(total_parents)
+      codec_budget.ensure_future_elements(total_parents)
+      total_parents.times { codec_budget.charge_node }
+      codec_budget.charge_elements(total_parents)
+
+      grid = source.inspect_grid(data_name, marks_name, 0, transport_budget)
+      validate_same_rows!(grid, outer_rows)
+      expected_size = checked_multiply_u64(total_parents, 8_u64)
+      unless grid.logical_size.to_u64 == expected_size && grid.prefix_size == 0
+        raise CorruptPartError.new("Array(JSON) .size0 extent disagrees with its complete parent grid")
+      end
+      if grid.mark_count.to_u64 > limits.max_nodes.to_u64 || grid.mark_count.to_u64 > limits.max_elements.to_u64
+        raise CorruptPartError.new("Array(JSON) child schedule mark count exceeds codec limits")
+      end
+      codec_budget.ensure_future_nodes(grid.mark_count.to_u64)
+      codec_budget.ensure_future_elements(grid.mark_count.to_u64)
+      grid.mark_count.times { codec_budget.charge_node }
+      codec_budget.charge_elements(grid.mark_count.to_u64)
+      codec_budget.charge_wire_bytes(expected_size)
+      bytes = source.read_all(data_name, transport_budget)
+      ensure_logical_size!(bytes, grid)
+
+      child_rows = Array(UInt64).new(grid.mark_count)
+      total_children = 0_u64
+      cursor = 0
+      grid.mark_count.times do |mark_index|
+        children_for_mark = 0_u64
+        outer_rows[mark_index].times do
+          size = uint64_le_at(bytes, cursor)
+          cursor += 8
+          if size > Int32::MAX.to_u64
+            raise CorruptPartError.new("Array(JSON) child row count exceeds the supported domain")
+          end
+          children_for_mark = checked_add_u64(children_for_mark, size)
+        end
+        if children_for_mark > Int32::MAX.to_u64
+          raise CorruptPartError.new("Array(JSON) child rows in one mark exceed the supported domain")
+        end
+        total_children = checked_add_u64(total_children, children_for_mark)
+        if total_children > Int32::MAX.to_u64
+          raise CorruptPartError.new("Array(JSON) flattened child rows exceed the supported domain")
+        end
+        child_rows << children_for_mark
+      end
+      unless cursor == bytes.size
+        raise CorruptPartError.new("Array(JSON) .size0 schedule has trailing or missing bytes")
+      end
+      grid.logical_size == expected_size.to_i64 || raise(CorruptPartError.new("Array(JSON) size schedule changed during inspection"))
+      {data_name, marks_name, grid, child_rows}
+    end
+
+    private def self.size_stream_name(column_prefix : String, limits : BinaryCodecLimits) : String
+      name = PhysicalStreamName.append_literal(column_prefix, ".size0")
+      ensure_name_size!(name.bytesize.to_u64, limits)
+      name
+    end
+
+    private def self.selected_occurrence_grid(
+      grid : StorageOccurrenceGrid,
+      first_mark : Int,
+      mark_count : Int,
+      budget : BinaryCodecBudget,
+    ) : StorageOccurrenceGrid
+      if first_mark < 0 || mark_count < 0 || first_mark > grid.mark_count || mark_count > grid.mark_count - first_mark
+        raise CorruptPartError.new("selected child occurrence window is outside the complete grid")
+      end
+      records = mark_count.to_u64 * 2_u64
+      budget.ensure_future_nodes(records)
+      budget.ensure_future_elements(records)
+      budget.charge_elements(records)
+      mark_count.times { budget.charge_node; budget.charge_node }
+      physical_rows = Array(UInt64).new(mark_count)
+      child_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |index|
+        physical_rows << grid.physical_rows_at(first_mark + index)
+        child_rows << grid.logical_occurrences_at(first_mark + index)
+      end
+      StorageOccurrenceGrid.new(physical_rows, child_rows, budget)
+    end
+
+    private def self.group_child_documents(
+      prepared : PreparedRead,
+      flat_marks : Array(Array(ObjectDocument)),
+    ) : Array(Array(Array(ObjectDocument)))
+      grid = prepared.occurrence_grid || raise(ArgumentError.new("child grouping requires an occurrence grid"))
+      data_name = prepared.size_data_name || raise(CorruptPartError.new("Array(JSON) .size0 data name is missing"))
+      marks_name = prepared.size_marks_name || raise(CorruptPartError.new("Array(JSON) .size0 mark name is missing"))
+      first_mark = prepared.first_mark
+      mark_count = prepared.selected_count
+      unless flat_marks.size == mark_count
+        raise CorruptPartError.new("Array(JSON) decoded child mark count differs from its selection")
+      end
+
+      parent_count = 0_u64
+      child_count = 0_u64
+      mark_count.times do |index|
+        physical = grid.physical_rows_at(first_mark + index)
+        logical = grid.logical_occurrences_at(first_mark + index)
+        parent_count = checked_add_u64(parent_count, physical)
+        child_count = checked_add_u64(child_count, logical)
+      end
+      retained_nodes = checked_add_u64(mark_count.to_u64, parent_count)
+      retained_elements = checked_add_u64(parent_count, child_count)
+      prepared.codec_budget.ensure_future_nodes(retained_nodes)
+      prepared.codec_budget.ensure_future_elements(retained_elements)
+
+      byte_count = checked_multiply_u64(parent_count, 8_u64)
+      prepared.codec_budget.charge_wire_bytes(byte_count)
+      window = prepared.source.read_window(
+        data_name,
+        marks_name,
+        first_mark,
+        mark_count,
+        0,
+        prepared.transport_budget
+      )
+      bytes = window.bytes
+      offsets = window.offsets
+      window_rows = window.rows_per_mark
+      unless window.prefix_size == 0 && window_rows.size == mark_count &&
+             offsets.size == mark_count + 1 && offsets.first? == 0_u64 && offsets.last? == bytes.size.to_u64 &&
+             bytes.size.to_u64 == byte_count
+        raise CorruptPartError.new("selected Array(JSON) .size0 window has inconsistent coordinates")
+      end
+
+      # Validate all selected parent sizes and the per-mark occurrence totals
+      # before allocating grouped child rows. This detects a redistribution
+      # mismatch when the affected payload mark is selected; it is not a
+      # whole-part decode of every arbitrary inner payload lane.
+      cursor = 0
+      mark_count.times do |mark_index|
+        global_mark = first_mark + mark_index
+        expected_parents = grid.physical_rows_at(global_mark)
+        expected_children = grid.logical_occurrences_at(global_mark)
+        unless window_rows[mark_index] == expected_parents
+          raise CorruptPartError.new("selected Array(JSON) .size0 parent rows differ from the complete grid")
+        end
+        start = offsets[mark_index]
+        finish = offsets[mark_index + 1]
+        unless finish >= start && finish - start == expected_parents * 8_u64
+          raise CorruptPartError.new("selected Array(JSON) .size0 offsets disagree with parent rows")
+        end
+        observed_children = 0_u64
+        expected_parents.times do
+          size = uint64_le_at(bytes, cursor)
+          cursor += 8
+          if size > Int32::MAX.to_u64
+            raise CorruptPartError.new("selected Array(JSON) child row count exceeds the supported domain")
+          end
+          observed_children = checked_add_u64(observed_children, size)
+        end
+        unless observed_children == expected_children
+          raise CorruptPartError.new("selected Array(JSON) .size0 counts differ from the complete child schedule")
+        end
+        unless flat_marks[mark_index].size.to_u64 == expected_children
+          raise CorruptPartError.new("selected Array(JSON) child payload disagrees with .size0 counts")
+        end
+      end
+      unless cursor == bytes.size
+        raise CorruptPartError.new("selected Array(JSON) .size0 window has trailing bytes")
+      end
+
+      # Charge retained grouping containers after whole-window checks and
+      # before the first proportional Array allocation.
+      retained_nodes.times { prepared.codec_budget.charge_node }
+      prepared.codec_budget.charge_elements(retained_elements)
+      grouped = Array(Array(Array(ObjectDocument))).new(mark_count)
+      cursor = 0
+      mark_count.times do |mark_index|
+        parent_rows = Array(Array(ObjectDocument)).new(grid.physical_rows_at(first_mark + mark_index).to_i)
+        flat_index = 0
+        grid.physical_rows_at(first_mark + mark_index).times do
+          size = uint64_le_at(bytes, cursor).to_i
+          cursor += 8
+          child_documents = Array(ObjectDocument).new(size)
+          size.times do
+            child_documents << flat_marks[mark_index][flat_index]
+            flat_index += 1
+          end
+          parent_rows << child_documents
+        end
+        grouped << parent_rows
+      end
+      grouped
+    end
+
+    private def self.uint64_le_at(bytes : Bytes, offset : Int) : UInt64
+      if offset < 0 || offset > bytes.size - 8
+        raise CorruptPartError.new("Array(JSON) .size0 value is truncated")
+      end
+      value = 0_u64
+      8.times do |index|
+        value |= bytes[offset + index].to_u64 << (index * 8)
+      end
+      value
     end
 
     # The raw schema is a caller-supplied declaration boundary. Reject JSON
@@ -980,12 +1329,22 @@ module CrystalClick
       checked_add_u64((finish - start).to_u64, prefix.to_u64)
     end
 
-    private def self.discriminator_stream(window : CompressedMarkWindow) : DynamicDiscriminatorStream
+    private def self.discriminator_stream(
+      window : CompressedMarkWindow,
+      logical_rows : Array(UInt64)? = nil,
+      logical_first : Int = 0,
+    ) : DynamicDiscriminatorStream
       bytes = window.bytes
       offsets = window.offsets
-      rows = window.rows_per_mark
+      physical_rows = window.rows_per_mark
+      if rows = logical_rows
+        if logical_first < 0 || logical_first > rows.size || physical_rows.size > rows.size - logical_first
+          raise CorruptPartError.new("selected discriminator rows are outside the child occurrence grid")
+        end
+      end
       unless window.prefix_size == DynamicDiscriminatorCodec::HEADER_BYTES &&
-             offsets.size == rows.size + 1 && offsets.first? == DynamicDiscriminatorCodec::HEADER_BYTES &&
+             offsets.size == physical_rows.size + 1 &&
+             offsets.first? == DynamicDiscriminatorCodec::HEADER_BYTES &&
              offsets.last? == bytes.size.to_u64
         raise CorruptPartError.new("selected discriminator window has inconsistent coordinates")
       end
@@ -996,9 +1355,10 @@ module CrystalClick
         end
         previous = offset
       end
-      marks = Array(DynamicDiscriminatorMark).new(rows.size + 1)
-      rows.size.times do |index|
-        marks << DynamicDiscriminatorMark.new(offsets[index], rows[index])
+      marks = Array(DynamicDiscriminatorMark).new(physical_rows.size + 1)
+      physical_rows.size.times do |index|
+        row_count = logical_rows ? logical_rows[logical_first + index] : physical_rows[index]
+        marks << DynamicDiscriminatorMark.new(offsets[index], row_count)
       end
       marks << DynamicDiscriminatorMark.new(offsets.last, 0_u64)
       DynamicDiscriminatorStream.new(bytes, marks)
@@ -1103,10 +1463,18 @@ module CrystalClick
       hashed : Bool,
       limits : BinaryCodecLimits,
       budget : BinaryCodecBudget,
+      additional_name : String? = nil,
     ) : Tuple(Array(String), Array(String))
-      count = physical.stream_count.to_u64
+      count = physical.stream_count.to_u64 + (additional_name ? 1_u64 : 0_u64)
       budget.preflight_children(count) if count > 0_u64
       logical_names = physical.stream_names
+      if name = additional_name
+        if logical_names.includes?(name)
+          raise CorruptPartError.new("Array(JSON) wrapper stream collides with an inner Object lane")
+        end
+        logical_names << String.new(name.to_slice)
+        logical_names.sort!
+      end
       unless logical_names.size.to_u64 == count
         raise CorruptPartError.new("Object descriptor stream roster changed after physical planning")
       end

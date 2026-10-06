@@ -80,10 +80,11 @@ module CrystalClick
       @prefix_role_bytes = 0_u64
       @physical_name_bytes = 0_u64
       @sql_work_bytes = 0_u64
+      initial_array_level = 0_u64
       escaped_bytes = PhysicalStreamName.escaped_size(column_name)
       @context.preflight_name_bytes(escaped_bytes)
       prefix = PhysicalStreamName.escape(column_name)
-      initialize_bindings(prefix)
+      initialize_bindings(prefix, initial_array_level)
     end
 
     private def initialize(
@@ -91,6 +92,7 @@ module CrystalClick
       escaped_prefix : EscapedPrefix,
       limits : BinaryCodecLimits? = nil,
       context : PhysicalStreamPlanContext? = nil,
+      initial_array_level : UInt64 = 0_u64,
     )
       @prepared = prepared
       selected_limits = limits || context.try(&.limits) || BinaryBulkCodec::DEFAULT_LIMITS
@@ -117,8 +119,9 @@ module CrystalClick
       @prefix_role_bytes = 0_u64
       @physical_name_bytes = 0_u64
       @sql_work_bytes = 0_u64
+      validate_initial_array_level!(initial_array_level, selected_limits)
       @context.preflight_name_bytes(escaped_prefix.value.bytesize.to_u64)
-      initialize_bindings(escaped_prefix.value)
+      initialize_bindings(escaped_prefix.value, initial_array_level)
     end
 
     # Composition entry point for a prefix already rendered by the physical
@@ -128,10 +131,17 @@ module CrystalClick
       escaped_prefix : String,
       limits : BinaryCodecLimits? = nil,
       context : PhysicalStreamPlanContext? = nil,
+      initial_array_level : UInt64 = 0_u64,
     ) : BinaryDynamicBulkPhysicalPlan
       selected_context = context || PhysicalStreamPlanContext.new(limits || BinaryBulkCodec::DEFAULT_LIMITS)
       selected_context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
-      new(prepared, EscapedPrefix.validated(escaped_prefix), limits, selected_context)
+      new(prepared, EscapedPrefix.validated(escaped_prefix), limits, selected_context, initial_array_level)
+    end
+
+    private def validate_initial_array_level!(level : UInt64, limits : BinaryCodecLimits) : Nil
+      if level > UInt64::MAX - limits.max_depth.to_u64
+        raise UnsupportedFormatError.new("Dynamic physical initial Array level overflows the name coordinate")
+      end
     end
 
     # Detached role-to-basename snapshots. Structure roles are included in the
@@ -188,7 +198,7 @@ module CrystalClick
       PhysicalStreamName.append_literal(basename, extension)
     end
 
-    private def initialize_bindings(prefix : String) : Nil
+    private def initialize_bindings(prefix : String, initial_array_level : UInt64) : Nil
       # Pass one validates and counts the complete declared-plus-actual tree.
       # Actual arms are children of their Dynamic occurrence for both depth
       # and node accounting; no name/role roster is built in this pass.
@@ -216,7 +226,7 @@ module CrystalClick
       @site_counts = Array(Int32).new(@variant_site_count.to_i)
       @physical_name_bytes = 0_u64
       @sql_work_bytes = 0_u64
-      measure_bindings(@prepared.type, "root", prefix.bytesize.to_u64, 0_u64)
+      measure_bindings(@prepared.type, "root", prefix.bytesize.to_u64, initial_array_level)
       unless @site_offsets.size.to_u64 == @variant_site_count && @arm_entries.size.to_u64 == @arm_occurrence_count
         raise UnsupportedFormatError.new("Dynamic physical SQL name roster changed after measurement")
       end
@@ -255,7 +265,7 @@ module CrystalClick
       @structure_names = Hash(String, String).new
       @prefix_sizes = Hash(String, Int32).new
       @append_site_cursor = 0
-      append_bindings(@prepared.type, "root", prefix, 0_u64)
+      append_bindings(@prepared.type, "root", prefix, initial_array_level)
       unless @append_site_cursor.to_u64 == @variant_site_count
         raise UnsupportedFormatError.new("Dynamic physical binding did not consume every measured Variant site")
       end

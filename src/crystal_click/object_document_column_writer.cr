@@ -103,6 +103,16 @@ module CrystalClick
       roster
     end
 
+    # Internal reusable preflight for a parent Array(JSON) wrapper. The JSON
+    # roles remain owned by this writer; the wrapper owner adds its own
+    # `.size0` lane and checks the combined roster.
+    def self.file_roster_for_child_site(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      hashed : Bool,
+    ) : Hash(String, Tuple(String, String))
+      preflight_file_roster(physical_plan, hashed)
+    end
+
     private def self.bind_lanes(
       physical_plan : ObjectDocumentPhysicalPlan,
       plan : ObjectDocumentPlan,
@@ -111,7 +121,24 @@ module CrystalClick
       LaneBinder.bind_lanes(physical_plan, plan, streams)
     end
 
+    def self.bind_child_site_lanes(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+    ) : Array(ObjectDocumentColumnLane)
+      LaneBinder.bind_lanes(physical_plan, plan, streams)
+    end
+
     private def self.preflight_variant_prefixes!(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      LaneBinder.preflight_variant_prefixes!(physical_plan, plan, streams, budget)
+    end
+
+    def self.preflight_child_site_variant_prefixes!(
       physical_plan : ObjectDocumentPhysicalPlan,
       plan : ObjectDocumentPlan,
       streams : ObjectDocumentStreams,

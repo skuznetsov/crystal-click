@@ -268,6 +268,37 @@ pre-decode transients, RSS, or caller retention. `.values` retains its separate
 aggregate cross-part materialization limits. Use an immutable local copy;
 no Active-state or snapshot guarantee follows.
 
+## Read a normalized Array(JSON) part
+
+```sh
+crystal run examples/read_array_json_w185.cr -- /path/to/all_1_1_0 a
+```
+
+This example expects a `pk UInt64` key and the exact column type
+`Array(JSON(max_dynamic_types=0, max_dynamic_paths=0, t UInt8))`. It prints
+physical parent rows and one document array per parent, including empty arrays.
+It is not a universal Array(JSON) schema detector; construct the expected
+`ObjectDocumentSchema` explicitly for other supported inner schemas.
+
+```crystal
+table = CrystalClick::WidePartTable.open_selected_typed([part], ["pk", "a"])
+table.scan_typed do |batch|
+  keys = batch.values_for("pk")
+  rows = batch.array_object_documents_for("a")
+  keys.each_with_index { |key, index| puts "#{key}: #{rows[index].size} documents" }
+  nil
+end
+```
+
+The batch slice is callback-scoped; its child arrays own their document handles.
+This path admits normalized hashed Wide/LZ4 Object V3 with one shared MAP bucket,
+BASIC child Dynamic mode and plain adaptive marks. Parent-size schedules are
+checked completely, even for a small selected window; logical budgets do not
+promise a peak-RSS cap or unbounded lazy reads. Generic persisted JSON wrappers,
+ArrayJSON projection reads, Compact parts and compressed marks remain outside
+this slice. Writer entry point: `WidePartWriter.write_uint64_array_object_pair`.
+See the [recursive storage frontier](../docs/JSON_RECURSIVE_STORAGE_FRONTIER.md).
+
 Admitted recursively named, nonempty `Tuple` columns use
 `read_offline_column_values.cr`, not the Object-specific example above.
 Their scalar and Nullable-scalar terminal surface is described in the

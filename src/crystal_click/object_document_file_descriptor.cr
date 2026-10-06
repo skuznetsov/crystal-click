@@ -6,10 +6,12 @@ module CrystalClick
     getter plan : ObjectDocumentPlan
     getter row_count : UInt64
     getter logical_read_bytes : UInt64
+    getter mark_count : Int32
 
     @mark_row_counts : Array(UInt64)
     @physical_stream_names : Array(String)
     @selected_checksum_names : Array(String)
+    @occurrence_grid : StorageOccurrenceGrid?
 
     def initialize(
       @plan : ObjectDocumentPlan,
@@ -17,8 +19,10 @@ module CrystalClick
       physical_stream_names : Array(String),
       selected_checksum_names : Array(String),
       @logical_read_bytes : UInt64,
+      @occurrence_grid : StorageOccurrenceGrid? = nil,
     )
       @mark_row_counts = mark_row_counts.dup
+      @mark_count = @mark_row_counts.size.to_i32
       @row_count = 0_u64
       @mark_row_counts.each do |rows|
         if @row_count > UInt64::MAX - rows
@@ -43,6 +47,18 @@ module CrystalClick
 
     def selected_checksum_names : Array(String)
       copy_names(@selected_checksum_names)
+    end
+
+    # Child counts are a separate logical coordinate from the physical parent
+    # rows. Only child-site readers attach this immutable schedule.
+    def child_occurrence_row_counts(first_mark : Int, mark_count : Int) : Array(UInt64)
+      grid = @occurrence_grid || raise(UnsupportedFormatError.new("Object descriptor has no child occurrence schedule"))
+      if first_mark < 0 || mark_count < 0 || first_mark > grid.mark_count || mark_count > grid.mark_count - first_mark
+        raise ArgumentError.new("child occurrence selection is outside the Object mark grid")
+      end
+      Array(UInt64).new(mark_count) do |index|
+        grid.logical_occurrences_at(first_mark + index)
+      end
     end
 
     private def copy_names(names : Array(String)) : Array(String)

@@ -1509,6 +1509,13 @@ module CrystalClick
       SelectedJsonMetadataProbe.read(part_path, column_name)
     end
 
+    # Return a selected Array of one normalized JSON declaration only. This is
+    # a dispatch hint for the dedicated recursive reader, not a general type
+    # admission rule for Array(JSON) or wider persisted JSON compositions.
+    def self.selected_array_json_declaration(part_path : String, column_name : String) : String?
+      SelectedJsonMetadataProbe.read_array_json(part_path, column_name)
+    end
+
     # Parse the intentionally small JSON typed-path declaration grammar used
     # by this reader: simple top-level identifiers with exact primitive
     # numeric or String types. Unsupported declarations fail closed.

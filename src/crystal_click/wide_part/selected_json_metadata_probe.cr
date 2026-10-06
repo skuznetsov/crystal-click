@@ -4,7 +4,24 @@ module CrystalClick
     # columns.txt, so unrelated physical codecs and Object declarations are
     # not interpreted when a scalar column is selected.
     private class SelectedJsonMetadataProbe
+      private enum SelectedShape
+        Object
+        ArrayObject
+      end
+
       def self.read(part_path : String, requested_column : String) : String?
+        read_matching_shape(part_path, requested_column, SelectedShape::Object)
+      end
+
+      def self.read_array_json(part_path : String, requested_column : String) : String?
+        read_matching_shape(part_path, requested_column, SelectedShape::ArrayObject)
+      end
+
+      private def self.read_matching_shape(
+        part_path : String,
+        requested_column : String,
+        shape : SelectedShape,
+      ) : String?
         raise ArgumentError.new("selected column name must not be empty") if requested_column.empty?
 
         columns_path = File.join(part_path, "columns.txt")
@@ -32,7 +49,13 @@ module CrystalClick
           raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
         end
         return nil unless selected = exact
-        return nil unless WidePart.json_type?(selected[1])
+        case shape
+        when SelectedShape::Object
+          return nil unless WidePart.json_type?(selected[1])
+        when SelectedShape::ArrayObject
+          schema = ArrayObjectColumnReader.schema_for_source_declaration(selected[1])
+          return nil unless schema && selected[1] == "Array(#{schema.declaration})"
+        end
         String.new(selected[1].to_slice)
       rescue ex : IO::Error
         raise InvalidPartError.new(ex.message || "cannot read selected JSON declaration")
