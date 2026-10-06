@@ -1,7 +1,9 @@
 # Recursive JSON storage frontier
 
-Status: PROPOSED storage composition; W182 scalar admission remains unchanged.
-Baseline: `48c1be0`. No new Crystal bulk, part or table-reader admission.
+Status: PROPOSED complete storage composition; W184's internal paired
+occurrence-grid foundation is VERIFIED within the executed scope below.
+Baseline: `4464ef3`. W182 scalar admission remains unchanged. No new generic
+Crystal JSON bulk, part or table-reader admission.
 W183's finite stock physical discriminator is verified below; it does not
 complete the storage-admission DoD.
 
@@ -166,14 +168,117 @@ native layout discriminator and probe guards, not Crystal storage support.
 
 ## Execution order and falsifiers
 
-1. Run `scripts/probe_json_array_storage_w183.rb` against a fresh isolated
-   evidence directory under the unchanged serial resource guard. Require exact
-   authored rows/schema, successful CHECK TABLE, real Wide metadata/stream and
-   plain mark observations for mixed/all-empty ArrayJSON and a root JSON control.
-2. Use the observed names/grids to specify a site plan and child-count seam.
-   Preserve early storage guards until that seam has an actual baseline RED.
-3. Implement paired site-aware bulk recursion, then binding/transport and
-   complete-part reader/writer integration. Keep owners in separate files.
+### W184 paired occurrence-grid foundation (2026-10-06)
+
+The implemented foundation separates physical outer rows from logical child
+occurrences in one immutable `StorageOccurrenceGrid` owner. Its complete real
+mark grid has positive Int32 physical row counts and nonnegative Int32 child
+counts; the terminal record is implicit. A child count may exceed its physical
+row count (Array fan-out). It is not a nominal type descriptor or a complete
+structural site/state plan, and counts supplied by a caller do not prove their
+derivation from Array offsets or Variant selections.
+
+Explicit borrowed-budget child entry points reuse Object, Dynamic and
+discriminator owners. They validate the complete grid even for an empty
+selected window, admit zero child groups only through this explicit context,
+and retain the existing root API's nonempty-real-mark behavior. Child
+discriminators are BASIC-only for this step: zero children emit no body bytes,
+but their mode prefix and all mark coordinates remain present. COMPACT child
+composition stays refused; root BASIC/COMPACT behavior stays unchanged.
+
+The paired physical lane seam validates discriminator rows against child
+counts while emitting adaptive mark row fields from positive physical counts.
+Repeated offsets are legal for zero child ranges. A mismatch, a nonempty body
+for zero BASIC children, an invalid terminal, or a backward offset is rejected.
+This seam does not admit root-named Object lanes as ArrayJSON filenames.
+Ordinary bulk lanes must come from the codec's checked row groups. Their
+generic byte offsets alone cannot prove a type-specific number of values in
+each range; this seam is not an arbitrary fabricated-payload validator.
+
+Implementation ownership: `src/crystal_click/storage_occurrence_grid.cr`,
+the explicit child entry points in `object_document_codec.cr`,
+`dynamic_value_codec.cr` and `dynamic_discriminator_codec.cr`, the lane seam in
+`object_document_column_lane.cr`, and registration in `src/crystal_click.cr`.
+Focused tests live in `spec/storage_occurrence_grid_w184_spec.cr` and
+`spec/object_child_occurrences_w184_spec.cr`. Existing part/table/schema guards
+are not widened. Rollback is one atomic local feature commit.
+
+First behavioral falsifier: run the stock-observed `0,1,3,0` child grid through
+the pre-existing root owner on baseline `4464ef3`; it must expose the current
+nonempty-group refusal rather than a missing-method compilation error. The
+permanent child tests must then admit that grid through the explicit new seam
+while the original root rejection tests still pass.
+
+Root executed that baseline discriminator before production edits. The existing
+UInt8 bulk codec emits authored bytes `7,11,13,17` and offsets `0,0,1,4,4` for
+the same groups; the root Object owner then raises
+`Object document real marks must contain at least one row`. Actual guard/child
+exit is 1 in
+`/private/tmp/crystal-click-w184-occurrences.i3E4Ar/baseline-red3.log`.
+The root API is supposed to retain this refusal after the child seam is added.
+The two earlier attempts failed at probe authoring (absolute Crystal require,
+then private `BinaryValue.new`), not at the behavioral boundary; their logs
+are retained and do not count as the RED signal.
+
+Foundation DoD: actual guarded DEBUG and RELEASE execution of the two new
+specs together with W121 discriminator/budget, W122 Dynamic/adversary, W123
+Object/root/adversary and W127 column/lane regressions. Require exact authored
+typed/discriminator bytes and coordinates, full/nonzero-origin/empty windows,
+all-empty children, detached grids, shared budget exhaustion, mismatches and
+malformed lane guards. Hostile review must distinguish this internal paired
+foundation from generic recursive JSON part/table admission. Physical tests
+must reopen compressed lanes with the existing reader; in-memory round trips
+alone do not close this foundation DoD.
+
+The pinned source corroborates the finite BASIC rule:
+`SerializationVariant.cpp:199-223,314-345` writes the mode prefix, then returns
+from a zero-size child bulk range before emitting any discriminator body.
+This is source corroboration, not a new executed stock Dynamic witness.
+
+Root executed 26 selected specs in three disjoint serial cohorts per mode:
+foundation 64, physical 52 and composition 65 examples. All 181 DEBUG and 181
+RELEASE examples pass with zero failures/errors/pending and six actual
+child/guard exits 0. Runs use Crystal 1.21.0, the unchanged 600-second/12-GiB
+guard and >=50% free-memory preflight (83% observed), isolated caches,
+`--single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`, and
+`--release --no-debug` only in RELEASE. No native runtime is executed in W184.
+
+The tests reopen both mixed and all-empty compressed typed/discriminator file
+pairs, inspect complete physical grids and check literal bytes/offsets. They
+also reject equal-total redistributed counts, malformed terminals and child
+COMPACT mode, preserve the root refusal, observe one budget identity across
+Object -> Dynamic -> discriminator, and prove a low transport budget rejects
+before the Variant prefix adapter is called (with a positive control).
+Root's separate authored probe checks NULL versus empty groups, a nonzero-origin
+window, an empty-selection mismatch, literal discriminator bytes and manually
+decoded `.mrk2` row fields `2,2,2,2,0`, then reopens the compressed files.
+
+After formatter normalization of one conditional's indentation, root repeats
+all six final cohorts and the separate authored probe. One complete immutable
+manifest contains 847 source/spec files and 1,192 fixture files, with no excluded
+child spec. It matches after every final cohort and the final probe; all
+production inputs are identical across these final gates. Earlier successful
+runs and their manifests remain historical evidence, not extra final examples.
+The format check passes for all eight changed/new code and spec files.
+Two foundation attempts failed at test-authoring compilation only
+(module/class observer declaration, then nonexistent `File.binwrite`); neither
+counts as behavioral evidence. Their logs remain alongside the successful gates.
+Scoped hostile verdict: ROBUST for this internal BASIC foundation. Luna's
+same-lineage static review is correlated; root's actual executions and separate
+literal/raw-mark probe supply behavioral checks. This is not the complete
+repository suite, stock whole-part interoperability or performance evidence.
+Exact roster, commands, hashes, failed attempts and scope:
+[json-child-occurrences-w184.json](evidence/json-child-occurrences-w184.json).
+
+Continuation:
+
+1. Derive child grids from checked Array offsets/Variant selections instead
+   of trusting caller-supplied counts; bind each full structural site to its
+   nominal caps, actual rosters, state and serialization profile.
+2. Add site-aware names/array levels, metadata discovery and binding. Adapt
+   whole-column statistics, whose root nonempty-grid rule is still intact.
+3. Integrate paired complete-part reader/writer and table consumers while
+   retaining unqualified early storage guards. Keep owners in separate files.
 4. Qualify library-owned parts with stock ATTACH/CHECK and literal full/middle
    reads; independently stock-written parts must reopen through Crystal.
 5. Attack zero children, mismatched offsets/counts, truncated/suffixed lanes,

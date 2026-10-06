@@ -93,5 +93,118 @@ module CrystalClick
         budget: budget
       )
     end
+
+    # Emits one physical lane for an explicit recursive child site. Bulk byte
+    # offsets delimit logical child data, while adaptive row fields retain the
+    # positive physical parent-row counts. Dynamic discriminator offsets are
+    # additionally checked against the logical child grid (BASIC only).
+    def encode_child_site(
+      grid : StorageOccurrenceGrid,
+      frame_bytes : Int,
+      budget : CompressedStreamBudget,
+    ) : CompressedMarkFiles
+      budget.ensure_direction(true)
+      mark_count = grid.mark_count
+      # The optional Variant prefix adapter can allocate a full transformed
+      # byte lane, so reserve every compressed output axis before copying
+      # counts, offsets, or adapted bytes. The physical writer requires at
+      # least one real mark; the in-memory child codecs remain useful for an
+      # empty logical site grid.
+      CompressedMarkWriter.preflight_batch([@byte_size], mark_count + 1, frame_bytes, budget)
+
+      rows_per_mark = Array(UInt64).new(mark_count)
+      mark_count.times do |index|
+        rows_per_mark << grid.physical_rows_at(index)
+      end
+
+      if statistics_offset = @statistics_offset
+        return CompressedMarkWriter.encode_metadata(
+          @bytes,
+          statistics_offset,
+          rows_per_mark,
+          frame_bytes: frame_bytes,
+          budget: budget
+        )
+      end
+
+      mark_records = mark_count + 1
+      lane_bytes, offsets = if source = @bulk_source
+                              unless source.offset_count == mark_records
+                                raise UnsupportedFormatError.new("child bulk lane does not have the complete occurrence grid")
+                              end
+                              if role = @variant_prefix_role
+                                adapted_bytes, adapted_offsets = BinaryBulkPhysicalPrefixAdapter.write_lane(role, source, @prefix_size)
+                                {adapted_bytes, adapted_offsets}
+                              else
+                                copied_offsets = Array(UInt64).new(source.offset_count) do |index|
+                                  source.offset_at(index)
+                                end
+                                {@bytes, copied_offsets}
+                              end
+                            elsif source = @discriminator_source
+                              unless source.mark_count == mark_records && source.byte_size == @bytes.size
+                                raise UnsupportedFormatError.new("child Dynamic discriminator does not match its complete lane")
+                              end
+                              validate_child_discriminator!(source, grid)
+                              copied_offsets = Array(UInt64).new(source.mark_count) do |index|
+                                source.mark_at(index).offset
+                              end
+                              {@bytes, copied_offsets}
+                            else
+                              raise UnsupportedFormatError.new("child Object lane has no mark-coordinate source")
+                            end
+
+      CompressedMarkWriter.encode(
+        lane_bytes,
+        offsets,
+        rows_per_mark,
+        prefix_size: @prefix_size,
+        frame_bytes: frame_bytes,
+        budget: budget
+      )
+    end
+
+    private def validate_child_discriminator!(
+      source : DynamicDiscriminatorStream,
+      grid : StorageOccurrenceGrid,
+    ) : Nil
+      if source.byte_size < DynamicDiscriminatorCodec::HEADER_BYTES.to_i
+        raise UnsupportedFormatError.new("child Dynamic discriminator is shorter than its BASIC header")
+      end
+      mode = 0_u64
+      8.times do |index|
+        mode |= source.byte_at(index).to_u64 << (index * 8)
+      end
+      unless mode == DynamicDiscriminatorCodec::BASIC_MODE
+        raise UnsupportedFormatError.new("child Dynamic discriminator lane requires BASIC mode")
+      end
+
+      byte_size = source.byte_size.to_u64
+      previous_end = DynamicDiscriminatorCodec::HEADER_BYTES
+      grid.mark_count.times do |index|
+        mark = source.mark_at(index)
+        following = source.mark_at(index + 1)
+        expected_rows = grid.logical_occurrences_at(index)
+        unless mark.offset == previous_end && mark.rows == expected_rows
+          raise UnsupportedFormatError.new("child Dynamic discriminator rows or offsets disagree with the occurrence grid")
+        end
+        if following.offset < mark.offset || following.offset > byte_size || mark.offset > byte_size
+          raise UnsupportedFormatError.new("child Dynamic discriminator offsets are outside the lane")
+        end
+        unless following.offset - mark.offset == expected_rows
+          raise UnsupportedFormatError.new("child Dynamic BASIC body extent does not equal its child occurrences")
+        end
+        previous_end = following.offset
+      end
+
+      terminal = source.mark_at(grid.mark_count)
+      unless terminal.rows == 0_u64 && terminal.offset == byte_size && terminal.offset == previous_end
+        raise UnsupportedFormatError.new("child Dynamic discriminator terminal mark is invalid")
+      end
+      if grid.mark_count == 0 && terminal.offset != DynamicDiscriminatorCodec::HEADER_BYTES
+        raise UnsupportedFormatError.new("empty child Dynamic discriminator must contain only its BASIC header")
+      end
+      nil
+    end
   end
 end

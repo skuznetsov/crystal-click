@@ -1,5 +1,12 @@
 # General JSON Storage Frontier
 
+W184 adds an internal paired BASIC child occurrence-grid seam for existing
+Object/Dynamic owners and physical lane emission. Its selected DEBUG/RELEASE
+and file-backed evidence are in
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+It does not derive those counts from enclosing wrappers or admit new complete
+parts/table layouts; the persisted gates below remain intact.
+
 W183 measures the first ArrayJSON physical-site contract in stock Wide parts;
 the proposed recursive storage seam and finite native probe are in
 [JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).

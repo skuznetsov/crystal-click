@@ -1,5 +1,21 @@
 # CrystalClick project status
 
+Current internal foundation (W184, 2026-10-06): `StorageOccurrenceGrid` separates
+positive physical parent rows from nonnegative logical child counts. Explicit
+paired Object/Dynamic/discriminator child APIs reuse existing owners and one
+borrowed budget; BASIC child groups may be empty while root guards stay strict.
+The physical lane seam keeps parent rows in adaptive marks. Root executes 26
+selected specs in three serial cohorts per mode: 181 DEBUG and 181 RELEASE
+examples, zero failures/errors/pending, six actual child/guard exits 0. Mixed
+and all-empty compressed file pairs reopen with exact bytes/coordinates; a
+separate authored probe inspects raw mark rows. Scoped verdict: ROBUST for this
+foundation only. Caller-supplied counts are not yet derived from enclosing
+offsets/selections; structural site/state/profile ownership, names/discovery,
+statistics and complete-part/table wiring remain next. No new stock whole-part
+qualification or performance claim. Source pins, evidence, retained compile
+failures and continuation:
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+
 Current investigation (W183): three stock Wide ArrayJSON/root JSON profiles
 and five primitive-lane decompressions verify the separate outer-row/child-count
 contract, including entirely empty child marks. No Crystal storage gate changes.

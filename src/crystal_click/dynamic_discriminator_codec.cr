@@ -35,11 +35,39 @@ module CrystalClick
       budget : BinaryCodecBudget,
       mode : UInt64 = DEFAULT_MODE,
     ) : DynamicDiscriminatorStream
+      encode_core_with_budget(structure, tags, budget, mode, nil)
+    end
+
+    # BASIC-only child-site entry point. Empty groups are meaningful only with
+    # the explicit physical/logical grid that owns their mark coordinates.
+    def self.encode_child_site_with_budget(
+      structure : DynamicStructure,
+      tags : Array(Array(UInt8)),
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      mode : UInt64 = BASIC_MODE,
+    ) : DynamicDiscriminatorStream
+      encode_core_with_budget(structure, tags, budget, mode, grid)
+    end
+
+    private def self.encode_core_with_budget(
+      structure : DynamicStructure,
+      tags : Array(Array(UInt8)),
+      budget : BinaryCodecBudget,
+      mode : UInt64,
+      occurrence_grid : StorageOccurrenceGrid?,
+    ) : DynamicDiscriminatorStream
       unless budget.writing?
         raise ArgumentError.new("Dynamic discriminator encode requires a writing budget")
       end
       unless mode == BASIC_MODE || mode == COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
+      end
+      if grid = occurrence_grid
+        unless mode == BASIC_MODE
+          raise UnsupportedFormatError.new("child-site Dynamic discriminators require the BASIC profile")
+        end
+        grid.validate_for!(tags.size, budget)
       end
 
       budget.ensure_depth(1)
@@ -53,9 +81,14 @@ module CrystalClick
       budget.ensure_future_elements(minimum_elements)
 
       total_rows = 0_u64
-      tags.each do |granule|
-        if granule.empty?
+      tags.each_with_index do |granule, mark_index|
+        if granule.empty? && occurrence_grid.nil?
           raise ArgumentError.new("Dynamic discriminator real granules must contain rows")
+        end
+        if grid = occurrence_grid
+          unless granule.size.to_u64 == grid.logical_occurrences_at(mark_index)
+            raise UnsupportedFormatError.new("Dynamic discriminator child rows disagree with the occurrence grid")
+          end
         end
         total_rows += granule.size.to_u64
       end
@@ -67,7 +100,7 @@ module CrystalClick
 
       body_bytes = 0_u64
       tags.each do |granule|
-        first_tag = granule[0]
+        first_tag = granule.first? || NULL_TAG
         uniform = true
         granule.each do |tag|
           unless valid_tag?(tag, variant_count)
@@ -101,7 +134,7 @@ module CrystalClick
 
       tags.each do |granule|
         marks << DynamicDiscriminatorMark.new(offset, granule.size.to_u64)
-        first_tag = granule[0]
+        first_tag = granule.first? || NULL_TAG
         uniform = true
         granule.each { |tag| uniform = false if tag != first_tag }
 
@@ -152,6 +185,30 @@ module CrystalClick
       first_mark : Int = 0,
       mark_count : Int? = nil,
     ) : Array(DynamicMarkSchedule)
+      decode_core_with_budget(structure, stream, budget, first_mark, mark_count, nil)
+    end
+
+    # BASIC-only child-site decoder. The complete grid is checked, including
+    # marks outside the requested window and a zero-mark selection.
+    def self.decode_child_site_with_budget(
+      structure : DynamicStructure,
+      stream : DynamicDiscriminatorStream,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+    ) : Array(DynamicMarkSchedule)
+      decode_core_with_budget(structure, stream, budget, first_mark, mark_count, grid)
+    end
+
+    private def self.decode_core_with_budget(
+      structure : DynamicStructure,
+      stream : DynamicDiscriminatorStream,
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+      occurrence_grid : StorageOccurrenceGrid?,
+    ) : Array(DynamicMarkSchedule)
       if budget.writing?
         raise ArgumentError.new("Dynamic discriminator decode requires a reading budget")
       end
@@ -162,6 +219,9 @@ module CrystalClick
         corrupt!("Dynamic discriminator mark grid has no terminal mark")
       end
       real_marks = mark_records - 1_u64
+      if grid = occurrence_grid
+        grid.validate_for!(real_marks.to_i, budget)
+      end
       selected_first = validate_selection(first_mark, mark_count, real_marks)
       selected_marks = if count = mark_count
                          count.to_u64
@@ -188,8 +248,15 @@ module CrystalClick
       unless mode == BASIC_MODE || mode == COMPACT_MODE
         corrupt!("unknown Dynamic discriminator mode")
       end
+      if occurrence_grid && mode != BASIC_MODE
+        raise UnsupportedFormatError.new("child-site Dynamic discriminators require the BASIC profile")
+      end
 
-      selected_rows, first_row = validate_grid(stream, real_marks, selected_first, selected_marks)
+      selected_rows, first_row = if grid = occurrence_grid
+                                   validate_occurrence_grid(stream, grid, selected_first, selected_marks)
+                                 else
+                                   validate_grid(stream, real_marks, selected_first, selected_marks)
+                                 end
       total_nodes = 1_u64 + mark_records + selected_rows
       total_elements = mark_records + (2_u64 * selected_rows) + ((2_u64 * selected_marks + 1_u64) * variant_count)
       budget.ensure_future_nodes(total_nodes)
@@ -314,6 +381,70 @@ module CrystalClick
         total_rows += mark.rows
         previous_offset = mark.offset
         mark_index += 1_u64
+      end
+
+      {selected_rows, first_row}
+    end
+
+    private def self.validate_occurrence_grid(
+      stream : DynamicDiscriminatorStream,
+      grid : StorageOccurrenceGrid,
+      selected_first : UInt64,
+      selected_marks : UInt64,
+    ) : Tuple(UInt64, UInt64)
+      real_marks = grid.mark_count.to_u64
+      unless stream.mark_count == grid.mark_count + 1
+        corrupt!("child Dynamic discriminator grid does not have exactly one terminal mark")
+      end
+
+      byte_size = stream.byte_size.to_u64
+      total_rows = 0_u64
+      selected_rows = 0_u64
+      first_row = 0_u64
+      selected_end = selected_first + selected_marks
+      previous_offset = HEADER_BYTES
+
+      real_marks.to_i.times do |mark_index|
+        mark = stream.mark_at(mark_index)
+        following = stream.mark_at(mark_index + 1)
+        expected_rows = grid.logical_occurrences_at(mark_index).to_u64
+
+        if mark_index == 0
+          unless mark.offset == HEADER_BYTES
+            corrupt!("child Dynamic discriminator first mark does not begin after its header")
+          end
+        elsif mark.offset != previous_offset
+          corrupt!("child Dynamic discriminator marks are not contiguous")
+        end
+        if mark.offset > byte_size || following.offset > byte_size || following.offset < mark.offset
+          corrupt!("child Dynamic discriminator offsets are outside the byte domain")
+        end
+        unless mark.rows == expected_rows
+          corrupt!("child Dynamic discriminator rows disagree with the occurrence grid")
+        end
+        unless following.offset - mark.offset == expected_rows
+          corrupt!("child Dynamic BASIC body extent does not equal its child occurrences")
+        end
+
+        if mark_index.to_u64 == selected_first
+          first_row = total_rows
+        end
+        if mark_index.to_u64 >= selected_first && mark_index.to_u64 < selected_end
+          selected_rows += expected_rows
+        end
+        total_rows += expected_rows
+        previous_offset = following.offset
+      end
+
+      terminal = stream.mark_at(real_marks.to_i)
+      unless terminal.rows == 0_u64 && terminal.offset == byte_size && terminal.offset == previous_offset
+        corrupt!("child Dynamic discriminator terminal mark does not match stream end")
+      end
+      if real_marks == 0_u64 && terminal.offset != HEADER_BYTES
+        corrupt!("empty child Dynamic discriminator stream contains bytes after its header")
+      end
+      if selected_first == real_marks
+        first_row = total_rows
       end
 
       {selected_rows, first_row}

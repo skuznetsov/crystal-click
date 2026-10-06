@@ -25,6 +25,41 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : ObjectDocumentStreams
+      encode_core_with_budget(plan, granules, budget, mode, profile, shared_profile, nil)
+    end
+
+    # Explicit child-site composition keeps the parent physical row grid
+    # separate from these flattened logical Object occurrences. This seam is
+    # BASIC-only; the ordinary root API and its nonempty-mark guard are intact.
+    def self.encode_child_site_with_budget(
+      plan : ObjectDocumentPlan,
+      granules : Array(Array(ObjectDocument)),
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : ObjectDocumentStreams
+      encode_core_with_budget(
+        plan,
+        granules,
+        budget,
+        mode,
+        profile,
+        shared_profile,
+        grid
+      )
+    end
+
+    private def self.encode_core_with_budget(
+      plan : ObjectDocumentPlan,
+      granules : Array(Array(ObjectDocument)),
+      budget : BinaryCodecBudget,
+      mode : UInt64,
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      occurrence_grid : StorageOccurrenceGrid?,
+    ) : ObjectDocumentStreams
       unless budget.writing?
         raise ArgumentError.new("Object document encode requires a writing budget")
       end
@@ -32,10 +67,21 @@ module CrystalClick
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
       end
+      if occurrence_grid && mode != DynamicDiscriminatorCodec::BASIC_MODE
+        raise UnsupportedFormatError.new("child-site Object composition requires the BASIC Dynamic profile")
+      end
       if plan.typed_dynamic_count > 0 && mode != DynamicDiscriminatorCodec::BASIC_MODE
         raise UnsupportedFormatError.new("declared Object Dynamic fields require the BASIC Dynamic profile")
       end
       validate_write_structure(plan.structures)
+      if grid = occurrence_grid
+        grid.validate_for!(granules.size, budget)
+        granules.each_with_index do |mark_rows, mark_index|
+          unless mark_rows.size.to_u64 == grid.logical_occurrences_at(mark_index)
+            raise UnsupportedFormatError.new("Object child rows disagree with the occurrence grid")
+          end
+        end
+      end
       typed_dynamic_write_plans = Hash(String, BinaryDynamicBulkPlan).new
       plan.typed_path_count.times do |index|
         path = plan.typed_path_at(index)
@@ -75,7 +121,7 @@ module CrystalClick
       total_rows = 0_u64
       shared_entries = 0_u64
       granules.each do |mark_rows|
-        if mark_rows.empty?
+        if mark_rows.empty? && occurrence_grid.nil?
           raise ArgumentError.new("Object document real marks must contain at least one row")
         end
         if mark_rows.size > Int32::MAX
@@ -181,13 +227,23 @@ module CrystalClick
           end
           dynamic_granules << values
         end
-        dynamic_lanes[path] = DynamicValueCodec.encode_with_budget(
-          plan.structures.dynamic_for(path),
-          dynamic_granules,
-          budget,
-          mode: mode,
-          profile: profile
-        )
+        if grid = occurrence_grid
+          dynamic_lanes[path] = DynamicValueCodec.encode_child_site_with_budget(
+            plan.structures.dynamic_for(path),
+            dynamic_granules,
+            grid,
+            budget,
+            profile: profile
+          )
+        else
+          dynamic_lanes[path] = DynamicValueCodec.encode_with_budget(
+            plan.structures.dynamic_for(path),
+            dynamic_granules,
+            budget,
+            mode: mode,
+            profile: profile
+          )
+        end
       end
 
       # Parent preflight counted every shared entry before this nested matrix
@@ -256,6 +312,34 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : Array(Array(ObjectDocument))
+      decode_core_with_budget(typed_schema, streams, budget, first_mark, mark_count, profile, shared_profile, nil)
+    end
+
+    # Explicit child-site decoder. Stream row counts remain logical child
+    # occurrences; `grid` independently certifies the positive parent rows.
+    def self.decode_child_site_with_budget(
+      typed_schema : Hash(String, BinaryDataType),
+      streams : ObjectDocumentStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : Array(Array(ObjectDocument))
+      decode_core_with_budget(typed_schema, streams, budget, first_mark, mark_count, profile, shared_profile, grid)
+    end
+
+    private def self.decode_core_with_budget(
+      typed_schema : Hash(String, BinaryDataType),
+      streams : ObjectDocumentStreams,
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      occurrence_grid : StorageOccurrenceGrid?,
+    ) : Array(Array(ObjectDocument))
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
       end
@@ -266,6 +350,9 @@ module CrystalClick
       end
 
       real_marks = streams.mark_count
+      if grid = occurrence_grid
+        grid.validate_for!(real_marks, budget)
+      end
       selected_first, selected_count = validate_selection(first_mark, mark_count, real_marks)
 
       # The outer row-grid is count-derived metadata. Admit and charge its
@@ -338,11 +425,16 @@ module CrystalClick
       total_rows = 0_u64
       real_marks.times do |mark_index|
         rows = streams.row_count_at(mark_index)
-        if rows == 0_u64
+        if rows == 0_u64 && occurrence_grid.nil?
           corrupt!("Object real marks must contain at least one row")
         end
         if rows > Int32::MAX.to_u64
           corrupt!("Object outer row count exceeds the supported in-memory domain")
+        end
+        if grid = occurrence_grid
+          unless rows == grid.logical_occurrences_at(mark_index)
+            corrupt!("Object logical rows disagree with the occurrence grid")
+          end
         end
         total_rows = checked_add(total_rows, rows, false)
         rows_per_mark << rows
@@ -357,8 +449,17 @@ module CrystalClick
           corrupt!("Dynamic discriminator mark grid does not match the Object row grid")
         end
         real_marks.times do |mark_index|
-          unless discriminator.mark_at(mark_index).rows == rows_per_mark[mark_index]
-            corrupt!("Dynamic discriminator rows disagree with the Object outer row grid")
+          expected_rows = if grid = occurrence_grid
+                            grid.logical_occurrences_at(mark_index)
+                          else
+                            rows_per_mark[mark_index]
+                          end
+          unless discriminator.mark_at(mark_index).rows == expected_rows
+            if occurrence_grid
+              corrupt!("Dynamic discriminator rows disagree with the Object occurrence grid")
+            else
+              corrupt!("Dynamic discriminator rows disagree with the Object outer row grid")
+            end
           end
         end
       end
@@ -413,14 +514,26 @@ module CrystalClick
       dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
       object.dynamic_path_count.times do |dynamic_index|
         path = object.dynamic_path_at(dynamic_index)
-        dynamic_rows[path] = DynamicValueCodec.decode_with_budget(
-          structure_set.dynamic_for(path),
-          streams.dynamic_for(path),
-          budget,
-          first_mark: selected_first,
-          mark_count: selected_count,
-          profile: profile
-        )
+        if grid = occurrence_grid
+          dynamic_rows[path] = DynamicValueCodec.decode_child_site_with_budget(
+            structure_set.dynamic_for(path),
+            streams.dynamic_for(path),
+            grid,
+            budget,
+            first_mark: selected_first,
+            mark_count: selected_count,
+            profile: profile
+          )
+        else
+          dynamic_rows[path] = DynamicValueCodec.decode_with_budget(
+            structure_set.dynamic_for(path),
+            streams.dynamic_for(path),
+            budget,
+            first_mark: selected_first,
+            mark_count: selected_count,
+            profile: profile
+          )
+        end
       end
 
       shared_rows = ObjectDocumentSharedCodec.decode_with_budget(

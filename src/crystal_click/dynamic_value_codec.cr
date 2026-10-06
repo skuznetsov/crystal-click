@@ -33,11 +33,42 @@ module CrystalClick
       mode : UInt64 = DynamicDiscriminatorCodec::DEFAULT_MODE,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : DynamicValueStreams
+      encode_core_with_budget(structure, granules, budget, mode, profile, nil)
+    end
+
+    # BASIC-only child-site entry point. Zero-length granules are accepted
+    # only when their logical counts are supplied by an immutable occurrence
+    # grid; all arm codecs continue to share the caller's budget.
+    def self.encode_child_site_with_budget(
+      structure : DynamicStructure,
+      granules : Array(Array(BinaryValue)),
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : DynamicValueStreams
+      encode_core_with_budget(structure, granules, budget, mode, profile, grid)
+    end
+
+    private def self.encode_core_with_budget(
+      structure : DynamicStructure,
+      granules : Array(Array(BinaryValue)),
+      budget : BinaryCodecBudget,
+      mode : UInt64,
+      profile : BinaryBulkProfile,
+      occurrence_grid : StorageOccurrenceGrid?,
+    ) : DynamicValueStreams
       unless budget.writing?
         raise ArgumentError.new("Dynamic value encode requires a writing budget")
       end
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
+      end
+      if grid = occurrence_grid
+        unless mode == DynamicDiscriminatorCodec::BASIC_MODE
+          raise UnsupportedFormatError.new("child-site Dynamic values require the BASIC profile")
+        end
+        grid.validate_for!(granules.size, budget)
       end
 
       real_marks = checked_mark_count(granules.size, budget)
@@ -46,9 +77,14 @@ module CrystalClick
       budget.ensure_depth(1)
       validate_descriptor_trees(structure, budget)
       total_rows = 0_u64
-      granules.each do |granule|
-        if granule.empty?
+      granules.each_with_index do |granule, mark_index|
+        if granule.empty? && occurrence_grid.nil?
           raise ArgumentError.new("Dynamic value real granules must contain rows")
+        end
+        if grid = occurrence_grid
+          unless granule.size.to_u64 == grid.logical_occurrences_at(mark_index)
+            raise UnsupportedFormatError.new("Dynamic child rows disagree with the occurrence grid")
+          end
         end
         if granule.size > Int32::MAX
           raise UnsupportedFormatError.new("Dynamic mark row count exceeds the supported domain")
@@ -105,7 +141,11 @@ module CrystalClick
         tags << mark_tags
       end
 
-      discriminator = DynamicDiscriminatorCodec.encode_with_budget(structure, tags, budget, mode: mode)
+      discriminator = if grid = occurrence_grid
+                        DynamicDiscriminatorCodec.encode_child_site_with_budget(structure, tags, grid, budget)
+                      else
+                        DynamicDiscriminatorCodec.encode_with_budget(structure, tags, budget, mode: mode)
+                      end
       arms = Hash(String, BinaryBulkStreams).new
 
       # SharedVariant is emitted first so its aggregate envelope framing can
@@ -164,8 +204,42 @@ module CrystalClick
       mark_count : Int? = nil,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : Array(Array(BinaryValue))
+      decode_core_with_budget(structure, streams, budget, first_mark, mark_count, profile, nil)
+    end
+
+    # BASIC-only child-site decoder that validates its complete physical/logical
+    # mark grid even when the requested window contains no marks.
+    def self.decode_child_site_with_budget(
+      structure : DynamicStructure,
+      streams : DynamicValueStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : Array(Array(BinaryValue))
+      decode_core_with_budget(structure, streams, budget, first_mark, mark_count, profile, grid)
+    end
+
+    private def self.decode_core_with_budget(
+      structure : DynamicStructure,
+      streams : DynamicValueStreams,
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+      profile : BinaryBulkProfile,
+      occurrence_grid : StorageOccurrenceGrid?,
+    ) : Array(Array(BinaryValue))
       if budget.writing?
         raise ArgumentError.new("Dynamic value decode requires a reading budget")
+      end
+
+      if grid = occurrence_grid
+        mark_records = streams.discriminators.mark_count
+        if mark_records == 0
+          corrupt!("Dynamic discriminator mark grid has no terminal mark")
+        end
+        grid.validate_for!(mark_records - 1, budget)
       end
 
       variant_count = structure.canonical_variant_count
@@ -182,13 +256,24 @@ module CrystalClick
         end
       end
 
-      schedules = DynamicDiscriminatorCodec.decode_with_budget(
-        structure,
-        streams.discriminators,
-        budget,
-        first_mark: first_mark,
-        mark_count: mark_count
-      )
+      schedules = if grid = occurrence_grid
+                    DynamicDiscriminatorCodec.decode_child_site_with_budget(
+                      structure,
+                      streams.discriminators,
+                      grid,
+                      budget,
+                      first_mark: first_mark,
+                      mark_count: mark_count
+                    )
+                  else
+                    DynamicDiscriminatorCodec.decode_with_budget(
+                      structure,
+                      streams.discriminators,
+                      budget,
+                      first_mark: first_mark,
+                      mark_count: mark_count
+                    )
+                  end
       mark_records = streams.discriminators.mark_count
       if mark_records == 0
         # Normally diagnosed by W121, kept explicit before subtracting one so
