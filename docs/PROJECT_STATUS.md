@@ -1,5 +1,11 @@
 # CrystalClick project status
 
+Current investigation (W183): three stock Wide ArrayJSON/root JSON profiles
+and five primitive-lane decompressions verify the separate outer-row/child-count
+contract, including entirely empty child marks. No Crystal storage gate changes.
+The site-aware recursive storage design and exact probe boundaries are in
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+
 Current qualified capability (W182, 2026-10-06): nominal JSON composes through
 the existing recursive scalar visitors beneath Array/Tuple/Map/Nullable/
 Variant/Nested, inside JSON typed/runtime paths and as a Dynamic actual type.

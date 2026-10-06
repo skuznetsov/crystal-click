@@ -1,0 +1,75 @@
+{
+  "slice": "W183 recursive JSON physical-site discriminator",
+  "baseline": "48c1be0",
+  "claim": "Three finite stock Wide profiles establish outer marks versus child occurrences and decoded primitive lanes; recursive Crystal storage remains proposed and guarded.",
+  "source_only": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+    "head": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+    "clean": true,
+    "built": false
+  },
+  "executed_runtime": {
+    "path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+    "sha256_before_after_match": true
+  },
+  "executed_inputs": {
+    "probe": "scripts/probe_json_array_storage_w183.rb",
+    "probe_sha256": "ba628aa7037bb4421a0e7456d282e359b6ff2ae1aab9a4667776742237697adf",
+    "executor": "scripts/check_json_binary_kernel_w180.rb",
+    "executor_sha256": "f4da2177f787fd1dc5a511cb6de8c47d7a44538efda4d26a25c4af1fb47b0c05",
+    "guard": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "guard_sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+    "root_verifier": "/private/tmp/crystal-click-w183-root-checks.UUegmb/check.rb",
+    "root_verifier_sha256": "8c1dcb814bcbbeb458ceeb381670076adc86e71188a655cad445781c741e88ad"
+  },
+  "evidence": {
+    "root": "/private/tmp/crystal-click-json-array-storage-w183.BAXu3S",
+    "summary_sha256": "50a3a03f7fda921d62ec66db943ad4bceff66f494c93cbd18b53ce20bea7d47f",
+    "root_receipt": "/private/tmp/crystal-click-w183-root-checks.UUegmb/receipt.json",
+    "root_receipt_sha256": "4322c1909730848a11bc02e89ecbcd4f07cadd50eba7311c62046f14951cfade",
+    "guard_exit": 0,
+    "successful_native_processes": 8,
+    "successful_local_profiles": 3,
+    "successful_primitive_decompressions": 5,
+    "independent_artifact_hash_checks": 72,
+    "seeded_negative_controls": 8
+  },
+  "finite_observations": {
+    "outer_row_grid": [2, 2, 2, 2, 0],
+    "mixed_array_sizes": [0, 0, 0, 1, 2, 1, 0, 0],
+    "mixed_child_counts_per_real_mark": [0, 1, 3, 0],
+    "mixed_typed_values": [7, 11, 13, 17],
+    "mixed_typed_mark_addresses": [[0, 0], [0, 0], [0, 1], [0, 4], [0, 4]],
+    "all_empty_typed_payload_bytes": 0,
+    "array_shared_size_stream": "a.object_shared_data.size1",
+    "root_shared_size_stream": "a.object_shared_data.size0"
+  },
+  "retained_failed_attempts": [
+    {
+      "root": "/private/tmp/crystal-click-json-array-storage-w183.PkA7Z3",
+      "native_successes": 1,
+      "runner_failure": "Ruby 2.6 filter_map and legitimate ClickHouse catalog symlink"
+    },
+    {
+      "root": "/private/tmp/crystal-click-json-array-storage-w183.kWa3P9",
+      "native_successes": 3,
+      "runner_failure": "nil prefix read on an empty stream file"
+    }
+  ],
+  "verdict": "ROBUST within the finite native discriminator and seeded probe guards; same-lineage Luna review is not independent replication.",
+  "not_qualified": [
+    "Crystal recursive JSON bulk, part or table admission",
+    "decoded ObjectStructure/shared-data payloads",
+    "runtime proof of independent Object state at different sites",
+    "two equal nominal JSON sites with distinct actual rosters",
+    "effective-settings audit or a fresh-source runtime build",
+    "Compact, bucketed/ADVANCED, SKIP/REGEXP, nested Map versions",
+    "MV/projection execution, full-type compatibility or performance"
+  ],
+  "next_falsifier": "A baseline RED for a site-aware ArrayJSON child-count seam, followed by paired stock-to-library and library-to-stock complete-part full/middle reads.",
+  "decay": "Refresh affected source and native/paired evidence after wrapper path, state ownership, mark interpretation, serialization setting, runtime pin or consumer admission changes; loss of local evidence requires regeneration.",
+  "validation_boundary": "This curated index is not proof. No repository evidence-graph validator/template is available; substantive checks are the recorded native executions and root reconciliation."
+}

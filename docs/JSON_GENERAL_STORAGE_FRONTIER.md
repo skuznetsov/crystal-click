@@ -1,5 +1,10 @@
 # General JSON Storage Frontier
 
+W183 measures the first ArrayJSON physical-site contract in stock Wide parts;
+the proposed recursive storage seam and finite native probe are in
+[JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).
+It does not admit new Crystal persisted layouts or relax the gates below.
+
 W182 permits nested nominal JSON in the scalar descriptor/value kernel; see
 [JSON_NESTED_SCALAR_FRONTIER.md](JSON_NESTED_SCALAR_FRONTIER.md). It does not
 admit new persisted stream layouts or relax the storage gates below.
