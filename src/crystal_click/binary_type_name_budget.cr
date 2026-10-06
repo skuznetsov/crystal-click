@@ -26,6 +26,25 @@ module CrystalClick
         budget.preflight_children(1_u64)
         qbit_element_bounds = measure(type.qbit_element_descriptor, budget, depth + 1)
       end
+      json_path_bounds = Array(Bounds).new(0)
+      json_path_bytes = 0_u64
+      if type.tag == BinaryDataType::TAG_JSON
+        descriptor = type.json_type || raise UnsupportedFormatError.new("JSON descriptor metadata is missing")
+        count = descriptor.typed_path_count.to_u64
+        if count > 0_u64
+          # Path declaration records and their declared DataTypes are distinct
+          # budgeted metadata edges. The latter deepen the type-name traversal.
+          budget.preflight_children(count)
+          count.times { budget.visit_node(depth) }
+          budget.preflight_children(count)
+          budget.ensure_depth(depth + 1)
+          descriptor.typed_path_count.times do |index|
+            path_size = descriptor.typed_path_byte_size(index).to_u64
+            json_path_bytes = add(json_path_bytes, path_size)
+            json_path_bounds << measure(descriptor.typed_type_at(index), budget, depth + 1)
+          end
+        end
+      end
       metadata_count = type.metadata_entry_count.to_u64
       if metadata_count > 0_u64
         budget.preflight_children(metadata_count)
@@ -110,12 +129,34 @@ module CrystalClick
                    total = add(total, add(2_u64, digits(descriptor.stride)))
                  end
                  total
+               when BinaryDataType::TAG_JSON
+                 descriptor = type.json_type.not_nil!
+                 total = 6_u64 # "JSON(" and closing parenthesis
+                 first = true
+                 if descriptor.max_dynamic_types != BinaryJsonType::DEFAULT_MAX_DYNAMIC_TYPES
+                   total = add(total, add("max_dynamic_types=".bytesize.to_u64, digits(descriptor.max_dynamic_types.to_u64)))
+                   first = false
+                 end
+                 if descriptor.max_dynamic_paths != BinaryJsonType::DEFAULT_MAX_DYNAMIC_PATHS
+                   total = add(total, add("max_dynamic_paths=".bytesize.to_u64, digits(descriptor.max_dynamic_paths.to_u64)))
+                   total = add(total, 2_u64) unless first
+                   first = false
+                 end
+                 descriptor.typed_path_count.times do |index|
+                   total = add(total, 2_u64) unless first
+                   total = add(total, descriptor.typed_path_byte_size(index).to_u64)
+                   total = add(total, 1_u64) # path/type separator
+                   total = add(total, json_path_bounds[index][0])
+                   first = false
+                 end
+                 total
                else
                  16_u64
                end
 
       child_allocations = 0_u64
       children.each { |bounds| child_allocations = add(child_allocations, bounds[1]) }
+      json_path_bounds.each { |bounds| child_allocations = add(child_allocations, bounds[1]) }
       if argument_bounds = aggregate_count_argument_bounds
         child_allocations = add(child_allocations, argument_bounds[1])
       end
@@ -136,6 +177,9 @@ module CrystalClick
       # conservative output bound keeps the metadata path simple and bounded.
       output_copies = multiply(output, 2_u64)
       temporary = add(child_allocations, field_temporaries)
+      # The local name builder duplicates each path into an accessor String;
+      # include those copies before BinaryDataType#name materializes them.
+      temporary = add(temporary, multiply(json_path_bytes, 3_u64))
       if type.tag == BinaryDataType::TAG_DATETIME_ZONE || type.tag == BinaryDataType::TAG_DATETIME64_ZONE
         temporary = add(temporary, TimezoneName::MAX_NAME_BYTES.to_u64)
       end

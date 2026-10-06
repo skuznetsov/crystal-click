@@ -28,6 +28,7 @@ module CrystalClick
       unless budget.writing?
         raise ArgumentError.new("Object document encode requires a writing budget")
       end
+      reject_json_plan!(plan)
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
       end
@@ -258,6 +259,11 @@ module CrystalClick
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
       end
+      typed_schema.each_value do |type|
+        if type.contains_json?
+          raise UnsupportedFormatError.new("root JSON is outside the persisted Object declaration grammar")
+        end
+      end
 
       real_marks = streams.mark_count
       selected_first, selected_count = validate_selection(first_mark, mark_count, real_marks)
@@ -482,6 +488,16 @@ module CrystalClick
         result << documents
       end
       result
+    end
+
+    private def self.reject_json_plan!(plan : ObjectDocumentPlan) : Nil
+      plan.typed_path_count.times do |index|
+        path = plan.typed_path_at(index)
+        if plan.typed_type_for(path).contains_json?
+          raise UnsupportedFormatError.new("root JSON is outside the persisted Object declaration grammar")
+        end
+      end
+      nil
     end
 
     private def self.validate_low_cardinality_typed_field!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil

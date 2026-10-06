@@ -34,6 +34,9 @@ module CrystalClick
       @limits : BinaryCodecLimits = BinaryCodecLimits.default,
       @writing : Bool = true,
     )
+      if @type.contains_json?
+        raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
+      end
       BinaryNestedType.reject_unqualified_specialized_bulk!(@type)
       @qbit_column = BinaryQBitBulkCodec.column_type(@type)
       if column = @qbit_column

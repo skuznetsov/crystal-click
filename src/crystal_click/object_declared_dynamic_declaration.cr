@@ -233,6 +233,9 @@ module CrystalClick
       root_depth : Int = 3,
       budget : BinaryCodecBudget? = nil,
     ) : Nil
+      if type.contains_json?
+        raise UnsupportedFormatError.new("JSON is not admitted as a typed Object Dynamic actual arm")
+      end
       if operation_budget = budget
         type_context = BinaryCodecContext.new(limits, nil, operation_budget.writing?, operation_budget, false, false)
         type_context.validate_type_tree(type, root_depth)

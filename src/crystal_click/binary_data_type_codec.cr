@@ -19,6 +19,9 @@ module CrystalClick
     # Internal shared entry point used by the typed value envelope so its type
     # and scalar visits consume one combined context budget.
     def self.write_to(type : BinaryDataType, context : BinaryCodecContext, depth : Int = 1) : Nil
+      if type.contains_json? && (type.tag != BinaryDataType::TAG_JSON || depth != 1)
+        context.unsupported!("JSON is admitted only as a root nominal descriptor")
+      end
       if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT && depth != 1
         context.unsupported!("AggregateFunction(count) is admitted only as a top-level descriptor")
       end
@@ -64,6 +67,9 @@ module CrystalClick
           context.ensure_depth(depth + 1)
           write_to(argument, context, depth + 1)
         end
+      when BinaryDataType::TAG_JSON
+        descriptor = type.json_type || context.unsupported!("JSON descriptor metadata is missing")
+        BinaryJsonTypeCodec.write(descriptor, context, depth)
       when BinaryDataType::TAG_VARIANT
         count = type.child_count
         context.preflight_children(count.to_u64)
@@ -162,11 +168,19 @@ module CrystalClick
           context.corrupt!("Dynamic max_types 255 is outside the local normal-type profile")
         end
         BinaryDataType.dynamic(max_types.to_i)
+      when BinaryDataType::TAG_JSON
+        unless depth == 1
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
+        end
+        BinaryJsonTypeCodec.read(context, depth)
       when BinaryDataType::TAG_ARRAY
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)
         if child.contains_qbit?
           context.unsupported!("QBit is outside the admitted Array profile")
+        end
+        if child.contains_json?
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
         end
         BinaryDataType.array(child)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
@@ -190,6 +204,9 @@ module CrystalClick
         context.preflight_children(1_u64)
         context.ensure_depth(depth + 1)
         child = read_from(context, depth + 1)
+        if child.contains_json?
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
+        end
         begin
           BinaryDataType.simple_aggregate(simple_aggregate_type.function, child)
         rescue ex : ArgumentError
@@ -234,6 +251,9 @@ module CrystalClick
       when BinaryDataType::TAG_NULLABLE
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)
+        if child.contains_json?
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
+        end
         begin
           BinaryDataType.nullable(child)
         rescue ex : ArgumentError
@@ -243,6 +263,9 @@ module CrystalClick
         context.preflight_children(1_u64)
         context.ensure_depth(depth + 1)
         child = read_from(context, depth + 1)
+        if child.contains_json?
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
+        end
         begin
           BinaryDataType.low_cardinality(child)
         rescue ex : ArgumentError
@@ -256,6 +279,9 @@ module CrystalClick
         context.preflight_children(2_u64)
         key = read_from(context, depth + 1)
         value = read_from(context, depth + 1)
+        if key.contains_json? || value.contains_json?
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
+        end
         begin
           BinaryDataType.map(key, value)
         rescue ex : ArgumentError
@@ -301,6 +327,9 @@ module CrystalClick
         if children.any?(&.contains_qbit?)
           context.unsupported!("QBit is outside the admitted Tuple profile")
         end
+        if children.any?(&.contains_json?)
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
+        end
         BinaryDataType.tuple(children)
       else
         context.ensure_depth(depth + 1) unless count == 0
@@ -314,6 +343,9 @@ module CrystalClick
           raw_name = context.read_slice(name_length)
           names << String.new(raw_name)
           children << read_from(context, depth + 1)
+        end
+        if children.any?(&.contains_json?)
+          context.unsupported!("JSON is admitted only as a root nominal descriptor")
         end
         begin
           BinaryDataType.tuple(children, names)
@@ -349,6 +381,9 @@ module CrystalClick
         raw_name = context.read_slice(name_length)
         names << String.new(raw_name)
         children << read_from(context, depth + 2)
+      end
+      if children.any?(&.contains_json?)
+        context.unsupported!("JSON is admitted only as a root nominal descriptor")
       end
       begin
         BinaryDataType.nested(children, names)

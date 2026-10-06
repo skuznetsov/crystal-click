@@ -46,6 +46,9 @@ module CrystalClick
       generated_path_bytes = 0_u64
       typed_paths.each do |path, type|
         budget.visit_node(2)
+        if type.contains_json?
+          raise ArgumentError.new("root JSON is outside the persisted Object declaration grammar")
+        end
         # Bound every raw descriptor before contains_dynamic? can recurse. This
         # generic walk preserves the constructor's prior ordinary-field
         # admission policy while making the new recursive predicate finite.

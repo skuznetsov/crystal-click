@@ -1,5 +1,28 @@
 # CrystalClick project status
 
+Current qualified capability (W180, 2026-10-05): a root nominal JSON v0
+descriptor and owned flattened structured RowBinary row now have paired codecs.
+Four narrow owners have separate files; typed-path metadata remains distinct
+from generic value children and from the older persisted ObjectDocument profile.
+Caps retain nominal identity, not scalar cardinality limits. Runtime Nothing
+NULL becomes absence; typed Nullable NULL is preserved. The closed child grammar,
+shared budget laws and parent/Dynamic/borrowed/bulk/Object refusal boundaries are
+explicit, including empty values and zero read windows.
+The same 33 selected specs pass 245 DEBUG and 245 RELEASE examples in five serial
+cohorts per mode, with all ten actual child/guard exits 0 and zero failures/errors/
+pending. Root reconciles 996 unchanged Crystal inputs and 1369 fixture files.
+Actual DEBUG/RELEASE encoder outputs match across 15 fixture files. The separately
+pinned stock runtime passes seven paired descriptor/row profiles, with 23 actual
+exit-zero signal/timeout-free processes and 129 reconciled artifact/input hashes;
+both helper modes decode and re-encode the captured stock bytes. An executed
+early-bulk-guard bypass fails the unchanged negative assertion; exact restoration
+and final focused gates pass. Scoped verdict: ROBUST for these laws and finite
+witnesses, not the full repository, every recursive child product, whole JSON
+parts or a fresh-source runtime build. General JSON layouts/path/SKIP semantics,
+remaining types and broader MV/projections remain open; performance is deferred.
+Exact API, stock profiles, failed attempts, guard warning, rosters and decay:
+[JSON_BINARY_KERNEL_FRONTIER.md](JSON_BINARY_KERNEL_FRONTIER.md).
+
 Current architecture checkpoint (2026-10-05, VERIFIED within the declared slice):
 the first table-facade slice moves seven existing numeric Map row/slice owners
 and `WidePartTableBatch` into eight owner-named files, plus one alias-only file.
@@ -1285,8 +1308,12 @@ source/runtime identities and executed evidence.
    through legal recursive wrappers, with separate Array/Tuple/Map whole-part
    qualification. Unqualified Dynamic/Variant/LC leaves/products, Map LC keys, and
    the inherited timezone-profile gap remain open within Object,
-   even where standalone part support exists. The older scalar typed-path behavior is
-   unchanged. Neither adapter implies arbitrary
+   even where standalone part support exists. The older persisted scalar
+   typed-path behavior is unchanged. W180 separately admits a root nominal JSON
+   v0 descriptor and structured scalar RowBinary row, with a closed child grammar
+   and seven paired witnesses; it does not widen these physical Object owners.
+   See [JSON_BINARY_KERNEL_FRONTIER.md](JSON_BINARY_KERNEL_FRONTIER.md).
+   Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required, and whole-Object projection child reads remain refused. See
    [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
@@ -1357,8 +1384,11 @@ source/runtime identities and executed evidence.
    W172 pairs the nominal Nested descriptor and ordinary logical value/bulk
    kernel; specialized Nested LC/Variant/Dynamic products remain refused.
    The general descriptor kernel admits AggregateFunction only for W178's
-   ordinary Count canonical-argument profile; other aggregate states, Custom
-   and general JSON remain outside it. W179 now pairs QBit/QBitWithStride tags,
+   ordinary Count canonical-argument profile; other aggregate states and Custom
+   remain outside it. W180 now admits root JSON v0 descriptors and structured
+   scalar RowBinary values, not parent products, SKIP/regexp or general persisted
+   JSON. Its finite native witnesses do not qualify every recursive child type.
+   W179 now pairs QBit/QBitWithStride tags,
    scalar RowBinary and normalized bulk for root/direct Nullable only; its
    finite native matrix does not admit container, borrowed Object or arbitrary
    complete-part products. SimpleAggregateFunction's tag is

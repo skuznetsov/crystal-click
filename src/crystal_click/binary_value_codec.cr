@@ -82,6 +82,9 @@ module CrystalClick
       if value.type.contains_qbit?
         raise UnsupportedFormatError.new("QBit is not admitted as a Dynamic actual type")
       end
+      if value.type.contains_json?
+        raise UnsupportedFormatError.new("JSON is not admitted as a Dynamic actual type")
+      end
       budget.ensure_wire_bytes(reserved_wire_bytes)
       context = BinaryCodecContext.new(
         budget.limits,
@@ -121,6 +124,9 @@ module CrystalClick
       end
       if type.contains_qbit?
         context.unsupported!("QBit is not admitted as a Dynamic actual type")
+      end
+      if type.contains_json?
+        context.unsupported!("JSON is not admitted as a Dynamic actual type")
       end
       value : BinaryValue? = if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(depth)
@@ -179,6 +185,10 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_NOTHING
         context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
+      when BinaryDataType::TAG_JSON
+        BinaryJsonValueCodec.write(value.json_row, context, depth) do |child, child_depth|
+          write_value(child, context, child_depth)
+        end
       when BinaryDataType::TAG_AGGREGATE_COUNT
         unless depth == 1
           context.unsupported!("AggregateFunction(count) is admitted only as a top-level value")
@@ -275,6 +285,11 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_NOTHING
         context.unsupported!("Nothing has no ordinary non-NULL scalar representation")
+      when BinaryDataType::TAG_JSON
+        row = BinaryJsonValueCodec.read(type, context, depth) do |child_type, child_depth|
+          read_value(child_type, context, child_depth)
+        end
+        BinaryValue.json(type, row)
       when BinaryDataType::TAG_AGGREGATE_COUNT
         unless depth == 1
           context.unsupported!("AggregateFunction(count) is admitted only as a top-level value")
@@ -392,6 +407,9 @@ module CrystalClick
     end
 
     private def self.reject_borrowed_type!(type : BinaryDataType, context : BinaryCodecContext) : Nil
+      if type.contains_json?
+        context.unsupported!("JSON is outside the borrowed persisted-envelope profile")
+      end
       if type.contains_variant?
         context.unsupported!("Variant is outside the borrowed persisted-envelope profile")
       end

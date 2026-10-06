@@ -147,6 +147,7 @@ module CrystalClick
       build_descriptor : Bool,
     ) : PreparedRead
       validate_selection_arguments!(first_mark, mark_count)
+      reject_json_schema!(typed_schema)
       codec_budget = BinaryCodecBudget.new(limits)
       transport_budget = CompressedStreamBudget.new(transport_limits)
       column_prefix = preflight_column_name!(column_name, hashed, limits)
@@ -592,6 +593,18 @@ module CrystalClick
       raise ArgumentError.new("first mark must be nonnegative") if first_mark < 0
       if count = mark_count
         raise ArgumentError.new("mark count must be nonnegative") if count < 0
+      end
+      nil
+    end
+
+    # The raw schema is a caller-supplied declaration boundary. Reject JSON
+    # before column-name rendering, schema snapshotting, or part metadata I/O;
+    # inspect and zero-window reads share this preflight through prepare_read.
+    private def self.reject_json_schema!(schema : Hash(String, BinaryDataType)) : Nil
+      schema.each_value do |type|
+        if type.contains_json?
+          raise UnsupportedFormatError.new("JSON is outside the admitted persisted Object declaration grammar")
+        end
       end
       nil
     end

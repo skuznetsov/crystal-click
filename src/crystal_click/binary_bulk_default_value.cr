@@ -188,6 +188,9 @@ module CrystalClick
     end
 
     private def self.reject_dynamic_type!(type : BinaryDataType, dynamic_plan : BinaryDynamicBulkPlan?) : Nil
+      if type.contains_json?
+        raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk default-value profile")
+      end
       if type.contains_dynamic? && dynamic_plan.nil?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted bulk default-value profile")
       end

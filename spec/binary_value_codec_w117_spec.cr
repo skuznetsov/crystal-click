@@ -691,11 +691,12 @@ describe "W117 binary DataType and scalar value codec" do
       ])
     end
 
-    # W119 admits DateTime, W141 admits LowCardinality, and W179 admits QBit;
-    # keep the refusal control on a valid JSON v0 descriptor outside the kernel.
+    # W119 admits DateTime, W141 admits LowCardinality, W179 admits QBit, and
+    # W180 admits a bounded JSON v0 profile. Keep a valid Custom(Point)
+    # descriptor outside this general kernel as the refusal control.
     CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x11_u8]).should eq(CrystalClick::BinaryDataType.datetime)
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x30_u8, 0x00, 0x80, 0x08, 0x20, 0x00, 0x00, 0x00])
+      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x2c_u8, 0x05, 0x50, 0x6f, 0x69, 0x6e, 0x74])
     end
     expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryDataTypeCodec.decode(Bytes[0xff_u8])

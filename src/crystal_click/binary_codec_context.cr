@@ -126,6 +126,23 @@ module CrystalClick
 
     def validate_type_tree(type : BinaryDataType, depth : Int = 1) : Nil
       visit_node(depth)
+      if type.tag == BinaryDataType::TAG_JSON
+        descriptor = type.json_type || unsupported!("JSON descriptor metadata is missing")
+        count = descriptor.typed_path_count.to_u64
+        if count > 0_u64
+          # Typed JSON paths are descriptor metadata, not generic value
+          # children. Charge both the path records and their declared types to
+          # this operation's shared traversal budget.
+          preflight_children(count)
+          visit_metadata_nodes(count, depth)
+          preflight_children(count)
+          ensure_depth(depth + 1)
+          descriptor.typed_path_count.times do |index|
+            validate_type_tree(descriptor.typed_type_at(index), depth + 1)
+          end
+        end
+        return nil
+      end
       if type.tag == BinaryDataType::TAG_QBIT
         # QBit's element DataType is descriptor metadata: charge the same
         # edge/node/depth bounds as a recursive child without adding it to

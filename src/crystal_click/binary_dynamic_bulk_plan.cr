@@ -524,7 +524,11 @@ module CrystalClick
       # specialized owner models Nested's shared sibling offsets, reject it
       # before canonical-name measurement or any arm/role roster allocation.
       structure.type_count.times do |index|
-        if structure.type_at(index).contains_nested?
+        actual_type = structure.type_at(index)
+        if actual_type.contains_json?
+          context.unsupported!("JSON in Dynamic actual rosters is outside the admitted bulk profile")
+        end
+        if actual_type.contains_nested?
           context.unsupported!("Nested in Dynamic actual rosters is outside the admitted bulk profile")
         end
       end

@@ -50,6 +50,7 @@ module CrystalClick
     TAG_BOOL             = 0x2d_u8
     TAG_SIMPLE_AGGREGATE = 0x2e_u8
     TAG_NESTED           = 0x2f_u8
+    TAG_JSON             = 0x30_u8
     TAG_BFLOAT16         = 0x31_u8
     TAG_TIME             = 0x32_u8
     TAG_TIME64           = 0x34_u8
@@ -70,6 +71,7 @@ module CrystalClick
     getter? contains_nested : Bool
     getter? contains_aggregate_count : Bool
     getter? contains_qbit : Bool
+    getter? contains_json : Bool
     getter dynamic_max_types : UInt8?
 
     @primitive_name : String?
@@ -82,6 +84,7 @@ module CrystalClick
     @simple_aggregate_type : BinarySimpleAggregateType?
     @aggregate_count_type : BinaryAggregateCountType?
     @qbit_type : QBitType?
+    @json_type : BinaryJsonType?
 
     private def initialize(
       @tag : UInt8,
@@ -97,6 +100,7 @@ module CrystalClick
       @simple_aggregate_type : BinarySimpleAggregateType? = nil,
       @aggregate_count_type : BinaryAggregateCountType? = nil,
       @qbit_type : QBitType? = nil,
+      @json_type : BinaryJsonType? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
@@ -109,6 +113,7 @@ module CrystalClick
       # Count itself and any physical composition child that illegally wraps it.
       @contains_aggregate_count = @tag == TAG_AGGREGATE_COUNT || @children.any?(&.contains_aggregate_count?)
       @contains_qbit = @tag == TAG_QBIT || @children.any?(&.contains_qbit?)
+      @contains_json = @tag == TAG_JSON || @children.any?(&.contains_json?)
     end
 
     def self.primitive(name : String) : BinaryDataType
@@ -201,9 +206,19 @@ module CrystalClick
       new(TAG_QBIT, nil, [] of BinaryDataType, [] of String, nil, qbit_type: type)
     end
 
+    def self.json(
+      max_dynamic_paths : Int = BinaryJsonType::DEFAULT_MAX_DYNAMIC_PATHS,
+      max_dynamic_types : Int = BinaryJsonType::DEFAULT_MAX_DYNAMIC_TYPES,
+      typed_paths : Hash(String, BinaryDataType) = {} of String => BinaryDataType,
+    ) : BinaryDataType
+      descriptor = BinaryJsonType.new(max_dynamic_paths, max_dynamic_types, typed_paths)
+      new(TAG_JSON, nil, [] of BinaryDataType, [] of String, nil, json_type: descriptor)
+    end
+
     def self.array(child : BinaryDataType) : BinaryDataType
       reject_aggregate_count_child!(child)
       reject_qbit_child!(child)
+      reject_json_child!(child)
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
@@ -223,6 +238,7 @@ module CrystalClick
     ) : BinaryDataType
       reject_aggregate_count_child!(storage_type)
       reject_qbit_child!(storage_type)
+      reject_json_child!(storage_type)
       storage_type_name = case storage_type.tag
                           when TAG_UINT8    then "UInt8"
                           when TAG_UINT16   then "UInt16"
@@ -277,6 +293,9 @@ module CrystalClick
       if argument && argument.contains_qbit?
         raise ArgumentError.new("AggregateFunction(count) arguments cannot contain QBit")
       end
+      if argument && argument.contains_json?
+        raise ArgumentError.new("JSON is not admitted in AggregateFunction(count) arguments")
+      end
       nominal = BinaryAggregateCountType.new(argument)
       new(TAG_AGGREGATE_COUNT, nil, [] of BinaryDataType, [] of String, nil, aggregate_count_type: nominal)
     end
@@ -293,6 +312,7 @@ module CrystalClick
       if child.contains_qbit? && child.tag != TAG_QBIT
         raise ArgumentError.new("Nullable can contain QBit only as its direct scalar child")
       end
+      reject_json_child!(child)
       if child.tag == TAG_ARRAY || child.tag == TAG_NESTED || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
         raise ArgumentError.new("Nullable cannot directly contain Array, Nested, Map, Nullable, LowCardinality, Variant, or Dynamic")
       end
@@ -302,7 +322,10 @@ module CrystalClick
     # Normal Variant construction canonicalizes by bounded SQL display name;
     # binary decode uses the same helper with the enclosing operation's budget.
     def self.variant(arms : Array(BinaryDataType), limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryDataType
-      arms.each { |arm| reject_aggregate_count_child!(arm) }
+      arms.each do |arm|
+        reject_aggregate_count_child!(arm)
+        reject_json_child!(arm)
+      end
       budget = BinaryCodecBudget.new(limits, true)
       canonical = BinaryVariantRoster.normalize(
         arms,
@@ -328,6 +351,7 @@ module CrystalClick
       arms.each do |arm|
         reject_aggregate_count_child!(arm)
         reject_qbit_child!(arm)
+        reject_json_child!(arm)
         if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.tag == TAG_VARIANT || arm.tag == TAG_DYNAMIC
           raise ArgumentError.new("canonical Object Variant roster has a forbidden direct arm")
         end
@@ -353,6 +377,9 @@ module CrystalClick
         if arm.contains_aggregate_count?
           context.corrupt!("AggregateFunction(count) cannot be nested in a Variant arm")
         end
+        if arm.contains_json?
+          context.unsupported!("JSON is not admitted in a Variant arm")
+        end
       end
       canonical = begin
         BinaryVariantRoster.normalize(
@@ -372,6 +399,7 @@ module CrystalClick
     def self.low_cardinality(child : BinaryDataType) : BinaryDataType
       reject_aggregate_count_child!(child)
       reject_qbit_child!(child)
+      reject_json_child!(child)
       unless BinaryLowCardinalityTypePolicy.admitted_child?(child)
         raise ArgumentError.new("LowCardinality child type is not admitted by ClickHouse")
       end
@@ -383,6 +411,7 @@ module CrystalClick
       children.each do |child|
         reject_aggregate_count_child!(child)
         reject_qbit_child!(child)
+        reject_json_child!(child)
       end
 
       if names
@@ -411,6 +440,8 @@ module CrystalClick
       reject_aggregate_count_child!(value)
       reject_qbit_child!(key)
       reject_qbit_child!(value)
+      reject_json_child!(key)
+      reject_json_child!(value)
       if BinaryLowCardinalityTypePolicy.nullable_map_key?(key)
         raise ArgumentError.new("Map key type cannot be Nullable or LowCardinality(Nullable(...))")
       end
@@ -477,6 +508,10 @@ module CrystalClick
 
     def qbit_type : QBitType?
       @qbit_type
+    end
+
+    def json_type : BinaryJsonType?
+      @json_type
     end
 
     # The binary DataType grammar embeds QBit's element type as metadata. Keep
@@ -553,6 +588,8 @@ module CrystalClick
         @aggregate_count_type.not_nil!.type_name
       when TAG_QBIT
         @qbit_type.not_nil!.type_name
+      when TAG_JSON
+        @json_type.not_nil!.type_name
       when TAG_MAP
         "Map(#{@children[0].name}, #{@children[1].name})"
       when TAG_VARIANT
@@ -642,6 +679,7 @@ module CrystalClick
       return false unless @simple_aggregate_type == other.@simple_aggregate_type
       return false unless @aggregate_count_type == other.@aggregate_count_type
       return false unless @qbit_type == other.@qbit_type
+      return false unless @json_type == other.@json_type
       return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
@@ -652,7 +690,7 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @qbit_type, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @qbit_type, @json_type, @children, @field_names
 
     private def self.reject_aggregate_count_child!(type : BinaryDataType) : Nil
       if type.contains_aggregate_count?
@@ -663,6 +701,12 @@ module CrystalClick
     private def self.reject_qbit_child!(type : BinaryDataType) : Nil
       if type.contains_qbit?
         raise ArgumentError.new("QBit is admitted only as a root scalar or direct Nullable child")
+      end
+    end
+
+    private def self.reject_json_child!(type : BinaryDataType) : Nil
+      if type.contains_json?
+        raise ArgumentError.new("JSON is admitted only as a root nominal descriptor")
       end
     end
 

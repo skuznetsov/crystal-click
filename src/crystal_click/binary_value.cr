@@ -10,6 +10,7 @@ module CrystalClick
     @null : Bool
     @variant_index : UInt8?
     @qbit_value : QBitValue?
+    @json_row : BinaryJsonRow?
 
     private def initialize(
       @type : BinaryDataType,
@@ -18,6 +19,7 @@ module CrystalClick
       @null : Bool = false,
       @variant_index : UInt8? = nil,
       @qbit_value : QBitValue? = nil,
+      @json_row : BinaryJsonRow? = nil,
     )
       @payload = payload.try { |bytes| Bytes.new(bytes.size) { |index| bytes[index] } }
       @elements = elements.dup
@@ -69,6 +71,15 @@ module CrystalClick
         raise ArgumentError.new("QBit value type does not match its nominal descriptor")
       end
       new(type, nil, [] of BinaryValue, false, nil, value)
+    end
+
+    # JSON is one nominal scalar with a separately-owned flattened structured
+    # row. It is not represented as an ObjectDocument or generic child array.
+    def self.json(type : BinaryDataType, row : BinaryJsonRow) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_JSON && row.type == type
+        raise ArgumentError.new("JSON row does not match its nominal descriptor")
+      end
+      new(type, nil, [] of BinaryValue, false, nil, nil, row)
     end
 
     def self.string(value : String) : BinaryValue
@@ -132,6 +143,9 @@ module CrystalClick
       end
       if child && child.type.contains_qbit?
         raise ArgumentError.new("QBit is not admitted as a Dynamic actual type")
+      end
+      if child && child.type.contains_json?
+        raise ArgumentError.new("JSON is not admitted as a Dynamic actual type")
       end
       if child && child.type.tag == BinaryDataType::TAG_NOTHING
         unless child.is_null?
@@ -289,6 +303,11 @@ module CrystalClick
       @qbit_value || raise ArgumentError.new("QBit value has no owned raw row")
     end
 
+    def json_row : BinaryJsonRow
+      require_tag(BinaryDataType::TAG_JSON, "JSON")
+      @json_row || raise ArgumentError.new("JSON value has no owned structured row")
+    end
+
     def elements : Array(BinaryValue)
       @elements.dup
     end
@@ -318,6 +337,11 @@ module CrystalClick
     # admitted QBit and Nullable(QBit) round trips.
     def ==(other : BinaryValue) : Bool
       return false unless @type == other.@type
+      if @type.tag == BinaryDataType::TAG_JSON
+        left = @json_row
+        right = other.@json_row
+        return left.nil? ? right.nil? : left == right
+      end
       return same?(other) unless @type.contains_qbit?
       return false unless @null == other.@null
       return true if @null
@@ -329,6 +353,11 @@ module CrystalClick
     end
 
     def hash(hasher)
+      if @type.tag == BinaryDataType::TAG_JSON
+        hasher = @type.hash(hasher)
+        return @json_row.hash(hasher) if row = @json_row
+        return hasher
+      end
       unless @type.contains_qbit?
         return object_id.hash(hasher)
       end

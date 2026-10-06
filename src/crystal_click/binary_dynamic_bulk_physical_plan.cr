@@ -290,6 +290,11 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_DYNAMIC
         arms = @prepared.arm_count(path)
+        arms.times do |index|
+          if @prepared.arm_type(path, index).contains_json?
+            raise UnsupportedFormatError.new("JSON is not admitted as a Dynamic physical actual type")
+          end
+        end
         @context.record_elements(arms.to_u64) if arms > 0
         add_data_role(path, ".discriminators", 8)
         add_structure_role(path)
