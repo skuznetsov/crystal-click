@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current finite internal frontier (W197, 2026-10-06): ordinary Nested actual
+Current finite complete-part frontier (W198, 2026-10-06): public writer and
+reader compose ordinary Nested actuals and an Array(named Tuple) control in
+root JSON shared ADVANCED v2 / CHUNKED v3, String profiles 0/1. No production
+change or serializer per recursive product was needed. The existing writer's
+always-spill policy preserves nominal type and stock direct-path readability;
+it does not reproduce ClickHouse's insertion/merge roster-selection policy.
+
+Focused DEBUG passes 16 examples; the same 130 affected files pass 857 DEBUG
+and 857 RELEASE examples, zero failures/errors/pending, actual exits 0. The
+943-file source/spec identity remains unchanged across final gates. Fresh
+helpers create eight Wide parts per mode with the public writer, without
+post-publication lane replacement, then read all stock/library parts through
+public full/middle/zero mark windows. Prefix versions and String profiles are
+authenticated from persisted metadata, not echoed fixture labels.
+
+Both native modes ATTACH/CHECK eight generated parts, re-CHECK eight stock
+parts, compare 128 full / 64 middle whole-Object rows and 192 independent typed
+path rows per mode, and authenticate zero selections, persisted PKs and nominal types.
+Root reconciles raw process/byte provenance and 680 unchanged files per mode;
+all 336 generated files and normalized helper observations agree between modes.
+Eight oracle mutations per mode and single/duplicate-capture controls reject.
+Scoped verdict: ROBUST for this finite corpus, not all recursive products.
+
+Next: ordinary QBit actual-path planning/binding and complete-part certificates,
+then remaining specialized wrapper/site schedules and JSON-as-Dynamic-actual
+storage. Full types, broader MV/projections and repository-wide one-class-per-file
+decomposition remain open. Performance stays deferred; the overall goal is
+incomplete. Details: [OBJECT_SHARED_NESTED_FRONTIER.md](OBJECT_SHARED_NESTED_FRONTIER.md),
+`.landmark/evidence/object-shared-nested-parts-w198.json`.
+
+Previous finite internal frontier (W197, 2026-10-06): ordinary Nested actual
 arms now compose the existing Array/implicit named Tuple owners across Dynamic
 bulk planning, physical stream binding and Object shared-path prefix/body
 serde. The nominal Nested descriptor is preserved; no serializer per recursive

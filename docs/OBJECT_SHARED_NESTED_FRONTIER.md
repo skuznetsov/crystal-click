@@ -141,3 +141,96 @@ Next: qualify remaining specialized wrapper/site schedules using shared child
 codecs, then qualify complete-part publication separately. No new full-part
 ATTACH certificate, broad recursive-product admission, performance result,
 MV/projection capability or repository-wide class decomposition is claimed.
+
+## Complete-part qualification (W198)
+
+Status: VERIFIED within the finite corpus below; baseline
+`ff00cac5efb7b9a276711bef5d9dc827de482ea1`.
+The discriminator uses the public `ObjectColumnReader` and
+`WidePartWriter.write_uint64_object_pair`, without replacing lanes after part
+publication. It tests ordinary `Nested(n UInt8, s String)` and the nominally
+distinct `Array(Tuple(n UInt8, s String))` control, shared ADVANCED v2 and
+CHUNKED v3, and String profiles 0 and 1. Authored rows include populated,
+pathless, empty, multi-element and empty-string values across mark boundaries.
+The column declaration is `JSON(max_dynamic_types=1, max_dynamic_paths=0)`;
+this fixture has no declared typed paths or Object dynamic paths. Each part
+has eight rows and a `[2, 2, 2, 2]` physical mark grid.
+
+The writer may use an empty actual-type roster and SharedVariant. Matching
+ClickHouse's roster-selection policy is not required; preserving nominal type,
+values and stock direct-path readability is required. The persisted read
+roster is not assumed empty merely because the writer uses `max_types=0`.
+No production change is justified before a measured behavioral failure.
+
+Risk: CAUTION (a persistent-format compatibility claim). Rollback: exact-path
+local commit from the clean baseline; no push. Root owns serial guarded
+compiler/native runs, source inspection and independent literal reconciliation.
+Luna owns candidate focused tests and thin helpers; it is correlated evidence.
+
+DoD: focused and affected DEBUG/RELEASE tests exit 0; fresh helper builds and
+paired native runs exit 0; stock parts remain unchanged; every profile preserves
+the authored type/value literals in public full/middle/zero reads and native
+ATTACH/CHECK, whole-Object, nominal-type and independent direct-path queries.
+The runner must reject a seeded nominal/value report defect. Native process
+failures, missing rows and absent markers are failures, not empty successes.
+Use the existing pinned source/runtime and bounded process runner. Exact
+commands, coverage and observed outcomes are indexed in the evidence packet.
+
+Retained guards: Nested with LowCardinality/Variant/Dynamic descendants,
+QBit/JSON actual-path adapters, arbitrary recursive products and complete
+Compact parts are not admitted by this qualification. MV/projections,
+performance and broad class decomposition remain separate open tracks.
+
+### Executed complete-part checkpoint (2026-10-06)
+
+No production changes were needed: the W197 recursive child adapters already
+compose through public complete-part publication and reads for this corpus.
+The writer uses its existing always-spill policy; stock insertion and merge
+roster policy are not reproduced or required by this certificate.
+
+- Focused DEBUG: 16 examples, zero failures/errors/pending, actual exit 0.
+- The same 130 affected files: 857 DEBUG and 857 RELEASE examples, zero
+  failures/errors/pending, actual guarded exits 0; not the full repository suite.
+- Source/spec identity: 943 regular files, SHA-256
+  `e7ba9f1232ca85c9ddaa160a199c3fae863376bf7091e343f89f3e3dd014797b`,
+  unchanged across the final suites, fresh builds and native runs.
+- Fresh DEBUG and RELEASE helpers independently create eight Wide parts via
+  `WidePartWriter.write_uint64_object_pair`; no lane replacement follows
+  publication. Both helpers read all eight stock and all eight library parts
+  with public full/middle/zero mark windows. Actual ordinary String metadata
+  and decoded shared-data prefix versions are checked, not profile labels.
+- Each mode's pinned stock runtime separately ATTACHes/CHECKs eight library
+  parts and re-CHECKs eight stock parts. Independent whole-Object, dynamicType
+  and direct dynamicElement RowBinary queries authenticate 128 full and 64
+  middle rows across both origins, plus explicit zero-window markers. There
+  are 192 direct-path result rows per mode. Persisted PKs, nominal Nested versus
+  Array(Tuple), absent versus present-empty and authored payload bytes agree.
+- Root authenticates raw argv, SQL, stdout/stderr, actual process exits and
+  snapshots of all 680 files per mode (344 stock, 336 generated). All generated
+  files are byte-identical between modes; normalized helper observations agree.
+- Eight root controls per mode reject nominal/payload/version report poison,
+  wrong persisted PK, wrong native nominal type, a missing zero marker, an
+  extra whole-JSON TSV field and same-length stdout substitution. Separate
+  single-capture and duplicate-capture probes are rejected. These are evidence
+  oracle controls, not new codec rejection tests.
+- Ruby syntax/literal/parser self-tests, Crystal format and diff checks exit 0.
+  Luna's static review is correlated; root's native and raw-byte reconciliation
+  provide the executed checks. Scoped Adversary verdict: ROBUST for this corpus.
+
+Verification repaired helper/test compiler issues and hardened real-tab
+parsing, inventory/CHECK cardinality and the executable/report summary-key
+collision. These are harness fixes, not serde regressions or capability REDs.
+
+Exact commands and digests are indexed in
+`.landmark/evidence/object-shared-nested-parts-w198.json`. Local captures:
+`/private/tmp/crystal-click-w198-native-debug-final.5X0O4f` and
+`/private/tmp/crystal-click-w198-native-release.SFzftq`; compiler logs and the
+root reconciler are in `/private/tmp/crystal-click-w198.03w0Y3`. They are not
+committed fixtures. Missing captures/reconciler or a changed dependent codec
+invalidates this checkpoint until refreshed. The separate source checkout is
+the clean, unbuilt October 5 depth-1 snapshot; it is not the runtime build.
+
+Next: direct ordinary QBit actual-path planning/binding, followed by its paired
+complete-part certificate. Specialized Nested descendants, JSON actual-path
+storage, Compact advanced parts and arbitrary recursive products remain open.
+No full-types, MV/projection, performance or class-decomposition closure is claimed.
