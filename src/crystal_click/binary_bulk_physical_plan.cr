@@ -248,6 +248,40 @@ module CrystalClick
       detached
     end
 
+    # Scalar role count without constructing the detached role/name snapshot.
+    def stream_count : Int32
+      @names.size
+    end
+
+    # Upper bound for the role/name bytes copied while the Object reader turns
+    # this plan into BulkBinding records. Keep this in step with the shared
+    # branch of ObjectDocumentFileReader#append_bulk_bindings!: it includes the
+    # detached role/name snapshot, file-name inputs and outputs, and (for
+    # hashed names) temporary hex rendering. This is physical-name work, not
+    # serialized wire traffic or an RSS estimate.
+    def binding_name_copy_work_bytes(hashed : Bool) : UInt64
+      total = 0_u64
+      @names.each do |role, name|
+        total = add_size(total, multiply_size(role.bytesize.to_u64, 2_u64))
+        name_multiplier = hashed ? 3_u64 : 5_u64
+        total = add_size(total, multiply_size(name.bytesize.to_u64, name_multiplier))
+        total = add_size(total, hashed ? 265_u64 : 9_u64)
+      end
+      total
+    end
+
+    # Object's typed reader owns a separate physical-name budget from the
+    # codec's serialized-wire-byte budget.
+    def preflight_binding_name_copy_work(bytes : UInt64) : Nil
+      @context.preflight_name_bytes(bytes)
+      nil
+    end
+
+    def charge_binding_name_copy_work(bytes : UInt64) : Nil
+      @context.charge_name_bytes(bytes)
+      nil
+    end
+
     def stream_name_for(role : String) : String
       name = @names[role]? || raise(KeyError.new("binary bulk role not found: #{role.inspect}"))
       String.new(name.to_slice)

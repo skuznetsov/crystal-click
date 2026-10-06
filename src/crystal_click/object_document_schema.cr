@@ -139,8 +139,8 @@ module CrystalClick
     # without inferring or modifying either roster.
     def validate_plan(plan : ObjectDocumentPlan) : Nil
       object = plan.structures.object
-      unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
-        raise ArgumentError.new("schema supports only Object V3 with one MAP bucket")
+      unless ObjectSharedBucketLayout.supported?(object)
+        raise ArgumentError.new("schema supports only Object V3 MAP or MAP_WITH_BUCKETS with 1..256 buckets")
       end
       if object.dynamic_path_count > @max_dynamic_paths
         raise ArgumentError.new("Object plan exceeds JSON max_dynamic_paths")

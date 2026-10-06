@@ -1,6 +1,26 @@
 # CrystalClick project status
 
-Current qualified capability (W189, 2026-10-06): declared typed-Dynamic JSON
+Current qualified capability (W190, 2026-10-06): Object-v3 shared
+MAP_WITH_BUCKETS reuses the existing Array(Tuple(String,String)) codec with
+explicit per-site 1..256 bucket state, zero-key ClickHouse SipHash64 placement,
+checked rejoining and complete physical naming/mark ownership. Version-1
+reader binding fanout is preflighted against borrowed node/edge and separate
+physical-name budgets before snapshots; MAP-0 and wire accounting are preserved.
+The same 81 affected files pass 493 DEBUG and 493 RELEASE examples, zero
+failures/errors/pending, actual guard exits 0. Both helper modes read stock and
+write parts accepted by stock ATTACH/CHECK for root JSON and Array(JSON) with
+2/32 buckets, plus an empty-shared one-bucket control. Direct/table consumers
+pass full/middle/zero windows. Root reconciles 26 processes, 52 captures,
+20 utility inputs, 1,792 stream files, 240 native/480 Crystal literal rows and
+60 schema rows; all 488 generated library files match DEBUG versus RELEASE.
+Scoped verdict: ROBUST for these finite normalized hashed Wide/LZ4, plain-mrk2
+witnesses and guards. Unit 256-bucket admission is not a native part certificate.
+ADVANCED/CHUNKED, other unqualified wrapper/layout products, remaining types,
+broader MV/projections and decomposition stay open; performance is deferred
+and the larger goal is incomplete. Details and continuation:
+[OBJECT_SHARED_BUCKETS_FRONTIER.md](OBJECT_SHARED_BUCKETS_FRONTIER.md).
+
+Previous qualified capability (W189, 2026-10-06): declared typed-Dynamic JSON
 lanes now compose BASIC/COMPACT physical discriminator framing with the existing
 recursive BinaryBulk serde, including declared Array(Dynamic) and the tested
 Variant(Array(Dynamic), String) path. A separate one-class/file framing adapter

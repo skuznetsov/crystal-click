@@ -14,14 +14,14 @@ module CrystalClick
     @typed_dynamic_mode : UInt64
     @dynamic_paths : Hash(String, DynamicValueStreams)
     @dynamic_names : Array(String)
-    @shared : BinaryBulkStreams
+    @shared_buckets : Array(BinaryBulkStreams)
 
     def initialize(
       structures : ObjectDynamicStructureStreams,
       rows_per_mark : Array(UInt64),
       typed_paths : Hash(String, BinaryBulkStreams),
       dynamic_paths : Hash(String, DynamicValueStreams),
-      shared : BinaryBulkStreams,
+      shared : BinaryBulkStreams | Array(BinaryBulkStreams),
       typed_dynamic_paths : Hash(String, BinaryDynamicBulkStreams) = Hash(String, BinaryDynamicBulkStreams).new,
       typed_dynamic_statistics_offsets : Hash(String, Int32) = Hash(String, Int32).new,
       typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32)) = Hash(String, Hash(String, Int32)).new,
@@ -102,7 +102,11 @@ module CrystalClick
         @dynamic_names << detached_path
       end
       @dynamic_names.sort! { |left, right| compare_paths(left, right) }
-      @shared = shared
+      @shared_buckets = if shared.is_a?(BinaryBulkStreams)
+                          [shared] of BinaryBulkStreams
+                        else
+                          shared.dup
+                        end
     end
 
     def structures : ObjectDynamicStructureStreams
@@ -226,7 +230,18 @@ module CrystalClick
     end
 
     def shared : BinaryBulkStreams
-      @shared
+      unless @shared_buckets.size == 1
+        raise ArgumentError.new("Object shared lane is ambiguous for a multi-bucket layout")
+      end
+      @shared_buckets[0]
+    end
+
+    def shared_bucket_count : Int32
+      @shared_buckets.size
+    end
+
+    def shared_bucket(index : Int) : BinaryBulkStreams
+      @shared_buckets[index]? || raise(IndexError.new("Object shared bucket index is outside the lane roster"))
     end
 
     private def compare_paths(left : String, right : String) : Int32

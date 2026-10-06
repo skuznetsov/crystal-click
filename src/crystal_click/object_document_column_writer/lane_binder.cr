@@ -140,7 +140,18 @@ module CrystalClick
             streams.typed_dynamic_mode
           )
         end
-        add_bulk_lanes!(lanes, expected, physical_plan.shared, streams.shared, streams.mark_count)
+        unless streams.shared_bucket_count == physical_plan.shared_bucket_count
+          raise UnsupportedFormatError.new("shared Object bucket lanes do not match their physical plan")
+        end
+        physical_plan.shared_bucket_count.times do |bucket_index|
+          add_bulk_lanes!(
+            lanes,
+            expected,
+            physical_plan.shared_bucket(bucket_index),
+            streams.shared_bucket(bucket_index),
+            streams.mark_count
+          )
+        end
 
         unless lanes.size == expected.size && expected.each_value.all? { |seen| seen }
           raise UnsupportedFormatError.new("Object column lanes do not exactly cover the physical filename roster")

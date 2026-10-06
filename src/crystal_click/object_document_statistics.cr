@@ -68,9 +68,7 @@ module CrystalClick
       end
 
       object = plan.structures.object
-      unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
-        raise UnsupportedFormatError.new("Object statistics support only Object V3 with one MAP bucket")
-      end
+      ObjectSharedBucketLayout.validate!(object)
 
       # Admit the complete name-copy set before either immutable plan roster is
       # exposed through its detached String getters. Object paths are read once,
@@ -220,7 +218,13 @@ module CrystalClick
         fresh_dynamics[dynamic_paths[index]] = rebuild_dynamic(routing, stats, budget)
       end
 
-      fresh_object = ObjectStructure.new(dynamic_paths, 4_u64, 0_u64, 1_u64, statistics: object_stats)
+      fresh_object = ObjectStructure.new(
+        dynamic_paths,
+        4_u64,
+        object.shared_data_version,
+        object.bucket_count,
+        statistics: object_stats
+      )
       fresh_set = ObjectDynamicStructureSet.new(fresh_object, fresh_dynamics)
       typed_schema = Hash(String, BinaryDataType).new
       typed_paths.each_with_index do |path, index|

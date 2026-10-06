@@ -32,7 +32,7 @@ module CrystalClick
       getter typed_plans : Hash(String, BinaryBulkPhysicalPlan)
       getter typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
       getter dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
-      getter shared_plan : BinaryBulkPhysicalPlan
+      getter shared_plans : Array(BinaryBulkPhysicalPlan)
       getter stream_count : Int32
 
       def initialize(
@@ -42,7 +42,7 @@ module CrystalClick
         @typed_plans : Hash(String, BinaryBulkPhysicalPlan),
         @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan),
         @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan)),
-        @shared_plan : BinaryBulkPhysicalPlan,
+        @shared_plans : Array(BinaryBulkPhysicalPlan),
         @stream_count : Int32,
       )
       end
@@ -54,8 +54,9 @@ module CrystalClick
     @typed_plans : Hash(String, BinaryBulkPhysicalPlan)
     @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
     @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
-    @shared_plan : BinaryBulkPhysicalPlan
+    @shared_plans : Array(BinaryBulkPhysicalPlan)
     @stream_count : Int32
+    @shared_data_version : UInt64
     @initial_array_level : UInt64
 
     # Discover only declared Dynamic structure basenames, without constructing
@@ -248,8 +249,9 @@ module CrystalClick
       @typed_plans = state.typed_plans
       @typed_dynamic_plans = state.typed_dynamic_plans
       @dynamic_arm_plans = state.dynamic_arm_plans
-      @shared_plan = state.shared_plan
+      @shared_plans = state.shared_plans
       @stream_count = state.stream_count
+      @shared_data_version = plan.structures.object.shared_data_version
     end
 
     private def initialize(
@@ -270,8 +272,9 @@ module CrystalClick
       @typed_plans = state.typed_plans
       @typed_dynamic_plans = state.typed_dynamic_plans
       @dynamic_arm_plans = state.dynamic_arm_plans
-      @shared_plan = state.shared_plan
+      @shared_plans = state.shared_plans
       @stream_count = state.stream_count
+      @shared_data_version = plan.structures.object.shared_data_version
     end
 
     private def build_plan(
@@ -288,8 +291,8 @@ module CrystalClick
         raise UnsupportedFormatError.new("physical Object initial Array level overflows the name coordinate")
       end
       object = plan.structures.object
-      unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
-        raise UnsupportedFormatError.new("physical Object planning admits only V3 MAP with one shared-data bucket")
+      unless ObjectSharedBucketLayout.supported?(object)
+        raise UnsupportedFormatError.new("physical Object planning admits only V3 MAP or MAP_WITH_BUCKETS with 1..256 buckets")
       end
 
       context = provided_context || PhysicalStreamPlanContext.new(limits)
@@ -426,11 +429,26 @@ module CrystalClick
           ["paths", "values"]
         )
       )
-      shared_prefix = PhysicalStreamName.append_literal(column_prefix, ".object_shared_data", context)
-      shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
-        shared_type, shared_prefix, shared_profile, limits, context, initial_array_level
-      )
-      collect_plan_names!(shared_plan, seen_names)
+      shared_bucket_count = ObjectSharedBucketLayout.bucket_count(object)
+      # MAP-0 keeps its historical planning-budget behavior; only the new
+      # bucket roster introduces one additional owner per configured bucket.
+      if object.shared_data_version == 1_u64
+        context.record_elements(shared_bucket_count.to_u64)
+      end
+      shared_plans = Array(BinaryBulkPhysicalPlan).new(shared_bucket_count)
+      shared_bucket_count.times do |bucket_index|
+        shared_component = if object.shared_data_version == 0_u64
+                             ".object_shared_data"
+                           else
+                             ".object_shared_data.#{bucket_index}"
+                           end
+        shared_prefix = PhysicalStreamName.append_literal(column_prefix, shared_component, context)
+        shared_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
+          shared_type, shared_prefix, shared_profile, limits, context, initial_array_level
+        )
+        collect_plan_names!(shared_plan, seen_names)
+        shared_plans << shared_plan
+      end
       PlanState.new(
         object_structure_stream,
         dynamic_structure_streams,
@@ -438,7 +456,7 @@ module CrystalClick
         typed_plans,
         typed_dynamic_plans,
         dynamic_arm_plans,
-        shared_plan,
+        shared_plans,
         seen_names.size.to_i32
       )
     end
@@ -476,7 +494,48 @@ module CrystalClick
     end
 
     def shared : BinaryBulkPhysicalPlan
-      @shared_plan
+      unless @shared_plans.size == 1
+        raise ArgumentError.new("Object shared plan is ambiguous for a multi-bucket layout")
+      end
+      @shared_plans[0]
+    end
+
+    def shared_bucket_count : Int32
+      @shared_plans.size
+    end
+
+    def shared_bucket(index : Int) : BinaryBulkPhysicalPlan
+      @shared_plans[index]? || raise(IndexError.new("Object shared bucket index is outside the physical roster"))
+    end
+
+    # Account the additional shared-lane binding records before the reader
+    # materializes per-bucket role/name snapshots. MAP-0 retains its historical
+    # budget behavior. All buckets are measured without detached name hashes;
+    # role records/edges use the borrowed codec budget while copied names use
+    # the existing physical-name context, never the wire-byte counter.
+    def preflight_shared_bucket_bindings!(hashed : Bool, budget : BinaryCodecBudget) : Nil
+      return nil unless @shared_data_version == 1_u64
+
+      binding_count = 0_u64
+      name_copy_work_bytes = 0_u64
+      @shared_plans.each do |physical|
+        binding_count = add_size(binding_count, physical.stream_count.to_u64)
+        name_copy_work_bytes = add_size(
+          name_copy_work_bytes,
+          physical.binding_name_copy_work_bytes(hashed)
+        )
+      end
+
+      budget.ensure_future_nodes(binding_count)
+      budget.ensure_future_elements(binding_count)
+      shared_names = @shared_plans[0]
+      shared_names.preflight_binding_name_copy_work(name_copy_work_bytes)
+
+      # These are all preflighted above before any owner is charged.
+      budget.charge_elements(binding_count)
+      binding_count.times { budget.charge_node }
+      shared_names.charge_binding_name_copy_work(name_copy_work_bytes)
+      nil
     end
 
     def initial_array_level : UInt64
@@ -507,7 +566,9 @@ module CrystalClick
           physical.stream_names.each_value { |name| names << String.new(name.to_slice) }
         end
       end
-      @shared_plan.stream_names.each_value { |name| names << String.new(name.to_slice) }
+      @shared_plans.each do |physical|
+        physical.stream_names.each_value { |name| names << String.new(name.to_slice) }
+      end
       names.sort!
       names
     end

@@ -11,6 +11,7 @@ module CrystalClick
       getter data_name : String
       getter marks_name : String
       getter prefix_size : Int32
+      getter bucket_index : Int32?
 
       def initialize(
         @kind : Symbol,
@@ -20,6 +21,7 @@ module CrystalClick
         @data_name : String,
         @marks_name : String,
         @prefix_size : Int32,
+        @bucket_index : Int32? = nil,
       )
       end
     end
@@ -47,6 +49,8 @@ module CrystalClick
       getter selected_count : Int32
       getter profile : BinaryBulkProfile
       getter shared_profile : BinaryBulkProfile
+      getter shared_data_version : UInt64
+      getter shared_bucket_count : Int32
       getter bulk_bindings : Array(BulkBinding)
       getter discriminator_bindings : Array(DiscriminatorBinding)
       getter codec_budget : BinaryCodecBudget
@@ -71,6 +75,8 @@ module CrystalClick
         @selected_count : Int32,
         @profile : BinaryBulkProfile,
         @shared_profile : BinaryBulkProfile,
+        @shared_data_version : UInt64,
+        @shared_bucket_count : Int32,
         @bulk_bindings : Array(BulkBinding),
         @discriminator_bindings : Array(DiscriminatorBinding),
         @codec_budget : BinaryCodecBudget,
@@ -444,6 +450,7 @@ module CrystalClick
       ensure_logical_size!(object_bytes, object_grid)
       object, object_statistics_offset = parse_object_metadata(object_bytes, limits, codec_budget)
       validate_layout!(object)
+      shared_bucket_count = ObjectSharedBucketLayout.bucket_count(object)
       validate_metadata_grid!(object_grid, object_statistics_offset, object_bytes.size)
       charge_source_roster!(object_grid, codec_budget)
       outer_rows = copy_outer_rows(object_grid)
@@ -614,6 +621,7 @@ module CrystalClick
         end
       end
 
+      physical_plan.preflight_shared_bucket_bindings!(hashed, codec_budget)
       bulk_bindings = collect_bulk_bindings(document_plan, physical_plan, hashed)
       discriminator_bindings = collect_discriminator_bindings(object, physical_plan, hashed)
       selected_wire_bytes = 0_u64
@@ -703,6 +711,8 @@ module CrystalClick
         selected_count.to_i32,
         profile,
         shared_profile,
+        object.shared_data_version,
+        shared_bucket_count,
         bulk_bindings,
         discriminator_bindings,
         codec_budget,
@@ -730,6 +740,7 @@ module CrystalClick
       occurrence_grid = prepared.occurrence_grid
       profile = prepared.profile
       shared_profile = prepared.shared_profile
+      shared_data_version = prepared.shared_data_version
       bulk_bindings = prepared.bulk_bindings
       discriminator_bindings = prepared.discriminator_bindings
       codec_budget = prepared.codec_budget
@@ -770,6 +781,20 @@ module CrystalClick
       typed_roles = Hash(String, Hash(String, BinaryBulkStream)).new
       typed_dynamic_roles = Hash(String, Hash(String, BinaryBulkStream)).new
       dynamic_roles = Hash(String, Hash(String, Hash(String, BinaryBulkStream))).new
+      shared_bucket_roles = [] of Hash(String, BinaryBulkStream)
+      if shared_data_version == 1_u64
+        shared_bindings_count = bulk_bindings.count { |binding| binding.kind == :shared }.to_u64
+        shared_owner_count = checked_add_u64(
+          checked_multiply_u64(prepared.shared_bucket_count.to_u64, 5_u64),
+          shared_bindings_count
+        )
+        codec_budget.ensure_future_nodes(shared_owner_count)
+        codec_budget.preflight_children(shared_owner_count)
+        prepared.shared_bucket_count.times do
+          codec_budget.charge_node
+          shared_bucket_roles << Hash(String, BinaryBulkStream).new
+        end
+      end
       shared_roles = Hash(String, BinaryBulkStream).new
       bulk_bindings.each do |binding|
         window = source.read_window(
@@ -813,6 +838,9 @@ module CrystalClick
           lane_bytes = logical[0]
           lane_offsets = logical[1]
         end
+        if shared_data_version == 1_u64 && binding.kind == :shared
+          codec_budget.charge_node
+        end
         stream = BinaryBulkStream.new(lane_bytes, lane_offsets)
         case binding.kind
         when :typed
@@ -848,7 +876,13 @@ module CrystalClick
             dynamic_roles[binding.path] = arms
           end
         when :shared
-          shared_roles[binding.role] = stream
+          if shared_data_version == 0_u64
+            shared_roles[binding.role] = stream
+          else
+            bucket_index = binding.bucket_index || raise(CorruptPartError.new("shared Object lane has no bucket identity"))
+            roles = shared_bucket_roles[bucket_index]? || raise(CorruptPartError.new("shared Object lane bucket is outside its metadata roster"))
+            roles[binding.role] = stream
+          end
         else
           raise CorruptPartError.new("unknown Object physical lane class")
         end
@@ -917,7 +951,17 @@ module CrystalClick
         dynamic_streams[binding.path] = DynamicValueStreams.new(discriminator, arms)
       end
 
-      shared_streams = BinaryBulkStreams.new(read_count, shared_roles)
+      shared_streams : BinaryBulkStreams | Array(BinaryBulkStreams) = if shared_data_version == 0_u64
+        BinaryBulkStreams.new(read_count, shared_roles)
+      else
+        bucket_streams = Array(BinaryBulkStreams).new(prepared.shared_bucket_count)
+        prepared.shared_bucket_count.times do |bucket_index|
+          codec_budget.charge_node
+          bucket_streams << BinaryBulkStreams.new(read_count, shared_bucket_roles[bucket_index])
+        end
+        prepared.shared_bucket_count.times { codec_budget.charge_node }
+        bucket_streams
+      end
       stream_rows = replay_complete ? logical_rows : selected_rows
       ordinary_schema = Hash(String, BinaryDataType).new
       schema_snapshot.each do |path, type|
@@ -1469,9 +1513,7 @@ module CrystalClick
     end
 
     private def self.validate_layout!(object : ObjectStructure) : Nil
-      unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
-        raise UnsupportedFormatError.new("file reader admits only Object V3 wire 4 with MAP 0 and one bucket")
-      end
+      ObjectSharedBucketLayout.validate!(object)
       nil
     end
 
@@ -1571,7 +1613,24 @@ module CrystalClick
           append_bulk_bindings!(bindings, :dynamic, path, arm, physical.dynamic_arm(path, arm), hashed)
         end
       end
-      append_bulk_bindings!(bindings, :shared, "", "", physical.shared, hashed)
+      unless physical.shared_bucket_count == ObjectSharedBucketLayout.bucket_count(object)
+        raise CorruptPartError.new("shared Object physical buckets disagree with their metadata")
+      end
+      if object.shared_data_version == 0_u64
+        append_bulk_bindings!(bindings, :shared, "", "", physical.shared, hashed)
+      else
+        physical.shared_bucket_count.times do |bucket_index|
+          append_bulk_bindings!(
+            bindings,
+            :shared,
+            "",
+            "",
+            physical.shared_bucket(bucket_index),
+            hashed,
+            bucket_index.to_i32
+          )
+        end
+      end
       bindings
     end
 
@@ -1615,6 +1674,7 @@ module CrystalClick
       arm : String,
       physical : BinaryBulkPhysicalPlan,
       hashed : Bool,
+      bucket_index : Int32? = nil,
     ) : Nil
       physical.stream_names.each_key do |role|
         prefix_size = physical.prefix_size_for(role)
@@ -1629,7 +1689,8 @@ module CrystalClick
           String.new(role.to_slice),
           data_name,
           marks_name,
-          prefix_size
+          prefix_size,
+          bucket_index
         )
       end
       nil

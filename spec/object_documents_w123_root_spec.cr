@@ -87,7 +87,7 @@ describe "W123 independent Object document composition" do
 
   it "distinguishes a recognized unadmitted Object profile from malformed input" do
     structure = CrystalClick::ObjectDynamicStructureSet.new(
-      CrystalClick::ObjectStructure.new([] of String, shared_data_version: 1_u64, bucket_count: 2_u64),
+      CrystalClick::ObjectStructure.new([] of String, shared_data_version: 3_u64, bucket_count: 2_u64),
       {} of String => CrystalClick::DynamicStructure
     )
     metadata = CrystalClick::ObjectDynamicStructureCodec.encode(structure)

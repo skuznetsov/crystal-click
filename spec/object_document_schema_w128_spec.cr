@@ -104,10 +104,11 @@ describe "W128 ObjectDocumentSchema" do
     end
   end
 
-  it "rejects non-normalized Object layouts without inferring or rewriting the roster" do
+  it "admits explicit bucketed metadata and rejects unadmitted shared layouts" do
     schema = CrystalClick::ObjectDocumentSchema.new({"t" => w128_schema_type("UInt64")})
+    schema.validate_plan(w128_schema_plan(shared_version: 1_u64, buckets: 2_u64)).should be_nil
     expect_raises(ArgumentError) do
-      schema.validate_plan(w128_schema_plan(shared_version: 1_u64, buckets: 2_u64))
+      schema.validate_plan(w128_schema_plan(shared_version: 2_u64, buckets: 2_u64))
     end
   end
 end

@@ -264,7 +264,16 @@ module CrystalClick
         end
         shared_granules << shared_rows
       end
-      shared_lanes = ObjectDocumentSharedCodec.encode_with_budget(shared_granules, budget, shared_profile)
+      shared_lanes = if object.shared_data_version == 0_u64
+                       ObjectDocumentSharedCodec.encode_with_budget(shared_granules, budget, shared_profile)
+                     else
+                       ObjectDocumentSharedBucketsCodec.encode_with_budget(
+                         shared_granules,
+                         ObjectSharedBucketLayout.bucket_count(object),
+                         budget,
+                         shared_profile
+                       )
+                     end
 
       ObjectDocumentStreams.new(
         metadata,
@@ -414,8 +423,14 @@ module CrystalClick
           corrupt!("Dynamic Object lane is missing metadata path #{path.inspect}")
         end
       end
-      if streams.shared.mark_count != real_marks
-        corrupt!("shared Object lane mark grid does not match the outer row grid")
+      expected_shared_buckets = ObjectSharedBucketLayout.bucket_count(object)
+      unless streams.shared_bucket_count == expected_shared_buckets
+        corrupt!("shared Object bucket lane count does not match its metadata")
+      end
+      expected_shared_buckets.times do |bucket_index|
+        unless streams.shared_bucket(bucket_index).mark_count == real_marks
+          corrupt!("shared Object lane mark grid does not match the outer row grid")
+        end
       end
 
       rows_per_mark = Array(UInt64).new(real_marks)
@@ -533,16 +548,29 @@ module CrystalClick
         end
       end
 
-      shared_rows = ObjectDocumentSharedCodec.decode_with_budget(
-        streams.shared,
-        rows_per_mark,
-        object,
-        typed_schema,
-        budget,
-        selected_first,
-        selected_count,
-        shared_profile
-      )
+      shared_rows = if object.shared_data_version == 0_u64
+                      ObjectDocumentSharedCodec.decode_with_budget(
+                        streams.shared,
+                        rows_per_mark,
+                        object,
+                        typed_schema,
+                        budget,
+                        selected_first,
+                        selected_count,
+                        shared_profile
+                      )
+                    else
+                      ObjectDocumentSharedBucketsCodec.decode_with_budget(
+                        streams,
+                        rows_per_mark,
+                        object,
+                        typed_schema,
+                        budget,
+                        selected_first,
+                        selected_count,
+                        shared_profile
+                      )
+                    end
 
       selected_rows = 0_u64
       selected_count.times do |window_offset|
@@ -627,9 +655,7 @@ module CrystalClick
 
     private def self.validate_write_structure(structure_set : ObjectDynamicStructureSet) : Nil
       object = structure_set.object
-      unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
-        raise UnsupportedFormatError.new("Object document composition supports only Object V3 with one MAP bucket")
-      end
+      ObjectSharedBucketLayout.validate!(object)
       unless structure_set.dynamic_count == object.dynamic_path_count
         raise UnsupportedFormatError.new("Dynamic structure set does not match Object metadata")
       end
@@ -638,9 +664,7 @@ module CrystalClick
 
     private def self.validate_read_structure(structure_set : ObjectDynamicStructureSet) : Nil
       object = structure_set.object
-      unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
-        raise UnsupportedFormatError.new("Object document composition supports only Object V3 with one MAP bucket")
-      end
+      ObjectSharedBucketLayout.validate!(object)
       unless structure_set.dynamic_count == object.dynamic_path_count
         corrupt!("Dynamic structure set does not match Object metadata")
       end

@@ -189,11 +189,11 @@ describe "W125 generic physical stream plans" do
     expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::ObjectDocumentPhysicalPlan.new("doc", logical, limits: limits) }
   end
 
-  it "rejects legacy and bucketed Object layouts instead of borrowing MAP names" do
+  it "rejects legacy and unadmitted Object layouts instead of borrowing MAP names" do
     stats = CrystalClick::StructureStatistics.new([] of UInt64, [] of CrystalClick::StructureStatistic)
     objects = [
       CrystalClick::ObjectStructure.new([] of String, version: 2_u64, statistics: stats),
-      CrystalClick::ObjectStructure.new([] of String, shared_data_version: 1_u64, bucket_count: 2_u64),
+      CrystalClick::ObjectStructure.new([] of String, shared_data_version: 3_u64, bucket_count: 2_u64),
     ]
     objects.each do |object|
       logical = CrystalClick::ObjectDocumentPlan.new(CrystalClick::ObjectDynamicStructureSet.new(object, {} of String => CrystalClick::DynamicStructure), {} of String => CrystalClick::BinaryDataType)
