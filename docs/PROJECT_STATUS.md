@@ -1,12 +1,36 @@
 # CrystalClick project status
 
-Current qualified capability (W188, 2026-10-06): the common recursive Array/Tuple
+Current qualified capability (W189, 2026-10-06): declared typed-Dynamic JSON
+lanes now compose BASIC/COMPACT physical discriminator framing with the existing
+recursive BinaryBulk serde, including declared Array(Dynamic) and the tested
+Variant(Array(Dynamic), String) path. A separate one-class/file framing adapter
+bounds expansion before allocation; reads discover mode independently per
+physical lane, including zero selections. Actual rosters, site identity,
+enclosing occurrence schedules and physical parent rows remain distinct.
+The same 72 affected files pass 419 DEBUG and 419 RELEASE examples, zero
+failures/errors/pending, actual guard exits 0. Both rebuilt helper modes read
+stock and write parts accepted by stock ATTACH/CHECK in BASIC and COMPACT for
+one/repeated Array(Tuple(JSON,JSON,UInt64)) profiles with direct and array typed
+Dynamic paths, independent rosters, NULL and shared spills. Root separately
+reconciles each run's 19 process records, 40 capture hashes/sizes, 16 utility
+inputs, 276 stream files, 48 native literal rows and 16 discriminator lanes.
+All 154 library files per discriminator mode match DEBUG versus RELEASE.
+Scoped verdict: ROBUST for finite normalized hashed Wide/LZ4, plain-mrk2,
+Object-v3/one-bucket shared-MAP profiles and tested guards; not every recursive
+product, layout or the full suite. The legacy BASIC adapter and dedicated W185
+writer remain unchanged. Other wrappers/layouts, remaining types, broader
+MV/projections and decomposition stay open; performance remains deferred and
+the larger goal is incomplete. Details and continuation:
+[OBJECT_TYPED_DYNAMIC_COMPACT_FRONTIER.md](OBJECT_TYPED_DYNAMIC_COMPACT_FRONTIER.md).
+
+Previous qualified capability (W188, 2026-10-06): the common recursive Array/Tuple
 JSON path admits COMPACT as well as BASIC child Dynamic discriminators, without
 a separate serializer per type combination. A shared non-allocating validator
 checks mode-specific framing and preserves physical parent rows separately from
 logical child counts. Empty child groups emit no body; persisted mode is read
 from bytes rather than inferred from the outer schema. Root and declared typed
-Dynamic guards remain strict; the dedicated W185 writer remains BASIC-only.
+Dynamic guards remained strict in that slice; W189 supersedes the declared
+typed-Dynamic restriction. The dedicated W185 writer remains BASIC-only.
 The same 69 affected spec files pass 404 DEBUG and 404 RELEASE examples with
 zero failures/errors/pending and actual child/guard exits 0. Both helper modes
 read stock and write parts accepted by stock ATTACH/CHECK in COMPACT and BASIC,
@@ -17,8 +41,9 @@ plus library COMPACT discriminator literals/physical marks. All 126 COMPACT and
 matches W187 byte-for-byte. Scoped verdict: ROBUST for finite normalized hashed
 Wide/LZ4, plain-mrk2, Object-v3/one-bucket shared-MAP profiles, not every recursive
 product or the full suite. Unselected payload authenticity, RSS bounds and
-fresh-master runtime compatibility are not claimed. Typed-Dynamic COMPACT,
-other wrappers/layouts, remaining types, broader MV/projections and class
+fresh-master runtime compatibility are not claimed. Typed-Dynamic COMPACT was
+the next frontier (now addressed in W189); other wrappers/layouts, remaining
+types, broader MV/projections and class
 decomposition remain open; performance is deferred and the larger goal is
 incomplete. Details and continuation:
 [JSON_RECURSIVE_STORAGE_FRONTIER.md](JSON_RECURSIVE_STORAGE_FRONTIER.md).

@@ -63,27 +63,56 @@ module CrystalClick
         return {COMPACT_EMPTY, 0}
       end
 
-      inner_rows, cursor = read_var_uint(body, 0, writing)
+      inner_rows, format, tag_offset, frame_end = inspect_frame(body, 0, writing)
       unless inner_rows == expected_rows
         fail!("Dynamic COMPACT row count does not equal its mark rows", writing)
       end
+      unless frame_end == body.size
+        fail!("Dynamic COMPACT frame has trailing bytes", writing)
+      end
+      {format, tag_offset}
+    end
+
+    # Inspects one positive COMPACT frame starting at `cursor` without
+    # materializing tags. The returned tuple is {rows, format, tag_offset,
+    # frame_end}; tag_offset and frame_end are relative to `body`. Unlike
+    # inspect_body, this parser deliberately permits a following frame so
+    # physical adapters can normalize concatenated frame sequences.
+    def self.inspect_frame(
+      body : Bytes,
+      cursor : Int32 = 0,
+      writing : Bool = false,
+    ) : Tuple(UInt64, UInt8, Int32, Int32)
+      if cursor < 0 || cursor >= body.size
+        fail!("Dynamic COMPACT frame is missing its row count", writing)
+      end
+
+      rows, cursor = read_var_uint(body, cursor, writing)
+      if rows == 0_u64
+        fail!("Dynamic COMPACT frame row count must be positive", writing)
+      end
+      if rows > Int32::MAX.to_u64
+        fail!("Dynamic COMPACT row count exceeds the supported domain", writing)
+      end
       if cursor >= body.size
-        fail!("Dynamic COMPACT body is missing its format", writing)
+        fail!("Dynamic COMPACT frame is missing its format", writing)
       end
 
       format = body[cursor]
       cursor += 1
       case format
       when COMPACT_ROW_TAGS
-        unless (body.size - cursor).to_u64 == expected_rows
-          fail!("Dynamic COMPACT row-tag body has an inexact extent", writing)
+        remaining = (body.size - cursor).to_u64
+        if rows > remaining
+          fail!("Dynamic COMPACT row-tag frame is truncated", writing)
         end
-        {COMPACT_ROW_TAGS, cursor}
+        frame_end = cursor + rows.to_i32
+        {rows, format, cursor, frame_end}
       when COMPACT_UNIFORM_TAG
-        unless body.size - cursor == 1
-          fail!("Dynamic COMPACT uniform body has an inexact extent", writing)
+        if cursor >= body.size
+          fail!("Dynamic COMPACT uniform frame is truncated", writing)
         end
-        {COMPACT_UNIFORM_TAG, cursor}
+        {rows, format, cursor, cursor + 1}
       else
         fail!("unknown Dynamic COMPACT granule format", writing)
       end

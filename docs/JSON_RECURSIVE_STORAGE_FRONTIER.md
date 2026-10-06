@@ -1,6 +1,10 @@
 # Recursive JSON storage frontier
 
-Status: PROPOSED complete storage composition; W188's COMPACT child extension,
+Status: PROPOSED complete storage composition; W189's declared typed-Dynamic
+COMPACT extension is separately qualified in
+[OBJECT_TYPED_DYNAMIC_COMPACT_FRONTIER.md](OBJECT_TYPED_DYNAMIC_COMPACT_FRONTIER.md)
+and supersedes the typed-Dynamic BASIC restriction recorded historically below.
+W188's COMPACT child extension,
 W187's common recursive Array/Tuple
 part/table path, W186's Tuple-with-JSON path, W185's dedicated normalized Array(JSON)
 path and W184's internal paired occurrence-grid foundation are VERIFIED within

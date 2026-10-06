@@ -11,6 +11,7 @@ module CrystalClick
     @typed_dynamic_names : Array(String)
     @typed_dynamic_statistics_offsets : Hash(String, Int32)
     @typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32))
+    @typed_dynamic_mode : UInt64
     @dynamic_paths : Hash(String, DynamicValueStreams)
     @dynamic_names : Array(String)
     @shared : BinaryBulkStreams
@@ -24,9 +25,11 @@ module CrystalClick
       typed_dynamic_paths : Hash(String, BinaryDynamicBulkStreams) = Hash(String, BinaryDynamicBulkStreams).new,
       typed_dynamic_statistics_offsets : Hash(String, Int32) = Hash(String, Int32).new,
       typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32)) = Hash(String, Hash(String, Int32)).new,
+      typed_dynamic_mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
     )
       @structures = structures
       @rows_per_mark = rows_per_mark.dup
+      @typed_dynamic_mode = typed_dynamic_mode
       @typed_paths = Hash(String, BinaryBulkStreams).new
       @typed_names = Array(String).new(typed_paths.size)
       typed_paths.each do |path, streams|
@@ -164,6 +167,12 @@ module CrystalClick
 
     def typed_dynamic_for(path : String) : BinaryDynamicBulkStreams
       @typed_dynamic_paths[path]? || raise(KeyError.new("typed Object Dynamic lanes not found: #{path.inspect}"))
+    end
+
+    # Physical discriminator mode owned by the declared typed-Dynamic value
+    # lanes. Their BinaryBulk streams remain normalized RowBinary tag streams.
+    def typed_dynamic_mode : UInt64
+      @typed_dynamic_mode
     end
 
     # Relative byte offset of the root Dynamic statistics flag within the

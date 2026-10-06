@@ -258,21 +258,17 @@ private def w158a_forbidden_recursive_types : Array(CrystalClick::BinaryDataType
 end
 
 describe "W158 direct declared Dynamic physical read adversaries" do
-  it "retains the COMPACT policy guard for declared Dynamic fields" do
+  it "uses the default COMPACT profile for declared Dynamic fields" do
     CrystalClick::ObjectDocumentCodec::DEFAULT_MODE.should eq(CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE)
     structure = CrystalClick::DynamicStructure.new([
       CrystalClick::BinaryDataType.primitive("UInt64"),
     ] of CrystalClick::BinaryDataType)
     _schema, plan, rows = w158a_codec_input(structure, CrystalClick::BinaryValue.uint64(10_u64))
 
-    error = expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentCodec.encode(
-        plan,
-        rows,
-        mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
-      )
-    end
-    error.message.not_nil!.should contain("BASIC Dynamic profile")
+    streams = CrystalClick::ObjectDocumentCodec.encode(plan, rows)
+    streams.typed_dynamic_mode.should eq(CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE)
+    decoded = CrystalClick::ObjectDocumentCodec.decode({"value" => plan.typed_type_for("value")}, streams)
+    decoded[0][0].value_for("value").child_at(0).as_uint64.should eq(10_u64)
   end
 
   it "drops supplied Dynamic statistics and emits a V3 child with the absent-statistics flag" do
@@ -439,7 +435,7 @@ describe "W158 direct declared Dynamic physical read adversaries" do
     end
   end
 
-  it "rejects an invalid Dynamic discriminator header before returning selected values" do
+  it "rejects an unknown typed Dynamic discriminator mode before returning selected values" do
     w158a_with_fixture do |part, schema, plan|
       physical = CrystalClick::ObjectDocumentPhysicalPlan.new("payload", plan)
       discriminator = physical.typed_dynamic("value").stream_name_for("root.discriminators")
@@ -451,7 +447,7 @@ describe "W158 direct declared Dynamic physical read adversaries" do
           first_mark: 1, mark_count: 1, hashed: true
         )
       end
-      error.message.not_nil!.should contain("nonzero BASIC mode header")
+      error.message.not_nil!.should contain("unknown typed Dynamic discriminator mode")
     end
   end
 

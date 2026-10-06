@@ -729,11 +729,11 @@ describe "W159 recursive declared Dynamic adversaries" do
     end
   end
 
-  it "rejects a nested Dynamic discriminator with a nonzero BASIC header" do
+  it "rejects a nested typed Dynamic discriminator with an unknown mode header" do
     w159a_with_pair_fixture do |part, schema, plan|
       physical = CrystalClick::ObjectDocumentPhysicalPlan.new("payload", plan)
       discriminator = physical.typed_dynamic("pair").stream_name_for("root.field.1.discriminators")
-      w159a_mutate_lane(part, discriminator, 0, 1_u8)
+      w159a_mutate_lane(part, discriminator, 0, 2_u8)
 
       error = expect_raises(CrystalClick::CorruptPartError) do
         CrystalClick::ObjectDocumentFileReader.read(
@@ -745,7 +745,7 @@ describe "W159 recursive declared Dynamic adversaries" do
           hashed: true,
         )
       end
-      error.message.not_nil!.should contain("nonzero BASIC mode header")
+      error.message.not_nil!.should contain("unknown typed Dynamic discriminator mode")
       zero_error = expect_raises(CrystalClick::CorruptPartError) do
         CrystalClick::ObjectDocumentFileReader.read(
           part,
@@ -756,11 +756,11 @@ describe "W159 recursive declared Dynamic adversaries" do
           hashed: true,
         )
       end
-      zero_error.message.not_nil!.should contain("nonzero BASIC mode header")
+      zero_error.message.not_nil!.should contain("unknown typed Dynamic discriminator mode")
       inspect_error = expect_raises(CrystalClick::CorruptPartError) do
         CrystalClick::ObjectDocumentFileReader.inspect(part, "payload", schema.typed_paths, hashed: true)
       end
-      inspect_error.message.not_nil!.should contain("nonzero BASIC mode header")
+      inspect_error.message.not_nil!.should contain("unknown typed Dynamic discriminator mode")
     end
   end
 

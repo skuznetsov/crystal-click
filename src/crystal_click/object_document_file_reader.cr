@@ -41,6 +41,7 @@ module CrystalClick
       getter typed_dynamic_bytes : Hash(String, Hash(String, Bytes))
       getter typed_dynamic_plans : Hash(String, BinaryDynamicBulkPlan)
       getter typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32))
+      getter typed_dynamic_modes : Hash(String, UInt64)
       getter outer_rows : Array(UInt64)
       getter first_mark : Int32
       getter selected_count : Int32
@@ -64,6 +65,7 @@ module CrystalClick
         @typed_dynamic_bytes : Hash(String, Hash(String, Bytes)),
         @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPlan),
         @typed_dynamic_site_statistics_offsets : Hash(String, Hash(String, Int32)),
+        @typed_dynamic_modes : Hash(String, UInt64),
         @outer_rows : Array(UInt64),
         @first_mark : Int32,
         @selected_count : Int32,
@@ -643,13 +645,24 @@ module CrystalClick
         end
       end
 
-      # The declared Dynamic lane uses the generic plan's BASIC physical
-      # discriminator prefix. Validate that header after every complete grid
-      # has been admitted, but before selected value windows are read.
+      # Validate every declared typed-Dynamic discriminator header after the
+      # complete grid is admitted, but before selected value windows are read.
+      # Each physical discriminator lane owns its mode independently, even
+      # when selection is empty. Retain it by physical filename for the
+      # selected-window TOCTOU check below.
+      typed_dynamic_modes = Hash(String, UInt64).new
       typed_dynamic_header_bindings(bulk_bindings).each do |binding|
         BinaryBulkPhysicalPrefixAdapter.preflight_read([{binding.role, binding.prefix_size, 1}], codec_budget)
         window = source.read_window(binding.data_name, binding.marks_name, 0, 0, binding.prefix_size, transport_budget)
-        BinaryBulkPhysicalPrefixAdapter.read_lane(binding.role, window.bytes, window.offsets, binding.prefix_size)
+        mode = BinaryBulkDiscriminatorFramingAdapter.validate_header(
+          binding.role,
+          window.bytes,
+          binding.prefix_size
+        )
+        if typed_dynamic_modes.has_key?(binding.data_name)
+          raise CorruptPartError.new("typed Dynamic physical discriminator filename is duplicated")
+        end
+        typed_dynamic_modes[binding.data_name] = mode
       end
 
       metadata_size = metadata_total_size(object_bytes, dynamic_bytes, typed_dynamic_bytes)
@@ -684,6 +697,7 @@ module CrystalClick
         typed_dynamic_bytes,
         typed_dynamic_plans,
         typed_dynamic_site_statistics_offsets,
+        typed_dynamic_modes,
         outer_rows,
         first_mark.to_i32,
         selected_count.to_i32,
@@ -709,6 +723,7 @@ module CrystalClick
       typed_dynamic_bytes = prepared.typed_dynamic_bytes
       typed_dynamic_plans = prepared.typed_dynamic_plans
       typed_dynamic_site_statistics_offsets = prepared.typed_dynamic_site_statistics_offsets
+      typed_dynamic_modes = prepared.typed_dynamic_modes
       outer_rows = prepared.outer_rows
       first_mark = prepared.first_mark
       selected_count = prepared.selected_count
@@ -767,8 +782,28 @@ module CrystalClick
         )
         lane_bytes = window.bytes
         lane_offsets = window.offsets
-        if (binding.kind == :typed || binding.kind == :typed_dynamic) &&
+        if binding.kind == :typed_dynamic &&
            BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(binding.role, binding.prefix_size)
+          mode = BinaryBulkDiscriminatorFramingAdapter.validate_header(
+            binding.role,
+            lane_bytes,
+            binding.prefix_size
+          )
+          expected_mode = typed_dynamic_modes[binding.data_name]?
+          unless expected_mode == mode
+            raise CorruptPartError.new("typed Dynamic discriminator mode changed after header preflight")
+          end
+          logical = BinaryBulkDiscriminatorFramingAdapter.read_lane(
+            binding.role,
+            lane_bytes,
+            lane_offsets,
+            binding.prefix_size,
+            codec_budget
+          )
+          lane_bytes = logical[0]
+          lane_offsets = logical[1]
+        elsif binding.kind == :typed &&
+              BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(binding.role, binding.prefix_size)
           logical = BinaryBulkPhysicalPrefixAdapter.read_lane(
             binding.role,
             lane_bytes,

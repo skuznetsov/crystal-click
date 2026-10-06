@@ -51,10 +51,9 @@ module CrystalClick
         shared_profile: shared_profile
       )
 
-      # Variant discriminators acquire an eight-byte physical prefix only at
-      # the column boundary. Admit all added headers and coordinate rebasing
-      # against the same operation budget before constructing any adapted
-      # lane buffer.
+      # Variant and typed-Dynamic discriminators acquire physical framing
+      # only at the column boundary. Admit added headers, COMPACT bodies, and
+      # coordinate rebasing before constructing any adapted lane buffer.
       preflight_variant_prefixes!(physical_plan, fresh_plan, streams, codec_budget)
       lanes = bind_lanes(physical_plan, fresh_plan, streams)
       mark_count = streams.mark_count + 1

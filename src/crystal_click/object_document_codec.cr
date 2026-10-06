@@ -68,9 +68,6 @@ module CrystalClick
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
       end
-      if plan.typed_dynamic_count > 0 && mode != DynamicDiscriminatorCodec::BASIC_MODE
-        raise UnsupportedFormatError.new("declared Object Dynamic fields require the BASIC Dynamic profile")
-      end
       validate_write_structure(plan.structures)
       if grid = occurrence_grid
         grid.validate_for!(granules.size, budget)
@@ -277,7 +274,8 @@ module CrystalClick
         shared_lanes,
         typed_dynamic_lanes,
         typed_dynamic_statistics_offsets,
-        typed_dynamic_site_statistics_offsets
+        typed_dynamic_site_statistics_offsets,
+        typed_dynamic_mode: mode
       )
     end
 

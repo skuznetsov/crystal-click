@@ -217,7 +217,7 @@ describe "W188 Object physical child-site COMPACT discriminator" do
     end
   end
 
-  it "retains the distinct declared typed-Dynamic BASIC-only guard" do
+  it "admits declared typed Dynamic in the COMPACT discriminator profile" do
     string = CrystalClick::BinaryDataType.primitive("String")
     dynamic_type = CrystalClick::BinaryDataType.dynamic(1)
     declared = CrystalClick::ObjectDocumentPlan.new(
@@ -232,14 +232,14 @@ describe "W188 Object physical child-site COMPACT discriminator" do
       "td" => CrystalClick::BinaryValue.dynamic(dynamic_type, CrystalClick::BinaryValue.string("value")),
     } of String => CrystalClick::BinaryValue)
 
-    error = expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentCodec.encode(
-        declared,
-        [[document]] of Array(CrystalClick::ObjectDocument),
-        mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
-      )
-    end
-    error.message.not_nil!.should contain("declared Object Dynamic fields require the BASIC Dynamic profile")
+    streams = CrystalClick::ObjectDocumentCodec.encode(
+      declared,
+      [[document]] of Array(CrystalClick::ObjectDocument),
+      mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
+    )
+    streams.typed_dynamic_mode.should eq(CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE)
+    decoded = CrystalClick::ObjectDocumentCodec.decode({"td" => dynamic_type}, streams)
+    decoded[0][0].value_for("td").child_at(0).as_string.should eq("value")
   end
 
   it "rejects malformed COMPACT mode, C=0 body, and per-mark count before returning lane files" do

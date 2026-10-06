@@ -136,7 +136,8 @@ module CrystalClick
             ))
           end
           add_typed_dynamic_data_lanes!(
-            lanes, expected, physical_dynamic, typed_dynamic, streams.mark_count
+            lanes, expected, physical_dynamic, typed_dynamic, streams.mark_count,
+            streams.typed_dynamic_mode
           )
         end
         add_bulk_lanes!(lanes, expected, physical_plan.shared, streams.shared, streams.mark_count)
@@ -194,6 +195,7 @@ module CrystalClick
         physical : BinaryDynamicBulkPhysicalPlan,
         streams : BinaryDynamicBulkStreams,
         real_mark_count : Int32,
+        discriminator_mode : UInt64,
       ) : Nil
         data = streams.data
         physical_names = physical.data_stream_names
@@ -206,21 +208,21 @@ module CrystalClick
             raise UnsupportedFormatError.new("typed Dynamic value lane does not have the complete outer mark grid")
           end
           prefix = physical.prefix_size_for(role)
-          variant_prefix_role = if role.ends_with?(".discriminators")
-                                  unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
-                                    raise UnsupportedFormatError.new("typed Dynamic discriminator is missing its BASIC physical prefix")
-                                  end
-                                  String.new(role.to_slice)
-                                else
-                                  if role.ends_with?(".dictionary")
-                                    unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
-                                      raise UnsupportedFormatError.new("typed Dynamic LowCardinality dictionary is missing its version prefix")
-                                    end
-                                  elsif prefix != 0
-                                    raise UnsupportedFormatError.new("typed Dynamic value lane has an unsupported physical prefix")
-                                  end
-                                  nil
-                                end
+          dynamic_discriminator_role = if role.ends_with?(".discriminators")
+                                         unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
+                                           raise UnsupportedFormatError.new("typed Dynamic discriminator is missing its physical prefix")
+                                         end
+                                         String.new(role.to_slice)
+                                       else
+                                         if role.ends_with?(".dictionary")
+                                           unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
+                                             raise UnsupportedFormatError.new("typed Dynamic LowCardinality dictionary is missing its version prefix")
+                                           end
+                                         elsif prefix != 0
+                                           raise UnsupportedFormatError.new("typed Dynamic value lane has an unsupported physical prefix")
+                                         end
+                                         nil
+                                       end
           add_lane!(lanes, expected, ObjectDocumentColumnLane.new(
             physical.stream_name_for(role),
             source.borrowed_slice(0, source.byte_size),
@@ -228,7 +230,9 @@ module CrystalClick
             source,
             nil,
             prefix,
-            variant_prefix_role
+            nil,
+            dynamic_discriminator_role,
+            dynamic_discriminator_role ? discriminator_mode : nil
           ))
         end
         nil
@@ -240,7 +244,12 @@ module CrystalClick
         streams : ObjectDocumentStreams,
         budget : BinaryCodecBudget,
       ) : Nil
-        lanes = [] of Tuple(String, BinaryBulkStream, Int32)
+        unless streams.typed_dynamic_mode == DynamicDiscriminatorCodec::BASIC_MODE ||
+               streams.typed_dynamic_mode == DynamicDiscriminatorCodec::COMPACT_MODE
+          raise UnsupportedFormatError.new("unsupported typed Dynamic discriminator write mode")
+        end
+        legacy_lanes = [] of Tuple(String, BinaryBulkStream, Int32)
+        compact_lanes = [] of Tuple(String, BinaryBulkStream, UInt64)
         plan.typed_path_count.times do |index|
           path = plan.typed_path_at(index)
           next if plan.has_typed_dynamic?(path)
@@ -249,7 +258,7 @@ module CrystalClick
           typed_streams.roles.each do |role|
             prefix = physical.prefix_size_for(role)
             if BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(role, prefix)
-              lanes << {role, typed_streams.stream(role), prefix}
+              legacy_lanes << {role, typed_streams.stream(role), prefix}
             end
           end
         end
@@ -271,9 +280,13 @@ module CrystalClick
             prefix = physical.prefix_size_for(role)
             if role.ends_with?(".discriminators")
               unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
-                raise UnsupportedFormatError.new("typed Dynamic discriminator is missing its BASIC physical prefix")
+                raise UnsupportedFormatError.new("typed Dynamic discriminator is missing its physical prefix")
               end
-              lanes << {role, typed_dynamic_streams.stream(role), prefix}
+              if streams.typed_dynamic_mode == DynamicDiscriminatorCodec::COMPACT_MODE
+                compact_lanes << {role, typed_dynamic_streams.stream(role), streams.typed_dynamic_mode}
+              else
+                legacy_lanes << {role, typed_dynamic_streams.stream(role), prefix}
+              end
             elsif role.ends_with?(".dictionary")
               unless prefix == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
                 raise UnsupportedFormatError.new("typed Dynamic LowCardinality dictionary is missing its version prefix")
@@ -283,7 +296,11 @@ module CrystalClick
             end
           end
         end
-        BinaryBulkPhysicalPrefixAdapter.preflight_write(lanes, budget) unless lanes.empty?
+        # BASIC retains its historical prefix/coordinate accounting. COMPACT
+        # has a distinct adapted output owner, so its full physical expansion
+        # is preflighted separately from the normalized tag streams.
+        BinaryBulkPhysicalPrefixAdapter.preflight_write(legacy_lanes, budget) unless legacy_lanes.empty?
+        BinaryBulkDiscriminatorFramingAdapter.preflight_write(compact_lanes, budget) unless compact_lanes.empty?
         nil
       end
 

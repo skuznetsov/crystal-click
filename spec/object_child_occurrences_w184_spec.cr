@@ -642,19 +642,15 @@ describe "W184 paired recursive child occurrences" do
     end
     root_error.message.should eq("Object document real marks must contain at least one row")
 
-    typed_dynamic_error = expect_raises(CrystalClick::UnsupportedFormatError) do
-      _schema, child_plan, child_grid, child_budget, child_granules = w184c_fixture
-      CrystalClick::ObjectDocumentCodec.encode_child_site_with_budget(
-        child_plan,
-        child_granules,
-        child_grid,
-        child_budget,
-        mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
-      )
-    end
-    typed_dynamic_error.message.not_nil!.should contain(
-      "declared Object Dynamic fields require the BASIC Dynamic profile"
+    _schema, child_plan, child_grid, child_budget, child_granules = w184c_fixture
+    typed_dynamic_streams = CrystalClick::ObjectDocumentCodec.encode_child_site_with_budget(
+      child_plan,
+      child_granules,
+      child_grid,
+      child_budget,
+      mode: CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE,
     )
+    typed_dynamic_streams.typed_dynamic_mode.should eq(CrystalClick::DynamicDiscriminatorCodec::COMPACT_MODE)
 
     source = CrystalClick::BinaryBulkStream.new(Bytes[0xaa_u8, 0xbb_u8], [0_u64, 2_u64])
     variant_lane = CrystalClick::ObjectDocumentColumnLane.new(

@@ -12,6 +12,8 @@ module CrystalClick
     @discriminator_source : DynamicDiscriminatorStream?
     @prefix_size : Int32
     @variant_prefix_role : String?
+    @dynamic_discriminator_role : String?
+    @discriminator_mode : UInt64?
 
     def initialize(
       @name : String,
@@ -21,8 +23,26 @@ module CrystalClick
       @discriminator_source : DynamicDiscriminatorStream? = nil,
       @prefix_size : Int32 = 0,
       @variant_prefix_role : String? = nil,
+      @dynamic_discriminator_role : String? = nil,
+      @discriminator_mode : UInt64? = nil,
     )
-      if role = @variant_prefix_role
+      if role = @dynamic_discriminator_role
+        source = @bulk_source || raise(ArgumentError.new("typed Dynamic physical framing requires a binary bulk source"))
+        mode = @discriminator_mode || raise(ArgumentError.new("typed Dynamic physical framing requires an explicit mode"))
+        unless role.ends_with?(".discriminators") && @prefix_size == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
+          raise ArgumentError.new("typed Dynamic physical framing role is not bound to its discriminator prefix")
+        end
+        if @variant_prefix_role
+          raise ArgumentError.new("typed Dynamic framing cannot also use the legacy Variant prefix adapter")
+        end
+        unless source.byte_size == @bytes.size
+          raise UnsupportedFormatError.new("typed Dynamic discriminator lane differs from its normalized bulk source")
+        end
+        @byte_size = BinaryBulkDiscriminatorFramingAdapter.physical_size(source, mode)
+      elsif role = @variant_prefix_role
+        if @discriminator_mode
+          raise ArgumentError.new("legacy Variant prefix lane cannot carry a typed Dynamic mode")
+        end
         source = @bulk_source || raise(ArgumentError.new("Variant physical prefix requires a binary bulk source"))
         unless role.ends_with?(".discriminators") && @prefix_size == BinaryBulkPhysicalPrefixAdapter::PREFIX_BYTES
           raise ArgumentError.new("Variant physical prefix role is not bound to its discriminator prefix")
@@ -56,7 +76,10 @@ module CrystalClick
                                            unless source.offset_count == mark_count
                                              raise UnsupportedFormatError.new("Object bulk lane does not have the complete outer mark grid")
                                            end
-                                           if role = @variant_prefix_role
+                                           if role = @dynamic_discriminator_role
+                                             mode = @discriminator_mode || raise(ArgumentError.new("typed Dynamic physical mode is missing"))
+                                             BinaryBulkDiscriminatorFramingAdapter.write_lane(role, source, mode)
+                                           elsif role = @variant_prefix_role
                                              BinaryBulkPhysicalPrefixAdapter.write_lane(role, source, @prefix_size)
                                            else
                                              {
@@ -105,11 +128,10 @@ module CrystalClick
     ) : CompressedMarkFiles
       budget.ensure_direction(true)
       mark_count = grid.mark_count
-      # The optional Variant prefix adapter can allocate a full transformed
-      # byte lane, so reserve every compressed output axis before copying
-      # counts, offsets, or adapted bytes. The physical writer requires at
-      # least one real mark; the in-memory child codecs remain useful for an
-      # empty logical site grid.
+      # Discriminator adapters can allocate transformed byte lanes, so
+      # reserve every compressed output axis before copying counts, offsets,
+      # or adapted bytes. The physical writer requires at least one real mark;
+      # the in-memory child codecs remain useful for an empty logical site grid.
       CompressedMarkWriter.preflight_batch([@byte_size], mark_count + 1, frame_bytes, budget)
 
       rows_per_mark = Array(UInt64).new(mark_count)
@@ -132,7 +154,15 @@ module CrystalClick
                               unless source.offset_count == mark_records
                                 raise UnsupportedFormatError.new("child bulk lane does not have the complete occurrence grid")
                               end
-                              if role = @variant_prefix_role
+                              if role = @dynamic_discriminator_role
+                                mode = @discriminator_mode || raise(ArgumentError.new("typed Dynamic physical mode is missing"))
+                                adapted_bytes, adapted_offsets, _ = BinaryBulkDiscriminatorFramingAdapter.write_lane(
+                                  role,
+                                  source,
+                                  mode
+                                )
+                                {adapted_bytes, adapted_offsets}
+                              elsif role = @variant_prefix_role
                                 adapted_bytes, adapted_offsets = BinaryBulkPhysicalPrefixAdapter.write_lane(role, source, @prefix_size)
                                 {adapted_bytes, adapted_offsets}
                               else
