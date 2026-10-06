@@ -1,5 +1,22 @@
 # CrystalClick project status
 
+Current architecture checkpoint (2026-10-05, VERIFIED within the declared slice):
+the first table-facade slice moves seven existing numeric Map row/slice owners
+and `WidePartTableBatch` into eight owner-named files, plus one alias-only file.
+`WidePartTable` falls from 7,312 to 4,930 lines; Batch remains 2,051 lines.
+Root verifies nine byte-identical bodies and unchanged aliases against
+`85fb22c`, and an executed owner-copy mutation fails five unchanged assertions
+before exact restoration. The same 19 selected regression specs pass 111 DEBUG
+and 111 RELEASE examples in seven serial cohorts per mode, zero failures/
+errors/pending and all fourteen actual child/guard exits 0. Root independently
+reconciles 987 immutable live Crystal inputs and 1,407 unchanged fixture files.
+The first larger RELEASE cohort exceeds the unchanged 12-GB guard and is not
+counted as green; limits are not relaxed. Scoped verdict: ROBUST for this
+eight-owner extraction and selected controls. This is behavior-preserving decomposition,
+not new type/storage admission, performance evidence or a completed architecture
+refactor. Remaining responsibility seams and exact checks are recorded in
+[TABLE_CLASS_DECOMPOSITION.md](TABLE_CLASS_DECOMPOSITION.md).
+
 Current qualified capability (W179, 2026-10-05):
 QBit now bridges the existing dedicated reader/writer into nominal binary
 descriptors, owned exact-bit values, scalar RowBinary and normalized bulk
@@ -1376,8 +1393,13 @@ source/runtime identities and executed evidence.
    W134 moved the nine existing inline Array/Map payload/row classes from
    `wide_part_table.cr` into nine separate files, preserving public names,
    generic signatures, retained ownership and limits. The remaining facade
-   was 6,911 lines at W167; W171 reader/writer/table facades are now
+   was 6,911 lines at W167; at W171 reader/writer/table facade sizes were
    16,221/25,676/7,175 lines.
+   The current table extraction leaves reader/writer/table facades at
+   16,357/25,781/4,930 lines and a separate 2,051-line Batch. These are sizes,
+   not a coupling or performance certificate. The next proposed Batch seam
+   is compositional row-handle storage, preserving the injected Tuple store
+   and shared Array(Tuple)/Nested store; it is not yet implemented.
    Pure metadata text and JSON typed-path grammar have separate private owners.
    Nested fixed-width temporal/Decimal payload reconstruction now has one
    private owner, with unchanged preflight and inherited private dispatch.
@@ -1506,13 +1528,15 @@ source/runtime identities and executed evidence.
 ## Source reference
 
 The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-29e0e201`, revision
-`29e0e201c786933171818f17c0fefc2bb11ec0a2` (2026-10-05).
+`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60`, revision
+`ef037e60fc7f5654c8c80eefb8be82e3c56f9a67` (2026-10-05).
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-comparison and earlier identities. Root independently hash-checks 12 explicit
-QBit, Count, aggregate descriptor and binary type encoding files against
-`095fae58`; all are content-identical. This is not an audit of every upstream
-change. Unchanged serializers do not imply unchanged framing, settings,
+six-directory comparison and earlier identities. Root independently
+hash-checks 24 decisive JSON/Dynamic/QBit/Count/descriptor owners against
+`29e0e201`; all are content-identical. Aggregate state-version propagation and
+`uniq` v1 are separate changed consumers, not newly qualified library types.
+This is not an audit of every upstream change. Unchanged serializers do not
+imply unchanged framing, settings,
 metadata or lifecycle behavior. This is
 source evidence only: no executable from this checkout has been built or
 qualified. Source identity and the separately pinned executable oracle must
