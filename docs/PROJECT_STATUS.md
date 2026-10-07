@@ -1,6 +1,30 @@
 # CrystalClick project status
 
-Current finite compatibility frontier (W206 checkpoint A, 2026-10-07): direct
+Current finite prerequisite (W207, 2026-10-07): the shared materialization budget
+now traverses retained BinaryJsonRow entries and BinaryJsonType typed rosters.
+Path Strings are metadata, child values/types inherit depth, and counter
+admission remains atomic. Equal-but-distinct row/value descriptor roots are
+both charged; a shared root is not counted twice for that JSON edge. This is
+logical occurrence accounting, not unique-allocation or RSS accounting.
+
+The same 185 affected files pass 1145 DEBUG and 1145 RELEASE examples; focused
+final gates pass nine per mode, all with zero failures/errors/pending and
+actual guarded exit 0. Three seeded final defects cause eight, five and one
+unchanged-test failures before exact restoration. Root's ownership review
+found the distinct-root counterexample after the initial green snapshot; its
+ninth test first measured 1354 rather than the independent 1927 logical bytes.
+Scoped verdict: ROBUST for the JSON-owner extension and executed profiles.
+Inherited Interval/SimpleAggregate sidecar accounting, AggregateCount metadata
+outside JSON and the broader QBitValue audit remain open; this is not a
+complete generic-owner budget guarantee or new persisted type admission.
+
+Ordinary Dynamic JSON-arm binding to Object storage is still the next proposed
+capability. Full types/layouts, MV/projections and repository-wide decomposition
+remain open; performance is deferred and the overall goal remains active.
+Details: [DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md](DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md),
+`.landmark/evidence/dynamic-json-materialization-w207.json`.
+
+Previous finite compatibility frontier (W206 checkpoint A, 2026-10-07): direct
 JSON actual descriptors are representable through the existing Dynamic V3
 full/prefix/paired metadata owner. This is metadata only. Bare Dynamic values
 and root Object plans explicitly reject unbound JSON, including unused arms;

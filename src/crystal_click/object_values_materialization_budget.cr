@@ -257,8 +257,18 @@ module CrystalClick
       )
       usage = measure_type(value.type, depth, usage)
 
-      value.element_count.times do |index|
-        usage = measure_value(value.element_at(index), next_depth(depth), usage)
+      if value.type.tag == BinaryDataType::TAG_JSON
+        row = value.json_row
+        # BinaryJsonRow retains its own descriptor reference. Charge that tree
+        # separately only when it is a distinct owner from BinaryValue.type.
+        unless row.type.same?(value.type)
+          usage = measure_type(row.type, depth, usage)
+        end
+        usage = measure_json_row(row, depth, usage)
+      else
+        value.element_count.times do |index|
+          usage = measure_value(value.element_at(index), next_depth(depth), usage)
+        end
       end
       usage
     end
@@ -323,8 +333,80 @@ module CrystalClick
         )
       end
 
+      if json_type = type.json_type
+        usage = measure_json_type(json_type, depth, usage)
+      end
+
       type.child_count.times do |index|
         usage = measure_type(type.child_at(index), next_depth(depth), usage)
+      end
+      usage
+    end
+
+    # BinaryJsonType is a retained metadata owner separate from the generic
+    # BinaryDataType child arrays. Its typed-path tuple slots and path Strings
+    # are occurrences in the owner graph; declared types are visited at the
+    # next inherited depth just like generic descriptor children.
+    private def measure_json_type(type : BinaryJsonType, depth : Int32, usage : Usage) : Usage
+      ensure_depth!(depth)
+      path_count = type.typed_path_count.to_u64
+      metadata_bytes = checked_add(
+        instance_sizeof(BinaryJsonType).to_u64,
+        instance_sizeof(Array(Tuple(String, BinaryDataType))).to_u64,
+      )
+      metadata_bytes = checked_add(
+        metadata_bytes,
+        checked_multiply(path_count, sizeof(Tuple(String, BinaryDataType)).to_u64),
+      )
+      usage = usage.add(bytes: metadata_bytes, nodes: 1_u64, elements: path_count)
+
+      if path_count > 0_u64
+        child_depth = next_depth(depth)
+        ensure_depth!(child_depth)
+        type.typed_path_count.times do |index|
+          path_bytes = type.typed_path_byte_size(index).to_u64
+          usage = usage.add(
+            bytes: checked_add(instance_sizeof(String).to_u64, checked_add(path_bytes, 1_u64)),
+            nodes: 1_u64,
+          )
+          usage = measure_type(type.typed_type_at(index), child_depth, usage)
+        end
+      end
+      usage
+    end
+
+    # BinaryJsonRow owns flattened path/value tuple slots rather than generic
+    # BinaryValue children. Path names are metadata Strings, not value payload;
+    # retained row entries count as cells and tuple-slot elements.
+    private def measure_json_row(row : BinaryJsonRow, depth : Int32, usage : Usage) : Usage
+      ensure_depth!(depth)
+      path_count = row.path_count.to_u64
+      row_bytes = checked_add(
+        instance_sizeof(BinaryJsonRow).to_u64,
+        instance_sizeof(Array(Tuple(String, BinaryValue))).to_u64,
+      )
+      row_bytes = checked_add(
+        row_bytes,
+        checked_multiply(path_count, sizeof(Tuple(String, BinaryValue)).to_u64),
+      )
+      usage = usage.add(
+        bytes: row_bytes,
+        cells: path_count,
+        nodes: 1_u64,
+        elements: path_count,
+      )
+
+      if path_count > 0_u64
+        child_depth = next_depth(depth)
+        ensure_depth!(child_depth)
+        row.path_count.times do |index|
+          path_bytes = row.path_byte_size(index).to_u64
+          usage = usage.add(
+            bytes: checked_add(instance_sizeof(String).to_u64, checked_add(path_bytes, 1_u64)),
+            nodes: 1_u64,
+          )
+          usage = measure_value(row.value_at(index), child_depth, usage)
+        end
       end
       usage
     end

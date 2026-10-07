@@ -127,3 +127,120 @@ build source. Native pin: 26.10.1.1201 / build
 A; the overall goal and checkpoint B remain incomplete. A changed descriptor,
 roster, budget/admission owner, layout, runtime pin or source invalidates the
 affected certificate and requires rerunning its gates.
+
+## Checkpoint B prerequisite — W207 retained JSON owners
+
+Status: VERIFIED for the scoped JSON-owner extension. Baseline: `19ae216`.
+The existing `ObjectValuesMaterializationBudget` public storage/document
+visitors inspect `BinaryValue.element_count`, but a structured JSON value owns
+its entries through `BinaryJsonRow`, not that generic children array. Its
+nominal typed paths likewise live in `BinaryJsonType`. Both owners therefore
+require explicit accounting before persisted Dynamic JSON values can be
+returned through the shared materialization boundary.
+
+CAUTION: a missed owner admits excess retained data; restarting depth at a JSON
+row or descriptor permits nested callers to bypass the limit. This is a typed
+logical accounting model, not a process RSS or allocator guarantee. Rollback
+is the exact scoped diff/local commit; no storage admission, dependency or
+runtime change belongs to this prerequisite.
+
+Plan and ownership:
+
+1. `spec/dynamic_json_materialization_w207_spec.cr`: establish RED through the
+   current public storage/document charge APIs. Use independently counted
+   String payloads plus exact/one-short retained bytes, nodes, elements, cells,
+   inherited depth, typed NULL and unused typed descriptor cases.
+2. `src/crystal_click/object_values_materialization_budget.cr`: visit the
+   immutable row entries and nominal typed roster under the same Usage
+   accumulator and inherited depth. Charge path String owners as metadata,
+   not String value payload. Preserve all-or-nothing counter admission. The
+   row and value descriptors may be equal but distinct owners; charge both
+   trees in that case, but do not charge the same root reference twice.
+3. Root executes focused and affected DEBUG/RELEASE gates under `run_safe.sh`,
+   seeds the missing JSON visitor to falsify the guards, and reviews the diff
+   before an atomic local commit. Expected signal: all declared gates have
+   zero failures/errors/pending and actual guarded exit 0; the seed rejects.
+
+DoD command shape: the guarded Crystal `spec` command with the W206 ordered
+affected roster plus the new W207 spec, `--single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace`, repeated with `--release`. The focused
+gate includes the existing Object catalog and recursive-storage budget specs.
+Checkpoint B still requires exact arm binding, Object child P/R schedules,
+public reader/writer propagation and stock interoperability in both directions.
+This prerequisite cannot certify or admit those missing capabilities.
+
+The spec-only guarded reproduction reached eight assertion failures in eight
+examples, with zero errors/pending and actual exit 1 on unchanged production.
+Empty JSON owners measured 488 rather than the independent 584-byte logical
+model; two nested String values measured zero rather than four payload bytes.
+Both inherited row depth and unused typed descriptor depth were admitted past
+their limits. This behavioral RED, not an invalid test or compilation failure,
+authorized the scoped visitor change.
+
+Root's hostile pass then found a feature-local counterexample:
+`BinaryValue.json(type, row)` requires structural equality, not reference
+identity, and retains both supplied descriptors. The ninth spec constructs
+equal-but-distinct JSON roots and their typed rosters; it first fails with
+1354 rather than the independently calculated 1927 logical bytes. The JSON
+branch now charges `row.type` at the same inherited depth when its root owner
+differs from `value.type`. Shared-root exact formulas remain unchanged.
+
+The inherited generic model is not complete for every admitted child:
+untyped runtime JSON can contain an Interval descriptor whose sidecar header
+is not measured; typed/runtime SimpleAggregate children retain an unmeasured
+sidecar and copied storage-name String. AggregateCount's separate argument
+descriptor is also unmeasured outside JSON (JSON rejects that tag). QBitType
+is an inline struct, not another heap owner; QBitValue needs its own broader
+audit. W207 covers the new JSON owners and tested profiles, not a complete
+generic-owner, unique-allocation or RSS bound. Those residuals must be audited
+before a broader materialization guarantee or expanding the binding profile.
+
+Final qualification supersedes the initial eight-example green snapshot. The
+same 185 affected files pass 1145 DEBUG and 1145 RELEASE examples; focused final
+gates pass all nine examples per mode. All have zero failures/errors/pending
+and actual guarded exit 0. Independently disabling the JSON row branch, JSON
+typed-roster visitor and distinct row-descriptor charge produces eight, five
+and one failures respectively in the unchanged nine-example suite. Canonical
+source/spec hashes were restored before the final affected and focused gates.
+An earlier no-op mutation failed compilation and is excluded from behavioral
+evidence. Final formatting and `git diff --check` pass.
+
+Evidence index: `.landmark/evidence/dynamic-json-materialization-w207.json`.
+Scoped verdict: ROBUST for the explicit JSON-owner extension and tested logical
+profiles; inherited generic-owner completeness remains open as listed above.
+Root checked the live ownership graph, independent formulas, REDs, mutations
+and raw guarded results; Luna's implementation/review are correlated evidence.
+No native workload, wire-layout or storage-admission change belongs to W207.
+Changes to owner representation, visitor/depth rules, descriptor grammar or the
+tested source reopen this certificate. The overall goal and checkpoint B are
+still incomplete; performance remains deferred.
+
+## Checkpoint B continuation — distinct schedules
+
+Keep physical mark rows P, logical Dynamic occurrences Q, and selected JSON-arm
+occurrences R separate. Even below Array, every Wide `.mrk2` third word remains
+the part's P; Array/Variant serializer offset/limit transformations govern Q/R
+payload counts, not persisted mark rows. The pinned source establishes this in
+`MergeTreeDataPartWriterWide.cpp:677-685,474-483`; the existing recursive reader
+checks Object child physical rows against the root mark schedule. An initial
+candidate proposal that substituted Q for child physical P was refuted by these
+source/consumer anchors before implementation.
+
+Proposed bindings are exact `(Dynamic site, canonical ordinary JSON arm)`
+identities, derived from the prepared actual roster and paired with an existing
+Object plan. Reader discovery needs a complete per-mark discriminator census
+before inspecting Object children with `(P,R)`; aggregate structure statistics
+cannot recover R. Array's site uses `(P,Q)`, followed by discriminator selection
+Q to R. The generic bulk stop-owner integration, actual-only JSON dispatch,
+public reader/writer propagation and fresh two-way stock qualification are
+still proposed, not admitted by W207. A mixed witness must include positive
+P/Q with R=0 and a case where Array Q differs from P.
+
+The physical hook belongs to `BinaryBulkEncoder.write_value` and
+`BinaryBulkDecoder.decode_value` after selecting the exact ordinary arm. Do not
+create a second lane/grid owner in the separate paired `DynamicValueCodec`
+path. Static `StorageColumnSchema.has_json?` cannot infer actual JSON from a
+nominal Dynamic type; actual-only recursive/table dispatch needs parent-first
+roster discovery and a validated union of Object stream owners. JSON below
+internal BinaryBulk Array/Tuple sites requires the census to traverse those
+parent schedules too, rather than silently using a root-only tag count.

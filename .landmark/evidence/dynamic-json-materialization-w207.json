@@ -1,0 +1,389 @@
+{
+  "slice": "W207: retained structured-JSON owner accounting prerequisite",
+  "date": "2026-10-07",
+  "baseline_commit": "19ae21694d83d6df255c64205ca8080e77b9a3b7",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "BinaryJsonRow and BinaryJsonType owner/entry traversal, including equal-but-distinct row/value descriptors, inherited depth and atomic counters in the existing logical occurrence model, within the executed finite profiles.",
+    "adversary_verdict": "ROBUST within the extension and executed corpus; broader generic-owner completeness remains vulnerable to the separately recorded inherited gaps.",
+    "overall_goal": "IN_PROGRESS: persisted Dynamic JSON arm binding, remaining type/layout contracts and MV/projections remain open; performance work is deferred.",
+    "evidence_is_index_not_proof": true,
+    "review_limitation": "Luna implementation and reviews are correlated candidate evidence. Root inspected the live ownership graph and formulas, reproduced two behavioral REDs, executed guarded workloads serially, seeded three final defects, and checked exact restoration."
+  },
+  "design_document": "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+  "implementation": {
+    "root_cause": "Generic BinaryValue children do not expose BinaryJsonRow entries or BinaryJsonType typed metadata. BinaryValue.json accepts structurally equal descriptor roots but may retain a second distinct tree through its row.",
+    "architecture": "Extend the existing recursive budget owner with explicit JSON owner edges; no new leaf serializer, layout, admission, constructor semantics, or per-product codec.",
+    "tested_files": [
+      {
+        "path": "src/crystal_click/object_values_materialization_budget.cr",
+        "bytes": 18978,
+        "sha256": "4797be39c305497704ec8d8309967090f3856626525524e7e186a956777d8985"
+      },
+      {
+        "path": "spec/dynamic_json_materialization_w207_spec.cr",
+        "bytes": 21752,
+        "sha256": "f464abd251d5a94b9818fd53164f363b09823312c8570fb4ec04136c5b07a7ef"
+      }
+    ],
+    "tested_source_identity": {
+      "files": 975,
+      "sha256": "c87aa8c4ccc234677f2fcfe215d3db604994444836a6f940e0a4ab9abaee3a36",
+      "encoding": "SHA256(JSON.pretty_generate(sorted [path,size,SHA256] rows)+newline) for all src/spec files"
+    },
+    "invariants": [
+      "Path Strings are retained metadata, not String value payload.",
+      "Row entries count as cells/elements; typed-roster entries are metadata elements, not row cells.",
+      "Typed descriptors and row values inherit the caller depth instead of restarting it.",
+      "Equal-but-distinct row.type and value.type roots are both charged; a shared root is not repeated for that JSON row edge.",
+      "All counters commit only through the existing immutable Usage accumulator after every limit/workspace check.",
+      "Occurrence accounting may conservatively repeat shared descriptor descendants; it is not unique-allocation accounting."
+    ],
+    "documentation_files": [
+      {
+        "path": "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+        "bytes": 15434,
+        "sha256": "217007ff9c6261de38c1063521e5957f273c393a6c5ad07091b365f156aeb0dd"
+      },
+      {
+        "path": "docs/PROJECT_STATUS.md",
+        "bytes": 156214,
+        "sha256": "cb6625b7dad70cd4a88744e6f0ae0185ec9227e6691f58bb94aecf7ead8c5f67"
+      }
+    ],
+    "intended_paths": [
+      "src/crystal_click/object_values_materialization_budget.cr",
+      "spec/dynamic_json_materialization_w207_spec.cr",
+      "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      ".landmark/evidence/dynamic-json-materialization-w207.json"
+    ]
+  },
+  "boundaries": {
+    "risk": "CAUTION: missed retained owner/depth edges can silently admit excess logical materialization.",
+    "rollback": "Revert only the scoped atomic W207 local commit; no remote push/history rewrite, source-part mutation, dependency/runtime change, or storage admission belongs to this slice.",
+    "nonclaims": [
+      "Complete generic metadata/heap-owner accounting, allocator or process-RSS bounds.",
+      "Persisted Dynamic JSON arm values, new JSON/Variant/LowCardinality layouts, or stock read/write interoperability from W207.",
+      "Stock qualification of the logical Nullable(JSON) unused-typed descriptor test.",
+      "Full types, MV/projections, repository-wide decomposition or speed/memory parity."
+    ],
+    "inherited_residuals": [
+      {
+        "owner": "Interval",
+        "scope": "Untyped runtime JSON admits its fixed-width value; typed JSON rejects it.",
+        "gap": "Separate BinaryIntervalType class header is not charged by the existing generic type visitor."
+      },
+      {
+        "owner": "SimpleAggregateFunction",
+        "scope": "Typed and runtime JSON admit its storage child through the recursive grammar.",
+        "gap": "Separate BinarySimpleAggregateType header and copied retained storage_type_name String are not charged."
+      },
+      {
+        "owner": "AggregateFunction(count)",
+        "scope": "Outside JSON; JSON grammar rejects the tag.",
+        "gap": "Separate BinaryAggregateCountType and optional argument descriptor outside generic children remain uncharged."
+      },
+      {
+        "owner": "QBit",
+        "scope": "JSON grammar rejects it.",
+        "gap": "QBitType is an inline struct, not a separate heap owner; QBitValue raw-buffer ownership requires a distinct broader audit."
+      }
+    ]
+  },
+  "reference": {
+    "source_snapshot": {
+      "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+      "commit": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+      "qualification": "Oct5 shallow archive, not Oct7 latest or the native runtime build source; design reference only for W207."
+    },
+    "physical_schedule_anchor": {
+      "path": "src/Storages/MergeTree/MergeTreeDataPartWriterWide.cpp",
+      "sha256": "a54c556841343f20ffb22b6cbd406f27c9a81df50eddb23ee5dca884d1686a76",
+      "lines": "474-483 and677-685",
+      "finding": "Wide substream adaptive marks preserve root physical P even below Array; child logical Q and selected-arm R are separate. Proposed Object JSON arm grid is(P,R), not(Q,R).",
+      "nonclaim": "Source/consumer anchor for checkpointB design, not new persisted qualification."
+    },
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "outer_timeout_seconds": 600,
+      "outer_memory_mib": 12288,
+      "minimum_free_memory_percent": 50,
+      "execution": "Root-only serial workloads; approved sandbox escalation preserves guard process inspection/isolation."
+    },
+    "compiler": "Crystal1.21.0 / LLVM22.1.8",
+    "native_workloads": "None in W207; serialization/admission/format behavior did not change. W206 metadata-only witness is not promoted to a value-storage witness."
+  },
+  "verification": {
+    "affected_roster": {
+      "base_packet": {
+        "path": ".landmark/evidence/dynamic-json-metadata-w206.json",
+        "bytes": 29455,
+        "sha256": "6b9e3a94202c857eb885ca15cd24d5862c8030d15cd6fc3f55bf88291bd8c253"
+      },
+      "base_json_path": "verification.affected_roster",
+      "base_files": 184,
+      "append_paths": [
+        "spec/dynamic_json_materialization_w207_spec.cr"
+      ],
+      "unique_files": 185,
+      "ordered_roster_sha256": "0f2ab3b9a50b0e6fa1ab220f83b296990d67b6cb3b6fcbac9642156e4736243b",
+      "hash_encoding": "SHA256 of JSON.pretty_generate(ordered_array) followed by newline; resolve base recursively."
+    },
+    "command_recipe": {
+      "prefix": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w207.0axf0Y/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288",
+      "subcommand": "spec",
+      "affected_paths": "Exact recursively resolved base roster in listed order, then append_paths.",
+      "flags": [
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_flag": "--release before the common flags in the affected command.",
+      "focused_paths": [
+        "spec/dynamic_json_materialization_w207_spec.cr"
+      ],
+      "capture": "2>&1 | tee the referenced scratch log; pipefail preserves the guarded actual exit.",
+      "existing_focus_in_affected_roster": [
+        "spec/recursive_storage_values_budget_w186_spec.cr",
+        "spec/object_catalog_w129_spec.cr",
+        "spec/object_catalog_w129_root_spec.cr",
+        "spec/recursive_storage_reader_budget_w186_spec.cr"
+      ]
+    },
+    "behavioral_red": [
+      {
+        "production_sha256": "3dcc339b310145edf93daf5fbcf63b07a561d63cc90901380013caefc4d004af",
+        "spec_sha256": "ba465aab7543ff8188289814df3d906ed4912969906b2b0cfa1679c918cb1cb6",
+        "examples": 8,
+        "failures": 8,
+        "errors": 0,
+        "pending": 0,
+        "actual_guarded_exit": 1,
+        "facts": [
+          "Empty JSON logical bytes488vs584.",
+          "Nested String payload0vs4.",
+          "Inherited row and unused typed descriptor depth limits bypassed."
+        ],
+        "capture": {
+          "path": "/private/tmp/crystal-click-w207.0axf0Y/red-debug.log",
+          "bytes": 4070,
+          "sha256": "52c419bbda124d787b157a1220160d408ac216b043010f463772c3e7a1301fc1",
+          "summary": [
+            "8 examples, 8 failures, 0 errors, 0 pending"
+          ],
+          "exits": [
+            "[EXIT: 1]"
+          ],
+          "compile_error": false
+        }
+      },
+      {
+        "production_sha256": "8a2ccf0dbaf0bc2a0488083aae5d642e524f65996cb5f7ed50bb7b049333e412",
+        "spec_sha256": "f6eeae7fb39a0c0ac04320d5267f4c08b74fbdde1e8dcf8f5d3324afaa9f0833",
+        "examples": 9,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "actual_guarded_exit": 1,
+        "facts": [
+          "Distinct retained JSON descriptor tree logical bytes1354vs1927; extra tree573bytes,5nodes,1element."
+        ],
+        "capture": {
+          "path": "/private/tmp/crystal-click-w207.0axf0Y/distinct-owner-red-debug.log",
+          "bytes": 697,
+          "sha256": "2982a5757861a2abf8fbdcbde6b19978e91137c9fecb1217a8b81e6c87b64666",
+          "summary": [
+            "9 examples, 1 failures, 0 errors, 0 pending"
+          ],
+          "exits": [
+            "[EXIT: 1]"
+          ],
+          "compile_error": false
+        }
+      }
+    ],
+    "root_spec_strengthening": "Root added literal empty/one-path node and element assertions after the first8-example green; ninth ownership test was added after root's graph counterexample. Formatting only changed whitespace.",
+    "final_defect_seeds": [
+      {
+        "mutation": "Disable the complete JSON row branch with&&false.",
+        "production_sha256": "c52eaecf729b6649b4831a982d9d832f22fbfe3ba8b63d2e141fd3813b8267b0",
+        "spec_sha256": "f464abd251d5a94b9818fd53164f363b09823312c8570fb4ec04136c5b07a7ef",
+        "examples": 9,
+        "failures": 8,
+        "errors": 0,
+        "pending": 0,
+        "actual_guarded_exit": 1,
+        "capture": {
+          "path": "/private/tmp/crystal-click-w207.0axf0Y/seed-row-final-debug.log",
+          "bytes": 4056,
+          "sha256": "806f75a2e8da9c10f88e8c89727fc05c4b58c32297d2d89f5a082c7f0e1d1618",
+          "summary": [
+            "9 examples, 8 failures, 0 errors, 0 pending"
+          ],
+          "exits": [
+            "[EXIT: 1]"
+          ],
+          "compile_error": false
+        }
+      },
+      {
+        "mutation": "Bypass measure_json_type at every valid depth using unless depth>0.",
+        "production_sha256": "5d4b228b5362c15afee1998f2685f09dd696a49d27b979f60e6a6527e8ae608b",
+        "spec_sha256": "f464abd251d5a94b9818fd53164f363b09823312c8570fb4ec04136c5b07a7ef",
+        "examples": 9,
+        "failures": 5,
+        "errors": 0,
+        "pending": 0,
+        "actual_guarded_exit": 1,
+        "capture": {
+          "path": "/private/tmp/crystal-click-w207.0axf0Y/seed-type-final-debug.log",
+          "bytes": 2675,
+          "sha256": "6d9e452508b275848c830b1b6dbf3a65497391def6f926b9c6ad9b1c7de73099",
+          "summary": [
+            "9 examples, 5 failures, 0 errors, 0 pending"
+          ],
+          "exits": [
+            "[EXIT: 1]"
+          ],
+          "compile_error": false
+        }
+      },
+      {
+        "mutation": "Bypass the distinct row.type charge using||depth>0.",
+        "production_sha256": "139c7f7ecb2a2bf397d1bc8e74ac9cf6c27c30e43376d7eb5ffb64b60cfd39fe",
+        "spec_sha256": "f464abd251d5a94b9818fd53164f363b09823312c8570fb4ec04136c5b07a7ef",
+        "examples": 9,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "actual_guarded_exit": 1,
+        "capture": {
+          "path": "/private/tmp/crystal-click-w207.0axf0Y/seed-distinct-final-debug.log",
+          "bytes": 697,
+          "sha256": "fbf524e93ad9a0cf2cda0ed51b590fb4c2d808ba75083e126b51739fb1046b6a",
+          "summary": [
+            "9 examples, 1 failures, 0 errors, 0 pending"
+          ],
+          "exits": [
+            "[EXIT: 1]"
+          ],
+          "compile_error": false
+        }
+      }
+    ],
+    "restoration": {
+      "production_sha256": "4797be39c305497704ec8d8309967090f3856626525524e7e186a956777d8985",
+      "spec_sha256": "f464abd251d5a94b9818fd53164f363b09823312c8570fb4ec04136c5b07a7ef",
+      "policy": "Exact canonical hashes were checked before the final affected DEBUG/RELEASE workloads."
+    },
+    "superseded_evidence": "The initial1144-example DEBUG/RELEASE and43-example focused green captures precede the ninth distinct-owner counterexample; they do not certify the final source.",
+    "excluded_diagnostic": "An earlier usage=usage mutation failed compilation(expression has no effect); no examples executed, so it is not behavioral falsifier evidence.",
+    "raw_capture_retention": "Scratch paths/hashes identify observed temporary captures; they are not an archival-storage guarantee.",
+    "final_affected": {
+      "files": 185,
+      "examples_per_mode": 1145,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "actual_guarded_exit": 0,
+      "debug": {
+        "path": "/private/tmp/crystal-click-w207.0axf0Y/affected-debug-qualified.log",
+        "bytes": 1281,
+        "sha256": "0b086ec4582f9cefa2e47e0eec9d30885386c681261eabcb8644a070ac78a437",
+        "summary": [
+          "1145 examples, 0 failures, 0 errors, 0 pending"
+        ],
+        "exits": [
+          "[EXIT: 0]"
+        ],
+        "compile_error": false
+      },
+      "release": {
+        "path": "/private/tmp/crystal-click-w207.0axf0Y/affected-release-qualified.log",
+        "bytes": 1282,
+        "sha256": "777b2def1fb739cfb081a272233531ff2b48db0232f3253024fcf18f737f0d83",
+        "summary": [
+          "1145 examples, 0 failures, 0 errors, 0 pending"
+        ],
+        "exits": [
+          "[EXIT: 0]"
+        ],
+        "compile_error": false
+      }
+    },
+    "final_focused": {
+      "examples_per_mode": 9,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "actual_guarded_exit": 0,
+      "debug": {
+        "path": "/private/tmp/crystal-click-w207.0axf0Y/focused-debug-qualified.log",
+        "bytes": 145,
+        "sha256": "06f34135914b688f20056ab15b4c34ca5bf447de11fb8eebcdfc74cbf0b15604",
+        "summary": [
+          "9 examples, 0 failures, 0 errors, 0 pending"
+        ],
+        "exits": [
+          "[EXIT: 0]"
+        ],
+        "compile_error": false
+      },
+      "release": {
+        "path": "/private/tmp/crystal-click-w207.0axf0Y/focused-release-qualified.log",
+        "bytes": 145,
+        "sha256": "b5678921d8ac5985b750ce69cc60ac14f0455de7a358af09168441c7c481e24e",
+        "summary": [
+          "9 examples, 0 failures, 0 errors, 0 pending"
+        ],
+        "exits": [
+          "[EXIT: 0]"
+        ],
+        "compile_error": false
+      }
+    },
+    "final_format": {
+      "actual_guarded_exit": 0,
+      "capture": {
+        "path": "/private/tmp/crystal-click-w207.0axf0Y/format-check-qualified.log",
+        "bytes": 61,
+        "sha256": "df517506152d19ec87fd4ace89384ab1c87db6108f0d8629bcf2cd9e646a7c08",
+        "summary": [],
+        "exits": [
+          "[EXIT: 0]"
+        ],
+        "compile_error": false
+      }
+    },
+    "excluded_diagnostic_capture": {
+      "path": "/private/tmp/crystal-click-w207.0axf0Y/seed-type-debug.log",
+      "bytes": 1816,
+      "sha256": "aa4047f76ad1ad4054d0117afbe2104cd073f7da0751ad8f17f83bbcd982cfbb",
+      "summary": [],
+      "exits": [
+        "[EXIT: 1]"
+      ],
+      "compile_error": true
+    },
+    "final_checks": [
+      "git diff --check exited0",
+      "Root recursively resolved the affected roster, verified ancestor packet digests/counts/hashes and exact executed185-file order.",
+      "All975 src/spec file fingerprints match the sealed final tested source aggregate."
+    ]
+  },
+  "continuation": {
+    "active_frontier": "CheckpointB remains proposed: exact canonical ordinary JSON arm/site binding to existing Object owner, parent-first discovery and whole-grid discriminator census, bounded adapters/public reader-writer propagation, fresh two-way stock qualification.",
+    "return_pointer": "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md: CheckpointB continuation — distinct schedules",
+    "next_falsifiers": [
+      "Missing/wrong/unused arm binding rejects before values/publication/callback.",
+      "Array witness separates physicalP,siteQ,selectedJSONR and includes positiveP/Q withR=0.",
+      "Stock directly reads and CHECKs library-written complete parts, beyond a library-only roundtrip."
+    ],
+    "decay_trigger": "Any changed visitor/owner representation, descriptor grammar, admission, affected source/spec file, layout or source/runtime premise reopens the affected certificate.",
+    "standing_authority": "Scoped local implementation/tests/atomic commit; no push, remote history rewrite, source-part mutation or deferred performance widening."
+  }
+}
