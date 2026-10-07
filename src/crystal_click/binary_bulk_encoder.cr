@@ -8,9 +8,18 @@ module CrystalClick
       profile : BinaryBulkProfile,
       dynamic_plan : BinaryDynamicBulkPlan? = nil,
       low_cardinality_policy : BinaryLowCardinalityStoragePolicy = BinaryLowCardinalityStoragePolicy::PartGlobalDictionary,
+      json_object_writer : BinaryDynamicBulkJsonObjectWriter? = nil,
     ) : BinaryBulkStreams
       unless budget.writing?
         raise ArgumentError.new("binary bulk encoder requires a write-direction budget")
+      end
+      if dynamic_plan.try(&.has_json_object_bindings?) && json_object_writer.nil?
+        raise UnsupportedFormatError.new("bound Dynamic JSON arms require the paired Object child owner")
+      end
+      if writer = json_object_writer
+        unless dynamic_plan && writer.matches_operation?(dynamic_plan, budget)
+          raise ArgumentError.new("Dynamic JSON Object writer does not match the bulk plan")
+        end
       end
       if granules.size == Int32::MAX
         raise UnsupportedFormatError.new("binary bulk mark grid exceeds the supported domain")
@@ -52,11 +61,11 @@ module CrystalClick
       # site owner preflights staging/default payloads and W142 costs later.
       total = zero_cost
       default_costs = Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost).new
-      granules.each do |rows|
+      granules.each_with_index do |rows, mark_index|
         rows.each do |value|
           minimum = minimum_value_cost(type, value, profile, default_costs, dynamic_plan)
           ensure_cost_fits(budget, add_cost(total, minimum))
-          total = add_cost(total, value_cost(type, value, "root", profile, budget, total, default_costs, dynamic_plan))
+          total = add_cost(total, value_cost(type, value, "root", profile, budget, total, default_costs, dynamic_plan, 1, mark_index, json_object_writer))
         end
       end
       budget.ensure_future_nodes(total[:nodes])
@@ -84,9 +93,9 @@ module CrystalClick
         offsets[role] = [0_u64]
       end
 
-      granules.each do |rows|
+      granules.each_with_index do |rows, mark_index|
         rows.each do |value|
-          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
         end
         roles.each do |role|
           offsets[role] << lanes[role].size.to_u64
@@ -112,6 +121,7 @@ module CrystalClick
       low_cardinality_streams.each do |role, stream|
         streams[role] = stream
       end
+      json_object_writer.try(&.ensure_consumed!)
       BinaryBulkStreams.new(granules.size, streams)
     end
 
@@ -172,6 +182,8 @@ module CrystalClick
       wire_bytes = 0_u64
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
+        return zero_cost
+      when BinaryDataType::TAG_JSON
         return zero_cost
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         child_type = type.child_at(0)
@@ -276,6 +288,9 @@ module CrystalClick
       base : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64),
       default_costs : Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost),
       dynamic_plan : BinaryDynamicBulkPlan?,
+      depth : Int,
+      mark_index : Int,
+      json_object_writer : BinaryDynamicBulkJsonObjectWriter?,
     ) : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64)
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -303,7 +318,10 @@ module CrystalClick
             budget,
             add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
             default_costs,
-            dynamic_plan
+            dynamic_plan,
+            depth + 1,
+            mark_index,
+            json_object_writer,
           )
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
@@ -321,6 +339,10 @@ module CrystalClick
             # Dynamic node/discriminator lower bound without double-visiting.
           else
             child_type = plan.arm_type(path, selection.index)
+            if child_type.tag == BinaryDataType::TAG_JSON
+              writer = json_object_writer || raise(UnsupportedFormatError.new("bound Dynamic JSON arm has no paired Object writer"))
+              writer.collect(path, selection.index.to_i, child_value.json_row, mark_index, depth + 1)
+            end
             edges = 1_u64
             child = value_cost(
               child_type,
@@ -330,7 +352,10 @@ module CrystalClick
               budget,
               add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
               default_costs,
-              dynamic_plan
+              dynamic_plan,
+              depth + 1,
+              mark_index,
+              json_object_writer,
             )
             nodes = checked_add(nodes, child[:nodes])
             edges = checked_add(edges, child[:edges])
@@ -340,6 +365,10 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         size = value.byte_size.to_u64
         wire_bytes = profile.with_size_stream? ? checked_add(8_u64, size) : checked_add(var_uint_size(size), size)
+      when BinaryDataType::TAG_JSON
+        # The Dynamic JSON adapter collected the corresponding ObjectDocument
+        # at the parent Dynamic stop; this value has no ordinary Bulk payload.
+        nil
       when BinaryDataType::TAG_QBIT
         qbit_type = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
         unless value.qbit_value.type == qbit_type
@@ -360,7 +389,7 @@ module CrystalClick
         count = value.element_count
         edges = count.to_u64
         count.times do |index|
-          child = value_cost(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
+          child = value_cost(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan, depth + 1, mark_index, json_object_writer)
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -372,7 +401,7 @@ module CrystalClick
         else
           edges = count.to_u64
           count.times do |index|
-            child = value_cost(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
+            child = value_cost(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan, depth + 1, mark_index, json_object_writer)
             nodes = checked_add(nodes, child[:nodes])
             edges = checked_add(edges, child[:edges])
             wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -384,7 +413,7 @@ module CrystalClick
         edges = flat_count.to_u64
         flat_count.times do |index|
           child_type = type.child_at(index.even? ? 0 : 1)
-          child = value_cost(child_type, value.element_at(index), child_path(path, ".elements.field.", index.even? ? 0 : 1, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
+          child = value_cost(child_type, value.element_at(index), child_path(path, ".elements.field.", index.even? ? 0 : 1, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan, depth + 1, mark_index, json_object_writer)
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -399,7 +428,7 @@ module CrystalClick
           edges = checked_add(edges, default.edges)
           wire_bytes = checked_add(wire_bytes, default.wire_bytes)
         else
-          child = value_cost(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan)
+          child = value_cost(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), profile, budget, add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}), default_costs, dynamic_plan, depth + 1, mark_index, json_object_writer)
           nodes = checked_add(nodes, child[:nodes])
           edges = checked_add(edges, child[:edges])
           wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
@@ -415,7 +444,10 @@ module CrystalClick
           budget,
           add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
           default_costs,
-          dynamic_plan
+          dynamic_plan,
+          depth + 1,
+          mark_index,
+          json_object_writer,
         )
         nodes = checked_add(nodes, child[:nodes])
         edges = checked_add(edges, child[:edges])
@@ -446,6 +478,8 @@ module CrystalClick
       qbit_role_offset : Int32 = 0,
       qbit_scratch : Bytes? = nil,
       qbit_site_scratch : Hash(QBitType, Bytes)? = nil,
+      mark_index : Int = 0,
+      json_object_writer : BinaryDynamicBulkJsonObjectWriter? = nil,
     ) : Nil
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -503,7 +537,7 @@ module CrystalClick
           selected_path = child_path(path, ".arm.", index.to_i, budget, dynamic_plan)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, child_value, selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+          write_value(child_type, child_value, selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
         end
       when BinaryDataType::TAG_DYNAMIC
         plan = dynamic_plan || raise UnsupportedFormatError.new("Dynamic bulk value has no structure plan")
@@ -528,9 +562,13 @@ module CrystalClick
             envelope.each { |byte| write_byte(lanes, "#{arm_path}.data", byte, budget) }
           else
             child_type = plan.arm_type(path, selection.index)
+            if child_type.tag == BinaryDataType::TAG_JSON
+              writer = json_object_writer || raise(UnsupportedFormatError.new("bound Dynamic JSON arm has no paired Object writer"))
+              writer.consume(path, selection.index.to_i, mark_index)
+            end
             traversal.preflight_children(1_u64)
             traversal.ensure_depth(depth + 1)
-            write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+            write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
           end
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
@@ -539,7 +577,7 @@ module CrystalClick
         traversal.ensure_depth(depth + 1) unless count == 0
         write_u64(lanes, "#{path}.sizes", count.to_u64, budget)
         count.times do |index|
-          write_value(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+          write_value(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = value.element_count
@@ -554,7 +592,7 @@ module CrystalClick
           traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           count.times do |index|
-            write_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+            write_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
           end
         end
       when BinaryDataType::TAG_MAP
@@ -574,7 +612,7 @@ module CrystalClick
         flat_count.times do |index|
           child_index = index.even? ? 0 : 1
           selected_path = child_path(path, ".elements.field.", child_index, budget, dynamic_plan)
-          write_value(type.child_at(child_index), value.element_at(index), selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+          write_value(type.child_at(child_index), value.element_at(index), selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
         end
       when BinaryDataType::TAG_NULLABLE
         child_type = type.child_at(0)
@@ -587,13 +625,16 @@ module CrystalClick
           write_byte(lanes, "#{path}.nulls", 0_u8, budget)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+          write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
         end
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         child_type = type.child_at(0)
         preflight_child_type(traversal, child_type, 1_u64)
         traversal.ensure_depth(depth + 1)
-        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
+        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer)
+      when BinaryDataType::TAG_JSON
+        # The matching document is already owned by the paired Object writer.
+        nil
       else
         width = type.fixed_width || raise UnsupportedFormatError.new("unsupported binary bulk leaf")
         unless value.byte_size == width

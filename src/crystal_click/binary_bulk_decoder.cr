@@ -10,9 +10,18 @@ module CrystalClick
       mark_count : Int?,
       profile : BinaryBulkProfile,
       dynamic_plan : BinaryDynamicBulkPlan? = nil,
+      json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
     ) : Array(Array(BinaryValue))
       unless !budget.writing?
         raise ArgumentError.new("binary bulk decoder requires a read-direction budget")
+      end
+      if dynamic_plan.try(&.has_json_object_bindings?) && json_object_reader.nil?
+        corrupt!("bound Dynamic JSON arms require the paired Object child reader")
+      end
+      if reader = json_object_reader
+        unless dynamic_plan && reader.matches_operation?(dynamic_plan, budget)
+          raise ArgumentError.new("Dynamic JSON Object reader does not match the bulk plan")
+        end
       end
 
       real_marks = streams.mark_count
@@ -124,16 +133,22 @@ module CrystalClick
           lc_values_for_mark[path] = mark_values[window_offset]
         end
         lc_cursors = Hash(String, Int32).new(0)
+        json_object_reader.try(&.begin_mark(mark))
         values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
         end
-        contexts.each_value(&.ensure_consumed)
+        contexts.each_value do |context|
+          context.ensure_consumed
+        end
         lc_values_for_mark.each do |path, mark_values|
           unless (lc_cursors[path]? || 0) == mark_values.size
             corrupt!("binary bulk value traversal did not consume the complete LowCardinality occurrence schedule")
           end
         end
         result << values
+      end
+      if reader = json_object_reader
+        reader.ensure_consumed!
       end
       result
     end
@@ -347,6 +362,9 @@ module CrystalClick
         ensure_role_minimum(contexts, child_path(path, ".discriminators", nil, budget, dynamic_plan), count, 1_u64)
       when BinaryDataType::TAG_DYNAMIC
         ensure_role_minimum(contexts, child_path(path, ".discriminators", nil, budget, dynamic_plan), count, 1_u64)
+      when BinaryDataType::TAG_JSON
+        # Direct JSON actual values are consumed by the paired Object reader.
+        nil
       when BinaryDataType::TAG_LOW_CARDINALITY
         # The LC owner validates every mark and pays its full-state wire cost.
       when BinaryDataType::TAG_NULLABLE
@@ -398,6 +416,7 @@ module CrystalClick
       qbit_roles : Array(String)? = nil,
       qbit_role_offset : Int32 = 0,
       qbit_site_roles : Hash(String, Tuple(QBitType, Array(String)))? = nil,
+      json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
     ) : BinaryValue
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
         traversal.ensure_depth(depth)
@@ -450,7 +469,7 @@ module CrystalClick
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
           ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
           BinaryValue.variant(type, discriminator.to_i, child)
         end
       when BinaryDataType::TAG_DYNAMIC
@@ -495,9 +514,16 @@ module CrystalClick
             child_type = plan.arm_type(path, index)
             traversal.preflight_children(1_u64)
             traversal.ensure_depth(depth + 1)
-            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-            BinaryValue.dynamic(type, child)
+            if child_type.tag == BinaryDataType::TAG_JSON
+              reader = json_object_reader || corrupt!("bound Dynamic JSON arm has no paired Object reader")
+              traversal.visit_node(depth + 1)
+              row = reader.next_row(path, index, depth + 1)
+              BinaryValue.dynamic(type, BinaryValue.json(child_type, row))
+            else
+              ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+              child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
+              BinaryValue.dynamic(type, child)
+            end
           end
         end
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
@@ -505,7 +531,7 @@ module CrystalClick
         traversal.preflight_children(1_u64)
         traversal.ensure_depth(depth + 1)
         ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
         BinaryValue.simple_aggregate(type, child)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
@@ -536,7 +562,7 @@ module CrystalClick
         ensure_minimum_count(type.child_at(0), elements_path, raw_count, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
         child_type = type.child_at(0)
         elements = Array(BinaryValue).new(count) do
-          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
         end
         if type.tag == BinaryDataType::TAG_NESTED
           BinaryValue.nested(type, elements)
@@ -567,7 +593,7 @@ module CrystalClick
           fields = Array(BinaryValue).new(count) do |index|
             child_type = type.child_at(index)
             selected_path = child_path(path, ".field.", index, traversal.budget, dynamic_plan)
-            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
           end
           BinaryValue.tuple(type, fields)
         end
@@ -595,7 +621,7 @@ module CrystalClick
         entries = Array(BinaryValue).new(count) do |index|
           child_index = index.even? ? 0 : 1
           selected_path = child_index == 0 ? key_path : value_path
-          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
         end
         BinaryValue.map(type, entries)
       when BinaryDataType::TAG_NULLABLE
@@ -608,7 +634,7 @@ module CrystalClick
         child_type = type.child_at(0)
         selected_path = child_path(path, ".nested", nil, traversal.budget, dynamic_plan)
         ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
         if flag == 1_u8
           BinaryValue.null(type)
         elsif child_type.tag == BinaryDataType::TAG_NOTHING

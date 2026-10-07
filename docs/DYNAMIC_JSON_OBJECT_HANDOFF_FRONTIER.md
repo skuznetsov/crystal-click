@@ -1,5 +1,121 @@
 # Direct JSON actuals in Dynamic — W206
 
+## W209 finite component — normalized stop-owner handoff
+
+Status: VERIFIED for the finite normalized component, 2026-10-07. Baseline: W208 commit
+`867f1b042e8b0ae8c16bc1ba53cb9dfe8b1be205`. This slice implements actual
+generic Bulk/Object value composition, not another metadata-only prerequisite.
+Checkpoint B still requires physical/public part integration and fresh stock
+bidirectional qualification after this finite slice.
+
+The writer and reader select the exact W208 binding at the existing
+ordinary Dynamic arm stop, reuse `BinaryJsonObjectAdapter`, and keep Object
+child streams separate from ordinary BinaryBulk roles. Explicit bindings cover
+every direct JSON actual at every site, including unselected arms. Existing
+unbound constructors and physical consumers stay closed; wrapped/composite
+JSON, SharedVariant inline JSON and Object-typed Dynamic do not widen.
+
+For normalized streams, census every site's discriminator lane over every mark
+before inspecting Object children. Positive root physical rows are P, Dynamic
+occurrences are Q, selected JSON occurrences are R; Object child grids are
+`(P,R)`. No statistics-derived schedule or `(Q,R)` substitution is permitted.
+The finite reader may decode the complete parent and child mark domain before
+returning a requested slice, so all Q/shape/consumption checks apply even to an
+empty selected window. This is intentionally not a lazy physical-reader claim.
+The census must not fabricate placeholder JSON values or add another serde.
+The lane census alone does not certify that Q agrees with enclosing Array or
+Variant schedules. A valid JSON tag beneath an Array declaring Q=0 must still
+fail the final parent and child-cursor consumption checks before any result is
+returned. Malformed inputs can therefore incur bounded child work before this
+semantic rejection. Eager decoding can also exhaust the full-domain budget for
+a small or empty selection; no selected-window cost guarantee is admitted.
+
+Context boundary: normalized BinaryBulk discriminator lanes contain one byte
+per Q occurrence. Stock Variant streams may contain BASIC or COMPACT headers
+and per-granule framing (`SerializationVariant.cpp:478-501` at the source pin
+below). Their discriminator decisions correspond, but their byte layouts do
+not. A normalized census cannot be applied to raw part bytes or certify compact
+physical decoding; that transfer requires the existing physical framing owner
+and fresh witnesses. Changes to either representation reopen this bridge.
+
+CAUTION: the likeliest false positive is a library-only round trip agreeing on
+the wrong child schedule. Mandatory literals include Array P != Q, R=0 beside
+R>0, an unused JSON arm, and corruption in an unselected mark. Complete child
+metadata/plan identity and contextual site/index checks precede value output.
+All census, binding, adapter, Object and generic work borrows one operation
+budget with inherited depth; a new local budget is not a composition proof.
+
+Ownership: `BinaryDynamicBulkPlan/Codec/Streams` own explicit bindings and the
+paired child stream association; `BinaryBulkEncoder/Decoder` retain the sole
+ordinary-arm dispatch; separate small JSON composition owners retain census,
+collection and injection. `ObjectDocumentCodec` remains the Object serde
+authority. Root owns require wiring, documents, compiler/native execution and
+Git; Luna owns the implementation candidate and focused specification.
+
+DoD: first execute a focused failing specification, then focused and inherited
+affected DEBUG/RELEASE gates serially under `run_safe.sh`, with zero failures,
+errors and pending examples and actual guarded exit 0. Attack missing unused
+bindings, swapped site/arm, lost typed NULL, wrong P/R census and unselected-mark
+corruption using unchanged specifications. Inspect the final intended diff
+before one local atomic commit. Rollback is the exact relevant diff; no source
+part, dependency, remote history or push changes are authorized.
+
+Fresh reference checkout: `/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1`,
+shallow, clean, commit `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`.
+This source pin is not the separately pinned stock runtime build.
+
+### Executed evidence and residual frontier
+
+The same 187 affected files pass 1168 DEBUG and 1168 RELEASE examples. The
+final focused gates pass 14 examples per mode. All four gates have zero
+failures/errors/pending and actual guarded exit 0. The restored source/spec
+identity is 981 files, SHA256
+`d8d4978ff0ccd291f2c5a396919791dc017e4ed606347702c8b2b451bd620c5d`.
+Scoped format and diff checks pass; no native workload was run in W209.
+
+Literal normalized witnesses retain P=[2,1,1], Q=[0,2,3], used JSON R=[0,0,2]
+and unused JSON R=[0,0,0], discriminator bytes [3,3,0,0,3] and offsets
+[0,0,2,5]. Typed Nullable NULL, distinct per-site values under one immutable
+Object plan, canonical unordered metadata identity and unused typed actual
+depth 7/one-short depth 6 are exercised. W209 focused coverage uses the default
+single-stream String profile, not every profile or Cartesian type product.
+
+Four final production defect seeds reject with the focused specification
+unchanged: losing budget identity gives two assertion failures; returning an
+empty window before parent consumption gives one; accepting only equal roster
+counts gives one; the typed-depth off-by-one gives one executed error. All nine
+scoped source/spec hashes restore exactly; focused DEBUG/RELEASE gates execute
+after restoration. Earlier compile failures and the invalid positive JSON-cap
+fixture are recorded separately from behavioral evidence in the packet.
+
+The inherited suite caught nominal JSON-containing Bulk descriptors slipping
+past their old admission guard. Write and read plans now distinguish nominal
+JSON from explicitly bound actual JSON before role planning. The W182 guard
+specification is unchanged. Legacy 3/4-argument structure decoding and the
+explicit 5-argument binding overload share one internal parser; the old W158
+test-only hook is exactly restored rather than weakened. Census lookup uses
+the existing site/arm map directly, not a binding scan for each discriminator;
+no measured CPU, allocation or RSS improvement follows from that source fix.
+
+Root independently inspected the P/Q/R literals, contextual owner association,
+budget/depth preflight and final guarded results, including all four final
+seeds. Luna implementation/reviews are correlated candidate evidence. Scoped
+Adversary verdict: ROBUST for the normalized component and executed corpus.
+Full checkpoint B remains IN_PROGRESS: physical framing/stream ownership,
+public part/column/table propagation and fresh stock bidirectional witnesses
+with CHECK/direct ATTACH still need qualification. Existing physical/public,
+wrapped JSON and SharedVariant guards remain closed. The broader inherited
+owner-accounting gaps, full types/layouts and MV/projections remain open;
+performance is deferred.
+
+Evidence index: `.landmark/evidence/dynamic-json-bulk-object-w209.json`. It is
+an index to source identity, commands and observed logs, not proof by itself.
+Changes to descriptors/rosters, occurrence schedules, budget/depth owners,
+representation or source/runtime pins reopen the corresponding claims and
+require their relevant gates. Rollback is the scoped atomic W209 commit.
+
+## W206–W208 established frontier
+
 Status: IN_PROGRESS. Checkpoint A is VERIFIED for metadata only; checkpoint B
 is the next active capability. Baseline: `6fc5edcc7431522a39f250df784d06c62c313e7a`.
 The overall types and MV/projections goal remains active; performance work is

@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current finite logical component (W208, 2026-10-07): an ordinary Dynamic JSON arm
+Current finite normalized component (W209, 2026-10-07): explicit ordinary
+Dynamic JSON actuals now compose with the existing Object child-site codec in
+BinaryDynamicBulk streams. The generic recursive traversal collects/injects
+JSON rows through the W208 adapter; two separate writer/reader classes own the
+handoff. This reuses leaf/Object serde, not one serializer per type product.
+Bindings cover all contextual direct JSON arms, including unused arms.
+
+The complete normalized discriminator census precedes Object child decode;
+Object grids retain physical parent P and selected JSON R, not Dynamic-site Q.
+All children and all parent marks are decoded before returning a window,
+including an empty selection. The finite path is eager, not a lazy-read or
+selected-window cost guarantee. Complete actual/path rosters, typed Nullable
+NULL, shared budget identity and inherited unused-actual depth are checked.
+Nominal JSON-containing Bulk descriptors and unbound lower owners remain
+guarded. Physical/public storage admission does not widen.
+
+The same 187 affected files pass 1168 DEBUG and 1168 RELEASE examples; final
+focused gates pass 14 per mode, all with zero failures/errors/pending and
+actual guarded exit 0. Four final defect seeds reject under the unchanged
+focused spec before exact restoration: lost budget identity, premature empty
+return, omitted unused-roster identity and typed-depth off-by-one. The depth
+seed gives an executed error, not an assertion failure. Root independently
+checked the literals, owner/admission boundaries, seeds and guarded results.
+Scoped verdict: ROBUST for the normalized component and executed corpus.
+
+A fresh clean shallow ClickHouse reference is pinned to
+`0ca8150d9b1d0886edb2e3b4ab65eebb768d0357` (2026-10-07). It is not the stock
+runtime build pin, and W209 runs no native interoperability workloads.
+Next: physical/public part/column/table propagation and fresh bidirectional
+stock Dynamic(JSON) witnesses, CHECK and direct ATTACH. Full types/layouts,
+MV/projections, broader owner-accounting gaps and repository-wide decomposition
+remain open. Performance stays deferred; the overall goal is active.
+Details: [DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md](DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md),
+`.landmark/evidence/dynamic-json-bulk-object-w209.json`.
+
+Previous finite logical component (W208, 2026-10-07): an ordinary Dynamic JSON arm
 can bind its exact contextual site/canonical index and descriptor to an existing
 Object plan. The Object schema comes directly from JSON caps and typed paths,
 without rendering/reparsing the descriptor. `BinaryJsonObjectAdapter` borrows
@@ -26,8 +61,10 @@ This is not persisted Dynamic(JSON) admission. Rows carry no enclosing-site
 provenance: consumers must select the exact binding and validate its contextual
 roster; W208 adds no physical consumer enforcing that obligation. Object codecs
 remain the physical admission authority, and existing JSON storage guards stay
-closed. Next: the BinaryBulk ordinary-arm handoff, full P/Q/R census, public
-column/table propagation and fresh bidirectional stock interoperability.
+closed. At that checkpoint the BinaryBulk ordinary-arm handoff, full P/Q/R
+census, public column/table propagation and fresh bidirectional stock
+interoperability were the next frontier. W209 now qualifies the normalized
+handoff/census only, not physical/public storage interoperability.
 Full types/layouts, MV/projections, broader owner-accounting gaps and repository-
 wide decomposition remain open. Performance stays deferred; the goal is active.
 Details: [DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md](DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md),

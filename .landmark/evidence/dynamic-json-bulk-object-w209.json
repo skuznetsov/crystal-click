@@ -1,0 +1,504 @@
+{
+  "slice": "W209: normalized paired Dynamic Bulk/Object value composition",
+  "date": "2026-10-07",
+  "baseline_commit": "867f1b042e8b0ae8c16bc1ba53cb9dfe8b1be205",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Explicit ordinary Dynamic JSON actuals reuse the existing Object child-site serde in normalized BinaryDynamicBulk streams, within the executed finite profiles; no physical/public Dynamic(JSON) storage admission.",
+    "adversary_verdict": "ROBUST for normalized paired ownership, P/Q/R and shared budget/depth/admission boundaries within the final executed finite corpus. Full checkpoint B remains IN_PROGRESS.",
+    "overall_goal": "IN_PROGRESS: checkpoint B physical/public integration, remaining type/layout contracts and MV/projections remain open; performance is deferred.",
+    "evidence_is_index_not_proof": true,
+    "review_limitation": "Luna implementation and reviews are same-lineage correlated candidates. Root independently inspected the P/Q/R literals and owner/depth/budget/admission boundaries and executes all guarded workloads and final defect seeds."
+  },
+  "design_document": "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+  "implementation": {
+    "root_cause": "Leaf serde is reusable, but Dynamic arm identity, Object path/actual rosters and physical-parent/site/selected-child occurrence schedules are not interchangeable. A JSON ordinary-arm stop needs explicit contextual Object ownership rather than a second Cartesian-product serializer.",
+    "architecture": "BinaryDynamicBulkJsonObjectWriter and BinaryDynamicBulkJsonObjectReader each have their own source file. The ordinary BinaryBulk traversal collects/injects JSON rows through the W208 adapter; ObjectDocumentCodec remains the sole Object child serde. Binding and child stream maps are separate from ordinary BinaryBulk roles.",
+    "tested_files": [
+      {
+        "path": "src/crystal_click.cr",
+        "bytes": 22636,
+        "sha256": "6fef2c7577840d5392ba2200f8a60d0021ea3675ecd1a5b9ad238d2a78cd3541"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_encoder.cr",
+        "bytes": 39346,
+        "sha256": "db28c2dceb1a3ddb742a918b7e2be7d3c922d56b07c66e860cb0f18a4a4778eb"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_decoder.cr",
+        "bytes": 34673,
+        "sha256": "76c6256490caa4a77ae7bead43cc40ffd63b93b32e6c97746852f86b8b0614e9"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_codec.cr",
+        "bytes": 5179,
+        "sha256": "7a6b488b3767577956cc3a93c1ab418711886463aa6f5a3c8eeda51890512d64"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_plan.cr",
+        "bytes": 80493,
+        "sha256": "456707af4e51e775c648fb948bba4f6c4df5489dad4f24993a5b99cf518d0cb0"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_streams.cr",
+        "bytes": 3239,
+        "sha256": "7ad647c7b37a5dfe0ebebc5fad99f91477baf0699152d0a63ab6ba28db255b3d"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr",
+        "bytes": 8965,
+        "sha256": "10e5cf8b6514db6bcfbc4c615226ea7ef2c968fbe0bfc09d6e724aa678df62bb"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_json_object_reader.cr",
+        "bytes": 14127,
+        "sha256": "da05cafe756f8fd9cf30218d9b7b2c5fe27fee70fda916ac3f6cb4e0abdbe12f"
+      },
+      {
+        "path": "spec/dynamic_json_bulk_object_w209_spec.cr",
+        "bytes": 37848,
+        "sha256": "fbda7e61104912db7374496e7378b766eb074637dcc959bb3efca6673d009251"
+      }
+    ],
+    "tested_source_identity": {
+      "files": 981,
+      "sha256": "d8d4978ff0ccd291f2c5a396919791dc017e4ed606347702c8b2b451bd620c5d",
+      "encoding": "SHA256(JSON.pretty_generate(sorted [path,size,SHA256] rows)+newline) for all src/spec files"
+    },
+    "invariants": [
+      "Optional explicit bindings exactly cover every direct JSON actual at every contextual Dynamic site, including unused arms; missing, duplicate, extra, wrong-site, wrapped and SharedVariant bindings reject.",
+      "Each helper must share the exact BinaryDynamicBulkPlan and BinaryCodecBudget identity of its lower owner; recursive children inherit operation depth.",
+      "Object child occurrence grids are (P,R), not (Q,R); normalized discriminator lanes have one byte per Q occurrence.",
+      "Read all normalized discriminator lanes at all marks before Object child decode; then decode all children and all parent marks before returning any requested window.",
+      "The census alone does not certify enclosing Array Q. A valid JSON tag and child R hidden behind Array Q=0 reject in final parent/cursor consumption even for an empty selection.",
+      "Complete Object raw-path sets and complete Dynamic descriptor rosters define identity; metadata order and statistics hints do not.",
+      "Typed Nullable NULL is retained. Existing lower-owner unbound JSON and nominal JSON-containing Bulk descriptor guards remain closed even at zero-Q/empty windows.",
+      "Unused root and typed Dynamic actual descriptors are checked at inherited JSON depth; typed actual root depth is inherited JSON depth plus Object-relative Dynamic descriptor depth.",
+      "Binding/census/cursor/slice logical records and owned key-copy work are precharged under the shared budget. This is not unique-allocation, RSS, CPU-time or lazy selected-window accounting.",
+      "Legacy 3/4-argument decode_structure_streams and the explicit 5-argument overload share one internal parser; the inherited W158 test hook is exactly restored."
+    ],
+    "literal_checks": {
+      "parent_P": [
+        2,
+        1,
+        1
+      ],
+      "dynamic_Q": [
+        0,
+        2,
+        3
+      ],
+      "used_JSON_R": [
+        0,
+        0,
+        2
+      ],
+      "unused_JSON_R": [
+        0,
+        0,
+        0
+      ],
+      "normalized_discriminators": [
+        3,
+        3,
+        0,
+        0,
+        3
+      ],
+      "normalized_discriminator_offsets": [
+        0,
+        0,
+        2,
+        5
+      ],
+      "JSON_ids": [
+        41,
+        42
+      ],
+      "JSON_counters": [
+        401,
+        402
+      ],
+      "typed_nullable_nulls": 2,
+      "inherited_unused_typed_roster_depth": {
+        "admitted": 7,
+        "rejected": 6
+      },
+      "shared_plan_sites": "One immutable Object plan bound to two independent Tuple Dynamic sites retains distinct values 61 and 62.",
+      "tested_profile": "W209 focused examples use the default single_stream String profile; inherited affected gates do not qualify W209 in other profiles."
+    },
+    "documentation_files": [
+      {
+        "path": "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+        "bytes": 30387,
+        "sha256": "9f8d8e3e7b766fc3db70d46a10c7e5125a8f66407450e0b0f196c23907d6e422"
+      },
+      {
+        "path": "docs/PROJECT_STATUS.md",
+        "bytes": 160980,
+        "sha256": "1abe9a4542a977da7f5778c7f02ac99bc2024059212d523f8c0a51a9804a799d"
+      }
+    ],
+    "intended_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_bulk_encoder.cr",
+      "src/crystal_click/binary_bulk_decoder.cr",
+      "src/crystal_click/binary_dynamic_bulk_codec.cr",
+      "src/crystal_click/binary_dynamic_bulk_plan.cr",
+      "src/crystal_click/binary_dynamic_bulk_streams.cr",
+      "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr",
+      "src/crystal_click/binary_dynamic_bulk_json_object_reader.cr",
+      "spec/dynamic_json_bulk_object_w209_spec.cr",
+      "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      ".landmark/evidence/dynamic-json-bulk-object-w209.json"
+    ]
+  },
+  "boundaries": {
+    "risk": "CAUTION: library-only round trips can agree on a wrong child schedule or bypass unused-arm/schema/budget/depth admission.",
+    "rollback": "Revert only the scoped atomic local W209 commit. No push/history rewrite, dependency/runtime change or source-part mutation.",
+    "normalized_vs_physical": "Normalized Q discriminator bytes correspond to stock Variant decisions, not its raw BASIC/COMPACT framing. The normalized reader cannot be applied to raw part bytes.",
+    "eager_read_policy": "All parent and child marks are decoded before slicing, including empty selection. Full-domain work may consume the full budget; malformed Q schedules may incur bounded child work before rejection.",
+    "nonclaims": [
+      "Physical persisted Dynamic(JSON) arm values, public part/column/table propagation, complete checkpoint B, library-part ATTACH or fresh CHECK/native interoperability from W209.",
+      "SharedVariant inline JSON, wrapped/composite JSON actuals, Object-typed runtime JSON or arbitrary type/layout Cartesian products.",
+      "Lazy physical reads, selected-window cost bounds, full type parity, MV/projections, repository-wide class decomposition, allocator/RSS/CPU bounds or performance parity."
+    ],
+    "inherited_residuals": "Interval/SimpleAggregate sidecar metadata, AggregateFunction(count) metadata outside JSON and broader QBitValue ownership audit remain open.",
+    "metadata_preflight_qualification": "Supplied bound plans are inherited-depth preflighted before child value decode. Serialized child metadata can first parse under its local bounded depth before additional inherited validation; no allocation-before-inherited-depth guarantee is claimed."
+  },
+  "reference": {
+    "source_snapshot": {
+      "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+      "commit": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "shallow": true,
+      "clean": true,
+      "qualification": "Fresh --depth 1 --single-branch --no-tags clone; no submodules initialized. This source pin is not the separately pinned stock runtime build."
+    },
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "outer_timeout_seconds": 600,
+      "outer_memory_mib": 12288,
+      "minimum_free_memory_percent": 50,
+      "execution": "Root-only serial workloads under approved escalation; isolation, process inspection and memory pressure guard remain enabled."
+    },
+    "compiler": "Crystal 1.21.0 / LLVM 22.1.8 (inherited toolchain pin)",
+    "native_workloads": "None in W209. Existing Object child codec reuse and fresh source inspection are not stock Dynamic(JSON) value interoperability.",
+    "primary_source_anchors": [
+      {
+        "path": "src/DataTypes/Serializations/SerializationVariant.cpp",
+        "sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022",
+        "lines": "450-524",
+        "finding": "Selected arm counts map Q to R; BASIC/COMPACT framing is not the normalized one-byte lane representation."
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationArray.cpp",
+        "sha256": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791",
+        "lines": "360-397",
+        "finding": "Array offsets map parent occurrences to child Q; child serialization still has a zero-occurrence state path."
+      },
+      {
+        "path": "src/Storages/MergeTree/MergeTreeDataPartWriterWide.cpp",
+        "sha256": "a54c556841343f20ffb22b6cbd406f27c9a81df50eddb23ee5dca884d1686a76",
+        "lines": "473-486",
+        "finding": "Wide mark third words preserve physical parent P. Object child schedule is (P,R), not (Q,R)."
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationDynamic.cpp",
+        "sha256": "ae052b671cf6b00ea87ac41aa80983bd48439235dcd035726fc9063a7ab81491",
+        "qualification": "Primary Dynamic state/roster reference, not W209 physical interoperability evidence."
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationObject.cpp",
+        "sha256": "45080c586a2510bc1e3d70102ec7e631efd22de7da9f73fcdfc029daa1007017",
+        "qualification": "Primary Object state/path reference, not W209 physical interoperability evidence."
+      }
+    ]
+  },
+  "verification": {
+    "affected_roster": {
+      "base_packet": {
+        "path": ".landmark/evidence/dynamic-json-object-bridge-w208.json",
+        "bytes": 28520,
+        "sha256": "d06878ee23d0875c943efc03f8c65602fe4d0ac4aa557866721fbdf414fc114f"
+      },
+      "base_json_path": "verification.affected_roster",
+      "base_files": 186,
+      "append_paths": [
+        "spec/dynamic_json_bulk_object_w209_spec.cr"
+      ],
+      "unique_files": 187,
+      "hash_encoding": "SHA256 of JSON.pretty_generate(ordered_array) followed by newline; resolve base recursively.",
+      "ordered_roster_sha256": "7b0c919f85c0b4fd0e84c3f8f0ab3b592ef209f5863aff2a3d9ba0983beffcbe"
+    },
+    "command_recipe": {
+      "prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w209.vZlnMC/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288",
+      "shell": "set -o pipefail",
+      "subcommand": "spec",
+      "affected_paths": "Exact recursively resolved base roster in listed order, then append_paths.",
+      "flags": [
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_flag": "--release before common flags",
+      "focused_paths": [
+        "spec/dynamic_json_bulk_object_w209_spec.cr"
+      ],
+      "capture": "2>&1 | tee referenced scratch log; pipefail preserves actual guarded exit."
+    },
+    "dod_expected": "Final affected/focused DEBUG and RELEASE have zero failures/errors/pending and actual guarded exit 0. Final seeded defects reject with unchanged focused specifications, exact source hashes restore, format --check and scoped diff checks pass.",
+    "scratch_directory": "/private/tmp/crystal-click-w209.vZlnMC",
+    "initial_reds": [
+      {
+        "label": "API absence compile RED",
+        "log": "api-absence-red.log",
+        "log_bytes": 593,
+        "log_sha256": "4bd6aa0cdc01f62df7db394821984aba227c91335bfc608ab5498a6bd76f77d4",
+        "actual_exit": 1,
+        "examples": 0,
+        "declared_examples": 2,
+        "failure": "No parameter named json_object_plans on the existing paired Bulk API; no behavioral examples executed."
+      },
+      {
+        "label": "First candidate compile RED",
+        "log": "focused-first-debug.log",
+        "log_bytes": 3703,
+        "log_sha256": "f328acfe2a902c93026cf6bf29c04812eeae804baf981c12f63245e90c0f6014",
+        "actual_exit": 1,
+        "examples": 0,
+        "declared_examples": 2,
+        "failure": "Instance helper call had wrong arity for the class-only JSON key byte helper.",
+        "repair": "Call self.class.json_object_key_bytesize_total."
+      },
+      {
+        "label": "Expanded budget/depth behavioral RED",
+        "log": "expanded-guards-red-debug.log",
+        "log_bytes": 3398,
+        "log_sha256": "60984e8ff0ce7d8704272d87bc05b8c8e75e6dafd350788b69635629aab4e620",
+        "actual_exit": 1,
+        "examples": 7,
+        "failures": 1,
+        "errors": 1,
+        "pending": 0,
+        "spec_sha256": "b56bba04e85e0c317454d0a705eabb5fcc142ddfd26a774d0006f09e2c6b2c71",
+        "failure": "Lower writer accepted another budget; unused typed actual at inherited depth 7 incorrectly required 8.",
+        "repair": "Exact plan and budget identity; actual depth = inherited JSON depth + Object-relative Dynamic depth."
+      },
+      {
+        "label": "Invalid positive canonical-order fixture",
+        "log": "focused-final-candidate-debug.log",
+        "log_bytes": 2676,
+        "log_sha256": "18e6a750a6f3293bf0736aab3b9e20fbcc2aa2079e8e4f570da20db1b0b81493",
+        "actual_exit": 1,
+        "examples": 14,
+        "failures": 0,
+        "errors": 1,
+        "pending": 0,
+        "failure": "Positive fixture declared JSON max_dynamic_paths/types=1 but supplied two Object paths/types. Correct binding guard rejected.",
+        "repair": "Specification-only correction to matching caps 2 and explicit z_path UInt64/a_path UInt8 values; production guard retained."
+      },
+      {
+        "label": "Inherited exact-signature hook compile RED",
+        "log": "affected-final-debug.log",
+        "log_bytes": 1451,
+        "log_sha256": "cead5b2b28f7780d284830a04f120ac791ec9dea91c3e16dd49a95f8e600aca1",
+        "actual_exit": 1,
+        "examples": 0,
+        "failure": "W158 test-only legacy 4-argument hook shadowed the new 5-argument definition."
+      },
+      {
+        "label": "Attempted hook extension compile RED",
+        "log": "affected-corrected-final-debug.log",
+        "log_bytes": 1542,
+        "log_sha256": "296d3870464ca0cbeff1f77e29588fd0a8bcf25c56b9b7e833a34af9bde874ef",
+        "actual_exit": 1,
+        "examples": 0,
+        "failure": "Adding an optional fifth hook parameter broke its previous_def chain.",
+        "repair": "Restore the old specification exactly; retain the legacy 3/4-argument production method and add an explicit required 5-argument overload sharing the same internal parser."
+      },
+      {
+        "label": "Inherited nominal JSON admission regression",
+        "log": "affected-overload-final-debug.log",
+        "log_bytes": 3580,
+        "log_sha256": "7aca69b64d63446da5665343e8c65327bf711b7d4a2f4d8065871a5e96df541b",
+        "actual_exit": 1,
+        "examples": 1168,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "failure": "A nominal Tuple(JSON,Dynamic) zero-window control reached invalid-grid CorruptPartError instead of its existing UnsupportedFormatError guard.",
+        "repair": "After bounded site discovery, distinguish cached nominal contains_json? from bound actual JSON before role planning on write and read; W182 spec unchanged."
+      }
+    ],
+    "final_gates": [
+      {
+        "label": "Affected DEBUG",
+        "log": "affected-admission-final-debug.log",
+        "log_bytes": 1304,
+        "log_sha256": "ddf2ecbbf19881522d08b1e6083d14c111d1eb58aba7746dd0f954a9119e1b60",
+        "actual_exit": 0,
+        "examples": 1168,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "label": "Affected RELEASE",
+        "log": "affected-final-release.log",
+        "log_bytes": 1304,
+        "log_sha256": "8cf97d108ad68807e6bb089d11c30990d52797cdec5b1b7f54f28b90ef6b3c92",
+        "actual_exit": 0,
+        "examples": 1168,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "label": "Focused DEBUG after final exact restoration",
+        "log": "focused-final-restored-debug.log",
+        "log_bytes": 152,
+        "log_sha256": "2f8fa09691b1e176209d6e74a0fa935d56b62fcf52b20d0b21c669cccce71e15",
+        "actual_exit": 0,
+        "examples": 14,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "label": "Focused RELEASE after final exact restoration",
+        "log": "focused-final-release.log",
+        "log_bytes": 153,
+        "log_sha256": "d61543c4c1841291535ceebcc0248ab6b1793a34a79d85aef9d294e6181af584",
+        "actual_exit": 0,
+        "examples": 14,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      }
+    ],
+    "defect_seeds": [
+      {
+        "label": "Lost budget identity",
+        "actual_exit": 1,
+        "examples": 14,
+        "failures": 2,
+        "errors": 0,
+        "pending": 0,
+        "log": "seed-final-budget-identity-debug.log",
+        "log_bytes": 1137,
+        "log_sha256": "aa9af9596f39e2663e0e0cd78af3967c19005ce95acaeb93afed6fcef974ad13",
+        "mutated_paths": [
+          "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr",
+          "src/crystal_click/binary_dynamic_bulk_json_object_reader.cr"
+        ],
+        "spec_sha256": "fbda7e61104912db7374496e7378b766eb074637dcc959bb3efca6673d009251",
+        "expected_observation": "Both lower owners accept a helper sharing only the plan, not the operation budget.",
+        "restoration": "Exact canonical source hashes restored before the next seed/gate; focused specification unchanged."
+      },
+      {
+        "label": "Premature empty-window return",
+        "actual_exit": 1,
+        "examples": 14,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "log": "seed-final-empty-window-debug.log",
+        "log_bytes": 679,
+        "log_sha256": "bf2685b5d1b9112dbf9e355afb3786cae6babf6678ea3e773310f3359746f0f2",
+        "mutated_paths": [
+          "src/crystal_click/binary_dynamic_bulk_codec.cr"
+        ],
+        "spec_sha256": "fbda7e61104912db7374496e7378b766eb074637dcc959bb3efca6673d009251",
+        "expected_observation": "Return immediately after reader construction; valid JSON census and child R hidden behind Array Q=0 escape final parent consumption.",
+        "restoration": "Exact canonical source hashes restored before the next seed/gate; focused specification unchanged."
+      },
+      {
+        "label": "Unused expected-roster identity omitted",
+        "actual_exit": 1,
+        "examples": 14,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "log": "seed-final-unused-roster-debug.log",
+        "log_bytes": 714,
+        "log_sha256": "1ad6ae5d8f70eb564180b910cffa5a14f57cdc14fc55312444aa4f18ff9097f3",
+        "mutated_paths": [
+          "src/crystal_click/binary_dynamic_bulk_json_object_reader.cr"
+        ],
+        "spec_sha256": "fbda7e61104912db7374496e7378b766eb074637dcc959bb3efca6673d009251",
+        "expected_observation": "Compare only type/shared counts; an internally valid saved unused child with UInt64 accepts the wrong supplied expected UInt8 roster.",
+        "restoration": "Exact canonical source hashes restored before the next seed/gate; focused specification unchanged."
+      },
+      {
+        "label": "Typed inherited-depth off-by-one",
+        "actual_exit": 1,
+        "examples": 14,
+        "failures": 0,
+        "errors": 1,
+        "pending": 0,
+        "log": "seed-final-typed-depth-debug.log",
+        "log_bytes": 2926,
+        "log_sha256": "7ca4c099359856aae8accb2539687a821facf2bd545e98f8c1ac3ef0ffe6de16",
+        "mutated_paths": [
+          "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr"
+        ],
+        "spec_sha256": "fbda7e61104912db7374496e7378b766eb074637dcc959bb3efca6673d009251",
+        "expected_observation": "Add one to the Object-relative actual depth; the valid exact-depth 7 control raises an executed UnsupportedFormatError.",
+        "restoration": "Exact canonical source hashes restored before the next seed/gate; focused specification unchanged."
+      }
+    ],
+    "restoration": {
+      "exact_scoped_hashes_match": true,
+      "exact_all_source_spec_identity_match": true,
+      "source_identity": {
+        "files": 981,
+        "sha256": "d8d4978ff0ccd291f2c5a396919791dc017e4ed606347702c8b2b451bd620c5d"
+      },
+      "inherited_unchanged_specifications": [
+        {
+          "path": "spec/object_declared_dynamic_w158_adversary_spec.cr",
+          "sha256": "bf6c081ad7cbb45f664e84156512dd07d3809492836a0f451801cfcbefa6669c"
+        },
+        {
+          "path": "spec/json_nested_scalar_w182_guards_spec.cr",
+          "sha256": "96556652556ec6192a0d743314113a7148eb7558c2927e15e847a252b36b64f0"
+        }
+      ],
+      "inherited_diff_exit": 0,
+      "affected_gates_timing": "Executed at the same canonical source identity before final seeds; exact restoration recomposes their source-state scope. Focused DEBUG/RELEASE executed after final restoration."
+    },
+    "format_check": {
+      "log": "format-final-check.log",
+      "log_bytes": 61,
+      "log_sha256": "0242d6a2cab8fea92d39f279f6076643178199e1003b5e486a4cee09e9b03d31",
+      "actual_exit": 0,
+      "paths": [
+        "src/crystal_click.cr",
+        "src/crystal_click/binary_bulk_encoder.cr",
+        "src/crystal_click/binary_bulk_decoder.cr",
+        "src/crystal_click/binary_dynamic_bulk_codec.cr",
+        "src/crystal_click/binary_dynamic_bulk_plan.cr",
+        "src/crystal_click/binary_dynamic_bulk_streams.cr",
+        "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr",
+        "src/crystal_click/binary_dynamic_bulk_json_object_reader.cr",
+        "spec/dynamic_json_bulk_object_w209_spec.cr"
+      ]
+    },
+    "structural_check": {
+      "command": "/usr/bin/ruby -rjson -e 'p = JSON.parse(File.read(ARGV.fetch(0))); abort unless p.fetch(\"implementation\").fetch(\"intended_paths\").size == 12; puts \"JSON parsed; 12 intended paths\"' .landmark/evidence/dynamic-json-bulk-object-w209.json",
+      "qualification": "JSON parsing and intended-path count only. No repository packet template/validator is available; these checks do not validate substantive claims."
+    }
+  },
+  "continuity": {
+    "confirmed_frontier": "Normalized paired ordinary Dynamic JSON arm/Object value handoff; full checkpoint B remains IN_PROGRESS.",
+    "next_signal": "Connect the explicitly bound Object children to physical/public part/column/table readers and writers, then fresh stock-to-library and library-to-stock witnesses with P/Q/R literals, CHECK and direct ATTACH.",
+    "decay_trigger": "Changes to Dynamic/Object rosters, descriptor/binding identity, recursive occurrence schedules, shared budget/depth owners, normalized or physical framing, test hooks, source/runtime pin or affected corpus reopen dependent claims.",
+    "refresh_operation": "Re-run exact affected/focused gates and relevant restored defect seeds at the new source identity; physical/native claims additionally require fresh independent stock witnesses.",
+    "failure_policy": "Keep physical/public guards closed until their corresponding capability and interoperability gates pass."
+  }
+}

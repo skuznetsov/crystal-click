@@ -46,6 +46,7 @@ module CrystalClick
       getter low_cardinality_schedule_grid_count : UInt64
       getter data_role_count : UInt64
       getter ordinary_role_count : UInt64
+      getter json_object_bindings : Hash(Tuple(String, Int32), DynamicJsonObjectBinding)
 
       def initialize(
         @type : BinaryDataType,
@@ -62,6 +63,7 @@ module CrystalClick
         @low_cardinality_schedule_grid_count : UInt64,
         @data_role_count : UInt64,
         @ordinary_role_count : UInt64,
+        @json_object_bindings : Hash(Tuple(String, Int32), DynamicJsonObjectBinding),
       )
       end
     end
@@ -78,6 +80,7 @@ module CrystalClick
     @low_cardinality_schedule_grid_count : UInt64
     @data_role_count : UInt64
     @ordinary_role_count : UInt64
+    @json_object_bindings : Hash(Tuple(String, Int32), DynamicJsonObjectBinding)
 
     def self.new(
       type : BinaryDataType,
@@ -97,11 +100,12 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       unless budget.writing?
         raise ArgumentError.new("Dynamic structure plan requires a writing budget")
       end
-      prepared = prepare_from_structures(type, structures, profile, budget.limits, budget, false)
+      prepared = prepare_from_structures(type, structures, profile, budget.limits, budget, false, true, json_object_plans)
       new(prepared)
     end
 
@@ -136,6 +140,7 @@ module CrystalClick
       @low_cardinality_schedule_grid_count = prepared.low_cardinality_schedule_grid_count
       @data_role_count = prepared.data_role_count
       @ordinary_role_count = prepared.ordinary_role_count
+      @json_object_bindings = prepared.json_object_bindings
     end
 
     def site_count : Int32
@@ -147,10 +152,7 @@ module CrystalClick
     # structure owners are separate from the nominal Dynamic descriptor, so
     # their actual types must be checked explicitly as well.
     def validate_inherited_depth!(initial_depth : Int32, budget : BinaryCodecBudget) : Nil
-      unless budget.writing?
-        raise ArgumentError.new("Dynamic writer depth validation requires a writing budget")
-      end
-      context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
+      context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
       context.validate_type_tree(@type, initial_depth)
       depth_offset = initial_depth - 1
       @site_paths.each do |path|
@@ -176,6 +178,14 @@ module CrystalClick
       copy_strings(@site_paths)
     end
 
+    # Allocation-free traversal for codec owners that only inspect all sites.
+    # Prefer this to detaching another path roster when the caller does not
+    # retain it.
+    def each_site_path(&block : String ->) : Nil
+      @site_paths.each { |path| yield path }
+      nil
+    end
+
     def has_site?(path : String) : Bool
       @sites.has_key?(path)
     end
@@ -188,6 +198,11 @@ module CrystalClick
     def structure_for(path : String) : DynamicStructure
       site = @sites[path]? || raise(KeyError.new("Dynamic site not found: #{path.inspect}"))
       site.structure
+    end
+
+    def depth_for_site(path : String) : Int32
+      site = @sites[path]? || raise(KeyError.new("Dynamic site not found: #{path.inspect}"))
+      site.depth
     end
 
     # Byte offset of the statistics flag relative to this site's structure
@@ -210,6 +225,49 @@ module CrystalClick
     def arm_type(path : String, index : Int) : BinaryDataType
       site = @sites[path]? || raise(KeyError.new("Dynamic site not found: #{path.inspect}"))
       site.arms[index]
+    end
+
+    def has_json_object_bindings? : Bool
+      !@json_object_bindings.empty?
+    end
+
+    def json_object_binding(path : String, index : Int) : DynamicJsonObjectBinding
+      @json_object_bindings[{path, index.to_i32}]? ||
+        raise UnsupportedFormatError.new("Dynamic JSON arm has no Object child binding")
+    end
+
+    def json_object_binding_keys : Array(Tuple(String, Int32))
+      @json_object_bindings.keys.map { |entry| {String.new(entry[0].to_slice), entry[1]} }
+    end
+
+    def json_object_binding_count : Int32
+      @json_object_bindings.size
+    end
+
+    def json_object_binding_key_bytesize_total : UInt64
+      total = 0_u64
+      @json_object_bindings.each_key do |key|
+        size = key[0].bytesize.to_u64
+        if total > UInt64::MAX - size
+          raise UnsupportedFormatError.new("Dynamic JSON binding key bytes overflow UInt64")
+        end
+        total += size
+      end
+      total
+    end
+
+    # Detached key rosters are retained work: preflight their logical records,
+    # then account the copied site-key bytes before allocating either.
+    def json_object_binding_keys(budget : BinaryCodecBudget) : Array(Tuple(String, Int32))
+      count = @json_object_bindings.size.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      budget.charge_wire_bytes(json_object_binding_key_bytesize_total) if count > 0_u64
+      count.times { budget.charge_node }
+      keys = Array(Tuple(String, Int32)).new(count.to_i)
+      @json_object_bindings.each_key do |entry|
+        keys << {String.new(entry[0].to_slice), entry[1]}
+      end
+      keys
     end
 
     def shared_index(path : String) : Int32
@@ -280,6 +338,43 @@ module CrystalClick
 
     def role_count : UInt64
       @data_role_count
+    end
+
+    # Borrowed traversal over the immutable planned role roster. W209's paired
+    # reader validates lane maps without creating an uncharged detached copy.
+    def each_data_role(&block : String ->) : Nil
+      @data_roles.each { |role| yield role }
+      nil
+    end
+
+    def has_data_role?(role : String) : Bool
+      @data_roles.includes?(role)
+    end
+
+    # Return the already-owned discriminator role string without interpolating
+    # a new name during the paired JSON census.
+    def discriminator_role_for(path : String) : String
+      suffix = ".discriminators"
+      expected_size = path.bytesize + suffix.bytesize
+      @data_roles.each do |role|
+        next unless role.bytesize == expected_size
+        matches = true
+        path.bytesize.times do |index|
+          if role.byte_at(index) != path.byte_at(index)
+            matches = false
+            break
+          end
+        end
+        next unless matches
+        suffix.bytesize.times do |index|
+          if role.byte_at(path.bytesize + index) != suffix.byte_at(index)
+            matches = false
+            break
+          end
+        end
+        return role if matches
+      end
+      raise KeyError.new("Dynamic discriminator role not found: #{path.inspect}")
     end
 
     def ordinary_role_count : UInt64
@@ -403,7 +498,21 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : BinaryDynamicBulkPlan
-      decode_structure_streams_internal(type, streams, budget, profile, true)
+      decode_structure_streams_internal(type, streams, budget, profile, true, nil)
+    end
+
+    # The explicitly paired overload keeps JSON Object bindings opt-in while
+    # preserving the legacy three/four-argument entry point and its callers.
+    # A nil fifth argument is supported for owners that forward an optional
+    # binding roster without splitting their call path.
+    def self.decode_structure_streams(
+      type : BinaryDataType,
+      streams : BinaryDynamicStructureStreams,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))?,
+    ) : BinaryDynamicBulkPlan
+      decode_structure_streams_internal(type, streams, budget, profile, true, json_object_plans)
     end
 
     # Discovers structure lanes parent-first from their physical owner. The
@@ -447,6 +556,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
       include_statistics : Bool,
+      json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       if budget.writing?
         raise ArgumentError.new("Dynamic structure stream decode requires a reading budget")
@@ -463,8 +573,8 @@ module CrystalClick
 
       sites = Hash(String, Site).new
       parsed_structures = Hash(String, DynamicStructure).new
-      discover_read_sites(type, "root", 1, 1, streams, nil, parsed_structures, context, sites, include_statistics)
-      decoded_plan(type, profile, context, sites, streams.site_count)
+      discover_read_sites(type, "root", 1, 1, streams, nil, parsed_structures, context, sites, include_statistics, !json_object_plans.nil?)
+      decoded_plan(type, profile, context, sites, streams.site_count, json_object_plans)
     end
 
     private def self.decoded_plan(
@@ -473,12 +583,17 @@ module CrystalClick
       context : BinaryCodecContext,
       sites : Hash(String, Site),
       expected_site_count : Int?,
+      json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       if count = expected_site_count
         unless sites.size == count
           context.corrupt!("Dynamic structure stream site set is incomplete")
         end
       end
+      if type.contains_json?
+        context.unsupported!("JSON in the nominal Dynamic bulk descriptor is outside the admitted profile")
+      end
+      json_object_bindings = build_json_object_bindings(sites, json_object_plans, context)
       data_role_count = count_type_roles(type, "root", sites, profile, context)
       ordinary_role_count = count_ordinary_type_roles(type, "root", sites, profile, context)
       qbit_metadata = qbit_site_metadata(sites, context)
@@ -513,7 +628,7 @@ module CrystalClick
       append_low_cardinality_shape_roles(type, "root", sites, context, shape_roles)
       shape_roles.sort!
 
-      new(Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, qbit_sites, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count))
+      new(Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, qbit_sites, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count, json_object_bindings))
     end
 
     private def self.preflight_dynamic_descriptor!(
@@ -550,6 +665,7 @@ module CrystalClick
       budget : BinaryCodecBudget? = nil,
       account_output_bytes : Bool = true,
       include_statistics : Bool = true,
+      json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
     ) : Prepared
       unless type.contains_dynamic?
         raise ArgumentError.new("Dynamic bulk plan requires at least one Dynamic site")
@@ -561,11 +677,15 @@ module CrystalClick
       context.validate_type_tree(type)
 
       sites = Hash(String, Site).new
-      discover_write_sites(type, "root", 1, structures, context, sites, include_statistics)
+      discover_write_sites(type, "root", 1, structures, context, sites, include_statistics, !json_object_plans.nil?)
       unless sites.size == structures.size
         raise ArgumentError.new("Dynamic structure site set is incomplete")
       end
+      if type.contains_json?
+        context.unsupported!("JSON in the nominal Dynamic bulk descriptor is outside the admitted profile")
+      end
 
+      json_object_bindings = build_json_object_bindings(sites, json_object_plans, context)
       data_role_count = count_type_roles(type, "root", sites, profile, context)
       ordinary_role_count = count_ordinary_type_roles(type, "root", sites, profile, context)
       qbit_metadata = qbit_site_metadata(sites, context)
@@ -599,7 +719,7 @@ module CrystalClick
       shape_roles = [] of String
       append_low_cardinality_shape_roles(type, "root", sites, context, shape_roles)
       shape_roles.sort!
-      Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, qbit_sites, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count)
+      Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, qbit_sites, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count, json_object_bindings)
     end
 
     private def self.discover_write_sites(
@@ -610,6 +730,7 @@ module CrystalClick
       context : BinaryCodecContext,
       sites : Hash(String, Site),
       include_statistics : Bool,
+      allow_direct_json : Bool = false,
     ) : Nil
       context.ensure_depth(depth)
       case type.tag
@@ -626,32 +747,32 @@ module CrystalClick
                               -1_i32
                             end
         charge_shared_variant_arm(context, depth + 1)
-        arms = canonical_arm_types(structure, context, depth + 1)
+        arms = canonical_arm_types(structure, context, depth + 1, allow_direct_json)
         sites[path] = Site.new(type, structure, depth, arms, statistics_offset)
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
-          discover_write_sites(arm, child, depth + 1, structures, context, sites, include_statistics)
+          discover_write_sites(arm, child, depth + 1, structures, context, sites, include_statistics, allow_direct_json)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        discover_write_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, structures, context, sites, include_statistics)
+        discover_write_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_NULLABLE
-        discover_write_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, structures, context, sites, include_statistics)
+        discover_write_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        discover_write_sites(type.child_at(0), path, depth + 1, structures, context, sites, include_statistics)
+        discover_write_sites(type.child_at(0), path, depth + 1, structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
-          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites, include_statistics)
+          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites, include_statistics, allow_direct_json)
         end
       when BinaryDataType::TAG_MAP
         key_path = child_path(context, path, ".elements.field.0")
-        discover_write_sites(type.child_at(0), key_path, depth + 1, structures, context, sites, include_statistics)
+        discover_write_sites(type.child_at(0), key_path, depth + 1, structures, context, sites, include_statistics, allow_direct_json)
         value_path = child_path(context, path, ".elements.field.1")
-        discover_write_sites(type.child_at(1), value_path, depth + 1, structures, context, sites, include_statistics)
+        discover_write_sites(type.child_at(1), value_path, depth + 1, structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_VARIANT
         type.child_count.times do |index|
           child = child_path(context, path, ".arm.", index)
-          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites, include_statistics)
+          discover_write_sites(type.child_at(index), child, depth + 1, structures, context, sites, include_statistics, allow_direct_json)
         end
       end
       nil
@@ -668,6 +789,7 @@ module CrystalClick
       context : BinaryCodecContext,
       sites : Hash(String, Site),
       include_statistics : Bool,
+      allow_direct_json : Bool = false,
     ) : Nil
       context.ensure_depth(depth)
       case type.tag
@@ -702,7 +824,7 @@ module CrystalClick
                                        end
         structure_context.ensure_consumed
         charge_shared_variant_arm(context, depth + 1)
-        arms = canonical_arm_types(structure, context, depth + 1)
+        arms = canonical_arm_types(structure, context, depth + 1, allow_direct_json)
         # Discovery budgets and parses at the inherited absolute depth, while
         # the retained plan remains local to its Dynamic root so it can be
         # rebound at another recursive storage site without double-rebasing.
@@ -710,28 +832,28 @@ module CrystalClick
         parsed_structures[path] = structure
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(arm, child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+          discover_read_sites(arm, child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_NULLABLE
-        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        discover_read_sites(type.child_at(0), path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
         end
       when BinaryDataType::TAG_MAP
         key_path = child_path(context, path, ".elements.field.0")
-        discover_read_sites(type.child_at(0), key_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), key_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
         value_path = child_path(context, path, ".elements.field.1")
-        discover_read_sites(type.child_at(1), value_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(1), value_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
       when BinaryDataType::TAG_VARIANT
         type.child_count.times do |index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
         end
       end
       nil
@@ -741,6 +863,7 @@ module CrystalClick
       structure : DynamicStructure,
       context : BinaryCodecContext,
       descriptor_depth : Int32,
+      allow_direct_json : Bool = false,
     ) : Array(BinaryDataType)
       count = structure.canonical_variant_count
       context.preflight_metadata(count.to_u64, maximum_count: 255_u64, label: "Dynamic canonical arm count")
@@ -750,7 +873,7 @@ module CrystalClick
       # building their per-mark occurrence schedule.
       structure.type_count.times do |index|
         actual_type = structure.type_at(index)
-        if actual_type.contains_json?
+        if actual_type.contains_json? && (actual_type.tag != BinaryDataType::TAG_JSON || !allow_direct_json)
           context.unsupported!("JSON in Dynamic actual rosters is outside the admitted bulk profile")
         end
         if actual_type.contains_qbit? && actual_type.tag != BinaryDataType::TAG_QBIT
@@ -786,6 +909,79 @@ module CrystalClick
       Array(BinaryDataType).new(count) do |index|
         arms[index] || context.unsupported!("Dynamic canonical arm descriptor is missing")
       end
+    end
+
+    private def self.build_json_object_bindings(
+      sites : Hash(String, Site),
+      supplied : Array(Tuple(String, Int32, ObjectDocumentPlan))?,
+      context : BinaryCodecContext,
+    ) : Hash(Tuple(String, Int32), DynamicJsonObjectBinding)
+      expected_count = 0_u64
+      sites.each do |site_path, site|
+        site.arms.each_with_index do |arm, arm_index|
+          if arm.tag == BinaryDataType::TAG_JSON
+            if expected_count == UInt64::MAX
+              context.unsupported!("Dynamic JSON binding count overflows UInt64")
+            end
+            expected_count += 1_u64
+          end
+        end
+      end
+
+      if expected_count == 0_u64 && supplied.nil?
+        return Hash(Tuple(String, Int32), DynamicJsonObjectBinding).new
+      end
+
+      if expected_count > 0_u64
+        if expected_count > UInt64::MAX // 2_u64
+          context.unsupported!("Dynamic JSON binding map count overflows UInt64")
+        end
+        map_records = expected_count * 2_u64
+        context.preflight_children(map_records)
+        map_records.times { context.budget.charge_node }
+      end
+
+      expected = Hash(Tuple(String, Int32), Site).new(initial_capacity: expected_count.to_i)
+      sites.each do |site_path, site|
+        site.arms.each_with_index do |arm, arm_index|
+          next unless arm.tag == BinaryDataType::TAG_JSON
+          expected[{site_path, arm_index.to_i32}] = site
+        end
+      end
+
+      if expected_count > 0_u64 && supplied.nil?
+        context.unsupported!("direct Dynamic JSON actuals require complete Object child bindings")
+      end
+
+      plans = supplied || [] of Tuple(String, Int32, ObjectDocumentPlan)
+      unless plans.size.to_u64 == expected_count
+        raise ArgumentError.new("Dynamic JSON Object bindings must exactly cover every direct JSON actual")
+      end
+
+      bindings = Hash(Tuple(String, Int32), DynamicJsonObjectBinding).new(initial_capacity: expected_count.to_i)
+      plans.each do |entry|
+        site_path, arm_index, object_plan = entry
+        key = {site_path, arm_index}
+        unless site = expected[key]?
+          raise ArgumentError.new("Dynamic JSON Object binding names an unknown or non-JSON arm")
+        end
+        if bindings.has_key?(key)
+          raise ArgumentError.new("Dynamic JSON Object binding is duplicated")
+        end
+        binding = DynamicJsonObjectBinding.new(
+          site_path,
+          site.structure,
+          arm_index,
+          object_plan,
+          context.budget,
+          depth: site.depth + 1,
+        )
+        bindings[key] = binding
+      end
+      unless bindings.size == expected.size
+        raise ArgumentError.new("Dynamic JSON Object bindings omit a direct JSON actual")
+      end
+      bindings
     end
 
     private def self.charge_shared_variant_arm(context : BinaryCodecContext, depth : Int) : Nil
@@ -915,6 +1111,8 @@ module CrystalClick
         count
       when BinaryDataType::TAG_STRING
         profile.with_size_stream? ? 2_u64 : 1_u64
+      when BinaryDataType::TAG_JSON
+        0_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = child_path(context, path, ".elements")
         checked_role_add(1_u64, count_type_roles(type.child_at(0), child, sites, profile, context))
@@ -1032,6 +1230,9 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         append_role(context, path, ".data", roles)
         append_role(context, path, ".string_sizes", roles) if profile.with_size_stream?
+      when BinaryDataType::TAG_JSON
+        # Bound direct JSON actuals are owned by the paired Object child map.
+        nil
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_role(context, path, ".sizes", roles)
         child = child_path(context, path, ".elements")
@@ -1107,6 +1308,8 @@ module CrystalClick
         0_u64
       when BinaryDataType::TAG_STRING
         profile.with_size_stream? ? 2_u64 : 1_u64
+      when BinaryDataType::TAG_JSON
+        0_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = child_path(context, path, ".elements")
         checked_role_add(1_u64, count_ordinary_type_roles(type.child_at(0), child, sites, profile, context))
@@ -1326,6 +1529,9 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         append_role(context, path, ".data", roles)
         append_role(context, path, ".string_sizes", roles) if profile.with_size_stream?
+      when BinaryDataType::TAG_JSON
+        # No ordinary Bulk lane exists for a bound JSON/Object handoff.
+        nil
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_role(context, path, ".sizes", roles)
         append_ordinary_type_roles(type.child_at(0), child_path(context, path, ".elements"), sites, profile, context, roles)
