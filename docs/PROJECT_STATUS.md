@@ -1,6 +1,34 @@
 # CrystalClick project status
 
-Current finite kernel frontier (W201, 2026-10-06): recursive Nested now reuses
+Current finite public-part frontier (W202, 2026-10-06): direct nominal static
+Nested complete-part reader/writer now delegates recursively to the shared
+BinaryBulk owners. The new `write_uint64_nested_bulk_part` and
+`NestedBulkColumnReader` APIs accept BinaryValue granules without a synthetic
+JSON sibling. The UInt64 key roots the physical mark grid; Nested fields use
+the flattened element domain. Three separate new owners isolate the column
+reader, column writer and complete-part publication workflow.
+
+The same exact 153 affected files pass 989 DEBUG and 989 RELEASE examples,
+zero failures/errors/pending, guarded actual exits 0. Fresh final native
+captures qualify LC(Nullable(String)), Variant(String, UInt64) and String
+inside nominal Nested under both String profiles in both directions:
+stock parts -> public reader; library parts -> stock ATTACH/CHECK/literal
+SELECT. Per mode: two library ATTACHes, six CHECKs, 84 selected-value rows
+across overlapping windows, and 106 unchanged published part files. Generated
+bytes and normalized helper observations agree across modes. Disabling LC
+replay triggers two unchanged-spec failures; 31 capture/report mutations per
+mode are rejected. Scoped verdict: ROBUST.
+
+No leaf serializer per Cartesian type product was introduced. Dynamic/JSON
+inside this new direct API remain rejected until their structure-site state is
+owned; COMPACT Variant and broader dictionary/layout schedules are unqualified.
+This is a direct two-column Wide API, not automatic OfflineTable dispatch.
+Full types, MV/projections and repository-wide class decomposition remain
+open; performance stays deferred and the overall goal is incomplete. Details:
+[NESTED_BULK_PART_FRONTIER.md](NESTED_BULK_PART_FRONTIER.md),
+`.landmark/evidence/nested-bulk-parts-w202.json`.
+
+Previous finite kernel frontier (W201, 2026-10-06): recursive Nested now reuses
 the Array/implicit named Tuple cardinality law for LowCardinality staging and
 occurrence census. Eight blanket specialized-Nested call-site guards were
 removed; existing illegal child, explicit Dynamic-site, JSON/QBit and budget
@@ -16,8 +44,8 @@ agree. A seeded census defect causes five runtime errors; six mutated reports
 and a wrong expected native NULL literal are rejected. Scoped verdict: ROBUST.
 
 This is recursive bulk read/write and stock-to-kernel qualification, not a new
-public complete-part writer certificate. The top-level Wide Nested writer
-remains narrower; native Variant/Dynamic specialized parts, broader dictionary,
+public complete-part writer certificate. At that frontier the top-level Wide
+Nested writer remained narrower; native Variant/Dynamic specialized parts, broader dictionary,
 legacy/Compact/flattened layouts and JSON-as-Dynamic-actual remain open.
 Full types, MV/projections and repository-wide class decomposition remain open;
 performance stays deferred. Details:

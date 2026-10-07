@@ -98,6 +98,30 @@ module CrystalClick
       )
     end
 
+    # Write one direct nominal Nested BinaryBulk column. Unlike the older
+    # typed leaf-buffer API, this accepts complete BinaryValues and delegates
+    # recursive LC/Variant roles to the shared bulk codec.
+    def self.write_uint64_nested_bulk_part(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type : BinaryDataType,
+      granules : Array(Array(BinaryValue)),
+      rows_per_mark : Int32 = 8192,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : String
+      NestedBulkPartWriter.write(
+        destination, key_name, keys, value_name, type, granules,
+        rows_per_mark, profile, frame_bytes, metadata_version, limits,
+        transport_limits
+      )
+    end
+
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values
