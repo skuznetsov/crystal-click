@@ -46,7 +46,7 @@ module CrystalClick
       getter low_cardinality_schedule_grid_count : UInt64
       getter data_role_count : UInt64
       getter ordinary_role_count : UInt64
-      getter json_object_bindings : Hash(Tuple(String, Int32), DynamicJsonObjectBinding)
+      getter json_object_bindings : Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectBinding)
 
       def initialize(
         @type : BinaryDataType,
@@ -63,7 +63,7 @@ module CrystalClick
         @low_cardinality_schedule_grid_count : UInt64,
         @data_role_count : UInt64,
         @ordinary_role_count : UInt64,
-        @json_object_bindings : Hash(Tuple(String, Int32), DynamicJsonObjectBinding),
+        @json_object_bindings : Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectBinding),
       )
       end
     end
@@ -80,7 +80,7 @@ module CrystalClick
     @low_cardinality_schedule_grid_count : UInt64
     @data_role_count : UInt64
     @ordinary_role_count : UInt64
-    @json_object_bindings : Hash(Tuple(String, Int32), DynamicJsonObjectBinding)
+    @json_object_bindings : Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectBinding)
 
     def self.new(
       type : BinaryDataType,
@@ -101,11 +101,12 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       unless budget.writing?
         raise ArgumentError.new("Dynamic structure plan requires a writing budget")
       end
-      prepared = prepare_from_structures(type, structures, profile, budget.limits, budget, false, true, json_object_plans)
+      prepared = prepare_from_structures(type, structures, profile, budget.limits, budget, false, true, json_object_plans, json_object_leaf_plans)
       new(prepared)
     end
 
@@ -172,14 +173,13 @@ module CrystalClick
         end
       end
       if has_json_object_bindings?
-        json_object_binding_keys(budget).each do |key|
-          site = @sites[key[0]]? || raise(CorruptPartError.new("Dynamic JSON binding has no actual site"))
-          site_depth64 = site.depth.to_i64
-          json_depth64 = initial_depth.to_i64 + site_depth64
+        json_object_leaf_keys(budget).each do |key|
+          site = @sites[key.dynamic_site]? || raise(CorruptPartError.new("Dynamic JSON binding has no actual site"))
+          json_depth64 = initial_depth.to_i64 + site.depth.to_i64 + key.descriptor_path_size.to_i64
           if json_depth64 <= 0_i64 || json_depth64 > Int32::MAX.to_i64
             raise UnsupportedFormatError.new("Dynamic JSON descriptor depth exceeds Int32")
           end
-          binding = json_object_binding(key[0], key[1])
+          binding = json_object_binding(key)
           begin
             binding.schema.validate_plan(binding.plan, budget, json_depth64.to_i)
           rescue ex : ArgumentError
@@ -248,12 +248,21 @@ module CrystalClick
     end
 
     def json_object_binding(path : String, index : Int) : DynamicJsonObjectBinding
-      @json_object_bindings[{path, index.to_i32}]? ||
+      json_object_binding(BinaryDynamicJsonLeafKey.new(path, index, [] of Int32))
+    end
+
+    def json_object_binding(key : BinaryDynamicJsonLeafKey) : DynamicJsonObjectBinding
+      @json_object_bindings[key]? ||
         raise UnsupportedFormatError.new("Dynamic JSON arm has no Object child binding")
     end
 
+    # Legacy tuple keys expose only direct JSON actuals. Wrapped leaf callers
+    # must use #json_object_leaf_keys to avoid collapsing sibling leaves.
     def json_object_binding_keys : Array(Tuple(String, Int32))
-      @json_object_bindings.keys.map { |entry| {String.new(entry[0].to_slice), entry[1]} }
+      json_object_leaf_keys.compact_map do |key|
+        next unless key.descriptor_path_size == 0
+        {String.new(key.dynamic_site.to_slice), key.canonical_arm_index}
+      end
     end
 
     def json_object_binding_count : Int32
@@ -263,7 +272,7 @@ module CrystalClick
     def json_object_binding_key_bytesize_total : UInt64
       total = 0_u64
       @json_object_bindings.each_key do |key|
-        size = key[0].bytesize.to_u64
+        size = key.dynamic_site_bytesize.to_u64 + key.descriptor_path_size.to_u64 * 4_u64
         if total > UInt64::MAX - size
           raise UnsupportedFormatError.new("Dynamic JSON binding key bytes overflow UInt64")
         end
@@ -275,15 +284,70 @@ module CrystalClick
     # Detached key rosters are retained work: preflight their logical records,
     # then account the copied site-key bytes before allocating either.
     def json_object_binding_keys(budget : BinaryCodecBudget) : Array(Tuple(String, Int32))
-      count = @json_object_bindings.size.to_u64
+      count = 0_u64
+      bytes = 0_u64
+      @json_object_bindings.each_key do |key|
+        next unless key.descriptor_path_size == 0
+        if count == UInt64::MAX
+          raise UnsupportedFormatError.new("Dynamic JSON binding key count overflows UInt64")
+        end
+        count += 1_u64
+        size = key.dynamic_site_bytesize.to_u64
+        if bytes > UInt64::MAX - size
+          raise UnsupportedFormatError.new("Dynamic JSON binding key bytes overflow UInt64")
+        end
+        bytes += size
+      end
       budget.preflight_children(count) if count > 0_u64
-      budget.charge_wire_bytes(json_object_binding_key_bytesize_total) if count > 0_u64
+      budget.charge_wire_bytes(bytes) if bytes > 0_u64
       count.times { budget.charge_node }
       keys = Array(Tuple(String, Int32)).new(count.to_i)
-      @json_object_bindings.each_key do |entry|
-        keys << {String.new(entry[0].to_slice), entry[1]}
+      @json_object_bindings.each_key do |key|
+        next unless key.descriptor_path_size == 0
+        keys << {key.dynamic_site, key.canonical_arm_index}
+      end
+      keys.sort_by! { |key| {key[0], key[1]} }
+      keys
+    end
+
+    def json_object_leaf_keys : Array(BinaryDynamicJsonLeafKey)
+      keys = @json_object_bindings.keys
+      keys.sort! do |left, right|
+        compare_json_leaf_keys(left, right)
       end
       keys
+    end
+
+    def json_object_leaf_keys(budget : BinaryCodecBudget) : Array(BinaryDynamicJsonLeafKey)
+      count = @json_object_bindings.size.to_u64
+      path_elements = 0_u64
+      @json_object_bindings.each_key do |key|
+        size = key.descriptor_path_size.to_u64
+        if path_elements > UInt64::MAX - size
+          raise UnsupportedFormatError.new("Dynamic JSON binding path element count overflows UInt64")
+        end
+        path_elements += size
+      end
+      budget.preflight_children(count) if count > 0_u64
+      budget.ensure_future_elements(path_elements)
+      budget.charge_wire_bytes(json_object_binding_key_bytesize_total) if count > 0_u64
+      count.times { budget.charge_node }
+      budget.charge_elements(path_elements) if path_elements > 0_u64
+      json_object_leaf_keys
+    end
+
+    def json_object_leaf_depth(key : BinaryDynamicJsonLeafKey, initial_depth : Int = 1) : Int32
+      site = @sites[key.dynamic_site]? || raise(KeyError.new("Dynamic site not found: #{key.dynamic_site.inspect}"))
+      depth64 = initial_depth.to_i64 + site.depth.to_i64 + key.descriptor_path_size.to_i64
+      if depth64 <= 0_i64 || depth64 > Int32::MAX.to_i64
+        raise UnsupportedFormatError.new("Dynamic JSON descriptor depth exceeds Int32")
+      end
+      depth64.to_i32
+    end
+
+    def json_object_leaf_type(key : BinaryDynamicJsonLeafKey) : BinaryDataType
+      root = arm_type(key.dynamic_site, key.canonical_arm_index)
+      key.resolve_json_type(root)
     end
 
     def shared_index(path : String) : Int32
@@ -527,8 +591,9 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))?,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
-      decode_structure_streams_internal(type, streams, budget, profile, true, json_object_plans)
+      decode_structure_streams_internal(type, streams, budget, profile, true, json_object_plans, json_object_leaf_plans)
     end
 
     # Discovers structure lanes parent-first from their physical owner. The
@@ -544,6 +609,10 @@ module CrystalClick
       descriptor_preflight : BinaryDynamicBulkDescriptorPreflight? = nil,
       json_object_plan_loader : Proc(
         String, Int32, Int32, DynamicStructure, Hash(String, DynamicStructure), BinaryCodecBudget,
+        ObjectDocumentPlan,
+      )? = nil,
+      json_object_leaf_plan_loader : Proc(
+        BinaryDynamicJsonLeafKey, Int32, DynamicStructure, Hash(String, DynamicStructure), BinaryCodecBudget,
         ObjectDocumentPlan,
       )? = nil,
     ) : BinaryDynamicBulkPlan
@@ -566,14 +635,19 @@ module CrystalClick
       parsed_structures = Hash(String, DynamicStructure).new
       discover_read_sites(
         type, "root", initial_depth, 1, nil, loader, parsed_structures, context, sites, true,
-        !json_object_plan_loader.nil?
+        !json_object_plan_loader.nil? || !json_object_leaf_plan_loader.nil?
       )
       json_object_plans = if plan_loader = json_object_plan_loader
                             load_json_object_plans(sites, parsed_structures, plan_loader, context, initial_depth)
                           else
                             nil
                           end
-      plan = decoded_plan(type, profile, context, sites, nil, json_object_plans)
+      json_object_leaf_plans = if plan_loader = json_object_leaf_plan_loader
+                                 load_json_object_leaf_plans(sites, parsed_structures, plan_loader, context, initial_depth)
+                               else
+                                 nil
+                               end
+      plan = decoded_plan(type, profile, context, sites, nil, json_object_plans, json_object_leaf_plans)
       plan.validate_inherited_depth!(initial_depth, budget) if plan.has_json_object_bindings?
       plan
     end
@@ -617,6 +691,108 @@ module CrystalClick
       plans
     end
 
+    private def self.load_json_object_leaf_plans(
+      sites : Hash(String, Site),
+      structures : Hash(String, DynamicStructure),
+      loader : Proc(
+        BinaryDynamicJsonLeafKey, Int32, DynamicStructure, Hash(String, DynamicStructure), BinaryCodecBudget,
+        ObjectDocumentPlan,
+      ),
+      context : BinaryCodecContext,
+      initial_depth : Int32,
+    ) : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))
+      count = 0_u64
+      path_elements = 0_u64
+      key_bytes = 0_u64
+      sites.each do |site_path, site|
+        site.arms.each do |arm|
+          leaf_shape = json_leaf_shape(arm, 0)
+          count = checked_role_add(count, leaf_shape[:leaves])
+          path_elements = checked_role_add(path_elements, leaf_shape[:path_elements])
+          per_site_bytes = checked_role_add(
+            checked_role_multiply(site_path.bytesize.to_u64, leaf_shape[:leaves]),
+            checked_role_multiply(leaf_shape[:path_elements], 4_u64),
+          )
+          key_bytes = checked_role_add(key_bytes, per_site_bytes)
+        end
+      end
+      context.preflight_children(count) if count > 0_u64
+      context.budget.ensure_future_elements(path_elements)
+      context.budget.ensure_wire_bytes(key_bytes)
+      context.budget.charge_elements(count) if count > 0_u64
+      context.budget.charge_elements(path_elements) if path_elements > 0_u64
+      context.budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
+      count.times { context.budget.charge_node }
+
+      plans = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(count.to_i)
+      sites.keys.sort!.each do |site_path|
+        site = sites[site_path]
+        site.arms.each_with_index do |arm, arm_index|
+          each_json_leaf_path(arm) do |path|
+            key = BinaryDynamicJsonLeafKey.new(site_path, arm_index, path)
+            depth64 = initial_depth.to_i64 + site.depth.to_i64 + key.descriptor_path_size.to_i64
+            if depth64 <= 0_i64 || depth64 > Int32::MAX.to_i64
+              context.unsupported!("Dynamic JSON descriptor depth exceeds Int32")
+            end
+            plans << {
+              key,
+              loader.call(key, depth64.to_i32, site.structure, structures, context.budget),
+            }
+            nil
+          end
+        end
+      end
+      unless plans.size.to_u64 == count
+        context.corrupt!("Dynamic JSON leaf-plan loader did not cover every JSON descriptor leaf")
+      end
+      plans
+    end
+
+    private def self.json_leaf_shape(
+      type : BinaryDataType,
+      path_length : Int,
+    ) : NamedTuple(leaves: UInt64, path_elements: UInt64)
+      return {leaves: 0_u64, path_elements: 0_u64} if type.tag == BinaryDataType::TAG_DYNAMIC
+      return {leaves: 1_u64, path_elements: path_length.to_u64} if type.tag == BinaryDataType::TAG_JSON
+
+      leaves = 0_u64
+      path_elements = 0_u64
+      type.child_count.times do |index|
+        child = json_leaf_shape(type.child_at(index), path_length + 1)
+        leaves = checked_role_add(leaves, child[:leaves])
+        path_elements = checked_role_add(path_elements, child[:path_elements])
+      end
+      {leaves: leaves, path_elements: path_elements}
+    end
+
+    private def self.each_json_leaf_path(
+      type : BinaryDataType,
+      &block : Array(Int32) -> Nil
+    ) : Nil
+      walk_json_leaf_paths(type, [] of Int32, block)
+    end
+
+    # Recursive callback is an ordinary Proc argument rather than a yielded
+    # block, avoiding recursive block inlining during Crystal specialization.
+    private def self.walk_json_leaf_paths(
+      type : BinaryDataType,
+      path : Array(Int32),
+      callback : Proc(Array(Int32), Nil),
+    ) : Nil
+      if type.tag == BinaryDataType::TAG_JSON
+        callback.call(path)
+        return nil
+      end
+      return nil if type.tag == BinaryDataType::TAG_DYNAMIC
+
+      type.child_count.times do |index|
+        path << index.to_i32
+        walk_json_leaf_paths(type.child_at(index), path, callback)
+        path.pop
+      end
+      nil
+    end
+
     private def self.decode_structure_streams_internal(
       type : BinaryDataType,
       streams : BinaryDynamicStructureStreams,
@@ -624,6 +800,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       include_statistics : Bool,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       if budget.writing?
         raise ArgumentError.new("Dynamic structure stream decode requires a reading budget")
@@ -640,8 +817,8 @@ module CrystalClick
 
       sites = Hash(String, Site).new
       parsed_structures = Hash(String, DynamicStructure).new
-      discover_read_sites(type, "root", 1, 1, streams, nil, parsed_structures, context, sites, include_statistics, !json_object_plans.nil?)
-      decoded_plan(type, profile, context, sites, streams.site_count, json_object_plans)
+      discover_read_sites(type, "root", 1, 1, streams, nil, parsed_structures, context, sites, include_statistics, !json_object_plans.nil? || !json_object_leaf_plans.nil?)
+      decoded_plan(type, profile, context, sites, streams.site_count, json_object_plans, json_object_leaf_plans)
     end
 
     private def self.decoded_plan(
@@ -651,6 +828,7 @@ module CrystalClick
       sites : Hash(String, Site),
       expected_site_count : Int?,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       if count = expected_site_count
         unless sites.size == count
@@ -660,7 +838,7 @@ module CrystalClick
       if type.contains_json?
         context.unsupported!("JSON in the nominal Dynamic bulk descriptor is outside the admitted profile")
       end
-      json_object_bindings = build_json_object_bindings(sites, json_object_plans, context)
+      json_object_bindings = build_json_object_bindings(sites, json_object_plans, json_object_leaf_plans, context)
       data_role_count = count_type_roles(type, "root", sites, profile, context)
       ordinary_role_count = count_ordinary_type_roles(type, "root", sites, profile, context)
       qbit_metadata = qbit_site_metadata(sites, context)
@@ -733,6 +911,7 @@ module CrystalClick
       account_output_bytes : Bool = true,
       include_statistics : Bool = true,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : Prepared
       unless type.contains_dynamic?
         raise ArgumentError.new("Dynamic bulk plan requires at least one Dynamic site")
@@ -744,7 +923,7 @@ module CrystalClick
       context.validate_type_tree(type)
 
       sites = Hash(String, Site).new
-      discover_write_sites(type, "root", 1, structures, context, sites, include_statistics, !json_object_plans.nil?)
+      discover_write_sites(type, "root", 1, structures, context, sites, include_statistics, !json_object_plans.nil? || !json_object_leaf_plans.nil?)
       unless sites.size == structures.size
         raise ArgumentError.new("Dynamic structure site set is incomplete")
       end
@@ -752,7 +931,7 @@ module CrystalClick
         context.unsupported!("JSON in the nominal Dynamic bulk descriptor is outside the admitted profile")
       end
 
-      json_object_bindings = build_json_object_bindings(sites, json_object_plans, context)
+      json_object_bindings = build_json_object_bindings(sites, json_object_plans, json_object_leaf_plans, context)
       data_role_count = count_type_roles(type, "root", sites, profile, context)
       ordinary_role_count = count_ordinary_type_roles(type, "root", sites, profile, context)
       qbit_metadata = qbit_site_metadata(sites, context)
@@ -940,7 +1119,7 @@ module CrystalClick
       # building their per-mark occurrence schedule.
       structure.type_count.times do |index|
         actual_type = structure.type_at(index)
-        if actual_type.contains_json? && (actual_type.tag != BinaryDataType::TAG_JSON || !allow_direct_json)
+        if actual_type.contains_json? && !allow_direct_json
           context.unsupported!("JSON in Dynamic actual rosters is outside the admitted bulk profile")
         end
         if actual_type.contains_qbit? && actual_type.tag != BinaryDataType::TAG_QBIT
@@ -981,22 +1160,34 @@ module CrystalClick
     private def self.build_json_object_bindings(
       sites : Hash(String, Site),
       supplied : Array(Tuple(String, Int32, ObjectDocumentPlan))?,
+      supplied_leaves : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))?,
       context : BinaryCodecContext,
-    ) : Hash(Tuple(String, Int32), DynamicJsonObjectBinding)
+    ) : Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectBinding)
       expected_count = 0_u64
+      expected_path_elements = 0_u64
+      expected_key_bytes = 0_u64
+      direct_expected_count = 0_u64
       sites.each do |site_path, site|
         site.arms.each_with_index do |arm, arm_index|
-          if arm.tag == BinaryDataType::TAG_JSON
-            if expected_count == UInt64::MAX
-              context.unsupported!("Dynamic JSON binding count overflows UInt64")
-            end
-            expected_count += 1_u64
-          end
+          shape = json_leaf_shape(arm, 0)
+          expected_count = checked_role_add(expected_count, shape[:leaves])
+          expected_path_elements = checked_role_add(expected_path_elements, shape[:path_elements])
+          expected_key_bytes = checked_role_add(
+            expected_key_bytes,
+            checked_role_add(
+              checked_role_multiply(site_path.bytesize.to_u64, shape[:leaves]),
+              checked_role_multiply(shape[:path_elements], 4_u64),
+            ),
+          )
+          direct_expected_count = checked_role_add(
+            direct_expected_count,
+            1_u64,
+          ) if arm.tag == BinaryDataType::TAG_JSON
         end
       end
 
-      if expected_count == 0_u64 && supplied.nil?
-        return Hash(Tuple(String, Int32), DynamicJsonObjectBinding).new
+      if expected_count == 0_u64 && supplied.nil? && supplied_leaves.nil?
+        return Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectBinding).new
       end
 
       if expected_count > 0_u64
@@ -1007,48 +1198,91 @@ module CrystalClick
         context.preflight_children(map_records)
         map_records.times { context.budget.charge_node }
       end
+      context.budget.ensure_future_elements(expected_path_elements)
+      context.budget.charge_elements(expected_path_elements) if expected_path_elements > 0_u64
+      context.budget.ensure_wire_bytes(expected_key_bytes)
+      context.budget.charge_wire_bytes(expected_key_bytes) if expected_key_bytes > 0_u64
 
-      expected = Hash(Tuple(String, Int32), Site).new(initial_capacity: expected_count.to_i)
+      expected = Hash(BinaryDynamicJsonLeafKey, Site).new(initial_capacity: expected_count.to_i)
       sites.each do |site_path, site|
         site.arms.each_with_index do |arm, arm_index|
-          next unless arm.tag == BinaryDataType::TAG_JSON
-          expected[{site_path, arm_index.to_i32}] = site
+          each_json_leaf_path(arm) do |path|
+            key = BinaryDynamicJsonLeafKey.new(site_path, arm_index, path)
+            if expected.has_key?(key)
+              context.unsupported!("Dynamic JSON leaf binding identity is duplicated")
+            end
+            expected[key] = site
+            nil
+          end
         end
       end
 
-      if expected_count > 0_u64 && supplied.nil?
-        context.unsupported!("direct Dynamic JSON actuals require complete Object child bindings")
+      if expected_count > 0_u64 && supplied.nil? && supplied_leaves.nil?
+        if direct_expected_count > 0_u64
+          context.unsupported!("direct Dynamic JSON actuals require complete Object child bindings")
+        else
+          context.unsupported!("wrapped Dynamic JSON actuals require complete Object child bindings")
+        end
       end
 
-      plans = supplied || [] of Tuple(String, Int32, ObjectDocumentPlan)
-      unless plans.size.to_u64 == expected_count
-        raise ArgumentError.new("Dynamic JSON Object bindings must exactly cover every direct JSON actual")
+      supplied_count = (supplied.try(&.size) || 0).to_u64 + (supplied_leaves.try(&.size) || 0).to_u64
+      unless supplied_count == expected_count
+        raise ArgumentError.new("Dynamic JSON Object bindings must exactly cover every JSON leaf")
       end
 
-      bindings = Hash(Tuple(String, Int32), DynamicJsonObjectBinding).new(initial_capacity: expected_count.to_i)
-      plans.each do |entry|
-        site_path, arm_index, object_plan = entry
-        key = {site_path, arm_index}
+      bindings = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectBinding).new(initial_capacity: expected_count.to_i)
+      bind_leaf = ->(key : BinaryDynamicJsonLeafKey, object_plan : ObjectDocumentPlan) do
         unless site = expected[key]?
-          raise ArgumentError.new("Dynamic JSON Object binding names an unknown or non-JSON arm")
+          raise ArgumentError.new("Dynamic JSON Object binding names an unknown or non-JSON leaf")
         end
         if bindings.has_key?(key)
           raise ArgumentError.new("Dynamic JSON Object binding is duplicated")
         end
+        leaf_depth = site.depth.to_i64 + 1_i64 + key.descriptor_path_size.to_i64
+        if leaf_depth <= 0_i64 || leaf_depth > Int32::MAX.to_i64
+          context.unsupported!("Dynamic JSON descriptor depth exceeds Int32")
+        end
         binding = DynamicJsonObjectBinding.new(
-          site_path,
+          key,
           site.structure,
-          arm_index,
           object_plan,
           context.budget,
-          depth: site.depth + 1,
+          depth: leaf_depth.to_i,
         )
         bindings[key] = binding
       end
+      if plans = supplied
+        plans.each do |entry|
+          site_path, arm_index, object_plan = entry
+          bind_leaf.call(BinaryDynamicJsonLeafKey.new(site_path, arm_index, [] of Int32), object_plan)
+        end
+      end
+      if plans = supplied_leaves
+        plans.each do |entry|
+          key, object_plan = entry
+          bind_leaf.call(key, object_plan)
+        end
+      end
       unless bindings.size == expected.size
-        raise ArgumentError.new("Dynamic JSON Object bindings omit a direct JSON actual")
+        raise ArgumentError.new("Dynamic JSON Object bindings omit a JSON leaf")
       end
       bindings
+    end
+
+    private def compare_json_leaf_keys(
+      left : BinaryDynamicJsonLeafKey,
+      right : BinaryDynamicJsonLeafKey,
+    ) : Int32
+      site_order = left.compare_dynamic_site(right)
+      return site_order unless site_order == 0
+      arm_order = left.canonical_arm_index <=> right.canonical_arm_index
+      return arm_order unless arm_order == 0
+      common_path = Math.min(left.descriptor_path_size, right.descriptor_path_size)
+      common_path.times do |index|
+        child_order = left.descriptor_child_at(index) <=> right.descriptor_child_at(index)
+        return child_order unless child_order == 0
+      end
+      left.descriptor_path_size <=> right.descriptor_path_size
     end
 
     private def self.charge_shared_variant_arm(context : BinaryCodecContext, depth : Int) : Nil
@@ -1786,6 +2020,13 @@ module CrystalClick
         raise UnsupportedFormatError.new("binary Dynamic bulk lane count overflows UInt64")
       end
       left + right
+    end
+
+    private def self.checked_role_multiply(left : UInt64, right : UInt64) : UInt64
+      if right != 0_u64 && left > UInt64::MAX // right
+        raise UnsupportedFormatError.new("binary Dynamic bulk lane count overflows UInt64")
+      end
+      left * right
     end
 
     private def copy_strings(values : Array(String)) : Array(String)

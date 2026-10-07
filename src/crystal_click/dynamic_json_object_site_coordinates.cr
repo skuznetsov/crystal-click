@@ -1,6 +1,6 @@
 module CrystalClick
-  # Physical coordinates for one direct JSON actual arm beneath a Dynamic
-  # site. `escaped_prefix` names the full arm prefix before Object suffixes;
+  # Physical coordinates for one JSON leaf beneath a Dynamic actual arm.
+  # `escaped_prefix` names the full leaf prefix before Object suffixes;
   # `array_level` is inherited from the same storage walk as the parent site.
   struct DynamicJsonObjectSiteCoordinates
     getter escaped_prefix : String

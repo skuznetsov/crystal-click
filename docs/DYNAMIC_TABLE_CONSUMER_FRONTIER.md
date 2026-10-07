@@ -5,6 +5,14 @@ Current frontier: `WidePartTable` exposes the existing physical Dynamic-bearing
 reader through a bounded generic typed-batch adapter. Physical serialization
 admission is unchanged; the full project goal remains open.
 
+W212 extension (2026-10-07): the same typed-batch route composes newly bound
+wrapped ordinary Dynamic JSON actuals through the existing reader. Exact JSON
+leaf identities and complete child schedules are established by the physical
+reader, not a separate table codec. Fresh stock/library native table witnesses
+and the affected corpus qualify this extension; see
+[DYNAMIC_JSON_RECURSIVE_FRONTIER.md](DYNAMIC_JSON_RECURSIVE_FRONTIER.md).
+The historical W211 evidence below remains scoped to its original admission.
+
 ## Scope and design laws
 
 This slice propagates existing Dynamic bulk storage into `WidePartTable`.
@@ -47,8 +55,9 @@ transport limits remain in force during decode.
 ## Rejected and deferred
 
 - Nominal JSON-bearing BinaryBulk declarations and currently rejected actual
-  combinations stay rejected, including wrapped JSON actuals and inline JSON
-  in SharedVariant.
+  combinations stay rejected, including inline JSON in SharedVariant and
+  unbound JSON inside Object path Dynamic. W212 admits exact bound wrapped
+  ordinary JSON leaves, not every wrapper/layout product.
 - Numeric-only scans, UInt64-only scans and typed projections cannot silently
   accept this new reader. Projection/MV consumer propagation is separate.
 - Owned `OfflineColumn.values` materialization is not admitted by a batch API.

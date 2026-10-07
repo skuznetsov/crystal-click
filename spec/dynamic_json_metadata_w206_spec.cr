@@ -199,41 +199,86 @@ describe "W206 direct JSON Dynamic metadata checkpoint" do
     end
   end
 
-  it "continues to reject JSON hidden under Array and Tuple actual descriptors" do
+  it "round-trips wrapped JSON Array and Tuple actuals with exact roster and prefix identity" do
     json = w206_json_metadata_type
-    wrapped_types = [
-      CrystalClick::BinaryDataType.array(json),
-      CrystalClick::BinaryDataType.tuple([json] of CrystalClick::BinaryDataType),
-    ] of CrystalClick::BinaryDataType
+    array_json = CrystalClick::BinaryDataType.array(json)
+    tuple_json = CrystalClick::BinaryDataType.tuple([json] of CrystalClick::BinaryDataType)
+    wrapped_types = [array_json, tuple_json] of CrystalClick::BinaryDataType
+    structure = CrystalClick::DynamicStructure.new(wrapped_types)
 
-    wrapped_types.each do |wrapped|
-      error = expect_raises(ArgumentError) do
-        CrystalClick::DynamicStructure.new([wrapped] of CrystalClick::BinaryDataType)
-      end
-      error.message.to_s.should contain("JSON")
+    array_descriptor = Bytes[
+      0x1e_u8,
+      0x30_u8, 0x00_u8, 0x13_u8, 0x04_u8, 0x01_u8,
+      0x01_u8, 0x6b_u8, 0x01_u8, 0x00_u8, 0x00_u8,
+    ]
+    tuple_descriptor = Bytes[
+      0x1f_u8, 0x01_u8,
+      0x30_u8, 0x00_u8, 0x13_u8, 0x04_u8, 0x01_u8,
+      0x01_u8, 0x6b_u8, 0x01_u8, 0x00_u8, 0x00_u8,
+    ]
+    # Independently authored V4 prefix with Array(JSON) then Tuple(JSON).
+    prefix_wire = Bytes[
+      0x04_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8,
+      0x02_u8,
+      0x1e_u8,
+      0x30_u8, 0x00_u8, 0x13_u8, 0x04_u8, 0x01_u8,
+      0x01_u8, 0x6b_u8, 0x01_u8, 0x00_u8, 0x00_u8,
+      0x1f_u8, 0x01_u8,
+      0x30_u8, 0x00_u8, 0x13_u8, 0x04_u8, 0x01_u8,
+      0x01_u8, 0x6b_u8, 0x01_u8, 0x00_u8, 0x00_u8,
+    ]
+    exact_limits = CrystalClick::BinaryCodecLimits.new(
+      max_depth: 3,
+      max_nodes: 64,
+      max_elements: 64,
+      max_bytes: prefix_wire.size,
+    )
+    one_less_limits = CrystalClick::BinaryCodecLimits.new(
+      max_depth: 2,
+      max_nodes: 64,
+      max_elements: 64,
+      max_bytes: prefix_wire.size,
+    )
+
+    CrystalClick::BinaryDataTypeCodec.encode(array_json).should eq(array_descriptor)
+    CrystalClick::BinaryDataTypeCodec.encode(tuple_json).should eq(tuple_descriptor)
+    structure.types.should eq(wrapped_types)
+    structure.canonical_variant_names.should eq([
+      array_json.name,
+      "SharedVariant",
+      tuple_json.name,
+    ] of String)
+    structure.canonical_index_for(array_json).should eq(0)
+    structure.shared_index.should eq(1)
+    structure.canonical_index_for(tuple_json).should eq(2)
+    CrystalClick::DynamicStructureCodec.encode_prefix_without_statistics(
+      structure,
+      exact_limits,
+    ).should eq(prefix_wire)
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::DynamicStructureCodec.encode_prefix_without_statistics(
+        structure,
+        one_less_limits,
+      )
     end
 
-    # Raw Dynamic prefixes: version 4, one actual, then Array(JSON) or a
-    # one-field Tuple(JSON). These fixtures do not use the descriptor writer.
-    wrapped_prefixes = [
-      Bytes[
-        0x04_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8,
-        0x01_u8, 0x1e_u8,
-        0x30_u8, 0x00_u8, 0x13_u8, 0x04_u8, 0x01_u8,
-        0x01_u8, 0x6b_u8, 0x01_u8, 0x00_u8, 0x00_u8,
-      ],
-      Bytes[
-        0x04_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8,
-        0x01_u8, 0x1f_u8, 0x01_u8,
-        0x30_u8, 0x00_u8, 0x13_u8, 0x04_u8, 0x01_u8,
-        0x01_u8, 0x6b_u8, 0x01_u8, 0x00_u8, 0x00_u8,
-      ],
-    ] of Bytes
-    wrapped_prefixes.each do |wire|
-      error = expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::DynamicStructureCodec.decode_prefix_without_statistics(wire)
-      end
-      error.message.to_s.should contain("JSON")
+    # This decoder input is independent of the structure encoder above.
+    decoded = CrystalClick::DynamicStructureCodec.decode_prefix_without_statistics(
+      prefix_wire,
+      exact_limits,
+    )
+    decoded.types.should eq(wrapped_types)
+    decoded.type_at(0).should eq(array_json)
+    decoded.type_at(1).should eq(tuple_json)
+    decoded.canonical_index_for(array_json).should eq(0)
+    decoded.shared_index.should eq(1)
+    decoded.canonical_index_for(tuple_json).should eq(2)
+    decoded.statistics.should be_nil
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::DynamicStructureCodec.decode_prefix_without_statistics(
+        prefix_wire,
+        one_less_limits,
+      )
     end
   end
 

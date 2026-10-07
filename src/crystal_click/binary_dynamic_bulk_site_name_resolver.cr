@@ -167,6 +167,90 @@ module CrystalClick
       DynamicJsonObjectSiteCoordinates.new(escaped_prefix, position.array_level, arm[1])
     end
 
+    # Resolve one JSON leaf inside a Dynamic actual descriptor. The child path
+    # is a sequence of BinaryDataType child ordinals from the selected actual
+    # arm root; unlike a rendered logical stream path, it is stable across
+    # metadata ordering and can be checked against the exact descriptor tree.
+    def json_object_leaf_site(
+      key : BinaryDynamicJsonLeafKey,
+      structures : Hash(String, DynamicStructure),
+    ) : DynamicJsonObjectSiteCoordinates
+      resolved = find_dynamic_site_position(
+        @type, "root", @root_prefix, @initial_array_level, key.dynamic_site, structures,
+        @context, @initial_descriptor_depth
+      )
+      position = resolved || raise(CorruptPartError.new("Dynamic JSON leaf has no physical prefix"))
+      structure = structures[key.dynamic_site]? ||
+                  raise(CorruptPartError.new("Dynamic JSON leaf structure is unavailable for prefix discovery"))
+
+      temporary_bound_slots = structure.type_count.to_u64
+      canonical_arm_slots = structure.canonical_variant_count.to_u64
+      @context.record_elements(temporary_bound_slots) if temporary_bound_slots > 0_u64
+      @context.record_elements(canonical_arm_slots) if canonical_arm_slots > 0_u64
+      arm = canonical_arms(structure)[key.canonical_arm_index]?
+      unless arm
+        raise CorruptPartError.new("Dynamic JSON leaf canonical arm is outside the actual roster")
+      end
+
+      escaped_prefix = append_component(position.prefix, arm[0], @context)
+      leaf_type = arm[1]
+      array_level = position.array_level
+      key.descriptor_child_path.each do |child_index|
+        unless child_index >= 0 && child_index < leaf_type.child_count
+          raise CorruptPartError.new("Dynamic JSON leaf path is outside its actual descriptor")
+        end
+        child = leaf_type.child_at(child_index)
+        escaped_prefix, array_level = child_site_coordinates(
+          leaf_type, child_index, child, escaped_prefix, array_level
+        )
+        leaf_type = child
+      end
+      unless leaf_type.tag == BinaryDataType::TAG_JSON
+        raise CorruptPartError.new("Dynamic JSON leaf path does not identify a JSON descriptor")
+      end
+      @context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
+      @context.charge_name_bytes(escaped_prefix.bytesize.to_u64)
+      DynamicJsonObjectSiteCoordinates.new(escaped_prefix, array_level, leaf_type)
+    rescue ex : ArgumentError | IndexError
+      raise CorruptPartError.new("Dynamic JSON leaf descriptor coordinates are invalid")
+    end
+
+    private def child_site_coordinates(
+      parent : BinaryDataType,
+      child_index : Int32,
+      child : BinaryDataType,
+      prefix : String,
+      array_level : UInt64,
+    ) : Tuple(String, UInt64)
+      case parent.tag
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
+        unless child_index == 0
+          raise CorruptPartError.new("Dynamic JSON Array leaf path selects an invalid child")
+        end
+        {prefix, checked_array_level(array_level)}
+      when BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_SIMPLE_AGGREGATE
+        unless child_index == 0
+          raise CorruptPartError.new("Dynamic JSON wrapper leaf path selects an invalid child")
+        end
+        {prefix, array_level}
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        field = parent.named_tuple? ? parent.field_name_at(child_index) : (child_index + 1).to_s
+        {append_field(prefix, field, @context), array_level}
+      when BinaryDataType::TAG_MAP
+        unless child_index == 0 || child_index == 1
+          raise CorruptPartError.new("Dynamic JSON Map leaf path selects an invalid child")
+        end
+        field = child_index == 0 ? "keys" : "values"
+        {append_field(prefix, field, @context), checked_array_level(array_level)}
+      when BinaryDataType::TAG_VARIANT
+        {append_component(prefix, type_name(child), @context), array_level}
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        raise CorruptPartError.new("Dynamic JSON leaf cannot cross a LowCardinality physical stop-site")
+      else
+        raise CorruptPartError.new("Dynamic JSON leaf path crosses a non-composite descriptor")
+      end
+    end
+
     private def find_dynamic_site_position(
       type : BinaryDataType,
       path : String,

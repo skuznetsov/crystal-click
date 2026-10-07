@@ -17,15 +17,6 @@ module CrystalClick
         raise ArgumentError.new("Dynamic V3 supports at most 254 ordinary types")
       end
 
-      # Dynamic actual alternatives are metadata rather than children of one
-      # generic descriptor. Admit only a direct JSON descriptor as metadata;
-      # wrapped/composite JSON still has no ordinary-arm representation here.
-      types.each do |type|
-        if type.contains_json? && type.tag != BinaryDataType::TAG_JSON
-          raise ArgumentError.new("JSON is not admitted as a Dynamic actual type")
-        end
-      end
-
       @types = types.dup
       names = [String.new(SHARED_VARIANT_NAME.to_slice)] of String
       seen = Set(String).new

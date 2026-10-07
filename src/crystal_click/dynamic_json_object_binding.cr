@@ -3,6 +3,7 @@ module CrystalClick
   # arm and the existing Object child plan. This does not admit any Object
   # physical lane; those remain owned by ObjectDocumentCodec.
   class DynamicJsonObjectBinding
+    getter leaf_key : BinaryDynamicJsonLeafKey
     getter site_key : String
     getter canonical_arm_index : Int32
     getter json_type : BinaryDataType
@@ -20,14 +21,31 @@ module CrystalClick
       budget : BinaryCodecBudget,
       depth : Int = 1,
     )
-      budget.visit_node(depth)
-      budget.ensure_wire_bytes(site_key.bytesize.to_u64)
-      budget.charge_wire_bytes(site_key.bytesize.to_u64)
-      @site_key = String.new(site_key.to_slice)
+      initialize(
+        BinaryDynamicJsonLeafKey.new(site_key, canonical_arm_index, [] of Int32),
+        structure,
+        @plan,
+        budget,
+        depth,
+      )
+    end
 
-      json_type, arm_name = resolve_json_arm(structure, canonical_arm_index, budget, depth)
+    def initialize(
+      @leaf_key : BinaryDynamicJsonLeafKey,
+      structure : DynamicStructure,
+      @plan : ObjectDocumentPlan,
+      budget : BinaryCodecBudget,
+      depth : Int = 1,
+    )
+      budget.visit_node(depth)
+      site_key_bytes = @leaf_key.dynamic_site_bytesize.to_u64
+      budget.ensure_wire_bytes(site_key_bytes)
+      budget.charge_wire_bytes(site_key_bytes)
+      @site_key = @leaf_key.dynamic_site
+
+      json_type, arm_name = resolve_json_arm(structure, @leaf_key, budget, depth)
       @structure = structure
-      @canonical_arm_index = canonical_arm_index.to_i32
+      @canonical_arm_index = @leaf_key.canonical_arm_index
       @arm_name = arm_name
       @json_type = json_type
 
@@ -54,12 +72,23 @@ module CrystalClick
       budget : BinaryCodecBudget,
       depth : Int = 1,
     ) : Nil
-      budget.charge_wire_bytes(site_key.bytesize.to_u64)
-      unless @site_key == site_key
-        raise ArgumentError.new("Dynamic JSON binding belongs to a different site")
-      end
-      unless canonical_arm_index == @canonical_arm_index
-        raise ArgumentError.new("Dynamic JSON binding belongs to a different canonical arm")
+      validate_for!(
+        BinaryDynamicJsonLeafKey.new(site_key, canonical_arm_index, [] of Int32),
+        structure,
+        budget,
+        depth,
+      )
+    end
+
+    def validate_for!(
+      leaf_key : BinaryDynamicJsonLeafKey,
+      structure : DynamicStructure,
+      budget : BinaryCodecBudget,
+      depth : Int = 1,
+    ) : Nil
+      budget.charge_wire_bytes(leaf_key.dynamic_site_bytesize.to_u64)
+      unless @leaf_key == leaf_key
+        raise ArgumentError.new("Dynamic JSON binding belongs to a different JSON leaf")
       end
 
       expected_types = canonical_descriptors(@structure, budget, depth)
@@ -75,9 +104,13 @@ module CrystalClick
           raise ArgumentError.new("Dynamic JSON binding roster differs from the requested site")
         end
       end
-      unless actual_names[@canonical_arm_index]? == @arm_name &&
-             actual_types.any? { |entry| entry[0] == @arm_name && entry[1].tag == BinaryDataType::TAG_JSON }
-        raise ArgumentError.new("Dynamic JSON binding canonical arm no longer identifies its JSON descriptor")
+      unless actual_names[@canonical_arm_index]? == @arm_name
+        raise ArgumentError.new("Dynamic JSON binding canonical arm no longer identifies its actual descriptor")
+      end
+      actual_arm = actual_types.find { |entry| entry[0] == @arm_name } ||
+                   raise(ArgumentError.new("Dynamic JSON binding canonical arm no longer exists"))
+      unless @leaf_key.resolve_json_type(actual_arm[1]) == @json_type
+        raise ArgumentError.new("Dynamic JSON binding leaf path no longer identifies its JSON descriptor")
       end
       nil
     end
@@ -97,12 +130,13 @@ module CrystalClick
 
     private def resolve_json_arm(
       structure : DynamicStructure,
-      canonical_arm_index : Int,
+      leaf_key : BinaryDynamicJsonLeafKey,
       budget : BinaryCodecBudget,
       depth : Int,
     ) : Tuple(BinaryDataType, String)
       descriptors = canonical_descriptors(structure, budget, depth)
       names = canonical_names(descriptors)
+      canonical_arm_index = leaf_key.canonical_arm_index
       unless 0 <= canonical_arm_index < names.size
         raise ArgumentError.new("Dynamic JSON canonical arm index is outside the ordinary roster")
       end
@@ -113,10 +147,7 @@ module CrystalClick
 
       selected = descriptors.find { |entry| entry[0] == name } ||
                  raise(ArgumentError.new("Dynamic JSON canonical arm is absent from the ordinary roster"))
-      unless selected[1].tag == BinaryDataType::TAG_JSON
-        raise ArgumentError.new("only a direct JSON descriptor can bind an Object child")
-      end
-      {selected[1], name}
+      {leaf_key.resolve_json_type(selected[1]), name}
     end
 
     private def canonical_descriptors(

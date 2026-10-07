@@ -1,6 +1,30 @@
 # CrystalClick project status
 
-Current finite table-consumer component (W211, 2026-10-07): typed table batches
+Current finite recursive-composition component (W212, 2026-10-07): ordinary
+Dynamic actuals can contain bound JSON leaves through the existing wrapper
+walker and Object serializer. Array/Tuple/Map/Nullable/Variant composition
+retains exact descriptor-child identity, P/Q/R/E occurrence domains, physical
+names, inherited budgets and all unused/empty child schedules. Complete-part
+writing, automatic reading and the W211 typed-table route share this handoff;
+there is no serializer per product of types. Two cohesive new owners have their
+own source files: immutable leaf identity and the complete-domain census.
+
+The same 62 affected files pass 388 examples per mode; final focused gates pass
+17 per mode. Four production seeds and one native-oracle seed fail their
+unchanged checks before exact restoration. Fresh six-family/two-profile native
+matrices read stock parts and directly ATTACH/CHECK 12 library parts per mode;
+all 874 library-part files agree across DEBUG/RELEASE. Root audits raw process
+records, immutable inputs and executable lineage. Scoped verdict: ROBUST, not
+all wrapper products/layouts, checksum hashes, lazy-read cost or RSS.
+
+Next: SharedVariant inline JSON, Object path Dynamic JSON bindings, owned
+offline values and projection/MV consumer propagation. JSON SKIP/SKIP REGEXP,
+other layouts, inherited owner-accounting gaps and broad class decomposition
+remain open. Performance stays deferred; the overall goal remains active.
+Details: [DYNAMIC_JSON_RECURSIVE_FRONTIER.md](DYNAMIC_JSON_RECURSIVE_FRONTIER.md),
+`.landmark/evidence/dynamic-json-recursive-w212.json`.
+
+Previous finite table-consumer component (W211, 2026-10-07): typed table batches
 now expose existing Dynamic bulk storage via
 `WidePartTableBatch#dynamic_bulk_values_for(column) : Slice(BinaryValue)`.
 Root/Array/Tuple/root-Nested carriers and admitted nested actual Dynamic trees

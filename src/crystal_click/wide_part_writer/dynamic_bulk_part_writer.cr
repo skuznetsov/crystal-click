@@ -18,11 +18,12 @@ module CrystalClick
         limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
         transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
         json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+        json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
       ) : String
         input = preflight(
           destination, key_name, keys, value_name, type, structures, granules,
           rows_per_mark, profile, frame_bytes, metadata_version, limits,
-          transport_limits, json_object_plans
+          transport_limits, json_object_plans, json_object_leaf_plans
         )
         transport_budget = CompressedStreamBudget.new(transport_limits, true)
         files = DynamicBulkColumnWriter.encode(
@@ -58,6 +59,7 @@ module CrystalClick
         limits : BinaryCodecLimits,
         transport_limits : CompressedStreamLimits,
         json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))?,
+        json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))?,
       ) : DynamicBulkPartInputPlan
         unless rows_per_mark > 0 && rows_per_mark <= MAX_ROWS_PER_MARK
           raise ArgumentError.new("rows_per_mark is outside the admitted range")
@@ -95,7 +97,8 @@ module CrystalClick
         end
         codec_budget = BinaryCodecBudget.new(limits, true)
         dynamic_plan = BinaryDynamicBulkPlan.new_with_budget(
-          type, structures, codec_budget, profile, json_object_plans
+          type, structures, codec_budget, profile, json_object_plans,
+          json_object_leaf_plans: json_object_leaf_plans
         )
         BinaryBulkTypePlan.new(type, profile, dynamic_plan, limits, true).role_count
         physical = BinaryDynamicBulkPhysicalPlan.new(

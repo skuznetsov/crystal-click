@@ -141,11 +141,12 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : String
       DynamicBulkPartWriter.write(
         destination, key_name, keys, value_name, type, structures, granules,
         rows_per_mark, profile, frame_bytes, metadata_version, limits,
-        transport_limits, json_object_plans
+        transport_limits, json_object_plans, json_object_leaf_plans
       )
     end
 

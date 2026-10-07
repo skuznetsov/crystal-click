@@ -8,9 +8,13 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkStreams
       budget = BinaryCodecBudget.new(limits, true)
-      encode_with_budget(type, structures, granules, budget, profile: profile, json_object_plans: json_object_plans)
+      encode_with_budget(
+        type, structures, granules, budget, profile: profile,
+        json_object_plans: json_object_plans, json_object_leaf_plans: json_object_leaf_plans,
+      )
     end
 
     def self.encode_with_budget(
@@ -20,11 +24,14 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkStreams
       unless budget.writing?
         raise ArgumentError.new("Dynamic bulk encoder requires a write-direction budget")
       end
-      plan = BinaryDynamicBulkPlan.new_with_budget(type, structures, budget, profile, json_object_plans)
+      plan = BinaryDynamicBulkPlan.new_with_budget(
+        type, structures, budget, profile, json_object_plans, json_object_leaf_plans,
+      )
       json_object_writer = if plan.has_json_object_bindings?
                              BinaryDynamicBulkJsonObjectWriter.new(plan, budget, granules)
                            end
@@ -37,8 +44,10 @@ module CrystalClick
         plan,
         json_object_writer: json_object_writer,
       )
-      json_objects = json_object_writer.try(&.finish(profile)) || Hash(Tuple(String, Int32), ObjectDocumentStreams).new
-      BinaryDynamicBulkStreams.new(structure_streams, data_streams, json_objects, budget)
+      json_objects = json_object_writer.try(&.finish_leaf_streams(profile)) ||
+                     Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams).new
+      BinaryDynamicBulkStreams.new(
+        structure_streams, data_streams, budget: budget, json_object_leaf_streams: json_objects)
     end
 
     def self.decode(
@@ -50,10 +59,12 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : Array(Array(BinaryValue))
       budget = BinaryCodecBudget.new(limits)
       decode_with_budget(type, streams, rows_per_mark, budget,
-        first_mark: first_mark, mark_count: mark_count, profile: profile, json_object_plans: json_object_plans)
+        first_mark: first_mark, mark_count: mark_count, profile: profile,
+        json_object_plans: json_object_plans, json_object_leaf_plans: json_object_leaf_plans)
     end
 
     def self.decode_with_budget(
@@ -65,11 +76,14 @@ module CrystalClick
       mark_count : Int? = nil,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : Array(Array(BinaryValue))
       if budget.writing?
         raise ArgumentError.new("Dynamic bulk decoder requires a read-direction budget")
       end
-      plan = BinaryDynamicBulkPlan.decode_structure_streams(type, streams.structures, budget, profile, json_object_plans)
+      plan = BinaryDynamicBulkPlan.decode_structure_streams(
+        type, streams.structures, budget, profile, json_object_plans, json_object_leaf_plans,
+      )
       selected_first, selected_count = validate_selection(first_mark, mark_count, streams.data.mark_count)
       json_object_reader = if plan.has_json_object_bindings? || streams.json_object_count > 0
                              BinaryDynamicBulkJsonObjectReader.new(plan, streams, rows_per_mark, budget, profile)

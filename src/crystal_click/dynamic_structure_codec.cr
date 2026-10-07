@@ -83,8 +83,6 @@ module CrystalClick
       structure_depth : Int = 1,
       type_depth : Int = 1,
     ) : Nil
-      reject_wrapped_json_actual_types!(structure, context)
-
       context.visit_node(structure_depth)
       write_u64_le(context, 4_u64)
 
@@ -183,9 +181,6 @@ module CrystalClick
       end
 
       types.each do |type|
-        if type.contains_json? && type.tag != BinaryDataType::TAG_JSON
-          context.unsupported!("JSON-containing wrappers are not admitted as Dynamic actual types")
-        end
         if type.tag == BinaryDataType::TAG_DYNAMIC
           context.unsupported!("Dynamic alternatives are not admitted in Dynamic V3")
         end
@@ -238,19 +233,6 @@ module CrystalClick
         value |= context.read_byte.to_u64 << (index * 8)
       end
       value
-    end
-
-    private def self.reject_wrapped_json_actual_types!(
-      structure : DynamicStructure,
-      context : BinaryCodecContext,
-    ) : Nil
-      structure.type_count.times do |index|
-        type = structure.type_at(index)
-        if type.contains_json? && type.tag != BinaryDataType::TAG_JSON
-          context.unsupported!("JSON-containing wrappers are not admitted as Dynamic actual types")
-        end
-      end
-      nil
     end
 
     private def self.write_u64_le(context : BinaryCodecContext, value : UInt64) : Nil

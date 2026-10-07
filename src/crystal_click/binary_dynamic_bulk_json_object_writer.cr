@@ -5,8 +5,8 @@ module CrystalClick
     @plan : BinaryDynamicBulkPlan
     @budget : BinaryCodecBudget
     @physical_rows : Array(UInt64)
-    @documents : Hash(Tuple(String, Int32), Array(Array(ObjectDocument)))
-    @consumed : Hash(Tuple(String, Int32), Array(Int32))
+    @documents : Hash(BinaryDynamicJsonLeafKey, Array(Array(ObjectDocument)))
+    @consumed : Hash(BinaryDynamicJsonLeafKey, Array(Int32))
 
     def initialize(
       @plan : BinaryDynamicBulkPlan,
@@ -23,10 +23,10 @@ module CrystalClick
         end
       end
 
-      binding_keys = @plan.json_object_binding_keys(@budget)
+      binding_keys = @plan.json_object_leaf_keys(@budget)
       binding_keys.each do |key|
-        binding = @plan.json_object_binding(key[0], key[1])
-        self.class.preflight_binding!(binding, @budget, @plan.depth_for_site(key[0]) + 1)
+        binding = @plan.json_object_binding(key)
+        self.class.preflight_binding!(binding, @budget, @plan.json_object_leaf_depth(key))
       end
 
       mark_count = granules.size.to_u64
@@ -51,8 +51,8 @@ module CrystalClick
           @physical_rows << rows.size.to_u64
         end
       end
-      @documents = Hash(Tuple(String, Int32), Array(Array(ObjectDocument))).new(initial_capacity: binding_keys.size)
-      @consumed = Hash(Tuple(String, Int32), Array(Int32)).new(initial_capacity: binding_keys.size)
+      @documents = Hash(BinaryDynamicJsonLeafKey, Array(Array(ObjectDocument))).new(initial_capacity: binding_keys.size)
+      @consumed = Hash(BinaryDynamicJsonLeafKey, Array(Int32)).new(initial_capacity: binding_keys.size)
 
       binding_keys.each do |key|
         marks = Array(Array(ObjectDocument)).new(granules.size) { [] of ObjectDocument }
@@ -75,9 +75,22 @@ module CrystalClick
       mark_index : Int,
       depth : Int,
     ) : Nil
-      key = {site, canonical_arm_index.to_i32}
-      binding = @plan.json_object_binding(site, canonical_arm_index)
-      expected_depth = @plan.depth_for_site(site) + 1
+      collect(
+        BinaryDynamicJsonLeafKey.new(site, canonical_arm_index, [] of Int32),
+        row,
+        mark_index,
+        depth,
+      )
+    end
+
+    def collect(
+      key : BinaryDynamicJsonLeafKey,
+      row : BinaryJsonRow,
+      mark_index : Int,
+      depth : Int,
+    ) : Nil
+      binding = @plan.json_object_binding(key)
+      expected_depth = @plan.json_object_leaf_depth(key)
       unless depth == expected_depth
         raise UnsupportedFormatError.new("Dynamic JSON Object row reached an unexpected inherited depth")
       end
@@ -90,12 +103,56 @@ module CrystalClick
       nil
     end
 
+    # Nullable NULL serializes its nested default even though the logical
+    # child is absent. The matching Object row contains each declared typed
+    # path's ordinary default value and no untyped dynamic paths.
+    def collect_default(
+      key : BinaryDynamicJsonLeafKey,
+      mark_index : Int,
+      depth : Int,
+      profile : BinaryBulkProfile,
+    ) : Nil
+      binding = @plan.json_object_binding(key)
+      descriptor = binding.json_type.json_type ||
+                   raise(UnsupportedFormatError.new("bound Dynamic JSON leaf has no descriptor"))
+      defaults = Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost).new
+      total_nodes = 0_u64
+      total_edges = 0_u64
+      total_wire_bytes = 0_u64
+      descriptor.typed_path_count.times do |index|
+        type = descriptor.typed_type_at(index)
+        cost = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, defaults, @plan)
+        total_nodes = checked_add(total_nodes, cost.nodes)
+        total_edges = checked_add(total_edges, cost.edges)
+        total_wire_bytes = checked_add(total_wire_bytes, cost.wire_bytes)
+      end
+      @budget.ensure_future_nodes(total_nodes)
+      @budget.ensure_future_elements(total_edges)
+      @budget.ensure_wire_bytes(total_wire_bytes)
+      @budget.charge_elements(total_edges) if total_edges > 0_u64
+      total_nodes.times { @budget.charge_node }
+      @budget.charge_wire_bytes(total_wire_bytes) if total_wire_bytes > 0_u64
+
+      values = Array(Tuple(String, BinaryValue)).new(descriptor.typed_path_count)
+      descriptor.typed_path_count.times do |index|
+        values << {
+          descriptor.typed_path_at(index),
+          BinaryBulkDefaultValue.build(descriptor.typed_type_at(index), @plan),
+        }
+      end
+      row = BinaryJsonRow.new(binding.json_type, values, @budget, depth: depth)
+      collect(key, row, mark_index, depth)
+    end
+
     # Called by the ordinary writer traversal. Per-mark cardinality proves the
     # Dynamic stop-site count matches collection; sequence alignment relies on
     # the encoder's synchronous traversal of the same input granules.
     def consume(site : String, canonical_arm_index : Int, mark_index : Int) : Nil
-      key = {site, canonical_arm_index.to_i32}
-      @plan.json_object_binding(site, canonical_arm_index)
+      consume(BinaryDynamicJsonLeafKey.new(site, canonical_arm_index, [] of Int32), mark_index)
+    end
+
+    def consume(key : BinaryDynamicJsonLeafKey, mark_index : Int) : Nil
+      @plan.json_object_binding(key)
       marks = @documents[key]? || raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no bound child owner"))
       cursors = @consumed[key]? || raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no child cursor"))
       unless 0 <= mark_index < marks.size
@@ -122,6 +179,18 @@ module CrystalClick
     end
 
     def finish(profile : BinaryBulkProfile) : Hash(Tuple(String, Int32), ObjectDocumentStreams)
+      leaf_streams = finish_leaf_streams(profile)
+      if leaf_streams.any? { |key, _| key.descriptor_path_size != 0 }
+        raise UnsupportedFormatError.new("legacy Dynamic JSON stream keys cannot represent wrapped JSON leaves")
+      end
+      output = Hash(Tuple(String, Int32), ObjectDocumentStreams).new(initial_capacity: leaf_streams.size)
+      leaf_streams.each do |key, streams|
+        output[{key.dynamic_site, key.canonical_arm_index}] = streams
+      end
+      output
+    end
+
+    def finish_leaf_streams(profile : BinaryBulkProfile) : Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams)
       ensure_consumed!
       mark_count = @physical_rows.size.to_u64
       binding_count = @documents.size.to_u64
@@ -130,9 +199,9 @@ module CrystalClick
       retained_records.times { @budget.charge_node }
       key_bytes = @plan.json_object_binding_key_bytesize_total
       @budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
-      output = Hash(Tuple(String, Int32), ObjectDocumentStreams).new(initial_capacity: @documents.size)
+      output = Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams).new(initial_capacity: @documents.size)
       @documents.each do |key, granules|
-        binding = @plan.json_object_binding(key[0], key[1])
+        binding = @plan.json_object_binding(key)
         logical_rows = Array(UInt64).new(granules.size)
         granules.each { |rows| logical_rows << rows.size.to_u64 }
         grid = StorageOccurrenceGrid.new(@physical_rows, logical_rows, @budget)
@@ -148,22 +217,27 @@ module CrystalClick
       output
     end
 
-    # Return the once-decoded ObjectDocuments and a P-by-R child grid for one
+    # Return the once-decoded ObjectDocuments and a P-by-E child grid for one
     # exact bound arm. P is inherited from the parent storage site when this
-    # writer is composed physically; R is the collected JSON cardinality.
+    # writer is composed physically; E is the collected Object row cardinality.
     def physical_child_site(
       site : String,
       canonical_arm_index : Int,
     ) : Tuple(Array(Array(ObjectDocument)), StorageOccurrenceGrid)
+      physical_child_site(BinaryDynamicJsonLeafKey.new(site, canonical_arm_index, [] of Int32))
+    end
+
+    def physical_child_site(
+      key : BinaryDynamicJsonLeafKey,
+    ) : Tuple(Array(Array(ObjectDocument)), StorageOccurrenceGrid)
       ensure_consumed!
-      key = {site, canonical_arm_index.to_i32}
-      @plan.json_object_binding(site, canonical_arm_index)
+      @plan.json_object_binding(key)
       granules = @documents[key]? ||
                  raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no bound child owner"))
       mark_count = granules.size.to_u64
       grid_records = checked_multiply(mark_count, 2_u64)
       combined_records = checked_add(mark_count, grid_records)
-      # The temporary R-count vector and the two detached grid vectors all
+      # The temporary E-count vector and the two detached grid vectors all
       # borrow the operation's aggregate budget. Reserve the combined record
       # domain before allocating the temporary vector; StorageOccurrenceGrid
       # performs its own charge before allocating its pair of arrays.

@@ -137,9 +137,7 @@ module CrystalClick
       if child_writer = json_object_writer
         child_writer.ensure_consumed!
         physical.json_object_sites.each do |site|
-          documents, grid = child_writer.physical_child_site(
-            site.site_path, site.canonical_arm_index
-          )
+          documents, grid = child_writer.physical_child_site(site.leaf_key)
           child_files = ObjectDocumentColumnWriter.encode_child_at_physical_site(
             site.escaped_prefix,
             site.binding.plan,

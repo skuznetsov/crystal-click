@@ -129,7 +129,7 @@ module CrystalClick
       @grids = Hash(String, CompressedMarkGrid).new
       structure_logical_bytes = 0_u64
       json_metadata_logical_bytes = 0_u64
-      json_coordinates = Hash(Tuple(String, Int32), DynamicJsonObjectSiteCoordinates).new
+      json_coordinates = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectSiteCoordinates).new
 
       # A requested Dynamic site may expose another site through its parsed
       # actual roster. Resolve only from ancestor structures already loaded.
@@ -153,10 +153,10 @@ module CrystalClick
         @structure_names[String.new(site_path.to_slice)] = String.new(logical_name.to_slice)
         bytes
       }
-      json_object_plan_loader = ->(site_path : String, canonical_arm_index : Int32, json_descriptor_depth : Int32, structure : DynamicStructure, structures : Hash(String, DynamicStructure), budget : BinaryCodecBudget) {
-        coordinates = resolver.json_object_arm_site(site_path, canonical_arm_index, structures)
+      json_object_leaf_plan_loader = ->(key : BinaryDynamicJsonLeafKey, json_descriptor_depth : Int32, structure : DynamicStructure, structures : Hash(String, DynamicStructure), budget : BinaryCodecBudget) {
+        coordinates = resolver.json_object_leaf_site(key, structures)
         json_descriptor = coordinates.json_type.json_type ||
-                          raise(CorruptPartError.new("direct Dynamic JSON arm has no persisted descriptor"))
+                          raise(CorruptPartError.new("Dynamic JSON leaf has no persisted descriptor"))
         typed_schema = copy_json_typed_schema(json_descriptor, budget)
         descriptor = ObjectDocumentFileReader.inspect_at_site(
           @source,
@@ -176,18 +176,18 @@ module CrystalClick
           raise CorruptPartError.new("Dynamic JSON Object metadata byte count overflows")
         end
         json_metadata_logical_bytes += descriptor.logical_read_bytes
-        key = {String.new(site_path.to_slice), canonical_arm_index}
         if json_coordinates.has_key?(key)
-          raise CorruptPartError.new("Dynamic JSON Object coordinates are duplicated")
+          raise CorruptPartError.new("Dynamic JSON Object leaf coordinates are duplicated")
         end
-        budget.charge_wire_bytes(site_path.bytesize.to_u64)
+        key_bytes = key.dynamic_site_bytesize.to_u64 + key.descriptor_path_size.to_u64 * 4_u64
+        budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
         budget.charge_node
         json_coordinates[key] = coordinates
         descriptor.plan
       }
       @plan = BinaryDynamicBulkPlan.decode_structure_streams_with_loader(
         @type, codec_budget, loader, @ordinary_profile, @initial_descriptor_depth,
-        resolver.descriptor_preflight, json_object_plan_loader
+        resolver.descriptor_preflight, nil, json_object_leaf_plan_loader
       )
       unless @plan.type == @type && @plan.profile == @ordinary_profile
         raise CorruptPartError.new("Dynamic site structures differ from the declared site descriptor")
@@ -205,10 +205,12 @@ module CrystalClick
         raise CorruptPartError.new("Dynamic JSON Object physical sites differ from discovered bindings")
       end
       physical_json_sites.each do |site|
-        coordinates = json_coordinates[{site.site_path, site.canonical_arm_index.to_i32}]? ||
-                      raise(CorruptPartError.new("Dynamic JSON Object physical site has no discovered coordinates"))
+        coordinates = json_coordinates[site.leaf_key]? ||
+                      raise(CorruptPartError.new("Dynamic JSON Object physical leaf has no discovered coordinates"))
         unless site.escaped_prefix == coordinates.escaped_prefix &&
-               site.array_level == coordinates.array_level
+               site.array_level == coordinates.array_level &&
+               site.binding.leaf_key == site.leaf_key &&
+               site.binding.json_type == coordinates.json_type
           raise CorruptPartError.new("Dynamic JSON Object physical coordinates changed after discovery")
         end
       end
@@ -457,23 +459,23 @@ module CrystalClick
                   dynamic_streams = BinaryDynamicBulkStreams.new(
                     empty_structures, stream_set, budget: codec_budget
                   )
-                  child_loader = ->(site_path : String, canonical_arm_index : Int32, binding : DynamicJsonObjectBinding, grid : StorageOccurrenceGrid, budget : BinaryCodecBudget) {
-                    physical_site = @physical.json_object_site(site_path, canonical_arm_index)
-                    expected_binding = @plan.json_object_binding(site_path, canonical_arm_index)
-                    structure = @plan.structure_for(site_path)
-                    json_depth = @initial_descriptor_depth + @plan.depth_for_site(site_path)
+                  child_loader = ->(key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, grid : StorageOccurrenceGrid, budget : BinaryCodecBudget) {
+                    physical_site = @physical.json_object_site(key)
+                    expected_binding = @plan.json_object_binding(key)
+                    structure = @plan.structure_for(key.dynamic_site)
+                    json_depth = @plan.json_object_leaf_depth(key, @initial_descriptor_depth)
                     begin
-                      binding.validate_for!(
-                        site_path, structure, canonical_arm_index, budget, json_depth
-                      )
-                      expected_binding.validate_for!(
-                        site_path, structure, canonical_arm_index, budget, json_depth
-                      )
+                      binding.validate_for!(key, structure, budget, json_depth)
+                      expected_binding.validate_for!(key, structure, budget, json_depth)
                     rescue ex : ArgumentError
                       raise CorruptPartError.new(ex.message || "Dynamic JSON binding changed before Object decode")
                     end
-                    descriptor = binding.json_type.json_type ||
-                                 raise(CorruptPartError.new("bound Dynamic JSON arm lost its descriptor"))
+                    leaf_type = @plan.json_object_leaf_type(key)
+                    unless binding.json_type == leaf_type && physical_site.binding.leaf_key == key
+                      raise CorruptPartError.new("bound Dynamic JSON leaf changed before Object decode")
+                    end
+                    descriptor = leaf_type.json_type ||
+                                 raise(CorruptPartError.new("bound Dynamic JSON leaf lost its descriptor"))
                     typed_schema = copy_json_typed_schema(descriptor, budget)
                     ObjectDocumentFileReader.read_child_at_site(
                       @source,

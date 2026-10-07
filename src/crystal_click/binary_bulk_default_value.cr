@@ -83,10 +83,11 @@ module CrystalClick
       profile : BinaryBulkProfile,
       cache : Hash(Tuple(UInt64, Bool), Cost)? = nil,
       dynamic_plan : BinaryDynamicBulkPlan? = nil,
+      allow_bound_json : Bool = false,
     ) : Cost
-      reject_dynamic_type!(type, dynamic_plan)
+      reject_dynamic_type!(type, dynamic_plan, allow_bound_json)
       costs = cache || Hash(Tuple(UInt64, Bool), Cost).new
-      key = {type.object_id, true}
+      key = {type.object_id, !allow_bound_json}
       if existing = costs[key]?
         return existing
       end
@@ -104,13 +105,17 @@ module CrystalClick
                Cost.new(1_u64, 0_u64, 1_u64)
              when BinaryDataType::TAG_DYNAMIC
                Cost.new(1_u64, 0_u64, 1_u64)
+             when BinaryDataType::TAG_JSON
+               # The physical JSON row is owned by the paired Object child
+               # stream. This logical node remains part of the default visit.
+               Cost.new(1_u64, 0_u64, 0_u64)
              when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_MAP
                Cost.new(1_u64, 0_u64, 8_u64)
              when BinaryDataType::TAG_NULLABLE
-               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan)
+               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan, allow_bound_json)
                Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), add(1_u64, child.wire_bytes))
              when BinaryDataType::TAG_SIMPLE_AGGREGATE
-               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan)
+               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan, allow_bound_json)
                Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), child.wire_bytes)
              when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
                if type.child_count == 0
@@ -120,7 +125,7 @@ module CrystalClick
                  edges = type.child_count.to_u64
                  wire_bytes = 0_u64
                  type.child_count.times do |index|
-                   child = measure_excluding_low_cardinality(type.child_at(index), profile, costs, dynamic_plan)
+                   child = measure_excluding_low_cardinality(type.child_at(index), profile, costs, dynamic_plan, allow_bound_json)
                    nodes = add(nodes, child.nodes)
                    edges = add(edges, child.edges)
                    wire_bytes = add(wire_bytes, child.wire_bytes)
@@ -187,8 +192,12 @@ module CrystalClick
       end
     end
 
-    private def self.reject_dynamic_type!(type : BinaryDataType, dynamic_plan : BinaryDynamicBulkPlan?) : Nil
-      if type.contains_json?
+    private def self.reject_dynamic_type!(
+      type : BinaryDataType,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+      allow_bound_json : Bool = false,
+    ) : Nil
+      if type.contains_json? && !(allow_bound_json && dynamic_plan.try(&.has_json_object_bindings?))
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk default-value profile")
       end
       if type.contains_dynamic? && dynamic_plan.nil?

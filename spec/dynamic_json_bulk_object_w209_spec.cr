@@ -452,15 +452,31 @@ describe "W209 normalized Dynamic JSON Object stop-owner" do
     end
   end
 
-  it "keeps wrapped JSON outside the direct actual-arm binding frontier" do
+  it "keeps nominal wrapped JSON rejected and requires an exact leaf Object binding for Dynamic actuals" do
     json_type = w209_json_type
     wrapped = CrystalClick::BinaryDataType.array(json_type)
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryBulkTypePlan.new(wrapped, CrystalClick::BinaryBulkProfile.single_stream)
     end
-    expect_raises(ArgumentError) do
-      CrystalClick::DynamicStructure.new([wrapped] of CrystalClick::BinaryDataType)
+
+    # Dynamic metadata accepts the ordinary wrapped actual roster; physical
+    # planning still requires a binding for its exact JSON leaf path [0].
+    structure = CrystalClick::DynamicStructure.new([wrapped] of CrystalClick::BinaryDataType)
+    structure.types.should eq([wrapped] of CrystalClick::BinaryDataType)
+    dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 1)
+    parent_type = CrystalClick::BinaryDataType.array(dynamic)
+    site = "root.elements"
+    error = expect_raises(ArgumentError) do
+      CrystalClick::BinaryDynamicBulkPlan.new_with_budget(
+        parent_type,
+        {site => structure} of String => CrystalClick::DynamicStructure,
+        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS, true),
+        json_object_leaf_plans: [] of Tuple(
+          CrystalClick::BinaryDynamicJsonLeafKey, CrystalClick::ObjectDocumentPlan,
+        ),
+      )
     end
+    error.message.to_s.should contain("exactly cover every JSON leaf")
   end
 
   it "validates every parent mark before returning an empty window" do

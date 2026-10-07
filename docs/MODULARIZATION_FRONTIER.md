@@ -9,7 +9,23 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility separation — W211
+## Current responsibility separation — W212
+
+`BinaryDynamicJsonLeafKey` owns detached, immutable `(Dynamic site, canonical
+arm, descriptor-child path)` identity. `BinaryDynamicJsonObjectSchedule` owns
+the bounded complete-domain shape/discriminator census, separate from Object
+child decoding and the common BinaryBulk value walker. Each has its own source
+file. Existing wrapper traversal delegates exact JSON leaves to the Object
+owner; no class or codec is added per wrapper product.
+
+Root passes 388 examples per mode across the same 62 affected files and fresh
+six-family/two-String-profile stock/library probes. Executed defect seeds and
+byte-identical mode outputs qualify this finite capability, not a behavior-
+neutral cleanup of all facades, lower coupling, allocator/RSS or throughput.
+Broad class decomposition remains IN_PROGRESS. Details:
+[DYNAMIC_JSON_RECURSIVE_FRONTIER.md](DYNAMIC_JSON_RECURSIVE_FRONTIER.md).
+
+## Previous responsibility separation — W211
 
 `DynamicBulkColumnDeclaration` owns bounded canonical Dynamic-bearing schema
 admission, including root Nested's implicit named Tuple and retained nominal

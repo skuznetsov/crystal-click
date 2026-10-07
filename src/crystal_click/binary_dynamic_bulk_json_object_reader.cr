@@ -5,8 +5,8 @@ module CrystalClick
     @plan : BinaryDynamicBulkPlan
     @budget : BinaryCodecBudget
     @initial_descriptor_depth : Int32
-    @documents : Hash(Tuple(String, Int32), Array(Array(ObjectDocument)))
-    @cursors : Hash(Tuple(String, Int32), Array(Int32))
+    @documents : Hash(BinaryDynamicJsonLeafKey, Array(Array(ObjectDocument)))
+    @cursors : Hash(BinaryDynamicJsonLeafKey, Array(Int32))
     @active_mark : Int32
 
     def initialize(
@@ -17,7 +17,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       physical_rows_per_mark : Array(UInt64)? = nil,
       physical_child_loader : Proc(
-        String, Int32, DynamicJsonObjectBinding, StorageOccurrenceGrid, BinaryCodecBudget,
+        BinaryDynamicJsonLeafKey, DynamicJsonObjectBinding, StorageOccurrenceGrid, BinaryCodecBudget,
         Array(Array(ObjectDocument)),
       )? = nil,
       @initial_descriptor_depth : Int32 = 1,
@@ -29,7 +29,7 @@ module CrystalClick
         raise ArgumentError.new("Dynamic JSON Object reader initial descriptor depth exceeds the configured limit")
       end
 
-      binding_keys = @plan.json_object_binding_keys(@budget)
+      binding_keys = @plan.json_object_leaf_keys(@budget)
       if physical_loader = physical_child_loader
         unless streams.json_object_count == 0
           corrupt!("physical Dynamic JSON child reader cannot mix normalized and physical Object streams")
@@ -38,7 +38,9 @@ module CrystalClick
         validate_child_keys!(streams, binding_keys)
       end
       physical_rows = validate_parent_grid!(streams.data, rows_per_mark, physical_rows_per_mark)
-      census = validate_and_census_lanes!(streams.data, rows_per_mark.size, profile, binding_keys)
+      census = BinaryDynamicJsonObjectSchedule.build(
+        @plan, streams.data, rows_per_mark.size, binding_keys, @budget, @initial_descriptor_depth,
+      )
 
       mark_count = rows_per_mark.size.to_u64
       binding_count = binding_keys.size.to_u64
@@ -51,25 +53,25 @@ module CrystalClick
       key_copy_bytes = checked_multiply(@plan.json_object_binding_key_bytesize_total, 2_u64)
       @budget.charge_wire_bytes(key_copy_bytes) if key_copy_bytes > 0_u64
 
-      @documents = Hash(Tuple(String, Int32), Array(Array(ObjectDocument))).new(initial_capacity: binding_keys.size)
-      @cursors = Hash(Tuple(String, Int32), Array(Int32)).new(initial_capacity: binding_keys.size)
+      @documents = Hash(BinaryDynamicJsonLeafKey, Array(Array(ObjectDocument))).new(initial_capacity: binding_keys.size)
+      @cursors = Hash(BinaryDynamicJsonLeafKey, Array(Int32)).new(initial_capacity: binding_keys.size)
       @active_mark = -1
 
       binding_keys.each do |key|
-        binding = @plan.json_object_binding(key[0], key[1])
+        binding = @plan.json_object_binding(key)
         logical_rows = census[key]
         grid = StorageOccurrenceGrid.new(physical_rows, logical_rows, @budget)
         documents = if physical_loader = physical_child_loader
-                      physical_loader.call(key[0], key[1], binding, grid, @budget).tap do |loaded|
+                      physical_loader.call(key, binding, grid, @budget).tap do |loaded|
                         validate_physical_documents!(loaded, logical_rows)
                       end
                     else
-                      child_streams = streams.json_object_for(key[0], key[1])
+                      child_streams = streams.json_object_leaf_for(key)
                       unless child_streams.rows_per_mark == logical_rows
                         corrupt!("Dynamic JSON Object child row grid differs from the discriminator census")
                       end
 
-                      depth = @plan.depth_for_site(key[0]) + 1
+                      depth = @plan.json_object_leaf_depth(key, @initial_descriptor_depth)
                       BinaryDynamicBulkJsonObjectWriter.preflight_binding!(binding, @budget, depth)
                       validate_object_metadata!(binding, child_streams, depth)
                       validate_typed_dynamic_metadata!(binding, child_streams, depth, profile)
@@ -99,9 +101,15 @@ module CrystalClick
     end
 
     def next_row(site : String, canonical_arm_index : Int, depth : Int) : BinaryJsonRow
-      key = {site, canonical_arm_index.to_i32}
-      binding = @plan.json_object_binding(site, canonical_arm_index)
-      expected_depth = @plan.depth_for_site(site) + 1
+      next_row(BinaryDynamicJsonLeafKey.new(site, canonical_arm_index, [] of Int32), depth)
+    end
+
+    def next_row(key : BinaryDynamicJsonLeafKey, depth : Int) : BinaryJsonRow
+      binding = @plan.json_object_binding(key)
+      # The generic decoder always starts at relative depth one. Inherited
+      # descriptor depth belongs only to the Object adapter/physical metadata
+      # boundary and must be applied exactly once after this comparison.
+      expected_depth = @plan.json_object_leaf_depth(key)
       unless depth == expected_depth
         corrupt!("Dynamic JSON Object row reached an unexpected inherited depth")
       end
@@ -137,9 +145,9 @@ module CrystalClick
 
     private def validate_child_keys!(
       streams : BinaryDynamicBulkStreams,
-      expected : Array(Tuple(String, Int32)),
+      expected : Array(BinaryDynamicJsonLeafKey),
     ) : Nil
-      actual = streams.json_object_keys(@budget)
+      actual = streams.json_object_leaf_keys(@budget)
       unless actual.size == expected.size && expected.all? { |key| actual.includes?(key) }
         corrupt!("Dynamic JSON Object child keys do not exactly match the bound actual arms")
       end
@@ -225,56 +233,6 @@ module CrystalClick
         end
       end
       nil
-    end
-
-    private def validate_and_census_lanes!(
-      streams : BinaryBulkStreams,
-      mark_count : Int,
-      _profile : BinaryBulkProfile,
-      binding_keys : Array(Tuple(String, Int32)),
-    ) : Hash(Tuple(String, Int32), Array(UInt64))
-      mark_records = mark_count.to_u64
-      binding_records = binding_keys.size.to_u64
-      retained_records = checked_multiply(binding_records, checked_add(mark_records, 1_u64))
-      @budget.preflight_children(retained_records) if retained_records > 0_u64
-      retained_records.times { @budget.charge_node }
-      key_bytes = @plan.json_object_binding_key_bytesize_total
-      @budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
-
-      counts = Hash(Tuple(String, Int32), Array(UInt64)).new(initial_capacity: binding_keys.size)
-      binding_keys.each do |key|
-        counts[key] = Array(UInt64).new(mark_count, 0_u64)
-      end
-
-      discriminator_bytes = 0_u64
-      @plan.each_site_path do |site|
-        role = @plan.discriminator_role_for(site)
-        lane = streams.stream(role)
-        discriminator_bytes = checked_add(discriminator_bytes, lane.byte_size.to_u64)
-      end
-      @budget.charge_wire_bytes(discriminator_bytes)
-
-      @plan.each_site_path do |site|
-        lane = streams.stream(@plan.discriminator_role_for(site))
-        mark_count.times do |mark|
-          start_offset = lane.offset_at(mark)
-          end_offset = lane.offset_at(mark + 1)
-          cursor = start_offset
-          while cursor < end_offset
-            discriminator = lane.byte_at(cursor.to_i32)
-            unless discriminator == 0xff_u8 || discriminator.to_i < @plan.arm_count(site)
-              corrupt!("Dynamic bulk discriminator is outside its actual arm roster")
-            end
-            if discriminator != 0xff_u8
-              if mark_counts = counts[{site, discriminator.to_i32}]?
-                mark_counts[mark] = checked_add(mark_counts[mark], 1_u64)
-              end
-            end
-            cursor += 1_u64
-          end
-        end
-      end
-      counts
     end
 
     private def validate_object_metadata!(

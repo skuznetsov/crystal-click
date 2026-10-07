@@ -32,7 +32,7 @@ module CrystalClick
     @data_names : Hash(String, String)
     @structure_names : Hash(String, String)
     @json_object_names : Hash(String, String)
-    @json_object_sites : Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite)
+    @json_object_sites : Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectPhysicalSite)
     @json_site_name_resolver : BinaryDynamicBulkSiteNameResolver?
     @json_site_structures : Hash(String, DynamicStructure)?
     @prefix_sizes : Hash(String, Int32)
@@ -71,7 +71,7 @@ module CrystalClick
       @data_names = Hash(String, String).new
       @structure_names = Hash(String, String).new
       @json_object_names = Hash(String, String).new
-      @json_object_sites = Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite).new
+      @json_object_sites = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectPhysicalSite).new
       @json_site_name_resolver = nil
       @json_site_structures = nil
       @prefix_sizes = Hash(String, Int32).new
@@ -116,7 +116,7 @@ module CrystalClick
       @data_names = Hash(String, String).new
       @structure_names = Hash(String, String).new
       @json_object_names = Hash(String, String).new
-      @json_object_sites = Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite).new
+      @json_object_sites = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectPhysicalSite).new
       @json_site_name_resolver = nil
       @json_site_structures = nil
       @prefix_sizes = Hash(String, Int32).new
@@ -186,19 +186,28 @@ module CrystalClick
       detached
     end
 
-    # Exact direct-JSON child sites, in stable Dynamic-site/canonical-arm
-    # order. Every bound arm appears, including arms not selected by any row.
+    # Exact JSON child leaves, in stable Dynamic-site/canonical-arm/path
+    # order. Every bound leaf appears, including leaves not selected by a row.
     def json_object_sites : Array(DynamicJsonObjectPhysicalSite)
       keys = @json_object_sites.keys
       keys.sort! do |left, right|
-        left[0] == right[0] ? left[1] <=> right[1] : left[0] <=> right[0]
+        comparison = left.dynamic_site <=> right.dynamic_site
+        if comparison == 0
+          comparison = left.canonical_arm_index <=> right.canonical_arm_index
+        end
+        comparison == 0 ? compare_descriptor_paths(left.descriptor_child_path, right.descriptor_child_path) : comparison
       end
       keys.map { |key| @json_object_sites[key] }
     end
 
+    def json_object_site(key : BinaryDynamicJsonLeafKey) : DynamicJsonObjectPhysicalSite
+      @json_object_sites[key]? || raise(KeyError.new("Dynamic JSON Object physical leaf not found"))
+    end
+
     def json_object_site(site_path : String, canonical_arm_index : Int) : DynamicJsonObjectPhysicalSite
-      @json_object_sites[{site_path, canonical_arm_index.to_i32}]? ||
-        raise(KeyError.new("Dynamic JSON Object physical site not found"))
+      json_object_site(BinaryDynamicJsonLeafKey.new(
+        site_path, canonical_arm_index.to_i32, [] of Int32
+      ))
     end
 
     # A column encoder must use the same prepared occurrence plan that supplied
@@ -320,7 +329,7 @@ module CrystalClick
       @data_names = Hash(String, String).new
       @structure_names = Hash(String, String).new
       @json_object_names = Hash(String, String).new
-      @json_object_sites = Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite).new
+      @json_object_sites = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectPhysicalSite).new
       @prefix_sizes = Hash(String, Int32).new
       @append_site_cursor = 0
       prepare_json_site_name_discovery(prefix, initial_array_level)
@@ -354,7 +363,14 @@ module CrystalClick
 
     # Count the complete role grammar and validate descriptors before any
     # count-derived name table or output map is admitted.
-    private def scan_type(type : BinaryDataType, path : String, depth : Int) : Nil
+    private def scan_type(
+      type : BinaryDataType,
+      path : String,
+      depth : Int,
+      leaf_site : String? = nil,
+      leaf_arm : Int32? = nil,
+      descriptor_child_path : Array(Int32)? = nil,
+    ) : Nil
       @context.record_type_node(depth)
       metadata_count = type.metadata_entry_count
       @context.record_elements(metadata_count.to_u64) if metadata_count > 0
@@ -364,13 +380,11 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_DYNAMIC
         arms = @prepared.arm_count(path)
+        shared_index = @prepared.shared_index(path)
         arms.times do |index|
           arm = @prepared.arm_type(path, index)
-          if arm.tag == BinaryDataType::TAG_JSON
-            @prepared.json_object_binding(path, index)
-            @json_object_binding_count = add_size(@json_object_binding_count, 1_u64)
-          elsif arm.contains_json?
-            raise UnsupportedFormatError.new("JSON is not admitted as a Dynamic physical actual type")
+          if index == shared_index && arm.contains_json?
+            raise UnsupportedFormatError.new("JSON cannot be bound through the Dynamic SharedVariant arm")
           end
         end
         @context.record_elements(arms.to_u64) if arms > 0
@@ -381,7 +395,11 @@ module CrystalClick
         arms.times do |index|
           arm = @prepared.arm_type(path, index)
           child = arm_path(path, index)
-          scan_type(arm, child, depth + 1) unless arm.tag == BinaryDataType::TAG_JSON
+          if arm.tag == BinaryDataType::TAG_JSON || arm.contains_json?
+            scan_type(arm, child, depth + 1, path, index.to_i32, [] of Int32)
+          else
+            scan_type(arm, child, depth + 1)
+          end
         end
         if shared_index < 0 || shared_index >= arms
           raise UnsupportedFormatError.new("Dynamic physical shared arm index is outside its prepared roster")
@@ -390,34 +408,37 @@ module CrystalClick
         add_data_role(path, ".discriminators", 8)
         add_variant_site(child_count.to_u64)
         child_count.times do |index|
-          scan_type(type.child_at(index), arm_path(path, index), depth + 1)
+          scan_type_child(type.child_at(index), arm_path(path, index), depth + 1, leaf_site, leaf_arm, descriptor_child_path, index)
         end
       when BinaryDataType::TAG_STRING
         add_data_role(path, ".data")
         add_data_role(path, ".string_sizes") if @prepared.profile.with_size_stream?
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         add_data_role(path, ".sizes")
-        scan_type(type.child_at(0), child_path(path, ".elements"), depth + 1)
+        scan_type_child(type.child_at(0), child_path(path, ".elements"), depth + 1, leaf_site, leaf_arm, descriptor_child_path, 0)
       when BinaryDataType::TAG_NULLABLE
         add_data_role(path, ".nulls")
-        scan_type(type.child_at(0), child_path(path, ".nested"), depth + 1)
+        scan_type_child(type.child_at(0), child_path(path, ".nested"), depth + 1, leaf_site, leaf_arm, descriptor_child_path, 0)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        scan_type(type.child_at(0), path, depth + 1)
+        scan_type_child(type.child_at(0), path, depth + 1, leaf_site, leaf_arm, descriptor_child_path, 0)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if child_count == 0
           add_data_role(path, ".data")
         else
           child_count.times do |index|
-            scan_type(type.child_at(index), field_path(path, index), depth + 1)
+            scan_type_child(type.child_at(index), field_path(path, index), depth + 1, leaf_site, leaf_arm, descriptor_child_path, index)
           end
         end
       when BinaryDataType::TAG_MAP
         add_data_role(path, ".sizes")
-        scan_type(type.child_at(0), child_path(path, ".elements.field.0"), depth + 1)
-        scan_type(type.child_at(1), child_path(path, ".elements.field.1"), depth + 1)
+        scan_type_child(type.child_at(0), child_path(path, ".elements.field.0"), depth + 1, leaf_site, leaf_arm, descriptor_child_path, 0)
+        scan_type_child(type.child_at(1), child_path(path, ".elements.field.1"), depth + 1, leaf_site, leaf_arm, descriptor_child_path, 1)
       when BinaryDataType::TAG_LOW_CARDINALITY
         add_data_role(path, ".dictionary", 8)
         add_data_role(path, ".indexes")
+        if type.child_at(0).contains_json?
+          raise UnsupportedFormatError.new("JSON leaves cannot cross a LowCardinality physical stop-site")
+        end
         # LC is a physical stop-site, but its child descriptors still consume
         # the shared descriptor budget just as they do in the static planner.
         # Walk them without adding dictionary-internal physical roles.
@@ -430,7 +451,12 @@ module CrystalClick
           plane += 1
         end
       when BinaryDataType::TAG_JSON
-        raise UnsupportedFormatError.new("JSON physical lanes require an exact direct Dynamic Object binding")
+        site = leaf_site || raise(UnsupportedFormatError.new("JSON physical lanes require an exact Dynamic Object binding"))
+        arm = leaf_arm || raise(UnsupportedFormatError.new("JSON physical lanes require an exact Dynamic Object binding"))
+        descriptor_path = descriptor_child_path || raise(UnsupportedFormatError.new("JSON physical leaf path is missing"))
+        key = BinaryDynamicJsonLeafKey.new(site, arm, descriptor_path)
+        @prepared.json_object_binding(key)
+        @json_object_binding_count = add_size(@json_object_binding_count, 1_u64)
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         add_data_role(path, ".data")
       else
@@ -438,6 +464,27 @@ module CrystalClick
           raise UnsupportedFormatError.new("unsupported binary Dynamic physical DataType")
         end
         add_data_role(path, ".data")
+      end
+      nil
+    end
+
+    private def scan_type_child(
+      type : BinaryDataType,
+      path : String,
+      depth : Int,
+      leaf_site : String?,
+      leaf_arm : Int32?,
+      descriptor_child_path : Array(Int32)?,
+      child_index : Int32,
+    ) : Nil
+      if site = leaf_site
+        arm = leaf_arm || raise(UnsupportedFormatError.new("Dynamic JSON leaf arm is missing"))
+        child_path = descriptor_child_path || raise(UnsupportedFormatError.new("Dynamic JSON leaf path is missing"))
+        child_path << child_index
+        scan_type(type, path, depth, site, arm, child_path)
+        child_path.pop
+      else
+        scan_type(type, path, depth)
       end
       nil
     end
@@ -505,6 +552,9 @@ module CrystalClick
           add_physical_name(add_size(prefix_length, add_size(3_u64, digit_count(plane + 1_u64))))
           plane += 1_u64
         end
+      when BinaryDataType::TAG_JSON
+        # The exact Dynamic leaf's Object physical plan is measured when its
+        # key is bound; JSON itself contributes no ordinary Dynamic lane.
       when BinaryDataType::TAG_DYNAMIC
         add_physical_name(add_size(prefix_length, ".dynamic_structure".bytesize.to_u64))
         measure_variant_site(type, path, prefix_length, array_level, true)
@@ -571,6 +621,9 @@ module CrystalClick
       path : String,
       prefix : String,
       array_level : UInt64,
+      leaf_site : String? = nil,
+      leaf_arm : Int32? = nil,
+      descriptor_child_path : Array(Int32)? = nil,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_STRING
@@ -580,12 +633,18 @@ module CrystalClick
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         add_data_binding("#{path}.sizes", PhysicalStreamName.append_literal(prefix, ".size#{array_level}"))
-        append_bindings(type.child_at(0), child_path(path, ".elements"), prefix, add_size(array_level, 1_u64))
+        append_bindings_child(
+          type.child_at(0), child_path(path, ".elements"), prefix, add_size(array_level, 1_u64),
+          leaf_site, leaf_arm, descriptor_child_path, 0
+        )
       when BinaryDataType::TAG_NULLABLE
         add_data_binding("#{path}.nulls", PhysicalStreamName.append_literal(prefix, ".null"))
-        append_bindings(type.child_at(0), child_path(path, ".nested"), prefix, array_level)
+        append_bindings_child(
+          type.child_at(0), child_path(path, ".nested"), prefix, array_level,
+          leaf_site, leaf_arm, descriptor_child_path, 0
+        )
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        append_bindings(type.child_at(0), path, prefix, array_level)
+        append_bindings_child(type.child_at(0), path, prefix, array_level, leaf_site, leaf_arm, descriptor_child_path, 0)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           add_data_binding("#{path}.data", String.new(prefix.to_slice))
@@ -593,15 +652,24 @@ module CrystalClick
           type.child_count.times do |index|
             field_name = type.named_tuple? ? type.field_name_at(index) : (index + 1).to_s
             field_prefix = PhysicalStreamName.append_escaped_field(prefix, field_name)
-            append_bindings(type.child_at(index), field_path(path, index), field_prefix, array_level)
+            append_bindings_child(
+              type.child_at(index), field_path(path, index), field_prefix, array_level,
+              leaf_site, leaf_arm, descriptor_child_path, index
+            )
           end
         end
       when BinaryDataType::TAG_MAP
         add_data_binding("#{path}.sizes", PhysicalStreamName.append_literal(prefix, ".size#{array_level}"))
         keys_prefix = PhysicalStreamName.append_escaped_field(prefix, "keys")
         values_prefix = PhysicalStreamName.append_escaped_field(prefix, "values")
-        append_bindings(type.child_at(0), child_path(path, ".elements.field.0"), keys_prefix, add_size(array_level, 1_u64))
-        append_bindings(type.child_at(1), child_path(path, ".elements.field.1"), values_prefix, add_size(array_level, 1_u64))
+        append_bindings_child(
+          type.child_at(0), child_path(path, ".elements.field.0"), keys_prefix, add_size(array_level, 1_u64),
+          leaf_site, leaf_arm, descriptor_child_path, 0
+        )
+        append_bindings_child(
+          type.child_at(1), child_path(path, ".elements.field.1"), values_prefix, add_size(array_level, 1_u64),
+          leaf_site, leaf_arm, descriptor_child_path, 1
+        )
       when BinaryDataType::TAG_LOW_CARDINALITY
         add_data_binding("#{path}.dictionary", PhysicalStreamName.append_literal(prefix, ".dict"))
         add_data_binding("#{path}.indexes", String.new(prefix.to_slice))
@@ -619,7 +687,14 @@ module CrystalClick
         add_structure_binding("#{path}.dynamic_structure", PhysicalStreamName.append_literal(prefix, ".dynamic_structure"))
         append_variant_bindings(type, path, prefix, array_level, true)
       when BinaryDataType::TAG_VARIANT
-        append_variant_bindings(type, path, prefix, array_level, false)
+        append_variant_bindings(type, path, prefix, array_level, false, leaf_site, leaf_arm, descriptor_child_path)
+      when BinaryDataType::TAG_JSON
+        site = leaf_site || raise(UnsupportedFormatError.new("JSON physical lanes require an exact Dynamic Object binding"))
+        arm = leaf_arm || raise(UnsupportedFormatError.new("JSON physical lanes require an exact Dynamic Object binding"))
+        descriptor_path = descriptor_child_path || raise(UnsupportedFormatError.new("JSON physical leaf path is missing"))
+        append_json_object_site(
+          BinaryDynamicJsonLeafKey.new(site, arm, descriptor_path), prefix, array_level
+        )
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         add_data_binding("#{path}.data", String.new(prefix.to_slice))
       else
@@ -631,12 +706,37 @@ module CrystalClick
       nil
     end
 
+    private def append_bindings_child(
+      type : BinaryDataType,
+      path : String,
+      prefix : String,
+      array_level : UInt64,
+      leaf_site : String?,
+      leaf_arm : Int32?,
+      descriptor_child_path : Array(Int32)?,
+      child_index : Int32,
+    ) : Nil
+      if site = leaf_site
+        arm = leaf_arm || raise(UnsupportedFormatError.new("Dynamic JSON leaf arm is missing"))
+        child_path = descriptor_child_path || raise(UnsupportedFormatError.new("Dynamic JSON leaf path is missing"))
+        child_path << child_index
+        append_bindings(type, path, prefix, array_level, site, arm, child_path)
+        child_path.pop
+      else
+        append_bindings(type, path, prefix, array_level)
+      end
+      nil
+    end
+
     private def append_variant_bindings(
       type : BinaryDataType,
       path : String,
       prefix : String,
       array_level : UInt64,
       dynamic : Bool,
+      leaf_site : String? = nil,
+      leaf_arm : Int32? = nil,
+      descriptor_child_path : Array(Int32)? = nil,
     ) : Nil
       role = "#{path}.discriminators"
       add_data_binding(role, PhysicalStreamName.append_literal(prefix, ".variant_discr"))
@@ -657,35 +757,46 @@ module CrystalClick
         arm_prefix = PhysicalStreamName.append_escaped_component(prefix, sql_name)
         arm = dynamic ? @prepared.arm_type(path, index) : type.child_at(index)
         if dynamic && arm.tag == BinaryDataType::TAG_JSON
-          append_json_object_site(path, index, arm_prefix, array_level)
-        else
+          append_json_object_site(
+            BinaryDynamicJsonLeafKey.new(path, index.to_i32, [] of Int32),
+            arm_prefix, array_level
+          )
+        elsif dynamic && arm.contains_json?
+          append_bindings(
+            arm, arm_path(path, index), arm_prefix, array_level,
+            path, index.to_i32, [] of Int32
+          )
+        elsif dynamic
           append_bindings(arm, arm_path(path, index), arm_prefix, array_level)
+        else
+          append_bindings_child(
+            arm, arm_path(path, index), arm_prefix, array_level,
+            leaf_site, leaf_arm, descriptor_child_path, index
+          )
         end
       end
       nil
     end
 
     private def append_json_object_site(
-      site_path : String,
-      canonical_arm_index : Int,
+      key : BinaryDynamicJsonLeafKey,
       escaped_prefix : String,
       array_level : UInt64,
     ) : Nil
-      binding = @prepared.json_object_binding(site_path, canonical_arm_index)
-      unless binding.site_key == site_path && binding.canonical_arm_index == canonical_arm_index
-        raise UnsupportedFormatError.new("Dynamic JSON Object binding differs from its physical arm coordinate")
+      binding = @prepared.json_object_binding(key)
+      unless binding.leaf_key == key
+        raise UnsupportedFormatError.new("Dynamic JSON Object binding differs from its exact leaf coordinate")
       end
       resolver = @json_site_name_resolver ||
                  raise(UnsupportedFormatError.new("Dynamic JSON Object site resolver is missing"))
       structures = @json_site_structures ||
                    raise(UnsupportedFormatError.new("Dynamic JSON Object source roster is missing"))
-      coordinates = resolver.json_object_arm_site(site_path, canonical_arm_index, structures)
+      coordinates = resolver.json_object_leaf_site(key, structures)
       unless coordinates.escaped_prefix == escaped_prefix && coordinates.array_level == array_level
-        raise UnsupportedFormatError.new("Dynamic JSON Object arm differs from the shared physical coordinate resolver")
+        raise UnsupportedFormatError.new("Dynamic JSON Object leaf differs from the shared physical coordinate resolver")
       end
-      key = {site_path, canonical_arm_index.to_i32}
       if @json_object_sites.has_key?(key)
-        raise UnsupportedFormatError.new("Dynamic JSON Object physical site is duplicated")
+        raise UnsupportedFormatError.new("Dynamic JSON Object physical leaf is duplicated")
       end
 
       physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(
@@ -698,19 +809,18 @@ module CrystalClick
         @context,
       )
       retained_site_bytes = add_size(
-        multiply_size(site_path.bytesize.to_u64, 2_u64), escaped_prefix.bytesize.to_u64
+        multiply_size(key.dynamic_site.bytesize.to_u64, 2_u64), escaped_prefix.bytesize.to_u64
       )
       @context.preflight_name_bytes(retained_site_bytes)
       @context.charge_name_bytes(retained_site_bytes)
       @context.record_elements(1_u64)
-      @json_object_sites[{String.new(site_path.to_slice), canonical_arm_index.to_i32}] =
-        DynamicJsonObjectPhysicalSite.new(
-          site_path, canonical_arm_index.to_i32, escaped_prefix, array_level, binding, physical
-        )
+      @json_object_sites[key] = DynamicJsonObjectPhysicalSite.new(
+        key, escaped_prefix, array_level, binding, physical
+      )
 
       @context.record_elements(physical.stream_count.to_u64 * 2_u64) if physical.stream_count > 0
       physical.stream_names.each_with_index do |name, child_index|
-        role = dynamic_json_object_role(site_path, canonical_arm_index, child_index)
+        role = dynamic_json_object_role(key, child_index)
         if @json_object_names.has_key?(role) || @data_names.has_key?(role) || @structure_names.has_key?(role)
           raise UnsupportedFormatError.new("Dynamic JSON Object physical roles collide")
         end
@@ -744,22 +854,37 @@ module CrystalClick
     end
 
     private def dynamic_json_object_role(
-      site_path : String,
-      canonical_arm_index : Int,
+      key : BinaryDynamicJsonLeafKey,
       child_index : Int,
     ) : String
+      site_path = key.dynamic_site
+      canonical_arm_index = key.canonical_arm_index
+      child_path = key.descriptor_child_path
       arm_digits = digit_count(canonical_arm_index.to_u64)
       child_digits = digit_count(child_index.to_u64)
       suffix_size = add_size(
         add_size(".json_object.".bytesize.to_u64, arm_digits),
         add_size(".stream.".bytesize.to_u64, child_digits),
       )
-      @context.preflight_name_bytes(add_size(site_path.bytesize.to_u64, suffix_size))
-      @context.charge_name_bytes(add_size(site_path.bytesize.to_u64, suffix_size))
+      unless child_path.empty?
+        suffix_size = add_size(suffix_size, ".leaf".bytesize.to_u64)
+        child_path.each do |index|
+          suffix_size = add_size(suffix_size, add_size(1_u64, digit_count(index.to_u64)))
+        end
+      end
+      role_size = add_size(site_path.bytesize.to_u64, suffix_size)
+      @context.preflight_name_bytes(role_size)
+      @context.charge_name_bytes(role_size)
       String.build do |io|
         io << site_path
         io << ".json_object."
         io << canonical_arm_index
+        unless child_path.empty?
+          io << ".leaf"
+          child_path.each do |index|
+            io << '.' << index
+          end
+        end
         io << ".stream."
         io << child_index
       end
@@ -842,6 +967,17 @@ module CrystalClick
 
     private def field_path(path : String, index : Int) : String
       indexed_child_path(path, ".field.", index)
+    end
+
+    private def compare_descriptor_paths(left : Array(Int32), right : Array(Int32)) : Int32
+      shared = Math.min(left.size, right.size)
+      index = 0
+      while index < shared
+        comparison = left[index] <=> right[index]
+        return comparison unless comparison == 0
+        index += 1
+      end
+      left.size <=> right.size
     end
 
     private def arm_path(path : String, index : Int) : String
