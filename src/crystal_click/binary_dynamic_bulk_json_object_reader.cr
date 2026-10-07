@@ -21,6 +21,7 @@ module CrystalClick
         Array(Array(ObjectDocument)),
       )? = nil,
       @initial_descriptor_depth : Int32 = 1,
+      child_shared_profile : BinaryBulkProfile = profile,
     )
       unless !@budget.writing?
         raise ArgumentError.new("Dynamic JSON Object reader requires a read-direction budget")
@@ -75,6 +76,10 @@ module CrystalClick
                       BinaryDynamicBulkJsonObjectWriter.preflight_binding!(binding, @budget, depth)
                       validate_object_metadata!(binding, child_streams, depth)
                       validate_typed_dynamic_metadata!(binding, child_streams, depth, profile)
+                      child_root_depth64 = depth.to_i64 + 1_i64
+                      @budget.ensure_depth(child_root_depth64)
+                      child_root_depth = child_root_depth64.to_i32
+                      child_json_leaf_plans = binding.plan.typed_dynamic_json_object_leaf_plans(@budget)
                       ObjectDocumentCodec.decode_child_site_with_budget(
                         binding.schema.typed_paths,
                         child_streams,
@@ -83,7 +88,9 @@ module CrystalClick
                         first_mark: 0,
                         mark_count: rows_per_mark.size,
                         profile: profile,
-                        shared_profile: profile,
+                        shared_profile: child_shared_profile,
+                        typed_dynamic_json_object_leaf_plans: child_json_leaf_plans,
+                        typed_descriptor_root_depth: child_root_depth,
                       )
                     end
         @documents[key] = documents
@@ -273,13 +280,18 @@ module CrystalClick
         path = plan.typed_path_at(index)
         next unless plan.has_typed_dynamic?(path)
 
+        json_leaf_plans = plan.typed_dynamic_json_object_leaf_plans_for(path, @budget)
         decoded = BinaryDynamicBulkPlan.decode_structure_streams(
           plan.typed_type_for(path),
           streams.typed_dynamic_for(path).structures,
           @budget,
           profile,
+          nil,
+          json_leaf_plans.empty? ? nil : json_leaf_plans,
         )
-        decoded.validate_inherited_depth!(depth + 1, @budget)
+        child_root_depth64 = depth.to_i64 + 1_i64
+        @budget.ensure_depth(child_root_depth64)
+        decoded.validate_inherited_depth!(child_root_depth64.to_i32, @budget)
         expected_site_count = plan.typed_dynamic_site_count_for(path)
         unless decoded.site_count == expected_site_count
           corrupt!("typed Dynamic Object child sites differ from the supplied plan")

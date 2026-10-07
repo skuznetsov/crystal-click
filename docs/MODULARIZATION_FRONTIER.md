@@ -9,7 +9,36 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility reuse — W214
+## Current responsibility reuse — W215
+
+Ordinary JSON actual leaves at declared Object typed-Dynamic sites reuse the
+generic recursive visitor and existing Object child serializer. The cohesive
+`ObjectDocumentTypedDynamicJsonPhysical` owner composes exact child plans into
+physical pairs recursively; it does not add a serializer per wrapper product.
+The composition preserves the parent's physical P grid, child logical Q grid,
+full-domain validation and inherited descriptor depth. Ordinary no-JSON
+selected reads remain on their existing route.
+
+Status: VERIFIED, scoped ROBUST for declared Object typed-Dynamic ordinary
+JSON actual leaves. The corrected-state run passes 898 examples across the
+same 150 unique spec files in each mode, partitioned into 18 serial cohorts;
+the final focused gates pass 18 in DEBUG and 18 in RELEASE. Four native cells
+per mode cover single/with-size String and BASIC/COMPACT Dynamic discriminators
+(not the Compact part layout), with stock reads, generated direct ATTACHes and
+source/library CHECKs. The raw-artifact audit exits zero, and all 188 generated
+library-part files reconcile across modes. The stock and generated fixtures
+are intentionally asymmetric, not equivalent-descriptor evidence.
+
+The empty advanced Object `max_depth=1` regression is guarded without rejecting
+empty Objects; invalid origins and the typed-Dynamic minimum depth remain
+guarded. This establishes responsibility reuse for the finite composition,
+not reduced coupling, compiler/RSS, performance or all-type coverage. Root-
+inferred Object paths, outer shared MAP/Copy, other layouts, offline values and
+MV/projection propagation remain open. Broad facade decomposition remains
+open. Details: [OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md),
+[W215 evidence packet](../.landmark/evidence/object-typed-dynamic-json-w215.json).
+
+## Previous responsibility reuse — W214
 
 Declared Object typed-Dynamic SharedVariant values reuse the W213 scalar JSON
 visitor and the existing Object/BinaryBulk owners. Selected-value permission

@@ -1,33 +1,33 @@
 # CrystalClick project status
 
-Current finite Object composition component (W214, 2026-10-07): declared typed
-Object Dynamic fields admit JSON-bearing selected SharedVariant actuals through
-the existing recursive scalar visitor. Ordinary actual rosters stay strict;
-four paired Object validation call sites explicitly opt in. The bulk walker
-retains a checked inherited depth origin and the same operation budget. No
-serializer/class per wrapper product or new public facade was added.
+Current Object composition slice (W215, 2026-10-07): ordinary JSON actual
+leaves at declared Object typed-Dynamic sites are VERIFIED within the finite
+scope below (scoped verdict: ROBUST). Exact persisted child bindings reuse the
+generic recursive visitor and existing Object child serializer;
+`ObjectDocumentTypedDynamicJsonPhysical` composes child physical pairs in one
+owner. Parent physical P, logical child Q and inherited descriptor depth stay
+distinct. Ordinary no-JSON selected reads retain their prior path; no codec
+per wrapper product was added.
 
-The same 88 affected files pass 539 examples in DEBUG and 539 in RELEASE;
-final focused gates pass 11 per mode. Three production defect seeds fail
-unchanged assertions and restore exactly. A native expected-value seed rejects
-after the stock process succeeds. Fresh two-profile/two-discriminator matrices
-read four stock parts and directly ATTACH/CHECK four library parts per mode.
-All 100 library-part files agree across modes. Root audits raw invocation,
-literal result, executable and immutable input/part evidence. Scoped verdict:
-ROBUST, not all combinations/layouts, checksum hashes, RSS or performance.
+The same 150 unique spec files pass 898 examples in each of DEBUG and RELEASE,
+partitioned into 18 serial cohorts per mode; the final focused gates pass 18
+examples in each mode. Corrected-state native qualification passes four cells
+per mode (single/with-size String profiles x BASIC/COMPACT Dynamic
+discriminators; not the Compact part layout): four stock reads and four
+generated direct ATTACHes, with source and attached source/library CHECKs.
+The root raw-artifact audit exits zero; all 188 generated library-part files
+reconcile across modes. Stock fixtures are intentionally asymmetric with the
+library output, so this is not an equivalent-descriptor claim. The empty
+advanced Object `max_depth=1` regression and depth-origin reset falsifiers were
+also caught and corrected/guarded within this slice.
 
-The native empty-array witness is inferred Array(Nullable(String)); explicit
-empty Array(JSON) is a library unit/physical witness only. Missing and NULL
-normalize to the same selected field value, not distinct whole-object states.
-The fresh source reference and pinned native runtime are different revisions.
-
-Next: ordinary Object typed-Dynamic JSON actuals with exact child bindings,
-inferred Object paths, owned offline values and projection/MV propagation.
-Outer Object shared MAP/Copy, JSON SKIP/SKIP REGEXP, additional layouts,
-inherited owner-accounting gaps and broad class decomposition remain open.
-Performance stays deferred; the overall goal remains active. Details:
-[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md),
-`.landmark/evidence/object-typed-dynamic-shared-json-w214.json`.
+The evidence is scoped to declared typed-Dynamic JSON leaves and the recorded
+fixtures. Root-inferred Object paths, outer shared MAP/Copy, other layouts,
+owned offline values and MV/projection propagation remain open; no all-type,
+whole-scan callback-atomicity, checksum-hash, benchmark or RSS claim is made.
+Broad facade decomposition remains open and the overall goal stays active.
+Details: [OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md),
+[W215 evidence packet](../.landmark/evidence/object-typed-dynamic-json-w215.json).
 
 Previous finite shared-envelope component (W213, 2026-10-07): generic Dynamic
 bulk/physical/table readers and writers reuse existing scalar recursion for
@@ -44,10 +44,10 @@ ATTACH/CHECK eight library parts per mode. All 140 library-part files agree
 across modes. Root audits raw process/input/executable identities. Scoped
 verdict: ROBUST, not all combinations/layouts, checksum hashes, RSS or performance.
 
-Next: Object path Dynamic JSON bindings, owned offline values and projection/MV
-consumer propagation. JSON SKIP/SKIP REGEXP, other layouts, inherited
-owner-accounting gaps and broad class decomposition remain open. Performance
-stays deferred; the overall goal remains active. Details:
+At W213 closure, the next work was Object path Dynamic JSON bindings, owned
+offline values and projection/MV consumer propagation. JSON SKIP/SKIP REGEXP,
+other layouts, inherited owner-accounting gaps and broad class decomposition
+remain open. Performance stays deferred; the overall goal remains active. Details:
 [DYNAMIC_SHARED_JSON_FRONTIER.md](DYNAMIC_SHARED_JSON_FRONTIER.md),
 `.landmark/evidence/dynamic-shared-json-w213.json`.
 

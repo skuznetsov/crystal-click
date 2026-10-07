@@ -72,6 +72,10 @@ module CrystalClick
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
         codec_budget, transport_budget, frame_bytes, profile
       )
+      ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
 
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
@@ -147,6 +151,10 @@ module CrystalClick
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
         codec_budget, transport_budget, frame_bytes, profile
       )
+      ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
 
@@ -213,6 +221,10 @@ module CrystalClick
         pairs[lane.name] = lane.encode(rows_per_mark, frame_bytes, transport_budget)
       end
       append_advanced_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
+      ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
         codec_budget, transport_budget, frame_bytes, profile
       )
@@ -290,6 +302,10 @@ module CrystalClick
       end
       physical_rows = physical_rows_from_grid(grid, codec_budget)
       append_advanced_pairs!(
+        pairs, physical_plan, fresh_plan, streams, physical_rows,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
+      ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, physical_rows,
         codec_budget, transport_budget, frame_bytes, profile
       )
@@ -381,6 +397,25 @@ module CrystalClick
       nil
     end
 
+    # Advanced Object copy/bucket lanes are produced after ordinary child
+    # lanes at both the root and recursively bound JSON child sites.
+    def self.append_child_site_advanced_pairs!(
+      pairs : Hash(String, CompressedMarkFiles),
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+      physical_rows : Array(UInt64),
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+      frame_bytes : Int,
+      profile : BinaryBulkProfile,
+    ) : Nil
+      append_advanced_pairs!(
+        pairs, physical_plan, plan, streams, physical_rows,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
+    end
+
     private def self.physical_rows_from_grid(
       grid : StorageOccurrenceGrid,
       budget : BinaryCodecBudget,
@@ -406,8 +441,9 @@ module CrystalClick
       physical_plan : ObjectDocumentPhysicalPlan,
       plan : ObjectDocumentPlan,
       streams : ObjectDocumentStreams,
+      codec_budget : BinaryCodecBudget? = nil,
     ) : Array(ObjectDocumentColumnLane)
-      LaneBinder.bind_lanes(physical_plan, plan, streams)
+      LaneBinder.bind_lanes(physical_plan, plan, streams, codec_budget)
     end
 
     private def self.preflight_variant_prefixes!(

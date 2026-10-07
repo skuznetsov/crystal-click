@@ -25,7 +25,7 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : ObjectDocumentStreams
-      encode_core_with_budget(plan, granules, budget, mode, profile, shared_profile, nil)
+      encode_core_with_budget(plan, granules, budget, mode, profile, shared_profile, nil, 2)
     end
 
     # Explicit child-site composition keeps the parent physical row grid
@@ -40,6 +40,7 @@ module CrystalClick
       mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      typed_descriptor_root_depth : Int32 = 2,
     ) : ObjectDocumentStreams
       encode_core_with_budget(
         plan,
@@ -48,7 +49,8 @@ module CrystalClick
         mode,
         profile,
         shared_profile,
-        grid
+        grid,
+        typed_descriptor_root_depth,
       )
     end
 
@@ -60,10 +62,15 @@ module CrystalClick
       profile : BinaryBulkProfile,
       shared_profile : BinaryBulkProfile,
       occurrence_grid : StorageOccurrenceGrid?,
+      typed_descriptor_root_depth : Int32,
     ) : ObjectDocumentStreams
       unless budget.writing?
         raise ArgumentError.new("Object document encode requires a writing budget")
       end
+      unless typed_descriptor_root_depth >= 2
+        raise UnsupportedFormatError.new("Object typed descriptor root depth must be at least 2 (got #{typed_descriptor_root_depth})")
+      end
+      budget.ensure_depth(typed_descriptor_root_depth) if plan.typed_path_count > 0
       reject_json_plan!(plan)
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
@@ -82,26 +89,28 @@ module CrystalClick
         path = plan.typed_path_at(index)
         type = plan.typed_type_for(path)
         if plan.has_typed_dynamic?(path)
-          unless type.contains_dynamic? && ObjectRecursiveDeclaration.account_descriptor(type, budget, budget.limits, 2)
+          unless type.contains_dynamic? && ObjectRecursiveDeclaration.account_descriptor(type, budget, budget.limits, typed_descriptor_root_depth)
             raise UnsupportedFormatError.new("typed Object Dynamic path is outside the recursive declaration grammar")
           end
           structures = plan.typed_dynamic_sites_for(path, budget)
+          json_leaf_plans = plan.typed_dynamic_json_object_leaf_plans_for(path, budget)
           typed_dynamic_write_plans[path] = ObjectDeclaredDynamicDeclaration.prepare_write_sites_plan(
             type,
             structures,
             budget,
             profile,
-            2
+            typed_descriptor_root_depth,
+            json_leaf_plans.empty? ? nil : json_leaf_plans,
           )
         elsif type.contains_dynamic?
           raise UnsupportedFormatError.new("Object typed containers containing Dynamic are not admitted")
         end
         if type.contains_variant?
           type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
-          type_context.validate_type_tree(type)
-          validate_variant_typed_field!(type, budget.limits)
+          type_context.validate_type_tree(type, typed_descriptor_root_depth)
+          validate_variant_typed_field!(type, budget.limits, typed_descriptor_root_depth)
         end
-        validate_low_cardinality_typed_field!(type, budget.limits)
+        validate_low_cardinality_typed_field!(type, budget.limits, typed_descriptor_root_depth)
       end
 
       mark_count = granules.size
@@ -177,9 +186,16 @@ module CrystalClick
             # supplied tree first under the shared aggregate budget so a deep
             # mismatching descriptor cannot bypass its bound during equality.
             type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
-            type_context.validate_type_tree(value.type)
+            type_context.validate_type_tree(value.type, typed_descriptor_root_depth)
             if plan.has_typed_dynamic?(path)
-              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, true, allow_shared_json: true)
+              ObjectDeclaredDynamicDeclaration.validate_selected_values!(
+                value,
+                type,
+                budget,
+                true,
+                typed_descriptor_root_depth,
+                allow_shared_json: true,
+              )
             end
             values << value
           end
@@ -188,15 +204,35 @@ module CrystalClick
         if plan.has_typed_dynamic?(path)
           dynamic_plan = typed_dynamic_write_plans[path]
           structures = dynamic_plan.encode_structure_streams(budget)
+          json_object_writer = if dynamic_plan.has_json_object_bindings?
+                                 BinaryDynamicBulkJsonObjectWriter.new(
+                                   dynamic_plan,
+                                   budget,
+                                   lane_granules,
+                                   inherited_grid: occurrence_grid,
+                                   initial_descriptor_depth: typed_descriptor_root_depth,
+                                 )
+                               end
           data = BinaryBulkEncoder.encode(
             type,
             lane_granules,
             budget,
             profile,
             dynamic_plan,
-            shared_value_depth_origin: 2,
+            json_object_writer: json_object_writer,
+            shared_value_depth_origin: typed_descriptor_root_depth,
           )
-          typed_dynamic_lanes[path] = BinaryDynamicBulkStreams.new(structures, data)
+          json_leaf_streams = json_object_writer.try(&.finish_leaf_streams(
+            profile,
+            child_shared_profile: BinaryBulkProfile.single_stream,
+          )) ||
+                              Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams).new
+          typed_dynamic_lanes[path] = BinaryDynamicBulkStreams.new(
+            structures,
+            data,
+            budget: budget,
+            json_object_leaf_streams: json_leaf_streams,
+          )
           site_offsets = Hash(String, Int32).new
           site_paths = dynamic_plan.site_paths
           unless site_paths.size == dynamic_plan.site_count
@@ -334,6 +370,8 @@ module CrystalClick
       limits : BinaryCodecLimits = DEFAULT_LIMITS,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+      typed_descriptor_root_depth : Int32 = 2,
     ) : Array(Array(ObjectDocument))
       budget = BinaryCodecBudget.new(limits)
       decode_with_budget(
@@ -343,7 +381,9 @@ module CrystalClick
         first_mark: first_mark,
         mark_count: mark_count,
         profile: profile,
-        shared_profile: shared_profile
+        shared_profile: shared_profile,
+        typed_dynamic_json_object_leaf_plans: typed_dynamic_json_object_leaf_plans,
+        typed_descriptor_root_depth: typed_descriptor_root_depth,
       )
     end
 
@@ -355,8 +395,21 @@ module CrystalClick
       mark_count : Int? = nil,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+      typed_descriptor_root_depth : Int32 = 2,
     ) : Array(Array(ObjectDocument))
-      decode_core_with_budget(typed_schema, streams, budget, first_mark, mark_count, profile, shared_profile, nil)
+      decode_core_with_budget(
+        typed_schema,
+        streams,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        shared_profile,
+        typed_dynamic_json_object_leaf_plans,
+        typed_descriptor_root_depth,
+        nil,
+      )
     end
 
     # Explicit child-site decoder. Stream row counts remain logical child
@@ -370,8 +423,21 @@ module CrystalClick
       mark_count : Int? = nil,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+      typed_descriptor_root_depth : Int32 = 2,
     ) : Array(Array(ObjectDocument))
-      decode_core_with_budget(typed_schema, streams, budget, first_mark, mark_count, profile, shared_profile, grid)
+      decode_core_with_budget(
+        typed_schema,
+        streams,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        shared_profile,
+        typed_dynamic_json_object_leaf_plans,
+        typed_descriptor_root_depth,
+        grid,
+      )
     end
 
     private def self.decode_core_with_budget(
@@ -382,16 +448,18 @@ module CrystalClick
       mark_count : Int?,
       profile : BinaryBulkProfile,
       shared_profile : BinaryBulkProfile,
+      typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))),
+      typed_descriptor_root_depth : Int32,
       occurrence_grid : StorageOccurrenceGrid?,
     ) : Array(Array(ObjectDocument))
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
       end
-      typed_schema.each_value do |type|
-        if type.contains_json?
-          raise UnsupportedFormatError.new("root JSON is outside the persisted Object declaration grammar")
-        end
+      unless typed_descriptor_root_depth >= 2
+        raise CorruptPartError.new("Object typed descriptor root depth must be at least 2 (got #{typed_descriptor_root_depth})")
       end
+      budget.ensure_depth(typed_descriptor_root_depth) unless typed_schema.empty?
+      validate_typed_json_binding_input!(typed_dynamic_json_object_leaf_plans, typed_schema, budget)
 
       real_marks = streams.mark_count
       if grid = occurrence_grid
@@ -414,18 +482,27 @@ module CrystalClick
       typed_dynamic_count = 0
       typed_schema.each_value do |type|
         # Bound raw schema recursion before contains_dynamic? traverses it.
-        schema_context.validate_type_tree(type)
+        schema_context.validate_type_tree(type, typed_descriptor_root_depth)
+        if type.contains_json?
+          raise UnsupportedFormatError.new("root JSON is outside the persisted Object declaration grammar")
+        end
         if type.contains_qbit?
           raise UnsupportedFormatError.new("Object typed QBit descriptor is outside the persisted Object declaration grammar")
         end
         if type.contains_dynamic?
-          unless ObjectRecursiveDeclaration.account_descriptor(type, budget, budget.limits, 2)
+          unless ObjectRecursiveDeclaration.account_descriptor(type, budget, budget.limits, typed_descriptor_root_depth)
             raise UnsupportedFormatError.new("Object typed Dynamic descriptor is outside the recursive declaration grammar")
           end
           typed_dynamic_count += 1
         end
-        validate_variant_typed_field!(type, budget.limits)
-        validate_low_cardinality_typed_field!(type, budget.limits)
+        validate_variant_typed_field!(type, budget.limits, typed_descriptor_root_depth)
+        validate_low_cardinality_typed_field!(type, budget.limits, typed_descriptor_root_depth)
+      end
+      typed_dynamic_json_object_leaf_plans.each do |path, leaf_plans|
+        type = typed_schema[path]?
+        unless type && type.contains_dynamic? && !leaf_plans.empty?
+          corrupt!("typed Dynamic JSON Object binding names an unknown or non-Dynamic field")
+        end
       end
 
       structure_set = ObjectDynamicStructureCodec.decode_with_budget(streams.structures, budget)
@@ -524,12 +601,14 @@ module CrystalClick
       typed_schema.each do |path, type|
         next unless type.contains_dynamic?
         dynamic_streams = streams.typed_dynamic_for(path)
+        json_leaf_plans = typed_dynamic_json_object_leaf_plans[path]?
         dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan(
           type,
           dynamic_streams.structures,
           budget,
           profile,
-          2
+          typed_descriptor_root_depth,
+          json_leaf_plans,
         )
         typed_dynamic_plans[path] = dynamic_plan
       end
@@ -539,20 +618,67 @@ module CrystalClick
         if type.contains_dynamic?
           dynamic_streams = streams.typed_dynamic_for(path)
           dynamic_plan = typed_dynamic_plans[path]
-          typed_rows[path] = BinaryBulkDecoder.decode(
-            type,
-            dynamic_streams.data,
-            rows_per_mark,
-            budget,
-            selected_first,
-            selected_count,
-            profile,
-            dynamic_plan,
-            shared_value_depth_origin: 2,
-          )
+          if dynamic_plan.has_json_object_bindings?
+            physical_rows_per_mark = occurrence_grid.try do |grid|
+              copy_occurrence_grid_physical_rows(grid, budget)
+            end
+            json_object_reader = BinaryDynamicBulkJsonObjectReader.new(
+              dynamic_plan,
+              dynamic_streams,
+              rows_per_mark,
+              budget,
+              profile,
+              physical_rows_per_mark: physical_rows_per_mark,
+              initial_descriptor_depth: typed_descriptor_root_depth,
+              child_shared_profile: BinaryBulkProfile.single_stream,
+            )
+            complete_rows = BinaryBulkDecoder.decode(
+              type,
+              dynamic_streams.data,
+              rows_per_mark,
+              budget,
+              0,
+              nil,
+              profile,
+              dynamic_plan,
+              json_object_reader,
+              typed_descriptor_root_depth,
+            )
+            selected_group_records = selected_count.to_u64
+            budget.preflight_children(selected_group_records) if selected_group_records > 0_u64
+            budget.ensure_future_nodes(selected_group_records)
+            budget.ensure_future_elements(selected_group_records)
+            selected_group_records.times { budget.charge_node }
+            budget.charge_elements(selected_group_records) if selected_group_records > 0_u64
+            selected_values = Array(Array(BinaryValue)).new(selected_count)
+            selected_count.times do |window_offset|
+              selected_values << complete_rows[selected_first + window_offset]
+            end
+            typed_rows[path] = selected_values
+          else
+            typed_rows[path] = BinaryBulkDecoder.decode(
+              type,
+              dynamic_streams.data,
+              rows_per_mark,
+              budget,
+              selected_first,
+              selected_count,
+              profile,
+              dynamic_plan,
+              nil,
+              typed_descriptor_root_depth,
+            )
+          end
           typed_rows[path].each do |mark_values|
             mark_values.each do |value|
-              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, false, allow_shared_json: true)
+              ObjectDeclaredDynamicDeclaration.validate_selected_values!(
+                value,
+                type,
+                budget,
+                false,
+                typed_descriptor_root_depth,
+                allow_shared_json: true,
+              )
             end
           end
         else
@@ -791,16 +917,91 @@ module CrystalClick
       true
     end
 
-    private def self.validate_low_cardinality_typed_field!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil
+    private def self.validate_typed_json_binding_input!(
+      bindings : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))),
+      typed_schema : Hash(String, BinaryDataType),
+      budget : BinaryCodecBudget,
+    ) : Nil
+      if bindings.size > typed_schema.size
+        corrupt!("typed Dynamic JSON Object binding roster exceeds the supplied schema")
+      end
+      record_count = bindings.size.to_u64
+      bindings.each do |_path, leaves|
+        record_count = checked_add(record_count, leaves.size.to_u64, false)
+      end
+      unless record_count <= budget.limits.max_nodes.to_u64 && record_count <= budget.limits.max_elements.to_u64
+        corrupt!("typed Dynamic JSON Object binding roster exceeds codec limits")
+      end
+      budget.preflight_children(record_count) if record_count > 0_u64
+
+      path_elements = 0_u64
+      key_bytes = 0_u64
+      bindings.each do |path, leaves|
+        unless typed_schema.has_key?(path)
+          corrupt!("typed Dynamic JSON Object binding names an unknown schema field")
+        end
+        if leaves.empty?
+          corrupt!("typed Dynamic JSON Object binding roster cannot be empty")
+        end
+        key_bytes = checked_add(key_bytes, path.bytesize.to_u64, false)
+        leaves.each do |entry|
+          key = entry[0]
+          path_elements = checked_add(path_elements, key.descriptor_path_size.to_u64, false)
+          key_bytes = checked_add(key_bytes, key.dynamic_site_bytesize.to_u64, false)
+          key_bytes = checked_add(key_bytes, checked_multiply(key.descriptor_path_size.to_u64, 4_u64, false), false)
+        end
+      end
+      element_count = checked_add(record_count, path_elements, false)
+      unless path_elements <= budget.limits.max_elements.to_u64 && key_bytes <= budget.limits.max_bytes.to_u64
+        corrupt!("typed Dynamic JSON Object binding keys exceed codec limits")
+      end
+      budget.ensure_future_elements(element_count)
+      budget.ensure_wire_bytes(key_bytes)
+      record_count.times { budget.charge_node }
+      budget.charge_elements(element_count) if element_count > 0_u64
+      budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
+      nil
+    end
+
+    # A nested Object's generic JSON reader consumes logical row counts (Q),
+    # while the child Object codec and its row marks belong to the inherited
+    # physical parent domain (P). The detached vector is another retained
+    # operation allocation, so account it without changing the shared budget.
+    private def self.copy_occurrence_grid_physical_rows(
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+    ) : Array(UInt64)
+      count = grid.mark_count.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      budget.ensure_future_nodes(count)
+      budget.ensure_future_elements(count)
+      rows = Array(UInt64).new(grid.mark_count)
+      grid.mark_count.times do |mark|
+        budget.charge_node
+        budget.charge_elements(1_u64)
+        rows << grid.physical_rows_at(mark)
+      end
+      rows
+    end
+
+    private def self.validate_low_cardinality_typed_field!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      root_depth : Int = 2,
+    ) : Nil
       if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type) &&
-         ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+         ObjectRecursiveDeclaration.measure_descriptor(type, limits, root_depth).nil?
         raise UnsupportedFormatError.new("Object typed LowCardinality fields are not admitted")
       end
       nil
     end
 
-    private def self.validate_variant_typed_field!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil
-      if type.contains_variant? && ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+    private def self.validate_variant_typed_field!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      root_depth : Int = 2,
+    ) : Nil
+      if type.contains_variant? && ObjectRecursiveDeclaration.measure_descriptor(type, limits, root_depth).nil?
         raise UnsupportedFormatError.new("Object typed Variant descriptor is outside the admitted declaration grammar")
       end
       nil

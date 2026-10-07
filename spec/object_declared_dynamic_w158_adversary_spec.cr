@@ -1,6 +1,8 @@
 require "./spec_helper"
 
 module W158TypedDynamicPlanDecodeProbe
+  # Count successful entries through the actual Dynamic metadata parser, not
+  # calls to the public bulk-plan constructor.
   class_property enabled = false
   class_property calls = 0
 
@@ -14,15 +16,16 @@ module W158TypedDynamicPlanDecodeProbe
   end
 end
 
-class CrystalClick::BinaryDynamicBulkPlan
-  def self.decode_structure_streams(
-    type : BinaryDataType,
-    streams : BinaryDynamicStructureStreams,
-    budget : BinaryCodecBudget,
-    profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
-  ) : BinaryDynamicBulkPlan
+module CrystalClick::DynamicStructureCodec
+  def self.read_with_statistics_offset(
+    context : BinaryCodecContext,
+    structure_depth : Int = 1,
+    type_depth : Int = 1,
+    preflight_type_names : Bool = false,
+  ) : Tuple(DynamicStructure, Int32)
+    parsed = previous_def(context, structure_depth, type_depth, preflight_type_names)
     W158TypedDynamicPlanDecodeProbe.calls += 1 if W158TypedDynamicPlanDecodeProbe.enabled
-    previous_def(type, streams, budget, profile)
+    parsed
   end
 end
 

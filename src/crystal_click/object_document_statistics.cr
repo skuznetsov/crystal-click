@@ -75,7 +75,7 @@ module CrystalClick
       # copied into ObjectStructure, copied into ObjectDynamicStructureSet,
       # then read once by that set's roster check. Typed paths are read once
       # and copied into the returned ObjectDocumentPlan.
-      dynamic_paths, typed_paths, typed_types, typed_dynamic_sites = copy_rosters(plan, budget)
+      dynamic_paths, typed_paths, typed_types, typed_dynamic_sites, typed_dynamic_json_object_leaf_plans = copy_rosters(plan, budget)
       typed_by_path = Hash(String, BinaryDataType).new
       typed_paths.each_with_index do |path, index|
         typed_by_path[path] = typed_types[index]
@@ -231,13 +231,24 @@ module CrystalClick
       typed_paths.each_with_index do |path, index|
         typed_schema[path] = typed_types[index]
       end
-      ObjectDocumentPlan.new(fresh_set, typed_schema, typed_dynamic_sites: typed_dynamic_sites)
+      ObjectDocumentPlan.new(
+        fresh_set,
+        typed_schema,
+        typed_dynamic_sites: typed_dynamic_sites,
+        typed_dynamic_json_object_leaf_plans: typed_dynamic_json_object_leaf_plans,
+      )
     end
 
     private def self.copy_rosters(
       plan : ObjectDocumentPlan,
       budget : BinaryCodecBudget,
-    ) : Tuple(Array(String), Array(String), Array(BinaryDataType), Hash(String, Hash(String, DynamicStructure)))
+    ) : Tuple(
+      Array(String),
+      Array(String),
+      Array(BinaryDataType),
+      Hash(String, Hash(String, DynamicStructure)),
+      Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))),
+    )
       object = plan.structures.object
       dynamic_count = object.dynamic_path_count
       typed_count = plan.typed_path_count
@@ -280,6 +291,7 @@ module CrystalClick
         budget.charge_node
         typed_dynamic_paths << plan.typed_dynamic_path_at(index)
       end
+      typed_dynamic_json_object_leaf_plans = plan.typed_dynamic_json_object_leaf_plans(budget)
 
       typed_dynamic_site_count = 0_u64
       typed_dynamic_paths.each do |path|
@@ -341,12 +353,13 @@ module CrystalClick
           site_roster[site_path] = ObjectDeclaredDynamicDeclaration.without_statistics(
             structure,
             budget,
-            actual_root_depth
+            actual_root_depth,
+            allow_bound_json: typed_dynamic_json_object_leaf_plans.has_key?(path),
           )
         end
         typed_dynamic_sites[path] = site_roster
       end
-      {dynamic_paths, typed_paths, typed_types, typed_dynamic_sites}
+      {dynamic_paths, typed_paths, typed_types, typed_dynamic_sites, typed_dynamic_json_object_leaf_plans}
     end
 
     private def self.build_routings(

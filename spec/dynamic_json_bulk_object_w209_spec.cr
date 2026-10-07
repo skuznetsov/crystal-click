@@ -266,9 +266,13 @@ module CrystalClick::ObjectDocumentCodec
     mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
     profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    typed_descriptor_root_depth : Int32 = 2,
   ) : ObjectDocumentStreams
     entry_nodes = W209ObjectChildBudgetProbe.enter("encode", budget)
-    result = previous_def(plan, granules, grid, budget, mode: mode, profile: profile, shared_profile: shared_profile)
+    result = previous_def(
+      plan, granules, grid, budget, mode: mode, profile: profile,
+      shared_profile: shared_profile, typed_descriptor_root_depth: typed_descriptor_root_depth,
+    )
     W209ObjectChildBudgetProbe.complete("encode", budget, entry_nodes)
     result
   end
@@ -282,6 +286,8 @@ module CrystalClick::ObjectDocumentCodec
     mark_count : Int? = nil,
     profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+    typed_descriptor_root_depth : Int32 = 2,
   ) : Array(Array(ObjectDocument))
     entry_nodes = W209ObjectChildBudgetProbe.enter("decode", budget)
     result = previous_def(
@@ -293,6 +299,8 @@ module CrystalClick::ObjectDocumentCodec
       mark_count: mark_count,
       profile: profile,
       shared_profile: shared_profile,
+      typed_dynamic_json_object_leaf_plans: typed_dynamic_json_object_leaf_plans,
+      typed_descriptor_root_depth: typed_descriptor_root_depth,
     )
     W209ObjectChildBudgetProbe.complete("decode", budget, entry_nodes)
     result

@@ -54,12 +54,14 @@ module CrystalClick
     @sql_work_bytes : UInt64
     @json_object_binding_count : UInt64
     @initial_array_level : UInt64
+    @initial_descriptor_depth : Int32
 
     def initialize(
       prepared : BinaryDynamicBulkPlan,
       column_name : String,
       limits : BinaryCodecLimits? = nil,
       context : PhysicalStreamPlanContext? = nil,
+      initial_descriptor_depth : Int32 = 1,
     )
       @prepared = prepared
       selected_limits = limits || context.try(&.limits) || BinaryBulkCodec::DEFAULT_LIMITS
@@ -92,6 +94,8 @@ module CrystalClick
       @sql_work_bytes = 0_u64
       initial_array_level = 0_u64
       @initial_array_level = initial_array_level
+      @initial_descriptor_depth = initial_descriptor_depth
+      validate_initial_descriptor_depth!(initial_descriptor_depth, selected_limits)
       @json_object_binding_count = 0_u64
       escaped_bytes = PhysicalStreamName.escaped_size(column_name)
       @context.preflight_name_bytes(escaped_bytes)
@@ -105,6 +109,7 @@ module CrystalClick
       limits : BinaryCodecLimits? = nil,
       context : PhysicalStreamPlanContext? = nil,
       initial_array_level : UInt64 = 0_u64,
+      initial_descriptor_depth : Int32 = 1,
     )
       @prepared = prepared
       selected_limits = limits || context.try(&.limits) || BinaryBulkCodec::DEFAULT_LIMITS
@@ -136,8 +141,10 @@ module CrystalClick
       @physical_name_bytes = 0_u64
       @sql_work_bytes = 0_u64
       @initial_array_level = initial_array_level
+      @initial_descriptor_depth = initial_descriptor_depth
       @json_object_binding_count = 0_u64
       validate_initial_array_level!(initial_array_level, selected_limits)
+      validate_initial_descriptor_depth!(initial_descriptor_depth, selected_limits)
       @context.preflight_name_bytes(escaped_prefix.value.bytesize.to_u64)
       initialize_bindings(escaped_prefix.value, initial_array_level)
     end
@@ -150,16 +157,34 @@ module CrystalClick
       limits : BinaryCodecLimits? = nil,
       context : PhysicalStreamPlanContext? = nil,
       initial_array_level : UInt64 = 0_u64,
+      initial_descriptor_depth : Int32 = 1,
     ) : BinaryDynamicBulkPhysicalPlan
       selected_context = context || PhysicalStreamPlanContext.new(limits || BinaryBulkCodec::DEFAULT_LIMITS)
       selected_context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
-      new(prepared, EscapedPrefix.validated(escaped_prefix), limits, selected_context, initial_array_level)
+      new(prepared, EscapedPrefix.validated(escaped_prefix), limits, selected_context, initial_array_level, initial_descriptor_depth)
     end
 
     private def validate_initial_array_level!(level : UInt64, limits : BinaryCodecLimits) : Nil
       if level > UInt64::MAX - limits.max_depth.to_u64
         raise UnsupportedFormatError.new("Dynamic physical initial Array level overflows the name coordinate")
       end
+    end
+
+    private def validate_initial_descriptor_depth!(depth : Int32, limits : BinaryCodecLimits) : Nil
+      if depth <= 0 || depth > limits.max_depth
+        raise UnsupportedFormatError.new("Dynamic physical initial descriptor depth exceeds the configured limit")
+      end
+    end
+
+    def initial_descriptor_depth : Int32
+      @initial_descriptor_depth
+    end
+
+    # Absolute descriptor depth for one bound JSON Object leaf. Keep this on
+    # the physical binding owner so recursive Object composition carries the
+    # original Dynamic ancestry instead of restarting at the standalone root.
+    def json_object_leaf_depth(key : BinaryDynamicJsonLeafKey) : Int32
+      @prepared.json_object_leaf_depth(key, @initial_descriptor_depth)
     end
 
     # Detached composite role-to-basename snapshot. Ordinary BinaryBulk roles
@@ -202,6 +227,10 @@ module CrystalClick
 
     def json_object_site(key : BinaryDynamicJsonLeafKey) : DynamicJsonObjectPhysicalSite
       @json_object_sites[key]? || raise(KeyError.new("Dynamic JSON Object physical leaf not found"))
+    end
+
+    def json_object_site_count : Int32
+      @json_object_sites.size
     end
 
     def json_object_site(site_path : String, canonical_arm_index : Int) : DynamicJsonObjectPhysicalSite
@@ -807,6 +836,7 @@ module CrystalClick
         @context.limits,
         array_level,
         @context,
+        @prepared.json_object_leaf_depth(key, @initial_descriptor_depth) + 1,
       )
       retained_site_bytes = add_size(
         multiply_size(key.dynamic_site.bytesize.to_u64, 2_u64), escaped_prefix.bytesize.to_u64
@@ -849,6 +879,7 @@ module CrystalClick
         @context.limits,
         @sql_budget,
         @context,
+        @initial_descriptor_depth,
       )
       nil
     end

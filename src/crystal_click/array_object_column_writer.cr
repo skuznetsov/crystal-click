@@ -107,6 +107,28 @@ module CrystalClick
       size_lane = ObjectDocumentColumnLane.new(size_name, size_bytes, bulk_source: size_stream)
       pairs = Hash(String, CompressedMarkFiles).new(initial_capacity: lanes.size)
       lanes.each { |lane| pairs[lane.name] = lane.encode_child_site(grid, frame_bytes, transport_budget) }
+      ObjectDocumentColumnWriter.append_child_site_advanced_pairs!(
+        pairs,
+        physical,
+        fresh_plan,
+        streams,
+        physical_rows,
+        codec_budget,
+        transport_budget,
+        frame_bytes,
+        profile,
+      )
+      ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
+        pairs,
+        physical,
+        fresh_plan,
+        streams,
+        physical_rows,
+        codec_budget,
+        transport_budget,
+        frame_bytes,
+        profile,
+      )
       inner_files = ObjectDocumentColumnFiles.new(fresh_plan, physical, pairs, inner_file_roster)
       size_pair = size_lane.encode_child_site(grid, frame_bytes, transport_budget)
       ArrayObjectColumnFiles.new(inner_files, size_name, size_pair, size_files)

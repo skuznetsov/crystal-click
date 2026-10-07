@@ -31,9 +31,13 @@ module CrystalClick::ObjectDocumentCodec
     mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
     profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    typed_descriptor_root_depth : Int32 = 2,
   ) : ObjectDocumentStreams
     W184ChildOccurrenceProbe.observe_budget("object", budget)
-    previous_def(plan, granules, grid, budget, mode: mode, profile: profile, shared_profile: shared_profile)
+    previous_def(
+      plan, granules, grid, budget, mode: mode, profile: profile,
+      shared_profile: shared_profile, typed_descriptor_root_depth: typed_descriptor_root_depth,
+    )
   end
 end
 

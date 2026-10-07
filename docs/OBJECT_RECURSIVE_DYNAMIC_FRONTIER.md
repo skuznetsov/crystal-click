@@ -1,5 +1,90 @@
 # Recursive declared Object Dynamic frontier
 
+## Active composition track — W215 (2026-10-07)
+
+Status: VERIFIED, scoped ROBUST for ordinary JSON actual leaves at declared
+Object typed-Dynamic sites. Baseline: `52ff690`. The complete types,
+MV/projections, then memory/performance objective remains unchanged; this is
+one finite composition handoff, not a reduced completion goal.
+
+Target: ordinary JSON-bearing actual alternatives at declared Object typed
+Dynamic sites. Reuse the generic recursive bulk visitor, exact
+`BinaryDynamicJsonLeafKey` bindings and existing Object child serializers.
+The per-file `ObjectDocumentTypedDynamicJsonPhysical` owner recursively
+composes the exact child physical pairs; no codec is introduced for wrapper
+products. Explicit bindings associate each JSON descriptor leaf with its child
+Object plan. Physical rows P, logical child rows Q and inherited descriptor
+depth stay separate, and JSON reads validate the complete parent mark domain
+before slicing selected results.
+
+Finite depth contract: supplied origins remain validated. When typed fields
+exist, their root depth must fit the configured limit; typed-Dynamic fields
+retain a minimum origin of two. An empty Object with no typed fields must
+remain admissible at `max_depth=1`, even if the default root origin is two.
+Each nested JSON child receives its absolute JSON-leaf depth plus one and the
+same operation budget; recursion must not reset depth at the child Object.
+
+Rejected cases include unbound or excessive bindings, invalid descriptor
+paths, mismatched child schemas/metadata and illegal Object wrappers. Inferred
+root Object Dynamic JSON actuals, outer shared MAP/Copy and advanced JSON
+owners, further layouts, owned offline values and MV/projections remain
+separate open frontiers.
+
+Risk: CAUTION (persisted serialization and API propagation). Preserve the
+clean baseline; rollback is the exact feature diff or its eventual atomic local
+commit, without push. Likeliest defect: admitting JSON metadata without routing
+every value/physical consumer to the child owner, or confusing sparse child
+occurrences with parent mark row counts. Missing/extra bindings and a corrupt
+unselected child mark must reject rather than silently yield partial values.
+Repeated Object/typed-Dynamic/JSON handoffs must carry the absolute descriptor
+depth as well as the shared operation budget; restarting at depth two inside
+each child Object would make a finite local limit ineffective globally.
+
+Observed W215 evidence and scope:
+
+1. The same 150 unique spec files pass 898 examples in each of DEBUG and
+   RELEASE, partitioned into 18 serial cohorts per mode; the final focused
+   gates pass 18 examples per mode. Coverage includes exact leaf bindings,
+   inherited budgets/depth, P/Q distinction, full-domain and EOF checks, and
+   column, table and Array(Object) consumers. Existing parser probes pass 28
+   checks across one- and two-entry metadata rosters. The actual-helper oracle
+   rejected a literal mutation from 22 to 222. A depth-origin reset seed was
+   caught by the unchanged max-depth assertion. An unconditional root-depth
+   upper bound produced three errors for an empty advanced Object at
+   `max_depth=1`; the conditional correction passes its six-example gate and
+   the corrected-state full gates.
+2. Four native cells pass in each mode: `single_stream` and `with_size_stream`
+   String profiles crossed with BASIC and COMPACT Dynamic discriminator
+   layouts (not the Compact part layout). Each mode has four stock reads, four
+   generated direct ATTACHes, four source CHECKs, and eight attached
+   source/library CHECKs. Stock actuals are plain JSON/Array(JSON) with
+   `v:Int64`; generated library parts use typed JSON/Array(JSON) with
+   `v:UInt8`. These intentionally asymmetric fixtures do not establish
+   equivalent descriptors. All 188 generated library-part files reconcile
+   across modes. The attached copies retain generated files and add the exact
+   pinned 28-byte `invalidated_system_columns.txt`; path expectations use the
+   independent raw `DATA_PATH`, not pre-ATTACH paths.
+3. Root's zero-exit raw-artifact audit validates actual process records,
+   literal windows, runtime/source pins, input/helper hashes and complete
+   manifests. The source is shallow ClickHouse revision
+   `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`; the separate native runtime is
+   ClickHouse `26.10.1.1201`, build
+   `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Refresh evidence if either pin,
+   grammar, bindings, physical names, budgets or consumers change.
+4. The full-domain reader validation and an unused bound-child EOF corruption
+   are covered. A separate corrupt mark on a nonempty parent row excluded by a
+   selected window was not a fixture; source-level complete-domain validation
+   is not that additional behavioral probe. No all-type, other-layout,
+   checksum-hash, whole-scan callback-atomicity, MV/projection, RSS or benchmark
+   claim follows. Broad facade decomposition remains a separate open frontier.
+
+The root evidence index is
+[W215 evidence packet](../.landmark/evidence/object-typed-dynamic-json-w215.json).
+
+Source reference and runtime pins are unchanged from W214 below. Refresh the
+evidence after grammar, binding/physical names, metadata, budgets, mark-window
+consumers or either pin changes.
+
 ## Active composition track — W214 (2026-10-07)
 
 Status: VERIFIED for the finite W214 inline SharedVariant branch below.

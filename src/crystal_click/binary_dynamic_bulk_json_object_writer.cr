@@ -4,6 +4,7 @@ module CrystalClick
   class BinaryDynamicBulkJsonObjectWriter
     @plan : BinaryDynamicBulkPlan
     @budget : BinaryCodecBudget
+    @initial_descriptor_depth : Int32
     @physical_rows : Array(UInt64)
     @documents : Hash(BinaryDynamicJsonLeafKey, Array(Array(ObjectDocument)))
     @consumed : Hash(BinaryDynamicJsonLeafKey, Array(Int32))
@@ -13,10 +14,13 @@ module CrystalClick
       @budget : BinaryCodecBudget,
       granules : Array(Array(BinaryValue)),
       inherited_grid : StorageOccurrenceGrid? = nil,
+      initial_descriptor_depth : Int32 = 1,
     )
       unless @budget.writing?
         raise ArgumentError.new("Dynamic JSON Object writer requires a writing budget")
       end
+      @budget.ensure_depth(initial_descriptor_depth)
+      @initial_descriptor_depth = initial_descriptor_depth
       if grid = inherited_grid
         unless grid.mark_count == granules.size
           raise ArgumentError.new("Dynamic JSON Object writer grid differs from the parent mark count")
@@ -26,7 +30,7 @@ module CrystalClick
       binding_keys = @plan.json_object_leaf_keys(@budget)
       binding_keys.each do |key|
         binding = @plan.json_object_binding(key)
-        self.class.preflight_binding!(binding, @budget, @plan.json_object_leaf_depth(key))
+        self.class.preflight_binding!(binding, @budget, @plan.json_object_leaf_depth(key, @initial_descriptor_depth))
       end
 
       mark_count = granules.size.to_u64
@@ -90,15 +94,16 @@ module CrystalClick
       depth : Int,
     ) : Nil
       binding = @plan.json_object_binding(key)
-      expected_depth = @plan.json_object_leaf_depth(key)
-      unless depth == expected_depth
+      absolute_depth = absolute_json_depth(depth)
+      expected_depth = @plan.json_object_leaf_depth(key, @initial_descriptor_depth)
+      unless absolute_depth == expected_depth
         raise UnsupportedFormatError.new("Dynamic JSON Object row reached an unexpected inherited depth")
       end
       marks = @documents[key]? || raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no bound child owner"))
       unless 0 <= mark_index < marks.size
         raise UnsupportedFormatError.new("Dynamic JSON Object row is outside the parent mark grid")
       end
-      document = BinaryJsonObjectAdapter.to_document(row, binding, @budget, depth)
+      document = BinaryJsonObjectAdapter.to_document(row, binding, @budget, absolute_depth)
       marks[mark_index] << document
       nil
     end
@@ -115,6 +120,7 @@ module CrystalClick
       binding = @plan.json_object_binding(key)
       descriptor = binding.json_type.json_type ||
                    raise(UnsupportedFormatError.new("bound Dynamic JSON leaf has no descriptor"))
+      absolute_depth = absolute_json_depth(depth)
       defaults = Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost).new
       total_nodes = 0_u64
       total_edges = 0_u64
@@ -140,7 +146,7 @@ module CrystalClick
           BinaryBulkDefaultValue.build(descriptor.typed_type_at(index), @plan),
         }
       end
-      row = BinaryJsonRow.new(binding.json_type, values, @budget, depth: depth)
+      row = BinaryJsonRow.new(binding.json_type, values, @budget, depth: absolute_depth)
       collect(key, row, mark_index, depth)
     end
 
@@ -190,7 +196,10 @@ module CrystalClick
       output
     end
 
-    def finish_leaf_streams(profile : BinaryBulkProfile) : Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams)
+    def finish_leaf_streams(
+      profile : BinaryBulkProfile,
+      child_shared_profile : BinaryBulkProfile = profile,
+    ) : Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams)
       ensure_consumed!
       mark_count = @physical_rows.size.to_u64
       binding_count = @documents.size.to_u64
@@ -205,13 +214,17 @@ module CrystalClick
         logical_rows = Array(UInt64).new(granules.size)
         granules.each { |rows| logical_rows << rows.size.to_u64 }
         grid = StorageOccurrenceGrid.new(@physical_rows, logical_rows, @budget)
+        child_root_depth64 = @plan.json_object_leaf_depth(key, @initial_descriptor_depth).to_i64 + 1_i64
+        @budget.ensure_depth(child_root_depth64)
+        child_root_depth = child_root_depth64.to_i32
         output[key] = ObjectDocumentCodec.encode_child_site_with_budget(
           binding.plan,
           granules,
           grid,
           @budget,
           profile: profile,
-          shared_profile: profile,
+          shared_profile: child_shared_profile,
+          typed_descriptor_root_depth: child_root_depth,
         )
       end
       output
@@ -256,6 +269,12 @@ module CrystalClick
         raise UnsupportedFormatError.new("Dynamic JSON writer record count overflows UInt64")
       end
       left + right
+    end
+
+    private def absolute_json_depth(relative_depth : Int) : Int32
+      depth = @initial_descriptor_depth.to_i64 - 1_i64 + relative_depth.to_i64
+      @budget.ensure_depth(depth)
+      depth.to_i32
     end
 
     private def checked_multiply(left : UInt64, right : UInt64) : UInt64

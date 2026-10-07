@@ -66,6 +66,7 @@ module CrystalClick
       limits : BinaryCodecLimits,
       root_depth : Int = 2,
       budget : BinaryCodecBudget? = nil,
+      allow_bound_json : Bool = false,
     ) : Array(SiteSpec)
       if operation_budget = budget
         unless operation_budget.writing?
@@ -83,7 +84,13 @@ module CrystalClick
         if structure.type_count > maximum
           raise UnsupportedFormatError.new("typed Object Dynamic roster exceeds its declared max_types cap")
         end
-        ObjectDeclaredDynamicDeclaration.validate_actual_structure!(structure, limits, site.actual_root_depth, budget)
+        ObjectDeclaredDynamicDeclaration.validate_actual_structure!(
+          structure,
+          limits,
+          site.actual_root_depth,
+          budget,
+          allow_bound_json,
+        )
       end
       sites
     end

@@ -22,12 +22,14 @@ module CrystalClick
     @typed_dynamic_sites : Hash(String, Hash(String, TypedDynamicSite))
     @typed_dynamic_site_paths : Hash(String, Array(String))
     @typed_dynamic_paths : Array(String)
+    @typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)))
 
     def initialize(
       structures : ObjectDynamicStructureSet,
       typed_paths : Hash(String, BinaryDataType),
       typed_dynamics : Hash(String, DynamicStructure) = Hash(String, DynamicStructure).new,
       typed_dynamic_sites : Hash(String, Hash(String, DynamicStructure)) = Hash(String, Hash(String, DynamicStructure)).new,
+      typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
     )
       # Root Object Dynamic metadata is representable without a child binding,
       # but this value-ready plan has no JSON arm-to-Object association. Reject
@@ -88,9 +90,49 @@ module CrystalClick
       unless typed_dynamics.size + typed_dynamic_sites.size <= dynamic_field_count
         raise ArgumentError.new("typed Object Dynamic roster has an unknown or duplicate field")
       end
+      unless typed_dynamic_json_object_leaf_plans.size <= dynamic_field_count
+        raise ArgumentError.new("typed Object Dynamic JSON binding roster has an unknown or duplicate field")
+      end
       if site_count > limits.max_nodes.to_u64 || site_count > limits.max_elements.to_u64
         raise ArgumentError.new("typed Object Dynamic site count exceeds codec limits")
       end
+
+      json_binding_count = 0_u64
+      json_binding_path_elements = 0_u64
+      json_binding_bytes = 0_u64
+      typed_dynamic_json_object_leaf_plans.each do |_path, leaf_plans|
+        json_binding_count = checked_add(json_binding_count, leaf_plans.size.to_u64)
+      end
+      if json_binding_count > limits.max_nodes.to_u64 || json_binding_count > limits.max_elements.to_u64
+        raise ArgumentError.new("typed Object Dynamic JSON bindings exceed codec limits")
+      end
+      budget.preflight_children(json_binding_count) if json_binding_count > 0_u64
+      typed_dynamic_json_object_leaf_plans.each do |path, leaf_plans|
+        type = typed_paths[path]?
+        unless type && type.contains_dynamic?
+          raise ArgumentError.new("typed Object Dynamic JSON bindings have no Dynamic-bearing declaration")
+        end
+        if leaf_plans.empty?
+          raise ArgumentError.new("typed Object Dynamic JSON binding roster cannot be empty")
+        end
+        json_binding_bytes = checked_add(json_binding_bytes, path.bytesize.to_u64)
+        leaf_plans.each do |entry|
+          key = entry[0]
+          json_binding_path_elements = checked_add(json_binding_path_elements, key.descriptor_path_size.to_u64)
+          json_binding_bytes = checked_add(json_binding_bytes, key.dynamic_site_bytesize.to_u64)
+          json_binding_bytes = checked_add(json_binding_bytes, checked_multiply(key.descriptor_path_size.to_u64, 4_u64))
+        end
+      end
+      if json_binding_count > limits.max_nodes.to_u64 ||
+         json_binding_count > limits.max_elements.to_u64 ||
+         json_binding_path_elements > limits.max_elements.to_u64 ||
+         json_binding_bytes > limits.max_bytes.to_u64
+        raise ArgumentError.new("typed Object Dynamic JSON bindings exceed codec limits")
+      end
+      budget.ensure_future_elements(json_binding_path_elements)
+      budget.charge_wire_bytes(json_binding_bytes) if json_binding_bytes > 0_u64
+      json_binding_count.times { budget.charge_node }
+      budget.charge_elements(json_binding_path_elements) if json_binding_path_elements > 0_u64
 
       supplied_site_count = typed_dynamics.size.to_u64
       supplied_key_bytes = 0_u64
@@ -147,6 +189,13 @@ module CrystalClick
       @typed_paths.sort! { |left, right| compare_paths(left, right) }
 
       @typed_dynamic_sites = Hash(String, Hash(String, TypedDynamicSite)).new(initial_capacity: dynamic_field_count.to_i)
+      @typed_dynamic_json_object_leaf_plans = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new(initial_capacity: typed_dynamic_json_object_leaf_plans.size)
+      typed_dynamic_json_object_leaf_plans.each do |path, leaf_plans|
+        detached_path = String.new(path.to_slice)
+        detached_plans = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(leaf_plans.size)
+        leaf_plans.each { |entry| detached_plans << entry }
+        @typed_dynamic_json_object_leaf_plans[detached_path] = detached_plans
+      end
       @typed_dynamic_site_paths = Hash(String, Array(String)).new(initial_capacity: dynamic_field_count.to_i)
       typed_paths.each do |path, type|
         next unless type.contains_dynamic?
@@ -168,7 +217,13 @@ module CrystalClick
             raise ArgumentError.new("typed Object Dynamic roster exceeds its declared max_types cap")
           end
           begin
-            ObjectDeclaredDynamicDeclaration.validate_actual_structure!(structure, limits, 3, budget)
+            ObjectDeclaredDynamicDeclaration.validate_actual_structure!(
+              structure,
+              limits,
+              3,
+              budget,
+              typed_dynamic_json_object_leaf_plans.has_key?(path),
+            )
           rescue ex : UnsupportedFormatError
             raise ArgumentError.new("invalid typed Object Dynamic actual roster: #{ex.message}")
           end
@@ -177,13 +232,42 @@ module CrystalClick
         else
           roster = supplied_roster.not_nil!
           specs = begin
-            ObjectDeclaredDynamicSites.validate_roster!(type, roster, limits, 2, budget)
+            ObjectDeclaredDynamicSites.validate_roster!(
+              type,
+              roster,
+              limits,
+              2,
+              budget,
+              typed_dynamic_json_object_leaf_plans.has_key?(path),
+            )
           rescue ex : UnsupportedFormatError
             raise ArgumentError.new("invalid typed Object Dynamic site roster: #{ex.message}")
           end
           specs.each do |spec|
             structure = roster[spec.path]? || raise(ArgumentError.new("typed Object Dynamic structure is missing site: #{spec.path.inspect}"))
             site_entries[spec.path] = TypedDynamicSite.new(spec.path, spec.type, spec.object_depth, structure)
+          end
+        end
+        if json_leaf_plans = typed_dynamic_json_object_leaf_plans[path]?
+          site_structures = Hash(String, DynamicStructure).new(initial_capacity: site_entries.size)
+          site_entries.each do |site_path, site|
+            site_structures[site_path] = site.structure
+          end
+          begin
+            # Reuse the generic Dynamic planner as the admission authority for
+            # exact leaf identities, duplicate/excess keys, and child-schema
+            # compatibility. `allow_bound_json` above is shape-only; it does
+            # not make this Object plan value-ready by itself.
+            ObjectDeclaredDynamicDeclaration.prepare_write_sites_plan(
+              type,
+              site_structures,
+              budget,
+              BinaryBulkProfile.single_stream,
+              2,
+              json_leaf_plans,
+            )
+          rescue ex : UnsupportedFormatError
+            raise ArgumentError.new("invalid typed Object Dynamic JSON binding: #{ex.message}")
           end
         end
         detached_path = String.new(path.to_slice)
@@ -333,6 +417,50 @@ module CrystalClick
       detached = Hash(String, DynamicStructure).new(initial_capacity: entries.size)
       entries.each do |site_path, site|
         detached[String.new(site_path.to_slice)] = site.structure
+      end
+      detached
+    end
+
+    # Borrowed-budget snapshot of the exact JSON leaf bindings for one declared
+    # typed Dynamic field. Binding keys and child plans are immutable owners;
+    # only the containing roster is detached.
+    def typed_dynamic_json_object_leaf_plans_for(
+      path : String,
+      budget : BinaryCodecBudget,
+    ) : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))
+      entries = @typed_dynamic_json_object_leaf_plans[path]?
+      return [] of Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan) unless entries
+      count = entries.size.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      budget.ensure_future_elements(count)
+      count.times { budget.charge_node }
+      budget.charge_elements(count) if count > 0_u64
+      copied = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(entries.size)
+      entries.each { |entry| copied << entry }
+      copied
+    end
+
+    # Detached full snapshot for normalized child decoding, where the Object
+    # codec must hand each declared Dynamic field its own exact leaf roster.
+    def typed_dynamic_json_object_leaf_plans(
+      budget : BinaryCodecBudget,
+    ) : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)))
+      count = @typed_dynamic_json_object_leaf_plans.size.to_u64
+      binding_count = 0_u64
+      copied_bytes = 0_u64
+      @typed_dynamic_json_object_leaf_plans.each do |path, entries|
+        copied_bytes = checked_add(copied_bytes, path.bytesize.to_u64)
+        binding_count = checked_add(binding_count, entries.size.to_u64)
+      end
+      records = checked_add(count, binding_count)
+      budget.preflight_children(records) if records > 0_u64
+      budget.ensure_future_elements(records)
+      budget.charge_wire_bytes(copied_bytes) if copied_bytes > 0_u64
+      records.times { budget.charge_node }
+      budget.charge_elements(records) if records > 0_u64
+      detached = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new(initial_capacity: @typed_dynamic_json_object_leaf_plans.size)
+      @typed_dynamic_json_object_leaf_plans.each do |path, entries|
+        detached[String.new(path.to_slice)] = entries.dup
       end
       detached
     end

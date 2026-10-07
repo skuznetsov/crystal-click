@@ -7,14 +7,25 @@ module CrystalClick
         physical_plan : ObjectDocumentPhysicalPlan,
         plan : ObjectDocumentPlan,
         streams : ObjectDocumentStreams,
+        codec_budget : BinaryCodecBudget? = nil,
       ) : Array(ObjectDocumentColumnLane)
         if streams.mark_count <= 0
           raise UnsupportedFormatError.new("Object document output has no real outer marks")
+        end
+        if budget = codec_budget
+          lane_bound = physical_plan.stream_count.to_u64
+          # Reserve one bounded lane-binding record per physical name before
+          # the detached name roster, expected-name set, and lane list grow.
+          budget.ensure_future_nodes(lane_bound)
+          budget.ensure_future_elements(lane_bound)
+          budget.preflight_children(lane_bound)
+          lane_bound.times { budget.charge_node }
         end
         expected = Hash(String, Bool).new
         physical_plan.stream_names.each do |name|
           expected[name] = false unless physical_plan.advanced_stream_name?(name)
         end
+        deferred_json_names = Hash(String, Bool).new
         lanes = Array(ObjectDocumentColumnLane).new(expected.size)
         structures = streams.structures
         object_bytes = structures.borrowed_object
@@ -137,6 +148,9 @@ module CrystalClick
               statistics_offset
             ))
           end
+          defer_json_object_child_lanes!(
+            expected, deferred_json_names, physical_dynamic, typed_dynamic
+          )
           add_typed_dynamic_data_lanes!(
             lanes, expected, physical_dynamic, typed_dynamic, streams.mark_count,
             streams.typed_dynamic_mode
@@ -161,7 +175,7 @@ module CrystalClick
           end
         end
 
-        unless lanes.size == expected.size && expected.each_value.all? { |seen| seen }
+        unless lanes.size + deferred_json_names.size == expected.size && expected.each_value.all? { |seen| seen }
           raise UnsupportedFormatError.new("Object column lanes do not exactly cover the physical filename roster")
         end
         lanes
@@ -253,6 +267,44 @@ module CrystalClick
             dynamic_discriminator_role,
             dynamic_discriminator_role ? discriminator_mode : nil
           ))
+        end
+        nil
+      end
+
+      # Typed Dynamic JSON Object lanes are emitted by the recursive physical
+      # child composer after the enclosing Dynamic lanes have been bound. Mark
+      # their exact, preplanned names as deferred here; no guessed or missing
+      # child can be hidden by the final parent roster check.
+      private def self.defer_json_object_child_lanes!(
+        expected : Hash(String, Bool),
+        deferred : Hash(String, Bool),
+        physical : BinaryDynamicBulkPhysicalPlan,
+        streams : BinaryDynamicBulkStreams,
+      ) : Nil
+        stream_keys = streams.json_object_leaf_keys
+        sites = physical.json_object_sites
+        unless stream_keys.size == sites.size
+          raise UnsupportedFormatError.new("typed Dynamic JSON child streams do not match their physical site roster")
+        end
+        seen = Hash(BinaryDynamicJsonLeafKey, Bool).new(initial_capacity: sites.size)
+        sites.each do |site|
+          key = site.leaf_key
+          unless stream_keys.includes?(key) && streams.has_json_object_leaf?(key) &&
+                 site.binding.leaf_key == key && !seen.has_key?(key)
+            raise UnsupportedFormatError.new("typed Dynamic JSON child binding differs from its encoded leaf roster")
+          end
+          seen[key] = true
+          child_names = site.physical_plan.stream_names
+          child_names.each do |name|
+            unless expected.has_key?(name) && !expected[name] && !deferred.has_key?(name)
+              raise UnsupportedFormatError.new("typed Dynamic JSON child lane has no unique physical filename binding")
+            end
+            expected[name] = true
+            deferred[name] = true
+          end
+        end
+        unless seen.size == stream_keys.size
+          raise UnsupportedFormatError.new("typed Dynamic JSON child stream roster omitted a bound leaf")
         end
         nil
       end

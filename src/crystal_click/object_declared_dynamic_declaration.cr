@@ -81,9 +81,14 @@ module CrystalClick
       limits : BinaryCodecLimits,
       root_depth : Int = 3,
       budget : BinaryCodecBudget? = nil,
+      allow_bound_json : Bool = false,
     ) : Nil
       structure.type_count.times do |index|
-        validate_actual_type!(structure.type_at(index), limits, root_depth, budget)
+        if allow_bound_json
+          validate_bound_json_actual_type!(structure.type_at(index), limits, root_depth, budget)
+        else
+          validate_actual_type!(structure.type_at(index), limits, root_depth, budget)
+        end
       end
       nil
     end
@@ -96,6 +101,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
       root_depth : Int = 2,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       unless budget.writing?
         raise ArgumentError.new("typed Object Dynamic plan requires a writing budget")
@@ -126,12 +132,30 @@ module CrystalClick
         end
         structure.type_count.times do |index|
           actual_type = structure.type_at(index)
-          validate_actual_type!(actual_type, limits, site.actual_root_depth, budget)
+          if json_object_leaf_plans.nil?
+            validate_actual_type!(actual_type, limits, site.actual_root_depth, budget)
+          else
+            validate_bound_json_actual_type!(actual_type, limits, site.actual_root_depth, budget)
+          end
         end
-        prepared_structures[site.path] = without_statistics(structure, budget, site.actual_root_depth)
+        prepared_structures[site.path] = without_statistics(
+          structure,
+          budget,
+          site.actual_root_depth,
+          allow_bound_json: !json_object_leaf_plans.nil?,
+        )
       end
 
-      BinaryDynamicBulkPlan.new_with_budget(type, prepared_structures, budget, profile)
+      plan = BinaryDynamicBulkPlan.new_with_budget(
+        type,
+        prepared_structures,
+        budget,
+        profile,
+        nil,
+        json_object_leaf_plans,
+      )
+      plan.validate_inherited_depth!(root_depth.to_i32, budget) if plan.has_json_object_bindings?
+      plan
     end
 
     # Parses every nominal typed-Dynamic metadata site once. The returned
@@ -143,10 +167,66 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
       root_depth : Int = 2,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       if budget.writing?
         raise ArgumentError.new("typed Object Dynamic plan requires a reading budget")
       end
+      sites = prepare_read_site_specs(type, budget, root_depth)
+      unless structures.site_count.to_u64 == sites.size.to_u64
+        raise CorruptPartError.new("typed Object Dynamic structure site count does not match its declaration")
+      end
+      plan = begin
+        BinaryDynamicBulkPlan.decode_structure_streams(type, structures, budget, profile, nil, json_object_leaf_plans)
+      rescue ex : UnsupportedFormatError
+        raise CorruptPartError.new("invalid typed Object Dynamic structure: #{ex.message}")
+      end
+      validate_read_sites_plan!(plan, sites, budget, root_depth)
+    end
+
+    # Physical Object readers discover each Dynamic metadata lane through its
+    # owning column namespace. This path preserves that single parse while
+    # allowing the generic plan to ask for every exact JSON leaf child plan.
+    # The callback depth is absolute: it starts at the typed Object root and
+    # advances through the declared site's relative path exactly once.
+    def self.prepare_read_sites_plan_with_loader(
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      loader : Proc(String, Hash(String, DynamicStructure), BinaryCodecBudget, Bytes),
+      root_depth : Int = 2,
+      descriptor_preflight : BinaryDynamicBulkDescriptorPreflight? = nil,
+      json_object_leaf_plan_loader : Proc(
+        BinaryDynamicJsonLeafKey, Int32, DynamicStructure, Hash(String, DynamicStructure), BinaryCodecBudget,
+        ObjectDocumentPlan,
+      )? = nil,
+    ) : BinaryDynamicBulkPlan
+      if budget.writing?
+        raise ArgumentError.new("typed Object Dynamic plan requires a reading budget")
+      end
+      sites = prepare_read_site_specs(type, budget, root_depth)
+      plan = begin
+        BinaryDynamicBulkPlan.decode_structure_streams_with_loader(
+          type,
+          budget,
+          loader,
+          profile,
+          root_depth.to_i32,
+          descriptor_preflight,
+          nil,
+          json_object_leaf_plan_loader,
+        )
+      rescue ex : UnsupportedFormatError
+        raise CorruptPartError.new("invalid typed Object Dynamic structure: #{ex.message}")
+      end
+      validate_read_sites_plan!(plan, sites, budget, root_depth)
+    end
+
+    private def self.prepare_read_site_specs(
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+      root_depth : Int,
+    ) : Array(ObjectDeclaredDynamicSites::SiteSpec)
       limits = budget.limits
       shape = begin
         ObjectDeclaredDynamicSites.shape_for(type, limits, root_depth)
@@ -156,9 +236,6 @@ module CrystalClick
       unless shape.count > 0_u64
         raise CorruptPartError.new("typed Object Dynamic site plan requires a declared Dynamic site")
       end
-      unless structures.site_count.to_u64 == shape.count
-        raise CorruptPartError.new("typed Object Dynamic structure site count does not match its declaration")
-      end
       if shape.count > 0_u64
         budget.ensure_future_nodes(shape.count)
         budget.preflight_children(shape.count)
@@ -166,13 +243,16 @@ module CrystalClick
       path_work_bytes = checked_multiply(shape.path_bytes, checked_add(limits.max_depth.to_u64, 1_u64))
       budget.ensure_wire_bytes(path_work_bytes)
       budget.charge_wire_bytes(path_work_bytes)
-      sites = ObjectDeclaredDynamicSites.for_type(type, limits, root_depth)
+      ObjectDeclaredDynamicSites.for_type(type, limits, root_depth)
+    end
 
-      plan = begin
-        BinaryDynamicBulkPlan.decode_structure_streams(type, structures, budget, profile)
-      rescue ex : UnsupportedFormatError
-        raise CorruptPartError.new("invalid typed Object Dynamic structure: #{ex.message}")
-      end
+    private def self.validate_read_sites_plan!(
+      plan : BinaryDynamicBulkPlan,
+      sites : Array(ObjectDeclaredDynamicSites::SiteSpec),
+      budget : BinaryCodecBudget,
+      root_depth : Int,
+    ) : BinaryDynamicBulkPlan
+      plan.validate_inherited_depth!(root_depth.to_i32, budget) if plan.has_json_object_bindings?
       unless plan.site_count == sites.size
         raise CorruptPartError.new("typed Object Dynamic structure contains undeclared nested sites")
       end
@@ -189,7 +269,11 @@ module CrystalClick
         begin
           structure.type_count.times do |index|
             actual_type = structure.type_at(index)
-            validate_actual_type!(actual_type, limits, site.actual_root_depth, budget)
+            if plan.has_json_object_bindings?
+              validate_bound_json_actual_type!(actual_type, budget.limits, site.actual_root_depth, budget)
+            else
+              validate_actual_type!(actual_type, budget.limits, site.actual_root_depth, budget)
+            end
           end
         rescue ex : UnsupportedFormatError
           raise CorruptPartError.new("invalid typed Object Dynamic actual roster: #{ex.message}")
@@ -242,6 +326,20 @@ module CrystalClick
     # JSON scalar. Keep this private opt-in separate from ordinary actual-arm
     # admission; JSON owns its own bounded typed-path grammar.
     private def self.validate_shared_json_actual_type!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      root_depth : Int,
+      budget : BinaryCodecBudget?,
+    ) : Nil
+      validate_actual_descriptor_tree!(type, limits, root_depth, budget)
+      validate_actual_type_shape!(type, limits, root_depth, true)
+      nil
+    end
+
+    # Ordinary JSON actuals are admitted only in the exact paired Object
+    # binding path. The caller still relies on BinaryDynamicBulkPlan's exact
+    # key coverage before producing or consuming lanes.
+    private def self.validate_bound_json_actual_type!(
       type : BinaryDataType,
       limits : BinaryCodecLimits,
       root_depth : Int,
@@ -330,7 +428,12 @@ module CrystalClick
     # Fresh typed-child metadata intentionally omits supplied statistics.
     # Bound descriptor/name work before the new roster or its canonical names
     # are allocated; the caller retains the same consumptive operation budget.
-    def self.without_statistics(structure : DynamicStructure, budget : BinaryCodecBudget, root_depth : Int = 3) : DynamicStructure
+    def self.without_statistics(
+      structure : DynamicStructure,
+      budget : BinaryCodecBudget,
+      root_depth : Int = 3,
+      allow_bound_json : Bool = false,
+    ) : DynamicStructure
       count = structure.type_count.to_u64
       budget.ensure_future_nodes(count)
       budget.preflight_children(count) if count > 0_u64
@@ -339,7 +442,11 @@ module CrystalClick
       maximum_copy_bytes = 0_u64
       structure.type_count.times do |index|
         type = structure.type_at(index)
-        validate_actual_type!(type, budget.limits, root_depth, budget)
+        if allow_bound_json
+          validate_bound_json_actual_type!(type, budget.limits, root_depth, budget)
+        else
+          validate_actual_type!(type, budget.limits, root_depth, budget)
+        end
         bound = BinaryTypeNameBudget.measure(type, budget, root_depth)
         maximum_copy_bytes = checked_add(maximum_copy_bytes, checked_add(bound[0], bound[1]))
       end

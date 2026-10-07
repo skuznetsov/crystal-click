@@ -2,27 +2,32 @@ require "./spec_helper"
 
 module W159TypedDynamicPlanDecodeProbe
   class_property enabled = false
+  class_property parse_calls = 0
+  # Completed read probes' actual Dynamic metadata parser-entry totals.
   class_property site_counts = [] of Int32
 
   def self.begin : Nil
+    self.parse_calls = 0
     self.site_counts = [] of Int32
     self.enabled = true
   end
 
   def self.finish : Nil
     self.enabled = false
+    self.site_counts << self.parse_calls
   end
 end
 
-class CrystalClick::BinaryDynamicBulkPlan
-  def self.decode_structure_streams(
-    type : BinaryDataType,
-    streams : BinaryDynamicStructureStreams,
-    budget : BinaryCodecBudget,
-    profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
-  ) : BinaryDynamicBulkPlan
-    W159TypedDynamicPlanDecodeProbe.site_counts << streams.site_count if W159TypedDynamicPlanDecodeProbe.enabled
-    previous_def(type, streams, budget, profile)
+module CrystalClick::DynamicStructureCodec
+  def self.read_with_statistics_offset(
+    context : BinaryCodecContext,
+    structure_depth : Int = 1,
+    type_depth : Int = 1,
+    preflight_type_names : Bool = false,
+  ) : Tuple(DynamicStructure, Int32)
+    parsed = previous_def(context, structure_depth, type_depth, preflight_type_names)
+    W159TypedDynamicPlanDecodeProbe.parse_calls += 1 if W159TypedDynamicPlanDecodeProbe.enabled
+    parsed
   end
 end
 
@@ -125,9 +130,9 @@ private def w159a_read_counted(
   ensure
     W159TypedDynamicPlanDecodeProbe.finish
   end
-  # A single typed composite child owns two Dynamic sites. The metadata parse
-  # is once per child and returns the complete two-site plan, independent of
-  # the selected value window.
+  # One completed read of a typed composite child should enter the actual
+  # metadata parser once per declared Dynamic site, independent of the
+  # selected value window. These are parser entries, not public plan calls.
   W159TypedDynamicPlanDecodeProbe.site_counts.should eq([2])
   rows
 end

@@ -68,6 +68,7 @@ module CrystalClick
     @stream_count : Int32
     @shared_data_version : UInt64
     @initial_array_level : UInt64
+    @typed_descriptor_root_depth : Int32
 
     # Discover only declared Dynamic structure basenames, without constructing
     # a dummy BinaryDynamicBulkPlan. This is used before metadata is available;
@@ -228,6 +229,7 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       initial_array_level : UInt64 = 0_u64,
       context : PhysicalStreamPlanContext? = nil,
+      typed_descriptor_root_depth : Int32 = 2,
     ) : ObjectDocumentPhysicalPlan
       PhysicalStreamName.validate_canonical_escaped_prefix(escaped_prefix)
       unless escaped_prefix.bytesize.to_u64 <= limits.max_bytes.to_u64 &&
@@ -239,7 +241,10 @@ module CrystalClick
           raise ArgumentError.new("Object physical name context limits differ from the site limits")
         end
       end
-      new(EscapedPrefix.validated(escaped_prefix), plan, profile, shared_profile, limits, initial_array_level, context)
+      new(
+        EscapedPrefix.validated(escaped_prefix), plan, profile, shared_profile, limits,
+        initial_array_level, context, typed_descriptor_root_depth
+      )
     end
 
     def initialize(
@@ -249,10 +254,15 @@ module CrystalClick
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       initial_array_level : UInt64 = 0_u64,
+      typed_descriptor_root_depth : Int32 = 2,
     )
-      state = build_plan(column_name, nil, plan, profile, shared_profile, limits, initial_array_level, nil)
+      state = build_plan(
+        column_name, nil, plan, profile, shared_profile, limits, initial_array_level, nil,
+        typed_descriptor_root_depth
+      )
       @profile = profile
       @initial_array_level = initial_array_level
+      @typed_descriptor_root_depth = typed_descriptor_root_depth
       @object_structure_stream = state.object_structure_stream
       @dynamic_structure_streams = state.dynamic_structure_streams
       @discriminator_streams = state.discriminator_streams
@@ -276,10 +286,15 @@ module CrystalClick
       limits : BinaryCodecLimits,
       initial_array_level : UInt64,
       context : PhysicalStreamPlanContext?,
+      typed_descriptor_root_depth : Int32,
     )
-      state = build_plan(nil, escaped_prefix.value, plan, profile, shared_profile, limits, initial_array_level, context)
+      state = build_plan(
+        nil, escaped_prefix.value, plan, profile, shared_profile, limits, initial_array_level,
+        context, typed_descriptor_root_depth
+      )
       @profile = profile
       @initial_array_level = initial_array_level
+      @typed_descriptor_root_depth = typed_descriptor_root_depth
       @object_structure_stream = state.object_structure_stream
       @dynamic_structure_streams = state.dynamic_structure_streams
       @discriminator_streams = state.discriminator_streams
@@ -304,9 +319,17 @@ module CrystalClick
       limits : BinaryCodecLimits,
       initial_array_level : UInt64,
       provided_context : PhysicalStreamPlanContext?,
+      typed_descriptor_root_depth : Int32,
     ) : PlanState
       if initial_array_level > UInt64::MAX - limits.max_depth.to_u64
         raise UnsupportedFormatError.new("physical Object initial Array level overflows the name coordinate")
+      end
+      if typed_descriptor_root_depth <= 0 ||
+         (plan.typed_path_count > 0 && typed_descriptor_root_depth > limits.max_depth)
+        raise UnsupportedFormatError.new("physical Object typed descriptor root depth exceeds the configured limit")
+      end
+      if plan.typed_dynamic_count > 0 && typed_descriptor_root_depth < 2
+        raise UnsupportedFormatError.new("physical Object typed Dynamic descriptor root depth must be at least 2")
       end
       object = plan.structures.object
       unless ObjectSharedBucketLayout.supported?(object)
@@ -322,16 +345,18 @@ module CrystalClick
         path = plan.typed_path_at(index)
         type = plan.typed_type_for(path)
         if plan.has_typed_dynamic?(path)
-          unless ObjectRecursiveDeclaration.account_descriptor(type, typed_dynamic_budget, limits, 2)
+          unless ObjectRecursiveDeclaration.account_descriptor(type, typed_dynamic_budget, limits, typed_descriptor_root_depth)
             raise UnsupportedFormatError.new("physical typed Object Dynamic descriptor is outside the recursive declaration grammar")
           end
           structures = plan.typed_dynamic_sites_for(path, typed_dynamic_budget)
+          json_leaf_plans = plan.typed_dynamic_json_object_leaf_plans_for(path, typed_dynamic_budget)
           typed_dynamic_write_plans[path] = ObjectDeclaredDynamicDeclaration.prepare_write_sites_plan(
             type,
             structures,
             typed_dynamic_budget,
             profile,
-            2
+            typed_descriptor_root_depth,
+            json_leaf_plans.empty? ? nil : json_leaf_plans,
           )
         elsif type.contains_dynamic?
           raise UnsupportedFormatError.new("physical Object typed Dynamic fields are not admitted")
@@ -417,7 +442,7 @@ module CrystalClick
         if plan.has_typed_dynamic?(raw_path)
           prepared = typed_dynamic_write_plans[raw_path]
           typed_dynamic_plan = BinaryDynamicBulkPhysicalPlan.from_escaped_prefix(
-            prepared, path_prefix, limits, context, initial_array_level
+            prepared, path_prefix, limits, context, initial_array_level, typed_descriptor_root_depth
           )
           typed_dynamic_plans[String.new(raw_path.to_slice)] = typed_dynamic_plan
           collect_plan_names!(typed_dynamic_plan, seen_names)
@@ -426,12 +451,12 @@ module CrystalClick
 
         if type.contains_variant?
           preflight_variant_typed_type(type, limits.max_depth, 0, context, 0_u64, 0_u64)
-          if ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+          if ObjectRecursiveDeclaration.measure_descriptor(type, limits, typed_descriptor_root_depth).nil?
             raise UnsupportedFormatError.new("physical Object typed Variant descriptor is outside the admitted declaration grammar")
           end
         end
         if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type) &&
-           ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+           ObjectRecursiveDeclaration.measure_descriptor(type, limits, typed_descriptor_root_depth).nil?
           raise UnsupportedFormatError.new("physical Object typed LowCardinality fields are not admitted")
         end
         typed_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
@@ -609,6 +634,10 @@ module CrystalClick
 
     def initial_array_level : UInt64
       @initial_array_level
+    end
+
+    def typed_descriptor_root_depth : Int32
+      @typed_descriptor_root_depth
     end
 
     # Scalar count from the collision-checked construction roster. This lets

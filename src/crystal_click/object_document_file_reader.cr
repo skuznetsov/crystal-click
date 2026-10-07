@@ -37,6 +37,9 @@ module CrystalClick
 
     private struct PreparedRead
       getter source : PartStreamSource
+      getter physical_plan : ObjectDocumentPhysicalPlan
+      getter name_context : PhysicalStreamPlanContext
+      getter hashed : Bool
       getter schema_snapshot : Hash(String, BinaryDataType)
       getter object_bytes : Bytes
       getter dynamic_bytes : Hash(String, Bytes)
@@ -66,6 +69,9 @@ module CrystalClick
 
       def initialize(
         @source : PartStreamSource,
+        @physical_plan : ObjectDocumentPhysicalPlan,
+        @name_context : PhysicalStreamPlanContext,
+        @hashed : Bool,
         @schema_snapshot : Hash(String, BinaryDataType),
         @object_bytes : Bytes,
         @dynamic_bytes : Hash(String, Bytes),
@@ -475,6 +481,10 @@ module CrystalClick
                                        )
                                      end
       source = source_override || PartStreamSource.new(part_path)
+      name_context = name_context_override || PhysicalStreamPlanContext.new(limits)
+      unless same_limits?(name_context.limits, limits)
+        raise ArgumentError.new("Object read and physical-name context limits differ")
+      end
 
       object_name = PhysicalStreamName.append_literal(column_prefix, ".object_structure")
       object_data_name, object_marks_name = file_pair(object_name, hashed)
@@ -550,6 +560,9 @@ module CrystalClick
       typed_dynamic_site_statistics_offsets = Hash(String, Hash(String, Int32)).new
       typed_dynamic_structures = Hash(String, Hash(String, DynamicStructure)).new
       typed_dynamic_direct_structures = Hash(String, DynamicStructure).new
+      typed_dynamic_json_object_leaf_plans = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new
+      typed_dynamic_json_leaf_coordinates = Hash(String, Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectSiteCoordinates)).new
+      typed_dynamic_json_logical_read_bytes = 0_u64
       schema_snapshot.each do |path, type|
         next unless type.contains_dynamic?
         names = typed_dynamic_metadata_names[path]?
@@ -570,14 +583,76 @@ module CrystalClick
           site_bytes[String.new(site_path.to_slice)] = bytes
           site_grids[String.new(site_path.to_slice)] = grid
         end
-        child_streams = BinaryDynamicStructureStreams.new(site_bytes)
-        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan(
+        root_depth = object_declared_dynamic_root_depth(typed_schema_depth)
+        typed_prefix = PhysicalStreamName.append_escaped_component(column_prefix, path, name_context)
+        resolver = BinaryDynamicBulkSiteNameResolver.from_escaped_prefix(
           type,
-          child_streams,
+          typed_prefix,
+          initial_array_level,
+          limits,
+          codec_budget,
+          name_context,
+          root_depth,
+        )
+        json_coordinates = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectSiteCoordinates).new
+        loader = ->(site_path : String, structures : Hash(String, DynamicStructure), _budget : BinaryCodecBudget) {
+          logical_name = resolver.structure_stream_name(site_path, structures)
+          unless names[site_path]? == logical_name
+            raise CorruptPartError.new("typed Dynamic structure name differs from the schema-derived physical roster")
+          end
+          site_bytes[site_path]? || raise(CorruptPartError.new("typed Dynamic structure bytes are missing a declared site"))
+        }
+        json_object_leaf_plan_loader = ->(key : BinaryDynamicJsonLeafKey, json_descriptor_depth : Int32, _structure : DynamicStructure, structures : Hash(String, DynamicStructure), budget : BinaryCodecBudget) {
+          coordinates = resolver.json_object_leaf_site(key, structures)
+          json_descriptor = coordinates.json_type.json_type ||
+                            raise(CorruptPartError.new("typed Dynamic JSON leaf has no persisted descriptor"))
+          json_schema = copy_json_typed_schema(json_descriptor, budget)
+          child_descriptor = inspect_at_site(
+            source,
+            coordinates.escaped_prefix,
+            json_schema,
+            budget,
+            name_context,
+            transport_budget,
+            profile,
+            BinaryBulkProfile.single_stream,
+            hashed,
+            coordinates.array_level,
+            outer_rows,
+            json_descriptor_depth + 1,
+          )
+          typed_dynamic_json_logical_read_bytes = checked_add_u64(
+            typed_dynamic_json_logical_read_bytes,
+            child_descriptor.logical_read_bytes
+          )
+          if json_coordinates.has_key?(key)
+            raise CorruptPartError.new("typed Dynamic JSON leaf coordinates are duplicated")
+          end
+          json_coordinates[key] = coordinates
+          child_descriptor.plan
+        }
+        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan_with_loader(
+          type,
           codec_budget,
           profile,
-          root_depth: object_declared_dynamic_root_depth(typed_schema_depth)
+          loader,
+          root_depth: root_depth,
+          descriptor_preflight: resolver.descriptor_preflight,
+          json_object_leaf_plan_loader: json_object_leaf_plan_loader,
         )
+        typed_dynamic_json_leaf_coordinates[String.new(path.to_slice)] = json_coordinates
+        json_keys = dynamic_plan.json_object_leaf_keys(codec_budget)
+        unless json_keys.empty?
+          records = json_keys.size.to_u64
+          codec_budget.preflight_children(records)
+          codec_budget.ensure_future_nodes(records)
+          records.times { codec_budget.charge_node }
+          leaf_plans = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(json_keys.size)
+          json_keys.each do |key|
+            leaf_plans << {key, dynamic_plan.json_object_binding(key).plan}
+          end
+          typed_dynamic_json_object_leaf_plans[String.new(path.to_slice)] = leaf_plans
+        end
         expected_sites = dynamic_plan.site_paths
         unless expected_sites.size == site_grids.size && expected_sites.size == names.size
           raise CorruptPartError.new("typed Dynamic metadata grids do not match the retained site roster")
@@ -590,7 +665,7 @@ module CrystalClick
             raise CorruptPartError.new("typed Dynamic metadata name is missing a declared site")
           end
           # The retained parse supplies each site's exact statistics boundary.
-          # `prepare_read_sites_plan` consumed these structure blobs once.
+          # `prepare_read_sites_plan_with_loader` retained each exact parse.
           statistics_offset = dynamic_plan.statistics_offset_for(site_path)
           bytes = site_bytes[site_path]? || raise(CorruptPartError.new("typed Dynamic metadata bytes are missing a declared site"))
           validate_metadata_grid!(grid, statistics_offset, bytes.size)
@@ -616,7 +691,8 @@ module CrystalClick
         structure_set,
         schema_snapshot,
         typed_dynamic_direct_structures,
-        recursive_typed_dynamic_structures
+        recursive_typed_dynamic_structures,
+        typed_dynamic_json_object_leaf_plans,
       )
       if expected_schema = expected_schema_override
         begin
@@ -632,26 +708,16 @@ module CrystalClick
           raise CorruptPartError.new("Object child metadata changed after Dynamic JSON binding")
         end
       end
-      physical_plan = if site_prefix = escaped_prefix_override
-                        ObjectDocumentPhysicalPlan.from_escaped_prefix(
-                          site_prefix,
-                          document_plan,
-                          profile,
-                          shared_profile,
-                          limits,
-                          initial_array_level,
-                          name_context_override,
-                        )
-                      else
-                        ObjectDocumentPhysicalPlan.new(
-                          column_name,
-                          document_plan,
-                          profile,
-                          shared_profile,
-                          limits,
-                          initial_array_level
-                        )
-                      end
+      physical_plan = ObjectDocumentPhysicalPlan.from_escaped_prefix(
+        column_prefix,
+        document_plan,
+        profile,
+        shared_profile,
+        limits,
+        initial_array_level,
+        name_context,
+        object_declared_dynamic_root_depth(typed_schema_depth),
+      )
 
       typed_dynamic_metadata_names.each do |path, names|
         physical = physical_plan.typed_dynamic(path)
@@ -667,6 +733,21 @@ module CrystalClick
           end
           unless physical.structure_name_for(site_path) == logical_name
             raise CorruptPartError.new("typed Dynamic discovered metadata name disagrees with the final physical plan")
+          end
+        end
+      end
+      typed_dynamic_json_leaf_coordinates.each do |path, coordinates_by_key|
+        physical = physical_plan.typed_dynamic(path)
+        unless physical.json_object_site_count == coordinates_by_key.size
+          raise CorruptPartError.new("typed Dynamic JSON physical sites differ from discovered metadata")
+        end
+        coordinates_by_key.each do |key, coordinates|
+          site = physical.json_object_site(key)
+          unless site.escaped_prefix == coordinates.escaped_prefix &&
+                 site.array_level == coordinates.array_level &&
+                 site.binding.leaf_key == key &&
+                 site.binding.json_type == coordinates.json_type
+            raise CorruptPartError.new("typed Dynamic JSON physical coordinates changed after metadata discovery")
           end
         end
       end
@@ -688,11 +769,13 @@ module CrystalClick
         discriminator_bindings,
         outer_rows,
         transport_budget
-      ) do |grid, prefix|
+      ) do |grid, prefix, binding_kind, binding_path|
         logical_lane_bytes = checked_add_u64(logical_lane_bytes, grid.logical_size.to_u64)
         unless build_descriptor
-          first = replay_complete ? 0 : first_mark
-          count = replay_complete ? outer_rows.size : selected_count
+          full_typed_dynamic_json = binding_kind == :typed_dynamic &&
+                                    (typed_dynamic_plans[binding_path]?.try(&.has_json_object_bindings?) || false)
+          first = full_typed_dynamic_json || replay_complete ? 0 : first_mark
+          count = full_typed_dynamic_json || replay_complete ? outer_rows.size : selected_count
           selected_wire_bytes = checked_add_u64(
             selected_wire_bytes,
             selected_extent(grid, first, count, prefix)
@@ -733,6 +816,7 @@ module CrystalClick
       codec_budget.ensure_wire_bytes(checked_add_u64(metadata_size, selected_wire_bytes))
 
       logical_read_bytes = checked_add_u64(metadata_size, logical_lane_bytes)
+      logical_read_bytes = checked_add_u64(logical_read_bytes, typed_dynamic_json_logical_read_bytes)
       descriptor = nil.as(ObjectDocumentFileDescriptor?)
       if build_descriptor
         logical_names, checksum_names = descriptor_stream_names!(
@@ -755,6 +839,9 @@ module CrystalClick
       # Selection validation bounded both indices to outer_rows.size before narrowing.
       PreparedRead.new(
         source,
+        physical_plan,
+        name_context,
+        hashed,
         schema_snapshot,
         object_bytes,
         dynamic_bytes,
@@ -855,10 +942,16 @@ module CrystalClick
       bulk_bindings.each do |binding|
         next unless (binding.kind == :typed || binding.kind == :typed_dynamic) &&
                     BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(binding.role, binding.prefix_size)
-        if read_count == Int32::MAX
+        binding_read_count = if binding.kind == :typed_dynamic &&
+                                typed_dynamic_full_json_grid?(binding.path, typed_dynamic_plans)
+                               outer_rows.size
+                             else
+                               read_count
+                             end
+        if binding_read_count == Int32::MAX
           raise CorruptPartError.new("Object Variant read coordinate count exceeds the supported domain")
         end
-        prefix_reads << {binding.role, binding.prefix_size, read_count + 1}
+        prefix_reads << {binding.role, binding.prefix_size, binding_read_count + 1}
       end
       BinaryBulkPhysicalPrefixAdapter.preflight_read(prefix_reads, codec_budget) unless prefix_reads.empty?
 
@@ -881,11 +974,15 @@ module CrystalClick
       end
       shared_roles = Hash(String, BinaryBulkStream).new
       bulk_bindings.each do |binding|
+        full_typed_dynamic_json = binding.kind == :typed_dynamic &&
+                                  typed_dynamic_full_json_grid?(binding.path, typed_dynamic_plans)
+        binding_read_first = full_typed_dynamic_json ? 0 : read_first
+        binding_read_count = full_typed_dynamic_json ? outer_rows.size : read_count
         window = source.read_window(
           binding.data_name,
           binding.marks_name,
-          read_first,
-          read_count,
+          binding_read_first,
+          binding_read_count,
           binding.prefix_size,
           transport_budget
         )
@@ -975,7 +1072,10 @@ module CrystalClick
       typed_streams = Hash(String, BinaryBulkStreams).new
       typed_roles.each { |path, roles| typed_streams[path] = BinaryBulkStreams.new(read_count, roles) }
       typed_dynamic_data = Hash(String, BinaryBulkStreams).new
-      typed_dynamic_roles.each { |path, roles| typed_dynamic_data[path] = BinaryBulkStreams.new(read_count, roles) }
+      typed_dynamic_roles.each do |path, roles|
+        marks = typed_dynamic_full_json_grid?(path, typed_dynamic_plans) ? outer_rows.size : read_count
+        typed_dynamic_data[path] = BinaryBulkStreams.new(marks, roles)
+      end
       typed_dynamic_rosters_match =
         typed_dynamic_data.size == typed_dynamic_plans.size &&
           typed_dynamic_bytes.size == typed_dynamic_plans.size &&
@@ -1076,7 +1176,8 @@ module CrystalClick
                    first_mark: replay_complete ? first_mark : 0,
                    mark_count: selected_count,
                    profile: profile,
-                   shared_profile: shared_profile
+                   shared_profile: shared_profile,
+                   typed_descriptor_root_depth: prepared.physical_plan.typed_descriptor_root_depth
                  )
                else
                  ObjectDocumentCodec.decode_with_budget(
@@ -1086,7 +1187,8 @@ module CrystalClick
                    first_mark: replay_complete ? first_mark : 0,
                    mark_count: selected_count,
                    profile: profile,
-                   shared_profile: shared_profile
+                   shared_profile: shared_profile,
+                   typed_descriptor_root_depth: prepared.physical_plan.typed_descriptor_root_depth
                  )
                end
       typed_dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
@@ -1096,20 +1198,95 @@ module CrystalClick
         unless type.contains_dynamic? && dynamic_plan.type == type
           raise CorruptPartError.new("typed Dynamic value stream has no matching declared plan")
         end
-        typed_dynamic_rows[path] = BinaryBulkDecoder.decode(
-          type,
-          data,
-          stream_rows,
-          codec_budget,
-          replay_complete ? first_mark : 0,
-          selected_count,
-          profile,
-          dynamic_plan,
-          shared_value_depth_origin: 2,
-        )
+        if dynamic_plan.has_json_object_bindings?
+          unless data.mark_count == outer_rows.size && logical_rows.size == outer_rows.size
+            raise CorruptPartError.new("typed Dynamic JSON value grid differs from its complete Object domain")
+          end
+          empty_structures = BinaryDynamicStructureStreams.new(Hash(String, Bytes).new)
+          dynamic_streams = BinaryDynamicBulkStreams.new(empty_structures, data, budget: codec_budget)
+          physical_dynamic = prepared.physical_plan.typed_dynamic(path)
+          child_loader = ->(key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, grid : StorageOccurrenceGrid, budget : BinaryCodecBudget) {
+            site = physical_dynamic.json_object_site(key)
+            structure = dynamic_plan.structure_for(key.dynamic_site)
+            json_depth = physical_dynamic.json_object_leaf_depth(key)
+            begin
+              binding.validate_for!(key, structure, budget, json_depth)
+              site.binding.validate_for!(key, structure, budget, json_depth)
+            rescue ex : ArgumentError
+              raise CorruptPartError.new(ex.message || "typed Dynamic JSON child binding changed before Object read")
+            end
+            unless site.binding.plan.same?(binding.plan) && site.binding.schema.typed_paths == binding.schema.typed_paths
+              raise CorruptPartError.new("typed Dynamic JSON physical and logical child bindings differ")
+            end
+            descriptor = binding.json_type.json_type ||
+                         raise(CorruptPartError.new("typed Dynamic JSON child binding lost its descriptor"))
+            typed_schema = copy_json_typed_schema(descriptor, budget)
+            ObjectDocumentFileReader.read_child_at_site(
+              prepared.source,
+              site.escaped_prefix,
+              typed_schema,
+              grid,
+              budget,
+              prepared.name_context,
+              prepared.transport_budget,
+              0,
+              outer_rows.size,
+              profile,
+              BinaryBulkProfile.single_stream,
+              prepared.hashed,
+              site.array_level,
+              binding.plan,
+              binding.schema,
+              json_depth,
+              json_depth + 1,
+            )
+          }
+          json_reader = BinaryDynamicBulkJsonObjectReader.new(
+            dynamic_plan,
+            dynamic_streams,
+            logical_rows,
+            codec_budget,
+            profile,
+            physical_rows_per_mark: outer_rows,
+            physical_child_loader: child_loader,
+            initial_descriptor_depth: physical_dynamic.initial_descriptor_depth,
+          )
+          full_rows = BinaryBulkDecoder.decode(
+            type,
+            data,
+            logical_rows,
+            codec_budget,
+            0,
+            outer_rows.size,
+            profile,
+            dynamic_plan,
+            json_reader,
+            physical_dynamic.initial_descriptor_depth,
+          )
+          typed_dynamic_rows[path] = slice_selected_marks(full_rows, first_mark, selected_count, codec_budget)
+        else
+          typed_dynamic_rows[path] = BinaryBulkDecoder.decode(
+            type,
+            data,
+            stream_rows,
+            codec_budget,
+            replay_complete ? first_mark : 0,
+            selected_count,
+            profile,
+            dynamic_plan,
+            shared_value_depth_origin: prepared.physical_plan.typed_dynamic(path).initial_descriptor_depth,
+          )
+        end
         typed_dynamic_rows[path].each do |mark_values|
           mark_values.each do |value|
-            ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, codec_budget, false, allow_shared_json: true)
+            ObjectDeclaredDynamicDeclaration.validate_selected_values!(
+              value,
+              type,
+              codec_budget,
+              false,
+              prepared.physical_plan.typed_descriptor_root_depth,
+              allow_shared_json: true,
+            )
           end
         end
       end
@@ -1236,6 +1413,59 @@ module CrystalClick
         child_rows << grid.logical_occurrences_at(first_mark + index)
       end
       StorageOccurrenceGrid.new(physical_rows, child_rows, budget)
+    end
+
+    private def self.typed_dynamic_full_json_grid?(
+      path : String,
+      plans : Hash(String, BinaryDynamicBulkPlan),
+    ) : Bool
+      if plan = plans[path]?
+        plan.has_json_object_bindings?
+      else
+        false
+      end
+    end
+
+    private def self.copy_json_typed_schema(
+      descriptor : BinaryJsonType,
+      budget : BinaryCodecBudget,
+    ) : Hash(String, BinaryDataType)
+      count = descriptor.typed_path_count.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      total_path_bytes = 0_u64
+      descriptor.typed_path_count.times do |index|
+        size = descriptor.typed_path_byte_size(index).to_u64
+        if total_path_bytes > UInt64::MAX - size
+          raise CorruptPartError.new("typed JSON path byte count overflows")
+        end
+        total_path_bytes += size
+      end
+      budget.charge_wire_bytes(total_path_bytes) if total_path_bytes > 0_u64
+      count.times { budget.charge_node }
+      schema = Hash(String, BinaryDataType).new(initial_capacity: descriptor.typed_path_count)
+      descriptor.typed_path_count.times do |index|
+        schema[descriptor.typed_path_at(index)] = descriptor.typed_type_at(index)
+      end
+      schema
+    end
+
+    private def self.slice_selected_marks(
+      marks : Array(Array(BinaryValue)),
+      first_mark : Int,
+      mark_count : Int,
+      budget : BinaryCodecBudget,
+    ) : Array(Array(BinaryValue))
+      if first_mark < 0 || mark_count < 0 || first_mark > marks.size || mark_count > marks.size - first_mark
+        raise CorruptPartError.new("selected typed Dynamic mark range is outside the full JSON child domain")
+      end
+      count = mark_count.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      budget.ensure_future_nodes(count + 1_u64)
+      budget.charge_node
+      count.times { budget.charge_node }
+      Array(Array(BinaryValue)).new(mark_count) do |index|
+        marks[first_mark + index]
+      end
     end
 
     private def self.group_child_documents(
@@ -2084,12 +2314,12 @@ module CrystalClick
       discriminator_bindings : Array(DiscriminatorBinding),
       outer_rows : Array(UInt64),
       budget : CompressedStreamBudget,
-      &block : CompressedMarkGrid, Int32 ->
+      &block : CompressedMarkGrid, Int32, Symbol, String ->
     ) : Nil
       bulk_bindings.each do |binding|
         grid = source.inspect_grid(binding.data_name, binding.marks_name, binding.prefix_size, budget)
         validate_same_rows!(grid, outer_rows)
-        yield grid, binding.prefix_size
+        yield grid, binding.prefix_size, binding.kind, binding.path
       end
       discriminator_bindings.each do |binding|
         grid = source.inspect_grid(
@@ -2099,7 +2329,7 @@ module CrystalClick
           budget
         )
         validate_same_rows!(grid, outer_rows)
-        yield grid, DynamicDiscriminatorCodec::HEADER_BYTES.to_i
+        yield grid, DynamicDiscriminatorCodec::HEADER_BYTES.to_i, :dynamic, binding.path
       end
       nil
     end
