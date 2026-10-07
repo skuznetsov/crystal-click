@@ -193,10 +193,18 @@ describe "W180 JSON binary profile guards and malformed boundaries" do
     json_structure.type_at(0).should eq(json_type)
     json_structure.canonical_variant_names.should contain(json_type.name)
 
-    wrapped_structure_error = expect_raises(ArgumentError) do
-      CrystalClick::DynamicStructure.new([array_type] of CrystalClick::BinaryDataType)
+    # W212 admits recursive JSON descriptors in representational metadata.
+    # The value-ready ordinary arm still needs an exact Object leaf binding.
+    wrapped_structure = CrystalClick::DynamicStructure.new([array_type] of CrystalClick::BinaryDataType)
+    wrapped_structure.type_at(0).should eq(array_type)
+    wrapped_plan_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryDynamicBulkPlan.new_with_budget(
+        CrystalClick::BinaryDataType.dynamic(max_types: 1),
+        {"root" => wrapped_structure},
+        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS, true),
+      )
     end
-    wrapped_structure_error.message.to_s.should contain("JSON")
+    wrapped_plan_error.message.to_s.should contain("JSON")
 
     # An unused JSON arm must not slip through the bare Dynamic value codec.
     unused_rows = [

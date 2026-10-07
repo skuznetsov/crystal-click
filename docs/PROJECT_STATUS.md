@@ -1,6 +1,28 @@
 # CrystalClick project status
 
-Current finite recursive-composition component (W212, 2026-10-07): ordinary
+Current finite shared-envelope component (W213, 2026-10-07): generic Dynamic
+bulk/physical/table readers and writers reuse existing scalar recursion for
+SharedVariant inline JSON-bearing actuals. Only two current production call
+sites opt in; default helper, borrowed, legacy Dynamic and Object shared
+MAP/Copy guards remain closed. Ordinary W212 JSON leaves keep exact Object
+bindings. No product-specific serializer or public facade was added.
+
+The same 86 affected files pass 528 examples in DEBUG and 528 in RELEASE.
+Four production defect seeds fail assertions and restore exactly; a changed
+native expected-value seed fails after a successful stock process. Fresh
+four-family/two-profile matrices read eight stock parts and directly
+ATTACH/CHECK eight library parts per mode. All 140 library-part files agree
+across modes. Root audits raw process/input/executable identities. Scoped
+verdict: ROBUST, not all combinations/layouts, checksum hashes, RSS or performance.
+
+Next: Object path Dynamic JSON bindings, owned offline values and projection/MV
+consumer propagation. JSON SKIP/SKIP REGEXP, other layouts, inherited
+owner-accounting gaps and broad class decomposition remain open. Performance
+stays deferred; the overall goal remains active. Details:
+[DYNAMIC_SHARED_JSON_FRONTIER.md](DYNAMIC_SHARED_JSON_FRONTIER.md),
+`.landmark/evidence/dynamic-shared-json-w213.json`.
+
+Previous finite recursive-composition component (W212, 2026-10-07): ordinary
 Dynamic actuals can contain bound JSON leaves through the existing wrapper
 walker and Object serializer. Array/Tuple/Map/Nullable/Variant composition
 retains exact descriptor-child identity, P/Q/R/E occurrence domains, physical

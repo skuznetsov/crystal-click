@@ -1,0 +1,512 @@
+{
+  "format": "crystal_click_scoped_evidence_v1",
+  "slice": "W213 Dynamic SharedVariant inline JSON",
+  "date": "2026-10-07",
+  "status": "VERIFIED within the finite declared scope",
+  "baseline_commit": "515d10c7b76378575a018c09aa354a7bc9ebfae3",
+  "claim": "The generic Dynamic shared-arm bulk/physical/table route composes scalar JSON-bearing actual envelopes through existing BinaryValueCodec and BinaryJsonValueCodec, without Object bindings or product-specific codecs.",
+  "admission": {
+    "nominal": "Dynamic-bearing bulk nominal declarations remain JSON-free; legal scalar-owner actual descriptors may contain JSON in the implicit SharedVariant String arm.",
+    "opt_in": "Default-false allow_json option on specialized Dynamic child helpers; only two current production BinaryBulkEncoder/Decoder SharedVariant call sites pass true. Public/internal by convention, not access control.",
+    "ordinary_json": "W212 ordinary JSON actuals retain exact Object leaf bindings; no ordinary-arm binding guard removed.",
+    "profiles": [
+      "single_stream",
+      "with_size_stream"
+    ],
+    "inherited_context": "Scalar descriptor/value parsing retains occurrence depth and the same operation budget; outer owner charges final wire bytes once and reserves pending String framing.",
+    "occurrence_law": "P=physical parent rows, Q=Dynamic occurrences, R=selected SharedVariant arm values. NULL has no compact String entry; empty Array(JSON) is a selected value. All physical .mrk2 third-word rows remain P, with terminal zero.",
+    "table_accessor": "WidePartTableBatch#dynamic_bulk_values_for(column) : Slice(BinaryValue); outer ownership remains callback-borrowed."
+  },
+  "architecture": {
+    "production_files": [
+      "src/crystal_click/binary_value_codec.cr",
+      "src/crystal_click/binary_bulk_encoder.cr",
+      "src/crystal_click/binary_bulk_decoder.cr"
+    ],
+    "reason": "SharedVariant payloads already carry binary descriptor plus scalar serde. Reuse recursive wrappers and stateful leaf owners instead of one serializer/class per product.",
+    "risk": "CAUTION: serialization admission",
+    "rollback": "Revert only the coherent local feature commit; no remote push or source-data mutation.",
+    "retained_consumers": "Default helpers, generic borrowed envelopes, legacy DynamicValueCodec and Object shared MAP/Copy/document consumers retain their JSON fences."
+  },
+  "source_lineage": {
+    "recipe": "Unique sorted paths; records [path,File.size,SHA256(file)]; SHA256(JSON.pretty_generate(records) + newline).",
+    "core_paths": "src/**/*.cr + spec/**/*.cr",
+    "full_paths": "src/**/*.cr + spec/**/*.cr + scripts/**/*.cr + scripts/**/*.rb",
+    "core": {
+      "count": 994,
+      "sha256": "cf3174c51522a25b204827fc63e456fc547af05bdcc6993330b50ded08947a8d"
+    },
+    "full": {
+      "count": 1221,
+      "sha256": "eabac4d878c25ebb3a3edb583ee8fdeeb1600a34e9b5f0f3e0891c57d568c9e9"
+    },
+    "helper_build_full": {
+      "count": 1221,
+      "sha256": "b1c6335ee4b392aa944ac5264be0fb6530edf42937d9d59c418f9fb4e229dba6"
+    },
+    "continuity": "Core production/spec bytes restored after four separate defect seeds. Final helper builds/selftests use the same core and final Crystal helper; subsequent changes affect only Ruby invocation metadata and are qualified by fresh native matrices. Documentation and packet are outside the globs.",
+    "hash_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 1024 -rjson -rdigest -e 'groups = {core: Dir.glob(\"src/**/*.cr\") + Dir.glob(\"spec/**/*.cr\"), full: Dir.glob(\"src/**/*.cr\") + Dir.glob(\"spec/**/*.cr\") + Dir.glob(\"scripts/**/*.cr\") + Dir.glob(\"scripts/**/*.rb\")}; puts JSON.generate(groups.transform_values { |paths| records = paths.uniq.sort.map { |p| [p, File.size(p), Digest::SHA256.file(p).hexdigest] }; {count: records.size, sha256: Digest::SHA256.hexdigest(JSON.pretty_generate(records) + \"\\n\")} }); puts JSON.generate(%w[src/crystal_click/binary_value_codec.cr src/crystal_click/binary_bulk_decoder.cr].to_h { |p| [p,Digest::SHA256.file(p).hexdigest] })'",
+    "helper_build_lineage": "Root executed recorded guarded builds; runner immutability checks alone are not source provenance."
+  },
+  "guards": {
+    "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+    "min_free_pct": 50,
+    "crystal": {
+      "seconds": 600,
+      "memory_mib": 12288
+    },
+    "ruby": {
+      "seconds": 120,
+      "memory_mib": 1024
+    },
+    "git": {
+      "seconds": 120,
+      "memory_mib": 1024
+    },
+    "native_child": {
+      "seconds": 10,
+      "termination_grace_seconds": 2,
+      "clickhouse_threads": 1,
+      "clickhouse_memory_bytes": 536870912
+    },
+    "distinction": "Root actually executed unchanged run_safe commands/logs. Runner outer_guard is declared_not_measured, separate from bounded child controls; inherited compiler-sized outer metadata was removed."
+  },
+  "source_reference": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+    "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+    "anchors": [
+      "src/DataTypes/Serializations/SerializationDynamic.cpp:755-779",
+      "src/Columns/ColumnDynamic.cpp:793-805",
+      "src/DataTypes/Serializations/SerializationObject.cpp:1184-1231",
+      "src/DataTypes/Serializations/SerializationVariant.cpp:464-507",
+      "src/DataTypes/DataTypesBinaryEncoding.cpp:528-534",
+      "src/DataTypes/DataTypeObject.h:83"
+    ],
+    "distinction": "Fresh shallow source reference is not the separately pinned stock runtime build."
+  },
+  "unit_evidence": {
+    "red": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_shared_json_w213_spec.cr spec/dynamic_shared_json_physical_w213_spec.cr spec/json_binary_kernel_w180_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+      "baseline": "W212 production; two initial W213 tests compiled and raised the JSON guard. Seven-example combined run also exposed one separate stale W180 metadata assertion; compiler failures were not counted as RED."
+    },
+    "affected_files": 86,
+    "affected_cohorts": [
+      [
+        "spec/binary_bulk_w122_spec.cr",
+        "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+        "spec/binary_bulk_physical_prefix_w151_spec.cr",
+        "spec/binary_dynamic_descriptor_w152_spec.cr",
+        "spec/binary_dynamic_descriptor_w152_red_spec.cr",
+        "spec/dynamic_descriptor_consumer_guards_w152_spec.cr",
+        "spec/binary_dynamic_value_w153_spec.cr",
+        "spec/binary_dynamic_value_w153_red_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr"
+      ],
+      [
+        "spec/dynamic_structure_roster_w154_red_spec.cr",
+        "spec/binary_dynamic_bulk_values_w155_spec.cr",
+        "spec/binary_dynamic_bulk_values_w155_red_spec.cr",
+        "spec/binary_dynamic_bulk_values_w155_adversary_spec.cr",
+        "spec/binary_dynamic_bulk_shared_context_w155_spec.cr",
+        "spec/binary_dynamic_physical_w156_spec.cr",
+        "spec/binary_dynamic_physical_w156_red_spec.cr",
+        "spec/binary_dynamic_physical_w156_adversary_spec.cr",
+        "spec/binary_dynamic_statistics_offsets_w157_spec.cr",
+        "spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr"
+      ],
+      [
+        "spec/binary_dynamic_qbit_w199_spec.cr",
+        "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+        "spec/binary_low_cardinality_bulk_w143_spec.cr",
+        "spec/binary_low_cardinality_storage_w142_spec.cr",
+        "spec/binary_low_cardinality_physical_w145_spec.cr",
+        "spec/binary_variant_bulk_w148_spec.cr",
+        "spec/binary_variant_bulk_w148_adversary_spec.cr",
+        "spec/binary_variant_physical_w149_spec.cr",
+        "spec/binary_variant_physical_w149_adversary_spec.cr"
+      ],
+      [
+        "spec/dynamic_json_metadata_w206_spec.cr",
+        "spec/dynamic_json_metadata_w206_adversary_spec.cr",
+        "spec/dynamic_json_materialization_w207_spec.cr",
+        "spec/dynamic_json_object_bridge_w208_spec.cr",
+        "spec/dynamic_json_bulk_object_w209_spec.cr",
+        "spec/dynamic_json_physical_w210_spec.cr"
+      ],
+      [
+        "spec/dynamic_bulk_part_w203_spec.cr",
+        "spec/dynamic_table_consumer_w211_red_spec.cr",
+        "spec/dynamic_table_consumer_w211_spec.cr",
+        "spec/dynamic_table_budget_w211_spec.cr",
+        "spec/dynamic_json_recursive_w212_spec.cr",
+        "spec/dynamic_json_recursive_physical_w212_spec.cr"
+      ],
+      [
+        "spec/object_declared_dynamic_w158_spec.cr",
+        "spec/object_declared_dynamic_w158_red_spec.cr",
+        "spec/object_declared_dynamic_w158_adversary_spec.cr",
+        "spec/object_recursive_dynamic_w159_spec.cr",
+        "spec/object_recursive_dynamic_w159_red_spec.cr",
+        "spec/object_recursive_dynamic_w159_adversary_spec.cr",
+        "spec/recursive_dynamic_json_w204_spec.cr",
+        "spec/recursive_dynamic_json_w204_red_spec.cr",
+        "spec/recursive_dynamic_json_w204_adversary_spec.cr",
+        "spec/recursive_dynamic_json_w205_spec.cr",
+        "spec/recursive_dynamic_json_w205_adversary_spec.cr"
+      ],
+      [
+        "spec/recursive_storage_column_w186_spec.cr",
+        "spec/recursive_storage_table_w186_spec.cr",
+        "spec/recursive_storage_reader_budget_w186_spec.cr",
+        "spec/recursive_storage_values_budget_w186_spec.cr",
+        "spec/recursive_storage_array_w187_spec.cr",
+        "spec/recursive_storage_compact_w188_spec.cr",
+        "spec/recursive_array_table_w187_spec.cr",
+        "spec/binary_nested_w172_spec.cr",
+        "spec/binary_nested_w172_guards_spec.cr",
+        "spec/binary_nested_specialized_w201_spec.cr"
+      ],
+      [
+        "spec/binary_value_codec_w117_spec.cr",
+        "spec/binary_scalar_types_w119_spec.cr",
+        "spec/json_binary_kernel_w180_spec.cr",
+        "spec/json_binary_kernel_w180_red_spec.cr",
+        "spec/json_binary_kernel_w180_guards_spec.cr",
+        "spec/json_binary_kernel_w180_boundary_spec.cr",
+        "spec/json_recursive_scalar_w181_spec.cr",
+        "spec/json_recursive_scalar_w181_guards_spec.cr"
+      ],
+      [
+        "spec/json_nested_scalar_w182_spec.cr",
+        "spec/json_nested_scalar_w182_guards_spec.cr",
+        "spec/json_nested_shared_dynamic_w182_spec.cr",
+        "spec/object_shared_map_w118_spec.cr",
+        "spec/object_shared_copy_w192_spec.cr",
+        "spec/object_shared_copy_w192_adversary_spec.cr",
+        "spec/object_shared_advanced_copy_layout_w195_spec.cr",
+        "spec/object_shared_advanced_document_w195_spec.cr"
+      ],
+      [
+        "spec/object_shared_advanced_chunk_w195_spec.cr",
+        "spec/object_shared_advanced_chunk_w195_adversary_spec.cr",
+        "spec/object_shared_path_profile_w195_spec.cr",
+        "spec/object_shared_advanced_profile_w195_spec.cr",
+        "spec/aggregate_count_w175_core_spec.cr",
+        "spec/aggregate_count_w175_admission_red_spec.cr",
+        "spec/dynamic_shared_json_w213_spec.cr",
+        "spec/dynamic_shared_json_physical_w213_spec.cr"
+      ]
+    ],
+    "examples_per_mode": 528,
+    "debug": [
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_bulk_w122_spec.cr spec/binary_bulk_discriminator_framing_w189_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_descriptor_w152_spec.cr spec/binary_dynamic_descriptor_w152_red_spec.cr spec/dynamic_descriptor_consumer_guards_w152_spec.cr spec/binary_dynamic_value_w153_spec.cr spec/binary_dynamic_value_w153_red_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-1.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-1.log",
+        "exit": 0,
+        "signal": "54 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_structure_roster_w154_red_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_red_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_statistics_offsets_w157_spec.cr spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-2.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-2.log",
+        "exit": 0,
+        "signal": "49 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_dynamic_qbit_w199_spec.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/binary_low_cardinality_bulk_w143_spec.cr spec/binary_low_cardinality_storage_w142_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/binary_variant_bulk_w148_spec.cr spec/binary_variant_bulk_w148_adversary_spec.cr spec/binary_variant_physical_w149_spec.cr spec/binary_variant_physical_w149_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-3.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-3.log",
+        "exit": 0,
+        "signal": "94 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_metadata_w206_spec.cr spec/dynamic_json_metadata_w206_adversary_spec.cr spec/dynamic_json_materialization_w207_spec.cr spec/dynamic_json_object_bridge_w208_spec.cr spec/dynamic_json_bulk_object_w209_spec.cr spec/dynamic_json_physical_w210_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-4.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-4.log",
+        "exit": 0,
+        "signal": "53 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_bulk_part_w203_spec.cr spec/dynamic_table_consumer_w211_red_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/dynamic_json_recursive_w212_spec.cr spec/dynamic_json_recursive_physical_w212_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-5.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-5.log",
+        "exit": 0,
+        "signal": "39 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_declared_dynamic_w158_spec.cr spec/object_declared_dynamic_w158_red_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/recursive_dynamic_json_w204_spec.cr spec/recursive_dynamic_json_w204_red_spec.cr spec/recursive_dynamic_json_w204_adversary_spec.cr spec/recursive_dynamic_json_w205_spec.cr spec/recursive_dynamic_json_w205_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-6.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-6.log",
+        "exit": 0,
+        "signal": "53 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_table_w186_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_storage_compact_w188_spec.cr spec/recursive_array_table_w187_spec.cr spec/binary_nested_w172_spec.cr spec/binary_nested_w172_guards_spec.cr spec/binary_nested_specialized_w201_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-7.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-7.log",
+        "exit": 0,
+        "signal": "46 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_value_codec_w117_spec.cr spec/binary_scalar_types_w119_spec.cr spec/json_binary_kernel_w180_spec.cr spec/json_binary_kernel_w180_red_spec.cr spec/json_binary_kernel_w180_guards_spec.cr spec/json_binary_kernel_w180_boundary_spec.cr spec/json_recursive_scalar_w181_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-8.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-8.log",
+        "exit": 0,
+        "signal": "50 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/json_nested_scalar_w182_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_nested_shared_dynamic_w182_spec.cr spec/object_shared_map_w118_spec.cr spec/object_shared_copy_w192_spec.cr spec/object_shared_copy_w192_adversary_spec.cr spec/object_shared_advanced_copy_layout_w195_spec.cr spec/object_shared_advanced_document_w195_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-9.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-9.log",
+        "exit": 0,
+        "signal": "56 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_advanced_chunk_w195_spec.cr spec/object_shared_advanced_chunk_w195_adversary_spec.cr spec/object_shared_path_profile_w195_spec.cr spec/object_shared_advanced_profile_w195_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w175_admission_red_spec.cr spec/dynamic_shared_json_w213_spec.cr spec/dynamic_shared_json_physical_w213_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-debug-10.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-debug-10.log",
+        "exit": 0,
+        "signal": "34 examples, 0 failures, 0 errors, 0 pending"
+      }
+    ],
+    "release": [
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_bulk_w122_spec.cr spec/binary_bulk_discriminator_framing_w189_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_descriptor_w152_spec.cr spec/binary_dynamic_descriptor_w152_red_spec.cr spec/dynamic_descriptor_consumer_guards_w152_spec.cr spec/binary_dynamic_value_w153_spec.cr spec/binary_dynamic_value_w153_red_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-1.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-1.log",
+        "exit": 0,
+        "signal": "54 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_structure_roster_w154_red_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_red_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_statistics_offsets_w157_spec.cr spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-2.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-2.log",
+        "exit": 0,
+        "signal": "49 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_dynamic_qbit_w199_spec.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/binary_low_cardinality_bulk_w143_spec.cr spec/binary_low_cardinality_storage_w142_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/binary_variant_bulk_w148_spec.cr spec/binary_variant_bulk_w148_adversary_spec.cr spec/binary_variant_physical_w149_spec.cr spec/binary_variant_physical_w149_adversary_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-3.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-3.log",
+        "exit": 0,
+        "signal": "94 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_metadata_w206_spec.cr spec/dynamic_json_metadata_w206_adversary_spec.cr spec/dynamic_json_materialization_w207_spec.cr spec/dynamic_json_object_bridge_w208_spec.cr spec/dynamic_json_bulk_object_w209_spec.cr spec/dynamic_json_physical_w210_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-4.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-4.log",
+        "exit": 0,
+        "signal": "53 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_bulk_part_w203_spec.cr spec/dynamic_table_consumer_w211_red_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/dynamic_json_recursive_w212_spec.cr spec/dynamic_json_recursive_physical_w212_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-5.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-5.log",
+        "exit": 0,
+        "signal": "39 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_declared_dynamic_w158_spec.cr spec/object_declared_dynamic_w158_red_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/recursive_dynamic_json_w204_spec.cr spec/recursive_dynamic_json_w204_red_spec.cr spec/recursive_dynamic_json_w204_adversary_spec.cr spec/recursive_dynamic_json_w205_spec.cr spec/recursive_dynamic_json_w205_adversary_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-6.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-6.log",
+        "exit": 0,
+        "signal": "53 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_table_w186_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_storage_compact_w188_spec.cr spec/recursive_array_table_w187_spec.cr spec/binary_nested_w172_spec.cr spec/binary_nested_w172_guards_spec.cr spec/binary_nested_specialized_w201_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-7.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-7.log",
+        "exit": 0,
+        "signal": "46 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_value_codec_w117_spec.cr spec/binary_scalar_types_w119_spec.cr spec/json_binary_kernel_w180_spec.cr spec/json_binary_kernel_w180_red_spec.cr spec/json_binary_kernel_w180_guards_spec.cr spec/json_binary_kernel_w180_boundary_spec.cr spec/json_recursive_scalar_w181_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-8.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-8.log",
+        "exit": 0,
+        "signal": "50 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/json_nested_scalar_w182_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_nested_shared_dynamic_w182_spec.cr spec/object_shared_map_w118_spec.cr spec/object_shared_copy_w192_spec.cr spec/object_shared_copy_w192_adversary_spec.cr spec/object_shared_advanced_copy_layout_w195_spec.cr spec/object_shared_advanced_document_w195_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-9.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-9.log",
+        "exit": 0,
+        "signal": "56 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_advanced_chunk_w195_spec.cr spec/object_shared_advanced_chunk_w195_adversary_spec.cr spec/object_shared_path_profile_w195_spec.cr spec/object_shared_advanced_profile_w195_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w175_admission_red_spec.cr spec/dynamic_shared_json_w213_spec.cr spec/dynamic_shared_json_physical_w213_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/sealed-release-10.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/sealed-release-10.log",
+        "exit": 0,
+        "signal": "34 examples, 0 failures, 0 errors, 0 pending"
+      }
+    ],
+    "final_formatted_cohort10": [
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_advanced_chunk_w195_spec.cr spec/object_shared_advanced_chunk_w195_adversary_spec.cr spec/object_shared_path_profile_w195_spec.cr spec/object_shared_advanced_profile_w195_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w175_admission_red_spec.cr spec/dynamic_shared_json_w213_spec.cr spec/dynamic_shared_json_physical_w213_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/restored-cohort10-debug.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/restored-cohort10-debug.log",
+        "exit": 0,
+        "signal": "34 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_advanced_chunk_w195_spec.cr spec/object_shared_advanced_chunk_w195_adversary_spec.cr spec/object_shared_path_profile_w195_spec.cr spec/object_shared_advanced_profile_w195_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w175_admission_red_spec.cr spec/dynamic_shared_json_w213_spec.cr spec/dynamic_shared_json_physical_w213_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/restored-cohort10-release.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/restored-cohort10-release.log",
+        "exit": 0,
+        "signal": "34 examples, 0 failures, 0 errors, 0 pending"
+      }
+    ],
+    "focused": "The two W213 spec files contain eleven examples; final cohort10 reruns include all eleven in both modes.",
+    "metadata_corrections": "W180/W182 tests now admit wrapped JSON descriptor metadata while refusing an unbound ordinary value plan. No DynamicStructure production code changed.",
+    "additional_boundaries": "Local literal untyped Array(UInt8) JSON path, typed Nullable NULL visits, inherited depth, cumulative nodes/edges/wire cap, selected windows vs complete grids, malformed/trailing/duplicate/missing typed paths."
+  },
+  "defect_seeds": {
+    "production": [
+      {
+        "id": "encode_default_json_leak",
+        "file": "src/crystal_click/binary_value_codec.cr",
+        "before": "      reserved_wire_bytes : UInt64 = 0_u64,\n      allow_json : Bool = false,",
+        "after": "      reserved_wire_bytes : UInt64 = 0_u64,\n      allow_json : Bool = true,",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_shared_json_w213_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/seed-encode_default_json_leak.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/seed-encode_default_json_leak.log",
+        "exit": 1,
+        "signal": "9 examples, 1 failures, 0 errors, 0 pending"
+      },
+      {
+        "id": "decode_default_json_leak",
+        "file": "src/crystal_click/binary_value_codec.cr",
+        "before": "      charge_parent_value_edge : Bool = false,\n      allow_json : Bool = false,",
+        "after": "      charge_parent_value_edge : Bool = false,\n      allow_json : Bool = true,",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_shared_json_w213_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/seed-decode_default_json_leak.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/seed-decode_default_json_leak.log",
+        "exit": 1,
+        "signal": "9 examples, 1 failures, 0 errors, 0 pending"
+      },
+      {
+        "id": "lost_reserved_wire_cap",
+        "file": "src/crystal_click/binary_value_codec.cr",
+        "before": "        budget.remaining_wire_bytes - reserved_wire_bytes,",
+        "after": "        budget.remaining_wire_bytes,",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_shared_json_w213_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/seed-lost_reserved_wire_cap.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/seed-lost_reserved_wire_cap.log",
+        "exit": 1,
+        "signal": "9 examples, 1 failures, 0 errors, 0 pending"
+      },
+      {
+        "id": "shared_decode_depth_reset",
+        "file": "src/crystal_click/binary_bulk_decoder.cr",
+        "before": "              (depth + 1).to_i32,\n              true,\n              allow_json: true,",
+        "after": "              1,\n              true,\n              allow_json: true,",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_shared_json_w213_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/seed-shared_decode_depth_reset.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/seed-shared_decode_depth_reset.log",
+        "exit": 1,
+        "signal": "9 examples, 1 failures, 0 errors, 0 pending"
+      }
+    ],
+    "production_result": "Each separate seed produced exactly 9 examples, 1 failure, 0 errors, 0 pending and guarded exit 1. Production hashes and core seal were restored exactly.",
+    "ruby": {
+      "root": "/private/tmp/crystal-click-w213-oracle-seed.HlqDsS",
+      "mutation": "expected native JSON counter +1 => +2; stock SQL and raw literal unchanged",
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 1024 scripts/probe_dynamic_shared_json_w213.rb --crystal-helper /private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-debug --evidence-root /private/tmp/crystal-click-w213-oracle-seed.HlqDsS 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/oracle-seed.log",
+      "log": "/private/tmp/crystal-click-w213.3R9A8n/oracle-seed.log",
+      "exit": 1,
+      "observed": "Stock invocation exit 0/no signal/no timeout; unchanged independent native value assertion rejects the +2 counter expectation before helper invocation. Unique-line inverse patch restores the runner; fresh final DEBUG/RELEASE matrices then pass."
+    },
+    "oracle_selftests": "Both final helpers and Ruby self-test accept reversed exact typed-path maps and reject wrong typed-child descriptors/rosters/semantics."
+  },
+  "helpers": [
+    {
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_dynamic_shared_json_w213.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-debug 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/parser-build-debug.log",
+      "log": "/private/tmp/crystal-click-w213.3R9A8n/parser-build-debug.log",
+      "exit": 0,
+      "signal": "[PREFLIGHT] System memory free 79% > 50%\r\n[EXIT: 0] after ~7s"
+    },
+    {
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-debug 120 1024 --self-test 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/parser-selftest-debug.log",
+      "log": "/private/tmp/crystal-click-w213.3R9A8n/parser-selftest-debug.log",
+      "exit": 0,
+      "signal": "[PREFLIGHT] System memory free 79% > 50%\r\nW213 self-test passed matrix_count=8 semantic_and_roster_mutations=rejected\r\n[EXIT: 0] after ~0s"
+    },
+    {
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w213.3R9A8n/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_dynamic_shared_json_w213.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-release 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/parser-build-release.log",
+      "log": "/private/tmp/crystal-click-w213.3R9A8n/parser-build-release.log",
+      "exit": 0,
+      "signal": "[PREFLIGHT] System memory free 79% > 50%\r\n[EXIT: 0] after ~36s"
+    },
+    {
+      "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-release 120 1024 --self-test 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/parser-selftest-release.log",
+      "log": "/private/tmp/crystal-click-w213.3R9A8n/parser-selftest-release.log",
+      "exit": 0,
+      "signal": "[PREFLIGHT] System memory free 79% > 50%\r\nW213 self-test passed matrix_count=8 semantic_and_roster_mutations=rejected\r\n[EXIT: 0] after ~0s"
+    }
+  ],
+  "native_evidence": {
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028"
+    },
+    "families": [
+      "root_json",
+      "root_array_json",
+      "root_tuple_json",
+      "array_dynamic_array_json"
+    ],
+    "matrix_per_mode": 8,
+    "parent_rows": [
+      2,
+      2,
+      2,
+      2
+    ],
+    "outer_dynamic_occurrences": [
+      2,
+      3,
+      3,
+      5
+    ],
+    "layout": "Wide/LZ4/plain .mrk2; Dynamic/Object v3; noncompact Variant discriminators; empty ordinary Dynamic roster with max_types=0.",
+    "runs": [
+      {
+        "mode": "DEBUG",
+        "root": "/private/tmp/crystal-click-w213-final-debug.volwJ2",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 1024 scripts/probe_dynamic_shared_json_w213.rb --crystal-helper /private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-debug --evidence-root /private/tmp/crystal-click-w213-final-debug.volwJ2 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/native-final-debug.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/native-final-debug.log",
+        "exit": 0,
+        "summary": "/private/tmp/crystal-click-w213-final-debug.volwJ2/summary.json",
+        "helper": "/private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-debug",
+        "helper_sha256": "f9a09e200b7603922791c555c8e8a45079db6f5eb969a0d2f82bcd8f524d5e50"
+      },
+      {
+        "mode": "RELEASE",
+        "root": "/private/tmp/crystal-click-w213-final-release.19NwXO",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 1024 scripts/probe_dynamic_shared_json_w213.rb --crystal-helper /private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-release --evidence-root /private/tmp/crystal-click-w213-final-release.19NwXO 2>&1 | tee /private/tmp/crystal-click-w213.3R9A8n/native-final-release.log",
+        "log": "/private/tmp/crystal-click-w213.3R9A8n/native-final-release.log",
+        "exit": 0,
+        "summary": "/private/tmp/crystal-click-w213-final-release.19NwXO/summary.json",
+        "helper": "/private/tmp/crystal-click-w213.3R9A8n/helper-descriptor-release",
+        "helper_sha256": "aad460340dd0ed511b57be848a16556933be0840de1629e48bf1b0665142a501"
+      }
+    ],
+    "per_mode": {
+      "stock_parts_read": 8,
+      "library_parts_directly_attached": 8,
+      "source_checks": 8,
+      "library_checks": 8,
+      "child_processes": 3,
+      "all_child_exits": 0
+    },
+    "value_scope": "Independent full/first/middle/final/EOF stock SQL JSON, nominal/actual types and shared flags; Crystal full/selected/candidate/typed-table values.",
+    "raw_oracle": "Complete logical and checksum file-name rosters, physical mark words, compact String framing and NULL placement; independent finite descriptor parser validates exact unordered typed map for stock; library envelopes remain byte-exact against canonical literal.",
+    "bytes_across_modes": {
+      "library_part_files": 140,
+      "equal": true
+    },
+    "root_audit": "All raw invocation JSON matches summary records; SQL/stdout/stderr byte counts and SHA-256 remeasured; helper/runtime/input identities and no signal/timeout checked. All 8 stock and 8 library part snapshots per mode independently remeasured unchanged.",
+    "corrected_oracle_routes": [
+      "TSV Dynamic NULL is \\\\N unless explicitly projected to JSON null hex.",
+      "NULL discriminator consumes no selected SharedVariant String/size element.",
+      "Stock typed JSON descriptor paths iterate unordered_map; semantic map identity is required, not canonical stock byte order."
+    ],
+    "not_format_falsifiers": "Early oracle mistakes and pre-review successes are not counted as final native evidence."
+  },
+  "adversary": {
+    "verdict": "ROBUST within finite W213 scope",
+    "method": "Luna candidate/source review is correlated model evidence. Root reviewed production and oracle paths, executed guards/tests/native witnesses and independent hostile seeds, audited raw records/identities and narrowed all claims.",
+    "strongest_attack": "Matching scalar read/write mistakes, incorrect shared NULL/empty framing, lost inherited depth/budget, leaked Copy opt-in, or unordered descriptor confusion.",
+    "residuals": [
+      "Not all legal type products or physical layouts, compression/serialization versions.",
+      "Object path Dynamic JSON binding composition remains deferred.",
+      "Owned OfflineColumn.values and projection/MV propagation remain deferred.",
+      "JSON SKIP/SKIP REGEXP remains unsupported.",
+      "BinaryJsonRow fresh revalidation context remains an inherited accounting gap; initial wire parse is inherited-depth/budget constrained.",
+      "No unselected shared-payload semantic-validation, whole-scan callback atomicity, selected-window IO complexity, checksum-hash or transient RSS claim.",
+      "Helper opt-in is public/internal-by-convention, not an access-control guarantee.",
+      "Broad class decomposition and performance remain deferred; full project goal stays active."
+    ]
+  },
+  "refresh": "Ephemeral /private/tmp evidence. Rerun recorded spec/build/selftest/native commands after descriptor, scalar JSON grammar, shared framing, operation budget, occurrence grid, consumer, physical layout or runtime changes; dependent claims reopen if gates fail."
+}

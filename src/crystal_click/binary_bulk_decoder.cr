@@ -504,7 +504,8 @@ module CrystalClick
               envelope,
               traversal.budget,
               (depth + 1).to_i32,
-              true
+              true,
+              allow_json: true,
             )
             if value = child_value
               BinaryValue.dynamic(type, value)

@@ -15,6 +15,12 @@ The historical W211 evidence below remains scoped to its original admission.
 
 ## Scope and design laws
 
+W213 extension (2026-10-07): the same accessor now consumes admitted inline
+SharedVariant JSON through the existing scalar owner. Fresh stock/library
+native table witnesses qualify root and outer Array(Dynamic) carriers in two
+String profiles; no separate table codec or all-layout admission is added.
+See [DYNAMIC_SHARED_JSON_FRONTIER.md](DYNAMIC_SHARED_JSON_FRONTIER.md).
+
 This slice propagates existing Dynamic bulk storage into `WidePartTable`.
 It does not add a new leaf codec or change physical serialization admission.
 Use the bounded `ObjectRecursiveDeclaration` parser already used by physical
@@ -55,9 +61,9 @@ transport limits remain in force during decode.
 ## Rejected and deferred
 
 - Nominal JSON-bearing BinaryBulk declarations and currently rejected actual
-  combinations stay rejected, including inline JSON in SharedVariant and
-  unbound JSON inside Object path Dynamic. W212 admits exact bound wrapped
-  ordinary JSON leaves, not every wrapper/layout product.
+  combinations stay rejected, including unbound JSON inside Object path
+  Dynamic. W212 admits exact bound wrapped ordinary JSON leaves; W213 admits
+  scalar inline SharedVariant JSON, not every wrapper/layout product.
 - Numeric-only scans, UInt64-only scans and typed projections cannot silently
   accept this new reader. Projection/MV consumer propagation is separate.
 - Owned `OfflineColumn.values` materialization is not admitted by a batch API.

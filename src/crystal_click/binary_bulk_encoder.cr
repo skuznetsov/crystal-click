@@ -598,7 +598,8 @@ module CrystalClick
           if selection.shared
             traversal.preflight_children(2_u64)
             reserved_framing = profile.with_size_stream? ? 8_u64 : 1_u64
-            envelope = BinaryValueCodec.encode_dynamic_bulk_child(child_value, budget, depth + 1, reserved_framing)
+            envelope = BinaryValueCodec.encode_dynamic_bulk_child(
+              child_value, budget, depth + 1, reserved_framing, allow_json: true)
             framing_bytes = profile.with_size_stream? ? 8_u64 : var_uint_size(envelope.size.to_u64)
             budget.ensure_wire_bytes(checked_add(framing_bytes, envelope.size.to_u64))
             if profile.with_size_stream?

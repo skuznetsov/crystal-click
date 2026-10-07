@@ -183,7 +183,11 @@ Map, sparse Variant, Dynamic/Object v3 and Object shared MAP. No all-layout,
 all-product, checksum-hash, transient RSS, selected-window complexity or global
 callback-atomicity claim is made.
 
-Next: SharedVariant inline JSON and Object path Dynamic binding composition;
+W213 follow-on: SharedVariant inline JSON now reuses the scalar owner;
+see [DYNAMIC_SHARED_JSON_FRONTIER.md](DYNAMIC_SHARED_JSON_FRONTIER.md) for its
+separate finite native evidence. The original W212 evidence above is unchanged.
+
+Next: Object path Dynamic binding composition;
 owned offline-column values and projection/MV consumer propagation; remaining
 physical layouts and JSON SKIP/SKIP REGEXP. Repository-wide class decomposition
 and inherited owner-accounting gaps remain open. The overall goal stays active;

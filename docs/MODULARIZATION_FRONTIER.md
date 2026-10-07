@@ -9,7 +9,22 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility separation — W212
+## Current responsibility reuse — W213
+
+SharedVariant JSON delegates to the existing BinaryValueCodec recursive visitor
+and BinaryJsonValueCodec. An explicit default-false helper option is enabled at
+two current BinaryBulk shared-arm call sites; other consumers keep their guards.
+Scalar envelopes need no Object bulk binding or per-wrapper-product codec.
+This is a narrowly verified capability change, not broad class decomposition.
+
+Root passes 528 examples per mode across 86 affected files, plus fresh paired
+four-family/two-profile stock/library probes and executed defect seeds. One
+cohesive class per file remains the architecture direction; reuse can be better
+than introducing another class without a new responsibility. Broad facade
+decomposition, compiler/RSS and performance claims remain open. Details:
+[DYNAMIC_SHARED_JSON_FRONTIER.md](DYNAMIC_SHARED_JSON_FRONTIER.md).
+
+## Previous responsibility separation — W212
 
 `BinaryDynamicJsonLeafKey` owns detached, immutable `(Dynamic site, canonical
 arm, descriptor-child path)` identity. `BinaryDynamicJsonObjectSchedule` owns

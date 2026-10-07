@@ -67,8 +67,16 @@ describe "W182 nested nominal JSON RowBinary guards" do
     end
     direct_json_structure = CrystalClick::DynamicStructure.new([json] of CrystalClick::BinaryDataType)
     direct_json_structure.type_at(0).should eq(json)
-    expect_raises(ArgumentError) do
-      CrystalClick::DynamicStructure.new([array] of CrystalClick::BinaryDataType)
+    # Recursive JSON metadata became representable in W212. The ordinary
+    # value lane still requires an exact Object leaf binding.
+    wrapped_structure = CrystalClick::DynamicStructure.new([array] of CrystalClick::BinaryDataType)
+    wrapped_structure.type_at(0).should eq(array)
+    expect_raises(CrystalClick::UnsupportedFormatError, "JSON") do
+      CrystalClick::BinaryDynamicBulkPlan.new_with_budget(
+        CrystalClick::BinaryDataType.dynamic(max_types: 1),
+        {"root" => wrapped_structure},
+        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS, true),
+      )
     end
   end
 
