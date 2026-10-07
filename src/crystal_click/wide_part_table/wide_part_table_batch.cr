@@ -22,6 +22,7 @@ module CrystalClick
     @object_documents : Hash(String, Slice(ObjectDocument)) = Hash(String, Slice(ObjectDocument)).new
     @array_object_documents : Hash(String, Slice(Array(ObjectDocument))) = Hash(String, Slice(Array(ObjectDocument))).new
     @recursive_values : Hash(String, Slice(StorageColumnValue)) = Hash(String, Slice(StorageColumnValue)).new
+    @dynamic_bulk_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @aggregate_count_state_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @string_values : Hash(String, Slice(String))
@@ -516,6 +517,36 @@ module CrystalClick
       end
       raise CorruptPartError.new("recursive storage batch slice row count mismatch") unless values.size == expected_rows
       @recursive_values[column] = values
+      nil
+    end
+
+    # Return generic Dynamic-bearing BinaryBulk rows. The outer slice is
+    # callback-scoped; immutable BinaryValue trees may be retained by callers.
+    # Bare Dynamic keeps its existing specialized accessor and is not admitted
+    # through this generic declaration contract.
+    def dynamic_bulk_values_for(column : String) : Slice(BinaryValue)
+      index = column_index(column)
+      expected_type = DynamicBulkColumnDeclaration.parse(@column_types[index])
+      unless expected_type
+        raise UnsupportedFormatError.new("Dynamic bulk accessor requires an admitted Dynamic-bearing declaration")
+      end
+      @dynamic_bulk_values[column]? || raise(UnsupportedFormatError.new("Dynamic bulk column was not materialized in this batch"))
+    end
+
+    # Internal table-scan hook for one borrowed parent-row slice.
+    def install_dynamic_bulk_values(column : String, values : Slice(BinaryValue), expected_rows : Int) : Nil
+      index = column_index(column)
+      expected_type = DynamicBulkColumnDeclaration.parse(@column_types[index])
+      unless expected_type
+        raise CorruptPartError.new("Dynamic bulk materializer received a non-admitted declaration")
+      end
+      raise CorruptPartError.new("Dynamic bulk batch slice row count mismatch") unless values.size == expected_rows
+      values.each do |value|
+        unless value.type == expected_type
+          raise CorruptPartError.new("Dynamic bulk batch value type differs from its declaration")
+        end
+      end
+      @dynamic_bulk_values[column] = values
       nil
     end
 

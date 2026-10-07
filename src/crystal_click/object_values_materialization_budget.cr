@@ -63,6 +63,28 @@ module CrystalClick
       nil
     end
 
+    # Reserve the owned row array that will hold a selected mark of
+    # BinaryValues before the physical reader decodes the mark. Descendant
+    # BinaryValue owners are charged transactionally after decode.
+    def reserve_binary_values_base(rows : UInt64, workspace_bytes : UInt64 = 0_u64) : Nil
+      raise BoundsError.new("Object materialization base was already reserved") if @base_reserved
+
+      array_header = instance_sizeof(Array(BinaryValue)).to_u64
+      slot_bytes = checked_multiply(rows, sizeof(Pointer(BinaryValue)).to_u64)
+      retained = checked_add(array_header, slot_bytes)
+      new_elements = checked_add(@element_count, rows)
+      new_nodes = checked_add(@node_count, 1_u64)
+      ensure_limit!(new_elements, @max_elements, "BinaryValue result element")
+      ensure_limit!(new_nodes, @max_nodes, "BinaryValue result array node")
+      ensure_logical_peak!(retained, workspace_bytes)
+
+      @retained_logical_bytes = retained
+      @element_count = new_elements
+      @node_count = new_nodes
+      @base_reserved = true
+      nil
+    end
+
     # Check a reader's workspace before payload decoding, then recheck it after
     # the complete returned mark has been charged and before retaining it.
     def ensure_workspace(workspace_bytes : UInt64) : Nil
@@ -108,6 +130,18 @@ module CrystalClick
       usage = Usage.new
       values.each do |value|
         usage = measure_storage_value(value, 1, usage)
+      end
+      admit_usage(usage, workspace_bytes)
+    end
+
+    # Charge every decoded BinaryValue root and descendant as one transaction.
+    # Repeated owners are charged per row occurrence; rejection leaves every
+    # counter unchanged.
+    def charge_binary_values(values : Array(BinaryValue), workspace_bytes : UInt64 = 0_u64) : Nil
+      ensure_base_reserved!
+      usage = Usage.new
+      values.each do |value|
+        usage = measure_value(value, 1, usage)
       end
       admit_usage(usage, workspace_bytes)
     end

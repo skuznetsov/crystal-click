@@ -8,6 +8,7 @@ module CrystalClick
         Object
         ArrayObject
         RecursiveJson
+        DynamicBulk
       end
 
       def self.read(part_path : String, requested_column : String) : String?
@@ -20,6 +21,10 @@ module CrystalClick
 
       def self.read_recursive_json(part_path : String, requested_column : String) : String?
         read_matching_shape(part_path, requested_column, SelectedShape::RecursiveJson)
+      end
+
+      def self.read_dynamic_bulk(part_path : String, requested_column : String) : String?
+        read_matching_shape(part_path, requested_column, SelectedShape::DynamicBulk)
       end
 
       private def self.read_matching_shape(
@@ -70,6 +75,8 @@ module CrystalClick
             # subset is a recursive Object dispatch candidate.
             return nil
           end
+        when SelectedShape::DynamicBulk
+          return nil unless DynamicBulkColumnDeclaration.parse(selected[1])
         end
         String.new(selected[1].to_slice)
       rescue ex : IO::Error

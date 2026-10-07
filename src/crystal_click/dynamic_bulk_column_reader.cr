@@ -125,9 +125,19 @@ module CrystalClick
       @site_reader.selected_checksum_names
     end
 
+    # Validate the complete parent schedule without selecting a mark. The
+    # site reader performs any required full-domain replay for bound JSON or
+    # LowCardinality state; table consumers must call this even for empty
+    # candidate/window selections.
+    def validate_complete_schedule : Nil
+      @site_reader.read_marks(0, 0)
+      nil
+    end
+
     # Returns selected parent marks as recursive BinaryValues. Dynamic actual
     # arms containing LowCardinality replay the complete state before a
-    # middle/end-empty selection.
+    # middle/end-empty selection. A zero mark count still validates the full
+    # schedule and any bound-child replay required by the site plan.
     def read_marks(first_mark : Int, mark_count : Int) : Array(Array(BinaryValue))
       @site_reader.read_marks(first_mark, mark_count)
     end

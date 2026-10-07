@@ -240,6 +240,61 @@ module CheckDynamicJSONPhysicalW210
     require!(reader.read_marks(2, 1).map { |mark| mark.map { |v| row_signature(v, fixed[:case_id]) } } == marks[2, 1],
       "#{origin} final mark selection differs")
 
+    # Exercise the generic typed table route on both stock-authored and
+    # library-written direct Dynamic(JSON) parts without changing this helper's
+    # fixed JSON output roster.
+    table = CrystalClick::WidePartTable.open_selected_typed([part], [KEY_NAME, COLUMN])
+    table_values = Array(Array(CrystalClick::BinaryValue)).new(fixed[:granules].size) do
+      [] of CrystalClick::BinaryValue
+    end
+    candidate_marks = Array(Int32).new(fixed[:granules].size) { |mark| mark.to_i32 }
+    table.scan_typed_candidate_marks([candidate_marks]) do |batch|
+      mark = batch.mark_index
+      require!(batch.part_index == 0 && mark >= 0 && mark < fixed[:granules].size,
+        "#{origin} table batch identity is outside the selected part/mark grid")
+      expected_offset = (mark * PARENT_ROWS.first).to_u64
+      require!(batch.mark_row_offset == 0_u64 && batch.part_row_offset == expected_offset &&
+               batch.source_row_offset == expected_offset,
+        "#{origin} table candidate offsets differ from parent P")
+      require!(batch.values_for(KEY_NAME, UInt64).size == fixed[:granules][mark].size,
+        "#{origin} table key and Dynamic row counts differ")
+      table_values[mark] = batch.dynamic_bulk_values_for(COLUMN).to_a
+    end
+    table_values.each_with_index do |rows, mark|
+      wanted = fixed[:granules][mark]
+      require!(rows.size == wanted.size, "#{origin} table candidate row count differs at mark #{mark}")
+      rows.each_with_index do |value, row|
+        require!(CrystalClick::BinaryValueCodec.encode(value) == CrystalClick::BinaryValueCodec.encode(wanted[row]),
+          "#{origin} table candidate literal differs at #{mark}/#{row}")
+      end
+    end
+
+    window_values = [] of CrystalClick::BinaryValue
+    table.scan_typed_window(1_u64, 3) do |batch|
+      mark = batch.mark_index
+      mark_start = (mark * PARENT_ROWS.first).to_u64
+      expected_mark_offset = if mark == 0
+                               1_u64
+                             else
+                               0_u64
+                             end
+      expected_row_offset = mark_start + expected_mark_offset
+      require!(batch.mark_row_offset == expected_mark_offset && batch.part_row_offset == expected_row_offset &&
+               batch.source_row_offset == expected_row_offset,
+        "#{origin} table middle-window offsets differ from parent P")
+      window_values.concat(batch.dynamic_bulk_values_for(COLUMN).to_a)
+    end
+    expected_window = fixed[:granules].flatten[1, 3]
+    require!(window_values.size == expected_window.size, "#{origin} table middle-window row count differs")
+    window_values.each_with_index do |value, index|
+      require!(CrystalClick::BinaryValueCodec.encode(value) == CrystalClick::BinaryValueCodec.encode(expected_window[index]),
+        "#{origin} table middle-window literal differs at row #{index}")
+    end
+
+    eof_callbacks = 0
+    table.scan_typed_window(table.total_row_count, 1) { |_batch| eof_callbacks += 1 }
+    require!(eof_callbacks == 0, "#{origin} table EOF window exposed a callback")
+
     physical_names = reader.physical_stream_names.sort!
     require!(physical_names.uniq == physical_names && !physical_names.empty?, "#{origin} stream roster is empty or duplicated")
     checksum_names = reader.selected_checksum_names.sort!

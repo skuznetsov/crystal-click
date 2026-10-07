@@ -224,10 +224,21 @@ module CrystalClick
     # Nested is nominally distinct from Array(Tuple(...)). Its one implicit
     # named-Tuple child preserves shared row alignment across sibling fields.
     def self.nested(children : Array(BinaryDataType), names : Array(String)) : BinaryDataType
-      if children.empty?
-        raise ArgumentError.new("Nested requires at least one field")
+      nested(tuple(children, names))
+    end
+
+    # Wrap an already validated implicit Tuple without copying its descriptor
+    # or field-name owners. The bounded declaration adapter uses this after
+    # preflighting and materializing the tuple at Nested's inherited depth.
+    def self.nested(tuple_type : BinaryDataType) : BinaryDataType
+      unless tuple_type.tag == TAG_NAMED_TUPLE && tuple_type.child_count > 0
+        raise ArgumentError.new("Nested requires a non-empty named Tuple")
       end
-      tuple_type = tuple(children, names)
+      tuple_type.child_count.times do |index|
+        child = tuple_type.child_at(index)
+        reject_aggregate_count_child!(child)
+        reject_qbit_child!(child)
+      end
       new(TAG_NESTED, nil, [tuple_type] of BinaryDataType, [] of String, nil)
     end
 

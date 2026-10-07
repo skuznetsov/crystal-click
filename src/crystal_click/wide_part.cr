@@ -1524,6 +1524,14 @@ module CrystalClick
       SelectedJsonMetadataProbe.read_recursive_json(part_path, column_name)
     end
 
+    # Return an exact selected Dynamic-bearing BinaryBulk declaration only
+    # when the bounded generic table admission accepts its canonical schema.
+    # Name resolution retains the selected JSON probe's literal/path
+    # ambiguity guard without interpreting unrelated physical columns.
+    def self.selected_dynamic_bulk_declaration(part_path : String, column_name : String) : String?
+      SelectedJsonMetadataProbe.read_dynamic_bulk(part_path, column_name)
+    end
+
     # Parse the intentionally small JSON typed-path declaration grammar used
     # by this reader: simple top-level identifiers with exact primitive
     # numeric or String types. Unsupported declarations fail closed.

@@ -1,8 +1,18 @@
 # Wide-part Table Reader Frontier
 
-Document status: implemented and verified for the admitted public slice.
+Document status: the initial UInt64 slice below is implemented and verified;
+later typed consumers are tracked in their own scoped frontier documents.
 
-Current frontier: provide a bounded, row-aligned multi-column `UInt64` scan
+Current addition (W211): selected admitted Dynamic-bearing columns reuse the
+existing physical recursive reader through
+`WidePartTableBatch#dynamic_bulk_values_for(column) : Slice(BinaryValue)` in
+typed scans. This does not widen `scan`'s UInt64-only contract, numeric-only
+scans or projection admission. The outer slice is callback-borrowed. Complete
+schedules and cumulative logical mark ownership remain guarded, including
+empty selections. Exact scope and executed gates:
+[DYNAMIC_TABLE_CONSUMER_FRONTIER.md](DYNAMIC_TABLE_CONSUMER_FRONTIER.md).
+
+Initial public frontier: provide a bounded, row-aligned multi-column `UInt64` scan
 over an explicit caller-ordered list of local Wide-part paths. Crystal code
 may filter values in an ordinary loop. This is a storage reader, not a SQL
 engine or a table-catalog integration.

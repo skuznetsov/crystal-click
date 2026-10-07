@@ -9,7 +9,26 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility separation — W179
+## Current responsibility separation — W211
+
+`DynamicBulkColumnDeclaration` owns bounded canonical Dynamic-bearing schema
+admission, including root Nested's implicit named Tuple and retained nominal
+identity. Private `WidePartTable::DynamicBulkColumnAdapter` owns table-grid
+binding, complete-schedule delegation and transactional logical-owner charging.
+Each has its own file. The physical reader and recursive BinaryValue visitor
+remain shared; no serializer or class is added per carrier product.
+
+The finite table-consumer gates pass 374 examples per mode across 79 affected
+files, plus fresh stock/library native probes in DEBUG/RELEASE. This establishes
+consumer behavior, not a behavior-neutral decomposition of the large facades,
+reduced coupling, lower compiler/reader RSS or performance. Three larger
+compiler invocations exceeded the unchanged guard and were partitioned; their
+failure does not identify an architectural cause. A concrete batch-consumer
+sink is only a future hypothesis until callback-equivalence and matched
+compiler-memory probes discriminate it. Broader class decomposition remains
+IN_PROGRESS. Details: [DYNAMIC_TABLE_CONSUMER_FRONTIER.md](DYNAMIC_TABLE_CONSUMER_FRONTIER.md).
+
+## Previous responsibility separation — W179
 
 Three cohesive QBit binary-kernel owners have separate files:
 `BinaryQBitTypeCodec` (59 lines) owns descriptor-only element metadata and

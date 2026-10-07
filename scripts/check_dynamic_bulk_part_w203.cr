@@ -264,6 +264,32 @@ module CheckDynamicBulkPartW203
     compare_marks!(reader.read_marks(3, 1), fixture[:granules][3, 1], "#{origin} final mark")
     require!(reader.read_marks(4, 0).empty?, "#{origin} zero-end window is not empty")
 
+    # Keep the stock-authored and library-written sides on the generic typed
+    # table route as well as this direct physical-reader witness. These copied
+    # slices are compared to the fixture literals after the callback ends.
+    table = CrystalClick::WidePartTable.open_selected_typed([part], [KEY_NAME, COLUMN])
+    table_values = Array(Array(CrystalClick::BinaryValue)).new(fixture[:granules].size) do
+      [] of CrystalClick::BinaryValue
+    end
+    candidate_marks = Array(Int32).new(fixture[:granules].size) { |mark| mark.to_i32 }
+    table.scan_typed_candidate_marks([candidate_marks]) do |batch|
+      mark = batch.mark_index
+      require!(batch.part_index == 0 && mark >= 0 && mark < fixture[:granules].size,
+        "#{origin} table batch identity is outside the selected part/mark grid")
+      expected_offset = (mark * MARK_ROWS.first).to_u64
+      require!(batch.mark_row_offset == 0_u64 && batch.part_row_offset == expected_offset &&
+               batch.source_row_offset == expected_offset,
+        "#{origin} table batch row offsets differ from parent P")
+      require!(batch.values_for(KEY_NAME, UInt64).size == fixture[:granules][mark].size,
+        "#{origin} table key and Dynamic row counts differ")
+      table_values[mark] = batch.dynamic_bulk_values_for(COLUMN).to_a
+    end
+    compare_marks!(table_values, fixture[:granules], "#{origin} typed-table full candidate schedule")
+
+    eof_callbacks = 0
+    table.scan_typed_window(table.total_row_count, 1) { |_batch| eof_callbacks += 1 }
+    require!(eof_callbacks == 0, "#{origin} typed-table EOF window exposed a callback")
+
     JSON::Any.new({
       "schema_declaration"    => JSON::Any.new(reader.schema_declaration),
       "row_count"             => JSON::Any.new(reader.row_count.to_i64),

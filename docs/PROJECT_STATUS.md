@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current finite physical/public component (W210, 2026-10-07): direct ordinary
+Current finite table-consumer component (W211, 2026-10-07): typed table batches
+now expose existing Dynamic bulk storage via
+`WidePartTableBatch#dynamic_bulk_values_for(column) : Slice(BinaryValue)`.
+Root/Array/Tuple/root-Nested carriers and admitted nested actual Dynamic trees
+reuse the same reader. Canonical declaration identity, complete parent/child
+schedules (including empty selections), and cumulative per-mark logical
+ownership are checked before exposing the offending mark. Bare legacy Dynamic
+and nominal-JSON accessors retain their contracts. No leaf codec or physical
+layout admission is added.
+
+Two cohesive declaration/table adapter owners have separate files. The same
+79 affected files pass 374 examples in DEBUG and 374 in RELEASE; final focused
+gates pass 13 per mode. Three deliberate defects fail unchanged assertions
+before exact restoration. Fresh W203/W210 probes exercise the new consumer on
+stock parts and directly ATTACH/CHECK 14 library parts per mode; all 510 part
+files agree across DEBUG/RELEASE. Root audits raw invocations and input lineage.
+Scoped verdict: ROBUST for this finite component, not all type/layout products,
+lazy-read cost, transient RSS, checksum hashes or whole-scan callback atomicity.
+
+Next: remaining contextual composition edges (wrapped JSON actuals,
+SharedVariant inline JSON and Object path Dynamic children needing bindings),
+owned offline-column values and projection/MV consumer propagation. Other
+layouts/types, JSON SKIP/SKIP REGEXP, inherited owner-accounting gaps and broad
+class decomposition remain open. Performance is deferred; the overall goal
+remains active. Details: [DYNAMIC_TABLE_CONSUMER_FRONTIER.md](DYNAMIC_TABLE_CONSUMER_FRONTIER.md),
+`.landmark/evidence/dynamic-table-consumer-w211.json`.
+
+Previous finite physical/public component (W210, 2026-10-07): direct ordinary
 Dynamic JSON arms reuse the existing Object physical owner, including unused
 bound arms. Complete-part writers accept explicit child bindings; readers
 recover bindings from persisted parent/child metadata. Root Dynamic and
