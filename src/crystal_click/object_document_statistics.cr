@@ -144,7 +144,8 @@ module CrystalClick
                 value,
                 typed_types[index],
                 budget,
-                true
+                true,
+                allow_shared_json: true,
               )
             end
           end

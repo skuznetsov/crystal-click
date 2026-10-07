@@ -9,7 +9,23 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility reuse — W213
+## Current responsibility reuse — W214
+
+Declared Object typed-Dynamic SharedVariant values reuse the W213 scalar JSON
+visitor and the existing Object/BinaryBulk owners. Selected-value permission
+defaults off and is explicit at four paired Object validation call sites;
+ordinary JSON actuals still require a separate future binding handoff. A checked
+shared-value depth origin preserves Object nesting without changing the ordinary
+JSON leaf-key coordinate system. No class/codec is added per wrapper product.
+
+Root passes 539 examples per mode across 88 affected files, final focused
+11-example gates, and fresh stock-read/library-ATTACH matrices in both modes.
+Executed defect seeds and a root raw-artifact audit qualify this finite
+capability, not reduced coupling, compiler/RSS or throughput. Broad class
+decomposition remains IN_PROGRESS. Details:
+[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md).
+
+## Previous responsibility reuse — W213
 
 SharedVariant JSON delegates to the existing BinaryValueCodec recursive visitor
 and BinaryJsonValueCodec. An explicit default-false helper option is enabled at

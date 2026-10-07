@@ -1104,11 +1104,12 @@ module CrystalClick
           replay_complete ? first_mark : 0,
           selected_count,
           profile,
-          dynamic_plan
+          dynamic_plan,
+          shared_value_depth_origin: 2,
         )
         typed_dynamic_rows[path].each do |mark_values|
           mark_values.each do |value|
-            ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, codec_budget, false)
+            ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, codec_budget, false, allow_shared_json: true)
           end
         end
       end

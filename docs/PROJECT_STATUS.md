@@ -1,6 +1,35 @@
 # CrystalClick project status
 
-Current finite shared-envelope component (W213, 2026-10-07): generic Dynamic
+Current finite Object composition component (W214, 2026-10-07): declared typed
+Object Dynamic fields admit JSON-bearing selected SharedVariant actuals through
+the existing recursive scalar visitor. Ordinary actual rosters stay strict;
+four paired Object validation call sites explicitly opt in. The bulk walker
+retains a checked inherited depth origin and the same operation budget. No
+serializer/class per wrapper product or new public facade was added.
+
+The same 88 affected files pass 539 examples in DEBUG and 539 in RELEASE;
+final focused gates pass 11 per mode. Three production defect seeds fail
+unchanged assertions and restore exactly. A native expected-value seed rejects
+after the stock process succeeds. Fresh two-profile/two-discriminator matrices
+read four stock parts and directly ATTACH/CHECK four library parts per mode.
+All 100 library-part files agree across modes. Root audits raw invocation,
+literal result, executable and immutable input/part evidence. Scoped verdict:
+ROBUST, not all combinations/layouts, checksum hashes, RSS or performance.
+
+The native empty-array witness is inferred Array(Nullable(String)); explicit
+empty Array(JSON) is a library unit/physical witness only. Missing and NULL
+normalize to the same selected field value, not distinct whole-object states.
+The fresh source reference and pinned native runtime are different revisions.
+
+Next: ordinary Object typed-Dynamic JSON actuals with exact child bindings,
+inferred Object paths, owned offline values and projection/MV propagation.
+Outer Object shared MAP/Copy, JSON SKIP/SKIP REGEXP, additional layouts,
+inherited owner-accounting gaps and broad class decomposition remain open.
+Performance stays deferred; the overall goal remains active. Details:
+[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md),
+`.landmark/evidence/object-typed-dynamic-shared-json-w214.json`.
+
+Previous finite shared-envelope component (W213, 2026-10-07): generic Dynamic
 bulk/physical/table readers and writers reuse existing scalar recursion for
 SharedVariant inline JSON-bearing actuals. Only two current production call
 sites opt in; default helper, borrowed, legacy Dynamic and Object shared

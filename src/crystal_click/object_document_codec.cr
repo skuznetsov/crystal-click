@@ -179,7 +179,7 @@ module CrystalClick
             type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
             type_context.validate_type_tree(value.type)
             if plan.has_typed_dynamic?(path)
-              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, true)
+              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, true, allow_shared_json: true)
             end
             values << value
           end
@@ -188,7 +188,14 @@ module CrystalClick
         if plan.has_typed_dynamic?(path)
           dynamic_plan = typed_dynamic_write_plans[path]
           structures = dynamic_plan.encode_structure_streams(budget)
-          data = BinaryBulkEncoder.encode(type, lane_granules, budget, profile, dynamic_plan)
+          data = BinaryBulkEncoder.encode(
+            type,
+            lane_granules,
+            budget,
+            profile,
+            dynamic_plan,
+            shared_value_depth_origin: 2,
+          )
           typed_dynamic_lanes[path] = BinaryDynamicBulkStreams.new(structures, data)
           site_offsets = Hash(String, Int32).new
           site_paths = dynamic_plan.site_paths
@@ -540,11 +547,12 @@ module CrystalClick
             selected_first,
             selected_count,
             profile,
-            dynamic_plan
+            dynamic_plan,
+            shared_value_depth_origin: 2,
           )
           typed_rows[path].each do |mark_values|
             mark_values.each do |value|
-              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, false)
+              ObjectDeclaredDynamicDeclaration.validate_selected_values!(value, type, budget, false, allow_shared_json: true)
             end
           end
         else

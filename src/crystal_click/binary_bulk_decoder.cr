@@ -11,10 +11,15 @@ module CrystalClick
       profile : BinaryBulkProfile,
       dynamic_plan : BinaryDynamicBulkPlan? = nil,
       json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
+      shared_value_depth_origin : Int = 1,
     ) : Array(Array(BinaryValue))
       unless !budget.writing?
         raise ArgumentError.new("binary bulk decoder requires a read-direction budget")
       end
+      # Generic bulk visits are root-relative (root=1). The shared scalar
+      # helper adds this origin to that relative Dynamic depth; Object typed
+      # fields pass their absolute descriptor root depth (2).
+      budget.ensure_depth(shared_value_depth_origin)
       if dynamic_plan.try(&.has_json_object_bindings?) && json_object_reader.nil?
         corrupt!("bound Dynamic JSON arms require the paired Object child reader")
       end
@@ -135,7 +140,7 @@ module CrystalClick
         lc_cursors = Hash(String, Int32).new(0)
         json_object_reader.try(&.begin_mark(mark))
         values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader)
+          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, nil, shared_value_depth_origin)
         end
         contexts.each_value do |context|
           context.ensure_consumed
@@ -418,6 +423,7 @@ module CrystalClick
       qbit_site_roles : Hash(String, Tuple(QBitType, Array(String)))? = nil,
       json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
+      shared_value_depth_origin : Int = 1,
     ) : BinaryValue
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
         traversal.ensure_depth(depth)
@@ -470,7 +476,7 @@ module CrystalClick
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
           ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) })
+          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin)
           BinaryValue.variant(type, discriminator.to_i, child)
         end
       when BinaryDataType::TAG_DYNAMIC
@@ -500,10 +506,12 @@ module CrystalClick
             # The shared scalar visitor preflights the selected value's edge
             # only after seeing a non-Nothing descriptor and before allocating
             # it.
+            shared_scalar_depth = depth.to_i64 + shared_value_depth_origin.to_i64
+            traversal.ensure_depth(shared_scalar_depth)
             child_type, child_value = BinaryValueCodec.decode_dynamic_bulk_child(
               envelope,
               traversal.budget,
-              (depth + 1).to_i32,
+              shared_scalar_depth.to_i32,
               true,
               allow_json: true,
             )
@@ -522,7 +530,7 @@ module CrystalClick
             traversal.preflight_children(1_u64)
             traversal.ensure_depth(depth + 1)
             ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, leaf_key)
+            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, leaf_key, shared_value_depth_origin)
             BinaryValue.dynamic(type, child)
           end
         end
@@ -531,7 +539,7 @@ module CrystalClick
         traversal.preflight_children(1_u64)
         traversal.ensure_depth(depth + 1)
         ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) })
+        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
         BinaryValue.simple_aggregate(type, child)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
@@ -566,7 +574,7 @@ module CrystalClick
         ensure_minimum_count(type.child_at(0), elements_path, raw_count, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
         child_type = type.child_at(0)
         elements = Array(BinaryValue).new(count) do
-          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) })
+          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
         end
         if type.tag == BinaryDataType::TAG_NESTED
           BinaryValue.nested(type, elements)
@@ -597,7 +605,7 @@ module CrystalClick
           fields = Array(BinaryValue).new(count) do |index|
             child_type = type.child_at(index)
             selected_path = child_path(path, ".field.", index, traversal.budget, dynamic_plan)
-            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) })
+            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin)
           end
           BinaryValue.tuple(type, fields)
         end
@@ -625,7 +633,7 @@ module CrystalClick
         entries = Array(BinaryValue).new(count) do |index|
           child_index = index.even? ? 0 : 1
           selected_path = child_index == 0 ? key_path : value_path
-          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(child_index) })
+          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(child_index) }, shared_value_depth_origin)
         end
         BinaryValue.map(type, entries)
       when BinaryDataType::TAG_NULLABLE
@@ -638,7 +646,7 @@ module CrystalClick
         child_type = type.child_at(0)
         selected_path = child_path(path, ".nested", nil, traversal.budget, dynamic_plan)
         ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) })
+        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
         if flag == 1_u8
           BinaryValue.null(type)
         elsif child_type.tag == BinaryDataType::TAG_NOTHING

@@ -233,9 +233,31 @@ module CrystalClick
       root_depth : Int = 3,
       budget : BinaryCodecBudget? = nil,
     ) : Nil
-      if type.contains_json?
-        raise UnsupportedFormatError.new("JSON is not admitted as a typed Object Dynamic actual arm")
-      end
+      validate_actual_descriptor_tree!(type, limits, root_depth, budget)
+      validate_actual_type_shape!(type, limits, root_depth, false)
+      nil
+    end
+
+    # SharedVariant is the only typed Object Dynamic route that may carry a
+    # JSON scalar. Keep this private opt-in separate from ordinary actual-arm
+    # admission; JSON owns its own bounded typed-path grammar.
+    private def self.validate_shared_json_actual_type!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      root_depth : Int,
+      budget : BinaryCodecBudget?,
+    ) : Nil
+      validate_actual_descriptor_tree!(type, limits, root_depth, budget)
+      validate_actual_type_shape!(type, limits, root_depth, true)
+      nil
+    end
+
+    private def self.validate_actual_descriptor_tree!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      root_depth : Int,
+      budget : BinaryCodecBudget?,
+    ) : Nil
       if operation_budget = budget
         type_context = BinaryCodecContext.new(limits, nil, operation_budget.writing?, operation_budget, false, false)
         type_context.validate_type_tree(type, root_depth)
@@ -244,13 +266,65 @@ module CrystalClick
         # is supplied. Callers with an aggregate budget pass it explicitly.
         BinaryCodecContext.new(limits, nil, true, nil, false, false).validate_type_tree(type, root_depth)
       end
-      unless ObjectRecursiveDeclaration.measure_descriptor(type, limits, root_depth)
+      nil
+    end
+
+    private def self.validate_actual_type_shape!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      root_depth : Int,
+      allow_shared_json : Bool,
+    ) : Nil
+      # The complete descriptor (including JSON metadata) has already passed
+      # the shared depth/node/edge budget before these recursive predicates.
+      # JSON typed-path metadata remains opaque here and is validated by the
+      # existing BinaryJsonType policy.
+      if type.contains_json?
+        unless allow_shared_json && shared_json_actual_type_admitted?(type, limits, root_depth)
+          raise UnsupportedFormatError.new("JSON is not admitted as a typed Object Dynamic actual arm")
+        end
+      elsif !ObjectRecursiveDeclaration.measure_descriptor(type, limits, root_depth)
         raise UnsupportedFormatError.new("typed Object Dynamic actual arm is outside the recursive declaration grammar")
       end
       if type.contains_dynamic? || type.contains_variant? || BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
         raise UnsupportedFormatError.new("typed Object Dynamic actual arms exclude Dynamic, Variant, and LowCardinality")
       end
       nil
+    end
+
+    # Object recursive wrappers with JSON treated as a terminal scalar. This
+    # deliberately mirrors only the admitted Object wrapper grammar; all
+    # other leaves must still belong to ObjectTypedFieldType's scalar set.
+    private def self.shared_json_actual_type_admitted?(type : BinaryDataType, limits : BinaryCodecLimits, depth : Int) : Bool
+      return false if depth <= 0 || depth > limits.max_depth
+
+      case type.tag
+      when BinaryDataType::TAG_JSON
+        type.child_count == 0 && !type.json_type.nil?
+      when BinaryDataType::TAG_ARRAY
+        type.child_count == 1 && shared_json_actual_type_admitted?(type.child_at(0), limits, depth + 1)
+      when BinaryDataType::TAG_NULLABLE
+        return false unless type.child_count == 1
+        child = type.child_at(0)
+        return false if child.tag == BinaryDataType::TAG_ARRAY || child.tag == BinaryDataType::TAG_MAP ||
+                        child.tag == BinaryDataType::TAG_NULLABLE || child.tag == BinaryDataType::TAG_LOW_CARDINALITY ||
+                        child.tag == BinaryDataType::TAG_VARIANT || child.tag == BinaryDataType::TAG_DYNAMIC
+        shared_json_actual_type_admitted?(child, limits, depth + 1)
+      when BinaryDataType::TAG_MAP
+        type.child_count == 2 && type.child_at(0).tag == BinaryDataType::TAG_STRING &&
+          shared_json_actual_type_admitted?(type.child_at(0), limits, depth + 1) &&
+          shared_json_actual_type_admitted?(type.child_at(1), limits, depth + 1)
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        named = type.tag == BinaryDataType::TAG_NAMED_TUPLE
+        return false if named && type.child_count == 0
+        type.child_count.times do |index|
+          return false if named && type.field_name_byte_size(index) <= 0
+          return false unless shared_json_actual_type_admitted?(type.child_at(index), limits, depth + 1)
+        end
+        true
+      else
+        !ObjectTypedFieldType.leaf_byte_size_for(type).nil?
+      end
     end
 
     # Fresh typed-child metadata intentionally omits supplied statistics.
@@ -291,29 +365,7 @@ module CrystalClick
       root_depth : Int = 3,
       budget : BinaryCodecBudget? = nil,
     ) : Nil
-      if operation_budget = budget
-        unless operation_budget.writing? == writing
-          raise ArgumentError.new("typed Object Dynamic selected-value budget direction differs")
-        end
-      end
-      unless value.type == expected_type && expected_type.tag == BinaryDataType::TAG_DYNAMIC
-        selected_value_error!(writing, "typed Object Dynamic value does not match its declared descriptor")
-      end
-      if value.is_null?
-        unless value.child_count == 0
-          selected_value_error!(writing, "typed Object Dynamic NULL value has a selected child")
-        end
-        return nil
-      end
-      unless value.child_count == 1
-        selected_value_error!(writing, "typed Object Dynamic value does not contain exactly one selected child")
-      end
-      begin
-        validate_actual_type!(value.child_at(0).type, limits, root_depth, budget)
-      rescue ex : UnsupportedFormatError
-        selected_value_error!(writing, "typed Object Dynamic selected child is outside the Object recursive arm domain")
-      end
-      nil
+      validate_selected_dynamic_value!(value, expected_type, limits, writing, root_depth, budget, false)
     end
 
     # Checks every selected Dynamic node inside one declared composite value.
@@ -332,13 +384,14 @@ module CrystalClick
     # Borrowed-budget form for paired codec owners. Direction is checked before
     # descriptor scans or value traversal; each Dynamic-bearing wrapper edge
     # and selected site node is preflighted/charged on the same operation
-    # budget used by the enclosing bulk lane.
+    # budget used by the enclosing bulk lane. Shared JSON remains opt-in.
     def self.validate_selected_values!(
       value : BinaryValue,
       expected_type : BinaryDataType,
       budget : BinaryCodecBudget,
       writing : Bool,
       root_depth : Int = 2,
+      allow_shared_json : Bool = false,
     ) : Nil
       unless budget.writing? == writing
         raise ArgumentError.new("typed Object Dynamic selected-value budget direction differs")
@@ -352,7 +405,7 @@ module CrystalClick
       unless ObjectRecursiveDeclaration.measure_descriptor(expected_type, limits, root_depth)
         selected_value_error!(writing, "typed Object Dynamic descriptor is outside the recursive declaration grammar")
       end
-      validate_selected_value_tree!(value, expected_type, limits, budget, writing, root_depth)
+      validate_selected_value_tree!(value, expected_type, limits, budget, writing, root_depth, allow_shared_json)
       nil
     end
 
@@ -363,6 +416,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       writing : Bool,
       object_depth : Int,
+      allow_shared_json : Bool,
     ) : Nil
       budget.visit_node(object_depth)
       unless value.type == expected_type
@@ -370,14 +424,14 @@ module CrystalClick
       end
       case expected_type.tag
       when BinaryDataType::TAG_DYNAMIC
-        validate_selected_value!(value, expected_type, limits, writing, object_depth + 1, budget)
+        validate_selected_dynamic_value!(value, expected_type, limits, writing, object_depth + 1, budget, allow_shared_json)
       when BinaryDataType::TAG_ARRAY
         child_type = expected_type.child_at(0)
         if child_type.contains_dynamic?
           child_count = value.element_count.to_u64
           budget.preflight_children(child_count) if child_count > 0_u64
           value.element_count.times do |index|
-            validate_selected_value_tree!(value.element_at(index), child_type, limits, budget, writing, object_depth + 1)
+            validate_selected_value_tree!(value.element_at(index), child_type, limits, budget, writing, object_depth + 1, allow_shared_json)
           end
         end
       when BinaryDataType::TAG_NULLABLE
@@ -387,7 +441,7 @@ module CrystalClick
             selected_value_error!(writing, "typed Object Dynamic Nullable value does not contain exactly one child")
           end
           budget.preflight_children(1_u64)
-          validate_selected_value_tree!(value.child_at(0), child_type, limits, budget, writing, object_depth + 1)
+          validate_selected_value_tree!(value.child_at(0), child_type, limits, budget, writing, object_depth + 1, allow_shared_json)
         end
       when BinaryDataType::TAG_MAP
         value_type = expected_type.child_at(1)
@@ -399,7 +453,7 @@ module CrystalClick
           budget.preflight_children(value_count) if value_count > 0_u64
           index = 1
           while index < value.element_count
-            validate_selected_value_tree!(value.element_at(index), value_type, limits, budget, writing, object_depth + 1)
+            validate_selected_value_tree!(value.element_at(index), value_type, limits, budget, writing, object_depth + 1, allow_shared_json)
             index += 2
           end
         end
@@ -415,7 +469,7 @@ module CrystalClick
         expected_type.child_count.times do |index|
           child_type = expected_type.child_at(index)
           if child_type.contains_dynamic?
-            validate_selected_value_tree!(value.element_at(index), child_type, limits, budget, writing, object_depth + 1)
+            validate_selected_value_tree!(value.element_at(index), child_type, limits, budget, writing, object_depth + 1, allow_shared_json)
           end
         end
       when BinaryDataType::TAG_VARIANT
@@ -428,9 +482,47 @@ module CrystalClick
           if child_type.contains_dynamic?
             child = value.variant_child? || selected_value_error!(writing, "non-NULL typed Object Variant is missing its selected child")
             budget.preflight_children(1_u64)
-            validate_selected_value_tree!(child, child_type, limits, budget, writing, object_depth + 1)
+            validate_selected_value_tree!(child, child_type, limits, budget, writing, object_depth + 1, allow_shared_json)
           end
         end
+      end
+      nil
+    end
+
+    private def self.validate_selected_dynamic_value!(
+      value : BinaryValue,
+      expected_type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      writing : Bool,
+      root_depth : Int,
+      budget : BinaryCodecBudget?,
+      allow_shared_json : Bool,
+    ) : Nil
+      if operation_budget = budget
+        unless operation_budget.writing? == writing
+          raise ArgumentError.new("typed Object Dynamic selected-value budget direction differs")
+        end
+      end
+      unless value.type == expected_type && expected_type.tag == BinaryDataType::TAG_DYNAMIC
+        selected_value_error!(writing, "typed Object Dynamic value does not match its declared descriptor")
+      end
+      if value.is_null?
+        unless value.child_count == 0
+          selected_value_error!(writing, "typed Object Dynamic NULL value has a selected child")
+        end
+        return nil
+      end
+      unless value.child_count == 1
+        selected_value_error!(writing, "typed Object Dynamic value does not contain exactly one selected child")
+      end
+      begin
+        if allow_shared_json
+          validate_shared_json_actual_type!(value.child_at(0).type, limits, root_depth, budget)
+        else
+          validate_actual_type!(value.child_at(0).type, limits, root_depth, budget)
+        end
+      rescue ex : UnsupportedFormatError
+        selected_value_error!(writing, "typed Object Dynamic selected child is outside the Object recursive arm domain")
       end
       nil
     end

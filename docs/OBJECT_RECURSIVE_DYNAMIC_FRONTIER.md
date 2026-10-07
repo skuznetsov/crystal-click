@@ -1,4 +1,176 @@
-# Recursive declared Object Dynamic frontier — W159
+# Recursive declared Object Dynamic frontier
+
+## Active composition track — W214 (2026-10-07)
+
+Status: VERIFIED for the finite W214 inline SharedVariant branch below.
+Ordinary JSON actual bindings remain guard-only and are the next transition.
+Baseline: `8e94d2e79785dd08e1a3d42f929c7c66278b7d1c`, inspected clean.
+The full types, MV/projections, and eventual performance goal is unchanged.
+
+Target: compose declared Object Dynamic sites with JSON-bearing actuals using
+the existing recursive scalar and Object child serializers, not codecs per
+wrapper product. Implement the two independent storage branches in order:
+inline SharedVariant JSON first; ordinary actual JSON leaves with exact child
+bindings next. Root inferred Object paths, outer Object shared MAP/Copy,
+other serialization layouts, and MV/projection consumers remain separate
+unimplemented handoffs, not evidence of this track's completion.
+
+Source reference: shallow ClickHouse `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`.
+Typed paths delegate to DataTypeFactory (DataTypeObject.cpp:858-870); Dynamic
+actual Object inference uses JSON (FieldToDataType.cpp:213-217). The separately
+pinned runtime is build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`.
+
+Risk: CAUTION, serialization admission. Rollback is the exact scoped diff and
+then one atomic local commit per verified branch; no push. Likeliest failure:
+an opt-in accidentally widens ordinary metadata or Object shared envelopes,
+or loses inherited Object depth when borrowing scalar recursion.
+
+Execution and falsifiers:
+
+1. Qualify declared and discovered paths with bounded stock MergeTree fixtures.
+   A discovered object is flattened; an array of objects is an Array(JSON)
+   actual. Source inspection does not replace persisted runtime qualification.
+2. Execute a compiling public-API RED for inline JSON in a declared typed
+   Dynamic site before production changes. Reuse W213 scalar recursion and
+   preserve the default actual-roster, legacy, Object MAP/Copy, and nominal
+   JSON declaration guards. Explicit caller permission is not permission to
+   infer or promote ordinary JSON alternatives.
+3. Verify normalized, complete-part and table read/write consumers, multiple
+   sites, whole/middle/final/EOF windows, NULL versus empty JSON, inherited
+   depth/aggregate bounds, malformed envelopes and both String profiles.
+   Root runs DEBUG/RELEASE `crystal spec` under the existing serial resource
+   guard; expected signal is zero failures/errors/pending. Use stock-authored
+   reads and direct ATTACH/CHECK of library-authored parts for native claims.
+4. Attack permission leakage and depth/reset defects, restore exact source,
+   rerun focused checks, and record only observed evidence. Ordinary JSON
+   child bindings stay guard-only until their separate complete-domain
+   metadata, occurrence-grid and physical-consumer gates pass.
+
+No performance/RSS, all-products, all-layouts, checksum-hash validation, or
+whole-scan callback-atomicity claim is made by this track.
+
+Completed handoff (W214 inline branch):
+
+1. `object_declared_dynamic_declaration.cr`: keep actual-roster validation
+   unchanged; opt in only selected JSON-bearing shared values at paired Object
+   callers. Preserve bounded descriptor scans and the existing excluded actual
+   types. Propagate that permission in `object_document_codec.cr`,
+   `object_document_statistics.cr`, and `object_document_file_reader.cr`.
+   Consumer inventory: `rg -n 'validate_selected_values!|validate_selected_value!'
+   src/crystal_click/object*` found the recursive validator and four paired
+   consumers (codec write/read, statistics, physical reader).
+2. `binary_bulk_encoder.cr` / `binary_bulk_decoder.cr`: borrow the same scalar
+   helpers and operation budget, with an explicit inherited shared-value depth
+   origin. Standalone defaults remain one; Object typed owners pass two. Keep
+   ordinary JSON leaf-key depths relative to the existing Dynamic plan.
+3. New `object_typed_dynamic_shared_json_w214` unit/physical specs and paired
+   native helper/probe: check literal values, multiple sites, distinct row and
+   occurrence grids, both String profiles and discriminator layouts, selected
+   windows, malformed payloads, depth and aggregate limits. DoD is guarded
+   focused and affected DEBUG/RELEASE specs with zero failures/errors/pending,
+   stock-authored part reads and direct ATTACH/CHECK of library-authored parts,
+   followed by permission/depth adversary checks. No all-layout claim follows
+   from these bounded fixtures. Root owns resource jobs and final review;
+   delegated code is candidate evidence until those checks execute.
+
+## Observed W214 gates (2026-10-07)
+
+Declared typed Dynamic sites explicitly admit selected JSON, Array(JSON), and
+Tuple(JSON, JSON) scalar envelopes through the existing W213 recursive visitor.
+Legal Object wrappers and scalar siblings reuse their existing owners; JSON's
+own metadata/value grammar remains the scalar JSON owner's responsibility.
+Ordinary actual rosters remain strict. Outside terminal JSON metadata, selected
+actual trees still exclude Dynamic/Variant/LowCardinality, QBit/count leaves
+and non-String Map keys. This is not an all-wrapper-products native claim.
+
+The four selected-value opt-ins are paired codec write/read, statistics and
+physical-reader validation. Public default helpers remain strict. The existing
+generic W213 shared-envelope API intentionally admits JSON; a standalone
+ObjectSharedPathCodec inherits that low-level contract. Outer Object shared
+MAP/Copy/advanced document owners retain their separate guards.
+
+`BinaryBulkEncoder`/`BinaryBulkDecoder` validate and propagate the trailing
+shared-value depth origin: standalone one, Object typed owner two. Selected
+scalar depth is summed in Int64, checked, then narrowed; no budget is reset.
+Ordinary JSON bindings retain their relative descriptor-child coordinates.
+The deeper W212 bridge walks runtime contents at the inherited row depth before
+returning a row. Its intermediate Object documents may exist before that final
+row check; this is not a transient allocation/CPU bound. A standalone selected
+validator is not a complete operation-budget certificate.
+
+- The same 88 affected spec files pass 539 examples per mode, zero failures,
+  errors or pending, in ten serial guarded cohorts. The final DEBUG cohort ten
+  supersedes its earlier 44-example run with 45 examples. Final focused unit/
+  physical gates pass 11 in DEBUG and 11 in RELEASE. Formatter and Ruby syntax
+  checks pass. Apple ld is used; default-lld linker failure is not a RED.
+- Normalized tests cover both String profiles and BASIC/COMPACT discriminator
+  modes, multiple typed sites and parent P / Dynamic Q / SharedVariant R grids.
+  Physical writer, file reader, column reader and table witnesses cover whole,
+  middle, final and EOF windows with literal values, NULL and empty arrays.
+  Malformed descriptor/trailing-envelope and one-short aggregate-node guards
+  reject. Runtime depth passes at four for generic versus five for Object;
+  an outer bound JSON bridge passes at six and rejects at five in both directions.
+- Three separate production seeds (Object encode origin one, decode origin one,
+  default selected JSON permission true) each fail an unchanged assertion.
+  Each seeded run reports nine examples, one failure and no errors/pending;
+  exact production/core restoration precedes the later deeper-owner test.
+- Fresh paired native matrices qualify `JSON(p Dynamic(max_types=0))` with an
+  empty ordinary roster, both String profiles and BASIC/COMPACT discriminators:
+  four stock reads and four direct library-part ATTACH/CHECKs per mode, eight
+  rows/four data marks each. Raw system.parts reports five marks including the
+  terminal. Native full/first/later/final/zero projections and helper full/first/
+  middle/final/EOF windows match. All 100 generated library-part files match
+  across DEBUG/RELEASE. Native empty [] is inferred Array(Nullable(String)), not
+  an empty Array(JSON) native witness; the explicit latter has library tests.
+  Missing and NULL both normalize to the same `payload.p` value.
+- A changed expected JSON projection, with unchanged native SQL input, fails
+  after stock process exit zero. The runner hash is restored exactly. Root
+  independently decodes raw TSV projections against a separate literal matrix,
+  verifies argv/stdin/stdout/stderr hashes and process status, executable pins,
+  helper input/part identities, immutable snapshots and byte parity. The runner's
+  native expectations themselves share the Ruby input roster; do not call them
+  independently authored. Harness mistakes (output root/profile, query
+  settings/window mapping) were corrected and fresh final matrices supersede
+  the failed runs. The failed empty-array prediction was narrowed, not promoted.
+
+Scoped adversary verdict: ROBUST for this paired finite transition. Delegated
+source review is correlated; observed root executions and the raw literal
+audit supply behavioral evidence. No full type/product/layout, whole-file
+checksum-hash validation, RSS/performance or whole-scan callback atomicity claim.
+Curated lineage and exact commands:
+`.landmark/evidence/object-typed-dynamic-shared-json-w214.json`.
+
+Next falsifier: ordinary JSON-bearing actuals at declared Object Dynamic sites
+must receive exact Object child bindings, complete-domain metadata and distinct
+parent/occurrence grids before their roster guard opens. Inferred root Object
+paths, outer shared data, owned offline values and MV/projections remain open.
+Refresh these claims when grammar, wrapper/budget handoffs, physical names,
+selected marks, runtime/source pins or consumers change. No push is authorized.
+
+## Initial W214 anchors (retained history)
+
+- `spec/object_typed_dynamic_shared_json_w214_spec.cr` uses the existing public
+  Object APIs with a declared zero-cap Dynamic and an explicit empty ordinary
+  roster. The guarded DEBUG run compiled, then reported one example and one
+  `UnsupportedFormatError` in selected-child validation, before scalar output.
+  Command suffix: `spec spec/object_typed_dynamic_shared_json_w214_spec.cr
+  --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace`.
+  The earlier default-lld attempt failed to link against the macOS SDK and is
+  not behavioral evidence. Logs remain session-local under
+  `/private/tmp/crystal-click-w214.AcjESJ/`.
+- The pinned native process wrote and queried four isolated MergeTree tables
+  (15 rows). Declared zero-cap Dynamic stores JSON and Array(JSON) through
+  SharedVariant; the one-cap fixture retains JSON ordinarily and spills
+  Array(JSON). The exact-output qualifier passes after correcting its initial
+  NULL and inferred-descriptor predictions. NULL/missing report `None` and TSV
+  `\N`; discovered Array(JSON) reports zero JSON dynamic caps. The original
+  mismatching record is retained alongside
+  `qualifier_69474_a65c8fb234ae.json`. This is stock-runtime qualification, not
+  a library part interoperability or fresh-source runtime claim.
+- The initial next falsifier was inherited Object depth inside shared JSON.
+  It is now exercised above; ordinary child bindings still follow separately.
+
+## Historical W159 slice
 
 Status: VERIFIED for the bounded paired slice below. Baseline: `032c515`
 (clean at inspection). Risk: CAUTION; this changes recursive schema admission and paired
