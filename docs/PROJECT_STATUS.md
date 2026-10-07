@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current finite internal-adapter frontier (W199, 2026-10-06): owned direct QBit
+Current finite complete-part frontier (W200, 2026-10-06): public writer and
+reader compose direct QBit actuals at root JSON shared paths, using existing
+scalar/bulk/Object owners. Only two paired direct-QBit admission guards changed;
+no serializer per recursive type product or new transpose algorithm was added.
+
+Final focused DEBUG passes 33 examples; the same exact 138 affected files pass
+901 DEBUG and 901 RELEASE examples, zero failures/errors/pending, actual serial
+guarded exits 0. The final 948-file source/spec identity remains unchanged across
+these gates, fresh helper builds and native captures. Each mode qualifies 48
+stock/library Wide profile pairs: four carriers, three dimension/stride shapes,
+shared versions 2/3 and String 0/1. Persisted empty typed/dynamic rosters prove
+the shared-only route. Public full/middle/zero mark reads preserve raw bits,
+nominal type and missing versus present-zero values.
+
+Both native modes ATTACH/CHECK all 48 library parts and re-CHECK the stock
+parts. Each whole/type/direct family has 864 observations (288 initial stock
+plus 576 attached stock/library), not 864 distinct fixture rows. Root checks
+raw process/SQL/file provenance, independent literal payloads, 18 semantic
+mutations per mode and single/duplicate-capture controls. Normalized helper
+reports and all 2016 generated files agree across modes. All 4080 published
+stock/generated files remain unchanged. Native ATTACH's only allowed addition
+is the exact 28-byte invalidated-system-columns metadata file on library parts;
+the full active snapshots remain stable. Scoped verdict: ROBUST.
+
+Recursive composition is the implementation model. Remaining work is legal
+container storage contracts and their qualification, not a Cartesian product
+of new leaf serializers: specialized wrappers/sites, JSON-as-Dynamic-actual,
+broader layouts and MV/projections. Illegal ClickHouse nesting is a different
+boundary from a library guard on a legal but unqualified layout. Static QBit
+wrappers, declared typed-QBit Object paths and borrowed-envelope guards remain.
+Full types, MV/projections and repository-wide class decomposition are still
+open; performance stays deferred and the overall goal remains incomplete.
+Details: [OBJECT_SHARED_QBIT_PARTS_FRONTIER.md](OBJECT_SHARED_QBIT_PARTS_FRONTIER.md),
+`.landmark/evidence/object-shared-qbit-parts-w200.json`.
+
+Previous finite internal-adapter frontier (W199, 2026-10-06): owned direct QBit
 Dynamic scalar envelopes and ordinary direct QBit actual arms at admitted
 Dynamic sites reuse existing QBit codecs across recursive bulk planning,
 physical binding and Object shared-path Data serde. One per-site owner keeps

@@ -79,8 +79,8 @@ module CrystalClick
       if value.type.contains_aggregate_count?
         raise UnsupportedFormatError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
       end
-      if value.type.contains_qbit?
-        raise UnsupportedFormatError.new("QBit is not admitted as a Dynamic actual type")
+      if value.type.contains_qbit? && value.type.tag != BinaryDataType::TAG_QBIT
+        raise UnsupportedFormatError.new("QBit is admitted only as a direct Dynamic actual type")
       end
       if value.type.contains_json?
         raise UnsupportedFormatError.new("JSON is not admitted as a Dynamic actual type")
@@ -122,8 +122,8 @@ module CrystalClick
       if type.contains_aggregate_count?
         context.unsupported!("AggregateFunction(count) is not admitted as a Dynamic actual type")
       end
-      if type.contains_qbit?
-        context.unsupported!("QBit is not admitted as a Dynamic actual type")
+      if type.contains_qbit? && type.tag != BinaryDataType::TAG_QBIT
+        context.unsupported!("QBit is admitted only as a direct Dynamic actual type")
       end
       if type.contains_json?
         context.unsupported!("JSON is not admitted as a Dynamic actual type")
