@@ -26,14 +26,18 @@ module CrystalClick
       part_path : String,
       column_name : String,
       validate_source_declaration : Proc(String, Nil)? = nil,
+      subcolumns_validator : Proc(Array(JSON::Any), UInt64, Nil)? = nil,
+      require_selected_subcolumns : Bool = false,
     ) : ObjectColumnPartMetadata
-      new(part_path, column_name, validate_source_declaration)
+      new(part_path, column_name, validate_source_declaration, subcolumns_validator, require_selected_subcolumns)
     end
 
     def initialize(
       part_path : String,
       column_name : String,
       validate_source_declaration : Proc(String, Nil)? = nil,
+      @subcolumns_validator : Proc(Array(JSON::Any), UInt64, Nil)? = nil,
+      @require_selected_subcolumns : Bool = false,
     )
       validate_part_directory!(part_path)
       raise ArgumentError.new("Object column name must not be empty") if column_name.empty?
@@ -193,7 +197,15 @@ module CrystalClick
         required_fields = Set{"kind", "name", "num_defaults", "num_rows"}
         extended_fields = required_fields.dup
         extended_fields << "exact_num_defaults"
-        unless fields == required_fields || fields == extended_fields
+        tuple_fields = required_fields.dup
+        tuple_fields << "subcolumns"
+        tuple_extended_fields = extended_fields.dup
+        tuple_extended_fields << "subcolumns"
+        accepted_fields = fields == required_fields || fields == extended_fields
+        if @subcolumns_validator
+          accepted_fields ||= fields == tuple_fields || fields == tuple_extended_fields
+        end
+        unless accepted_fields
           raise UnsupportedFormatError.new("unsupported Object serialization column metadata")
         end
         kind = entry["kind"]?.try(&.as_s) || raise(CorruptPartError.new("serializer kind is missing or malformed"))
@@ -210,6 +222,18 @@ module CrystalClick
         rows = entry["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("serializer row count is missing or malformed"))
         if defaults < 0 || rows < 0 || defaults > rows || rows.to_u64 > MAX_ROWS || rows.to_u64 != row_count
           raise CorruptPartError.new("serializer default or row count is outside the admitted part")
+        end
+        if name == @column_name && @require_selected_subcolumns && !entry.has_key?("subcolumns")
+          raise UnsupportedFormatError.new("selected Tuple serializer is missing child metadata")
+        end
+        if raw_subcolumns = entry["subcolumns"]?
+          unless name == @column_name
+            raise UnsupportedFormatError.new("subcolumns metadata is supported only for the selected value column")
+          end
+          validator = @subcolumns_validator ||
+                      raise UnsupportedFormatError.new("Tuple subcolumns metadata is unsupported for this Object reader")
+          subcolumns = raw_subcolumns.as_a
+          validator.call(subcolumns, row_count)
         end
       end
 

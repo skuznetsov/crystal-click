@@ -122,6 +122,31 @@ module CrystalClick
       )
     end
 
+    # Write one complete Dynamic-bearing BinaryBulk column through the same
+    # recursive role plan used for Nested, Array, Tuple, and other carriers.
+    # Dynamic structures are discovered from the caller's parent-first roster.
+    def self.write_uint64_dynamic_bulk_part(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type : BinaryDataType,
+      structures : Hash(String, DynamicStructure),
+      granules : Array(Array(BinaryValue)),
+      rows_per_mark : Int32 = 8192,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : String
+      DynamicBulkPartWriter.write(
+        destination, key_name, keys, value_name, type, structures, granules,
+        rows_per_mark, profile, frame_bytes, metadata_version, limits,
+        transport_limits
+      )
+    end
+
     private enum VariantSparseUInt64Stream
       StringSizes
       UInt64Values

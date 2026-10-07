@@ -1,6 +1,6 @@
 module CrystalClick
   module WidePartWriter
-    # Bounded metadata snapshot for one root-Tuple recursive storage column.
+    # Bounded metadata snapshot for one recursive storage value column.
     # The admitted schema supplies the declaration and the complete physical
     # roster; this class owns only the two-column part envelope.
     private class RecursiveStoragePartMetadata

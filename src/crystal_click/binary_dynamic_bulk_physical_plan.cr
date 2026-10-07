@@ -154,6 +154,12 @@ module CrystalClick
       detached
     end
 
+    # A column encoder must use the same prepared occurrence plan that supplied
+    # this physical roster; equal role shapes alone do not prove equal arm types.
+    def same_prepared_plan?(plan : BinaryDynamicBulkPlan) : Bool
+      @prepared.same?(plan)
+    end
+
     def data_stream_names : Hash(String, String)
       detached_copy(@data_names)
     end
