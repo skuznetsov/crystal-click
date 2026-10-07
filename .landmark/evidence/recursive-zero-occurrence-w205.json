@@ -1,0 +1,303 @@
+{
+  "slice": "W205 recursive whole-part zero-occurrence qualification",
+  "date": "2026-10-07",
+  "baseline_commit": "7b7c411a5635119f5e4d1b50ee42dae86c3c19fd",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Existing public recursive column/table and UInt64-key Wide complete-part API: Array(Tuple(JSON, Dynamic)) with eight parent rows, four positive-P marks and Q=0 for the entire child site; two String profiles, both native directions and helper build modes.",
+    "adversary_verdict": "ROBUST within the finite zero-occurrence corpus and executed guards",
+    "evidence_is_index_not_proof": true,
+    "review_limitation": "Luna candidate reviews are correlated. Root inspected the live semantic rejection path, executed all guarded compiler/native gates serially, and independently audited raw process/file records and literal oracles."
+  },
+  "design_document": "docs/RECURSIVE_ZERO_OCCURRENCE_FRONTIER.md",
+  "implementation": {
+    "production_changes": false,
+    "root_cause": "The missing certificate was a stock interoperability witness for an entire positive-parent part with no child occurrences, not a missing leaf codec. Existing recursive physical owners retain P marks and Q value domains.",
+    "baseline_evidence": ".landmark/evidence/recursive-dynamic-json-storage-w204.json",
+    "baseline_evidence_sha256": "5f535a3ed27479e9316f8e38b3db7cd1c52c7939127bb4a92068ead11fd587f4",
+    "tested_files": [
+      {
+        "path": "scripts/check_recursive_dynamic_json_w205.cr",
+        "sha256": "b5e9c2f36ef2933030f3b0ed11b6bab4710223984c1345fc5e8630760c221673",
+        "bytes": 14089
+      },
+      {
+        "path": "scripts/probe_recursive_dynamic_json_w205.rb",
+        "sha256": "17e5810cf33fd09ad8dd84575cd82755a2d656c7507c6400f846067bd62b827c",
+        "bytes": 36154
+      },
+      {
+        "path": "spec/recursive_dynamic_json_w205_spec.cr",
+        "sha256": "c9afd3a5fde2eeb7c0a4f5f1db287f07e5bdcf37d01151413f19e532a128050e",
+        "bytes": 6753
+      },
+      {
+        "path": "spec/recursive_dynamic_json_w205_adversary_spec.cr",
+        "sha256": "786dfef0f91011f98bca7f561d9779d3b62843f57952004a247a4e081ab2d94d",
+        "bytes": 10950
+      }
+    ],
+    "invariants": [
+      "P=[2,2,2,2] plus terminal EOF; Q=[0,0,0,0]. Empty selected windows are not the whole-site witness.",
+      "Stock chooses an empty actual/path roster independently. Library input declares unused UInt64; no post-write roster normalization or stock data rewrite.",
+      "Descriptor structure, exact inherited Array coordinates and unused arms remain required when Q=0.",
+      "Full/first/later/middle/final/end-zero reads preserve parent keys and empty Array values.",
+      "The helper's library_prepared_actual_roster is writer input, not an independent read-back metadata witness."
+    ]
+  },
+  "boundaries": {
+    "risk": "CAUTION: persisted compatibility claim; no production widening.",
+    "rollback": "Revert only the scoped atomic local W205 commit. No push, dependency or runtime mutation.",
+    "nonclaims": [
+      "Native whole-zero-Q LowCardinality actual qualification: the LC(String) unused-arm positive and corruption case are library-only.",
+      "JSON as a Dynamic actual or Variant arm; new wrappers, dictionary schedules, Compact, flattened or legacy layouts.",
+      "Every legal recursive product, arbitrary publication/catalog dispatch, full MV/projections or repository-wide class decomposition.",
+      "Performance or memory parity; the overall types/MV/projections goal remains active and optimization is deferred."
+    ],
+    "integrity": "Quiescent fixture trees, declared sizes and consumed compressed-frame checksums; not authentication of all unselected bytes or a whole-process RSS/no-I/O claim."
+  },
+  "reference": {
+    "source": {
+      "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+      "commit": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+      "state": "Clean shallow Oct 5 snapshot, not claimed to be Oct 7 latest or the native runtime build source.",
+      "anchors": [
+        "src/DataTypes/Serializations/SerializationArray.cpp:352-394 retains nested serialization calls at zero children for stream getters/marks.",
+        "src/DataTypes/Serializations/SerializationDynamic.cpp:108-135 enumerates structure then recursively enumerates actual Variant streams."
+      ]
+    },
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "version": "26.10.1.1201",
+      "build_git_hash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "build_id": "DB3524E5F34139BEA7B1D573C45D031F",
+      "pin_checked_before_and_after": true
+    },
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "outer_timeout_seconds": 600,
+      "outer_memory_mib": 12288,
+      "minimum_free_memory_percent": 50,
+      "workload_execution": "Root only, serial, process inspection/isolation and cleanup enabled via approved sandbox escalation.",
+      "native_inner_timeout_seconds": 10,
+      "native_inner_grace_seconds": 2,
+      "native_max_threads": 1,
+      "native_max_memory_bytes": 536870912
+    }
+  },
+  "verification": {
+    "affected_roster": {
+      "base_packet": ".landmark/evidence/recursive-dynamic-json-storage-w204.json",
+      "base_packet_sha256": "5f535a3ed27479e9316f8e38b3db7cd1c52c7939127bb4a92068ead11fd587f4",
+      "base_json_path": "verification.affected_roster",
+      "base_files": 180,
+      "append_paths": [
+        "spec/recursive_dynamic_json_w205_spec.cr",
+        "spec/recursive_dynamic_json_w205_adversary_spec.cr"
+      ],
+      "unique_files": 182,
+      "ordered_roster_sha256": "c1d0354e73336e37013022e719c2b85b0ff79f3fb34f57f548ad27772f67f3e6",
+      "hash_encoding": "SHA256 of JSON.pretty_generate(ordered_array) followed by newline; resolve the W204 base recursively."
+    },
+    "affected_command_recipe": {
+      "prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w205.AGeLf0/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288",
+      "subcommand": "spec",
+      "paths": "Exact resolved base roster in listed order, then the two appended paths.",
+      "flags": [
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_additional_flag": "--release"
+    },
+    "debug": {
+      "exit_code": 0,
+      "examples": 1125,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log": "/private/tmp/crystal-click-w205.AGeLf0/affected-debug-final.log",
+      "sha256": "8825c4e7a56bd2f5f2275b1b38f3f6e3cf9d67759f99931bb3671c9c67038a15"
+    },
+    "release": {
+      "exit_code": 0,
+      "examples": 1125,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log": "/private/tmp/crystal-click-w205.AGeLf0/affected-release-final.log",
+      "sha256": "ac106c45673ea364b3ad907b31707616c1917994160afc4af08124f4f1146ed9"
+    },
+    "focused_debug": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w205.AGeLf0/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_dynamic_json_w204_red_spec.cr spec/recursive_dynamic_json_w204_spec.cr spec/recursive_dynamic_json_w204_adversary_spec.cr spec/recursive_dynamic_json_w205_spec.cr spec/recursive_dynamic_json_w205_adversary_spec.cr spec/dynamic_bulk_part_w203_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w205.AGeLf0/focused-debug-q-final.log 2>&1",
+      "exit_code": 0,
+      "examples": 22,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log": "/private/tmp/crystal-click-w205.AGeLf0/focused-debug-q-final.log",
+      "sha256": "c82908364fd2fcb5a4d847cc6c8485c43e128a0e83132be05bd30b2de78c2fc9",
+      "note": "The same focused files also belong to the affected DEBUG/RELEASE roster; no separately executed focused RELEASE gate is claimed."
+    },
+    "helper_builds": [
+      {
+        "mode": "debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w205.AGeLf0/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_dynamic_json_w205.cr -o /private/tmp/crystal-click-w205.AGeLf0/check-recursive-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w205.AGeLf0/helper-debug-build.log 2>&1",
+        "exit_code": 0,
+        "log_sha256": "74610fd07bc6a6c28331c2144076f327d8a068a58802de1457c4b08f890006ea"
+      },
+      {
+        "mode": "release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w205.AGeLf0/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_dynamic_json_w205.cr -o /private/tmp/crystal-click-w205.AGeLf0/check-recursive-release --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w205.AGeLf0/helper-release-build.log 2>&1",
+        "exit_code": 0,
+        "log_sha256": "f2c80fa8203ba718ddf289a00e3305026b8bdb587cc100ec915658a1c32fe9e0"
+      }
+    ],
+    "native": [
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_recursive_dynamic_json_w205.rb --crystal-helper /private/tmp/crystal-click-w205.AGeLf0/check-recursive-debug --evidence-root /private/tmp/crystal-click-w205-debug.WEVkKA > /private/tmp/crystal-click-w205.AGeLf0/native-debug.log 2>&1",
+        "exit_code": 0,
+        "helper": "/private/tmp/crystal-click-w205.AGeLf0/check-recursive-debug",
+        "helper_sha256": "20298dde32472769125ef79293ccda13beefe1dceecd0b7f915e56c6b635b5b2",
+        "evidence_root": "/private/tmp/crystal-click-w205-debug.WEVkKA",
+        "summary_sha256": "1dbe7d99d488329ed2c533a44029e3db879d6ceb3b91500138061e26fb8d21b6",
+        "log": "/private/tmp/crystal-click-w205.AGeLf0/native-debug.log",
+        "log_sha256": "3748bc0a4468d36dd73f5db100bd08b8335bf3457777b3cb7a8ddded4474a006"
+      },
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_recursive_dynamic_json_w205.rb --crystal-helper /private/tmp/crystal-click-w205.AGeLf0/check-recursive-release --evidence-root /private/tmp/crystal-click-w205-release.mETK2g > /private/tmp/crystal-click-w205.AGeLf0/native-release.log 2>&1",
+        "exit_code": 0,
+        "helper": "/private/tmp/crystal-click-w205.AGeLf0/check-recursive-release",
+        "helper_sha256": "3ab24848fdfe84ee519ad38380b187facf4c9387191b16312528172ac0e3021f",
+        "evidence_root": "/private/tmp/crystal-click-w205-release.mETK2g",
+        "summary_sha256": "908573072c464ea6ff4fefc6663a2bba7a39035bc092e44e787930f780380bf6",
+        "log": "/private/tmp/crystal-click-w205.AGeLf0/native-release.log",
+        "log_sha256": "3c752609fbde56f59bb4c00c63d45b4a84162fed6eed90821c4cd316d2b52fd2"
+      }
+    ],
+    "persisted_semantic_falsifier": {
+      "spec": "spec/recursive_dynamic_json_w205_adversary_spec.cr",
+      "mutation": "In a fresh public all-zero-Q part with an unused LC(String) Dynamic actual, set the first persisted Array size from 0 to 1; re-encode the size0 bin/mrk2 pair with unchanged P grid and reseal checksums.",
+      "guard_checks": "Explicit declared physical sizes/file hashes agree; reopened raw size bytes equal the mutated bytes and rows_per_mark remains [2,2,2,2].",
+      "expected_and_observed": "CorruptPartError: binary codec input is too short for declared metadata count; table callbacks remain zero.",
+      "rejection_owner": "Dynamic LC occurrence census attempts one discriminator byte for invented Q=1 before ordinary value decode.",
+      "scope": "Library-only persisted semantic contradiction, not a report mutation or native LC qualification.",
+      "initial_prediction_corrected": "The first new test predicted a later guard message. Root observed 22 examples / one assertion failure and changed only the expected message after inspecting the earlier LC census path; no production change."
+    },
+    "root_audit": {
+      "command": "/usr/bin/ruby /private/tmp/crystal-click-w205.AGeLf0/audit_w205.rb /private/tmp/crystal-click-w205-debug.WEVkKA /private/tmp/crystal-click-w205-release.mETK2g > /private/tmp/crystal-click-w205.AGeLf0/root-audit-final.log",
+      "source": "/private/tmp/crystal-click-w205.AGeLf0/audit_w205.rb",
+      "source_sha256": "2187799ba5be9beed193084079de61575295e4b4e6f9277ac9c1b3e626b4b03b",
+      "exit_code": 0,
+      "log": "/private/tmp/crystal-click-w205.AGeLf0/root-audit-final.log",
+      "log_sha256": "db9952774099ca30e621544df987644c6adac0b586cccbc4843864a5a5d8e1f7",
+      "checks": "Independent hardcoded type/key/empty-array/window/physical-roster literals; raw process argv/stdin/stdout/stderr/exits/pins/limits; unchanged published and authenticated active ATTACH trees; helper input/output hashes; cross-mode bytes/reports.",
+      "instrument_mutations_rejected_per_mode": 9,
+      "mutations": [
+        "wrong_parent_count",
+        "wrong_mark_grid",
+        "positive_child_count",
+        "dropped_unused_structure",
+        "nonempty_child_value",
+        "lost_parent_key",
+        "nonempty_zero_window",
+        "native_nonempty_child",
+        "native_failed_check"
+      ],
+      "limitation": "These nine are oracle/instrument controls, separate from the persisted semantic falsifier above."
+    },
+    "ruby_checks": {
+      "commands": [
+        "/usr/bin/ruby -c scripts/probe_recursive_dynamic_json_w205.rb",
+        "/usr/bin/ruby scripts/probe_recursive_dynamic_json_w205.rb --self-test"
+      ],
+      "exit_codes": [
+        0,
+        0
+      ],
+      "logs": [
+        {
+          "path": "/private/tmp/crystal-click-w205.AGeLf0/ruby-syntax.log",
+          "sha256": "bbafef10c22b9323fa5589564990f57fbf57f9a632381d5e765dc5a3b25b4a1b"
+        },
+        {
+          "path": "/private/tmp/crystal-click-w205.AGeLf0/ruby-self-test.log",
+          "sha256": "b4a5194b6fbacd8599141c294cd33562a8c7af97c9bc3187572a3c4b81f318a7"
+        }
+      ],
+      "signal": "Syntax OK and fixture self-test passes; unknown origin/profile and dropped structure/manifest controls reject."
+    },
+    "packet_validation": "JSON syntax and explicit field/hash/log/source checks only. Installed skill template and validate-landmark-graph.sh are absent; reused the repository evidence-index convention, not proof by structure.",
+    "commit_gate_command": "git diff --cached --check",
+    "commit_gate_observation": "Exit 0; root confirmed the exact seven staged paths and that their worktree content matches the staged content."
+  },
+  "native_scope": {
+    "carrier": "Array(Tuple(doc JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8), d Dynamic(max_types=1)))",
+    "profiles": [
+      "single_stream",
+      "with_size_stream"
+    ],
+    "layout": "Wide/hash names/LZ4 literal transport/plain adaptive mrk2; Object V3 shared MAP with single-stream shared String; Dynamic V3/BASIC.",
+    "domains": {
+      "parent_rows": 8,
+      "rows_per_mark": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "child_rows_per_mark": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "library_unused_actual": "UInt64",
+    "stock_actual_roster": [],
+    "stock_path_roster": [],
+    "windows": [
+      "full",
+      "first",
+      "later",
+      "middle",
+      "final",
+      "end_zero"
+    ],
+    "per_mode": {
+      "direct_library_attaches": 2,
+      "checks": 6,
+      "independent_selected_rows": 96,
+      "raw_process_records": 3,
+      "unchanged_published_files": 122,
+      "generated_library_files": 62,
+      "active_attached_library_files": 64
+    },
+    "observations_note": "96 rows count overlapping/repeated window observations, not distinct fixture rows.",
+    "active_snapshot_policy": "Resolve active library paths from captured data_path/all_1_1_0. Match every published file exactly; only optional invalidated_system_columns.txt is allowed with exact _block_number/_block_offset newline content in either order.",
+    "cross_mode": {
+      "generated_files_byte_identical": 62,
+      "normalized_helper_reports_equal": true
+    }
+  },
+  "next_frontier": {
+    "status": "PROPOSED, not implemented",
+    "capability": "Direct JSON Dynamic actual through exact Object physical/value binding.",
+    "design": "Reuse the single existing Dynamic roster/statistics/canonical-index owner. Descriptor representability alone does not admit values. Do not add a private duplicate roster parser or blanket contains_json? exemption.",
+    "guards": "Bare value APIs, Object-typed Dynamic and inline SharedVariant JSON retain explicit unbound/unqualified guards.",
+    "return_pointer": "docs/RECURSIVE_ZERO_OCCURRENCE_FRONTIER.md#next-capability"
+  },
+  "evidence_decay": {
+    "triggers": [
+      "Changes to recursive/Dynamic/Object/LC ownership, P/Q framing, profiles, persisted layouts, descriptor validation or budgets.",
+      "Different stock executable/version or source identity.",
+      "Fixture/capture/log loss or mutation, or widening the admitted carrier/actual/layout."
+    ],
+    "refresh": "Rebuild both helpers at the new source state; rerun the affected roster in both modes, fresh native two-direction captures and raw/literal/physical audit plus persisted schedule contradiction.",
+    "failure_policy": "Downgrade/reopen only dependent finite compatibility claims. Missing scratch is unavailable raw evidence, not an automatic native pass; no full-goal closure."
+  }
+}

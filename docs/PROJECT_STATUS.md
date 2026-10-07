@@ -1,6 +1,32 @@
 # CrystalClick project status
 
-Current finite recursive public-part frontier (W204, 2026-10-07): the existing
+Current finite compatibility frontier (W205, 2026-10-07): whole-part positive
+parent P with child Q=0 is now qualified for the existing recursive
+Array(Tuple(JSON, Dynamic)) public column/table and complete-part APIs. No
+production code or type admission changed. Both String profiles pass fresh
+stock-to-library and library-to-stock gates in DEBUG and RELEASE. Stock's
+independently empty actual/path roster and the library's unused UInt64 actual
+are retained rather than normalized.
+
+The same 182 affected files pass 1125 DEBUG and 1125 RELEASE examples; focused
+DEBUG passes 22, all with zero failures/errors/pending and actual guarded exits
+0. Per native mode: two direct ATTACHes, six CHECKs, 96 selected-row observations
+across repeated windows and 122 unchanged published files. All 62 generated
+files and normalized helper reports agree across modes. Nine instrument/oracle
+mutations reject per mode. A separate checksum-resealed persisted Array-size
+contradiction rejects before a table callback through Dynamic LC census; that
+unused LC(String) actual case remains library-only. Scoped verdict: ROBUST.
+
+The next proposed capability is a direct JSON Dynamic actual bound to the
+existing Object owner, reusing the ordinary roster/statistics owner rather than
+adding a serializer per product. It is not implemented. Wider layouts and
+dictionary schedules, arbitrary publication/catalog dispatch, full types and
+MV/projections, and repository-wide class decomposition remain open.
+Performance stays deferred and the overall goal remains active. Details:
+[RECURSIVE_ZERO_OCCURRENCE_FRONTIER.md](RECURSIVE_ZERO_OCCURRENCE_FRONTIER.md),
+`.landmark/evidence/recursive-zero-occurrence-w205.json`.
+
+Previous finite recursive public-part frontier (W204, 2026-10-07): the existing
 Array/Tuple JSON reader, typed table consumer and complete-part writer compose
 JSON-free Dynamic-bearing siblings through the shared generic codecs. The
 writer takes explicit prepared Dynamic site plans; the reader discovers actual
@@ -20,7 +46,8 @@ are rejected per mode; a seeded production P/Q defect breaks both positives
 before restoration. All 364 generated files and normalized helper reports
 match across modes. Scoped verdict: ROBUST.
 
-Whole-part all-zero-Q has library-only tests, not a separate stock witness.
+At the W204 frontier, whole-part all-zero-Q had library-only tests, not a
+separate stock witness; W205 qualifies that finite missing native case.
 JSON-as-Dynamic-actual, additional wrapper/layout contracts, broader dictionary
 schedules, general publication/catalog dispatch, full MV/projections and
 repository-wide decomposition remain open. Performance is still deferred and
