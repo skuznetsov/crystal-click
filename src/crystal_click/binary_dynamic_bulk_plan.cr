@@ -39,6 +39,7 @@ module CrystalClick
       getter data_roles : Array(String)
       getter structure_roles : Array(String)
       getter ordinary_roles : Array(String)
+      getter qbit_sites : Array(BinaryDynamicQBitSite)
       getter low_cardinality_site_paths : Array(Tuple(BinaryDataType, String))
       getter ancestor_size_roles : Array(String)
       getter low_cardinality_shape_roles : Array(String)
@@ -54,6 +55,7 @@ module CrystalClick
         @data_roles : Array(String),
         @structure_roles : Array(String),
         @ordinary_roles : Array(String),
+        @qbit_sites : Array(BinaryDynamicQBitSite),
         @low_cardinality_site_paths : Array(Tuple(BinaryDataType, String)),
         @ancestor_size_roles : Array(String),
         @low_cardinality_shape_roles : Array(String),
@@ -69,6 +71,7 @@ module CrystalClick
     @data_roles : Array(String)
     @structure_roles : Array(String)
     @ordinary_roles : Array(String)
+    @qbit_sites : Array(BinaryDynamicQBitSite)
     @low_cardinality_site_paths : Array(Tuple(BinaryDataType, String))
     @ancestor_size_roles : Array(String)
     @low_cardinality_shape_roles : Array(String)
@@ -126,6 +129,7 @@ module CrystalClick
       @data_roles = prepared.data_roles
       @structure_roles = prepared.structure_roles
       @ordinary_roles = prepared.ordinary_roles
+      @qbit_sites = prepared.qbit_sites
       @low_cardinality_site_paths = prepared.low_cardinality_site_paths
       @ancestor_size_roles = prepared.ancestor_size_roles
       @low_cardinality_shape_roles = prepared.low_cardinality_shape_roles
@@ -256,6 +260,27 @@ module CrystalClick
       copy_strings(@ordinary_roles)
     end
 
+    # Detached traversal data for direct QBit actual arms. Site role names
+    # retain numeric plane order, independently of the sorted public roster.
+    def qbit_sites : Array(BinaryDynamicQBitSite)
+      @qbit_sites.map(&.detached_copy)
+    end
+
+    # The site object exposes no mutable retained state; plane role getters
+    # return detached strings. This avoids cloning the full roster on each
+    # encoder/decoder lookup.
+    def each_qbit_site(&block : BinaryDynamicQBitSite ->) : Nil
+      @qbit_sites.each { |site| yield site }
+      nil
+    end
+
+    def qbit_site_for(path : String) : BinaryDynamicQBitSite?
+      @qbit_sites.each do |site|
+        return site if site.matches_path?(path)
+      end
+      nil
+    end
+
     def low_cardinality_site_paths : Array(Tuple(BinaryDataType, String))
       @low_cardinality_site_paths.map { |entry| {entry[0], String.new(entry[1].to_slice)} }
     end
@@ -379,14 +404,21 @@ module CrystalClick
 
       data_role_count = count_type_roles(type, "root", sites, profile, context)
       ordinary_role_count = count_ordinary_type_roles(type, "root", sites, profile, context)
+      qbit_metadata = qbit_site_metadata(sites, context)
+      qbit_site_count = qbit_metadata[:sites]
       site_path_count = count_low_cardinality_sites(type, "root", sites, context)
       ancestor_role_count = count_ancestor_size_roles(type, "root", sites, context)[:count]
       schedule_metrics = low_cardinality_schedule_metrics(type, "root", sites, context)
-      retained_metadata = checked_role_add(ordinary_role_count, checked_role_add(site_path_count, checked_role_add(ancestor_role_count, schedule_metrics[:shape_roles])))
+      retained_metadata = checked_role_add(qbit_site_count, checked_role_add(qbit_metadata[:slots], checked_role_add(ordinary_role_count, checked_role_add(site_path_count, checked_role_add(ancestor_role_count, schedule_metrics[:shape_roles])))))
       charge_plan_metadata(context, sites.size.to_u64, checked_role_add(data_role_count, retained_metadata))
+      preflight_qbit_site_snapshots(context, qbit_metadata[:snapshot_bytes])
       site_paths = sites.keys.sort!
       data_roles = Array(String).new(data_role_count.to_i)
-      append_type_roles(type, "root", sites, profile, context, data_roles)
+      qbit_sites = Array(BinaryDynamicQBitSite).new(qbit_site_count.to_i)
+      append_type_roles(type, "root", sites, profile, context, data_roles, qbit_sites)
+      unless qbit_sites.size.to_u64 == qbit_site_count
+        context.corrupt!("Dynamic QBit actual-site roster changed after preflight")
+      end
       data_roles.sort!
       structure_roles = Array(String).new(site_paths.size)
       site_paths.each { |path| append_role(context, path, ".dynamic_structure", structure_roles) }
@@ -404,7 +436,7 @@ module CrystalClick
       append_low_cardinality_shape_roles(type, "root", sites, context, shape_roles)
       shape_roles.sort!
 
-      new(Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count))
+      new(Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, qbit_sites, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count))
     end
 
     # Parses the exact no-statistics prefixes under the caller's read budget.
@@ -445,14 +477,21 @@ module CrystalClick
 
       data_role_count = count_type_roles(type, "root", sites, profile, context)
       ordinary_role_count = count_ordinary_type_roles(type, "root", sites, profile, context)
+      qbit_metadata = qbit_site_metadata(sites, context)
+      qbit_site_count = qbit_metadata[:sites]
       site_path_count = count_low_cardinality_sites(type, "root", sites, context)
       ancestor_role_count = count_ancestor_size_roles(type, "root", sites, context)[:count]
       schedule_metrics = low_cardinality_schedule_metrics(type, "root", sites, context)
-      retained_metadata = checked_role_add(ordinary_role_count, checked_role_add(site_path_count, checked_role_add(ancestor_role_count, schedule_metrics[:shape_roles])))
+      retained_metadata = checked_role_add(qbit_site_count, checked_role_add(qbit_metadata[:slots], checked_role_add(ordinary_role_count, checked_role_add(site_path_count, checked_role_add(ancestor_role_count, schedule_metrics[:shape_roles])))))
       charge_plan_metadata(context, sites.size.to_u64, checked_role_add(data_role_count, retained_metadata))
+      preflight_qbit_site_snapshots(context, qbit_metadata[:snapshot_bytes])
       site_paths = sites.keys.sort!
       data_roles = Array(String).new(data_role_count.to_i)
-      append_type_roles(type, "root", sites, profile, context, data_roles)
+      qbit_sites = Array(BinaryDynamicQBitSite).new(qbit_site_count.to_i)
+      append_type_roles(type, "root", sites, profile, context, data_roles, qbit_sites)
+      unless qbit_sites.size.to_u64 == qbit_site_count
+        context.unsupported!("Dynamic QBit actual-site roster changed after preflight")
+      end
       data_roles.sort!
       structure_roles = Array(String).new(site_paths.size)
       site_paths.each { |path| append_role(context, path, ".dynamic_structure", structure_roles) }
@@ -469,7 +508,7 @@ module CrystalClick
       shape_roles = [] of String
       append_low_cardinality_shape_roles(type, "root", sites, context, shape_roles)
       shape_roles.sort!
-      Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count)
+      Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, qbit_sites, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count)
     end
 
     private def self.discover_write_sites(
@@ -606,6 +645,9 @@ module CrystalClick
         actual_type = structure.type_at(index)
         if actual_type.contains_json?
           context.unsupported!("JSON in Dynamic actual rosters is outside the admitted bulk profile")
+        end
+        if actual_type.contains_qbit? && actual_type.tag != BinaryDataType::TAG_QBIT
+          context.unsupported!("QBit is admitted only as a direct Dynamic actual type")
         end
         BinaryNestedType.reject_unqualified_specialized_bulk!(actual_type)
       end
@@ -805,6 +847,9 @@ module CrystalClick
         2_u64
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         1_u64
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        qbit.plane_count.to_u64
       else
         if type.fixed_width
           1_u64
@@ -814,6 +859,53 @@ module CrystalClick
       end
     end
 
+    private def self.qbit_site_metadata(
+      sites : Hash(String, Site),
+      context : BinaryCodecContext,
+    ) : NamedTuple(sites: UInt64, slots: UInt64, snapshot_bytes: UInt64)
+      # Actual rosters are already discovered and their canonical arms are
+      # owned by Site. Counting only direct QBit arms avoids a second generated
+      # path walk (and preserves the pre-W199 budget for all other plans).
+      site_count = 0_u64
+      slot_count = 0_u64
+      snapshot_bytes = 0_u64
+      sites.each do |site_path, site|
+        site.arms.each_with_index do |arm, index|
+          next unless arm.tag == BinaryDataType::TAG_QBIT
+
+          qbit = arm.qbit_type || context.unsupported!("Dynamic QBit actual arm is missing its nominal descriptor")
+          begin
+            QBitColumnType.new(qbit)
+          rescue ex : ArgumentError
+            context.unsupported!("Dynamic QBit descriptor exceeds the bounded plane profile")
+          end
+          site_count = checked_role_add(site_count, 1_u64)
+          slot_count = checked_role_add(slot_count, qbit.plane_count.to_u64)
+
+          # BinaryDynamicQBitSite owns snapshots of the actual path and every
+          # numeric-order role. Preflight their total work before constructors
+          # copy any borrowed/generated names.
+          path_bytes = checked_role_add(site_path.bytesize.to_u64, ".arm.".bytesize.to_u64)
+          path_bytes = checked_role_add(path_bytes, decimal_digits(index).to_u64)
+          snapshot_bytes = checked_role_add(snapshot_bytes, path_bytes)
+          plane = 0
+          while plane < qbit.plane_count
+            role_bytes = checked_role_add(path_bytes, BinaryQBitBulkCodec::ROLE_SUFFIX.bytesize.to_u64)
+            role_bytes = checked_role_add(role_bytes, decimal_digits(plane).to_u64)
+            snapshot_bytes = checked_role_add(snapshot_bytes, role_bytes)
+            plane += 1
+          end
+        end
+      end
+      {sites: site_count, slots: slot_count, snapshot_bytes: snapshot_bytes}
+    end
+
+    private def self.preflight_qbit_site_snapshots(context : BinaryCodecContext, snapshot_bytes : UInt64) : Nil
+      return if snapshot_bytes == 0_u64
+      context.budget.ensure_wire_bytes(snapshot_bytes)
+      context.budget.charge_wire_bytes(snapshot_bytes)
+    end
+
     private def self.append_type_roles(
       type : BinaryDataType,
       path : String,
@@ -821,6 +913,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       context : BinaryCodecContext,
       roles : Array(String),
+      qbit_sites : Array(BinaryDynamicQBitSite),
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_DYNAMIC
@@ -828,7 +921,7 @@ module CrystalClick
         append_role(context, path, ".discriminators", roles)
         site.arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
-          append_type_roles(arm, child, sites, profile, context, roles)
+          append_type_roles(arm, child, sites, profile, context, roles, qbit_sites)
         end
       when BinaryDataType::TAG_STRING
         append_role(context, path, ".data", roles)
@@ -836,37 +929,46 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_role(context, path, ".sizes", roles)
         child = child_path(context, path, ".elements")
-        append_type_roles(type.child_at(0), child, sites, profile, context, roles)
+        append_type_roles(type.child_at(0), child, sites, profile, context, roles, qbit_sites)
       when BinaryDataType::TAG_NULLABLE
         append_role(context, path, ".nulls", roles)
         child = child_path(context, path, ".nested")
-        append_type_roles(type.child_at(0), child, sites, profile, context, roles)
+        append_type_roles(type.child_at(0), child, sites, profile, context, roles, qbit_sites)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        append_type_roles(type.child_at(0), path, sites, profile, context, roles)
+        append_type_roles(type.child_at(0), path, sites, profile, context, roles, qbit_sites)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           append_role(context, path, ".data", roles)
         else
           type.child_count.times do |index|
             child = child_path(context, path, ".field.", index)
-            append_type_roles(type.child_at(index), child, sites, profile, context, roles)
+            append_type_roles(type.child_at(index), child, sites, profile, context, roles, qbit_sites)
           end
         end
       when BinaryDataType::TAG_MAP
         append_role(context, path, ".sizes", roles)
         key_path = child_path(context, path, ".elements.field.0")
-        append_type_roles(type.child_at(0), key_path, sites, profile, context, roles)
+        append_type_roles(type.child_at(0), key_path, sites, profile, context, roles, qbit_sites)
         value_path = child_path(context, path, ".elements.field.1")
-        append_type_roles(type.child_at(1), value_path, sites, profile, context, roles)
+        append_type_roles(type.child_at(1), value_path, sites, profile, context, roles, qbit_sites)
       when BinaryDataType::TAG_VARIANT
         append_role(context, path, ".discriminators", roles)
         type.child_count.times do |index|
           child = child_path(context, path, ".arm.", index)
-          append_type_roles(type.child_at(index), child, sites, profile, context, roles)
+          append_type_roles(type.child_at(index), child, sites, profile, context, roles, qbit_sites)
         end
       when BinaryDataType::TAG_LOW_CARDINALITY
         append_role(context, path, ".dictionary", roles)
         append_role(context, path, ".indexes", roles)
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || context.unsupported!("QBit bulk descriptor is missing its nominal type")
+        plane_roles = Array(String).new(qbit.plane_count)
+        qbit.plane_count.times do |plane|
+          role = generated_name(context, path, BinaryQBitBulkCodec::ROLE_SUFFIX, plane)
+          roles << role
+          plane_roles << role
+        end
+        qbit_sites << BinaryDynamicQBitSite.new(path, type, plane_roles)
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         append_role(context, path, ".data", roles)
       else
@@ -933,6 +1035,9 @@ module CrystalClick
           count = checked_role_add(count, count_ordinary_type_roles(type.child_at(index), child, sites, profile, context))
         end
         count
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        qbit.plane_count.to_u64
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         1_u64
       else
@@ -1139,6 +1244,12 @@ module CrystalClick
         append_role(context, path, ".discriminators", roles)
         type.child_count.times do |index|
           append_ordinary_type_roles(type.child_at(index), child_path(context, path, ".arm.", index), sites, profile, context, roles)
+        end
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || context.unsupported!("QBit bulk descriptor is missing its nominal type")
+        qbit.plane_count.times do |plane|
+          role = generated_name(context, path, BinaryQBitBulkCodec::ROLE_SUFFIX, plane)
+          roles << role
         end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         append_role(context, path, ".data", roles)

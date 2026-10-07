@@ -141,7 +141,7 @@ module CrystalClick
       if child && child.type.contains_aggregate_count?
         raise ArgumentError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
       end
-      if child && child.type.contains_qbit?
+      if child && child.type.contains_qbit? && child.type.tag != BinaryDataType::TAG_QBIT
         raise ArgumentError.new("QBit is not admitted as a Dynamic actual type")
       end
       if child && child.type.tag == BinaryDataType::TAG_NOTHING

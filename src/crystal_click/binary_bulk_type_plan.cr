@@ -38,7 +38,10 @@ module CrystalClick
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end
       BinaryNestedType.reject_unqualified_specialized_bulk!(@type)
-      @qbit_column = BinaryQBitBulkCodec.column_type(@type)
+      # Dynamic QBit leaves have per-actual-site roles owned by the supplied
+      # Dynamic plan. The root-column adapter remains limited to standalone
+      # QBit/Nullable(QBit) descriptors and keeps static container guards.
+      @qbit_column = @dynamic_plan ? nil : BinaryQBitBulkCodec.column_type(@type)
       if column = @qbit_column
         BinaryQBitBulkCodec.preflight_role_metadata!(column, "root", @limits, @writing)
       end

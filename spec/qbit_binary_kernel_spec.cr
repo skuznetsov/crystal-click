@@ -224,7 +224,7 @@ describe "QBit binary descriptor and scalar kernel" do
     end
   end
 
-  it "admits only root QBit or direct Nullable(QBit), not nested, Dynamic, Variant or borrowed placements" do
+  it "keeps static and borrowed QBit guards while admitting a direct owned Dynamic QBit" do
     qbit = CrystalClick::BinaryDataType.qbit(CrystalClick::QBitType.new("Int8", 3_u64))
     nullable = CrystalClick::BinaryDataType.nullable(qbit)
     nullable.contains_qbit?.should be_true
@@ -241,9 +241,18 @@ describe "QBit binary descriptor and scalar kernel" do
     qbit_value = CrystalClick::BinaryValue.qbit(
       CrystalClick::QBitValue.new(CrystalClick::QBitType.new("Int8", 3_u64), Bytes[1_u8, 2, 3])
     )
+    dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 1)
+    dynamic_value = CrystalClick::BinaryValue.dynamic(dynamic, qbit_value)
+    dynamic_value.type.should eq(dynamic)
+    dynamic_value.child_at(0).type.should eq(qbit)
+    dynamic_value.child_at(0).qbit_value.should eq(qbit_value.qbit_value)
+
+    nullable_qbit = CrystalClick::BinaryDataType.nullable(qbit)
+    nullable_value = CrystalClick::BinaryValue.nullable(nullable_qbit, qbit_value)
     expect_raises(ArgumentError) do
-      CrystalClick::BinaryValue.dynamic(CrystalClick::BinaryDataType.dynamic, qbit_value)
+      CrystalClick::BinaryValue.dynamic(dynamic, nullable_value)
     end
+
     borrowed_wire = CrystalClick::BinaryValueCodec.encode(qbit_value)
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.encode_borrowed(
@@ -256,6 +265,10 @@ describe "QBit binary descriptor and scalar kernel" do
       )
     end
     dynamic_wire = Bytes[0x2b_u8, 0x20, 0x36, 0x07, 0x03, 0x03, 1, 2, 3]
-    expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::BinaryValueCodec.decode(dynamic_wire) }
+    decoded_dynamic = CrystalClick::BinaryValueCodec.decode(dynamic_wire)
+    decoded_dynamic.type.tag.should eq(CrystalClick::BinaryDataType::TAG_DYNAMIC)
+    decoded_dynamic.child_at(0).type.should eq(qbit)
+    decoded_dynamic.child_at(0).qbit_value.should eq(qbit_value.qbit_value)
+    CrystalClick::BinaryValueCodec.encode(decoded_dynamic).should eq(dynamic_wire)
   end
 end

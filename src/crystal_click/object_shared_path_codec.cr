@@ -280,7 +280,14 @@ module CrystalClick
         add_lane_emission(emissions, dictionary_name, dictionary_role, streams, LOW_CARDINALITY_VERSION_BYTES, budget)
         add_lane_emission(emissions, physical_prefix, indexes_role, streams, 0, budget)
       when BinaryDataType::TAG_QBIT
-        raise UnsupportedFormatError.new("QBit per-path physical substreams are not admitted")
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        plane = 0
+        while plane < qbit.plane_count
+          role = indexed_path(path, BinaryQBitBulkCodec::ROLE_SUFFIX, plane, budget)
+          name = append_escaped_field(physical_prefix, (plane + 1).to_s, budget)
+          add_lane_emission(emissions, name, role, streams, 0, budget)
+          plane += 1
+        end
       when BinaryDataType::TAG_JSON
         raise UnsupportedFormatError.new("JSON per-path physical substreams are not admitted")
       else
@@ -490,7 +497,14 @@ module CrystalClick
         indexes_role = logical_name(path, ".indexes", budget)
         reader.add_lane(indexes_role, reader.take(physical_prefix))
       when BinaryDataType::TAG_QBIT
-        raise UnsupportedFormatError.new("QBit per-path physical substreams are not admitted")
+        qbit = type.qbit_type || raise CorruptPartError.new("QBit bulk descriptor is missing its nominal type")
+        plane = 0
+        while plane < qbit.plane_count
+          role = indexed_path(path, BinaryQBitBulkCodec::ROLE_SUFFIX, plane, budget)
+          name = append_escaped_field(physical_prefix, (plane + 1).to_s, budget)
+          reader.add_lane(role, reader.take(name))
+          plane += 1
+        end
       when BinaryDataType::TAG_JSON
         raise UnsupportedFormatError.new("JSON per-path physical substreams are not admitted")
       else

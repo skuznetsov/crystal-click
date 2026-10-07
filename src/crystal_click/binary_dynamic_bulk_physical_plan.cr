@@ -354,6 +354,13 @@ module CrystalClick
         # the shared descriptor budget just as they do in the static planner.
         # Walk them without adding dictionary-internal physical roles.
         scan_hidden_descriptors(type.child_at(0), depth + 1)
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        plane = 0
+        while plane < qbit.plane_count
+          add_data_role(path, "#{BinaryQBitBulkCodec::ROLE_SUFFIX}#{plane}")
+          plane += 1
+        end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         add_data_role(path, ".data")
       else
@@ -421,6 +428,13 @@ module CrystalClick
       when BinaryDataType::TAG_LOW_CARDINALITY
         add_physical_name(add_size(prefix_length, 5_u64))
         add_physical_name(prefix_length)
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        plane = 0_u64
+        while plane < qbit.plane_count.to_u64
+          add_physical_name(add_size(prefix_length, add_size(3_u64, digit_count(plane + 1_u64))))
+          plane += 1_u64
+        end
       when BinaryDataType::TAG_DYNAMIC
         add_physical_name(add_size(prefix_length, ".dynamic_structure".bytesize.to_u64))
         measure_variant_site(type, path, prefix_length, array_level, true)
@@ -520,6 +534,15 @@ module CrystalClick
         add_data_binding("#{path}.dictionary", PhysicalStreamName.append_literal(prefix, ".dict"))
         add_data_binding("#{path}.indexes", String.new(prefix.to_slice))
         @prefix_sizes[String.new("#{path}.dictionary".to_slice)] = 8
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+        plane = 0
+        while plane < qbit.plane_count
+          role = BinaryQBitBulkCodec.plane_role(path, plane)
+          physical_suffix = "%2E#{plane + 1}"
+          add_data_binding(role, PhysicalStreamName.append_literal(prefix, physical_suffix))
+          plane += 1
+        end
       when BinaryDataType::TAG_DYNAMIC
         add_structure_binding("#{path}.dynamic_structure", PhysicalStreamName.append_literal(prefix, ".dynamic_structure"))
         append_variant_bindings(type, path, prefix, array_level, true)

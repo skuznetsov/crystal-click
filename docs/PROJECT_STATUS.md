@@ -1,5 +1,33 @@
 # CrystalClick project status
 
+Current finite internal-adapter frontier (W199, 2026-10-06): owned direct QBit
+Dynamic scalar envelopes and ordinary direct QBit actual arms at admitted
+Dynamic sites reuse existing QBit codecs across recursive bulk planning,
+physical binding and Object shared-path Data serde. One per-site owner keeps
+numeric planes, nominal identity and cumulative admission bounds; no serializer
+per recursive product or second bit transposition algorithm was introduced.
+
+Final focused DEBUG passes 29 examples; the same 136 affected files pass 897
+DEBUG and 897 RELEASE examples, zero failures/errors/pending, actual serial
+guarded exits0. The final 946-file source/spec identity remains unchanged
+across these gates, fresh helper builds and native runs. Each mode inspects
+48 stock Wide profiles (four QBit carriers, three dimension/stride shapes,
+shared versions2/3, String0/1), authenticates 120 path records, 288 bucket/chunk
+schedule records and 288 direct typed native rows, and preserves all 2064 source
+part files. Independent literal planes, raw process/SQL/file provenance and
+11 report/output mutations per mode qualify the finite scope; normalized
+DEBUG/RELEASE observations agree. Scoped verdict: ROBUST.
+
+This is not a public library-written QBit-in-JSON complete-part certificate:
+no library part ATTACH/CHECK was executed. Direct static QBit wrapper and
+borrowed/SharedVariant guards remain. Zero-row selection validates metadata
+and shape, not unselected discriminator/value bodies. Next: public complete
+QBit actual parts, then remaining recursive physical contracts and
+JSON-as-Dynamic-actual storage. Full types, broader MV/projections and
+repository-wide class decomposition remain open; performance stays deferred.
+Details: [OBJECT_SHARED_QBIT_FRONTIER.md](OBJECT_SHARED_QBIT_FRONTIER.md),
+`.landmark/evidence/object-shared-qbit-w199.json`.
+
 Current finite complete-part frontier (W198, 2026-10-06): public writer and
 reader compose ordinary Nested actuals and an Array(named Tuple) control in
 root JSON shared ADVANCED v2 / CHUNKED v3, String profiles 0/1. No production
@@ -23,7 +51,7 @@ all 336 generated files and normalized helper observations agree between modes.
 Eight oracle mutations per mode and single/duplicate-capture controls reject.
 Scoped verdict: ROBUST for this finite corpus, not all recursive products.
 
-Next: ordinary QBit actual-path planning/binding and complete-part certificates,
+Next after W199's internal QBit adapter: public QBit complete-part certificates,
 then remaining specialized wrapper/site schedules and JSON-as-Dynamic-actual
 storage. Full types, broader MV/projections and repository-wide one-class-per-file
 decomposition remain open. Performance stays deferred; the overall goal is

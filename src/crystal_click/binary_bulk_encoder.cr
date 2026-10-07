@@ -62,6 +62,11 @@ module CrystalClick
       budget.ensure_future_nodes(total[:nodes])
       budget.ensure_future_elements(total[:edges])
       budget.ensure_wire_bytes(total[:wire_bytes])
+      qbit_site_scratch = if total[:wire_bytes] > 0_u64
+                            prepare_dynamic_qbit_scratch(dynamic_plan, budget)
+                          else
+                            nil
+                          end
 
       # A single plane-width scratch buffer is an output allocation. Do not
       # create it until all selected values have passed the wire-cost preflight;
@@ -81,7 +86,7 @@ module CrystalClick
 
       granules.each do |rows|
         rows.each do |value|
-          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
         end
         roles.each do |role|
           offsets[role] << lanes[role].size.to_u64
@@ -112,6 +117,33 @@ module CrystalClick
 
     private def self.zero_cost : NamedTuple(nodes: UInt64, edges: UInt64, wire_bytes: UInt64)
       {nodes: 0_u64, edges: 0_u64, wire_bytes: 0_u64}
+    end
+
+    private def self.prepare_dynamic_qbit_scratch(
+      dynamic_plan : BinaryDynamicBulkPlan?,
+      budget : BinaryCodecBudget,
+    ) : Hash(QBitType, Bytes)?
+      return nil unless dynamic_plan
+
+      widths = Hash(QBitType, Int32).new
+      dynamic_plan.each_qbit_site do |site|
+        widths[site.qbit_type] = site.plane_width
+      end
+      return nil if widths.empty?
+
+      total_bytes = 0_u64
+      widths.each do |_type, width|
+        total_bytes = checked_add(total_bytes, width.to_u64)
+      end
+      if total_bytes > budget.limits.max_bytes.to_u64
+        raise UnsupportedFormatError.new("Dynamic QBit scratch exceeds configured byte limit")
+      end
+
+      scratch = Hash(QBitType, Bytes).new
+      widths.each do |qbit_type, width|
+        scratch[qbit_type] = Bytes.new(width, 0_u8)
+      end
+      scratch
     end
 
     private def self.add_cost(
@@ -413,6 +445,7 @@ module CrystalClick
       qbit_roles : Array(String)? = nil,
       qbit_role_offset : Int32 = 0,
       qbit_scratch : Bytes? = nil,
+      qbit_site_scratch : Hash(QBitType, Bytes)? = nil,
     ) : Nil
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -425,6 +458,16 @@ module CrystalClick
 
       case type.tag
       when BinaryDataType::TAG_QBIT
+        if plan = dynamic_plan
+          if site = plan.qbit_site_for(path)
+            scratch_by_type = qbit_site_scratch || raise UnsupportedFormatError.new("Dynamic QBit plane scratch was not preflighted")
+            scratch = scratch_by_type[site.qbit_type]? || raise UnsupportedFormatError.new("Dynamic QBit plane scratch is missing its nominal type")
+            site.append_plane_row(value.qbit_value, scratch) do |role, byte|
+              write_byte(lanes, role, byte, budget)
+            end
+            return nil
+          end
+        end
         roles = qbit_roles || raise UnsupportedFormatError.new("QBit bulk plane roles were not planned")
         scratch = qbit_scratch || raise UnsupportedFormatError.new("QBit bulk plane scratch was not preflighted")
         BinaryQBitBulkCodec.append_plane_row(value.qbit_value, roles, qbit_role_offset, scratch) do |role, byte|
@@ -460,7 +503,7 @@ module CrystalClick
           selected_path = child_path(path, ".arm.", index.to_i, budget, dynamic_plan)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, child_value, selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+          write_value(child_type, child_value, selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
         end
       when BinaryDataType::TAG_DYNAMIC
         plan = dynamic_plan || raise UnsupportedFormatError.new("Dynamic bulk value has no structure plan")
@@ -487,7 +530,7 @@ module CrystalClick
             child_type = plan.arm_type(path, selection.index)
             traversal.preflight_children(1_u64)
             traversal.ensure_depth(depth + 1)
-            write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+            write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
           end
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
@@ -496,7 +539,7 @@ module CrystalClick
         traversal.ensure_depth(depth + 1) unless count == 0
         write_u64(lanes, "#{path}.sizes", count.to_u64, budget)
         count.times do |index|
-          write_value(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+          write_value(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = value.element_count
@@ -511,7 +554,7 @@ module CrystalClick
           traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           count.times do |index|
-            write_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+            write_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
           end
         end
       when BinaryDataType::TAG_MAP
@@ -531,7 +574,7 @@ module CrystalClick
         flat_count.times do |index|
           child_index = index.even? ? 0 : 1
           selected_path = child_path(path, ".elements.field.", child_index, budget, dynamic_plan)
-          write_value(type.child_at(child_index), value.element_at(index), selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+          write_value(type.child_at(child_index), value.element_at(index), selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
         end
       when BinaryDataType::TAG_NULLABLE
         child_type = type.child_at(0)
@@ -544,13 +587,13 @@ module CrystalClick
           write_byte(lanes, "#{path}.nulls", 0_u8, budget)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+          write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
         end
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         child_type = type.child_at(0)
         preflight_child_type(traversal, child_type, 1_u64)
         traversal.ensure_depth(depth + 1)
-        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch)
+        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch)
       else
         width = type.fixed_width || raise UnsupportedFormatError.new("unsupported binary bulk leaf")
         unless value.byte_size == width

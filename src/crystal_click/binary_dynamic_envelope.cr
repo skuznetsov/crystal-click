@@ -14,7 +14,7 @@ module CrystalClick
         BinaryDataTypeCodec.write_to(BinaryDataType.primitive("Nothing"), context, depth + 1)
       else
         selected = value.child_at(0)
-        if selected.type.contains_qbit?
+        if selected.type.contains_qbit? && selected.type.tag != BinaryDataType::TAG_QBIT
           context.unsupported!("QBit is not admitted as a Dynamic actual type")
         end
         context.preflight_children(1_u64)
@@ -33,7 +33,7 @@ module CrystalClick
     ) : BinaryValue
       context.preflight_children(1_u64)
       selected_type = BinaryDataTypeCodec.read_from(context, depth + 1)
-      if selected_type.contains_qbit?
+      if selected_type.contains_qbit? && selected_type.tag != BinaryDataType::TAG_QBIT
         context.unsupported!("QBit is not admitted as a Dynamic actual type")
       end
       if selected_type.tag == BinaryDataType::TAG_NOTHING
