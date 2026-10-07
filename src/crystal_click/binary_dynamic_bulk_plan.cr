@@ -171,6 +171,22 @@ module CrystalClick
           BinaryTypeNameBudget.measure(site.structure.type_at(index), budget, actual_depth)
         end
       end
+      if has_json_object_bindings?
+        json_object_binding_keys(budget).each do |key|
+          site = @sites[key[0]]? || raise(CorruptPartError.new("Dynamic JSON binding has no actual site"))
+          site_depth64 = site.depth.to_i64
+          json_depth64 = initial_depth.to_i64 + site_depth64
+          if json_depth64 <= 0_i64 || json_depth64 > Int32::MAX.to_i64
+            raise UnsupportedFormatError.new("Dynamic JSON descriptor depth exceeds Int32")
+          end
+          binding = json_object_binding(key[0], key[1])
+          begin
+            binding.schema.validate_plan(binding.plan, budget, json_depth64.to_i)
+          rescue ex : ArgumentError
+            raise UnsupportedFormatError.new(ex.message || "Dynamic JSON Object schema exceeds its inherited depth")
+          end
+        end
+      end
       nil
     end
 
@@ -526,6 +542,10 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       initial_depth : Int32 = 1,
       descriptor_preflight : BinaryDynamicBulkDescriptorPreflight? = nil,
+      json_object_plan_loader : Proc(
+        String, Int32, Int32, DynamicStructure, Hash(String, DynamicStructure), BinaryCodecBudget,
+        ObjectDocumentPlan,
+      )? = nil,
     ) : BinaryDynamicBulkPlan
       if budget.writing?
         raise ArgumentError.new("Dynamic structure stream decode requires a read-direction budget")
@@ -545,9 +565,56 @@ module CrystalClick
       sites = Hash(String, Site).new
       parsed_structures = Hash(String, DynamicStructure).new
       discover_read_sites(
-        type, "root", initial_depth, 1, nil, loader, parsed_structures, context, sites, true
+        type, "root", initial_depth, 1, nil, loader, parsed_structures, context, sites, true,
+        !json_object_plan_loader.nil?
       )
-      decoded_plan(type, profile, context, sites, nil)
+      json_object_plans = if plan_loader = json_object_plan_loader
+                            load_json_object_plans(sites, parsed_structures, plan_loader, context, initial_depth)
+                          else
+                            nil
+                          end
+      plan = decoded_plan(type, profile, context, sites, nil, json_object_plans)
+      plan.validate_inherited_depth!(initial_depth, budget) if plan.has_json_object_bindings?
+      plan
+    end
+
+    private def self.load_json_object_plans(
+      sites : Hash(String, Site),
+      structures : Hash(String, DynamicStructure),
+      loader : Proc(
+        String, Int32, Int32, DynamicStructure, Hash(String, DynamicStructure), BinaryCodecBudget,
+        ObjectDocumentPlan,
+      ),
+      context : BinaryCodecContext,
+      initial_depth : Int32,
+    ) : Array(Tuple(String, Int32, ObjectDocumentPlan))
+      count = 0_u64
+      sites.each_value do |site|
+        site.arms.each { |arm| count += 1_u64 if arm.tag == BinaryDataType::TAG_JSON }
+      end
+      context.preflight_children(count) if count > 0_u64
+      context.budget.ensure_future_elements(count)
+      context.budget.charge_elements(count)
+      plans = Array(Tuple(String, Int32, ObjectDocumentPlan)).new(count.to_i)
+      sites.keys.sort!.each do |site_path|
+        site = sites[site_path]
+        site.arms.each_with_index do |arm, arm_index|
+          next unless arm.tag == BinaryDataType::TAG_JSON
+          json_descriptor_depth = initial_depth.to_i64 + site.depth.to_i64
+          if json_descriptor_depth <= 0_i64 || json_descriptor_depth > Int32::MAX.to_i64
+            context.unsupported!("Dynamic JSON descriptor depth exceeds Int32")
+          end
+          plans << {
+            site_path,
+            arm_index.to_i32,
+            loader.call(site_path, arm_index, json_descriptor_depth.to_i32, site.structure, structures, context.budget),
+          }
+        end
+      end
+      unless plans.size.to_u64 == count
+        context.corrupt!("Dynamic JSON child-plan loader did not cover every direct JSON actual")
+      end
+      plans
     end
 
     private def self.decode_structure_streams_internal(

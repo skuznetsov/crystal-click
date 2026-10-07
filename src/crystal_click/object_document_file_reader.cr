@@ -160,6 +160,7 @@ module CrystalClick
       hashed : Bool = false,
       initial_array_level : UInt64 = 0_u64,
       expected_mark_row_counts : Array(UInt64)? = nil,
+      typed_schema_depth : Int32 = 1,
     ) : ObjectDocumentFileDescriptor
       prepared = prepare_site_read(
         source,
@@ -176,6 +177,11 @@ module CrystalClick
         true,
         initial_array_level,
         expected_mark_row_counts,
+        nil,
+        nil,
+        nil,
+        1,
+        typed_schema_depth,
       )
       prepared.descriptor.not_nil!
     end
@@ -323,6 +329,10 @@ module CrystalClick
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       hashed : Bool = false,
       initial_array_level : UInt64 = 0_u64,
+      expected_document_plan : ObjectDocumentPlan? = nil,
+      expected_schema : ObjectDocumentSchema? = nil,
+      expected_schema_depth : Int32 = 1,
+      typed_schema_depth : Int32 = 1,
     ) : Array(Array(ObjectDocument))
       prepared = prepare_site_read(
         source,
@@ -340,6 +350,10 @@ module CrystalClick
         initial_array_level,
         nil,
         grid,
+        expected_document_plan,
+        expected_schema,
+        expected_schema_depth,
+        typed_schema_depth,
       )
       read_prepared(prepared)
     end
@@ -360,6 +374,10 @@ module CrystalClick
       initial_array_level : UInt64,
       expected_mark_row_counts : Array(UInt64)?,
       occurrence_grid_override : StorageOccurrenceGrid? = nil,
+      expected_document_plan : ObjectDocumentPlan? = nil,
+      expected_schema : ObjectDocumentSchema? = nil,
+      expected_schema_depth : Int32 = 1,
+      typed_schema_depth : Int32 = 1,
     ) : PreparedRead
       unless !codec_budget.writing? && !transport_budget.writing?
         raise ArgumentError.new("Object site reader requires read-direction budgets")
@@ -389,6 +407,10 @@ module CrystalClick
         transport_budget,
         name_context,
         occurrence_grid_override,
+        expected_document_plan,
+        expected_schema,
+        expected_schema_depth,
+        typed_schema_depth,
       )
     end
 
@@ -413,6 +435,10 @@ module CrystalClick
       transport_budget_override : CompressedStreamBudget? = nil,
       name_context_override : PhysicalStreamPlanContext? = nil,
       occurrence_grid_override : StorageOccurrenceGrid? = nil,
+      expected_document_plan_override : ObjectDocumentPlan? = nil,
+      expected_schema_override : ObjectDocumentSchema? = nil,
+      expected_schema_depth : Int32 = 1,
+      typed_schema_depth : Int32 = 1,
     ) : PreparedRead
       validate_selection_arguments!(first_mark, mark_count)
       reject_json_schema!(typed_schema)
@@ -423,7 +449,9 @@ module CrystalClick
                       else
                         preflight_column_name!(column_name, hashed, limits)
                       end
-      schema_snapshot = preflight_and_copy_schema!(typed_schema, column_prefix, hashed, limits, codec_budget)
+      schema_snapshot = preflight_and_copy_schema!(
+        typed_schema, column_prefix, hashed, limits, codec_budget, typed_schema_depth
+      )
       replay_complete = schema_snapshot.each_value.any? do |type|
         BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
       end
@@ -431,6 +459,7 @@ module CrystalClick
                                        discover_typed_dynamic_metadata_names_at_site!(
                                          column_prefix,
                                          schema_snapshot,
+                                         typed_schema_depth,
                                          limits,
                                          hashed,
                                          codec_budget
@@ -439,6 +468,7 @@ module CrystalClick
                                        discover_typed_dynamic_metadata_names!(
                                          column_name,
                                          schema_snapshot,
+                                         typed_schema_depth,
                                          limits,
                                          hashed,
                                          codec_budget
@@ -546,7 +576,7 @@ module CrystalClick
           child_streams,
           codec_budget,
           profile,
-          root_depth: 2
+          root_depth: object_declared_dynamic_root_depth(typed_schema_depth)
         )
         expected_sites = dynamic_plan.site_paths
         unless expected_sites.size == site_grids.size && expected_sites.size == names.size
@@ -588,6 +618,20 @@ module CrystalClick
         typed_dynamic_direct_structures,
         recursive_typed_dynamic_structures
       )
+      if expected_schema = expected_schema_override
+        begin
+          expected_schema.validate_plan(document_plan, codec_budget, expected_schema_depth)
+        rescue ex : ArgumentError
+          raise CorruptPartError.new(ex.message || "Object child metadata differs from its JSON descriptor")
+        end
+      end
+      if expected_plan = expected_document_plan_override
+        unless same_document_plan_rosters?(
+                 document_plan, expected_plan, codec_budget, expected_schema_depth
+               )
+          raise CorruptPartError.new("Object child metadata changed after Dynamic JSON binding")
+        end
+      end
       physical_plan = if site_prefix = escaped_prefix_override
                         ObjectDocumentPhysicalPlan.from_escaped_prefix(
                           site_prefix,
@@ -1355,6 +1399,7 @@ module CrystalClick
       hashed : Bool,
       limits : BinaryCodecLimits,
       budget : BinaryCodecBudget,
+      typed_schema_depth : Int32 = 1,
     ) : Hash(String, BinaryDataType)
       count = schema.size.to_u64
       budget.preflight_children(count) if count > 0_u64
@@ -1374,8 +1419,8 @@ module CrystalClick
         ensure_unhashed_name_size!(marks_size, hashed)
         expanded_total = checked_add_u64(expanded_total, logical_size)
         ensure_name_size!(expanded_total, limits)
-        context.validate_type_tree(type)
-        if type.contains_variant? && ObjectRecursiveDeclaration.measure_descriptor(type, limits, 2).nil?
+        context.validate_type_tree(type, typed_schema_depth)
+        if type.contains_variant? && ObjectRecursiveDeclaration.measure_descriptor(type, limits, typed_schema_depth).nil?
           raise UnsupportedFormatError.new("Object typed Variant descriptor is outside the admitted declaration grammar")
         end
       end
@@ -1415,6 +1460,7 @@ module CrystalClick
     private def self.discover_typed_dynamic_metadata_names!(
       column_name : String,
       schema : Hash(String, BinaryDataType),
+      typed_schema_depth : Int32,
       limits : BinaryCodecLimits,
       hashed : Bool,
       budget : BinaryCodecBudget,
@@ -1424,7 +1470,9 @@ module CrystalClick
       total_path_bytes = 0_u64
       schema.each do |path, type|
         next unless type.contains_dynamic?
-        shape = ObjectDeclaredDynamicSites.shape_for(type, limits, 2)
+        shape = ObjectDeclaredDynamicSites.shape_for(
+          type, limits, object_declared_dynamic_root_depth(typed_schema_depth)
+        )
         if shape.count == 0_u64
           raise UnsupportedFormatError.new("typed Object Dynamic descriptor has no declared Dynamic site")
         end
@@ -1476,6 +1524,7 @@ module CrystalClick
     private def self.discover_typed_dynamic_metadata_names_at_site!(
       escaped_prefix : String,
       schema : Hash(String, BinaryDataType),
+      typed_schema_depth : Int32,
       limits : BinaryCodecLimits,
       hashed : Bool,
       budget : BinaryCodecBudget,
@@ -1485,7 +1534,9 @@ module CrystalClick
       total_path_bytes = 0_u64
       schema.each do |path, type|
         next unless type.contains_dynamic?
-        shape = ObjectDeclaredDynamicSites.shape_for(type, limits, 2)
+        shape = ObjectDeclaredDynamicSites.shape_for(
+          type, limits, object_declared_dynamic_root_depth(typed_schema_depth)
+        )
         if shape.count == 0_u64
           raise UnsupportedFormatError.new("typed Object Dynamic descriptor has no declared Dynamic site")
         end
@@ -1531,6 +1582,15 @@ module CrystalClick
         names_by_field[String.new(path.to_slice)] = names
       end
       names_by_field
+    end
+
+    # Ordinary Object callers historically root typed Dynamic metadata at
+    # Object depth 2, even though their standalone typed-schema traversal
+    # starts at depth 1. A nested JSON site already supplies the absolute
+    # typed-field depth, so retain the legacy floor without adding the JSON
+    # wrapper depth a second time.
+    private def self.object_declared_dynamic_root_depth(typed_schema_depth : Int32) : Int32
+      typed_schema_depth < 2_i32 ? 2_i32 : typed_schema_depth
     end
 
     private def self.parse_object_metadata(
@@ -1616,6 +1676,121 @@ module CrystalClick
         end
       end
       nil
+    end
+
+    # Re-reading an Object child after the Dynamic discriminator census must
+    # not silently switch to a different metadata roster between discovery and
+    # value decoding. Statistics are hints, so compare Object/Dynamic schemas
+    # and typed descendants while deliberately ignoring statistics payloads.
+    private def self.same_document_plan_rosters?(
+      actual : ObjectDocumentPlan,
+      expected : ObjectDocumentPlan,
+      budget : BinaryCodecBudget,
+      json_descriptor_depth : Int32,
+    ) : Bool
+      actual_object = actual.structures.object
+      expected_object = expected.structures.object
+      return false unless same_object_roster?(actual_object, expected_object)
+
+      context = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
+      actual_object.dynamic_path_count.times do |index|
+        path = actual_object.dynamic_path_at(index)
+        actual_dynamic = actual.structures.dynamic_for(path)
+        expected_dynamic = expected.structures.dynamic_for(path)
+        return false unless same_dynamic_roster?(
+                              actual_dynamic, expected_dynamic, context, json_descriptor_depth + 2
+                            )
+      end
+
+      return false unless actual.typed_path_count == expected.typed_path_count
+      actual.typed_path_count.times do |index|
+        actual_path = actual.typed_path_at(index)
+        expected_path = expected.typed_path_at(index)
+        return false unless actual_path == expected_path
+        actual_type = actual.typed_type_for(actual_path)
+        expected_type = expected.typed_type_for(expected_path)
+        context.validate_type_tree(actual_type, json_descriptor_depth + 1)
+        context.validate_type_tree(expected_type, json_descriptor_depth + 1) unless actual_type.same?(expected_type)
+        return false unless actual_type == expected_type
+      end
+
+      return false unless actual.typed_dynamic_count == expected.typed_dynamic_count
+      actual.typed_dynamic_count.times do |index|
+        path = actual.typed_dynamic_path_at(index)
+        return false unless expected.has_typed_dynamic?(path)
+        actual_site_count = actual.typed_dynamic_site_count_for(path)
+        return false unless actual_site_count == expected.typed_dynamic_site_count_for(path)
+        actual_site_count.times do |site_index|
+          site_path = actual.typed_dynamic_site_path_at(path, site_index)
+          return false unless site_path == expected.typed_dynamic_site_path_at(path, site_index)
+          actual_type = actual.typed_dynamic_site_type_for(path, site_path)
+          expected_type = expected.typed_dynamic_site_type_for(path, site_path)
+          actual_object_depth = actual.typed_dynamic_site_object_depth_for(path, site_path)
+          expected_object_depth = expected.typed_dynamic_site_object_depth_for(path, site_path)
+          return false unless actual_object_depth == expected_object_depth
+          if json_descriptor_depth <= 0_i32 || actual_object_depth <= 0_i32
+            raise CorruptPartError.new("typed Object Dynamic descriptor depth is invalid")
+          end
+          # ObjectDocumentPlan stores this coordinate relative to its local
+          # Object root (2). Rebase it under the inherited JSON descriptor:
+          # Object typed fields start at JSON depth + 1, while `object_depth`
+          # starts at local depth 2, hence JSON depth - 1 + object depth.
+          absolute_dynamic_depth = json_descriptor_depth.to_i64 - 1_i64 + actual_object_depth.to_i64
+          if absolute_dynamic_depth <= 0_i64 || absolute_dynamic_depth >= Int32::MAX.to_i64
+            raise CorruptPartError.new("typed Object Dynamic actual type depth exceeds Int32")
+          end
+          declared_dynamic_depth = absolute_dynamic_depth.to_i32
+          actual_arm_depth = (absolute_dynamic_depth + 1_i64).to_i32
+          context.validate_type_tree(actual_type, declared_dynamic_depth)
+          context.validate_type_tree(expected_type, declared_dynamic_depth) unless actual_type.same?(expected_type)
+          return false unless actual_type == expected_type
+          unless same_dynamic_roster?(
+                   actual.typed_dynamic_site_structure_for(path, site_path),
+                   expected.typed_dynamic_site_structure_for(path, site_path),
+                   context,
+                   actual_arm_depth,
+                 )
+            return false
+          end
+        end
+      end
+      true
+    end
+
+    private def self.same_object_roster?(actual : ObjectStructure, expected : ObjectStructure) : Bool
+      return false unless actual.version == expected.version &&
+                          actual.shared_data_version == expected.shared_data_version &&
+                          actual.bucket_count == expected.bucket_count &&
+                          actual.legacy_max_dynamic_paths == expected.legacy_max_dynamic_paths &&
+                          actual.dynamic_path_count == expected.dynamic_path_count
+      actual.dynamic_path_count.times do |index|
+        return false unless expected.has_dynamic_path?(actual.dynamic_path_at(index))
+      end
+      true
+    end
+
+    private def self.same_dynamic_roster?(
+      actual : DynamicStructure,
+      expected : DynamicStructure,
+      context : BinaryCodecContext,
+      type_depth : Int32,
+    ) : Bool
+      return false unless actual.type_count == expected.type_count && actual.shared_index == expected.shared_index
+      actual.type_count.times do |actual_index|
+        actual_type = actual.type_at(actual_index)
+        context.validate_type_tree(actual_type, type_depth)
+        found = false
+        expected.type_count.times do |expected_index|
+          expected_type = expected.type_at(expected_index)
+          context.validate_type_tree(expected_type, type_depth) unless actual_type.same?(expected_type)
+          if actual_type == expected_type
+            found = true
+            break
+          end
+        end
+        return false unless found
+      end
+      true
     end
 
     private def self.ensure_logical_size!(bytes : Bytes, grid : CompressedMarkGrid) : Nil

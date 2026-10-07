@@ -4,6 +4,7 @@ module CrystalClick
   class BinaryDynamicBulkJsonObjectReader
     @plan : BinaryDynamicBulkPlan
     @budget : BinaryCodecBudget
+    @initial_descriptor_depth : Int32
     @documents : Hash(Tuple(String, Int32), Array(Array(ObjectDocument)))
     @cursors : Hash(Tuple(String, Int32), Array(Int32))
     @active_mark : Int32
@@ -14,14 +15,29 @@ module CrystalClick
       rows_per_mark : Array(UInt64),
       @budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
+      physical_rows_per_mark : Array(UInt64)? = nil,
+      physical_child_loader : Proc(
+        String, Int32, DynamicJsonObjectBinding, StorageOccurrenceGrid, BinaryCodecBudget,
+        Array(Array(ObjectDocument)),
+      )? = nil,
+      @initial_descriptor_depth : Int32 = 1,
     )
       unless !@budget.writing?
         raise ArgumentError.new("Dynamic JSON Object reader requires a read-direction budget")
       end
+      unless @initial_descriptor_depth > 0 && @initial_descriptor_depth <= @budget.limits.max_depth
+        raise ArgumentError.new("Dynamic JSON Object reader initial descriptor depth exceeds the configured limit")
+      end
 
       binding_keys = @plan.json_object_binding_keys(@budget)
-      validate_child_keys!(streams, binding_keys)
-      physical_rows = validate_parent_grid!(streams.data, rows_per_mark)
+      if physical_loader = physical_child_loader
+        unless streams.json_object_count == 0
+          corrupt!("physical Dynamic JSON child reader cannot mix normalized and physical Object streams")
+        end
+      else
+        validate_child_keys!(streams, binding_keys)
+      end
+      physical_rows = validate_parent_grid!(streams.data, rows_per_mark, physical_rows_per_mark)
       census = validate_and_census_lanes!(streams.data, rows_per_mark.size, profile, binding_keys)
 
       mark_count = rows_per_mark.size.to_u64
@@ -41,28 +57,33 @@ module CrystalClick
 
       binding_keys.each do |key|
         binding = @plan.json_object_binding(key[0], key[1])
-        child_streams = streams.json_object_for(key[0], key[1])
         logical_rows = census[key]
-        unless child_streams.rows_per_mark == logical_rows
-          corrupt!("Dynamic JSON Object child row grid differs from the discriminator census")
-        end
-
-        depth = @plan.depth_for_site(key[0]) + 1
-        BinaryDynamicBulkJsonObjectWriter.preflight_binding!(binding, @budget, depth)
-        validate_object_metadata!(binding, child_streams, depth)
-        validate_typed_dynamic_metadata!(binding, child_streams, depth, profile)
-
         grid = StorageOccurrenceGrid.new(physical_rows, logical_rows, @budget)
-        documents = ObjectDocumentCodec.decode_child_site_with_budget(
-          binding.schema.typed_paths,
-          child_streams,
-          grid,
-          @budget,
-          first_mark: 0,
-          mark_count: rows_per_mark.size,
-          profile: profile,
-          shared_profile: profile,
-        )
+        documents = if physical_loader = physical_child_loader
+                      physical_loader.call(key[0], key[1], binding, grid, @budget).tap do |loaded|
+                        validate_physical_documents!(loaded, logical_rows)
+                      end
+                    else
+                      child_streams = streams.json_object_for(key[0], key[1])
+                      unless child_streams.rows_per_mark == logical_rows
+                        corrupt!("Dynamic JSON Object child row grid differs from the discriminator census")
+                      end
+
+                      depth = @plan.depth_for_site(key[0]) + 1
+                      BinaryDynamicBulkJsonObjectWriter.preflight_binding!(binding, @budget, depth)
+                      validate_object_metadata!(binding, child_streams, depth)
+                      validate_typed_dynamic_metadata!(binding, child_streams, depth, profile)
+                      ObjectDocumentCodec.decode_child_site_with_budget(
+                        binding.schema.typed_paths,
+                        child_streams,
+                        grid,
+                        @budget,
+                        first_mark: 0,
+                        mark_count: rows_per_mark.size,
+                        profile: profile,
+                        shared_profile: profile,
+                      )
+                    end
         @documents[key] = documents
         @cursors[key] = Array(Int32).new(documents.size, 0)
       end
@@ -95,7 +116,11 @@ module CrystalClick
       end
       document = documents[@active_mark][cursor]
       cursors[@active_mark] = cursor + 1
-      BinaryJsonObjectAdapter.to_json_row(document, binding, @budget, depth)
+      absolute_depth = @initial_descriptor_depth.to_i64 - 1_i64 + depth.to_i64
+      if absolute_depth <= 0_i64 || absolute_depth > Int32::MAX.to_i64
+        corrupt!("Dynamic JSON Object value depth exceeds Int32")
+      end
+      BinaryJsonObjectAdapter.to_json_row(document, binding, @budget, absolute_depth.to_i)
     end
 
     def ensure_consumed! : Nil
@@ -124,14 +149,25 @@ module CrystalClick
     private def validate_parent_grid!(
       streams : BinaryBulkStreams,
       rows_per_mark : Array(UInt64),
+      physical_rows_per_mark : Array(UInt64)?,
     ) : Array(UInt64)
       real_marks = streams.mark_count
       if real_marks < 0 || rows_per_mark.size != real_marks
         corrupt!("binary bulk row-count grid does not match its mark domain")
       end
+      physical_child_mode = !physical_rows_per_mark.nil?
       rows_per_mark.each do |rows|
+        unless rows <= Int32::MAX.to_u64 && (physical_child_mode || rows > 0_u64)
+          corrupt!("paired Dynamic JSON logical mark count is outside its admitted domain")
+        end
+      end
+      physical_rows = physical_rows_per_mark || rows_per_mark
+      unless physical_rows.size == real_marks
+        corrupt!("Dynamic JSON parent P grid does not match its mark domain")
+      end
+      physical_rows.each do |rows|
         unless rows > 0_u64 && rows <= Int32::MAX.to_u64
-          corrupt!("paired Dynamic JSON parent marks must contain positive Int32 rows")
+          corrupt!("paired Dynamic JSON parent physical marks must contain positive Int32 rows")
         end
       end
 
@@ -173,7 +209,22 @@ module CrystalClick
           corrupt!("binary bulk lane terminal offset does not match its byte size")
         end
       end
-      rows_per_mark
+      physical_rows
+    end
+
+    private def validate_physical_documents!(
+      documents : Array(Array(ObjectDocument)),
+      expected_rows : Array(UInt64),
+    ) : Nil
+      unless documents.size == expected_rows.size
+        corrupt!("physical Dynamic JSON Object reader returned the wrong mark count")
+      end
+      documents.each_with_index do |mark_documents, mark|
+        unless mark_documents.size.to_u64 == expected_rows[mark]
+          corrupt!("physical Dynamic JSON Object rows differ from the discriminator census")
+        end
+      end
+      nil
     end
 
     private def validate_and_census_lanes!(

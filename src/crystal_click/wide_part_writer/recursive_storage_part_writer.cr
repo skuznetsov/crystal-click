@@ -456,6 +456,7 @@ module CrystalClick
 
       private def self.compare_binary_value!(actual : BinaryValue, expected : BinaryValue) : Nil
         unless actual.type == expected.type && actual.is_null? == expected.is_null? &&
+               (actual.type.tag != BinaryDataType::TAG_VARIANT || actual.variant_index? == expected.variant_index?) &&
                actual.byte_size == expected.byte_size && actual.child_count == expected.child_count
           raise CorruptPartError.new("staged recursive BinaryValue differs from input descriptor")
         end
@@ -464,7 +465,24 @@ module CrystalClick
             raise CorruptPartError.new("staged recursive BinaryValue scalar bytes differ from input")
           end
         end
+        if actual.type.tag == BinaryDataType::TAG_JSON
+          compare_json_row!(actual.json_row, expected.json_row)
+          return nil
+        end
         actual.child_count.times { |index| compare_binary_value!(actual.child_at(index), expected.child_at(index)) }
+        nil
+      end
+
+      private def self.compare_json_row!(actual : BinaryJsonRow, expected : BinaryJsonRow) : Nil
+        unless actual.path_count == expected.path_count
+          raise CorruptPartError.new("staged recursive JSON path count differs from input")
+        end
+        expected.path_count.times do |index|
+          unless actual.path_at(index) == expected.path_at(index)
+            raise CorruptPartError.new("staged recursive JSON path bytes differ from input")
+          end
+          compare_binary_value!(actual.value_at(index), expected.value_at(index))
+        end
         nil
       end
 

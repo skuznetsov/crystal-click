@@ -4,6 +4,14 @@ module CrystalClick
   # Dynamic site, so this resolver follows only the requested root-to-site
   # path and consults already-parsed ancestor structures.
   class BinaryDynamicBulkSiteNameResolver
+    private struct DynamicSitePosition
+      getter prefix : String
+      getter array_level : UInt64
+
+      def initialize(@prefix : String, @array_level : UInt64)
+      end
+    end
+
     private struct EscapedPrefix
       getter value : String
 
@@ -119,14 +127,47 @@ module CrystalClick
     # columns_substreams.txt. `structures` contains only sites already loaded
     # in parent-first order; no unknown arm name is guessed.
     def structure_stream_name(target_path : String, structures : Hash(String, DynamicStructure)) : String
-      resolved = find_structure_name(
+      resolved = find_dynamic_site_position(
         @type, "root", @root_prefix, @initial_array_level, target_path, structures,
         @context, @initial_descriptor_depth
       )
-      resolved || raise(CorruptPartError.new("Dynamic structure site has no physical name"))
+      position = resolved || raise(CorruptPartError.new("Dynamic structure site has no physical name"))
+      append_literal(position.prefix, ".dynamic_structure", @context)
     end
 
-    private def find_structure_name(
+    # Resolve one direct ordinary JSON actual arm from the exact Dynamic site
+    # path and already-parsed ancestor rosters. The arm component is rendered
+    # from the same canonical roster used by DynamicBulkPhysicalPlan.
+    def json_object_arm_site(
+      target_path : String,
+      canonical_arm_index : Int,
+      structures : Hash(String, DynamicStructure),
+    ) : DynamicJsonObjectSiteCoordinates
+      resolved = find_dynamic_site_position(
+        @type, "root", @root_prefix, @initial_array_level, target_path, structures,
+        @context, @initial_descriptor_depth
+      )
+      position = resolved || raise(CorruptPartError.new("Dynamic JSON site has no physical prefix"))
+      structure = structures[target_path]? ||
+                  raise(CorruptPartError.new("Dynamic JSON site structure is unavailable for prefix discovery"))
+      # This direct-target path bypasses the parent-first traversal's roster
+      # accounting. Reserve both the temporary bounds table and retained
+      # canonical arm table before canonical_arms allocates either one.
+      temporary_bound_slots = structure.type_count.to_u64
+      canonical_arm_slots = structure.canonical_variant_count.to_u64
+      @context.record_elements(temporary_bound_slots) if temporary_bound_slots > 0_u64
+      @context.record_elements(canonical_arm_slots) if canonical_arm_slots > 0_u64
+      arm = canonical_arms(structure)[canonical_arm_index]?
+      unless arm && arm[1].tag == BinaryDataType::TAG_JSON
+        raise CorruptPartError.new("Dynamic JSON physical site does not identify a direct JSON actual arm")
+      end
+      escaped_prefix = append_component(position.prefix, arm[0], @context)
+      @context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
+      @context.charge_name_bytes(escaped_prefix.bytesize.to_u64)
+      DynamicJsonObjectSiteCoordinates.new(escaped_prefix, position.array_level, arm[1])
+    end
+
+    private def find_dynamic_site_position(
       type : BinaryDataType,
       path : String,
       prefix : String,
@@ -135,14 +176,14 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
       context : PhysicalStreamPlanContext,
       depth : Int32,
-    ) : String?
+    ) : DynamicSitePosition?
       return nil unless path_is_ancestor_or_equal?(target_path, path)
       context.record_type_node(depth)
 
       case type.tag
       when BinaryDataType::TAG_DYNAMIC
         if path == target_path
-          return append_literal(prefix, ".dynamic_structure", context)
+          return DynamicSitePosition.new(prefix, array_level)
         end
         structure = structures[path]? ||
                     raise CorruptPartError.new("Dynamic ancestor structure is unavailable for site-name discovery")
@@ -156,7 +197,7 @@ module CrystalClick
           child = generated_path(path, ".arm.", index, context)
           next unless path_is_ancestor_or_equal?(target_path, child)
           arm_prefix = append_component(prefix, arm[0], context)
-          if result = find_structure_name(
+          if result = find_dynamic_site_position(
                arm[1], child, arm_prefix, array_level, target_path,
                structures, context, depth + 1
              )
@@ -166,20 +207,20 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         context.record_elements(1_u64)
         child = generated_path(path, ".elements", nil, context)
-        return find_structure_name(
+        return find_dynamic_site_position(
           type.child_at(0), child, prefix, checked_array_level(array_level),
           target_path, structures, context, depth + 1
         ) if path_is_ancestor_or_equal?(target_path, child)
       when BinaryDataType::TAG_NULLABLE
         context.record_elements(1_u64)
         child = generated_path(path, ".nested", nil, context)
-        return find_structure_name(
+        return find_dynamic_site_position(
           type.child_at(0), child, prefix, array_level, target_path,
           structures, context, depth + 1
         ) if path_is_ancestor_or_equal?(target_path, child)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         context.record_elements(1_u64)
-        return find_structure_name(
+        return find_dynamic_site_position(
           type.child_at(0), path, prefix, array_level, target_path,
           structures, context, depth + 1
         )
@@ -190,7 +231,7 @@ module CrystalClick
           next unless path_is_ancestor_or_equal?(target_path, child)
           field = type.named_tuple? ? type.field_name_at(index) : (index + 1).to_s
           field_prefix = append_field(prefix, field, context)
-          return find_structure_name(
+          return find_dynamic_site_position(
             type.child_at(index), child, field_prefix, array_level,
             target_path, structures, context, depth + 1
           )
@@ -203,7 +244,7 @@ module CrystalClick
           child = generated_path(path, suffix, nil, context)
           next unless path_is_ancestor_or_equal?(target_path, child)
           field_prefix = append_field(prefix, field, context)
-          return find_structure_name(
+          return find_dynamic_site_position(
             type.child_at(child_index), child, field_prefix,
             checked_array_level(array_level), target_path, structures,
             context, depth + 1
@@ -216,7 +257,7 @@ module CrystalClick
           next unless path_is_ancestor_or_equal?(target_path, child)
           component = type_name(type.child_at(index))
           arm_prefix = append_component(prefix, component, context)
-          return find_structure_name(
+          return find_dynamic_site_position(
             type.child_at(index), child, arm_prefix, array_level,
             target_path, structures, context, depth + 1
           )

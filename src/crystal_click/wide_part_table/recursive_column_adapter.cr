@@ -44,6 +44,11 @@ module CrystalClick
         unless rows == reader.row_count
           raise CorruptPartError.new("selected recursive schedule differs from its row count")
         end
+
+        # Bound Dynamic JSON owns a complete Object child roster, including
+        # unused arms. Revalidate it before callbacks even when the caller
+        # selects no marks; read_marks preserves the full-domain JSON replay.
+        reader.read_marks(0, 0) if reader.contains_bound_dynamic_json?
         nil
       end
 

@@ -17,11 +17,12 @@ module CrystalClick
         metadata_version : Int64 = 0_i64,
         limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
         transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+        json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
       ) : String
         input = preflight(
           destination, key_name, keys, value_name, type, structures, granules,
           rows_per_mark, profile, frame_bytes, metadata_version, limits,
-          transport_limits
+          transport_limits, json_object_plans
         )
         transport_budget = CompressedStreamBudget.new(transport_limits, true)
         files = DynamicBulkColumnWriter.encode(
@@ -56,6 +57,7 @@ module CrystalClick
         metadata_version : Int64,
         limits : BinaryCodecLimits,
         transport_limits : CompressedStreamLimits,
+        json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))?,
       ) : DynamicBulkPartInputPlan
         unless rows_per_mark > 0 && rows_per_mark <= MAX_ROWS_PER_MARK
           raise ArgumentError.new("rows_per_mark is outside the admitted range")
@@ -92,7 +94,9 @@ module CrystalClick
           raise UnsupportedFormatError.new("unsupported Dynamic String profile")
         end
         codec_budget = BinaryCodecBudget.new(limits, true)
-        dynamic_plan = BinaryDynamicBulkPlan.new_with_budget(type, structures, codec_budget, profile)
+        dynamic_plan = BinaryDynamicBulkPlan.new_with_budget(
+          type, structures, codec_budget, profile, json_object_plans
+        )
         BinaryBulkTypePlan.new(type, profile, dynamic_plan, limits, true).role_count
         physical = BinaryDynamicBulkPhysicalPlan.new(
           dynamic_plan, value_name, limits, PhysicalStreamPlanContext.new(limits)
@@ -191,7 +195,24 @@ module CrystalClick
             raise CorruptPartError.new("staged Dynamic BinaryValue scalar bytes differ from input")
           end
         end
+        if actual.type.tag == BinaryDataType::TAG_JSON
+          compare_json_row!(actual.json_row, expected.json_row)
+          return nil
+        end
         actual.child_count.times { |index| compare_binary_value!(actual.child_at(index), expected.child_at(index)) }
+        nil
+      end
+
+      private def self.compare_json_row!(actual : BinaryJsonRow, expected : BinaryJsonRow) : Nil
+        unless actual.path_count == expected.path_count
+          raise CorruptPartError.new("staged Dynamic JSON path count differs from input")
+        end
+        expected.path_count.times do |index|
+          unless actual.path_at(index) == expected.path_at(index)
+            raise CorruptPartError.new("staged Dynamic JSON path bytes differ from input")
+          end
+          compare_binary_value!(actual.value_at(index), expected.value_at(index))
+        end
         nil
       end
     end

@@ -140,11 +140,12 @@ module CrystalClick
       metadata_version : Int64 = 0_i64,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      json_object_plans : Array(Tuple(String, Int32, ObjectDocumentPlan))? = nil,
     ) : String
       DynamicBulkPartWriter.write(
         destination, key_name, keys, value_name, type, structures, granules,
         rows_per_mark, profile, frame_bytes, metadata_version, limits,
-        transport_limits
+        transport_limits, json_object_plans
       )
     end
 

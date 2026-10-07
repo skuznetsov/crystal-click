@@ -12,9 +12,15 @@ module CrystalClick
       @plan : BinaryDynamicBulkPlan,
       @budget : BinaryCodecBudget,
       granules : Array(Array(BinaryValue)),
+      inherited_grid : StorageOccurrenceGrid? = nil,
     )
       unless @budget.writing?
         raise ArgumentError.new("Dynamic JSON Object writer requires a writing budget")
+      end
+      if grid = inherited_grid
+        unless grid.mark_count == granules.size
+          raise ArgumentError.new("Dynamic JSON Object writer grid differs from the parent mark count")
+        end
       end
 
       binding_keys = @plan.json_object_binding_keys(@budget)
@@ -36,8 +42,14 @@ module CrystalClick
       @budget.charge_wire_bytes(key_copy_bytes) if key_copy_bytes > 0_u64
 
       @physical_rows = Array(UInt64).new(granules.size)
-      granules.each do |rows|
-        @physical_rows << rows.size.to_u64
+      if grid = inherited_grid
+        grid.mark_count.times do |mark|
+          @physical_rows << grid.physical_rows_at(mark)
+        end
+      else
+        granules.each do |rows|
+          @physical_rows << rows.size.to_u64
+        end
       end
       @documents = Hash(Tuple(String, Int32), Array(Array(ObjectDocument))).new(initial_capacity: binding_keys.size)
       @consumed = Hash(Tuple(String, Int32), Array(Int32)).new(initial_capacity: binding_keys.size)
@@ -134,6 +146,35 @@ module CrystalClick
         )
       end
       output
+    end
+
+    # Return the once-decoded ObjectDocuments and a P-by-R child grid for one
+    # exact bound arm. P is inherited from the parent storage site when this
+    # writer is composed physically; R is the collected JSON cardinality.
+    def physical_child_site(
+      site : String,
+      canonical_arm_index : Int,
+    ) : Tuple(Array(Array(ObjectDocument)), StorageOccurrenceGrid)
+      ensure_consumed!
+      key = {site, canonical_arm_index.to_i32}
+      @plan.json_object_binding(site, canonical_arm_index)
+      granules = @documents[key]? ||
+                 raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no bound child owner"))
+      mark_count = granules.size.to_u64
+      grid_records = checked_multiply(mark_count, 2_u64)
+      combined_records = checked_add(mark_count, grid_records)
+      # The temporary R-count vector and the two detached grid vectors all
+      # borrow the operation's aggregate budget. Reserve the combined record
+      # domain before allocating the temporary vector; StorageOccurrenceGrid
+      # performs its own charge before allocating its pair of arrays.
+      @budget.ensure_future_nodes(combined_records)
+      @budget.ensure_future_elements(combined_records)
+      @budget.preflight_children(mark_count) if mark_count > 0_u64
+      mark_count.times { @budget.charge_node }
+      logical_rows = Array(UInt64).new(granules.size)
+      granules.each { |rows| logical_rows << rows.size.to_u64 }
+      grid = StorageOccurrenceGrid.new(@physical_rows, logical_rows, @budget)
+      {granules, grid}
     end
 
     private def checked_add(left : UInt64, right : UInt64) : UInt64

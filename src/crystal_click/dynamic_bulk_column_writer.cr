@@ -31,8 +31,15 @@ module CrystalClick
       write_transport_budget = transport_budget || CompressedStreamBudget.new(transport_limits, true)
       validate_transport_budget!(write_transport_budget, transport_limits)
       structures = plan.encode_structure_streams(write_codec_budget)
+      json_object_writer = nil.as(BinaryDynamicBulkJsonObjectWriter?)
+      if plan.has_json_object_bindings?
+        json_object_writer = BinaryDynamicBulkJsonObjectWriter.new(
+          plan, write_codec_budget, granules, site_grid
+        )
+      end
       data = BinaryBulkEncoder.encode(
-        plan.type, granules, write_codec_budget, plan.profile, plan
+        plan.type, granules, write_codec_budget, plan.profile, plan,
+        json_object_writer: json_object_writer
       )
 
       lane_count = data.role_count.to_i64 + structures.site_count.to_i64
@@ -50,13 +57,13 @@ module CrystalClick
       site_paths.each { |path| structure_roles << "#{path}.dynamic_structure" }
       structure_roles.sort!
 
-      physical_names = physical.stream_names
+      ordinary_names = physical.ordinary_stream_names
       expected_roles = Array(String).new(lane_count.to_i)
       expected_roles.concat(data_roles)
       expected_roles.concat(structure_roles)
       expected_roles.sort!
       unless data_roles == data_roles.sort && structure_roles == structure_roles.uniq &&
-             physical_names.size == lane_count && physical_names.keys.sort == expected_roles
+             ordinary_names.size == lane_count && ordinary_names.keys.sort == expected_roles
         raise UnsupportedFormatError.new("Dynamic physical roles differ from the retained plan and encoded lanes")
       end
 
@@ -89,7 +96,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("Dynamic structure statistics offset is outside its physical lane")
         end
         role = "#{path}.dynamic_structure"
-        physical_name = physical_names[role]? ||
+        physical_name = ordinary_names[role]? ||
                         raise(UnsupportedFormatError.new("Dynamic structure role is missing from its physical plan"))
         structure_lanes << {physical_name, bytes, statistics_offset}
         raw_sizes << bytes.size.to_i32
@@ -103,12 +110,13 @@ module CrystalClick
         raw_sizes, rows_per_mark.size + 1, frame_bytes, write_transport_budget
       )
 
-      pairs = Hash(String, CompressedMarkFiles).new(initial_capacity: lane_count.to_i)
+      composite_names = physical.stream_names
+      pairs = Hash(String, CompressedMarkFiles).new(initial_capacity: composite_names.size)
       prefix_lanes.each do |role, stream, prefix|
         bytes, offsets, physical_prefix = BinaryBulkPhysicalPrefixAdapter.write_lane(
           role, stream, prefix
         )
-        physical_name = physical_names[role]? ||
+        physical_name = ordinary_names[role]? ||
                         raise(UnsupportedFormatError.new("Dynamic data role is missing from its physical plan"))
         add_lane!(pairs, physical_name, CompressedMarkWriter.encode(
           bytes, offsets, rows_per_mark,
@@ -126,8 +134,33 @@ module CrystalClick
         ))
       end
 
-      expected_names = physical_names.values.sort
-      unless pairs.size == lane_count && pairs.keys.sort == expected_names
+      if child_writer = json_object_writer
+        child_writer.ensure_consumed!
+        physical.json_object_sites.each do |site|
+          documents, grid = child_writer.physical_child_site(
+            site.site_path, site.canonical_arm_index
+          )
+          child_files = ObjectDocumentColumnWriter.encode_child_at_physical_site(
+            site.escaped_prefix,
+            site.binding.plan,
+            site.physical_plan,
+            grid,
+            documents,
+            write_codec_budget,
+            write_transport_budget,
+            profile: plan.profile,
+            shared_profile: BinaryBulkProfile.single_stream,
+            frame_bytes: frame_bytes,
+            initial_array_level: site.array_level,
+          )
+          child_files.stream_names.each do |name|
+            add_lane!(pairs, name, child_files.pair_for(name))
+          end
+        end
+      end
+
+      expected_names = composite_names.values.sort
+      unless pairs.size == composite_names.size && pairs.keys.sort == expected_names
         raise UnsupportedFormatError.new("Dynamic encoded physical roster differs from its plan")
       end
       pairs

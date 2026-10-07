@@ -128,6 +128,8 @@ module CrystalClick
       @structure_names = Hash(String, String).new
       @grids = Hash(String, CompressedMarkGrid).new
       structure_logical_bytes = 0_u64
+      json_metadata_logical_bytes = 0_u64
+      json_coordinates = Hash(Tuple(String, Int32), DynamicJsonObjectSiteCoordinates).new
 
       # A requested Dynamic site may expose another site through its parsed
       # actual roster. Resolve only from ancestor structures already loaded.
@@ -151,9 +153,41 @@ module CrystalClick
         @structure_names[String.new(site_path.to_slice)] = String.new(logical_name.to_slice)
         bytes
       }
+      json_object_plan_loader = ->(site_path : String, canonical_arm_index : Int32, json_descriptor_depth : Int32, structure : DynamicStructure, structures : Hash(String, DynamicStructure), budget : BinaryCodecBudget) {
+        coordinates = resolver.json_object_arm_site(site_path, canonical_arm_index, structures)
+        json_descriptor = coordinates.json_type.json_type ||
+                          raise(CorruptPartError.new("direct Dynamic JSON arm has no persisted descriptor"))
+        typed_schema = copy_json_typed_schema(json_descriptor, budget)
+        descriptor = ObjectDocumentFileReader.inspect_at_site(
+          @source,
+          coordinates.escaped_prefix,
+          typed_schema,
+          budget,
+          @name_context,
+          transport_budget,
+          @ordinary_profile,
+          BinaryBulkProfile.single_stream,
+          true,
+          coordinates.array_level,
+          nil,
+          json_descriptor_depth + 1,
+        )
+        if descriptor.logical_read_bytes > UInt64::MAX - json_metadata_logical_bytes
+          raise CorruptPartError.new("Dynamic JSON Object metadata byte count overflows")
+        end
+        json_metadata_logical_bytes += descriptor.logical_read_bytes
+        key = {String.new(site_path.to_slice), canonical_arm_index}
+        if json_coordinates.has_key?(key)
+          raise CorruptPartError.new("Dynamic JSON Object coordinates are duplicated")
+        end
+        budget.charge_wire_bytes(site_path.bytesize.to_u64)
+        budget.charge_node
+        json_coordinates[key] = coordinates
+        descriptor.plan
+      }
       @plan = BinaryDynamicBulkPlan.decode_structure_streams_with_loader(
         @type, codec_budget, loader, @ordinary_profile, @initial_descriptor_depth,
-        resolver.descriptor_preflight
+        resolver.descriptor_preflight, json_object_plan_loader
       )
       unless @plan.type == @type && @plan.profile == @ordinary_profile
         raise CorruptPartError.new("Dynamic site structures differ from the declared site descriptor")
@@ -166,6 +200,18 @@ module CrystalClick
         @name_context,
         @initial_array_level,
       )
+      physical_json_sites = @physical.json_object_sites
+      unless physical_json_sites.size == json_coordinates.size
+        raise CorruptPartError.new("Dynamic JSON Object physical sites differ from discovered bindings")
+      end
+      physical_json_sites.each do |site|
+        coordinates = json_coordinates[{site.site_path, site.canonical_arm_index.to_i32}]? ||
+                      raise(CorruptPartError.new("Dynamic JSON Object physical site has no discovered coordinates"))
+        unless site.escaped_prefix == coordinates.escaped_prefix &&
+               site.array_level == coordinates.array_level
+          raise CorruptPartError.new("Dynamic JSON Object physical coordinates changed after discovery")
+        end
+      end
       role_names = @physical.stream_names
       unless @physical.structure_stream_names.keys.sort! == @plan.structure_roles.sort!
         raise CorruptPartError.new("Dynamic site structure roles differ from the parsed actual roster")
@@ -173,6 +219,10 @@ module CrystalClick
 
       rows = expected_parent_rows
       logical_bytes = structure_logical_bytes
+      if json_metadata_logical_bytes > UInt64::MAX - logical_bytes
+        raise CorruptPartError.new("Dynamic JSON Object metadata byte count overflows")
+      end
+      logical_bytes += json_metadata_logical_bytes
       data_roles = @physical.data_stream_names
       data_roles.keys.sort!.each do |role|
         prefix_size = @physical.prefix_size_for(role)
@@ -304,6 +354,10 @@ module CrystalClick
       copy_strings(@selected_checksum_names)
     end
 
+    def contains_bound_dynamic_json? : Bool
+      @plan.has_json_object_bindings?
+    end
+
     # Revalidates the complete borrowed P/Q grid on every read operation.
     # In particular, an empty Q mark remains an explicit decoder schedule.
     def validate_complete_schedule!(budget : BinaryCodecBudget) : Nil
@@ -335,14 +389,23 @@ module CrystalClick
       mark_count : Int,
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
+      name_context : PhysicalStreamPlanContext? = nil,
     ) : Array(Array(BinaryValue))
       if transport_budget.writing? || !same_transport_limits?(@transport_limits, transport_budget.limits)
         raise ArgumentError.new("Dynamic site reader transport budget differs from its limits")
       end
       validate_selection!(first_mark, mark_count)
       validate_complete_schedule!(codec_budget)
+      operation_name_context = name_context || PhysicalStreamPlanContext.new(@limits)
+      unless operation_name_context.limits.max_depth == @limits.max_depth &&
+             operation_name_context.limits.max_nodes == @limits.max_nodes &&
+             operation_name_context.limits.max_elements == @limits.max_elements &&
+             operation_name_context.limits.max_bytes == @limits.max_bytes
+        raise ArgumentError.new("Dynamic site operation physical context differs from its limits")
+      end
       traversal = BinaryCodecContext.new(@limits, nil, false, codec_budget, false, false)
-      replay_complete = @plan.contains_low_cardinality?(@type, "root", traversal)
+      has_json_objects = @plan.has_json_object_bindings?
+      replay_complete = has_json_objects || @plan.contains_low_cardinality?(@type, "root", traversal)
       read_first = replay_complete ? 0 : first_mark
       read_count = replay_complete ? @mark_count : mark_count
       rows_for_decode = if replay_complete
@@ -389,10 +452,70 @@ module CrystalClick
       end
 
       stream_set = BinaryBulkStreams.new(read_count, streams_by_role)
-      decoded = BinaryBulkDecoder.decode(
-        @type, stream_set, rows_for_decode, codec_budget,
-        replay_complete ? first_mark : 0, mark_count, @ordinary_profile, @plan
-      )
+      decoded = if has_json_objects
+                  empty_structures = BinaryDynamicStructureStreams.new(Hash(String, Bytes).new)
+                  dynamic_streams = BinaryDynamicBulkStreams.new(
+                    empty_structures, stream_set, budget: codec_budget
+                  )
+                  child_loader = ->(site_path : String, canonical_arm_index : Int32, binding : DynamicJsonObjectBinding, grid : StorageOccurrenceGrid, budget : BinaryCodecBudget) {
+                    physical_site = @physical.json_object_site(site_path, canonical_arm_index)
+                    expected_binding = @plan.json_object_binding(site_path, canonical_arm_index)
+                    structure = @plan.structure_for(site_path)
+                    json_depth = @initial_descriptor_depth + @plan.depth_for_site(site_path)
+                    begin
+                      binding.validate_for!(
+                        site_path, structure, canonical_arm_index, budget, json_depth
+                      )
+                      expected_binding.validate_for!(
+                        site_path, structure, canonical_arm_index, budget, json_depth
+                      )
+                    rescue ex : ArgumentError
+                      raise CorruptPartError.new(ex.message || "Dynamic JSON binding changed before Object decode")
+                    end
+                    descriptor = binding.json_type.json_type ||
+                                 raise(CorruptPartError.new("bound Dynamic JSON arm lost its descriptor"))
+                    typed_schema = copy_json_typed_schema(descriptor, budget)
+                    ObjectDocumentFileReader.read_child_at_site(
+                      @source,
+                      physical_site.escaped_prefix,
+                      typed_schema,
+                      grid,
+                      budget,
+                      operation_name_context,
+                      transport_budget,
+                      0,
+                      @mark_count,
+                      @ordinary_profile,
+                      BinaryBulkProfile.single_stream,
+                      true,
+                      physical_site.array_level,
+                      binding.plan,
+                      binding.schema,
+                      json_depth,
+                      json_depth + 1,
+                    )
+                  }
+                  json_reader = BinaryDynamicBulkJsonObjectReader.new(
+                    @plan,
+                    dynamic_streams,
+                    rows_for_decode,
+                    codec_budget,
+                    @ordinary_profile,
+                    physical_rows_per_mark: @mark_row_counts,
+                    physical_child_loader: child_loader,
+                    initial_descriptor_depth: @initial_descriptor_depth,
+                  )
+                  full = BinaryBulkDecoder.decode(
+                    @type, stream_set, rows_for_decode, codec_budget,
+                    0, @mark_count, @ordinary_profile, @plan, json_reader
+                  )
+                  slice_selected_marks(full, first_mark, mark_count, codec_budget)
+                else
+                  BinaryBulkDecoder.decode(
+                    @type, stream_set, rows_for_decode, codec_budget,
+                    replay_complete ? first_mark : 0, mark_count, @ordinary_profile, @plan
+                  )
+                end
       unless decoded.size == mark_count
         raise CorruptPartError.new("Dynamic site decoder returned the wrong selected mark count")
       end
@@ -430,6 +553,45 @@ module CrystalClick
       budget.charge_node
       budget.charge_elements(rows.size.to_u64)
       Array(UInt64).new(rows.size) { |index| rows[index] }
+    end
+
+    private def copy_json_typed_schema(
+      descriptor : BinaryJsonType,
+      budget : BinaryCodecBudget,
+    ) : Hash(String, BinaryDataType)
+      count = descriptor.typed_path_count.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      total_path_bytes = 0_u64
+      descriptor.typed_path_count.times do |index|
+        size = descriptor.typed_path_byte_size(index).to_u64
+        if total_path_bytes > UInt64::MAX - size
+          raise CorruptPartError.new("Dynamic JSON typed path byte count overflows")
+        end
+        total_path_bytes += size
+      end
+      budget.charge_wire_bytes(total_path_bytes) if total_path_bytes > 0_u64
+      count.times { budget.charge_node }
+      schema = Hash(String, BinaryDataType).new(initial_capacity: descriptor.typed_path_count)
+      descriptor.typed_path_count.times do |index|
+        schema[descriptor.typed_path_at(index)] = descriptor.typed_type_at(index)
+      end
+      schema
+    end
+
+    private def slice_selected_marks(
+      marks : Array(Array(BinaryValue)),
+      first_mark : Int,
+      mark_count : Int,
+      budget : BinaryCodecBudget,
+    ) : Array(Array(BinaryValue))
+      count = mark_count.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      budget.ensure_future_nodes(count + 1_u64)
+      budget.charge_node
+      count.times { budget.charge_node }
+      Array(Array(BinaryValue)).new(mark_count) do |index|
+        marks[first_mark + index]
+      end
     end
 
     private def discriminator_role?(role : String) : Bool

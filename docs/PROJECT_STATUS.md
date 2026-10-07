@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current finite normalized component (W209, 2026-10-07): explicit ordinary
+Current finite physical/public component (W210, 2026-10-07): direct ordinary
+Dynamic JSON arms reuse the existing Object physical owner, including unused
+bound arms. Complete-part writers accept explicit child bindings; readers
+recover bindings from persisted parent/child metadata. Root Dynamic and
+Array(Dynamic) have fresh stock-authored/read and library-authored ATTACH/CHECK
+witnesses in both String profiles, in DEBUG and RELEASE. Recursive carriers
+and the existing nominal-JSON table dispatch route pass focused tests too;
+this does not qualify a generic root-Dynamic table batch accessor.
+
+The physical handoff preserves parent P, Dynamic occurrences Q and selected
+JSON occurrences R independently. Child marks retain P even when Q or R is
+zero. Object shared MAP uses default single-stream String serde while ordinary
+typed/Dynamic children inherit the parent profile, matching the pinned source.
+Leaf codecs are composed, not duplicated per product of types. Two new physical
+site/coordinate owners each have their own file; repository-wide decomposition
+is still open.
+
+The same 188-file affected corpus passes 1179 examples per mode: one DEBUG run
+and four disjoint RELEASE groups under the unchanged memory cap. Final focused
+gates pass 11 per mode. Paired native probes directly ATTACH four library parts
+per mode; all 264 generated part files agree across DEBUG/RELEASE. Independent
+literal roster assertions exposed and fixed a matching writer/reader profile
+mistake. Hostile seeds discriminate positive-but-wrong P, omitted empty-table
+validation and both staged JSON-content comparisons before exact restoration.
+Scoped verdict: ROBUST for this finite composition, not all CH type/layout
+products, lazy-read cost, whole-file checksum verification or fault atomicity.
+
+Next: the generic Dynamic table consumer and remaining contextual composition
+edges (wrapped JSON actuals, SharedVariant inline JSON and Object path Dynamic
+children needing bindings). JSON SKIP/SKIP REGEXP, additional physical layouts,
+inherited owner-accounting gaps, MV/projections and broad class decomposition
+remain open. Performance stays deferred and the overall goal remains active.
+Details: [DYNAMIC_JSON_PHYSICAL_COMPOSITION_FRONTIER.md](DYNAMIC_JSON_PHYSICAL_COMPOSITION_FRONTIER.md),
+`.landmark/evidence/dynamic-json-physical-w210.json`.
+
+Previous finite normalized component (W209, 2026-10-07): explicit ordinary
 Dynamic JSON actuals now compose with the existing Object child-site codec in
 BinaryDynamicBulk streams. The generic recursive traversal collects/injects
 JSON rows through the W208 adapter; two separate writer/reader classes own the

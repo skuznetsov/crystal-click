@@ -256,6 +256,15 @@ module CrystalClick
       copy_strings(@physical_stream_names)
     end
 
+    # Lets the table adapter eagerly validate bound Dynamic JSON child sites
+    # even when the selected logical row window is empty.
+    def contains_bound_dynamic_json? : Bool
+      @dynamic_readers.each_value do |reader|
+        return true if reader.contains_bound_dynamic_json?
+      end
+      false
+    end
+
     def selected_checksum_names : Array(String)
       copy_strings(@selected_checksum_names)
     end
@@ -394,7 +403,9 @@ module CrystalClick
       @plan.dynamic_site_count.times do |site_index|
         site = @plan.dynamic_site_at(site_index)
         reader = @dynamic_readers[site.key]? || raise(CorruptPartError.new("recursive Dynamic site has no discovered physical reader"))
-        selected = reader.read_marks(first_mark, mark_count, codec_budget, transport_budget)
+        selected = reader.read_marks(
+          first_mark, mark_count, codec_budget, transport_budget, name_context
+        )
         unless selected.size == mark_count
           raise CorruptPartError.new("bounded recursive Dynamic read returned the wrong mark count")
         end

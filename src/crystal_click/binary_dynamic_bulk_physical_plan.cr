@@ -31,6 +31,10 @@ module CrystalClick
     @sql_budget : BinaryCodecBudget
     @data_names : Hash(String, String)
     @structure_names : Hash(String, String)
+    @json_object_names : Hash(String, String)
+    @json_object_sites : Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite)
+    @json_site_name_resolver : BinaryDynamicBulkSiteNameResolver?
+    @json_site_structures : Hash(String, DynamicStructure)?
     @prefix_sizes : Hash(String, Int32)
     @arm_entries : Array(ArmNameEntry)
     @arm_names : Array(String)
@@ -48,6 +52,8 @@ module CrystalClick
     @prefix_role_bytes : UInt64
     @physical_name_bytes : UInt64
     @sql_work_bytes : UInt64
+    @json_object_binding_count : UInt64
+    @initial_array_level : UInt64
 
     def initialize(
       prepared : BinaryDynamicBulkPlan,
@@ -64,6 +70,10 @@ module CrystalClick
       @sql_budget = BinaryCodecBudget.new(selected_limits, true)
       @data_names = Hash(String, String).new
       @structure_names = Hash(String, String).new
+      @json_object_names = Hash(String, String).new
+      @json_object_sites = Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite).new
+      @json_site_name_resolver = nil
+      @json_site_structures = nil
       @prefix_sizes = Hash(String, Int32).new
       @arm_entries = [] of ArmNameEntry
       @arm_names = [] of String
@@ -81,6 +91,8 @@ module CrystalClick
       @physical_name_bytes = 0_u64
       @sql_work_bytes = 0_u64
       initial_array_level = 0_u64
+      @initial_array_level = initial_array_level
+      @json_object_binding_count = 0_u64
       escaped_bytes = PhysicalStreamName.escaped_size(column_name)
       @context.preflight_name_bytes(escaped_bytes)
       prefix = PhysicalStreamName.escape(column_name)
@@ -103,6 +115,10 @@ module CrystalClick
       @sql_budget = BinaryCodecBudget.new(selected_limits, true)
       @data_names = Hash(String, String).new
       @structure_names = Hash(String, String).new
+      @json_object_names = Hash(String, String).new
+      @json_object_sites = Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite).new
+      @json_site_name_resolver = nil
+      @json_site_structures = nil
       @prefix_sizes = Hash(String, Int32).new
       @arm_entries = [] of ArmNameEntry
       @arm_names = [] of String
@@ -119,6 +135,8 @@ module CrystalClick
       @prefix_role_bytes = 0_u64
       @physical_name_bytes = 0_u64
       @sql_work_bytes = 0_u64
+      @initial_array_level = initial_array_level
+      @json_object_binding_count = 0_u64
       validate_initial_array_level!(initial_array_level, selected_limits)
       @context.preflight_name_bytes(escaped_prefix.value.bytesize.to_u64)
       initialize_bindings(escaped_prefix.value, initial_array_level)
@@ -144,14 +162,43 @@ module CrystalClick
       end
     end
 
-    # Detached role-to-basename snapshots. Structure roles are included in the
-    # combined map and retain their `.dynamic_structure` physical suffix.
+    # Detached composite role-to-basename snapshot. Ordinary BinaryBulk roles
+    # remain separately addressable; direct JSON Object children join only the
+    # composite roster.
     def stream_names : Hash(String, String)
+      detached = ordinary_stream_names
+      @json_object_names.each do |role, name|
+        if detached.has_key?(role)
+          raise UnsupportedFormatError.new("Dynamic Object child role collides with an ordinary role")
+        end
+        detached[String.new(role.to_slice)] = String.new(name.to_slice)
+      end
+      detached
+    end
+
+    # The ordinary Dynamic lanes consumed by BinaryBulk and the structure
+    # codec. Object child lanes are intentionally not returned here.
+    def ordinary_stream_names : Hash(String, String)
       detached = detached_copy(@data_names)
       @structure_names.each do |role, name|
         detached[String.new(role.to_slice)] = String.new(name.to_slice)
       end
       detached
+    end
+
+    # Exact direct-JSON child sites, in stable Dynamic-site/canonical-arm
+    # order. Every bound arm appears, including arms not selected by any row.
+    def json_object_sites : Array(DynamicJsonObjectPhysicalSite)
+      keys = @json_object_sites.keys
+      keys.sort! do |left, right|
+        left[0] == right[0] ? left[1] <=> right[1] : left[0] <=> right[0]
+      end
+      keys.map { |key| @json_object_sites[key] }
+    end
+
+    def json_object_site(site_path : String, canonical_arm_index : Int) : DynamicJsonObjectPhysicalSite
+      @json_object_sites[{site_path, canonical_arm_index.to_i32}]? ||
+        raise(KeyError.new("Dynamic JSON Object physical site not found"))
     end
 
     # A column encoder must use the same prepared occurrence plan that supplied
@@ -169,7 +216,7 @@ module CrystalClick
     end
 
     def stream_name_for(role : String) : String
-      name = @data_names[role]? || @structure_names[role]? ||
+      name = @data_names[role]? || @structure_names[role]? || @json_object_names[role]? ||
              raise(KeyError.new("binary Dynamic physical role not found: #{role.inspect}"))
       String.new(name.to_slice)
     end
@@ -198,7 +245,7 @@ module CrystalClick
     end
 
     private def file_for_data_role(role : String, extension : String, hashed : Bool) : String
-      name = @data_names[role]? || @structure_names[role]? ||
+      name = @data_names[role]? || @structure_names[role]? || @json_object_names[role]? ||
              raise(KeyError.new("binary Dynamic physical role not found: #{role.inspect}"))
       basename = hashed ? StreamName.hash(name) : String.new(name.to_slice)
       PhysicalStreamName.append_literal(basename, extension)
@@ -215,12 +262,15 @@ module CrystalClick
       unless @structure_role_count == @prepared.site_count.to_u64
         raise UnsupportedFormatError.new("Dynamic physical structure role count does not match its prepared plan")
       end
+      unless @prepared.json_object_binding_count.to_u64 == @json_object_binding_count
+        raise UnsupportedFormatError.new("Dynamic physical JSON child count does not match its prepared plan")
+      end
       ensure_memory_domain!(@variant_site_count, "Dynamic physical Variant site roster")
       ensure_memory_domain!(@arm_occurrence_count, "Dynamic physical Variant arm roster")
 
       roster_elements = add_size(
         add_size(@data_role_count, @structure_role_count),
-        add_size(@prefix_role_count, add_size(@variant_site_count, @arm_occurrence_count))
+        add_size(@prefix_role_count, add_size(@variant_site_count, add_size(@arm_occurrence_count, @json_object_binding_count)))
       )
       @context.record_elements(roster_elements)
 
@@ -269,9 +319,14 @@ module CrystalClick
 
       @data_names = Hash(String, String).new
       @structure_names = Hash(String, String).new
+      @json_object_names = Hash(String, String).new
+      @json_object_sites = Hash(Tuple(String, Int32), DynamicJsonObjectPhysicalSite).new
       @prefix_sizes = Hash(String, Int32).new
       @append_site_cursor = 0
+      prepare_json_site_name_discovery(prefix, initial_array_level)
       append_bindings(@prepared.type, "root", prefix, initial_array_level)
+      @json_site_name_resolver = nil
+      @json_site_structures = nil
       unless @append_site_cursor.to_u64 == @variant_site_count
         raise UnsupportedFormatError.new("Dynamic physical binding did not consume every measured Variant site")
       end
@@ -284,6 +339,9 @@ module CrystalClick
       end
       unless @data_names.size.to_u64 == @data_role_count && @structure_names.size.to_u64 == @structure_role_count
         raise UnsupportedFormatError.new("Dynamic physical lane count does not match the prepared role grammar")
+      end
+      unless @json_object_sites.size.to_u64 == @json_object_binding_count
+        raise UnsupportedFormatError.new("Dynamic physical JSON child roster differs from the prepared plan")
       end
       unless @prefix_sizes.size.to_u64 == @prefix_role_count
         raise UnsupportedFormatError.new("Dynamic physical prefix roster changed after preflight")
@@ -307,7 +365,11 @@ module CrystalClick
       when BinaryDataType::TAG_DYNAMIC
         arms = @prepared.arm_count(path)
         arms.times do |index|
-          if @prepared.arm_type(path, index).contains_json?
+          arm = @prepared.arm_type(path, index)
+          if arm.tag == BinaryDataType::TAG_JSON
+            @prepared.json_object_binding(path, index)
+            @json_object_binding_count = add_size(@json_object_binding_count, 1_u64)
+          elsif arm.contains_json?
             raise UnsupportedFormatError.new("JSON is not admitted as a Dynamic physical actual type")
           end
         end
@@ -319,7 +381,7 @@ module CrystalClick
         arms.times do |index|
           arm = @prepared.arm_type(path, index)
           child = arm_path(path, index)
-          scan_type(arm, child, depth + 1)
+          scan_type(arm, child, depth + 1) unless arm.tag == BinaryDataType::TAG_JSON
         end
         if shared_index < 0 || shared_index >= arms
           raise UnsupportedFormatError.new("Dynamic physical shared arm index is outside its prepared roster")
@@ -367,6 +429,8 @@ module CrystalClick
           add_data_role(path, "#{BinaryQBitBulkCodec::ROLE_SUFFIX}#{plane}")
           plane += 1
         end
+      when BinaryDataType::TAG_JSON
+        raise UnsupportedFormatError.new("JSON physical lanes require an exact direct Dynamic Object binding")
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
         add_data_role(path, ".data")
       else
@@ -495,7 +559,9 @@ module CrystalClick
                              multiply_size(entry.bounds[0], 3_u64)
                            end
         arm_prefix_length = add_size(prefix_length, add_size(1_u64, component_length))
-        measure_bindings(entry.type, arm_path(path, index), arm_prefix_length, array_level)
+        unless entry.type.tag == BinaryDataType::TAG_JSON
+          measure_bindings(entry.type, arm_path(path, index), arm_prefix_length, array_level)
+        end
       end
       nil
     end
@@ -590,9 +656,113 @@ module CrystalClick
         sql_name = @arm_names[offset + index]
         arm_prefix = PhysicalStreamName.append_escaped_component(prefix, sql_name)
         arm = dynamic ? @prepared.arm_type(path, index) : type.child_at(index)
-        append_bindings(arm, arm_path(path, index), arm_prefix, array_level)
+        if dynamic && arm.tag == BinaryDataType::TAG_JSON
+          append_json_object_site(path, index, arm_prefix, array_level)
+        else
+          append_bindings(arm, arm_path(path, index), arm_prefix, array_level)
+        end
       end
       nil
+    end
+
+    private def append_json_object_site(
+      site_path : String,
+      canonical_arm_index : Int,
+      escaped_prefix : String,
+      array_level : UInt64,
+    ) : Nil
+      binding = @prepared.json_object_binding(site_path, canonical_arm_index)
+      unless binding.site_key == site_path && binding.canonical_arm_index == canonical_arm_index
+        raise UnsupportedFormatError.new("Dynamic JSON Object binding differs from its physical arm coordinate")
+      end
+      resolver = @json_site_name_resolver ||
+                 raise(UnsupportedFormatError.new("Dynamic JSON Object site resolver is missing"))
+      structures = @json_site_structures ||
+                   raise(UnsupportedFormatError.new("Dynamic JSON Object source roster is missing"))
+      coordinates = resolver.json_object_arm_site(site_path, canonical_arm_index, structures)
+      unless coordinates.escaped_prefix == escaped_prefix && coordinates.array_level == array_level
+        raise UnsupportedFormatError.new("Dynamic JSON Object arm differs from the shared physical coordinate resolver")
+      end
+      key = {site_path, canonical_arm_index.to_i32}
+      if @json_object_sites.has_key?(key)
+        raise UnsupportedFormatError.new("Dynamic JSON Object physical site is duplicated")
+      end
+
+      physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(
+        escaped_prefix,
+        binding.plan,
+        @prepared.profile,
+        BinaryBulkProfile.single_stream,
+        @context.limits,
+        array_level,
+        @context,
+      )
+      retained_site_bytes = add_size(
+        multiply_size(site_path.bytesize.to_u64, 2_u64), escaped_prefix.bytesize.to_u64
+      )
+      @context.preflight_name_bytes(retained_site_bytes)
+      @context.charge_name_bytes(retained_site_bytes)
+      @context.record_elements(1_u64)
+      @json_object_sites[{String.new(site_path.to_slice), canonical_arm_index.to_i32}] =
+        DynamicJsonObjectPhysicalSite.new(
+          site_path, canonical_arm_index.to_i32, escaped_prefix, array_level, binding, physical
+        )
+
+      @context.record_elements(physical.stream_count.to_u64 * 2_u64) if physical.stream_count > 0
+      physical.stream_names.each_with_index do |name, child_index|
+        role = dynamic_json_object_role(site_path, canonical_arm_index, child_index)
+        if @json_object_names.has_key?(role) || @data_names.has_key?(role) || @structure_names.has_key?(role)
+          raise UnsupportedFormatError.new("Dynamic JSON Object physical roles collide")
+        end
+        copied_name_bytes = add_size(role.bytesize.to_u64, name.bytesize.to_u64)
+        @context.preflight_name_bytes(copied_name_bytes)
+        @context.charge_name_bytes(copied_name_bytes)
+        @json_object_names[role] = name
+      end
+      nil
+    end
+
+    private def prepare_json_site_name_discovery(prefix : String, initial_array_level : UInt64) : Nil
+      return nil if @json_object_binding_count == 0_u64
+
+      site_count = @prepared.site_count
+      @context.record_elements(site_count.to_u64) if site_count > 0
+      structures = Hash(String, DynamicStructure).new(initial_capacity: site_count)
+      @prepared.each_site_path do |path|
+        structures[path] = @prepared.structure_for(path)
+      end
+      @json_site_structures = structures
+      @json_site_name_resolver = BinaryDynamicBulkSiteNameResolver.from_escaped_prefix(
+        @prepared.type,
+        prefix,
+        initial_array_level,
+        @context.limits,
+        @sql_budget,
+        @context,
+      )
+      nil
+    end
+
+    private def dynamic_json_object_role(
+      site_path : String,
+      canonical_arm_index : Int,
+      child_index : Int,
+    ) : String
+      arm_digits = digit_count(canonical_arm_index.to_u64)
+      child_digits = digit_count(child_index.to_u64)
+      suffix_size = add_size(
+        add_size(".json_object.".bytesize.to_u64, arm_digits),
+        add_size(".stream.".bytesize.to_u64, child_digits),
+      )
+      @context.preflight_name_bytes(add_size(site_path.bytesize.to_u64, suffix_size))
+      @context.charge_name_bytes(add_size(site_path.bytesize.to_u64, suffix_size))
+      String.build do |io|
+        io << site_path
+        io << ".json_object."
+        io << canonical_arm_index
+        io << ".stream."
+        io << child_index
+      end
     end
 
     private def add_data_role(path : String, suffix : String, prefix_size : Int32? = nil) : Nil
@@ -619,14 +789,14 @@ module CrystalClick
     end
 
     private def add_data_binding(role : String, name : String) : Nil
-      if @data_names.has_key?(role) || @structure_names.has_key?(role)
+      if @data_names.has_key?(role) || @structure_names.has_key?(role) || @json_object_names.has_key?(role)
         raise UnsupportedFormatError.new("Dynamic physical roles collide across data and structure maps")
       end
       @data_names[role] = name
     end
 
     private def add_structure_binding(role : String, name : String) : Nil
-      if @data_names.has_key?(role) || @structure_names.has_key?(role)
+      if @data_names.has_key?(role) || @structure_names.has_key?(role) || @json_object_names.has_key?(role)
         raise UnsupportedFormatError.new("Dynamic physical roles collide across data and structure maps")
       end
       @structure_names[role] = name
@@ -634,7 +804,7 @@ module CrystalClick
 
     private def validate_unique_physical_names! : Nil
       seen = Hash(String, Bool).new
-      {@data_names, @structure_names}.each do |bindings|
+      {@data_names, @structure_names, @json_object_names}.each do |bindings|
         bindings.each_value do |name|
           if seen.has_key?(name)
             raise UnsupportedFormatError.new("Dynamic physical roles collide on a physical stream name")
