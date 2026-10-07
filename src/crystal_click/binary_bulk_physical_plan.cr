@@ -29,7 +29,6 @@ module CrystalClick
       context : PhysicalStreamPlanContext? = nil,
     )
       reject_json_type!(type)
-      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
       BinaryQBitBulkCodec.column_type(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
@@ -48,7 +47,6 @@ module CrystalClick
       initial_array_level : UInt64,
     )
       reject_json_type!(type)
-      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
       BinaryQBitBulkCodec.column_type(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
@@ -222,7 +220,6 @@ module CrystalClick
       if type.contains_json?
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end
-      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
       BinaryQBitBulkCodec.column_type(type)
       if type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")

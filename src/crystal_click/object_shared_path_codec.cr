@@ -515,9 +515,6 @@ module CrystalClick
 
     private def self.canonical_arms(structure : DynamicStructure, budget : BinaryCodecBudget) : Array(BinaryDataType)
       count = structure.canonical_variant_count
-      structure.type_count.times do |index|
-        BinaryNestedType.reject_unqualified_specialized_bulk!(structure.type_at(index))
-      end
       budget.ensure_future_elements(count.to_u64)
       budget.charge_elements(count.to_u64)
       arms = Array(BinaryDataType?).new(count, nil)

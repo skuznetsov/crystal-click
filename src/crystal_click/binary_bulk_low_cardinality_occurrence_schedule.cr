@@ -172,7 +172,7 @@ module CrystalClick
           current = census_type(arm_type, arm_path, selected_counts, streams, budget, occurrences, used_shape_roles, current, traversal, dynamic_plan)
         end
         current
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child_type = type.child_at(0)
         child_path_value = child_path(traversal, path, ".elements", nil, dynamic_plan != nil)
         return created_grids unless contains_low_cardinality?(child_type, child_path_value, dynamic_plan, traversal)
@@ -292,7 +292,7 @@ module CrystalClick
       child_counts = Array(UInt64).new(parent_counts.size, 0_u64)
       parent_counts.each_with_index do |parent_count, mark|
         if parent_count > Int32::MAX.to_u64
-          corrupt!("binary bulk ancestor Array count exceeds its supported domain")
+          corrupt!("binary bulk ancestor Array/Nested count exceeds its supported domain")
         end
         bytes = checked_multiply(parent_count, 8_u64)
         context = lane_context(lane, mark, budget)
@@ -303,7 +303,7 @@ module CrystalClick
         end
         context.ensure_consumed
         if total > Int32::MAX.to_u64
-          corrupt!("binary bulk flattened Array child count exceeds its supported domain")
+          corrupt!("binary bulk flattened Array/Nested child count exceeds its supported domain")
         end
         child_counts[mark] = total
       end

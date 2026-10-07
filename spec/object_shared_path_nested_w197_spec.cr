@@ -185,42 +185,21 @@ describe CrystalClick::ObjectSharedPathCodec do
     bounded_budget.wire_byte_count.should eq(spent_after_first)
   end
 
-  it "retains specialized Nested-child refusals" do
+  it "plans and frames empty Nested LC and Variant children" do
     uint8 = CrystalClick::BinaryDataType.primitive("UInt8")
     string = CrystalClick::BinaryDataType.primitive("String")
     low_cardinality = CrystalClick::BinaryDataType.low_cardinality(string)
     variant = CrystalClick::BinaryDataType.variant([uint8, string] of CrystalClick::BinaryDataType)
-    dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 1)
 
-    [low_cardinality, variant, dynamic].each do |child|
+    [low_cardinality, variant].each do |child|
       nested = CrystalClick::BinaryDataType.nested([child] of CrystalClick::BinaryDataType, ["payload"] of String)
-      path_dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 2)
-      structure = CrystalClick::DynamicStructure.new([nested] of CrystalClick::BinaryDataType)
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::ObjectSharedPathCodec.encode(
-          path_dynamic,
-          {"root" => structure},
-          [] of CrystalClick::BinaryValue
-        )
-      end
+      profile = CrystalClick::BinaryBulkProfile.single_stream
+      plan = CrystalClick::BinaryBulkTypePlan.new(nested, profile)
+      streams = CrystalClick::BinaryBulkCodec.encode(nested, [] of Array(CrystalClick::BinaryValue), profile: profile)
 
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkCodec.encode(nested, [] of Array(CrystalClick::BinaryValue))
-      end
-
-      structure_streams = CrystalClick::BinaryDynamicStructureStreams.new({
-        "root" => CrystalClick::DynamicStructureCodec.encode(structure),
-      })
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDynamicBulkPlan.new(path_dynamic, {"root" => structure})
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDynamicBulkPlan.decode_structure_streams(
-          path_dynamic,
-          structure_streams,
-          CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
-        )
-      end
+      plan.roles.should eq(streams.roles)
+      CrystalClick::BinaryBulkPhysicalPlan.new(nested, "events", profile: profile).stream_names.keys.sort.should eq(streams.roles)
+      CrystalClick::BinaryBulkCodec.decode(nested, streams, [] of UInt64, profile: profile).should be_empty
     end
   end
 
@@ -296,16 +275,17 @@ describe CrystalClick::ObjectSharedPathCodec do
     ).size.should eq(fixture[:rows].size)
   end
 
-  it "refuses declared Nested(Dynamic) products in both structure-plan directions" do
+  it "requires declared Nested(Dynamic) structure sites in both structure-plan directions" do
     dynamic_field = CrystalClick::BinaryDataType.dynamic(max_types: 1)
     declared_nested = CrystalClick::BinaryDataType.nested(
       [dynamic_field] of CrystalClick::BinaryDataType, ["payload"] of String
     )
 
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    missing_write_site = expect_raises(ArgumentError) do
       CrystalClick::BinaryDynamicBulkPlan.new(declared_nested, {} of String => CrystalClick::DynamicStructure)
     end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    missing_write_site.message.should eq("Dynamic structure is missing for site \"root.elements.field.0\"")
+    expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryDynamicBulkPlan.decode_structure_streams(
         declared_nested,
         CrystalClick::BinaryDynamicStructureStreams.new({} of String => Bytes),

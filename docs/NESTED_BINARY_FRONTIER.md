@@ -1,5 +1,11 @@
 # Nested logical binary frontier (W172)
 
+Historical checkpoint: the specialized-product refusals below describe W172,
+not the current kernel. W201 removes that blanket policy and tests the
+shared Array/implicit-Tuple storage path; see
+[NESTED_SPECIALIZED_BULK_FRONTIER.md](NESTED_SPECIALIZED_BULK_FRONTIER.md).
+The narrower complete-part writer is a separate boundary.
+
 Current frontier: VERIFIED within the bounded ordinary logical profile. W171 pairs a
 bounded unflattened Nested Wide-part profile. W172 implements the paired
 reusable logical descriptor/value/ordinary-bulk profile without widening

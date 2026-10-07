@@ -1,6 +1,30 @@
 # CrystalClick project status
 
-Current finite complete-part frontier (W200, 2026-10-06): public writer and
+Current finite kernel frontier (W201, 2026-10-06): recursive Nested now reuses
+the Array/implicit named Tuple cardinality law for LowCardinality staging and
+occurrence census. Eight blanket specialized-Nested call-site guards were
+removed; existing illegal child, explicit Dynamic-site, JSON/QBit and budget
+boundaries remain. No serializer per Cartesian type product was introduced.
+
+The same 144 affected files, including nine new W201 examples, pass 944 DEBUG
+and 944 RELEASE examples, zero failures/errors/pending, actual guarded exits 0.
+Fresh helpers in each mode decode four stock-created Wide Nested/Array(Tuple)
+LC(Nullable(String))+String profiles, checking full/empty/later/final/zero mark
+windows against literals. Root authenticates raw captures and 32 native value
+observations per mode; all 80 part files per mode remain unchanged. Both modes
+agree. A seeded census defect causes five runtime errors; six mutated reports
+and a wrong expected native NULL literal are rejected. Scoped verdict: ROBUST.
+
+This is recursive bulk read/write and stock-to-kernel qualification, not a new
+public complete-part writer certificate. The top-level Wide Nested writer
+remains narrower; native Variant/Dynamic specialized parts, broader dictionary,
+legacy/Compact/flattened layouts and JSON-as-Dynamic-actual remain open.
+Full types, MV/projections and repository-wide class decomposition remain open;
+performance stays deferred. Details:
+[NESTED_SPECIALIZED_BULK_FRONTIER.md](NESTED_SPECIALIZED_BULK_FRONTIER.md),
+`.landmark/evidence/nested-specialized-bulk-w201.json`.
+
+Previous finite complete-part frontier (W200, 2026-10-06): public writer and
 reader compose direct QBit actuals at root JSON shared paths, using existing
 scalar/bulk/Object owners. Only two paired direct-QBit admission guards changed;
 no serializer per recursive type product or new transpose algorithm was added.

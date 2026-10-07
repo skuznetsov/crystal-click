@@ -121,7 +121,7 @@ module CrystalClick
           child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
           count_value(child_type, child_value, child_path(path, ".arm.", index, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child_type = type.child_at(0)
         value.element_count.times do |index|
           count_value(child_type, value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), mark, counts, has_default, budget, dynamic_plan)
@@ -206,7 +206,7 @@ module CrystalClick
           child_value = value.variant_child? || raise UnsupportedFormatError.new("non-NULL Variant value is missing its selected arm")
           append_value(child_type, child_value, child_path(path, ".arm.", index, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)
         end
-      when BinaryDataType::TAG_ARRAY
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child_type = type.child_at(0)
         value.element_count.times do |index|
           append_value(child_type, value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), mark, buckets, default_values, budget, dynamic_plan)

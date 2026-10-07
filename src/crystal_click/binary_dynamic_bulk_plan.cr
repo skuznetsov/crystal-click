@@ -394,7 +394,6 @@ module CrystalClick
       preflight_external_site_count(context, streams.site_count, "Dynamic structure stream site count")
       budget.charge_wire_bytes(streams.total_input_byte_size)
       context.validate_type_tree(type)
-      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
 
       sites = Hash(String, Site).new
       discover_read_sites(type, "root", 1, streams, context, sites, include_statistics)
@@ -467,7 +466,6 @@ module CrystalClick
       context = BinaryCodecContext.new(limits, nil, true, operation_budget, false, account_output_bytes)
       preflight_external_site_count(context, structures.size, "Dynamic structure site count")
       context.validate_type_tree(type)
-      BinaryNestedType.reject_unqualified_specialized_bulk!(type)
 
       sites = Hash(String, Site).new
       discover_write_sites(type, "root", 1, structures, context, sites, include_statistics)
@@ -639,8 +637,8 @@ module CrystalClick
       context.preflight_metadata(count.to_u64, maximum_count: 255_u64, label: "Dynamic canonical arm count")
 
       # Nested is carried by the same size-plus-implicit-Tuple recursion as an
-      # Array. Specialized descendants still need their own sibling-row
-      # schedule and remain rejected before names or role rosters are built.
+      # Array. Descendant LowCardinality sites use that shared size lane when
+      # building their per-mark occurrence schedule.
       structure.type_count.times do |index|
         actual_type = structure.type_at(index)
         if actual_type.contains_json?
@@ -649,7 +647,6 @@ module CrystalClick
         if actual_type.contains_qbit? && actual_type.tag != BinaryDataType::TAG_QBIT
           context.unsupported!("QBit is admitted only as a direct Dynamic actual type")
         end
-        BinaryNestedType.reject_unqualified_specialized_bulk!(actual_type)
       end
 
       name_work_bytes = 0_u64

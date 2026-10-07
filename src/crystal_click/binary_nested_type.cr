@@ -13,22 +13,5 @@ module CrystalClick
       end
       tuple
     end
-
-    # Specialized LC/Variant/Dynamic walkers do not yet own Nested's shared
-    # sibling-row cardinality. Reject the whole mixed product before any role,
-    # site or path roster is materialized.
-    def self.reject_unqualified_specialized_bulk!(type : BinaryDataType) : Nil
-      return unless type.contains_nested?
-
-      if type.contains_low_cardinality?
-        raise UnsupportedFormatError.new("Nested with LowCardinality is outside the admitted bulk profile")
-      end
-      if type.contains_variant?
-        raise UnsupportedFormatError.new("Nested with Variant is outside the admitted bulk profile")
-      end
-      if type.contains_dynamic?
-        raise UnsupportedFormatError.new("Nested with Dynamic is outside the admitted bulk profile")
-      end
-    end
   end
 end

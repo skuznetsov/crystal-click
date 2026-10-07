@@ -1,5 +1,11 @@
 # Object shared-path Nested composition (W197)
 
+Historical checkpoint: the specialized-child refusals below were retained by
+W197/W198. The current W201 kernel replaces that blanket policy with recursive
+LC occurrence schedules and explicit Dynamic structure sites; see
+[NESTED_SPECIALIZED_BULK_FRONTIER.md](NESTED_SPECIALIZED_BULK_FRONTIER.md).
+This does not widen the earlier complete-part corpus to arbitrary schemas.
+
 Status: VERIFIED within the finite internal Data-adapter corpus below.
 No complete library-written Nested actual part is qualified by this slice.
 Baseline: `4473ed28dde554b7420f77a3b3b9f0310052a0fa`.

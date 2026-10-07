@@ -37,7 +37,6 @@ module CrystalClick
       if @type.contains_json?
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end
-      BinaryNestedType.reject_unqualified_specialized_bulk!(@type)
       # Dynamic QBit leaves have per-actual-site roles owned by the supplied
       # Dynamic plan. The root-column adapter remains limited to standalone
       # QBit/Nullable(QBit) descriptors and keeps static container guards.

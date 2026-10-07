@@ -169,89 +169,95 @@ describe "W172 Nested logical binary adversarial guards" do
     end
   end
 
-  it "keeps recursive descriptors but refuses unqualified Nested+LC, Variant, or Dynamic bulk products" do
+  it "retains specialized Nested descriptors while checking positive bulk parity and profile guards" do
     uint64 = CrystalClick::BinaryDataType.primitive("UInt64")
     string = CrystalClick::BinaryDataType.primitive("String")
+    profile = CrystalClick::BinaryBulkProfile.single_stream
+
     specialized = [
       CrystalClick::BinaryDataType.low_cardinality(uint64),
       CrystalClick::BinaryDataType.variant([uint64, string] of CrystalClick::BinaryDataType),
-      CrystalClick::BinaryDataType.dynamic(4),
+      CrystalClick::BinaryDataType.dynamic(2),
     ] of CrystalClick::BinaryDataType
-
     specialized.each do |child|
       nested = CrystalClick::BinaryDataType.nested([child] of CrystalClick::BinaryDataType, ["x"] of String)
       restored = CrystalClick::BinaryDataTypeCodec.decode(CrystalClick::BinaryDataTypeCodec.encode(nested))
+      restored.should eq(nested)
       restored.tag.should eq(CrystalClick::BinaryDataType::TAG_NESTED)
-      restored.child_at(0).child_at(0).tag.should eq(child.tag)
-
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkTypePlan.new(nested, CrystalClick::BinaryBulkProfile.single_stream)
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkCodec.encode(nested, [] of Array(CrystalClick::BinaryValue))
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkPhysicalPlan.new(nested, "events")
-      end
     end
 
-    ordinary_nested = CrystalClick::BinaryDataType.nested([uint64] of CrystalClick::BinaryDataType, ["n"] of String)
+    low_cardinality = CrystalClick::BinaryDataType.low_cardinality(uint64)
     nested_low_cardinality = CrystalClick::BinaryDataType.nested(
-      [CrystalClick::BinaryDataType.low_cardinality(uint64)] of CrystalClick::BinaryDataType,
-      ["n"] of String
+      [low_cardinality] of CrystalClick::BinaryDataType,
+      ["value"] of String,
     )
-    variant_around_nested = CrystalClick::BinaryDataType.variant(
-      [ordinary_nested, uint64] of CrystalClick::BinaryDataType
+    nested_low_cardinality_record = CrystalClick::BinaryValue.tuple(
+      nested_low_cardinality.child_at(0),
+      [CrystalClick::BinaryValue.low_cardinality(low_cardinality, CrystalClick::BinaryValue.uint64(7_u64))] of CrystalClick::BinaryValue,
     )
-    tuple_with_unrelated_low_cardinality = CrystalClick::BinaryDataType.tuple(
-      [ordinary_nested, CrystalClick::BinaryDataType.low_cardinality(string)] of CrystalClick::BinaryDataType,
-      ["payload", "lookup"] of String
+    nested_low_cardinality_value = CrystalClick::BinaryValue.nested(
+      nested_low_cardinality,
+      [nested_low_cardinality_record] of CrystalClick::BinaryValue,
     )
+    low_cardinality_plan = CrystalClick::BinaryBulkTypePlan.new(nested_low_cardinality, profile)
+    low_cardinality_streams = CrystalClick::BinaryBulkCodec.encode(
+      nested_low_cardinality,
+      [[nested_low_cardinality_value]] of Array(CrystalClick::BinaryValue),
+    )
+    low_cardinality_plan.roles.should eq(low_cardinality_streams.roles)
+    CrystalClick::BinaryBulkPhysicalPlan.new(nested_low_cardinality, "events").stream_names.keys.sort.should eq(low_cardinality_streams.roles)
+    low_cardinality_restored = CrystalClick::BinaryBulkCodec.decode(nested_low_cardinality, low_cardinality_streams, [1_u64])
+    low_cardinality_restored[0][0].type.should eq(nested_low_cardinality)
+    low_cardinality_restored[0][0].element_at(0).child_at(0).child_at(0).as_uint64.should eq(7_u64)
 
-    [variant_around_nested, tuple_with_unrelated_low_cardinality].each do |product|
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkTypePlan.new(product, CrystalClick::BinaryBulkProfile.single_stream)
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkCodec.encode(product, [] of Array(CrystalClick::BinaryValue))
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryBulkPhysicalPlan.new(product, "events")
-      end
+    # The legal Nested+LC role roster is now read as data, so a missing lane
+    # must fail as corruption rather than being confused with type admission.
+    missing_dictionary_lanes = Hash(String, CrystalClick::BinaryBulkStream).new
+    low_cardinality_streams.roles.each do |role|
+      next if role == "root.elements.field.0.dictionary"
+      missing_dictionary_lanes[role] = low_cardinality_streams.stream(role)
+    end
+    missing_dictionary = CrystalClick::BinaryBulkStreams.new(
+      low_cardinality_streams.mark_count,
+      missing_dictionary_lanes,
+    )
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryBulkCodec.decode(nested_low_cardinality, missing_dictionary, [1_u64])
     end
 
-    # A valid empty Array(named-Tuple) control has the same role shape as the
-    # Nested LC carrier. Nested+LC must fail its admission guard before the
-    # reader treats any role as missing or corrupt.
-    tuple_with_low_cardinality = CrystalClick::BinaryDataType.tuple(
-      [CrystalClick::BinaryDataType.low_cardinality(uint64)] of CrystalClick::BinaryDataType,
-      ["n"] of String
+    # The reverse recursive direction remains composable too: Nested can be
+    # the selected arm of Variant without losing its nominal type.
+    ordinary_nested = CrystalClick::BinaryDataType.nested([uint64] of CrystalClick::BinaryDataType, ["n"] of String)
+    ordinary_record = CrystalClick::BinaryValue.tuple(
+      ordinary_nested.child_at(0),
+      [CrystalClick::BinaryValue.uint64(12_u64)] of CrystalClick::BinaryValue,
     )
-    array_tuple_control = CrystalClick::BinaryDataType.array(tuple_with_low_cardinality)
-    valid_empty_control = CrystalClick::BinaryBulkCodec.encode(
-      array_tuple_control,
-      [] of Array(CrystalClick::BinaryValue)
+    ordinary_value = CrystalClick::BinaryValue.nested(ordinary_nested, [ordinary_record] of CrystalClick::BinaryValue)
+    variant = CrystalClick::BinaryDataType.variant([ordinary_nested, uint64] of CrystalClick::BinaryDataType)
+    nested_arm = variant.children.index(ordinary_nested).not_nil!
+    variant_value = CrystalClick::BinaryValue.variant(variant, nested_arm, ordinary_value)
+    variant_plan = CrystalClick::BinaryBulkTypePlan.new(variant, profile)
+    variant_streams = CrystalClick::BinaryBulkCodec.encode(variant, [[variant_value]] of Array(CrystalClick::BinaryValue))
+    variant_plan.roles.should eq(variant_streams.roles)
+    variant_restored = CrystalClick::BinaryBulkCodec.decode(variant, variant_streams, [1_u64])[0][0]
+    variant_restored.variant_child?.not_nil!.type.should eq(ordinary_nested)
+    variant_restored.variant_child?.not_nil!.element_at(0).child_at(0).as_uint64.should eq(12_u64)
+
+    # The ordinary bulk entry remains guarded: Dynamic requires its actual
+    # structure roster and goes through the paired Dynamic bulk owner.
+    nested_dynamic = CrystalClick::BinaryDataType.nested(
+      [CrystalClick::BinaryDataType.dynamic(2)] of CrystalClick::BinaryDataType,
+      ["payload"] of String,
     )
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryBulkCodec.decode(nested_low_cardinality, valid_empty_control, [] of UInt64)
+      CrystalClick::BinaryBulkTypePlan.new(nested_dynamic, profile)
     end
-
-    # A plain Nested actual uses the shared Array/implicit-Tuple carrier in
-    # both structure-plan directions.
-    actual = CrystalClick::DynamicStructure.new([ordinary_nested] of CrystalClick::BinaryDataType)
-    structure_streams = CrystalClick::BinaryDynamicStructureStreams.new({
-      "root" => CrystalClick::DynamicStructureCodec.encode(actual),
-    })
-    dynamic = CrystalClick::BinaryDataType.dynamic(1)
-    write_plan = CrystalClick::BinaryDynamicBulkPlan.new(dynamic, {"root" => actual})
-    read_plan = CrystalClick::BinaryDynamicBulkPlan.decode_structure_streams(
-      dynamic,
-      structure_streams,
-      CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
-    )
-    read_plan.data_roles.should eq(write_plan.data_roles)
-    read_plan.data_roles.should contain("root.arm.0.sizes")
-    read_plan.data_roles.should contain("root.arm.0.elements.field.0.data")
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryBulkCodec.encode(nested_dynamic, [] of Array(CrystalClick::BinaryValue))
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryBulkPhysicalPlan.new(nested_dynamic, "events")
+    end
   end
 
   it "retains Nested through ordinary Array, Tuple, and Map row and bulk composition" do
