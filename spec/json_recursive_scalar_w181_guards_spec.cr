@@ -321,11 +321,18 @@ describe "W181 recursive scalar JSON RowBinary guards" do
     empty_array = CrystalClick::BinaryValue.array(CrystalClick::BinaryDataType.array(nullable),
       [] of CrystalClick::BinaryValue)
     sibling_entries = [{"left", empty_array}, {"right", empty_array}] of Tuple(String, CrystalClick::BinaryValue)
+    # The retained value descriptor is equal to, but distinct from, each
+    # typed declaration root. Each path therefore charges its own bounded
+    # Array(Nullable(UInt8)) descriptor visit before structural equality.
     CrystalClick::BinaryJsonRow.new(sibling_type, sibling_entries,
-      w181_recursive_limits(max_depth: 4, max_nodes: 14, max_elements: 12)).path_count.should eq(2)
+      w181_recursive_limits(max_depth: 4, max_nodes: 20, max_elements: 16)).path_count.should eq(2)
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryJsonRow.new(sibling_type, sibling_entries,
-        w181_recursive_limits(max_depth: 4, max_nodes: 13, max_elements: 12))
+        w181_recursive_limits(max_depth: 4, max_nodes: 19, max_elements: 16))
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryJsonRow.new(sibling_type, sibling_entries,
+        w181_recursive_limits(max_depth: 4, max_nodes: 20, max_elements: 15))
     end
   end
 

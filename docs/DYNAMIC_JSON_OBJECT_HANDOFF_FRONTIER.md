@@ -244,3 +244,119 @@ nominal Dynamic type; actual-only recursive/table dispatch needs parent-first
 roster discovery and a validated union of Object stream owners. JSON below
 internal BinaryBulk Array/Tuple sites requires the census to traverse those
 parent schedules too, rather than silently using a root-only tag count.
+
+## Checkpoint B first component — W208 binding and logical row bridge
+
+Status: VERIFIED for this finite logical component. Baseline: `5536097`. This is an implementation step toward
+checkpoint B, not a replacement for its public-part and stock interoperability
+DoD. Existing physical and paired value-ready JSON guards remain unchanged.
+
+The binding must associate an exact raw Dynamic site key and canonical ordinary
+JSON arm with its immutable descriptor and the existing Object plan. Derive the
+Object schema directly from BinaryJsonType caps and typed descriptors, without
+rendering and reparsing a type name. Validate the complete plan, including an
+unused arm, before returning a binding. A shared arm, absent ordinary descriptor,
+wrong canonical index, mismatched caps/typed paths or unsupported declaration
+must not become a logical binding. The binding establishes identity and schema
+association only; the existing Object codecs remain the physical admission
+authority for each row and lane. It does not certify universal value readiness.
+Rows and documents have no outer Dynamic-site provenance. The adapter cannot
+infer which enclosing site produced them: its caller must select the binding
+by exact site/canonical arm and call `validate_for!` against the contextual
+roster. W208 exposes that check but introduces no physical consumer which
+enforces the obligation; such enforcement belongs to checkpoint B integration.
+
+The logical adapter borrows immutable BinaryValue children while copying the
+row's path collection into the other owner. It preserves exact typed values,
+including typed Nullable NULL; only an untyped Nothing NULL is omitted. Object
+paths outside BinaryJsonType's admitted raw-path grammar and missing typed
+values reject. No textual JSON conversion, second serializer or inferred schema
+belongs to this bridge. This logical step has no physical layout certificate.
+
+CAUTION: an apparently lossless row conversion can erase nominal schema or
+restart a recursive allowance. One caller-owned BinaryCodecBudget and inherited
+depth must govern descriptor/value work and path copies across sibling rows.
+The new borrowed-budget entry points accept either direction: a reader may
+discover a binding from actual metadata, rather than reuse a writer's schema.
+Read-side budget failures remain corruption; existing convenience constructors
+retain their write-direction defaults. No unchecked preflight receipt is public.
+Rollback is the exact local diff or atomic commit; no dependencies, native
+runtime, source parts or remote state change.
+
+Component plan (steps 1-3 executed; step 4 remains open):
+
+1. Establish missing-API RED before production changes, then save the focused
+   `spec/dynamic_json_object_bridge_w208_spec.cr` before implementation;
+   distinguish absent API compilation from executed assertion failures. Cover
+   exact identity, typed NULL/absence,
+   immutable child reuse, invalid raw paths, wrong/unused arm and schema-plan
+   mismatch, inherited depth and aggregate limits in both directions.
+2. New `DynamicJsonObjectBinding` and `BinaryJsonObjectAdapter` owners, one class
+   per file: implement only the exact binding and logical conversion. Shared
+   codec-budget accounting is logical work/copy accounting, not retained-owner
+   RSS; W207's inherited generic sidecar gaps remain open.
+3. Root runs focused and relevant affected specs in DEBUG/RELEASE serially under
+   `run_safe.sh`, seeds a bridge defect and checks restored canonical sources.
+   DoD signal: zero failures/errors/pending and actual guarded exit 0; the seed
+   must reject. Format and scoped diff checks precede an atomic local commit.
+4. Continue checkpoint B by consuming these owners at the BinaryBulk ordinary
+   JSON stop-owner hook, full-grid P/Q/R census and public reader/writer/table
+   propagation, then execute fresh stock interoperability in both directions.
+
+The strongest falsifier is a bridge that agrees with itself after discarding a
+typed NULL, cap, nominal child descriptor or inherited depth. Independent
+expected row/schema literals and an unchanged-test defect seed target that
+failure; a bridge roundtrip alone is insufficient. Physical parts, ATTACH,
+SharedVariant JSON, nested JSON owners and arbitrary layouts remain unqualified
+by this component.
+
+### W208 observed qualification
+
+The exact ordinary-arm binding and logical adapter are implemented in separate
+files. Existing BinaryJsonRow and ObjectDocumentSchema expose caller-owned
+budget/depth entry points in both directions; the adapter borrows child values
+instead of converting textual JSON or introducing a product serializer.
+
+The final focused pair contains nine W208 examples and nine W181 guard examples.
+All 18 pass DEBUG and RELEASE; the same 186 affected files pass all 1154 examples
+in each mode. Every final gate has zero failures/errors/pending and actual
+guarded exit 0. Final seven-file `format --check` and scoped `git diff --check`
+pass. The 978-file src/spec identity is
+`ce03712f1ecbee910e6998f69823a98e1a6650ebdd88603b96d3ae19dc2300e3`;
+the evidence index records its encoding, exact file hashes and ordered roster.
+
+The first RED was absent API compilation, not an executed behavioral failure.
+Initial constructor compilation and an executed second-sibling budget error
+were fixed before the initial eight-example green result. The affected corpus
+then exposed an old exact-counter fixture: equal Array(Nullable(UInt8)) values
+retained a separate descriptor graph. Independent accounting is 14 nodes/12
+edges with a shared root and 20/16 with the two distinct runtime traversals.
+The fixture and its one-short limits now use 20/16; a ninth W208 literal test
+compares both ownership cases. No bound was removed to make the corpus pass.
+
+Four unchanged-test defect seeds discriminate wrong site, omitted reverse
+ObjectDocument source owner, dropped typed Nullable NULL and omitted distinct
+descriptor preflight. They cause one assertion failure, one assertion failure,
+one executed missing-key error and two assertion failures respectively. The
+first three seeds used the original eight-example spec; the fourth used the
+later nine-example spec plus the nine W181 guards. Canonical source/spec hashes
+were exactly restored after each phase. A subsequent comment-only correction
+preceded all final focused/affected gates; the packet preserves these phases
+instead of claiming every seed ran against the final spec hash.
+
+Independent one-path literals measure seven logical nodes/three edges in both
+adapter directions, with 22 forward and 15 reverse logical bytes. These bytes
+include path metadata and temporary/detached key copies, not allocator/RSS
+accounting; the UInt64 child is borrowed. Nested JSON can cross this logical
+bridge while the existing persisted SharedVariant owner still rejects it.
+
+Evidence index: `.landmark/evidence/dynamic-json-object-bridge-w208.json`.
+Root inspected the live graphs, formulas, contextual preconditions, REDs,
+mutations and raw guarded exits. Luna's implementation/review are correlated
+candidate evidence. Scoped verdict: ROBUST for this logical bridge and tested
+profiles. No native workload, physical layout/admission, complete part, ATTACH
+or CHECK belongs to W208. Changes to contextual binding/consumer use, descriptor
+grammar, owner representation, accounting/depth rules or tested source reopen
+this certificate. Full checkpoint B still needs exact binding collections,
+parent-first stream/roster discovery, P/Q/R census and public-part stock gates;
+performance remains deferred and the overall goal remains active.

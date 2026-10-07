@@ -1,0 +1,446 @@
+{
+  "slice": "W208: ordinary Dynamic JSON binding and logical Object row bridge",
+  "date": "2026-10-07",
+  "baseline_commit": "5536097caac54873bcc18060dd12b759f44b2455",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Exact contextual ordinary JSON arm/schema association and borrowed logical BinaryJsonRow/ObjectDocument conversion with shared inherited budgets, within the executed finite profiles; no physical Dynamic JSON arm admission.",
+    "adversary_verdict": "ROBUST for exact logical identity/schema association and borrowed row conversion within the caller-context preconditions and final executed corpus. Physical capability remains IN_PROGRESS.",
+    "overall_goal": "IN_PROGRESS: checkpoint B physical handoff, remaining type/layout contracts and MV/projections remain open; performance is deferred.",
+    "evidence_is_index_not_proof": true,
+    "review_limitation": "Luna implementation and review are correlated candidate evidence. Root independently inspected owner graphs, descriptor/copy accounting and literals, executed all guarded workloads and four defect seeds, and checked exact restoration."
+  },
+  "design_document": "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+  "implementation": {
+    "root_cause": "A nominal Dynamic type cannot infer its actual JSON descriptor or Object schema. Logical JSON and Object rows have separate immutable path owners but can borrow the same BinaryValue children; their outer site/arm provenance is contextual, not carried by the row.",
+    "architecture": "DynamicJsonObjectBinding and BinaryJsonObjectAdapter each have their own source file. Existing Object codecs remain the physical serialization/admission owner. Existing BinaryJsonRow and ObjectDocumentSchema gain borrowed-budget/depth entry points rather than a serializer for each Cartesian type product.",
+    "tested_files": [
+      {
+        "path": "src/crystal_click.cr",
+        "bytes": 22506,
+        "sha256": "1f39b4624e5760c7c281069c4506cef6b5da8b7ade0a695afd21216ab61dbd4c"
+      },
+      {
+        "path": "src/crystal_click/binary_json_row.cr",
+        "bytes": 13866,
+        "sha256": "cda5e7a56ca0344f3e64f12b6bc3079ba564663bb4afef25bc9dcd890acf94e7"
+      },
+      {
+        "path": "src/crystal_click/object_document_schema.cr",
+        "bytes": 15503,
+        "sha256": "0937f3bd40bb88ab04b15283b726979b430bbc94fe256174c43599648954dd99"
+      },
+      {
+        "path": "src/crystal_click/dynamic_json_object_binding.cr",
+        "bytes": 9747,
+        "sha256": "1f3c2e4c809b23762aa767e1fe81c219847da90a1e172ef9abf0092446140433"
+      },
+      {
+        "path": "src/crystal_click/binary_json_object_adapter.cr",
+        "bytes": 4307,
+        "sha256": "3f4d4aa9914074109568526d032a16bb8b255d1c95408ffed56b3f10cf64efd7"
+      },
+      {
+        "path": "spec/dynamic_json_object_bridge_w208_spec.cr",
+        "bytes": 28842,
+        "sha256": "996580c1b979acff16264ef2f6c34601b942d2ca95ffd0c4f2e79f5f1ca80342"
+      },
+      {
+        "path": "spec/json_recursive_scalar_w181_guards_spec.cr",
+        "bytes": 21715,
+        "sha256": "118e18cc3866b605182d747550dfd2b2580bc2927dcac3d112db46abb30df169"
+      }
+    ],
+    "tested_source_identity": {
+      "files": 978,
+      "sha256": "ce03712f1ecbee910e6998f69823a98e1a6650ebdd88603b96d3ae19dc2300e3",
+      "encoding": "SHA256(JSON.pretty_generate(sorted [path,size,SHA256] rows)+newline) for all src/spec files"
+    },
+    "invariants": [
+      "Bind an exact raw Dynamic site key and canonical ordinary arm index; canonical order is not actual-array order.",
+      "Full actual descriptor rosters define identity; statistics and actual descriptor ordering do not.",
+      "Derive Object schema directly from JSON caps and typed descriptors without a render/reparse round trip.",
+      "Validate unused ordinary JSON arms and exact Object plan caps/typed paths too; reject SharedVariant and wrapped or non-JSON arms.",
+      "The adapter borrows immutable child BinaryValue owners, preserves typed Nullable NULL and omits only untyped Nothing NULL.",
+      "One caller-owned BinaryCodecBudget and inherited depth cover descriptors, values, logical owner/edge work and complete path-copy sets across sibling rows.",
+      "Read budget/row corruption rejects as CorruptPartError; existing convenience constructors retain writing defaults.",
+      "Bound equal-but-distinct typed runtime descriptor graphs before structural equality; shared declared roots are not repeated for that edge."
+    ],
+    "literal_checks": {
+      "single_counter_path_forward": {
+        "nodes": 7,
+        "elements": 3,
+        "logical_bytes": 22
+      },
+      "single_counter_path_reverse": {
+        "nodes": 7,
+        "elements": 3,
+        "logical_bytes": 15
+      },
+      "two_empty_typed_array_paths_shared_roots": {
+        "nodes": 14,
+        "elements": 12
+      },
+      "two_empty_typed_array_paths_distinct_equal_roots": {
+        "nodes": 20,
+        "elements": 16
+      },
+      "qualification": "Logical traversal/copy work, not process RSS or unique allocation size. UInt64 scalar payload is borrowed unchanged."
+    },
+    "constructor_guard_tightening": "The existing W181 exact counter oracle counted a structurally equal but separate Array(Nullable(UInt8)) runtime descriptor as shared. Two three-node/two-edge graphs require 20 nodes/16 edges rather than 14/12. Root derived both formulas independently; the old exact/one-short fixtures were updated, and a new shared-vs-distinct literal test plus defect seed falsifies omission. No limit was removed to restore a green suite.",
+    "documentation_files": [
+      {
+        "path": "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+        "bytes": 23026,
+        "sha256": "eb9ed278d1f8c44567b92aa5632fc68b6e8121900ed20210f44c8edb596fb4f9"
+      },
+      {
+        "path": "docs/PROJECT_STATUS.md",
+        "bytes": 158537,
+        "sha256": "e81a5f9dca3febc34f567e1e598440ee950f1080d3e3da02cbf8f22ba6e11c4d"
+      }
+    ],
+    "intended_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_json_row.cr",
+      "src/crystal_click/object_document_schema.cr",
+      "src/crystal_click/dynamic_json_object_binding.cr",
+      "src/crystal_click/binary_json_object_adapter.cr",
+      "spec/dynamic_json_object_bridge_w208_spec.cr",
+      "spec/json_recursive_scalar_w181_guards_spec.cr",
+      "docs/DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      ".landmark/evidence/dynamic-json-object-bridge-w208.json"
+    ]
+  },
+  "boundaries": {
+    "risk": "CAUTION: a logical bridge can discard a typed NULL/schema identity, restart recursive allowance, or silently walk an unbounded equal-but-distinct descriptor.",
+    "rollback": "Revert only the scoped atomic local W208 commit. No push/history rewrite, dependency/runtime change, source-part mutation or physical type admission.",
+    "caller_obligation": "Rows/documents have no outer Dynamic site provenance. The consumer must select the binding by the exact contextual site/canonical arm and call validate_for! against the contextual actual roster before adapter use. W208 exposes this check but adds no physical consumer that enforces it.",
+    "nonclaims": [
+      "Persisted Dynamic(JSON) arm values, physical Object child grid construction, public column/table dispatch or full checkpoint B completion.",
+      "Fresh stock native interoperability, complete library parts, ATTACH or CHECK from W208.",
+      "SharedVariant JSON, nested JSON persistence or arbitrary JSON/Dynamic/Variant/LowCardinality/Nested layouts.",
+      "Complete generic owner/heap accounting, allocator/RSS bounds, full types, MV/projections, repository-wide class decomposition or performance parity."
+    ],
+    "inherited_residuals": "W207 Interval/SimpleAggregate sidecar metadata, AggregateFunction(count) metadata outside JSON and broader QBitValue ownership audit remain open."
+  },
+  "reference": {
+    "source_snapshot": {
+      "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+      "commit": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+      "qualification": "Oct5 shallow archive, not Oct7 latest or the native runtime build source; pinned design reference."
+    },
+    "physical_schedule_anchor": {
+      "path": "src/Storages/MergeTree/MergeTreeDataPartWriterWide.cpp",
+      "sha256": "a54c556841343f20ffb22b6cbd406f27c9a81df50eddb23ee5dca884d1686a76",
+      "lines": "474-483 and 677-685",
+      "finding": "Wide mark third words retain physical part P, including Array descendants. Dynamic-site Q and selected JSON-arm R are payload domains; Object child grid is (P,R), not (Q,R).",
+      "nonclaim": "Design anchor only; W208 does not construct or qualify this grid."
+    },
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "outer_timeout_seconds": 600,
+      "outer_memory_mib": 12288,
+      "minimum_free_memory_percent": 50,
+      "execution": "Root-only serial workloads; approved escalation preserves guard process inspection/isolation."
+    },
+    "compiler": "Crystal 1.21.0 / LLVM 22.1.8",
+    "native_workloads": "None in W208. Logical scalar Object codec reuse is not fresh stock storage interoperability."
+  },
+  "verification": {
+    "affected_roster": {
+      "base_packet": {
+        "path": ".landmark/evidence/dynamic-json-materialization-w207.json",
+        "bytes": 18269,
+        "sha256": "af9b03555ee59709b84ba7dea0efde4b006001b5c9249174154608a211d5e1d9"
+      },
+      "base_json_path": "verification.affected_roster",
+      "base_files": 185,
+      "append_paths": [
+        "spec/dynamic_json_object_bridge_w208_spec.cr"
+      ],
+      "unique_files": 186,
+      "ordered_roster_sha256": "73094d0b71118cf6681f598a7a05b974db3f70a502a5c72bd8bb11bb71e7aeb3",
+      "hash_encoding": "SHA256 of JSON.pretty_generate(ordered_array) followed by newline; resolve base recursively."
+    },
+    "command_recipe": {
+      "prefix": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288",
+      "subcommand": "spec",
+      "affected_paths": "Exact recursively resolved base roster in listed order, then append_paths.",
+      "flags": [
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_flag": "--release before common flags",
+      "focused_paths": [
+        "spec/dynamic_json_object_bridge_w208_spec.cr",
+        "spec/json_recursive_scalar_w181_guards_spec.cr"
+      ],
+      "capture": "2>&1 | tee the referenced scratch log; pipefail preserves actual guarded exit."
+    },
+    "dod_expected": "Final affected and focused DEBUG/RELEASE have zero failures/errors/pending and actual guarded exit 0; seeded defects reject, canonical hashes are restored; format --check and scoped diff checks pass.",
+    "initial_reds": [
+      {
+        "label": "API absence",
+        "log": "api-absence-red.log",
+        "actual_exit": 1,
+        "examples": 0,
+        "failure": "Undefined DynamicJsonObjectBinding; this is compile/API RED, not an executed behavioral test.",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 eval 'require \"./src/crystal_click\"; CrystalClick::DynamicJsonObjectBinding' --error-trace 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/api-absence-red.log"
+      },
+      {
+        "label": "Initial constructor compile RED",
+        "log": "focused-first-debug.log",
+        "actual_exit": 1,
+        "examples": 0,
+        "failure": "Crystal requires explicit instance-variable initialization; helper mutations did not establish definite initialization.",
+        "repair": "Constructors assign required fields from helper-returned Array/tuple."
+      },
+      {
+        "label": "Phantom future child nodes",
+        "log": "focused-second-debug.log",
+        "actual_exit": 1,
+        "examples": 8,
+        "failures": 0,
+        "errors": 1,
+        "pending": 0,
+        "failure": "Second exact-budget forward conversion rejected because output preflight reserved nodes already charged for borrowed children.",
+        "repair": "Output Object document adds path edges, not another borrowed value-node tree."
+      },
+      {
+        "label": "Affected old exact-counter oracle",
+        "log": "affected-final-debug.log",
+        "actual_exit": 1,
+        "examples": 1153,
+        "failures": 0,
+        "errors": 1,
+        "pending": 0,
+        "failure": "W181 exact fixture ignored separately owned but equal typed runtime descriptor graphs.",
+        "repair": "Retain descriptor preflight, correct exact/one-short limits to independent 20/16, add shared/distinct literal test and seed."
+      }
+    ],
+    "defect_seeds": [
+      {
+        "label": "Wrong-site validation omitted",
+        "log": "seed-site-debug.log",
+        "examples": 8,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "actual_exit": 1,
+        "spec_sha256": "3fdfe065095b0d120a2d120a5c1eb6ac74a0f2feb4a82cbb84fcd7312f7519de",
+        "expected_observation": "Wrong site no longer raises the expected ArgumentError.",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/seed-site-debug.log"
+      },
+      {
+        "label": "Reverse source ObjectDocument root omitted",
+        "log": "seed-owner-debug.log",
+        "examples": 8,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "actual_exit": 1,
+        "spec_sha256": "3fdfe065095b0d120a2d120a5c1eb6ac74a0f2feb4a82cbb84fcd7312f7519de",
+        "mutated_file_sha256": "37892a03083c71350ad83c9485123fdb408d4c0c07f3184c4eccdb8e5e50499a",
+        "expected_observation": "Independent literal expected seven nodes; omission measured six.",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/seed-owner-debug.log"
+      },
+      {
+        "label": "All NULL children omitted in forward bridge",
+        "log": "seed-null-debug.log",
+        "examples": 8,
+        "failures": 0,
+        "errors": 1,
+        "pending": 0,
+        "actual_exit": 1,
+        "spec_sha256": "3fdfe065095b0d120a2d120a5c1eb6ac74a0f2feb4a82cbb84fcd7312f7519de",
+        "mutated_file_sha256": "88b259a48a676f6db6a24ea2e4c69a2ad133f7ebf59c6587a8e286677aafb0b2",
+        "expected_observation": "Executed KeyError for the missing typed maybe path; this is an executed error, not an assertion failure.",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/seed-null-debug.log"
+      },
+      {
+        "label": "Distinct typed runtime descriptor preflight omitted",
+        "log": "seed-distinct-debug.log",
+        "examples": 18,
+        "failures": 2,
+        "errors": 0,
+        "pending": 0,
+        "actual_exit": 1,
+        "spec_sha256": "9658a86720e276f26eb1fbbd6519c6d2f03eac59af5ea6133b731d2e91fe59af",
+        "additional_spec_sha256": "118e18cc3866b605182d747550dfd2b2580bc2927dcac3d112db46abb30df169",
+        "mutated_file_sha256": "33ba72f6a55f8ecb5fdb393acaf1c82daa5b0ea7a1eb88a8ac47df4cb3bd2972",
+        "expected_observation": "Literal expected20/got14 plus missing old one-short rejection.",
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/seed-distinct-debug.log"
+      }
+    ],
+    "seed_lineage": "First three seeds used the unchanged initial eight-example W208 spec, not the later nine-example version. The fourth used the nine-example spec plus the nine-example W181 guard spec. Canonical source/spec hashes were exactly restored after each phase; only a later comment correction changed the W208 spec hash before all final gates. All assertions from the seeded phases remain in the final tested spec.",
+    "final_gates": [
+      {
+        "label": "Focused DEBUG",
+        "log": "focused-canonical-final-debug.log",
+        "files": 2,
+        "examples": 18,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "actual_exit": 0,
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/focused-canonical-final-debug.log"
+      },
+      {
+        "label": "Focused RELEASE",
+        "log": "focused-canonical-final-release.log",
+        "files": 2,
+        "examples": 18,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "actual_exit": 0,
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/focused-canonical-final-release.log"
+      },
+      {
+        "label": "Affected DEBUG",
+        "log": "affected-canonical-final-debug.log",
+        "files": 186,
+        "examples": 1154,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "actual_exit": 0,
+        "command": "Resolve verification.affected_roster, then use verification.command_recipe with common flags only; tee verification.logs entry affected-canonical-final-debug.log."
+      },
+      {
+        "label": "Affected RELEASE",
+        "log": "affected-canonical-final-release.log",
+        "files": 186,
+        "examples": 1154,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "actual_exit": 0,
+        "command": "Resolve verification.affected_roster, then use verification.command_recipe with --release before common flags; tee verification.logs entry affected-canonical-final-release.log."
+      },
+      {
+        "label": "Canonical format --check",
+        "log": "format-canonical-check.log",
+        "files": 7,
+        "actual_exit": 0,
+        "command": "set -o pipefail\nenv COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w208.XRZSbT/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 tool format --check src/crystal_click.cr src/crystal_click/binary_json_row.cr src/crystal_click/object_document_schema.cr src/crystal_click/dynamic_json_object_binding.cr src/crystal_click/binary_json_object_adapter.cr spec/dynamic_json_object_bridge_w208_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr 2>&1 | tee /private/tmp/crystal-click-w208.XRZSbT/format-canonical-check.log"
+      }
+    ],
+    "logs": [
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/api-absence-red.log",
+        "bytes": 157,
+        "sha256": "7f948814c62b041f04dcafd8bfa571762df2fc09953eccdad84bb670bcf6afcd"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/focused-first-debug.log",
+        "bytes": 682,
+        "sha256": "71223f1cd8971599342a84ed9e922675b66a8a4eb61d2834cff017a66dbc4881"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/focused-second-debug.log",
+        "bytes": 2211,
+        "sha256": "8cab8cf4dbd5364134d9d45875c14e7c1cbcdf0dbe59b9a986de4b384eb28491"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/focused-green-debug.log",
+        "bytes": 145,
+        "sha256": "dc65764757ad81f2ffb48f91b85dc515398055e62ade74622bfb2f613b29eb79"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/seed-site-debug.log",
+        "bytes": 672,
+        "sha256": "992bf0a2bc79ba2f5ae321e4442c71f54e00f1a6b9182472f695f69ccdc24eb6"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/seed-owner-debug.log",
+        "bytes": 617,
+        "sha256": "7ce1d7813b6b05dd9e7dd12ff24fcf93b708941e604c4afc7426212659fd50fd"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/seed-null-debug.log",
+        "bytes": 1948,
+        "sha256": "10538124da3f373acc74261f08709cf5ab532bc0c60e1072c8d413df54326c09"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/affected-final-debug.log",
+        "bytes": 3774,
+        "sha256": "b6db8ee8d103bc34138c75b9ebd8f5a3494e983f74f950d333684c01bd101e66"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/focused-distinct-debug.log",
+        "bytes": 156,
+        "sha256": "091f7ca05e0fa08991d20d5d88d5ca3cd96f323c50b7608ef0afff8d99a8ba96"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/seed-distinct-debug.log",
+        "bytes": 1243,
+        "sha256": "0815b62e0902b3edafead30304dc740ade5170d4ad1c98c37bdb906b78d73972"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/focused-canonical-final-debug.log",
+        "bytes": 156,
+        "sha256": "7da0c12385d0f05d02e3b7fd9448b508f80b2a6fa9885d351557292a0feacaf1"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/focused-canonical-final-release.log",
+        "bytes": 157,
+        "sha256": "1ac642f1f658102b15e033c537936e795e037c2c8c0e7ae37ddb4c0b80078ead"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/affected-canonical-final-debug.log",
+        "bytes": 1290,
+        "sha256": "a69effd360373f2a3fc8242c7c5b7f42c32f164835e2b173c7d0163ebfc6efaf"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/format-final.log",
+        "bytes": 115,
+        "sha256": "d96a05d0afd8273dcc90943fa23e3c1e6ba6f1ec1a8e19c18471994535bf3d11"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/affected-canonical-final-release.log",
+        "bytes": 1291,
+        "sha256": "ad0ac3774b29e3e2f740fccd7c7fde4dc1e1f915c1ba3500b0f30672891e6c11"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w208.XRZSbT/format-canonical-check.log",
+        "bytes": 61,
+        "sha256": "0242d6a2cab8fea92d39f279f6076643178199e1003b5e486a4cee09e9b03d31"
+      }
+    ],
+    "restoration": "Root verified exact six-file restoration after the first three seeds and exact seven-file restoration after the fourth. Final canonical gates use the final tested_files/source identity above, after the comment-only correction."
+  },
+  "adversary": {
+    "strongest_failure": "Self-consistent bridge roundtrip discards typed NULL, nominal caps/descriptor or inherited depth; a wrong contextual binding or silently unbounded distinct descriptor passes.",
+    "root_checks": [
+      "Independent row/type/presence literals, borrowed-child identity and Object codec reuse rather than roundtrip-only claims.",
+      "Literal seven-node/three-edge forward and reverse laws; temporary/detached path copies accounted before allocation.",
+      "Shared14/12 versus distinct20/16 derivation; exact and one-short tests in both directions.",
+      "Wrong-site/canonical roster identity, unused arm, plan caps/types/path grammar and malformed/read error direction checks.",
+      "Cumulative sibling budgets and inherited depth in both directions; nested logical JSON still rejects persisted SharedVariant encoding.",
+      "Four unchanged-test defect seeds and raw actual guarded exits; exact canonical restoration before final gates."
+    ],
+    "candidate_review": "Luna source-level scoped ROBUST; correlated and not independent qualification.",
+    "verdict": "ROBUST within the logical component and executed profiles; physical readiness and generic-owner completeness are not promoted."
+  },
+  "continuation": {
+    "status": "IN_PROGRESS: W208 is only a logical component, not full checkpoint B.",
+    "next_frontier": [
+      "Complete exact bindings for every ordinary JSON arm, including unused arms; reject missing/extra/shared/wrapped bindings.",
+      "Consume binding at BinaryBulkEncoder.write_value/BinaryBulkDecoder.decode_value after exact ordinary arm selection, not a second DynamicValueCodec lane owner.",
+      "Discover part-scoped Object child path/actual unions and caps before plan/stream construction; aggregate statistics are not a per-mark census.",
+      "Transform full discriminator Q schedule to selected-arm R with root physical P unchanged; cover Array P!=Q, R=0 marks and unused JSON arms.",
+      "Propagate bound Object file/checksum/shared-stream owners through Dynamic bulk reader/writer and actual-only JSON public column/table dispatch.",
+      "Fresh stock-to-library/library-to-stock complete-part ATTACH/CHECK gates with independent literals in DEBUG and RELEASE."
+    ],
+    "decay_trigger": "Any change to contextual binding identity/consumer use, JSON/Object descriptor grammar, constructors/owner representation, accounting/depth rules, or tested source requires renewed focused/affected gates and applicable defect seeds. Source snapshot refresh may reopen physical design anchors.",
+    "refresh": "Recompute source and roster identities; rerun the exact guarded focused/affected recipe; renew relevant falsifiers. Physical admission requires its own fresh native interoperability witnesses.",
+    "failure_policy": "Keep existing physical JSON guards fail-closed. A logical binding is not a physical readiness certificate."
+  }
+}

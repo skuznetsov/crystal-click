@@ -8,22 +8,43 @@ module CrystalClick
     @entries : Array(Tuple(String, BinaryValue))
 
     def initialize(
-      @type : BinaryDataType,
+      type : BinaryDataType,
       values : Array(Tuple(String, BinaryValue)),
       limits : BinaryCodecLimits = BinaryCodecLimits.default,
     )
-      unless @type.tag == BinaryDataType::TAG_JSON
+      @type = type
+      @entries = build_entries(type, values, BinaryCodecBudget.new(limits, true), 1)
+    end
+
+    def initialize(
+      type : BinaryDataType,
+      values : Array(Tuple(String, BinaryValue)),
+      budget : BinaryCodecBudget,
+      depth : Int = 1,
+    )
+      @type = type
+      @entries = build_entries(type, values, budget, depth)
+    end
+
+    private def build_entries(
+      type : BinaryDataType,
+      values : Array(Tuple(String, BinaryValue)),
+      budget : BinaryCodecBudget,
+      depth : Int,
+    ) : Array(Tuple(String, BinaryValue))
+      unless type.tag == BinaryDataType::TAG_JSON
         raise ArgumentError.new("JSON row requires a root JSON descriptor")
       end
-      descriptor = @type.json_type.not_nil!
-      context = BinaryCodecContext.new(limits, nil, true)
-      context.validate_type_tree(@type)
-      context.visit_node(1) # structured row root
+      descriptor = type.json_type.not_nil!
+      context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
+      context.validate_type_tree(type, depth)
+      context.visit_node(depth) # structured row root
       count = values.size.to_u64
       checked_count = context.checked_count(count, "JSON row path count")
       context.preflight_children(count) if count > 0_u64
-      context.visit_metadata_nodes(count, 1) if count > 0_u64
+      context.visit_metadata_nodes(count, depth) if count > 0_u64
       context.preflight_children(count) if count > 0_u64
+      context.ensure_depth(depth + 1) if count > 0_u64
 
       seen = Set(String).new
       supplied_typed = Set(String).new
@@ -39,11 +60,16 @@ module CrystalClick
         context.budget.charge_wire_bytes(BinaryJsonType.path_wire_size(path.bytesize.to_u64))
 
         if declared = descriptor.typed_type_for(path)
+          # Exact structural equality can itself recursively inspect an
+          # untrusted caller-owned graph. The root descriptor covers a shared
+          # declared type; a distinct graph must be bounded first.
+          context.validate_type_tree(value.type, depth + 1) unless value.type.same?(declared)
           unless value.type == declared
             raise ArgumentError.new("JSON typed path value does not match its exact declared type")
           end
           supplied_typed.add(path)
         else
+          context.validate_type_tree(value.type, depth + 1)
           if value.type.tag == BinaryDataType::TAG_NOTHING
             unless value.is_null?
               raise ArgumentError.new("JSON runtime Nothing value must be NULL")
@@ -55,7 +81,6 @@ module CrystalClick
             # Bound traversal before recursively inspecting a caller-owned
             # graph. The closed grammar check below must not multiply work on
             # a wide/deep shared DAG before the operation limits can reject it.
-            context.validate_type_tree(value.type, 2)
             begin
               BinaryJsonType.validate_runtime_type!(value.type)
             rescue ex : ArgumentError
@@ -63,7 +88,7 @@ module CrystalClick
             end
           end
         end
-        preflight_value_tree!(value, context, 2)
+        preflight_value_tree!(value, context, depth + 1)
       end
 
       descriptor.typed_path_count.times do |index|
@@ -79,7 +104,52 @@ module CrystalClick
         entries << {String.new(path.to_slice), value}
       end
       entries.sort! { |left, right| left[0] <=> right[0] }
-      @entries = entries
+      entries
+    end
+
+    # Charge this immutable row's descriptor, path metadata, and complete
+    # value subtree to a caller-owned bridge operation before that bridge
+    # copies any path names. This is accounting/preflight only: it neither
+    # constructs another row nor materializes retained path strings.
+    def preflight_for_object!(budget : BinaryCodecBudget, depth : Int = 1) : Nil
+      unless @type.tag == BinaryDataType::TAG_JSON
+        raise ArgumentError.new("JSON row requires a root JSON descriptor")
+      end
+      context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
+      context.validate_type_tree(@type, depth)
+      context.visit_node(depth)
+
+      count = @entries.size.to_u64
+      context.checked_count(count, "JSON row path count")
+      if count > 0_u64
+        context.preflight_children(count)
+        context.visit_metadata_nodes(count, depth)
+        context.preflight_children(count)
+        context.ensure_depth(depth + 1)
+      end
+
+      path_wire_bytes = 0_u64
+      @entries.each_with_index do |entry, index|
+        next_bytes = BinaryJsonType.path_wire_size(path_byte_size(index).to_u64)
+        if path_wire_bytes > UInt64::MAX - next_bytes
+          context.unsupported!("JSON row path metadata size overflows UInt64")
+        end
+        path_wire_bytes += next_bytes
+      end
+      context.budget.charge_wire_bytes(path_wire_bytes) if path_wire_bytes > 0_u64
+
+      descriptor = @type.json_type.not_nil!
+      @entries.each_with_index do |entry, index|
+        value = entry[1]
+        declared = typed_type_for_path_bytes(descriptor, index)
+        if declared
+          context.validate_type_tree(value.type, depth + 1) unless value.type.same?(declared)
+        else
+          context.validate_type_tree(value.type, depth + 1)
+        end
+        preflight_value_tree!(value, context, depth + 1)
+      end
+      nil
     end
 
     def path_count : Int32
@@ -157,9 +227,9 @@ module CrystalClick
           context.preflight_children(count) # one value edge per path
           context.ensure_depth(depth + 1)
 
-          # Bound the complete nested path roster before path_at materializes
-          # any retained-name copies. Values are immutable, so this pass can
-          # inspect byte sizes without escaping the row owner.
+          # Bound the complete nested path roster before any bridge materializes
+          # retained-name copies. Values are immutable, so this pass can inspect
+          # byte sizes without escaping the row owner.
           path_wire_bytes = 0_u64
           row.path_count.times do |index|
             next_bytes = BinaryJsonType.path_wire_size(row.path_byte_size(index).to_u64)
@@ -172,9 +242,14 @@ module CrystalClick
         end
 
         row.path_count.times do |index|
-          path = row.path_at(index) # only after aggregate path-byte preflight
           child = row.value_at(index)
-          unless descriptor.typed_type_for(path)
+          declared = typed_type_for_path_bytes(descriptor, row, index)
+          if declared
+            context.validate_type_tree(child.type, depth + 1) unless child.type.same?(declared)
+            unless child.type == declared
+              context.unsupported!("JSON typed path value does not match its exact declared type")
+            end
+          else
             # Typed child descriptors were traversed from the enclosing JSON
             # type tree. Untyped paths carry an inline runtime descriptor and
             # must consume this same budget at the row's rebased depth.
@@ -238,6 +313,49 @@ module CrystalClick
         end
       end
       nil
+    end
+
+    private def typed_type_for_path_bytes(descriptor : BinaryJsonType, index : Int) : BinaryDataType?
+      typed_type_for_path_bytes(descriptor, self, index)
+    end
+
+    private def typed_type_for_path_bytes(
+      descriptor : BinaryJsonType,
+      row : BinaryJsonRow,
+      row_index : Int,
+    ) : BinaryDataType?
+      low = 0
+      high = descriptor.typed_path_count
+      while low < high
+        middle = low + (high - low) // 2
+        comparison = compare_row_path_to_typed_path(row, row_index, descriptor, middle)
+        if comparison > 0
+          low = middle + 1
+        elsif comparison < 0
+          high = middle
+        else
+          return descriptor.typed_type_at(middle)
+        end
+      end
+      nil
+    end
+
+    private def compare_row_path_to_typed_path(
+      row : BinaryJsonRow,
+      row_index : Int,
+      descriptor : BinaryJsonType,
+      typed_index : Int,
+    ) : Int32
+      row_size = row.path_byte_size(row_index)
+      typed_size = descriptor.typed_path_byte_size(typed_index)
+      common_size = Math.min(row_size, typed_size)
+      common_size.times do |byte_index|
+        row_byte = row.path_byte_at(row_index, byte_index)
+        typed_byte = descriptor.typed_path_byte_at(typed_index, byte_index)
+        return -1 if row_byte < typed_byte
+        return 1 if row_byte > typed_byte
+      end
+      row_size <=> typed_size
     end
   end
 end

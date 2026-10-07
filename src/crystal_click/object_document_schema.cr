@@ -22,8 +22,48 @@ module CrystalClick
       typed_paths : Hash(String, BinaryDataType),
       max_dynamic_paths : Int = DEFAULT_MAX_DYNAMIC_PATHS,
       max_dynamic_types : Int = DEFAULT_MAX_DYNAMIC_TYPES,
-      @limits : BinaryCodecLimits = DEFAULT_LIMITS,
+      limits : BinaryCodecLimits = DEFAULT_LIMITS,
     )
+      @limits = limits
+      prepared = prepare_with_budget(
+        typed_paths,
+        max_dynamic_paths,
+        max_dynamic_types,
+        BinaryCodecBudget.new(@limits, true),
+        1,
+        @limits,
+      )
+      @max_dynamic_paths = prepared[0]
+      @max_dynamic_types = prepared[1]
+      @typed_types = prepared[2]
+      @typed_paths = prepared[3]
+      @declaration = prepared[4]
+    end
+
+    def initialize(
+      typed_paths : Hash(String, BinaryDataType),
+      max_dynamic_paths : Int,
+      max_dynamic_types : Int,
+      budget : BinaryCodecBudget,
+      depth : Int = 1,
+    )
+      @limits = budget.limits
+      prepared = prepare_with_budget(typed_paths, max_dynamic_paths, max_dynamic_types, budget, depth, @limits)
+      @max_dynamic_paths = prepared[0]
+      @max_dynamic_types = prepared[1]
+      @typed_types = prepared[2]
+      @typed_paths = prepared[3]
+      @declaration = prepared[4]
+    end
+
+    private def prepare_with_budget(
+      typed_paths : Hash(String, BinaryDataType),
+      max_dynamic_paths : Int,
+      max_dynamic_types : Int,
+      budget : BinaryCodecBudget,
+      depth : Int,
+      limits : BinaryCodecLimits,
+    ) : Tuple(Int32, Int32, Hash(String, BinaryDataType), Array(String), String)
       unless 0 <= max_dynamic_paths <= MAX_DYNAMIC_PATHS
         raise ArgumentError.new("JSON max_dynamic_paths is outside the admitted range")
       end
@@ -34,33 +74,34 @@ module CrystalClick
         raise ArgumentError.new("JSON schema exceeds the maximum of #{MAX_TYPED_PATHS} typed paths")
       end
 
-      @max_dynamic_paths = max_dynamic_paths.to_i32
-      @max_dynamic_types = max_dynamic_types.to_i32
-      budget = BinaryCodecBudget.new(@limits, true)
-      budget.visit_node(1)
+      normalized_max_dynamic_paths = max_dynamic_paths.to_i32
+      normalized_max_dynamic_types = max_dynamic_types.to_i32
+      budget.visit_node(depth)
+      inherited_depth = depth.to_i32
       entry_count = typed_paths.size.to_u64
       budget.preflight_children(entry_count) if entry_count > 0_u64
+      budget.ensure_depth(depth + 1) if entry_count > 0_u64
 
       # Inspect all raw keys without copying them, then admit the complete
       # retained-key and declaration output before allocating either.
       raw_key_bytes = 0_u64
       declaration_bytes = declaration_prefix_size
-      argument_count = capacity_entry_count.to_u64 + entry_count
+      argument_count = capacity_entry_count(normalized_max_dynamic_paths, normalized_max_dynamic_types).to_u64 + entry_count
       declaration_bytes = checked_add(declaration_bytes, 1_u64) if argument_count > 0_u64 # opening parenthesis
       rendered_entry_count = 0_u64
-      unless @max_dynamic_types == DEFAULT_MAX_DYNAMIC_TYPES
-        declaration_bytes = checked_add(declaration_bytes, checked_add("max_dynamic_types=".bytesize.to_u64, digits(@max_dynamic_types.to_u64)))
+      unless normalized_max_dynamic_types == DEFAULT_MAX_DYNAMIC_TYPES
+        declaration_bytes = checked_add(declaration_bytes, checked_add("max_dynamic_types=".bytesize.to_u64, digits(normalized_max_dynamic_types.to_u64)))
         rendered_entry_count += 1_u64
       end
-      unless @max_dynamic_paths == DEFAULT_MAX_DYNAMIC_PATHS
+      unless normalized_max_dynamic_paths == DEFAULT_MAX_DYNAMIC_PATHS
         declaration_bytes = checked_add(declaration_bytes, 2_u64) if rendered_entry_count > 0_u64
-        declaration_bytes = checked_add(declaration_bytes, checked_add("max_dynamic_paths=".bytesize.to_u64, digits(@max_dynamic_paths.to_u64)))
+        declaration_bytes = checked_add(declaration_bytes, checked_add("max_dynamic_paths=".bytesize.to_u64, digits(normalized_max_dynamic_paths.to_u64)))
         rendered_entry_count += 1_u64
       end
       typed_paths.each do |path, type|
-        budget.visit_node(2)
+        budget.visit_node(depth + 1)
         validate_path!(path)
-        metrics = ObjectRecursiveDeclaration.account_descriptor(type, budget, @limits, 2) ||
+        metrics = ObjectRecursiveDeclaration.account_descriptor(type, budget, limits, depth + 1) ||
                   raise ArgumentError.new("typed JSON schema admits only supported Object recursive types")
         type_bytes = metrics.byte_size
         if rendered_entry_count > 0_u64
@@ -80,18 +121,32 @@ module CrystalClick
       budget.ensure_wire_bytes(checked_add(raw_key_bytes, checked_multiply(declaration_bytes, 2_u64)))
       budget.charge_wire_bytes(checked_add(raw_key_bytes, checked_multiply(declaration_bytes, 2_u64)))
 
-      @typed_types = Hash(String, BinaryDataType).new(initial_capacity: typed_paths.size)
-      @typed_paths = Array(String).new(typed_paths.size)
+      typed_types_copy = Hash(String, BinaryDataType).new(initial_capacity: typed_paths.size)
+      typed_paths_copy = Array(String).new(typed_paths.size)
       typed_paths.each do |path, type|
         detached = String.new(path.to_slice)
-        @typed_types[detached] = type
-        @typed_paths << detached
+        typed_types_copy[detached] = type
+        typed_paths_copy << detached
       end
-      @typed_paths.sort!
-      @declaration = render_declaration
-      unless @declaration.bytesize.to_u64 == declaration_bytes
+      typed_paths_copy.sort!
+      declaration = render_declaration(
+        normalized_max_dynamic_types,
+        normalized_max_dynamic_paths,
+        typed_paths_copy,
+        typed_types_copy,
+        limits,
+        inherited_depth,
+      )
+      unless declaration.bytesize.to_u64 == declaration_bytes
         raise UnsupportedFormatError.new("JSON schema declaration exceeded its preflight size")
       end
+      {
+        normalized_max_dynamic_paths,
+        normalized_max_dynamic_types,
+        typed_types_copy,
+        typed_paths_copy,
+        declaration,
+      }
     end
 
     # Every call returns a new Hash with detached path strings. Its complete
@@ -138,6 +193,14 @@ module CrystalClick
     # Validate exact typed-path/type identity and declared dynamic capacities
     # without inferring or modifying either roster.
     def validate_plan(plan : ObjectDocumentPlan) : Nil
+      validate_plan(plan, BinaryCodecBudget.new(@limits, true), 1)
+    end
+
+    def validate_plan(
+      plan : ObjectDocumentPlan,
+      budget : BinaryCodecBudget,
+      depth : Int = 1,
+    ) : Nil
       object = plan.structures.object
       unless ObjectSharedBucketLayout.supported?(object)
         raise ArgumentError.new("schema supports only Object V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or CHUNKED with 1..256 buckets")
@@ -149,33 +212,37 @@ module CrystalClick
         raise ArgumentError.new("Object plan typed paths differ from the declared JSON schema")
       end
 
-      budget = BinaryCodecBudget.new(@limits, true)
-      budget.visit_node(1)
+      context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
+      context.visit_node(depth)
       total_count = checked_add(object.dynamic_path_count.to_u64, plan.typed_path_count.to_u64)
-      budget.preflight_children(total_count) if total_count > 0_u64
+      context.preflight_children(total_count) if total_count > 0_u64
+      context.ensure_depth(depth + 1) if total_count > 0_u64
 
       path_bytes = 0_u64
       object.dynamic_path_count.times do |index|
-        budget.visit_node(2)
+        context.visit_node(depth + 1)
         path_bytes = checked_add(path_bytes, object.dynamic_path_byte_size(index).to_u64)
       end
       plan.typed_path_count.times do |index|
-        budget.visit_node(2)
+        context.visit_node(depth + 1)
         size = plan.typed_path_byte_size_at(index)
         path_bytes = checked_add(path_bytes, size.to_u64)
         unless same_path_bytes?(@typed_paths[index], plan, index, size)
           raise ArgumentError.new("Object plan typed paths differ from the declared JSON schema")
         end
         expected = @typed_types[@typed_paths[index]]
-        unless plan.typed_type_for(@typed_paths[index]) == expected
+        actual = plan.typed_type_for(@typed_paths[index])
+        context.validate_type_tree(expected, depth + 1)
+        context.validate_type_tree(actual, depth + 1) unless actual.same?(expected)
+        unless actual == expected
           raise ArgumentError.new("Object plan typed type differs from the declared JSON schema")
         end
       end
-      budget.ensure_wire_bytes(path_bytes)
-      budget.charge_wire_bytes(path_bytes)
+      context.budget.ensure_wire_bytes(path_bytes)
+      context.budget.charge_wire_bytes(path_bytes)
 
       object.dynamic_path_count.times do |index|
-        budget.visit_node(2)
+        context.visit_node(depth + 1)
         path = object.dynamic_path_at(index)
         dynamic = plan.structures.dynamic_for(path)
         if dynamic.type_count > @max_dynamic_types
@@ -185,24 +252,31 @@ module CrystalClick
       nil
     end
 
-    private def render_declaration : String
+    private def render_declaration(
+      max_dynamic_types : Int32,
+      max_dynamic_paths : Int32,
+      typed_paths : Array(String),
+      typed_types : Hash(String, BinaryDataType),
+      limits : BinaryCodecLimits,
+      inherited_depth : Int32,
+    ) : String
       String.build do |io|
         io << "JSON"
         first = true
-        if @max_dynamic_types != DEFAULT_MAX_DYNAMIC_TYPES
-          io << '(' << "max_dynamic_types=" << @max_dynamic_types
+        if max_dynamic_types != DEFAULT_MAX_DYNAMIC_TYPES
+          io << '(' << "max_dynamic_types=" << max_dynamic_types
           first = false
         end
-        if @max_dynamic_paths != DEFAULT_MAX_DYNAMIC_PATHS
+        if max_dynamic_paths != DEFAULT_MAX_DYNAMIC_PATHS
           if first
             io << '('
           else
             io << ", "
           end
-          io << "max_dynamic_paths=" << @max_dynamic_paths
+          io << "max_dynamic_paths=" << max_dynamic_paths
           first = false
         end
-        @typed_paths.each do |path|
+        typed_paths.each do |path|
           if first
             io << '('
           else
@@ -214,7 +288,7 @@ module CrystalClick
             io << path
           end
           io << ' '
-          ObjectTypedFieldType.append_name(io, @typed_types[path], @limits, 2)
+          ObjectTypedFieldType.append_name(io, typed_types[path], limits, inherited_depth + 1)
           first = false
         end
         io << ')' unless first
@@ -225,10 +299,10 @@ module CrystalClick
       "JSON".bytesize.to_u64
     end
 
-    private def capacity_entry_count : Int32
+    private def capacity_entry_count(max_dynamic_paths : Int32, max_dynamic_types : Int32) : Int32
       count = 0
-      count += 1 unless @max_dynamic_types == DEFAULT_MAX_DYNAMIC_TYPES
-      count += 1 unless @max_dynamic_paths == DEFAULT_MAX_DYNAMIC_PATHS
+      count += 1 unless max_dynamic_types == DEFAULT_MAX_DYNAMIC_TYPES
+      count += 1 unless max_dynamic_paths == DEFAULT_MAX_DYNAMIC_PATHS
       count
     end
 

@@ -1,6 +1,39 @@
 # CrystalClick project status
 
-Current finite prerequisite (W207, 2026-10-07): the shared materialization budget
+Current finite logical component (W208, 2026-10-07): an ordinary Dynamic JSON arm
+can bind its exact contextual site/canonical index and descriptor to an existing
+Object plan. The Object schema comes directly from JSON caps and typed paths,
+without rendering/reparsing the descriptor. `BinaryJsonObjectAdapter` borrows
+immutable child values in both directions and preserves typed Nullable NULL;
+only untyped Nothing NULL is omitted. Each new owner has its own source file.
+
+Borrowed-budget/depth entry points in BinaryJsonRow and ObjectDocumentSchema
+keep sibling work cumulative. Typed value descriptors that are equal but owned
+by a separate graph are bounded before structural equality; the shared-root
+literal is 14 nodes/12 edges, the distinct-root literal 20/16. The old W181 exact
+fixture was corrected to account for those distinct graphs, not made unbounded.
+Logical work/path-copy bytes are not retained heap or RSS measurements.
+
+The same 186 affected files pass 1154 DEBUG and 1154 RELEASE examples; focused
+final gates pass 18 per mode, all with zero failures/errors/pending and actual
+guarded exit 0. Four defect seeds reject before exact restoration: wrong site,
+missing source owner, dropped typed NULL, and skipped distinct descriptor
+preflight. The NULL seed raises an executed error, not an assertion failure.
+Root independently checked the literals, owner graph, seeds and guarded results.
+Scoped verdict: ROBUST for the logical component and executed profiles.
+
+This is not persisted Dynamic(JSON) admission. Rows carry no enclosing-site
+provenance: consumers must select the exact binding and validate its contextual
+roster; W208 adds no physical consumer enforcing that obligation. Object codecs
+remain the physical admission authority, and existing JSON storage guards stay
+closed. Next: the BinaryBulk ordinary-arm handoff, full P/Q/R census, public
+column/table propagation and fresh bidirectional stock interoperability.
+Full types/layouts, MV/projections, broader owner-accounting gaps and repository-
+wide decomposition remain open. Performance stays deferred; the goal is active.
+Details: [DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md](DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md),
+`.landmark/evidence/dynamic-json-object-bridge-w208.json`.
+
+Previous finite prerequisite (W207, 2026-10-07): the shared materialization budget
 now traverses retained BinaryJsonRow entries and BinaryJsonType typed rosters.
 Path Strings are metadata, child values/types inherit depth, and counter
 admission remains atomic. Equal-but-distinct row/value descriptor roots are
@@ -18,8 +51,9 @@ Inherited Interval/SimpleAggregate sidecar accounting, AggregateCount metadata
 outside JSON and the broader QBitValue audit remain open; this is not a
 complete generic-owner budget guarantee or new persisted type admission.
 
-Ordinary Dynamic JSON-arm binding to Object storage is still the next proposed
-capability. Full types/layouts, MV/projections and repository-wide decomposition
+At that checkpoint, ordinary Dynamic JSON-arm binding to Object storage was the
+next proposed capability; W208 qualifies only its logical component. Full
+types/layouts, MV/projections and repository-wide decomposition
 remain open; performance is deferred and the overall goal remains active.
 Details: [DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md](DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md),
 `.landmark/evidence/dynamic-json-materialization-w207.json`.
