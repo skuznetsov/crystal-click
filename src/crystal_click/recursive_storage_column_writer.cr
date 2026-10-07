@@ -1,5 +1,5 @@
 module CrystalClick
-  # Composes Tuple and Array edges around existing Object and BinaryBulk leaf
+  # Composes Tuple and Array edges around existing Object, BinaryBulk, and Dynamic leaf
   # owners. Structural sites carry schedules; serializers remain per leaf.
   module RecursiveStorageColumnWriter
     def self.encode(
@@ -130,6 +130,28 @@ module CrystalClick
                  end
           add_pair!(pairs, lane.name, pair)
         end
+      end
+
+      plan.dynamic_site_count.times do |index|
+        site = plan.dynamic_site_at(index)
+        site_granules = bulks[site.key]? || raise(UnsupportedFormatError.new("recursive Dynamic site data is missing"))
+        grid = site_grids[site.key]? || raise(UnsupportedFormatError.new("recursive Dynamic site grid is missing"))
+        files = DynamicBulkColumnWriter.encode_at_site(
+          site.plan,
+          site.physical,
+          site_granules,
+          grid,
+          plan.frame_bytes,
+          limits,
+          plan.transport_limits,
+          codec_budget,
+          transport_budget,
+        )
+        expected_names = site.physical.stream_names.values.sort!
+        unless files.keys.sort == expected_names
+          raise UnsupportedFormatError.new("encoded Dynamic site roster changed after planning")
+        end
+        files.each { |name, pair| add_pair!(pairs, name, pair) }
       end
 
       RecursiveStorageColumnFiles.new(plan, pairs)
@@ -605,10 +627,13 @@ module CrystalClick
     ) : Nil
       object_keys = Array(String).new(plan.object_site_count) { |index| plan.object_site_at(index).key }.sort!
       bulk_keys = Array(String).new(plan.bulk_site_count) { |index| plan.bulk_site_at(index).key }.sort!
+      dynamic_keys = Array(String).new(plan.dynamic_site_count) { |index| plan.dynamic_site_at(index).key }.sort!
       array_keys = Array(String).new(plan.array_site_count) { |index| plan.array_site_at(index).key }.sort!
-      expected_grid_keys = object_keys + bulk_keys
+      all_bulk_keys = bulk_keys + dynamic_keys
+      all_bulk_keys.sort!
+      expected_grid_keys = object_keys + all_bulk_keys
       expected_grid_keys.sort!
-      unless objects.keys.sort == object_keys && bulks.keys.sort == bulk_keys &&
+      unless objects.keys.sort == object_keys && bulks.keys.sort == all_bulk_keys &&
              frames.keys.sort == array_keys && site_grids.keys.sort == expected_grid_keys
         raise UnsupportedFormatError.new("recursive collected site roster differs from its admitted plan")
       end

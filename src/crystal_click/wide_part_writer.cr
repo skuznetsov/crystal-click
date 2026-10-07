@@ -90,11 +90,12 @@ module CrystalClick
       metadata_version : Int64 = 0_i64,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      dynamic_plans : Hash(String, BinaryDynamicBulkPlan) = Hash(String, BinaryDynamicBulkPlan).new,
     ) : String
       RecursiveStoragePartWriter.write(
         destination, key_name, keys, value_name, schema, object_plans,
         granules, rows_per_mark, mode, profile, shared_profile,
-        frame_bytes, metadata_version, limits, transport_limits
+        frame_bytes, metadata_version, limits, transport_limits, dynamic_plans
       )
     end
 

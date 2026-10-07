@@ -1,0 +1,436 @@
+{
+  "slice": "W204 recursive JSON and JSON-free Dynamic physical-site composition",
+  "date": "2026-10-07",
+  "baseline_commit": "5cb6e0cd9f4c0b6974cdf1975dcd48cb466335a6",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Finite Array/Tuple JSON public recursive column/table and UInt64-key Wide complete-part composition with prepared JSON-free Dynamic-bearing siblings; four carriers under two String profiles in DEBUG and RELEASE.",
+    "adversary_verdict": "ROBUST within the executed finite corpus and guards",
+    "evidence_is_index_not_proof": true,
+    "review_limitation": "Luna candidate/source reviews are correlated. Root inspected live owners and primary source, ran all compiler/native gates serially, seeded a production P/Q defect and independently audited raw records and oracle mutations."
+  },
+  "design_document": "docs/RECURSIVE_DYNAMIC_JSON_STORAGE_FRONTIER.md",
+  "implementation": {
+    "root_cause": "The recursive schema already parsed a Dynamic-bearing JSON-free subtree, but static bulk physical ownership could not bind its persisted actual structure. Reuse leaf serde while composing physical identity, inherited coordinates and state.",
+    "reader": "RecursiveStorageColumnReader.open/read_marks plus existing OfflineTable recursive-value consumer; DynamicBulkColumnReader delegates to reusable DynamicBulkSiteReader.",
+    "writer": "WidePartWriter.write_uint64_recursive_pair(..., dynamic_plans: Hash(String, BinaryDynamicBulkPlan)); appended named option preserves previous defaults.",
+    "invariants": [
+      "Physical P marks and logical Q occurrences are distinct, including all-zero-Q library fixtures.",
+      "Escaped prefixes, inherited Array .sizeN coordinate and inherited descriptor depth are distinct and retained.",
+      "Persisted structures are discovered parent-first; exact site/plan/physical/limit identities are retained rather than rebound.",
+      "Codec and transport budgets are shared within the operation; write-direction/wider-limit read budgets reject before charges/source reads.",
+      "LowCardinality sites replay state before later/end-zero selections; supplied actual descriptors are bounded even when unused.",
+      "Invalid preparation/encoding precedes publication; no per-product leaf serializers."
+    ],
+    "architecture": "One class/file for the Dynamic site owner and one-shot descriptor preflight receipt; standalone facade delegates. Not repository-wide decomposition.",
+    "tested_source_spec_helper_hashes": [
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "759a8703c270172d4f83fee460b5afd7f3b281cdc7f384b4a75a32a5074a55a8"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_plan.cr",
+        "sha256": "af255d66bbdd39600b8a2fa0c9555f96dd495df04e7c1d23a61f75da39cb55b5"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_descriptor_preflight.cr",
+        "sha256": "96454da710d91237702e711e14b0ae9fdcefcc1bfd789c8bae1d948b46e13625"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_site_name_resolver.cr",
+        "sha256": "1b7324ed68cd2ac6ecd289fac6b1a9714af5a3d9a05452bcbb21a08e45b99afd"
+      },
+      {
+        "path": "src/crystal_click/dynamic_bulk_site_reader.cr",
+        "sha256": "1f174cf0e33708ab4bbdecb23fada7029c676f0a0607eb687d455fe8fd5f9c89"
+      },
+      {
+        "path": "src/crystal_click/dynamic_bulk_column_reader.cr",
+        "sha256": "588561f16d216513799e608ca64b00378a142656c281bcade643991924b915fc"
+      },
+      {
+        "path": "src/crystal_click/dynamic_bulk_column_writer.cr",
+        "sha256": "c8a4d3aadc3e20c3ca1ca8e45e90eabcca3ba2f2d0a9431614f2962267f0eb20"
+      },
+      {
+        "path": "src/crystal_click/recursive_storage_column_plan.cr",
+        "sha256": "007154c589e7cfd3394b2cd793c7157f24981e89d5deb179398854e11a088ae5"
+      },
+      {
+        "path": "src/crystal_click/recursive_storage_column_reader.cr",
+        "sha256": "516822e43f7e3992b89c63ad935a84c9d029b7f3260ba3145512ff52b970174c"
+      },
+      {
+        "path": "src/crystal_click/recursive_storage_column_writer.cr",
+        "sha256": "b1d2a6de604bfed5b617cc69381298cfd37d8a99a08ed9d9f4aa3f5b2adf559b"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer.cr",
+        "sha256": "2711759deb4100c712caff46b6b5c91a565264bb0aafde51035046b49aa5f3a7"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/recursive_storage_part_writer.cr",
+        "sha256": "94b5b0e42e65cf792908182244321695cb2dcb3ec41620d1eb536c63c5049efd"
+      },
+      {
+        "path": "spec/recursive_dynamic_json_w204_red_spec.cr",
+        "sha256": "bced9590d67b361fa940ad27e505a879f55b4a55908465e8800ac1bda29d6afd"
+      },
+      {
+        "path": "spec/recursive_dynamic_json_w204_spec.cr",
+        "sha256": "79b00e9eb37579dfef2e82bd3b22c87849b0f7b30d09326dc213cc9977bd9261"
+      },
+      {
+        "path": "spec/recursive_dynamic_json_w204_adversary_spec.cr",
+        "sha256": "bb7115812d640ec52c2f405f5947103b46e8c711b8d7fb42ee7c305e5765e4cb"
+      },
+      {
+        "path": "scripts/check_recursive_dynamic_json_w204.cr",
+        "sha256": "45b412a8f491a327e877e8442e727124d98e944555182f593c4c9b4c45db9fd4"
+      },
+      {
+        "path": "scripts/probe_recursive_dynamic_json_w204.rb",
+        "sha256": "b9a86212f942daf9986f6245e2e5ad64036df100780347b7e93944d187b8228f"
+      }
+    ]
+  },
+  "boundaries": {
+    "risk": "CAUTION: serialization, shared owner and public read/write composition.",
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_dynamic_bulk_plan.cr",
+      "src/crystal_click/binary_dynamic_bulk_descriptor_preflight.cr",
+      "src/crystal_click/binary_dynamic_bulk_site_name_resolver.cr",
+      "src/crystal_click/dynamic_bulk_site_reader.cr",
+      "src/crystal_click/dynamic_bulk_column_reader.cr",
+      "src/crystal_click/dynamic_bulk_column_writer.cr",
+      "src/crystal_click/recursive_storage_column_plan.cr",
+      "src/crystal_click/recursive_storage_column_reader.cr",
+      "src/crystal_click/recursive_storage_column_writer.cr",
+      "src/crystal_click/wide_part_writer.cr",
+      "src/crystal_click/wide_part_writer/recursive_storage_part_writer.cr",
+      "spec/recursive_dynamic_json_w204_red_spec.cr",
+      "spec/recursive_dynamic_json_w204_spec.cr",
+      "spec/recursive_dynamic_json_w204_adversary_spec.cr",
+      "scripts/check_recursive_dynamic_json_w204.cr",
+      "scripts/probe_recursive_dynamic_json_w204.rb",
+      "docs/RECURSIVE_DYNAMIC_JSON_STORAGE_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      ".landmark/evidence/recursive-dynamic-json-storage-w204.json"
+    ],
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_dynamic_bulk_plan.cr",
+      "src/crystal_click/binary_dynamic_bulk_descriptor_preflight.cr",
+      "src/crystal_click/binary_dynamic_bulk_site_name_resolver.cr",
+      "src/crystal_click/dynamic_bulk_site_reader.cr",
+      "src/crystal_click/dynamic_bulk_column_reader.cr",
+      "src/crystal_click/dynamic_bulk_column_writer.cr",
+      "src/crystal_click/recursive_storage_column_plan.cr",
+      "src/crystal_click/recursive_storage_column_reader.cr",
+      "src/crystal_click/recursive_storage_column_writer.cr",
+      "src/crystal_click/wide_part_writer.cr",
+      "src/crystal_click/wide_part_writer/recursive_storage_part_writer.cr",
+      "spec/recursive_dynamic_json_w204_red_spec.cr",
+      "spec/recursive_dynamic_json_w204_spec.cr",
+      "spec/recursive_dynamic_json_w204_adversary_spec.cr",
+      "scripts/check_recursive_dynamic_json_w204.cr",
+      "scripts/probe_recursive_dynamic_json_w204.rb",
+      "docs/RECURSIVE_DYNAMIC_JSON_STORAGE_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      ".landmark/evidence/recursive-dynamic-json-storage-w204.json"
+    ],
+    "rollback": "Revert only the scoped atomic local feature commit; no push, history rewrite or stock checkout mutation.",
+    "integrity": "Quiescent parts, bounded consumed frames and declared sizes; not authentication of every unselected data file or a whole-process RSS/no-I/O claim.",
+    "nonclaims": [
+      "Every legal recursive type product, every persisted layout, version or dictionary schedule.",
+      "Whole-part all-zero-Q native interoperability: Crystal-only positive tests pass, but the native matrix has only empty-Q marks/windows.",
+      "JSON-as-Dynamic-actual or Variant arm; new JSON structural wrapper kinds; flattened Dynamic; Compact parts; unqualified specialized profiles.",
+      "All forms of selected recursive Tuple serialization metadata: native fixtures use the retained Default omission profile.",
+      "General table publication, automatic arbitrary catalog dispatch, full MV/projections, repository-wide modularization or performance parity."
+    ],
+    "residual_source_identity": "The read-discovery plan seam validates site coordinates, limits and exact prepared/physical plan identities but not an independent source token. Actual column-reader owners are constructed internally from one source; re-audit if that callgraph/visibility widens."
+  },
+  "reference": {
+    "source": {
+      "root": "/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60",
+      "head": "ef037e60fc7f5654c8c80eefb8be82e3c56f9a67",
+      "clean": true,
+      "shallow": true,
+      "unbuilt": true,
+      "is_latest_october7": false,
+      "source_is_runtime_build": false
+    },
+    "primary_anchors": [
+      "src/DataTypes/Serializations/SerializationArray.cpp:352-394",
+      "src/DataTypes/Serializations/SerializationDynamic.cpp:182-328",
+      "src/DataTypes/Serializations/SerializationVariant.cpp:199-223,454-520",
+      "src/DataTypes/Serializations/SerializationLowCardinality.cpp:271-340"
+    ],
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w144-runtime-recovery.Pm8VNb/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "version": "26.10.1.1201",
+      "version_githash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sql_build_id": "DB3524E5F34139BEA7B1D573C45D031F"
+    },
+    "compiler": "Crystal 1.21.0 (2026-07-16), LLVM 22.1.8, aarch64-apple-darwin25.6.0",
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4"
+    },
+    "limits": {
+      "compiler_timeout_seconds": 600,
+      "outer_guard_memory_bytes": 12884901888,
+      "min_free_percent": 50,
+      "native_timeout_seconds": 10,
+      "native_termination_grace_seconds": 2,
+      "native_max_threads": 1,
+      "native_local_max_memory_usage_bytes": 536870912
+    },
+    "helpers": [
+      {
+        "mode": "DEBUG",
+        "path": "/private/tmp/crystal-click-w204.Z5VYmc/check-recursive-debug",
+        "sha256": "ddc279e2b07ec2f861bf13856d3a1a410d61e9176a88a675c4f3ea63e12d1dde"
+      },
+      {
+        "mode": "RELEASE",
+        "path": "/private/tmp/crystal-click-w204.Z5VYmc/check-recursive-release",
+        "sha256": "41885fb4b5d013e7b98c125f3f763ce3deb6a28d5a8cb207bd31cf3f3adeab33"
+      }
+    ]
+  },
+  "verification": {
+    "affected_roster": {
+      "base_packet": ".landmark/evidence/dynamic-bulk-parts-w203.json",
+      "base_packet_sha256": "e455d5135050555659a33df59f3b93be58aec14cff1a376b62dbbc20621e74e7",
+      "base_json_path": "verification.affected_roster",
+      "base_files": 177,
+      "append_paths": [
+        "spec/recursive_dynamic_json_w204_red_spec.cr",
+        "spec/recursive_dynamic_json_w204_spec.cr",
+        "spec/recursive_dynamic_json_w204_adversary_spec.cr"
+      ],
+      "unique_files": 180
+    },
+    "affected_command_recipe": {
+      "prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288",
+      "subcommand": "spec",
+      "paths": "Use the exact base roster in listed order, then the three appended paths.",
+      "flags": [
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_additional_flag": "--release"
+    },
+    "debug": {
+      "exit_code": 0,
+      "examples": 1121,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log": "/private/tmp/crystal-click-w204.Z5VYmc/affected-debug.log",
+      "sha256": "a7eb5e79dfd3b48f829e496d4fde713db8ac0898346a56181790372f12518654"
+    },
+    "release": {
+      "exit_code": 0,
+      "examples": 1121,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log": "/private/tmp/crystal-click-w204.Z5VYmc/affected-release.log",
+      "sha256": "0bda8282be7d43f0e5219143123bb95d5e0dc700be959521355db8640102e74b"
+    },
+    "focused": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_dynamic_json_w204_red_spec.cr spec/recursive_dynamic_json_w204_spec.cr spec/recursive_dynamic_json_w204_adversary_spec.cr spec/dynamic_bulk_part_w203_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w204.Z5VYmc/focused-final.log 2>&1",
+      "exit_code": 0,
+      "examples": 18,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log": "/private/tmp/crystal-click-w204.Z5VYmc/focused-final.log",
+      "sha256": "9c3ab3f73115ca0a118cac72da6f90557b8cb669ba02dcac5b306de04a0c7f94"
+    },
+    "baseline_red": {
+      "command": "crystal spec spec/recursive_dynamic_json_w204_red_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+      "exit_code": 1,
+      "examples": 1,
+      "errors": 1,
+      "observed": "Dynamic is outside the admitted physical bulk storage profile",
+      "scope": "Root guarded tool observation before production changes; legal mixed schema parsed first. Successor fixture supplies explicit Dynamic plan; missing plan remains rejection."
+    },
+    "seed": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_dynamic_json_w204_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w204.Z5VYmc/seeded-pq.log 2>&1",
+      "mutation": "Both Dynamic site rows_for_decode branches used selected physical P instead of logical Q.",
+      "exit_code": 1,
+      "examples": 2,
+      "errors": 2,
+      "observed": "binary codec input too short for declared metadata count",
+      "log": "/private/tmp/crystal-click-w204.Z5VYmc/seeded-pq.log",
+      "sha256": "1007bb9733e25f1d73128880a783147917f82e25bb2f95dd320f08ecfd7e775c",
+      "restored_before_final_gates": true
+    },
+    "transport_red": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_dynamic_json_w204_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w204.Z5VYmc/transport-red.log 2>&1",
+      "exit_code": 1,
+      "examples": 5,
+      "failures": 1,
+      "observed": "Expected ArgumentError but nothing was raised for a wider transport limit.",
+      "log": "/private/tmp/crystal-click-w204.Z5VYmc/transport-red.log",
+      "sha256": "9d9d6dddbf15d18ff7bee0a3df3cb0024a53247005a5e29b9aa41832955c76bc",
+      "successor_guard": "Reject differing transport limits/write direction before charges or source reads; final focused and affected gates are green."
+    },
+    "helper_debug_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_dynamic_json_w204.cr -o /private/tmp/crystal-click-w204.Z5VYmc/check-recursive-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w204.Z5VYmc/helper-debug.log 2>&1",
+    "helper_release_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_dynamic_json_w204.cr -o /private/tmp/crystal-click-w204.Z5VYmc/check-recursive-release --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w204.Z5VYmc/helper-release.log 2>&1",
+    "native_debug_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_recursive_dynamic_json_w204.rb --crystal-helper /private/tmp/crystal-click-w204.Z5VYmc/check-recursive-debug --evidence-root /private/tmp/crystal-click-w204-native-debug-qualified.spg4SW > /private/tmp/crystal-click-w204.Z5VYmc/native-debug.log 2>&1",
+    "native_release_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_recursive_dynamic_json_w204.rb --crystal-helper /private/tmp/crystal-click-w204.Z5VYmc/check-recursive-release --evidence-root /private/tmp/crystal-click-w204-native-release-qualified.u83AMi > /private/tmp/crystal-click-w204.Z5VYmc/native-release.log 2>&1",
+    "raw_audit_oracle_attack": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w204.Z5VYmc/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 /private/tmp/crystal-click-w204.Z5VYmc/audit_oracles.rb /private/tmp/crystal-click-w204-native-debug-qualified.spg4SW /private/tmp/crystal-click-w204-native-release-qualified.u83AMi > /private/tmp/crystal-click-w204.Z5VYmc/oracle-audit.log 2>&1",
+      "source": "/private/tmp/crystal-click-w204.Z5VYmc/audit_oracles.rb",
+      "source_sha256": "b635cbc7516f8d22971a8f4c80387f92d5786da1e5c54da4493b634e2e9dbca4",
+      "exit_code": 0,
+      "per_mode": {
+        "reader_controls": 16,
+        "native_table_controls": 24,
+        "oracle_mutants_rejected": 13
+      },
+      "mutants": [
+        "zero-Q site slot removal",
+        "physical P substituted for total child Q",
+        "physical P substituted for per-site Q",
+        "missing inherited ragged size1",
+        "missing with-size String lane",
+        "wrong helper nominal type",
+        "wrong later LC helper value",
+        "String-profile lane collapse",
+        "wrong later native Dynamic state",
+        "wrong later native child value",
+        "wrong native nominal type",
+        "lost native selected row",
+        "wrong manifest declared column count"
+      ],
+      "raw_process_records_authenticated": true,
+      "debug_release_generated_bytes_and_normalized_reports_equal": true,
+      "log": "/private/tmp/crystal-click-w204.Z5VYmc/oracle-audit.log",
+      "sha256": "7340da0caee295e509ce8859780ca33af0336ac27393073d176495b62d6edb79"
+    },
+    "ruby_checks": {
+      "commands": [
+        "/usr/bin/ruby -c scripts/probe_recursive_dynamic_json_w204.rb",
+        "/usr/bin/ruby scripts/probe_recursive_dynamic_json_w204.rb --self-test"
+      ],
+      "exit_codes": [
+        0,
+        0
+      ],
+      "signal": "Syntax OK; W204 Ruby fixture self-test passed, including mismatched manifest cardinality rejection."
+    },
+    "diff_check": "git diff --check exits 0",
+    "packet_validation": "JSON syntax and explicit field/source identity checks only. Skill's template and validate-landmark-graph.sh are absent in both installed package and repo; reused repository evidence-index convention, not a substantive proof-by-structure claim."
+  },
+  "native_scope": {
+    "cases": [
+      "root_tuple",
+      "array_tuple",
+      "ragged_array_tuple",
+      "lc_bulk_tuple"
+    ],
+    "profiles": [
+      "single_stream",
+      "with_size_stream"
+    ],
+    "directions": [
+      "Pinned stock-authored complete parts -> recursive column reader and typed table consumer",
+      "Library-authored complete parts -> direct stock ATTACH, CHECK and literal SELECT"
+    ],
+    "layout": "Wide/LZ4/plain adaptive mrk2, eight parents/four real P marks plus terminal mark; Object V3/one-bucket shared MAP and Dynamic V3/BASIC, UInt64 ordinary and shared String values.",
+    "windows": [
+      "full",
+      "first (Array carriers empty Q)",
+      "later",
+      "middle",
+      "final",
+      "end_zero"
+    ],
+    "per_mode": {
+      "case_profile_cells": 8,
+      "direct_library_attaches": 8,
+      "checks": 24,
+      "selected_literal_type_state_observations": 384,
+      "generated_files_unchanged": 364,
+      "payload_lane_counts": [
+        [
+          "root_tuple",
+          "single_stream",
+          13
+        ],
+        [
+          "root_tuple",
+          "with_size_stream",
+          16
+        ],
+        [
+          "array_tuple",
+          "single_stream",
+          14
+        ],
+        [
+          "array_tuple",
+          "with_size_stream",
+          17
+        ],
+        [
+          "ragged_array_tuple",
+          "single_stream",
+          15
+        ],
+        [
+          "ragged_array_tuple",
+          "with_size_stream",
+          18
+        ],
+        [
+          "lc_bulk_tuple",
+          "single_stream",
+          22
+        ],
+        [
+          "lc_bulk_tuple",
+          "with_size_stream",
+          27
+        ]
+      ]
+    },
+    "raw_summaries": [
+      {
+        "mode": "DEBUG",
+        "path": "/private/tmp/crystal-click-w204-native-debug-qualified.spg4SW/summary.json",
+        "sha256": "de3f6dde250357c49e9970eb9ba718c31846ffb29d6b17f793f71c5639c97386"
+      },
+      {
+        "mode": "RELEASE",
+        "path": "/private/tmp/crystal-click-w204-native-release-qualified.u83AMi/summary.json",
+        "sha256": "45a2f218ed4c53373618975334172ab975afac05ea3c3e100c8f3ebe694c3238"
+      }
+    ],
+    "whole_part_all_zero_Q_native_qualified": false
+  },
+  "continuity": {
+    "overall_goal": "Still active: all type/layout compatibility and MV/projections before optimization; no performance improvement/parity claim.",
+    "next_frontier": "Add a distinct stock-authored whole-part all-zero-Q witness, then remaining JSON-as-Dynamic-actual/wrapper and persisted-layout obligations; keep generic recursive codecs rather than per-combination serializers.",
+    "decay_triggers": [
+      "Any tested owner/spec/helper/oracle change",
+      "Source/runtime pin, profile/layout or dictionary schedule change",
+      "Dynamic owner construction/seam visibility or source-identity authority widening",
+      "Raw scratch evidence disappears"
+    ],
+    "refresh": "Rerun affected DEBUG/RELEASE and fresh pinned native captures with rebuilt helpers; repeat scoped adversary/raw audit.",
+    "failure_policy": "Reopen or narrow dependent compatibility claims; absence of a guard violation does not qualify the missing capability.",
+    "raw_evidence_retention": "Raw binaries, parts, logs and root audit source are local /private/tmp artifacts, not committed. Hashes are indexes and become non-replayable if scratch is removed.",
+    "no_push_performed": true
+  }
+}

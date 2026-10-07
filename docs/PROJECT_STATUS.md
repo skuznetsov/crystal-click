@@ -1,6 +1,34 @@
 # CrystalClick project status
 
-Current finite public-part frontier (W203, 2026-10-07): a generic direct
+Current finite recursive public-part frontier (W204, 2026-10-07): the existing
+Array/Tuple JSON reader, typed table consumer and complete-part writer compose
+JSON-free Dynamic-bearing siblings through the shared generic codecs. The
+writer takes explicit prepared Dynamic site plans; the reader discovers actual
+rosters parent-first and reuses bound physical owners. Physical parent P marks
+and child occurrence Q schedules remain distinct, including zero-Q marks.
+Inherited Array names, descriptor depth, LC replay and cumulative budgets are
+preserved. `DynamicBulkSiteReader` and the descriptor-preflight receipt have
+their own files; the standalone Dynamic column facade delegates to the same
+site owner. No serializer per Cartesian type product was added.
+
+The same 180 affected files pass 1121 DEBUG and 1121 RELEASE examples; the
+focused gate passes 18. All have no failures/errors/pending. Four mixed carriers
+under two String profiles pass fresh stock-to-library and library-to-stock
+native gates in both modes: eight direct ATTACHes, 24 CHECKs and 384 independent
+selected literal/type/state observations per mode. Thirteen oracle mutations
+are rejected per mode; a seeded production P/Q defect breaks both positives
+before restoration. All 364 generated files and normalized helper reports
+match across modes. Scoped verdict: ROBUST.
+
+Whole-part all-zero-Q has library-only tests, not a separate stock witness.
+JSON-as-Dynamic-actual, additional wrapper/layout contracts, broader dictionary
+schedules, general publication/catalog dispatch, full MV/projections and
+repository-wide decomposition remain open. Performance is still deferred and
+the overall goal is not complete. Details:
+[RECURSIVE_DYNAMIC_JSON_STORAGE_FRONTIER.md](RECURSIVE_DYNAMIC_JSON_STORAGE_FRONTIER.md),
+`.landmark/evidence/recursive-dynamic-json-storage-w204.json`.
+
+Previous finite public-part frontier (W203, 2026-10-07): a generic direct
 Dynamic-bearing complete-part reader/writer reuses the recursive BinaryBulk
 owners. `write_uint64_dynamic_bulk_part` accepts an explicit per-site structure
 map; `DynamicBulkColumnReader` discovers persisted sites parent-first, including

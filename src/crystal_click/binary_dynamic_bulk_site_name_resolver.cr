@@ -4,27 +4,114 @@ module CrystalClick
   # Dynamic site, so this resolver follows only the requested root-to-site
   # path and consults already-parsed ancestor structures.
   class BinaryDynamicBulkSiteNameResolver
+    private struct EscapedPrefix
+      getter value : String
+
+      private def initialize(value : String)
+        PhysicalStreamName.validate_escaped_prefix(value)
+        @value = String.new(value.to_slice)
+      end
+
+      def self.validated(value : String) : EscapedPrefix
+        new(value)
+      end
+    end
+
     @type : BinaryDataType
     @root_prefix : String
+    @initial_array_level : UInt64
+    @initial_descriptor_depth : Int32
     @limits : BinaryCodecLimits
     @context : PhysicalStreamPlanContext
     @type_name_budget : BinaryCodecBudget
+    @descriptor_preflight : BinaryDynamicBulkDescriptorPreflight?
+
+    def descriptor_preflight : BinaryDynamicBulkDescriptorPreflight
+      @descriptor_preflight || raise ArgumentError.new("Dynamic resolver has no shared descriptor preflight")
+    end
 
     def initialize(type : BinaryDataType, column_name : String, @limits : BinaryCodecLimits)
       # Public discovery must not call recursive summary predicates or render a
       # path before the complete caller descriptor has a bounded name walk.
       budget = BinaryCodecBudget.new(@limits)
-      bounds = BinaryTypeNameBudget.measure(type, budget)
-      BinaryTypeNameBudget.materialize(type, budget, bounds)
+      @descriptor_preflight = BinaryDynamicBulkDescriptorPreflight.admit(type, budget)
       @context = PhysicalStreamPlanContext.new(@limits)
       escaped_size = PhysicalStreamName.escaped_size(column_name)
       @context.preflight_name_bytes(escaped_size)
       @root_prefix = PhysicalStreamName.escape(column_name, @context)
       @context.charge_name_bytes(escaped_size)
+      @initial_array_level = 0_u64
+      @initial_descriptor_depth = 1_i32
       # This resolver is used while reading persisted structure lanes. Keep
       # malformed source metadata in the corruption domain rather than
       # reporting a caller-side write rejection.
       @type_name_budget = BinaryCodecBudget.new(@limits)
+      @type = type
+    end
+
+    # Composition entry point for a schema site whose outer physical prefix
+    # is already escaped and whose Array numbering is inherited from the
+    # recursive storage tree.
+    def self.from_escaped_prefix(
+      type : BinaryDataType,
+      escaped_prefix : String,
+      initial_array_level : UInt64,
+      limits : BinaryCodecLimits,
+      codec_budget : BinaryCodecBudget? = nil,
+      context : PhysicalStreamPlanContext? = nil,
+      initial_descriptor_depth : Int32 = 1,
+    ) : BinaryDynamicBulkSiteNameResolver
+      selected_context = context || PhysicalStreamPlanContext.new(limits)
+      selected_budget = codec_budget || BinaryCodecBudget.new(limits)
+      unless selected_budget.limits.max_depth == limits.max_depth &&
+             selected_budget.limits.max_nodes == limits.max_nodes &&
+             selected_budget.limits.max_elements == limits.max_elements &&
+             selected_budget.limits.max_bytes == limits.max_bytes
+        raise ArgumentError.new("Dynamic resolver codec budget differs from its limits")
+      end
+      unless selected_context.limits.max_depth == limits.max_depth &&
+             selected_context.limits.max_nodes == limits.max_nodes &&
+             selected_context.limits.max_elements == limits.max_elements &&
+             selected_context.limits.max_bytes == limits.max_bytes
+        raise ArgumentError.new("Dynamic resolver physical context differs from its limits")
+      end
+      if initial_descriptor_depth <= 0 || initial_descriptor_depth > limits.max_depth
+        raise UnsupportedFormatError.new("Dynamic resolver initial descriptor depth exceeds the configured limit")
+      end
+      if initial_array_level > UInt64::MAX - limits.max_depth.to_u64
+        raise UnsupportedFormatError.new("Dynamic resolver initial Array level overflows the name coordinate")
+      end
+
+      # The site prefix is already escaped. Bound and charge its retained copy
+      # before validating/materializing the detached resolver token.
+      selected_context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
+      PhysicalStreamName.validate_escaped_prefix(escaped_prefix)
+      selected_context.charge_name_bytes(escaped_prefix.bytesize.to_u64)
+      descriptor_preflight = BinaryDynamicBulkDescriptorPreflight.admit(
+        type, selected_budget, initial_descriptor_depth
+      )
+      new(
+        type, EscapedPrefix.validated(escaped_prefix), initial_array_level,
+        initial_descriptor_depth, limits, selected_context, selected_budget,
+        descriptor_preflight
+      )
+    end
+
+    private def initialize(
+      type : BinaryDataType,
+      escaped_prefix : EscapedPrefix,
+      @initial_array_level : UInt64,
+      @initial_descriptor_depth : Int32,
+      @limits : BinaryCodecLimits,
+      @context : PhysicalStreamPlanContext,
+      @type_name_budget : BinaryCodecBudget,
+      @descriptor_preflight : BinaryDynamicBulkDescriptorPreflight,
+    )
+      if @initial_descriptor_depth <= 0 || @initial_descriptor_depth > @limits.max_depth
+        raise UnsupportedFormatError.new("Dynamic resolver initial descriptor depth exceeds the configured limit")
+      end
+      # The token already owns the single charged copy made by EscapedPrefix.
+      @root_prefix = escaped_prefix.value
       @type = type
     end
 
@@ -33,8 +120,8 @@ module CrystalClick
     # in parent-first order; no unknown arm name is guessed.
     def structure_stream_name(target_path : String, structures : Hash(String, DynamicStructure)) : String
       resolved = find_structure_name(
-        @type, "root", @root_prefix, 0_u64, target_path, structures,
-        @context, 1
+        @type, "root", @root_prefix, @initial_array_level, target_path, structures,
+        @context, @initial_descriptor_depth
       )
       resolved || raise(CorruptPartError.new("Dynamic structure site has no physical name"))
     end

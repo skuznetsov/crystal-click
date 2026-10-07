@@ -1,8 +1,8 @@
 module CrystalClick
   # Complete, collision-checked physical roster for the recursive Tuple/Array
   # storage profile. JSON sites retain their Object owner; JSON-free leaves
-  # retain their BinaryBulk owner. The plan binds every structural site before
-  # any row payload is encoded.
+  # retain their BinaryBulk or Dynamic owner. The plan binds every structural
+  # site before any row payload is encoded.
   class RecursiveStorageColumnPlan
     struct ObjectSite
       getter key : String
@@ -27,6 +27,27 @@ module CrystalClick
       end
     end
 
+    struct DynamicSite
+      getter key : String
+      getter prefix : String
+      getter type : BinaryDataType
+      getter plan : BinaryDynamicBulkPlan
+      getter physical : BinaryDynamicBulkPhysicalPlan
+      getter array_level : UInt64
+      getter descriptor_depth : Int32
+
+      def initialize(
+        @key : String,
+        @prefix : String,
+        @type : BinaryDataType,
+        @plan : BinaryDynamicBulkPlan,
+        @physical : BinaryDynamicBulkPhysicalPlan,
+        @array_level : UInt64,
+        @descriptor_depth : Int32,
+      )
+      end
+    end
+
     struct ArraySite
       getter key : String
       getter prefix : String
@@ -41,6 +62,7 @@ module CrystalClick
     @schema : StorageColumnSchema
     @object_sites : Array(ObjectSite)
     @bulk_sites : Array(BulkSite)
+    @dynamic_sites : Array(DynamicSite)
     @array_sites : Array(ArraySite)
     @physical_stream_names : Array(String)
     @file_names : Array(String)
@@ -52,6 +74,7 @@ module CrystalClick
     @frame_bytes : Int32
     @limits : BinaryCodecLimits
     @transport_limits : CompressedStreamLimits
+    @dynamic_readers : Hash(String, DynamicBulkSiteReader)?
 
     def self.for_column(
       column_name : String,
@@ -64,8 +87,37 @@ module CrystalClick
       frame_bytes : Int = 4096,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      dynamic_plans : Hash(String, BinaryDynamicBulkPlan) = Hash(String, BinaryDynamicBulkPlan).new,
     ) : RecursiveStorageColumnPlan
-      new(column_name, schema, object_plans, profile, shared_profile, hashed, mode, frame_bytes, limits, transport_limits)
+      new(column_name, schema, object_plans, profile, shared_profile, hashed, mode, frame_bytes, limits, transport_limits, dynamic_plans, nil, nil)
+    end
+
+    # Reader-only composition path. It preserves the already discovered
+    # physical bindings and validates them against schema-derived site facts;
+    # writer callers cannot supply arbitrary prebound plans through for_column.
+    def self.for_column_with_dynamic_readers(
+      column_name : String,
+      schema : StorageColumnSchema,
+      object_plans : Hash(String, ObjectDocumentPlan),
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      hashed : Bool,
+      mode : UInt64,
+      frame_bytes : Int,
+      limits : BinaryCodecLimits,
+      transport_limits : CompressedStreamLimits,
+      dynamic_readers : Hash(String, DynamicBulkSiteReader),
+      name_context : PhysicalStreamPlanContext,
+    ) : RecursiveStorageColumnPlan
+      dynamic_plans = Hash(String, BinaryDynamicBulkPlan).new(initial_capacity: dynamic_readers.size)
+      dynamic_readers.each do |key, reader|
+        dynamic_plans[String.new(key.to_slice)] = reader.plan
+      end
+      new(
+        column_name, schema, object_plans, profile, shared_profile, hashed,
+        mode, frame_bytes, limits, transport_limits, dynamic_plans,
+        dynamic_readers, name_context
+      )
     end
 
     def initialize(
@@ -79,7 +131,21 @@ module CrystalClick
       frame_bytes : Int = 4096,
       @limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       @transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      dynamic_plans : Hash(String, BinaryDynamicBulkPlan) = Hash(String, BinaryDynamicBulkPlan).new,
+      dynamic_readers : Hash(String, DynamicBulkSiteReader)? = nil,
+      shared_name_context : PhysicalStreamPlanContext? = nil,
     )
+      @dynamic_readers = if readers = dynamic_readers
+                           detached_readers = Hash(String, DynamicBulkSiteReader).new(initial_capacity: readers.size)
+                           readers.each do |key, reader|
+                             detached_key = String.new(key.to_slice)
+                             if detached_readers.has_key?(detached_key)
+                               raise ArgumentError.new("discovered Dynamic site keys must be unique")
+                             end
+                             detached_readers[detached_key] = reader
+                           end
+                           detached_readers
+                         end
       raise ArgumentError.new("recursive storage column name must be nonempty") if column_name.empty?
       unless frame_bytes > 0 && frame_bytes <= Int32::MAX && frame_bytes >= DynamicDiscriminatorCodec::HEADER_BYTES
         raise ArgumentError.new("frame size must contain the complete Dynamic discriminator prefix")
@@ -117,22 +183,51 @@ module CrystalClick
         detached_plans[detached_key] = object_plan
       end
 
-      context = PhysicalStreamPlanContext.new(@limits)
+      expected_dynamic_sites = dynamic_site_keys(@schema, "root")
+      supplied_dynamic_sites = dynamic_plans.keys
+      unless supplied_dynamic_sites.sort == expected_dynamic_sites.sort
+        raise ArgumentError.new("Dynamic plan keys must exactly match recursive Dynamic site keys")
+      end
+      if readers = @dynamic_readers
+        unless readers.keys.sort == expected_dynamic_sites.sort
+          raise ArgumentError.new("discovered Dynamic reader keys must exactly match recursive Dynamic site keys")
+        end
+      end
+      detached_dynamic_plans = Hash(String, BinaryDynamicBulkPlan).new(initial_capacity: dynamic_plans.size)
+      dynamic_plans.each do |key, dynamic_plan|
+        detached_key = String.new(key.to_slice)
+        if detached_dynamic_plans.has_key?(detached_key)
+          raise ArgumentError.new("recursive Dynamic site keys must be unique")
+        end
+        detached_dynamic_plans[detached_key] = dynamic_plan
+      end
+
+      context = shared_name_context || PhysicalStreamPlanContext.new(@limits)
+      unless same_limits?(context.limits, @limits)
+        raise ArgumentError.new("recursive physical context differs from its codec limits")
+      end
+      dynamic_depth_budget = BinaryCodecBudget.new(@limits, true)
       context.preflight_name_bytes(PhysicalStreamName.escaped_size(@column_name))
       root_prefix = PhysicalStreamName.escape(@column_name, context)
       object_sites = [] of ObjectSite
       bulk_sites = [] of BulkSite
+      dynamic_sites = [] of DynamicSite
       array_sites = [] of ArraySite
       unless @schema.tuple? || @schema.array?
         raise UnsupportedFormatError.new("recursive storage root must be a Tuple or Array")
       end
-      build_sites(@schema, root_prefix, "root", 0_u64, detached_plans, context, object_sites, bulk_sites, array_sites)
+      build_sites(
+        @schema, root_prefix, "root", 0_u64, 1_i32, detached_plans,
+        detached_dynamic_plans, context, dynamic_depth_budget, object_sites, bulk_sites,
+        dynamic_sites, array_sites
+      )
 
       unless object_sites.map(&.key).sort! == expected_sites
         raise UnsupportedFormatError.new("recursive physical Object site roster differs from its schema")
       end
       @object_sites = object_sites
       @bulk_sites = bulk_sites
+      @dynamic_sites = dynamic_sites
       @array_sites = array_sites
       unless @array_sites.map(&.key).sort! == @schema.array_site_keys.sort!
         raise UnsupportedFormatError.new("recursive physical Array site roster differs from its schema")
@@ -149,6 +244,11 @@ module CrystalClick
         end
       end
       @bulk_sites.each do |site|
+        site.physical.stream_names.each_value do |name|
+          append_unique_logical!(logical_names, seen_logical, name)
+        end
+      end
+      @dynamic_sites.each do |site|
         site.physical.stream_names.each_value do |name|
           append_unique_logical!(logical_names, seen_logical, name)
         end
@@ -217,6 +317,18 @@ module CrystalClick
       BulkSite.new(String.new(site.key.to_slice), String.new(site.prefix.to_slice), site.type, site.physical, site.array_level)
     end
 
+    def dynamic_site_count : Int32
+      @dynamic_sites.size
+    end
+
+    def dynamic_site_at(index : Int) : DynamicSite
+      site = @dynamic_sites[index]
+      DynamicSite.new(
+        String.new(site.key.to_slice), String.new(site.prefix.to_slice), site.type,
+        site.plan, site.physical, site.array_level, site.descriptor_depth
+      )
+    end
+
     def array_site_count : Int32
       @array_sites.size
     end
@@ -275,10 +387,14 @@ module CrystalClick
       prefix : String,
       site_key : String,
       array_level : UInt64,
+      descriptor_depth : Int32,
       object_plans : Hash(String, ObjectDocumentPlan),
+      dynamic_plans : Hash(String, BinaryDynamicBulkPlan),
       context : PhysicalStreamPlanContext,
+      dynamic_depth_budget : BinaryCodecBudget,
       objects : Array(ObjectSite),
       bulk : Array(BulkSite),
+      dynamic : Array(DynamicSite),
       arrays : Array(ArraySite),
     ) : Nil
       if object_schema = schema.object_schema_or_nil
@@ -291,6 +407,37 @@ module CrystalClick
         return nil
       end
       if bulk_type = schema.bulk_type_or_nil
+        if bulk_type.contains_dynamic?
+          dynamic_plan = dynamic_plans[site_key]? || raise(ArgumentError.new("recursive Dynamic site has no prepared plan"))
+          unless dynamic_plan.type == bulk_type && dynamic_plan.profile == @profile
+            raise ArgumentError.new("recursive Dynamic prepared plan differs from its declared type or profile")
+          end
+          if dynamic_plan.type.contains_json?
+            raise UnsupportedFormatError.new("JSON is outside the admitted recursive Dynamic profile")
+          end
+          unless @dynamic_readers
+            dynamic_plan.validate_inherited_depth!(descriptor_depth, dynamic_depth_budget)
+          end
+          physical = if readers = @dynamic_readers
+                       reader = readers[site_key]? || raise(ArgumentError.new("discovered Dynamic site reader is missing"))
+                       unless reader.matches_site?(
+                                bulk_type, prefix, site_key, array_level, descriptor_depth,
+                                @profile, dynamic_plan, @limits, @transport_limits
+                              )
+                         raise CorruptPartError.new("discovered Dynamic reader identity differs from its recursive schema site")
+                       end
+                       reader.physical
+                     else
+                       BinaryDynamicBulkPhysicalPlan.from_escaped_prefix(
+                         dynamic_plan, prefix, @limits, context, array_level
+                       )
+                     end
+          dynamic << DynamicSite.new(
+            String.new(site_key.to_slice), String.new(prefix.to_slice), bulk_type,
+            dynamic_plan, physical, array_level, descriptor_depth
+          )
+          return nil
+        end
         physical = BinaryBulkPhysicalPlan.from_escaped_prefix(
           bulk_type, prefix, @profile, @limits, context, array_level
         )
@@ -307,7 +454,7 @@ module CrystalClick
         context.charge_name_bytes(size_name.bytesize.to_u64)
         arrays << ArraySite.new(String.new(site_key.to_slice), String.new(prefix.to_slice), array_level, size_name)
         child_key = String.build { |io| io << site_key << "/array[0]" }
-        build_sites(schema.child_at(0), prefix, child_key, array_level + 1_u64, object_plans, context, objects, bulk, arrays)
+        build_sites(schema.child_at(0), prefix, child_key, array_level + 1_u64, descriptor_depth + 1, object_plans, dynamic_plans, context, dynamic_depth_budget, objects, bulk, dynamic, arrays)
         return nil
       end
 
@@ -318,7 +465,28 @@ module CrystalClick
         raw_field = schema.named_tuple? ? schema.field_name_at(index) : (index + 1).to_s
         child_prefix = PhysicalStreamName.append_escaped_field(prefix, raw_field, context)
         child_key = String.build { |io| io << site_key << "/tuple[" << index << ']' }
-        build_sites(schema.child_at(index), child_prefix, child_key, array_level, object_plans, context, objects, bulk, arrays)
+        build_sites(schema.child_at(index), child_prefix, child_key, array_level, descriptor_depth + 1, object_plans, dynamic_plans, context, dynamic_depth_budget, objects, bulk, dynamic, arrays)
+      end
+      nil
+    end
+
+    private def dynamic_site_keys(schema : StorageColumnSchema, key : String) : Array(String)
+      output = [] of String
+      append_dynamic_site_keys(schema, key, output)
+      output
+    end
+
+    private def append_dynamic_site_keys(schema : StorageColumnSchema, key : String, output : Array(String)) : Nil
+      if type = schema.bulk_type_or_nil
+        output << String.new(key.to_slice) if type.contains_dynamic?
+      elsif schema.array?
+        append_dynamic_site_keys(schema.child_at(0), String.build { |io| io << key << "/array[0]" }, output)
+      elsif schema.tuple?
+        schema.child_count.times do |index|
+          append_dynamic_site_keys(
+            schema.child_at(index), String.build { |io| io << key << "/tuple[" << index << ']' }, output
+          )
+        end
       end
       nil
     end

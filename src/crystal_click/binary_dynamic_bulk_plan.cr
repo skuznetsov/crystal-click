@@ -142,6 +142,36 @@ module CrystalClick
       @site_paths.size
     end
 
+    # Validate a prepared site's complete declared-plus-actual descriptor
+    # tree at the depth inherited from its enclosing storage schema. The
+    # structure owners are separate from the nominal Dynamic descriptor, so
+    # their actual types must be checked explicitly as well.
+    def validate_inherited_depth!(initial_depth : Int32, budget : BinaryCodecBudget) : Nil
+      unless budget.writing?
+        raise ArgumentError.new("Dynamic writer depth validation requires a writing budget")
+      end
+      context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
+      context.validate_type_tree(@type, initial_depth)
+      depth_offset = initial_depth - 1
+      @site_paths.each do |path|
+        site = @sites[path]
+        actual_depth64 = site.depth.to_i64 + depth_offset.to_i64 + 1_i64
+        if actual_depth64 > Int32::MAX.to_i64
+          raise UnsupportedFormatError.new("Dynamic actual descriptor depth exceeds Int32")
+        end
+        actual_depth = actual_depth64.to_i
+        # The implicit SharedVariant String arm exists even for an empty
+        # actual roster and therefore inherits the storage-site depth too.
+        BinaryTypeNameBudget.measure(BinaryDataType.primitive("String"), budget, actual_depth)
+        site.structure.type_count.times do |index|
+          # Measurement validates every descriptor edge and inherited depth
+          # without materializing another SQL name or codec representation.
+          BinaryTypeNameBudget.measure(site.structure.type_at(index), budget, actual_depth)
+        end
+      end
+      nil
+    end
+
     def site_paths : Array(String)
       copy_strings(@site_paths)
     end
@@ -385,14 +415,20 @@ module CrystalClick
       budget : BinaryCodecBudget,
       loader : Proc(String, Hash(String, DynamicStructure), BinaryCodecBudget, Bytes),
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      initial_depth : Int32 = 1,
+      descriptor_preflight : BinaryDynamicBulkDescriptorPreflight? = nil,
     ) : BinaryDynamicBulkPlan
       if budget.writing?
         raise ArgumentError.new("Dynamic structure stream decode requires a read-direction budget")
       end
 
-      preflight_dynamic_descriptor!(type, budget.limits)
       context = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
-      context.validate_type_tree(type)
+      if preflight = descriptor_preflight
+        preflight.consume!(type, budget, initial_depth)
+      else
+        preflight_dynamic_descriptor!(type, budget.limits, budget, initial_depth)
+      end
+      context.validate_type_tree(type, initial_depth)
       unless type.contains_dynamic?
         raise ArgumentError.new("Dynamic bulk plan requires at least one Dynamic site")
       end
@@ -400,7 +436,7 @@ module CrystalClick
       sites = Hash(String, Site).new
       parsed_structures = Hash(String, DynamicStructure).new
       discover_read_sites(
-        type, "root", 1, nil, loader, parsed_structures, context, sites, true
+        type, "root", initial_depth, 1, nil, loader, parsed_structures, context, sites, true
       )
       decoded_plan(type, profile, context, sites, nil)
     end
@@ -427,7 +463,7 @@ module CrystalClick
 
       sites = Hash(String, Site).new
       parsed_structures = Hash(String, DynamicStructure).new
-      discover_read_sites(type, "root", 1, streams, nil, parsed_structures, context, sites, include_statistics)
+      discover_read_sites(type, "root", 1, 1, streams, nil, parsed_structures, context, sites, include_statistics)
       decoded_plan(type, profile, context, sites, streams.site_count)
     end
 
@@ -480,12 +516,17 @@ module CrystalClick
       new(Prepared.new(type, profile, sites, site_paths, data_roles, structure_roles, ordinary_roles, qbit_sites, low_cardinality_sites, ancestor_size_roles, shape_roles, schedule_metrics[:grids], data_role_count, ordinary_role_count))
     end
 
-    private def self.preflight_dynamic_descriptor!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil
+    private def self.preflight_dynamic_descriptor!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      shared_budget : BinaryCodecBudget? = nil,
+      initial_depth : Int32 = 1,
+    ) : Nil
       # contains_dynamic? is recursive over descriptor children. Bound its full
       # type-name/tree walk first, even when callers enter through this public
       # loader instead of the part column reader.
-      budget = BinaryCodecBudget.new(limits)
-      bounds = BinaryTypeNameBudget.measure(type, budget)
+      budget = shared_budget || BinaryCodecBudget.new(limits)
+      bounds = BinaryTypeNameBudget.measure(type, budget, initial_depth)
       BinaryTypeNameBudget.materialize(type, budget, bounds)
       nil
     end
@@ -620,6 +661,7 @@ module CrystalClick
       type : BinaryDataType,
       path : String,
       depth : Int32,
+      local_depth : Int32,
       streams : BinaryDynamicStructureStreams?,
       loader : Proc(String, Hash(String, DynamicStructure), BinaryCodecBudget, Bytes)?,
       parsed_structures : Hash(String, DynamicStructure),
@@ -661,32 +703,35 @@ module CrystalClick
         structure_context.ensure_consumed
         charge_shared_variant_arm(context, depth + 1)
         arms = canonical_arm_types(structure, context, depth + 1)
-        sites[path] = Site.new(type, structure, depth, arms, statistics_offset)
+        # Discovery budgets and parses at the inherited absolute depth, while
+        # the retained plan remains local to its Dynamic root so it can be
+        # rebound at another recursive storage site without double-rebasing.
+        sites[path] = Site.new(type, structure, local_depth, arms, statistics_offset)
         parsed_structures[path] = structure
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(arm, child, depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+          discover_read_sites(arm, child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
       when BinaryDataType::TAG_NULLABLE
-        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        discover_read_sites(type.child_at(0), path, depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
         end
       when BinaryDataType::TAG_MAP
         key_path = child_path(context, path, ".elements.field.0")
-        discover_read_sites(type.child_at(0), key_path, depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(0), key_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
         value_path = child_path(context, path, ".elements.field.1")
-        discover_read_sites(type.child_at(1), value_path, depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+        discover_read_sites(type.child_at(1), value_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
       when BinaryDataType::TAG_VARIANT
         type.child_count.times do |index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
+          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics)
         end
       end
       nil

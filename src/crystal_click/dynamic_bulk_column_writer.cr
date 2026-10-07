@@ -12,11 +12,16 @@ module CrystalClick
       transport_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget? = nil,
       transport_budget : CompressedStreamBudget? = nil,
+      site_grid : StorageOccurrenceGrid? = nil,
     ) : Hash(String, CompressedMarkFiles)
       unless physical.same_prepared_plan?(plan)
         raise ArgumentError.new("Dynamic physical plan does not retain the supplied prepared plan")
       end
-      validate_parent_grid!(granules, rows_per_mark)
+      if grid = site_grid
+        validate_site_grid!(granules, rows_per_mark, grid)
+      else
+        validate_parent_grid!(granules, rows_per_mark)
+      end
       validate_frame_bytes!(frame_bytes, transport_limits, plan, physical)
 
       # Structures and ordinary Dynamic data consume one operation-local codec
@@ -128,6 +133,37 @@ module CrystalClick
       pairs
     end
 
+    # Encodes a Dynamic leaf embedded in the recursive Tuple/Array profile.
+    # The returned .mrk2 rows remain the physical P grid while BinaryBulk
+    # offsets and decoder schedules use the inherited logical Q grid.
+    def self.encode_at_site(
+      plan : BinaryDynamicBulkPlan,
+      physical : BinaryDynamicBulkPhysicalPlan,
+      granules : Array(Array(BinaryValue)),
+      grid : StorageOccurrenceGrid,
+      frame_bytes : Int,
+      limits : BinaryCodecLimits,
+      transport_limits : CompressedStreamLimits,
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+    ) : Hash(String, CompressedMarkFiles)
+      # The grid is borrowed from the recursive traversal. Revalidate and
+      # charge it to this codec operation, then reserve the detached physical
+      # row vector before allocating it. Logical Q rows are not physical P
+      # rows and remain available only through the grid below.
+      grid.validate_for!(granules.size, codec_budget)
+      codec_budget.ensure_future_nodes(grid.mark_count.to_u64 + 1_u64)
+      codec_budget.ensure_future_elements(grid.mark_count.to_u64)
+      codec_budget.charge_node
+      codec_budget.charge_elements(grid.mark_count.to_u64)
+      physical_rows = Array(UInt64).new(grid.mark_count)
+      grid.mark_count.times { |mark| physical_rows << grid.physical_rows_at(mark) }
+      encode(
+        plan, physical, granules, physical_rows, frame_bytes, limits,
+        transport_limits, codec_budget, transport_budget, grid
+      )
+    end
+
     private def self.validate_frame_bytes!(
       frame_bytes : Int,
       limits : CompressedStreamLimits,
@@ -165,6 +201,36 @@ module CrystalClick
         unless rows_per_mark[mark] == rows.size.to_u64
           raise ArgumentError.new("Dynamic parent row counts differ from the value granules")
         end
+      end
+      nil
+    end
+
+    private def self.validate_site_grid!(
+      granules : Array(Array(BinaryValue)),
+      physical_rows : Array(UInt64),
+      grid : StorageOccurrenceGrid,
+    ) : Nil
+      if grid.mark_count <= 0 || grid.mark_count > WidePartWriter::MAX_MARKS
+        raise ArgumentError.new("Dynamic physical site requires a bounded nonempty parent grid")
+      end
+      unless granules.size == grid.mark_count && physical_rows.size == grid.mark_count
+        raise ArgumentError.new("Dynamic logical values differ from their inherited mark grid")
+      end
+      total = 0_u64
+      grid.mark_count.times do |mark|
+        physical = grid.physical_rows_at(mark)
+        logical = grid.logical_occurrences_at(mark)
+        unless physical_rows[mark] == physical && physical > 0_u64 && physical <= WidePartWriter::MAX_ROWS_PER_MARK.to_u64
+          raise ArgumentError.new("Dynamic physical rows differ from the inherited parent grid")
+        end
+        values = granules[mark]
+        unless values.size.to_u64 == logical && values.size <= Int32::MAX
+          raise ArgumentError.new("Dynamic values differ from the inherited logical occurrence grid")
+        end
+        if logical > Int32::MAX.to_u64 - total
+          raise ArgumentError.new("Dynamic flattened value domain exceeds Int32")
+        end
+        total += logical
       end
       nil
     end

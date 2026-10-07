@@ -39,11 +39,12 @@ module CrystalClick
         metadata_version : Int64 = 0_i64,
         limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
         transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+        dynamic_plans : Hash(String, BinaryDynamicBulkPlan) = Hash(String, BinaryDynamicBulkPlan).new,
       ) : String
         input = preflight(
           destination, key_name, keys, value_name, schema, object_plans,
           granules, rows_per_mark, mode, profile, shared_profile,
-          frame_bytes, metadata_version, limits, transport_limits
+          frame_bytes, metadata_version, limits, transport_limits, dynamic_plans
         )
 
         # The plan binds every structural site and the entire physical/file
@@ -102,6 +103,7 @@ module CrystalClick
         metadata_version : Int64,
         limits : BinaryCodecLimits,
         transport_limits : CompressedStreamLimits,
+        dynamic_plans : Hash(String, BinaryDynamicBulkPlan),
       ) : InputPlan
         ensure_supported_platform!
         validate_column_name!(key_name)
@@ -136,7 +138,7 @@ module CrystalClick
 
         column_plan = RecursiveStorageColumnPlan.for_column(
           value_name, schema, object_plans, profile, shared_profile, true,
-          mode, frame_bytes, limits, transport_limits
+          mode, frame_bytes, limits, transport_limits, dynamic_plans: dynamic_plans
         )
         expected_files = expected_file_roster(column_plan.file_names, key_name)
         checksum_count = column_plan.physical_stream_names.size.to_i64 * 2_i64 + 5_i64

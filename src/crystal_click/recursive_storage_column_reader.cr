@@ -25,6 +25,7 @@ module CrystalClick
     @plan : RecursiveStorageColumnPlan
     @object_descriptors : Hash(String, ObjectDocumentFileDescriptor)
     @bulk_grids : Hash(String, BulkGridSet)
+    @dynamic_readers : Hash(String, DynamicBulkSiteReader)
     @array_frames : Hash(String, StorageArrayOccurrenceFrame)
     @array_size_names : Hash(String, String)
     @object_domain_grids : Hash(String, StorageOccurrenceGrid)
@@ -99,6 +100,7 @@ module CrystalClick
       name_context = PhysicalStreamPlanContext.new(@limits)
       descriptors = Hash(String, ObjectDocumentFileDescriptor).new
       object_plans = Hash(String, ObjectDocumentPlan).new
+      dynamic_readers = Hash(String, DynamicBulkSiteReader).new
       root_prefix = PhysicalStreamName.escape(@column_name, name_context)
       preinspected = Hash(String, ObjectDocumentFileDescriptor).new
 
@@ -145,6 +147,7 @@ module CrystalClick
         root_prefix,
         "root",
         0_u64,
+        1_i32,
         root_grid,
         rows,
         rows,
@@ -155,12 +158,13 @@ module CrystalClick
         array_size_names,
         object_domain_grids,
         site_domain_rows,
+        dynamic_readers,
         codec_budget,
         name_context,
         transport_budget,
       )
 
-      @plan = RecursiveStorageColumnPlan.for_column(
+      @plan = RecursiveStorageColumnPlan.for_column_with_dynamic_readers(
         @column_name,
         expected_schema,
         object_plans,
@@ -174,6 +178,8 @@ module CrystalClick
         4096,
         @limits,
         @transport_limits,
+        dynamic_readers,
+        name_context,
       )
 
       bulk_grids = Hash(String, BulkGridSet).new
@@ -219,6 +225,7 @@ module CrystalClick
       validate_object_descriptors!(descriptors)
       @object_descriptors = descriptors
       @bulk_grids = bulk_grids
+      @dynamic_readers = dynamic_readers
       @array_frames = array_frames
       @array_size_names = array_size_names
       @object_domain_grids = object_domain_grids
@@ -228,7 +235,7 @@ module CrystalClick
       @mark_count = rows.size.to_i32
       @physical_stream_names = @plan.physical_stream_names
       @selected_checksum_names = @plan.file_names
-      @logical_read_bytes = logical_bytes(descriptors, bulk_grids, array_frames)
+      @logical_read_bytes = logical_bytes(descriptors, bulk_grids, dynamic_readers, array_frames)
     end
 
     def schema_declaration : String
@@ -382,6 +389,22 @@ module CrystalClick
           end
         end
         bulk_rows[String.new(site.key.to_slice)] = decoded
+      end
+
+      @plan.dynamic_site_count.times do |site_index|
+        site = @plan.dynamic_site_at(site_index)
+        reader = @dynamic_readers[site.key]? || raise(CorruptPartError.new("recursive Dynamic site has no discovered physical reader"))
+        selected = reader.read_marks(first_mark, mark_count, codec_budget, transport_budget)
+        unless selected.size == mark_count
+          raise CorruptPartError.new("bounded recursive Dynamic read returned the wrong mark count")
+        end
+        site_rows = @site_domain_rows[site.key]? || raise(CorruptPartError.new("recursive Dynamic site has no logical row schedule"))
+        selected.each_with_index do |mark_values, index|
+          unless mark_values.size.to_u64 == site_rows[first_mark + index]
+            raise CorruptPartError.new("bounded recursive Dynamic read returned the wrong occurrence row count")
+          end
+        end
+        bulk_rows[String.new(site.key.to_slice)] = selected
       end
 
       result = Array(Array(StorageColumnValue)).new(mark_count)
@@ -598,6 +621,7 @@ module CrystalClick
       prefix : String,
       key : String,
       array_level : UInt64,
+      descriptor_depth : Int32,
       domain_grid : StorageOccurrenceGrid,
       root_physical_rows : Array(UInt64),
       domain_rows : Array(UInt64),
@@ -608,6 +632,7 @@ module CrystalClick
       array_size_names : Hash(String, String),
       object_domain_grids : Hash(String, StorageOccurrenceGrid),
       site_domain_rows : Hash(String, Array(UInt64)),
+      dynamic_readers : Hash(String, DynamicBulkSiteReader),
       codec_budget : BinaryCodecBudget,
       name_context : PhysicalStreamPlanContext,
       transport_budget : CompressedStreamBudget,
@@ -647,9 +672,18 @@ module CrystalClick
         unless descriptor.mark_row_counts == root_physical_rows
           raise CorruptPartError.new("recursive Object site does not share the root physical mark grid")
         end
-        if !preinspected.has_key?(key) &&
-           descriptor.child_occurrence_row_counts(0, root_physical_rows.size) != domain_rows
-          raise CorruptPartError.new("recursive Object site differs from its inherited occurrence grid")
+        if !preinspected.has_key?(key)
+          # A root-domain Object descriptor owns the physical P mark schedule
+          # directly; it has no child-occurrence schedule to query. Only a
+          # descriptor below Array inherits a separate Q grid from its parent.
+          inherited_rows = if array_level == 0_u64
+                             root_physical_rows
+                           else
+                             descriptor.child_occurrence_row_counts(0, root_physical_rows.size)
+                           end
+          unless inherited_rows == domain_rows
+            raise CorruptPartError.new("recursive Object site differs from its inherited occurrence grid")
+          end
         end
         begin
           object_schema.validate_plan(descriptor.plan)
@@ -663,7 +697,38 @@ module CrystalClick
         return nil
       end
 
-      if schema.bulk?
+      if bulk_type = schema.bulk_type_or_nil
+        if bulk_type.contains_dynamic?
+          reader = DynamicBulkSiteReader.open(
+            @source,
+            bulk_type,
+            prefix,
+            array_level,
+            @ordinary_profile,
+            @limits,
+            @transport_limits,
+            codec_budget,
+            transport_budget,
+            root_physical_rows,
+            domain_grid,
+            root_physical_rows.sum(0_u64),
+            name_context,
+            descriptor_depth,
+            key,
+          )
+          unless reader.mark_count == root_physical_rows.size && reader.mark_row_counts == root_physical_rows
+            raise CorruptPartError.new("recursive Dynamic site does not share the root physical mark grid")
+          end
+          unless reader.mark_count == domain_rows.size
+            raise CorruptPartError.new("recursive Dynamic site logical schedule differs from its inherited mark grid")
+          end
+          reader.mark_count.times do |mark|
+            unless reader.logical_occurrences_at(mark) == domain_rows[mark]
+              raise CorruptPartError.new("recursive Dynamic site differs from its inherited occurrence schedule")
+            end
+          end
+          dynamic_readers[String.new(key.to_slice)] = reader
+        end
         site_domain_rows[String.new(key.to_slice)] = domain_rows.dup
         return nil
       end
@@ -687,6 +752,7 @@ module CrystalClick
           prefix,
           array_child_key(key),
           array_level + 1_u64,
+          descriptor_depth + 1,
           frame.child_grid,
           root_physical_rows,
           child_rows,
@@ -697,6 +763,7 @@ module CrystalClick
           array_size_names,
           object_domain_grids,
           site_domain_rows,
+          dynamic_readers,
           codec_budget,
           name_context,
           transport_budget,
@@ -716,6 +783,7 @@ module CrystalClick
           child_prefix,
           child_key,
           array_level,
+          descriptor_depth + 1,
           domain_grid,
           root_physical_rows,
           domain_rows,
@@ -726,6 +794,7 @@ module CrystalClick
           array_size_names,
           object_domain_grids,
           site_domain_rows,
+          dynamic_readers,
           codec_budget,
           name_context,
           transport_budget,
@@ -881,6 +950,29 @@ module CrystalClick
       end
       unless @bulk_grids.keys.sort! == expected_bulk_keys.sort!
         raise CorruptPartError.new("recursive BinaryBulk grid roster differs from its schema sites")
+      end
+
+      expected_dynamic_keys = [] of String
+      @plan.dynamic_site_count.times do |index|
+        site = @plan.dynamic_site_at(index)
+        expected_dynamic_keys << site.key
+        reader = @dynamic_readers[site.key]? || raise(CorruptPartError.new("recursive Dynamic site has no discovered physical reader"))
+        reader.validate_complete_schedule!(budget)
+        unless reader.mark_count == @mark_count && reader.mark_row_counts == @mark_row_counts
+          raise CorruptPartError.new("recursive Dynamic P grid differs from the complete root mark schedule")
+        end
+        rows = @site_domain_rows[site.key]? || raise(CorruptPartError.new("recursive Dynamic site has no logical row schedule"))
+        unless rows.size == @mark_count
+          raise CorruptPartError.new("recursive Dynamic Q schedule differs from the complete mark grid")
+        end
+        @mark_count.times do |mark|
+          unless reader.logical_occurrences_at(mark) == rows[mark]
+            raise CorruptPartError.new("recursive Dynamic Q grid differs from its inherited occurrence schedule")
+          end
+        end
+      end
+      unless @dynamic_readers.keys.sort! == expected_dynamic_keys.sort!
+        raise CorruptPartError.new("recursive Dynamic reader roster differs from its schema sites")
       end
       nil
     end
@@ -1057,6 +1149,7 @@ module CrystalClick
     private def logical_bytes(
       descriptors : Hash(String, ObjectDocumentFileDescriptor),
       grids : Hash(String, BulkGridSet),
+      dynamic_readers : Hash(String, DynamicBulkSiteReader),
       array_frames : Hash(String, StorageArrayOccurrenceFrame),
     ) : UInt64
       total = 0_u64
@@ -1067,6 +1160,9 @@ module CrystalClick
         grid_set.grids.each_value do |grid|
           total = checked_add_u64(total, grid.logical_size.to_u64)
         end
+      end
+      dynamic_readers.each_value do |reader|
+        total = checked_add_u64(total, reader.logical_read_bytes)
       end
       array_frames.each_value do |frame|
         total = checked_add_u64(total, frame.size_stream.byte_size.to_u64)
