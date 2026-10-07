@@ -1,6 +1,32 @@
 # CrystalClick project status
 
-Current finite compatibility frontier (W205, 2026-10-07): whole-part positive
+Current finite compatibility frontier (W206 checkpoint A, 2026-10-07): direct
+JSON actual descriptors are representable through the existing Dynamic V3
+full/prefix/paired metadata owner. This is metadata only. Bare Dynamic values
+and root Object plans explicitly reject unbound JSON, including unused arms;
+wrapped/physical/bulk/typed Object/SharedVariant guards remain. Scalar RowBinary
+Dynamic(JSON) is preserved. No per-product leaf serializer was introduced.
+
+The same 184 affected files pass 1136 DEBUG and 1136 RELEASE examples; focused
+gates pass 22 per mode, all with zero failures/errors/pending and actual guarded
+exit 0. Disabling both new guards causes three unchanged-test failures before
+exact restoration. Each final native mode checks one fresh nonempty stock part,
+one CHECK, eight independent value/type/shared-state observations and the exact
+23-byte metadata literal (statistics offset 19, counts [8,0]). All 27 source
+files remain unchanged per mode; part bytes and helper reports agree. Twelve
+semantic oracle mutations and a helper-provenance regression are covered.
+Root independently audits raw process/SQL/file evidence. Scoped verdict: ROBUST
+for metadata only; no JSON-arm value handoff, library part or ATTACH is claimed.
+
+The next active capability is an exact ordinary Dynamic JSON-arm binding to
+the existing Object owner, preserving physical P, site Q and selected-arm R
+domains and cumulative budgets. Full types, wider layouts/dictionary schedules,
+MV/projections and repository-wide class decomposition remain open. Performance
+is deferred and the overall goal remains active. Details:
+[DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md](DYNAMIC_JSON_OBJECT_HANDOFF_FRONTIER.md),
+`.landmark/evidence/dynamic-json-metadata-w206.json`.
+
+Previous finite compatibility frontier (W205, 2026-10-07): whole-part positive
 parent P with child Q=0 is now qualified for the existing recursive
 Array(Tuple(JSON, Dynamic)) public column/table and complete-part APIs. No
 production code or type admission changed. Both String profiles pass fresh
@@ -17,10 +43,11 @@ mutations reject per mode. A separate checksum-resealed persisted Array-size
 contradiction rejects before a table callback through Dynamic LC census; that
 unused LC(String) actual case remains library-only. Scoped verdict: ROBUST.
 
-The next proposed capability is a direct JSON Dynamic actual bound to the
-existing Object owner, reusing the ordinary roster/statistics owner rather than
-adding a serializer per product. It is not implemented. Wider layouts and
-dictionary schedules, arbitrary publication/catalog dispatch, full types and
+The next proposed capability at that checkpoint was a direct JSON Dynamic
+actual bound to the existing Object owner, reusing the ordinary roster/statistics
+owner rather than adding a serializer per product. W206 admits its metadata,
+not its value-ready Object handoff. Wider layouts and dictionary schedules,
+arbitrary publication/catalog dispatch, full types and
 MV/projections, and repository-wide class decomposition remain open.
 Performance stays deferred and the overall goal remains active. Details:
 [RECURSIVE_ZERO_OCCURRENCE_FRONTIER.md](RECURSIVE_ZERO_OCCURRENCE_FRONTIER.md),

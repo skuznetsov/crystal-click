@@ -492,6 +492,9 @@ module CrystalClick
       context = BinaryCodecContext.new(budget.limits, nil, budget.writing?, budget, false, false)
       structure.type_count.times do |index|
         type = structure.type_at(index)
+        if type.contains_json?
+          raise UnsupportedFormatError.new("JSON is not admitted as an unbound Dynamic actual type")
+        end
         if type.contains_dynamic?
           raise UnsupportedFormatError.new("recursive Dynamic alternatives are not admitted in Dynamic V3")
         end

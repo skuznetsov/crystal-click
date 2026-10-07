@@ -65,9 +65,29 @@ describe "W182 nested nominal JSON RowBinary guards" do
     expect_raises(ArgumentError) do
       CrystalClick::ObjectDocumentSchema.new({"nested" => array})
     end
+    direct_json_structure = CrystalClick::DynamicStructure.new([json] of CrystalClick::BinaryDataType)
+    direct_json_structure.type_at(0).should eq(json)
     expect_raises(ArgumentError) do
-      CrystalClick::DynamicStructure.new([json] of CrystalClick::BinaryDataType)
+      CrystalClick::DynamicStructure.new([array] of CrystalClick::BinaryDataType)
     end
+  end
+
+  it "keeps JSON out of typed Object Dynamic actual rosters" do
+    json = CrystalClick::BinaryDataType.json(max_dynamic_paths: 0, max_dynamic_types: 0)
+    dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 1)
+    structures = CrystalClick::ObjectDynamicStructureSet.new(
+      CrystalClick::ObjectStructure.new([] of String),
+      {} of String => CrystalClick::DynamicStructure,
+    )
+
+    error = expect_raises(ArgumentError) do
+      CrystalClick::ObjectDocumentPlan.new(
+        structures,
+        {"typed" => dynamic},
+        {"typed" => CrystalClick::DynamicStructure.new([json] of CrystalClick::BinaryDataType)},
+      )
+    end
+    error.message.to_s.should contain("JSON")
   end
 
   it "charges a nested typed JSON child once across construction and scalar codec visits" do

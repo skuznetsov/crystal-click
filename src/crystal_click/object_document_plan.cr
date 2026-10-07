@@ -29,6 +29,20 @@ module CrystalClick
       typed_dynamics : Hash(String, DynamicStructure) = Hash(String, DynamicStructure).new,
       typed_dynamic_sites : Hash(String, Hash(String, DynamicStructure)) = Hash(String, Hash(String, DynamicStructure)).new,
     )
+      # Root Object Dynamic metadata is representable without a child binding,
+      # but this value-ready plan has no JSON arm-to-Object association. Reject
+      # those actuals before copying any plan roster or allocating lane maps.
+      object = structures.object
+      object.dynamic_path_count.times do |index|
+        path = object.dynamic_path_at(index)
+        structure = structures.dynamic_for(path)
+        structure.type_count.times do |type_index|
+          if structure.type_at(type_index).contains_json?
+            raise ArgumentError.new("JSON is not admitted as an unbound root Object Dynamic actual type")
+          end
+        end
+      end
+
       @structures = structures
       limits = DEFAULT_LIMITS
       raise ArgumentError.new("typed Object paths exceed the admitted count") if typed_paths.size > MAX_TYPED_PATHS

@@ -18,10 +18,10 @@ module CrystalClick
       end
 
       # Dynamic actual alternatives are metadata rather than children of one
-      # generic descriptor, so reject JSON before copying the roster or
-      # materializing any SQL display names.
+      # generic descriptor. Admit only a direct JSON descriptor as metadata;
+      # wrapped/composite JSON still has no ordinary-arm representation here.
       types.each do |type|
-        if type.contains_json?
+        if type.contains_json? && type.tag != BinaryDataType::TAG_JSON
           raise ArgumentError.new("JSON is not admitted as a Dynamic actual type")
         end
       end

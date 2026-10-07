@@ -187,10 +187,54 @@ describe "W180 JSON binary profile guards and malformed boundaries" do
     decoded_dynamic.child_at(0).type.should eq(json_type)
     decoded_dynamic.child_at(0).json_row.empty?.should be_true
 
-    structure_error = expect_raises(ArgumentError) do
-      CrystalClick::DynamicStructure.new([json_type] of CrystalClick::BinaryDataType)
+    # Direct JSON is representable as Dynamic metadata, while its storage lane
+    # remains unavailable until an Object child binding exists.
+    json_structure = CrystalClick::DynamicStructure.new([json_type] of CrystalClick::BinaryDataType)
+    json_structure.type_at(0).should eq(json_type)
+    json_structure.canonical_variant_names.should contain(json_type.name)
+
+    wrapped_structure_error = expect_raises(ArgumentError) do
+      CrystalClick::DynamicStructure.new([array_type] of CrystalClick::BinaryDataType)
     end
-    structure_error.message.to_s.should contain("JSON")
+    wrapped_structure_error.message.to_s.should contain("JSON")
+
+    # An unused JSON arm must not slip through the bare Dynamic value codec.
+    unused_rows = [
+      [CrystalClick::BinaryValue.null] of CrystalClick::BinaryValue,
+    ] of Array(CrystalClick::BinaryValue)
+    value_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::DynamicValueCodec.encode(json_structure, unused_rows)
+    end
+    value_error.message.to_s.should contain("JSON")
+
+    empty_streams = CrystalClick::DynamicValueStreams.new(
+      CrystalClick::DynamicDiscriminatorStream.new(Bytes.new(0), [] of CrystalClick::DynamicDiscriminatorMark),
+      {} of String => CrystalClick::BinaryBulkStreams,
+    )
+    zero_window_error = expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::DynamicValueCodec.decode(
+        json_structure,
+        empty_streams,
+        first_mark: 0,
+        mark_count: 0,
+      )
+    end
+    zero_window_error.message.to_s.should contain("JSON")
+
+    # The metadata owner remains representational; the value-ready Object plan
+    # rejects this unbound root Dynamic actual before making its lane plan.
+    metadata_set = CrystalClick::ObjectDynamicStructureSet.new(
+      CrystalClick::ObjectStructure.new(["doc"] of String),
+      {"doc" => json_structure},
+    )
+    metadata_set.dynamic_for("doc").type_at(0).should eq(json_type)
+    object_plan_error = expect_raises(ArgumentError) do
+      CrystalClick::ObjectDocumentPlan.new(
+        metadata_set,
+        {} of String => CrystalClick::BinaryDataType,
+      )
+    end
+    object_plan_error.message.to_s.should contain("JSON")
 
     object_error = expect_raises(ArgumentError) do
       # This schema-only probe is intentionally zero-row: persisted Object
