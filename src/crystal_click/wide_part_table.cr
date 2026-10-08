@@ -85,6 +85,7 @@ module CrystalClick
       getter array_object_readers : Array(ArrayObjectColumnReaderEntry)
       getter recursive_readers : Array(RecursiveColumnReaderEntry)
       getter dynamic_bulk_readers : Array(DynamicBulkColumnReaderEntry)
+      getter binary_bulk_readers : Array(BinaryBulkTableReaderEntry)
       getter column_types : Array(String)
       getter column_sources : Array({String, String, String})
 
@@ -99,6 +100,7 @@ module CrystalClick
         @array_object_readers : Array(ArrayObjectColumnReaderEntry),
         @recursive_readers : Array(RecursiveColumnReaderEntry),
         @dynamic_bulk_readers : Array(DynamicBulkColumnReaderEntry),
+        @binary_bulk_readers : Array(BinaryBulkTableReaderEntry),
         @column_types : Array(String),
         @column_sources : Array({String, String, String}),
       )
@@ -188,7 +190,7 @@ module CrystalClick
     # alias the current mark arrays and must not be retained past the callback.
     def scan(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.dynamic_bulk_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.dynamic_bulk_readers.empty? && part.binary_bulk_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 scan requires exact UInt64 columns")
       end
 
@@ -199,7 +201,7 @@ module CrystalClick
     # complete candidate granule; skipped marks still advance physical row
     # offsets and are never materialized.
     def scan_candidate_marks(mark_indices : Array(Array(Int32)), & : WidePartTableBatch -> Nil) : Nil
-      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.dynamic_bulk_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.dynamic_bulk_readers.empty? && part.binary_bulk_readers.empty? && part.readers.all? { |selected| selected.column_type == "UInt64" } }
         raise UnsupportedFormatError.new("UInt64 candidate scan requires exact UInt64 columns")
       end
       raise BoundsError.new("candidate mark list does not match selected parts") unless mark_indices.size == @entries.size
@@ -292,7 +294,7 @@ module CrystalClick
     # retrieved from each batch with values_for(column, CrystalType).
     def scan_numeric(batch_rows : Int = DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
-      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.dynamic_bulk_readers.empty? && part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
+      unless @entries.all? { |part| part.object_readers.empty? && part.array_object_readers.empty? && part.recursive_readers.empty? && part.dynamic_bulk_readers.empty? && part.binary_bulk_readers.empty? && part.readers.all? { |selected| WidePart.supports_numeric_type?(selected.column_type) } }
         raise UnsupportedFormatError.new("numeric scan requires exact primitive numeric columns")
       end
 
@@ -320,6 +322,7 @@ module CrystalClick
       raise BoundsError.new("window start is beyond the source row count") if start_row > @total_row_count
       if start_row == @total_row_count
         validate_complete_dynamic_schedules
+        validate_complete_binary_bulk_schedules
         return nil
       end
 
@@ -346,6 +349,7 @@ module CrystalClick
       validate_complete_array_object_schedules
       validate_complete_recursive_schedules
       validate_complete_dynamic_schedules
+      validate_complete_binary_bulk_schedules
       preflight_coordinate_selected_marks(candidate_marks, window_rows)
       preflight_array_map_leaf_selected_marks(candidate_marks, window_rows)
 
@@ -913,6 +917,16 @@ module CrystalClick
             part.dynamic_bulk_readers.each do |selected|
               remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
               bytes = DynamicBulkColumnAdapter.preflight_owner(
+                selected.reader,
+                mark_index.to_i32,
+                mark_rows,
+                remaining_bytes
+              )
+              preflight_string_bytes += bytes
+            end
+            part.binary_bulk_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - preflight_string_bytes
+              bytes = BinaryBulkColumnAdapter.preflight_owner(
                 selected.reader,
                 mark_index.to_i32,
                 mark_rows,
@@ -2601,6 +2615,22 @@ module CrystalClick
               actual_string_bytes += charge
               dynamic_bulk_values[selected.name] = values
             end
+            binary_bulk_values = Hash(String, Array(BinaryValue)).new
+            part.binary_bulk_readers.each do |selected|
+              remaining_bytes = MAX_MARK_MATERIALIZED_BYTES.to_u64 - actual_string_bytes
+              values, charge = BinaryBulkColumnAdapter.materialize_mark(
+                selected.reader,
+                selected.value_type,
+                mark_index.to_i32,
+                mark_rows,
+                remaining_bytes
+              )
+              if charge > remaining_bytes
+                raise CorruptPartError.new("selected SimpleAggregate bulk mark exceeds aggregate materialization limit")
+              end
+              actual_string_bytes += charge
+              binary_bulk_values[selected.name] = values
+            end
 
             mark_row_offset = selected_mark_row_start
             first_whole_mark_batch = whole_marks
@@ -2902,6 +2932,12 @@ module CrystalClick
                 selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 batch.install_dynamic_bulk_values(selected.name, selected_slice, size)
               end
+              part.binary_bulk_readers.each do |selected|
+                values = binary_bulk_values[selected.name]? ||
+                         raise(CorruptPartError.new("selected SimpleAggregate bulk column was not materialized"))
+                selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
+                batch.install_binary_bulk_values(selected.name, selected_slice, size)
+              end
               yield batch
               mark_row_offset &+= size.to_u64
               break if whole_marks
@@ -2955,6 +2991,19 @@ module CrystalClick
       @entries.each do |part|
         part.dynamic_bulk_readers.each do |selected|
           DynamicBulkColumnAdapter.validate_complete_schedule(
+            selected.reader,
+            part.row_count,
+            part.mark_row_counts
+          )
+        end
+      end
+      nil
+    end
+
+    private def validate_complete_binary_bulk_schedules : Nil
+      @entries.each do |part|
+        part.binary_bulk_readers.each do |selected|
+          BinaryBulkColumnAdapter.validate_complete_schedule(
             selected.reader,
             part.row_count,
             part.mark_row_counts
@@ -4675,6 +4724,7 @@ module CrystalClick
         array_object_readers = Array(ArrayObjectColumnReaderEntry).new
         recursive_readers = Array(RecursiveColumnReaderEntry).new
         dynamic_bulk_readers = Array(DynamicBulkColumnReaderEntry).new
+        binary_bulk_readers = Array(BinaryBulkTableReaderEntry).new
         expected_mark_rows = nil.as(Array(UInt64)?)
         expected_row_count = nil.as(UInt64?)
         current_column_types = Array(String).new(@columns.size)
@@ -4686,11 +4736,13 @@ module CrystalClick
           array_object_declaration = nil.as(String?)
           recursive_declaration = nil.as(String?)
           dynamic_bulk_declaration = nil.as(String?)
+          simple_aggregate_bulk_declaration = nil.as(String?)
           if @typed_mode && !@numeric_mode && flattened_context.nil?
             object_declaration = WidePart.selected_json_declaration(path, column)
             array_object_declaration = WidePart.selected_array_json_declaration(path, column)
             recursive_declaration = WidePart.selected_recursive_json_declaration(path, column)
             dynamic_bulk_declaration = WidePart.selected_dynamic_bulk_declaration(path, column)
+            simple_aggregate_bulk_declaration = WidePart.selected_simple_aggregate_bulk_declaration(path, column)
           end
 
           mark_rows = [] of UInt64
@@ -4741,6 +4793,19 @@ module CrystalClick
             column_source = {column, column, dynamic_reader.source_declaration}
             selected_checksum_names = dynamic_reader.selected_checksum_names
             dynamic_bulk_readers << DynamicBulkColumnReaderEntry.new(column, dynamic_reader, dynamic_value_type, column_type)
+          elsif source_declaration = simple_aggregate_bulk_declaration
+            binary_reader, binary_value_type = BinaryBulkColumnAdapter.open(path, column, source_declaration)
+            mark_rows = binary_reader.mark_row_counts
+            raise BoundsError.new("mark count exceeds per-reader limit") if mark_rows.size > MAX_MARKS_PER_READER
+            mark_rows.each do |rows|
+              raise BoundsError.new("mark row count exceeds limit") if rows > MAX_MARK_ROWS
+            end
+            BinaryBulkColumnAdapter.validate_complete_schedule(binary_reader, binary_reader.row_count, mark_rows)
+            column_row_count = binary_reader.row_count
+            column_type = binary_reader.schema_declaration
+            column_source = {column, column, binary_reader.source_declaration}
+            selected_checksum_names = binary_reader.selected_checksum_names
+            binary_bulk_readers << BinaryBulkTableReaderEntry.new(column, binary_reader, binary_value_type, column_type)
           else
             reader = if context = flattened_context
                        context.open_reader(path, column)
@@ -4828,7 +4893,7 @@ module CrystalClick
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, array_object_readers, recursive_readers, dynamic_bulk_readers, current_column_types, current_column_sources)
+        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, array_object_readers, recursive_readers, dynamic_bulk_readers, binary_bulk_readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32

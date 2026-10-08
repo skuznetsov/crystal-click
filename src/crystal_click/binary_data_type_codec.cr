@@ -176,7 +176,7 @@ module CrystalClick
         BinaryDataType.array(child)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         name_length = context.read_var_uint
-        if name_length > 15_u64
+        if name_length > BinarySimpleAggregateType::MAX_FUNCTION_NAME_BYTES.to_u64
           context.unsupported!("SimpleAggregateFunction name is outside the admitted function profile")
         end
         raw_name = context.read_slice(name_length)

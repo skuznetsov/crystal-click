@@ -46,6 +46,7 @@ private def w163_literal_descriptor(
   function_name : String,
   storage_tag : UInt8,
   nullable : Bool = false,
+  nullable_child_depth : Int32 = 0,
 ) : Array(UInt8)
   bytes = [] of UInt8
   bytes << 0x23_u8 if nullable # BinaryTypeIndex::Nullable wraps the full aggregate node.
@@ -54,6 +55,7 @@ private def w163_literal_descriptor(
   bytes.concat(function_name.to_slice.to_a)
   bytes << 0_u8 # zero Field parameters
   bytes << 1_u8 # one recursive child descriptor
+  nullable_child_depth.times { bytes << 0x23_u8 }
   bytes << storage_tag
   bytes
 end
@@ -124,7 +126,7 @@ describe "W163 SimpleAggregateFunction numeric carrier descriptors" do
     pair_count.should eq(77)
   end
 
-  it "rejects stock-ineligible function/carrier pairs without broadening wrappers" do
+  it "rejects stock-ineligible pairs and repeated wrappers while preserving Nullable child identity" do
     ineligible_pairs = [
       {"sum", CrystalClick::BinarySimpleAggregateType::Function::Sum, "UInt8", 0x01_u8},
       {"sum", CrystalClick::BinarySimpleAggregateType::Function::Sum, "UInt16", 0x02_u8},
@@ -160,8 +162,42 @@ describe "W163 SimpleAggregateFunction numeric carrier descriptors" do
       ).should be_nil
     end
 
+    nullable_uint64 = CrystalClick::BinaryDataType.nullable(
+      CrystalClick::BinaryDataType.primitive("UInt64")
+    )
+    nullable_name = "SimpleAggregateFunction(min, Nullable(UInt64))"
+    nullable_wire = w163_literal_descriptor("min", 0x04_u8, nullable_child_depth: 1)
+    nullable_aggregate = CrystalClick::BinaryDataTypeCodec.decode(w163_bytes(nullable_wire))
+    nullable_aggregate.name.should eq(nullable_name)
+    nullable_aggregate.child_at(0).should eq(nullable_uint64)
+    nullable_aggregate.should eq(CrystalClick::BinaryDataType.simple_aggregate(
+      CrystalClick::BinarySimpleAggregateType::Function::Min,
+      nullable_uint64
+    ))
+    CrystalClick::BinaryDataTypeCodec.encode(nullable_aggregate).to_a.should eq(nullable_wire)
+    parsed_nullable = CrystalClick::BinarySimpleAggregateType.parse(nullable_name).not_nil!
+    parsed_nullable.type_name.should eq(nullable_name)
+    parsed_nullable.storage_type_name.should eq("Nullable(UInt64)")
+    CrystalClick::SimpleAggregateColumnType.parse(nullable_name).should be_nil
+
+    double_nullable_wire = w163_literal_descriptor("min", 0x04_u8, nullable_child_depth: 2)
+    double_nullable_name = "SimpleAggregateFunction(min, Nullable(Nullable(UInt64)))"
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryDataTypeCodec.decode(w163_bytes(double_nullable_wire))
+    end
+    CrystalClick::BinarySimpleAggregateType.parse(double_nullable_name).should be_nil
+    CrystalClick::SimpleAggregateColumnType.parse(double_nullable_name).should be_nil
+    # The nested Nullable factory rejects this descriptor before the SAF
+    # constructor can observe it; wire and SQL parser controls are independent.
+    expect_raises(ArgumentError) do
+      double_nullable_uint64 = CrystalClick::BinaryDataType.nullable(nullable_uint64)
+      CrystalClick::BinaryDataType.simple_aggregate(
+        CrystalClick::BinarySimpleAggregateType::Function::Min,
+        double_nullable_uint64
+      )
+    end
+
     [
-      [0x23_u8, 0x04_u8], # Nullable(UInt64) is not a child storage carrier.
       [0x26_u8, 0x04_u8], # LowCardinality(UInt64) is not a child storage carrier.
     ].each do |child_wire|
       wire = [0x2e_u8, 3_u8] + "min".to_slice.to_a + [0_u8, 1_u8] + child_wire
@@ -171,12 +207,6 @@ describe "W163 SimpleAggregateFunction numeric carrier descriptors" do
     end
 
     function = CrystalClick::BinarySimpleAggregateType::Function::Min
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.simple_aggregate(
-        function,
-        CrystalClick::BinaryDataType.nullable(CrystalClick::BinaryDataType.primitive("UInt64"))
-      )
-    end
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.simple_aggregate(
         function,

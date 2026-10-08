@@ -129,6 +129,8 @@ module CrystalClick
       case function
       when BinarySimpleAggregateType::Function::Any,
            BinarySimpleAggregateType::Function::AnyLast,
+           BinarySimpleAggregateType::Function::AnyRespectNulls,
+           BinarySimpleAggregateType::Function::AnyLastRespectNulls,
            BinarySimpleAggregateType::Function::Min,
            BinarySimpleAggregateType::Function::Max
         true

@@ -86,6 +86,7 @@ private def w168_literal_descriptor(
   function_name : String,
   child_wire : Array(UInt8),
   nullable : Bool = false,
+  nullable_child_depth : Int32 = 0,
 ) : Bytes
   bytes = [] of UInt8
   bytes << 0x23_u8 if nullable # Nullable wraps the complete aggregate node.
@@ -94,6 +95,7 @@ private def w168_literal_descriptor(
   bytes.concat(function_name.to_slice.to_a)
   bytes << 0_u8 # zero Field parameters
   bytes << 1_u8 # one argument type
+  nullable_child_depth.times { bytes << 0x23_u8 }
   bytes.concat(child_wire)
   w168_bytes(bytes)
 end
@@ -653,7 +655,7 @@ describe "W168 SimpleAggregateFunction String and FixedString core admission" do
     nullable_fixed_decoded[0][2].child_at(0).as_simple_aggregate.bytes.should eq(Bytes[0_u8, 0_u8, 0_u8])
   end
 
-  it "rejects the other five functions, wrapped or parameterized children, and noncanonical widths" do
+  it "admits single Nullable children and rejects other functions, repeated Nullable, and bad widths" do
     W168_TEXT_CHILDREN.each do |storage_name, child_type, child_wire|
       W168_REJECTED_TEXT_FUNCTIONS.each do |function_name, function|
         scalar_name = "SimpleAggregateFunction(#{function_name}, #{storage_name})"
@@ -668,14 +670,51 @@ describe "W168 SimpleAggregateFunction String and FixedString core admission" do
       end
     end
 
+    W168_TEXT_FUNCTIONS.each do |function_name, function|
+      W168_TEXT_CHILDREN.each do |storage_name, child, child_wire|
+        nullable_child = CrystalClick::BinaryDataType.nullable(child)
+        aggregate_name = "SimpleAggregateFunction(#{function_name}, Nullable(#{storage_name}))"
+        aggregate_wire = w168_literal_descriptor(function_name, child_wire, nullable_child_depth: 1)
+        aggregate = CrystalClick::BinaryDataType.simple_aggregate(function, nullable_child)
+        aggregate.name.should eq(aggregate_name)
+        aggregate.child_at(0).should eq(nullable_child)
+        CrystalClick::BinaryDataTypeCodec.encode(aggregate).should eq(aggregate_wire)
+        decoded = w168_decode_type(aggregate_wire)
+        decoded.should eq(aggregate)
+        decoded.name.should eq(aggregate_name)
+        parsed = CrystalClick::BinarySimpleAggregateType.parse(aggregate_name).not_nil!
+        parsed.type_name.should eq(aggregate_name)
+        parsed.storage_type_name.should eq("Nullable(#{storage_name})")
+        CrystalClick::SimpleAggregateColumnType.parse(aggregate_name).should be_nil
+      end
+    end
+
     string = CrystalClick::BinaryDataType.primitive("String")
+    # The nested Nullable factory rejects this descriptor before the SAF
+    # constructor can observe it; the independent wire control follows below.
+    expect_raises(ArgumentError) do
+      double_nullable_string = CrystalClick::BinaryDataType.nullable(
+        CrystalClick::BinaryDataType.nullable(string)
+      )
+      CrystalClick::BinaryDataType.simple_aggregate(
+        CrystalClick::BinarySimpleAggregateType::Function::Any,
+        double_nullable_string
+      )
+    end
+    double_nullable_wire = w168_literal_descriptor(
+      "any",
+      [0x15_u8],
+      nullable_child_depth: 2
+    )
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryDataTypeCodec.decode(double_nullable_wire)
+    end
+
     wrapped_children = [
-      CrystalClick::BinaryDataType.nullable(string),
       CrystalClick::BinaryDataType.low_cardinality(string),
       CrystalClick::BinaryDataType.array(string),
     ]
     wrapped_child_wires = [
-      [0x23_u8, 0x15_u8],
       [0x26_u8, 0x15_u8],
       [0x1e_u8, 0x15_u8],
     ]
@@ -694,7 +733,7 @@ describe "W168 SimpleAggregateFunction String and FixedString core admission" do
       "SimpleAggregateFunction(any, FixedString(65537))",
       "SimpleAggregateFunction(any, fixedstring(3))",
       "SimpleAggregateFunction(anylast, String)",
-      "SimpleAggregateFunction(any, Nullable(String))",
+      "SimpleAggregateFunction(any, Nullable(Nullable(String)))",
       "SimpleAggregateFunction(any, LowCardinality(String))",
     ].each do |type_name|
       CrystalClick::BinarySimpleAggregateType.parse(type_name).should be_nil

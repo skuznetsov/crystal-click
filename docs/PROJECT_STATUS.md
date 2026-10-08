@@ -1,5 +1,41 @@
 # CrystalClick project status
 
+Current nullable-storage SimpleAggregateFunction slice (W221, 2026-10-08):
+VERIFIED within the finite declared scope (scoped verdict: ROBUST). Existing
+child codecs now compose `any_respect_nulls`, `anyLast_respect_nulls` and one
+inner Nullable storage child under the measured function/result-type law.
+Inner and outer Nullable remain distinct nominal declarations; double
+nullability is refused. Shared static bulk reader/writer/publication owners
+have their own files, with thin SAF/Nested nominal adapters. Public borrowed
+batches and owned `.values` use the shared recursive value/budget path;
+legacy scalar accessors retain their narrower semantics.
+
+The same 30 affected spec files pass 182 examples in each of DEBUG/RELEASE,
+zero failures/errors/pending. Fresh native runs per mode pass 186 stock part
+reads and 186 library ATTACH/CHECK/literal-value witnesses. Both raw matrices
+pass a separately executed audit with external runtime/helper hashes. All
+2,496 generated file inventories agree across modes. Executed nominal/payload
+stage substitutions reject and preserve unrelated files; an inconsistent
+process-sidecar seed rejects despite a green summary, and exact restoration
+returns the audit to green. The combined RELEASE compiler was terminated
+before tests near its memory ceiling; replacement serial groups pass the
+same exact roster. No production admission guard was relaxed for corrected
+String-profile, substream-order or source-backed ATTACH auxiliary-file oracles.
+
+This is recursive codec/context composition, not one serializer per product
+or all-layout compatibility. Finite witnesses cover Wide/LZ4/plain-mrk2, 29
+leaf/parameter witnesses, three legal nominal shapes, both String profiles
+and six old-function controls. Production assumes quiescent parts and checks
+declared sizes, not complete payload hashes. Logical ownership accounting
+is not peak RSS. Public multi-part/projection controls are synthetic, not a
+native full-catalog discovery certificate. SAF has eleven of the pinned
+source's twenty-two function identities; the remaining functions/products,
+non-Count states, physical layouts, MV/projection writing/semantics and broad
+facade decomposition stay open. Memory/performance remains deferred; the
+full goal stays active. Details:
+[SIMPLE_AGGREGATE_NULLABLE_FRONTIER.md](SIMPLE_AGGREGATE_NULLABLE_FRONTIER.md),
+[W221 evidence packet](../.landmark/evidence/simple-aggregate-nullable-w221.json).
+
 Current owned Dynamic consumer slice (W220, 2026-10-08): VERIFIED within the
 finite declared scope (scoped verdict: ROBUST). Public column `.values`
 materializes the existing generic Dynamic-bearing grammar as detached

@@ -155,8 +155,14 @@ module CrystalClick
                      else
                        nil
                      end
+      simple_aggregate_bulk_type = if !json_path && source_name == column_name &&
+                                      WidePart.supports_simple_aggregate_bulk_type?(selected_type)
+                                     SimpleAggregateBulkColumnDeclaration.parse(selected_type)
+                                   else
+                                     nil
+                                   end
       object_root = WidePart.json_type?(selected_type)
-      unless object_root || dynamic_type || WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
+      unless object_root || dynamic_type || simple_aggregate_bulk_type || WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
         raise UnsupportedFormatError.new("selected table column type is unsupported")
       end
       source_column = @columns.find { |entry| entry.name == source_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
@@ -189,6 +195,18 @@ module CrystalClick
 
       if type = dynamic_type
         return DynamicBulkValuesMaterializer.materialize(
+          self,
+          candidates,
+          column_name,
+          type,
+          expected_rows,
+          max_string_bytes,
+          max_tuple_cells
+        )
+      end
+
+      if type = simple_aggregate_bulk_type
+        return StaticBulkValuesMaterializer.materialize(
           self,
           candidates,
           column_name,

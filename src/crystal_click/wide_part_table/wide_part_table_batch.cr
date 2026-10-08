@@ -22,7 +22,7 @@ module CrystalClick
     @object_documents : Hash(String, Slice(ObjectDocument)) = Hash(String, Slice(ObjectDocument)).new
     @array_object_documents : Hash(String, Slice(Array(ObjectDocument))) = Hash(String, Slice(Array(ObjectDocument))).new
     @recursive_values : Hash(String, Slice(StorageColumnValue)) = Hash(String, Slice(StorageColumnValue)).new
-    @dynamic_bulk_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
+    @binary_bulk_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @aggregate_count_state_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @string_values : Hash(String, Slice(String))
@@ -520,33 +520,65 @@ module CrystalClick
       nil
     end
 
-    # Return generic Dynamic-bearing BinaryBulk rows. The outer slice is
+    # Return generic static or Dynamic BinaryBulk rows. The outer slice is
     # callback-scoped; immutable BinaryValue trees may be retained by callers.
-    # Bare Dynamic keeps its existing specialized accessor and is not admitted
-    # through this generic declaration contract.
+    # Admission remains exact to the already-owned Dynamic declaration or the
+    # narrow inner-Nullable SimpleAggregate bulk profile.
+    def binary_bulk_values_for(column : String) : Slice(BinaryValue)
+      index = column_index(column)
+      column_type = @column_types[index]
+      expected_type = DynamicBulkColumnDeclaration.parse(column_type)
+      expected_type ||= if WidePart.supports_simple_aggregate_bulk_type?(column_type)
+                          SimpleAggregateBulkColumnDeclaration.parse(column_type)
+                        else
+                          nil
+                        end
+      unless expected_type
+        raise UnsupportedFormatError.new("Binary bulk accessor requires an admitted static or Dynamic declaration")
+      end
+      @binary_bulk_values[column]? || raise(UnsupportedFormatError.new("Binary bulk column was not materialized in this batch"))
+    end
+
+    # Backward-compatible Dynamic-only accessor. Keep its old type guard even
+    # though the shared BinaryValue owner is available through the generic API.
     def dynamic_bulk_values_for(column : String) : Slice(BinaryValue)
       index = column_index(column)
-      expected_type = DynamicBulkColumnDeclaration.parse(@column_types[index])
-      unless expected_type
+      unless DynamicBulkColumnDeclaration.parse(@column_types[index])
         raise UnsupportedFormatError.new("Dynamic bulk accessor requires an admitted Dynamic-bearing declaration")
       end
-      @dynamic_bulk_values[column]? || raise(UnsupportedFormatError.new("Dynamic bulk column was not materialized in this batch"))
+      binary_bulk_values_for(column)
+    end
+
+    # Internal table-scan hook for one borrowed parent-row slice.
+    def install_binary_bulk_values(column : String, values : Slice(BinaryValue), expected_rows : Int) : Nil
+      index = column_index(column)
+      column_type = @column_types[index]
+      expected_type = DynamicBulkColumnDeclaration.parse(column_type)
+      expected_type ||= if WidePart.supports_simple_aggregate_bulk_type?(column_type)
+                          SimpleAggregateBulkColumnDeclaration.parse(column_type)
+                        else
+                          nil
+                        end
+      unless expected_type
+        raise CorruptPartError.new("Binary bulk materializer received a non-admitted declaration")
+      end
+      raise CorruptPartError.new("Binary bulk batch slice row count mismatch") unless values.size == expected_rows
+      values.each do |value|
+        unless value.type == expected_type
+          raise CorruptPartError.new("Binary bulk batch value type differs from its declaration")
+        end
+      end
+      @binary_bulk_values[column] = values
+      nil
     end
 
     # Internal table-scan hook for one borrowed parent-row slice.
     def install_dynamic_bulk_values(column : String, values : Slice(BinaryValue), expected_rows : Int) : Nil
       index = column_index(column)
-      expected_type = DynamicBulkColumnDeclaration.parse(@column_types[index])
-      unless expected_type
+      unless DynamicBulkColumnDeclaration.parse(@column_types[index])
         raise CorruptPartError.new("Dynamic bulk materializer received a non-admitted declaration")
       end
-      raise CorruptPartError.new("Dynamic bulk batch slice row count mismatch") unless values.size == expected_rows
-      values.each do |value|
-        unless value.type == expected_type
-          raise CorruptPartError.new("Dynamic bulk batch value type differs from its declaration")
-        end
-      end
-      @dynamic_bulk_values[column] = values
+      install_binary_bulk_values(column, values, expected_rows)
       nil
     end
 

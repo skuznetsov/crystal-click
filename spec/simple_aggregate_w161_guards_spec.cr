@@ -106,8 +106,8 @@ private def w161_guard_change_mark_rows(part : String, stream : String, mark_ind
 end
 
 describe "W161 SimpleAggregateFunction negative admission and publication guards" do
-  it "rejects validly encoded nonzero parameters, bad arities, unknown functions and unsupported wrappers" do
-    W161_SIMPLE_AGGREGATE_TYPES.each do |name, _suffix, _function|
+  it "rejects invalid descriptors while preserving exact Nullable child identity" do
+    W161_SIMPLE_AGGREGATE_TYPES.each do |name, _suffix, function|
       # Field::UInt64 is 0x01 followed by VarUInt(1); the malformed profile is
       # otherwise structurally complete, so rejection is semantic, not truncation.
       parameterized = W161SimpleAggregateTestSupport.descriptor(
@@ -150,14 +150,49 @@ describe "W161 SimpleAggregateFunction negative admission and publication guards
         end
       end
 
-      [
-        [0x23_u8, 0x04_u8], # Nullable(UInt64), still a wrapped child
-        [0x26_u8, 0x04_u8], # LowCardinality(UInt64), still a wrapped child
-      ].each do |carrier|
-        wrong_storage = W161SimpleAggregateTestSupport.descriptor(name, arguments: carrier)
-        expect_raises(CrystalClick::UnsupportedFormatError) do
-          CrystalClick::BinaryDataTypeCodec.decode(Bytes.new(wrong_storage.size) { |i| wrong_storage[i] })
-        end
+      nullable_child = CrystalClick::BinaryDataType.nullable(
+        CrystalClick::BinaryDataType.primitive("UInt64")
+      )
+      nullable_child_name = "SimpleAggregateFunction(#{name}, Nullable(UInt64))"
+      nullable_child_wire = W161SimpleAggregateTestSupport.descriptor(
+        name,
+        arguments: [0x23_u8, 0x04_u8]
+      )
+      decoded_nullable_child = CrystalClick::BinaryDataTypeCodec.decode(
+        Bytes.new(nullable_child_wire.size) { |i| nullable_child_wire[i] }
+      )
+      decoded_nullable_child.name.should eq(nullable_child_name)
+      decoded_nullable_child.child_at(0).should eq(nullable_child)
+      CrystalClick::BinaryDataType.simple_aggregate(function, nullable_child).should eq(decoded_nullable_child)
+      CrystalClick::BinaryDataTypeCodec.encode(decoded_nullable_child).to_a.should eq(nullable_child_wire)
+      parsed_nullable_child = CrystalClick::BinarySimpleAggregateType.parse(nullable_child_name).not_nil!
+      parsed_nullable_child.type_name.should eq(nullable_child_name)
+      parsed_nullable_child.storage_type_name.should eq("Nullable(UInt64)")
+      CrystalClick::SimpleAggregateColumnType.parse(nullable_child_name).should be_nil
+
+      # The nested Nullable factory rejects this descriptor before the SAF
+      # constructor can observe it; wire and SQL parser controls follow below.
+      expect_raises(ArgumentError) do
+        double_nullable_child = CrystalClick::BinaryDataType.nullable(nullable_child)
+        CrystalClick::BinaryDataType.simple_aggregate(function, double_nullable_child)
+      end
+      double_nullable_name = "SimpleAggregateFunction(#{name}, Nullable(Nullable(UInt64)))"
+      CrystalClick::BinarySimpleAggregateType.parse(double_nullable_name).should be_nil
+      CrystalClick::SimpleAggregateColumnType.parse(double_nullable_name).should be_nil
+      double_nullable_wire = W161SimpleAggregateTestSupport.descriptor(
+        name,
+        arguments: [0x23_u8, 0x23_u8, 0x04_u8]
+      )
+      expect_raises(CrystalClick::CorruptPartError) do
+        CrystalClick::BinaryDataTypeCodec.decode(Bytes.new(double_nullable_wire.size) { |i| double_nullable_wire[i] })
+      end
+
+      low_cardinality_child = W161SimpleAggregateTestSupport.descriptor(
+        name,
+        arguments: [0x26_u8, 0x04_u8]
+      )
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        CrystalClick::BinaryDataTypeCodec.decode(Bytes.new(low_cardinality_child.size) { |i| low_cardinality_child[i] })
       end
     end
 

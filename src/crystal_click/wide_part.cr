@@ -1532,6 +1532,50 @@ module CrystalClick
       SelectedJsonMetadataProbe.read_dynamic_bulk(part_path, column_name)
     end
 
+    # Return the exact stored declaration only for the narrow static
+    # SimpleAggregate bulk route with one Nullable storage child. The legacy
+    # typed facade remains responsible for bare/outer-Nullable declarations.
+    def self.selected_simple_aggregate_bulk_declaration(part_path : String, column_name : String) : String?
+      raise ArgumentError.new("selected column name must not be empty") if column_name.empty?
+      return nil if column_name.bytesize > MAX_METADATA_LINE_BYTES
+
+      columns_path = File.join(part_path, "columns.txt")
+      info = File.info?(columns_path, follow_symlinks: false) || raise(InvalidPartError.new("columns.txt is missing or inaccessible"))
+      raise CorruptPartError.new("columns.txt must not be a symbolic link") if info.type.symlink?
+      raise CorruptPartError.new("columns.txt is not a regular file") unless info.type.file?
+      raise UnsupportedFormatError.new("columns.txt exceeds metadata limit") if info.size > MAX_METADATA_FILE_BYTES
+      text = File.read(columns_path)
+      unless text.bytesize.to_i64 == info.size && !text.empty? && text.to_slice[text.bytesize - 1] == 10
+        raise CorruptPartError.new("columns.txt changed while reading or is missing LF")
+      end
+
+      columns = PartMetadataTextParser.parse_columns(text)
+      exact = columns.find { |column| column[0] == column_name }
+      virtual_path_found = false
+      columns.each do |column|
+        next unless json_type?(column[1])
+        prefix = "#{column[0]}."
+        next unless column_name.starts_with?(prefix)
+        path = column_name.byte_slice(prefix.bytesize, column_name.bytesize - prefix.bytesize)
+        virtual_path_found ||= !json_typed_path_type(column[1], path).nil?
+      end
+
+      if exact && virtual_path_found
+        raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
+      end
+      return nil unless selected = exact
+      return nil unless supports_simple_aggregate_bulk_type?(selected[1])
+      String.new(selected[1].to_slice)
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot read selected SimpleAggregate declaration")
+    end
+
+    def self.supports_simple_aggregate_bulk_type?(type : String) : Bool
+      descriptor = SimpleAggregateBulkColumnDeclaration.parse(type) || return false
+      descriptor.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE &&
+        descriptor.child_at(0).tag == BinaryDataType::TAG_NULLABLE
+    end
+
     # Parse the intentionally small JSON typed-path declaration grammar used
     # by this reader: simple top-level identifiers with exact primitive
     # numeric or String types. Unsupported declarations fail closed.

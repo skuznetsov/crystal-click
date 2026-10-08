@@ -3,8 +3,9 @@ module CrystalClick
   # profile. The function name remains nominal metadata; the stored payload
   # retains the exact child representation and is never aggregated here.
   class SimpleAggregateColumnType
-    # Covers the bounded scalar descriptor plus the outer Nullable shell.
-    MAX_TYPE_BYTES = 106
+    # Covers the longest admitted scalar descriptor plus an outer Nullable
+    # shell, including the bounded respect-nulls function spelling.
+    MAX_TYPE_BYTES = 107
 
     enum Shape
       Scalar
@@ -19,6 +20,9 @@ module CrystalClick
       nullable : Bool = false,
       storage_type_name : String = BinarySimpleAggregateType::DEFAULT_STORAGE_TYPE_NAME,
     )
+      if storage_type_name.starts_with?("Nullable(")
+        raise ArgumentError.new("legacy SimpleAggregateColumnType requires scalar storage; nullable? describes only outer Nullable")
+      end
       @simple_aggregate_type = BinarySimpleAggregateType.new(function, storage_type_name)
       @shape = nullable ? Shape::Nullable : Shape::Scalar
     end
@@ -77,6 +81,7 @@ module CrystalClick
       return nil if type_name.bytesize > MAX_TYPE_BYTES
 
       if aggregate_type = BinarySimpleAggregateType.parse(type_name)
+        return nil if aggregate_type.storage_type_name.starts_with?("Nullable(")
         return new(aggregate_type.function, false, aggregate_type.storage_type_name)
       end
 
@@ -84,6 +89,7 @@ module CrystalClick
 
       leaf = type_name.byte_slice("Nullable(".bytesize, type_name.bytesize - "Nullable()".bytesize)
       aggregate_type = BinarySimpleAggregateType.parse(leaf) || return nil
+      return nil if aggregate_type.storage_type_name.starts_with?("Nullable(")
       new(aggregate_type.function, true, aggregate_type.storage_type_name)
     end
 

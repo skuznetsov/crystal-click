@@ -276,8 +276,25 @@ describe "W170 temporal SimpleAggregateFunction core" do
       end
     end
 
+    temporal_child = CrystalClick::BinaryDataType.datetime64(3)
+    nullable_temporal_child = CrystalClick::BinaryDataType.nullable(temporal_child)
+    nullable_name = "SimpleAggregateFunction(min, Nullable(DateTime64(3)))"
+    nullable_wire = w170_temporal_wire_descriptor("min", Bytes[0x23_u8, 0x13_u8, 0x03_u8])
+    nullable_aggregate = CrystalClick::BinaryDataType.simple_aggregate(
+      CrystalClick::BinarySimpleAggregateType::Function::Min,
+      nullable_temporal_child,
+    )
+    nullable_aggregate.name.should eq(nullable_name)
+    nullable_aggregate.child_at(0).should eq(nullable_temporal_child)
+    CrystalClick::BinaryDataTypeCodec.encode(nullable_aggregate).should eq(nullable_wire)
+    CrystalClick::BinaryDataTypeCodec.decode(nullable_wire).should eq(nullable_aggregate)
+    parsed_nullable = CrystalClick::BinarySimpleAggregateType.parse(nullable_name).not_nil!
+    parsed_nullable.type_name.should eq(nullable_name)
+    parsed_nullable.storage_type_name.should eq("Nullable(DateTime64(3))")
+    CrystalClick::SimpleAggregateColumnType.parse(nullable_name).should be_nil
+
     malformed = [
-      "SimpleAggregateFunction(min, Nullable(DateTime64(3)))",
+      "SimpleAggregateFunction(min, Nullable(Nullable(DateTime64(3))))",
       "SimpleAggregateFunction(min, LowCardinality(DateTime64(3)))",
       "SimpleAggregateFunction(min, DateTime64(03))",
       "SimpleAggregateFunction(min, DateTime64(10))",
@@ -292,12 +309,21 @@ describe "W170 temporal SimpleAggregateFunction core" do
       CrystalClick::SimpleAggregateColumnType.parse(name).should be_nil
     end
 
-    wrapped = CrystalClick::BinaryDataType.nullable(CrystalClick::BinaryDataType.datetime64(3))
+    # The nested Nullable factory rejects this descriptor before the SAF
+    # constructor can observe it; wire and SQL parser controls remain separate.
     expect_raises(ArgumentError) do
+      double_nullable_child = CrystalClick::BinaryDataType.nullable(nullable_temporal_child)
       CrystalClick::BinaryDataType.simple_aggregate(
         CrystalClick::BinarySimpleAggregateType::Function::Min,
-        wrapped,
+        double_nullable_child,
       )
+    end
+    double_nullable_wire = w170_temporal_wire_descriptor(
+      "min",
+      Bytes[0x23_u8, 0x23_u8, 0x13_u8, 0x03_u8],
+    )
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryDataTypeCodec.decode(double_nullable_wire)
     end
   end
 
@@ -378,8 +404,8 @@ describe "W170 temporal SimpleAggregateFunction core" do
 
     over_core_cap = "x" * (CrystalClick::BinarySimpleAggregateType::MAX_TYPE_BYTES + 1)
     over_column_cap = "x" * (CrystalClick::SimpleAggregateColumnType::MAX_TYPE_BYTES + 1)
-    over_core_cap.bytesize.should eq(97)
-    over_column_cap.bytesize.should eq(107)
+    over_core_cap.bytesize.should eq(108)
+    over_column_cap.bytesize.should eq(108)
     CrystalClick::BinarySimpleAggregateType.parse(over_core_cap).should be_nil
     CrystalClick::SimpleAggregateColumnType.parse(over_column_cap).should be_nil
   end

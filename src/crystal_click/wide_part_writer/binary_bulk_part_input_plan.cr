@@ -1,7 +1,8 @@
 module CrystalClick
   module WidePartWriter
-    # Preflighted, Nested-specific inputs retained by the nominal adapter.
-    private struct NestedBulkPartInputPlan
+    # Fully preflighted input shared by every nominal static BinaryBulk part
+    # adapter.
+    private struct BinaryBulkPartInputPlan
       getter part : TwoColumnBulkPartInput
       getter physical : BinaryBulkPhysicalPlan
       getter metadata : RecursiveStoragePartMetadata

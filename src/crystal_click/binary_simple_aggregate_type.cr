@@ -7,9 +7,12 @@ module CrystalClick
     # UInt64 constructor and constant.
     TYPE_SUFFIX               = ", UInt64)"
     DEFAULT_STORAGE_TYPE_NAME = "UInt64"
-    # Leaves room for the complete bounded timezone token while remaining a
-    # hard parser cap. The outer Nullable owner applies its own ten-byte shell.
-    MAX_TYPE_BYTES = 96
+    # Bounds the longest admitted function name, one inner Nullable shell, and
+    # the complete bounded timezone token in a canonical temporal leaf.
+    MAX_FUNCTION_NAME_BYTES = 21
+    # The 107-byte descriptor cap leaves 59 bytes for its storage name.
+    MAX_STORAGE_TYPE_BYTES = 59
+    MAX_TYPE_BYTES         = 107
     # Existing local FixedString materialization limit; ClickHouse itself
     # permits wider declarations than this library profile admits.
     MAX_FIXED_STRING_WIDTH = 65_536
@@ -24,6 +27,8 @@ module CrystalClick
       GroupBitAnd
       GroupBitOr
       GroupBitXor
+      AnyRespectNulls
+      AnyLastRespectNulls
     end
 
     getter function : Function
@@ -46,29 +51,31 @@ module CrystalClick
       String.new(@storage_type_name.to_slice)
     end
 
-    # Exact canonical Decimal(P, S) parameters, when this descriptor stores a
-    # Decimal leaf. This deliberately does not infer Decimal from a raw width.
+    # Exact canonical Decimal(P, S) parameters when storage is exactly a
+    # Decimal leaf. An inner Nullable wrapper is intentionally not erased.
     def decimal_type : DecimalType?
       DecimalType.parse(@storage_type_name)
     end
 
-    # Exact canonical temporal storage identity, when the storage child is one
-    # of the six scalar temporal leaves admitted by this profile.
+    # Exact canonical temporal identity when storage is exactly one of the six
+    # scalar temporal leaves. An inner Nullable wrapper is not erased.
     def temporal_storage_type : TemporalStorageType?
       TemporalStorageType.parse(@storage_type_name)
     end
 
     def function_name : String
       case @function
-      when Function::Any             then "any"
-      when Function::AnyLast         then "anyLast"
-      when Function::Min             then "min"
-      when Function::Max             then "max"
-      when Function::Sum             then "sum"
-      when Function::SumWithOverflow then "sumWithOverflow"
-      when Function::GroupBitAnd     then "groupBitAnd"
-      when Function::GroupBitOr      then "groupBitOr"
-      when Function::GroupBitXor     then "groupBitXor"
+      when Function::Any                 then "any"
+      when Function::AnyLast             then "anyLast"
+      when Function::AnyRespectNulls     then "any_respect_nulls"
+      when Function::AnyLastRespectNulls then "anyLast_respect_nulls"
+      when Function::Min                 then "min"
+      when Function::Max                 then "max"
+      when Function::Sum                 then "sum"
+      when Function::SumWithOverflow     then "sumWithOverflow"
+      when Function::GroupBitAnd         then "groupBitAnd"
+      when Function::GroupBitOr          then "groupBitOr"
+      when Function::GroupBitXor         then "groupBitXor"
       else
         raise ArgumentError.new("invalid SimpleAggregateFunction function")
       end
@@ -94,15 +101,16 @@ module CrystalClick
 
       function_name = body.byte_slice(0, separator)
       storage_type_name = body.byte_slice(separator + 2, body.bytesize - separator - 2)
-      return nil unless 3 <= function_name.bytesize <= 15
+      return nil unless 3 <= function_name.bytesize <= MAX_FUNCTION_NAME_BYTES
       return nil if storage_type_name.empty?
+      return nil if storage_type_name.bytesize > MAX_STORAGE_TYPE_BYTES
 
       # Decimal and zoned temporal leaves are the only admitted storage leaves
-      # whose canonical names contain commas. Their exact leaf parsers validate
-      # complete spellings; extra arguments and composite children stay outside
-      # this bounded profile.
-      unless DecimalType.parse(storage_type_name) || TemporalStorageType.parse(storage_type_name)
-        return nil if storage_type_name.includes?(',')
+      # whose canonical names contain commas. Allow one exact inner Nullable
+      # shell while keeping their leaf parsers responsible for full spellings.
+      storage_leaf_name = nullable_storage_child_name(storage_type_name) || storage_type_name
+      unless DecimalType.parse(storage_leaf_name) || TemporalStorageType.parse(storage_leaf_name)
+        return nil if storage_leaf_name.includes?(',')
       end
 
       from_name(function_name, storage_type_name)
@@ -113,15 +121,17 @@ module CrystalClick
       storage_type_name : String = DEFAULT_STORAGE_TYPE_NAME,
     ) : BinarySimpleAggregateType?
       function = case name
-                 when "any"             then Function::Any
-                 when "anyLast"         then Function::AnyLast
-                 when "min"             then Function::Min
-                 when "max"             then Function::Max
-                 when "sum"             then Function::Sum
-                 when "sumWithOverflow" then Function::SumWithOverflow
-                 when "groupBitAnd"     then Function::GroupBitAnd
-                 when "groupBitOr"      then Function::GroupBitOr
-                 when "groupBitXor"     then Function::GroupBitXor
+                 when "any"                   then Function::Any
+                 when "anyLast"               then Function::AnyLast
+                 when "any_respect_nulls"     then Function::AnyRespectNulls
+                 when "anyLast_respect_nulls" then Function::AnyLastRespectNulls
+                 when "min"                   then Function::Min
+                 when "max"                   then Function::Max
+                 when "sum"                   then Function::Sum
+                 when "sumWithOverflow"       then Function::SumWithOverflow
+                 when "groupBitAnd"            then Function::GroupBitAnd
+                 when "groupBitOr"             then Function::GroupBitOr
+                 when "groupBitXor"            then Function::GroupBitXor
                  else
                    return nil
                  end
@@ -187,12 +197,26 @@ module CrystalClick
       function : Function,
       storage_type_name : String,
     ) : Bool
+      return false if storage_type_name.bytesize > MAX_STORAGE_TYPE_BYTES
+
+      law_function = case function
+                     when Function::AnyRespectNulls     then Function::Any
+                     when Function::AnyLastRespectNulls then Function::AnyLast
+                     else
+                       function
+                     end
+
+      if storage_type_name.starts_with?("Nullable(")
+        storage_leaf_name = nullable_storage_child_name(storage_type_name) || return false
+        return admitted_function_storage?(law_function, storage_leaf_name)
+      end
+
       if string_storage?(storage_type_name) || fixed_string_width(storage_type_name) != nil
-        return admitted_text_function?(function)
+        return admitted_text_function?(law_function)
       end
 
       if decimal_type = DecimalType.parse(storage_type_name)
-        case function
+        case law_function
         when Function::Any, Function::AnyLast, Function::Min, Function::Max,
              Function::SumWithOverflow
           return true
@@ -209,7 +233,7 @@ module CrystalClick
       end
 
       if TemporalStorageType.parse(storage_type_name)
-        case function
+        case law_function
         when Function::Any, Function::AnyLast, Function::Min, Function::Max
           return true
         else
@@ -219,7 +243,7 @@ module CrystalClick
 
       return false unless storage_width(storage_type_name)
 
-      case function
+      case law_function
       when Function::Any, Function::AnyLast, Function::Min, Function::Max,
            Function::SumWithOverflow
         true
@@ -243,6 +267,22 @@ module CrystalClick
       end
     end
 
+    # Return a single canonical wrapper's child. This is only a syntax helper;
+    # callers still run the child through the exact scalar leaf admission law.
+    private def self.nullable_storage_child_name(storage_type_name : String) : String?
+      return nil if storage_type_name.bytesize > MAX_STORAGE_TYPE_BYTES
+
+      prefix = "Nullable("
+      return nil unless storage_type_name.starts_with?(prefix) && storage_type_name.ends_with?(")")
+
+      child_size = storage_type_name.bytesize - "Nullable()".bytesize
+      return nil if child_size <= 0
+      child_name = storage_type_name.byte_slice(prefix.bytesize, child_size)
+      return nil if child_name.starts_with?(prefix)
+
+      child_name
+    end
+
     def ==(other : BinarySimpleAggregateType) : Bool
       @function == other.function && @storage_type_name == other.storage_type_name
     end
@@ -252,6 +292,7 @@ module CrystalClick
     private def valid_function?(function : Function) : Bool
       case function
       when Function::Any, Function::AnyLast, Function::Min, Function::Max,
+           Function::AnyRespectNulls, Function::AnyLastRespectNulls,
            Function::Sum, Function::SumWithOverflow, Function::GroupBitAnd,
            Function::GroupBitOr, Function::GroupBitXor
         true

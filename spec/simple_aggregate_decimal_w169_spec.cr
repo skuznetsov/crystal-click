@@ -28,6 +28,7 @@ private def w169_literal_decimal_aggregate(
   precision : Int,
   scale : Int,
   nullable : Bool = false,
+  nullable_child_depth : Int32 = 0,
 ) : Bytes
   bytes = [] of UInt8
   bytes << CrystalClick::BinaryDataType::TAG_NULLABLE if nullable
@@ -36,6 +37,7 @@ private def w169_literal_decimal_aggregate(
   bytes.concat(function_name.to_slice.to_a)
   bytes << 0_u8 # no function parameters
   bytes << 1_u8 # unary function
+  nullable_child_depth.times { bytes << CrystalClick::BinaryDataType::TAG_NULLABLE }
   bytes << w169_decimal_child_tag(width_bits)
   bytes << precision.to_u8
   bytes << scale.to_u8
@@ -154,7 +156,7 @@ describe "W169 canonical Decimal SimpleAggregateFunction core" do
     mismatches.should be_empty
   end
 
-  it "rejects SQL aliases, parameters, inner wrappers, and noncanonical binary widths" do
+  it "admits a single Nullable child and rejects aliases, repeated Nullable, and noncanonical widths" do
     [
       "SimpleAggregateFunction(min, Decimal32(3))",
       "SimpleAggregateFunction(min, Decimal64(3))",
@@ -167,7 +169,7 @@ describe "W169 canonical Decimal SimpleAggregateFunction core" do
       "SimpleAggregateFunction(min, Decimal(19,3))",
       "SimpleAggregateFunction(min, Decimal(19, 20))",
       "SimpleAggregateFunction(min, Decimal(19, 3), UInt8)",
-      "SimpleAggregateFunction(min, Nullable(Decimal(19, 3)))",
+      "SimpleAggregateFunction(min, Nullable(Nullable(Decimal(19, 3))))",
       "SimpleAggregateFunction(min, LowCardinality(Decimal(19, 3)))",
     ].each do |name|
       CrystalClick::BinarySimpleAggregateType.parse(name).should be_nil
@@ -197,6 +199,51 @@ describe "W169 canonical Decimal SimpleAggregateFunction core" do
     end
 
     CrystalClick::BinarySimpleAggregateType.storage_width("Decimal(19, 3)").should be_nil
+
+    decimal = CrystalClick::BinaryDataType.decimal(128, 19, 3)
+    nullable_decimal = CrystalClick::BinaryDataType.nullable(decimal)
+    nullable_name = "SimpleAggregateFunction(min, Nullable(Decimal(19, 3)))"
+    nullable_wire = w169_literal_decimal_aggregate(
+      "min",
+      128,
+      19,
+      3,
+      nullable_child_depth: 1
+    )
+    nullable_aggregate = CrystalClick::BinaryDataType.simple_aggregate(
+      CrystalClick::BinarySimpleAggregateType::Function::Min,
+      nullable_decimal
+    )
+    nullable_aggregate.name.should eq(nullable_name)
+    nullable_aggregate.child_at(0).should eq(nullable_decimal)
+    CrystalClick::BinaryDataTypeCodec.encode(nullable_aggregate).should eq(nullable_wire)
+    CrystalClick::BinaryDataTypeCodec.decode(nullable_wire).should eq(nullable_aggregate)
+    parsed_nullable = CrystalClick::BinarySimpleAggregateType.parse(nullable_name).not_nil!
+    parsed_nullable.type_name.should eq(nullable_name)
+    parsed_nullable.storage_type_name.should eq("Nullable(Decimal(19, 3))")
+    CrystalClick::SimpleAggregateColumnType.parse(nullable_name).should be_nil
+
+    double_nullable_name = "SimpleAggregateFunction(min, Nullable(Nullable(Decimal(19, 3))))"
+    # The nested Nullable factory rejects this descriptor before the SAF
+    # constructor can observe it; wire and SQL parser controls follow below.
+    expect_raises(ArgumentError) do
+      double_nullable_decimal = CrystalClick::BinaryDataType.nullable(nullable_decimal)
+      CrystalClick::BinaryDataType.simple_aggregate(
+        CrystalClick::BinarySimpleAggregateType::Function::Min,
+        double_nullable_decimal
+      )
+    end
+    double_nullable_wire = w169_literal_decimal_aggregate(
+      "min",
+      128,
+      19,
+      3,
+      nullable_child_depth: 2
+    )
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryDataTypeCodec.decode(double_nullable_wire)
+    end
+    CrystalClick::BinarySimpleAggregateType.parse(double_nullable_name).should be_nil
 
     # A descriptor can print the same SQL Decimal name while retaining a
     # different explicit binary width. SAF admission rejects that mismatch;
