@@ -244,9 +244,9 @@ describe "W224 recursive AggregateFunction admission RED" do
     [
       "Nullable(AggregateFunction(sum, UInt8))",
       "LowCardinality(AggregateFunction(sum, UInt8))",
-      # Variant's logical source type law is not being claimed here; its
-      # physical state route is outside this W224 static composition profile.
-      "Variant(AggregateFunction(sum, UInt8), UInt8)",
+      # W225 admits static Variant state arms, but direct Nullable is still
+      # forbidden by Variant's source type law.
+      "Variant(Nullable(AggregateFunction(sum, UInt8)), UInt8)",
     ].each do |source|
       CrystalClick::BinaryRecursiveDataTypeNameReader.parse_canonical(source).should be_nil
     end

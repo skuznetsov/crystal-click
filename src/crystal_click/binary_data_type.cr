@@ -352,7 +352,7 @@ module CrystalClick
     # binary decode uses the same helper with the enclosing operation's budget.
     def self.variant(arms : Array(BinaryDataType), limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryDataType
       arms.each do |arm|
-        reject_aggregate_function_child!(arm)
+        BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(arm)
       end
       budget = BinaryCodecBudget.new(limits, true)
       canonical = BinaryVariantRoster.normalize(
@@ -402,8 +402,8 @@ module CrystalClick
         if arm.contains_qbit?
           context.corrupt!("QBit is not admitted in a Variant arm")
         end
-        if arm.contains_aggregate_function?
-          context.corrupt!("AggregateFunction cannot be nested in a Variant arm")
+        unless BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(arm)
+          context.corrupt!("AggregateFunction is outside the admitted static Variant composition path")
         end
       end
       canonical = begin

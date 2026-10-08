@@ -33,7 +33,7 @@ module CrystalClick
           stack.pop
           tuple = current.child_at(0)
           stack << Frame.new(tuple) if tuple.contains_aggregate_function?
-        when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_VARIANT
           if frame.next_child >= current.child_count
             stack.pop
           else
@@ -56,9 +56,11 @@ module CrystalClick
                               child.tag == BinaryDataType::TAG_NAMED_TUPLE
           stack << Frame.new(child) if child.contains_aggregate_function?
         else
-          # LowCardinality, Variant, Dynamic, JSON, SimpleAggregateFunction,
-          # and every non-static/custom route stay closed when they contain
-          # an AggregateFunction state.
+          # LowCardinality, Dynamic, JSON, SimpleAggregateFunction, and every
+          # non-static/custom route stay closed when they contain an
+          # AggregateFunction state. Variant alternatives are handled like
+          # tuple fields above: every state-bearing path must independently
+          # satisfy this static grammar, while AF-free siblings are neutral.
           return false
         end
       end

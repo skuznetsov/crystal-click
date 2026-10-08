@@ -1,6 +1,48 @@
 # CrystalClick project status
 
-Current recursive AggregateFunction storage slice (W224, 2026-10-08): VERIFIED
+Current recursive AggregateFunction Variant slice (W225, 2026-10-08): VERIFIED
+within seven finite profiles (scoped verdict: ROBUST). The shared contextual
+admission visitor now traverses AggregateFunction-bearing Variant alternatives.
+Normal and wire constructors admit those shapes; generic values and bulk routes
+reuse existing Count/Sum leaf codecs, recursive roles, paired publication,
+readers, typed callbacks/windows and owned `.values`. The fixed legacy Variant
+unions were not widened. Count retains VarUInt state; Sum remains a nominal
+opaque state lane and its argument is descriptor metadata.
+
+The same unique 76-file affected roster passes 433 examples with zero
+failures/errors/pending in both DEBUG and RELEASE. RELEASE used eleven serial
+cohorts with counts `32,30,25,52,43,45,36,23,37,59,51`. Final format checking
+covers eight affected Crystal files, and the final source-freeze check covers
+all 1,311 entries. Fresh native helpers in both modes qualify seven stock reads
+and seven library ATTACH/CHECK/exact full, middle and empty RowBinary witnesses;
+each mode records 136 `success_exit0` raw process records. Both separate final
+raw audits pass. DEBUG helper SHA-256 is
+`bd5165752d7dbece307fff28bd934a4513c9e4eca6db7e1d0e28423cfa448933`; RELEASE
+helper SHA-256 is `6495e8397c56a8eb8304705e61004c91b9ad4e7e26f1b73dc3d64bd58cccdec8`.
+
+CHECK-zero and terminal-literal controls pass in both modes with exact
+restoration and no generated-file changes. A separately executed scratch
+reference/hash/count comparison finds all 130 generated files agree across the
+seven profiles and with attached records; that inventory check is not
+behavioral proof. The auditor-only sorted-key fix followed DEBUG native
+qualification; the untouched raw evidence tree was separately re-audited.
+Source characterization/instrumentation developed alongside production after
+descriptor RED, and the pinned source/runtime are different builds.
+
+The scope is quiescent Wide/LZ4/Default/plain-mrk2, BASIC discriminator, five
+parent rows and marks `[2,2,1]` plus terminal zero. Only root Variant has both
+String profiles; wrapped profiles use SingleStream. Synthetic offline catalogs
+and unit-level projection-child tests are not native full-catalog or native
+projection integration. Direct Nullable(AF) and LC(AF) remain rejected.
+Dynamic/JSON AF envelopes, other AF families/layouts, MV/projection
+writing/semantics, broad facade cleanup and performance remain outside this
+qualification; the exact inherited 64 MiB callback boundary was not measured
+with a large W225 fixture. No full-type compatibility is claimed.
+The full storage goal remains active; performance work stays deferred.
+Details: [AGGREGATE_FUNCTION_VARIANT_FRONTIER.md](AGGREGATE_FUNCTION_VARIANT_FRONTIER.md),
+[W225 evidence packet](../.landmark/evidence/aggregate-function-variant-w225.json).
+
+Previous recursive AggregateFunction storage slice (W224, 2026-10-08): VERIFIED
 within the nine measured static profiles (scoped verdict: ROBUST). Array,
 named/unnamed Tuple, Map values, nominal Nested and eligible Nullable(Tuple)
 reuse existing child codecs and physical schedules around Count/W223 Sum
@@ -24,9 +66,10 @@ All 146 generated file inventories agree across modes.
 The finite profile is quiescent Wide/LZ4/Default/plain-mrk2, five rows and real
 marks [2,2,1] plus terminal zero. Nested is exact nominal on this runtime.
 Map aggregate keys remain a library guard despite observed stock constructor
-acceptance. Aggregate-bearing LC/Variant/Dynamic/JSON envelopes, other state
-families, remaining physical layouts, native MV/projection writing/semantics
-and broad facade decomposition remain open. Stock public native checks use
+acceptance. At the W224 closure, aggregate-bearing LC/Variant/Dynamic/JSON
+envelopes, other state families, remaining physical layouts, native MV/
+projection writing/semantics and broad facade decomposition remained open.
+Stock public native checks use
 WidePartTable; offline `.values` uses synthetic library-part catalogs, and
 W224 projection-child controls are unit-level, not new native offline coverage.
 Memory/performance remains deferred; the full goal stays active. Details:

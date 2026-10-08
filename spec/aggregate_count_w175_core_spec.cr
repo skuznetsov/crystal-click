@@ -354,12 +354,12 @@ describe "W175 paired AggregateFunction(count) core" do
     nested_count = CrystalClick::BinaryDataType.nested([count] of CrystalClick::BinaryDataType, ["c"] of String)
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.map(count, uint64) }
     map_value_count = CrystalClick::BinaryDataType.map(uint64, count)
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.variant([count] of CrystalClick::BinaryDataType) }
+    variant_count = CrystalClick::BinaryDataType.variant([count] of CrystalClick::BinaryDataType)
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.low_cardinality(count) }
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.simple_aggregate(CrystalClick::BinarySimpleAggregateType::Function::Sum, count)
     end
-    [array_count, tuple_count, nested_count, map_value_count].each do |type|
+    [array_count, tuple_count, nested_count, map_value_count, variant_count].each do |type|
       CrystalClick::BinaryDataTypeCodec.decode(CrystalClick::BinaryDataTypeCodec.encode(type)).should eq(type)
     end
 
