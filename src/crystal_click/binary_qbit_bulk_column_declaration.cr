@@ -1,7 +1,7 @@
 module CrystalClick
-  # Exact static BinaryBulk declaration adapter for Array chains ending in a
-  # QBit leaf or direct Nullable(QBit). Other QBit-bearing compositions keep
-  # their independent Dynamic, Object and root-column contracts.
+  # Exact static BinaryBulk declaration adapter for admitted recursive QBit
+  # products. Root QBit and Nullable(QBit) retain their dedicated owners;
+  # Dynamic, Object, Variant and other runtime layouts remain out of scope.
   class BinaryQBitBulkColumnDeclaration
     getter type : BinaryDataType
     getter declaration : String
@@ -21,17 +21,24 @@ module CrystalClick
       rescue ex : ArgumentError
         raise UnsupportedFormatError.new(ex.message || "QBit declaration is outside the static bulk profile")
       end
-      unless @type.qbit_array_chain?
-        raise UnsupportedFormatError.new("QBit bulk declaration requires an Array chain ending in QBit or Nullable(QBit)")
+      root_qbit = @type.tag == BinaryDataType::TAG_QBIT ||
+                  (@type.tag == BinaryDataType::TAG_NULLABLE &&
+                   @type.child_at(0).tag == BinaryDataType::TAG_QBIT)
+      unless @type.contains_qbit? && !root_qbit
+        raise UnsupportedFormatError.new("QBit bulk declaration requires an admitted recursive static product")
       end
       BinaryQBitRecursiveAdmission.validate_static_type!(@type)
-      BinaryBulkTypePlan.new(
+      plan = BinaryBulkTypePlan.new(
         @type,
         BinaryBulkProfile.single_stream,
         nil,
         limits,
         true
-      ).role_count
+      )
+      if plan.qbit_static_sites.empty?
+        raise UnsupportedFormatError.new("QBit bulk declaration has no recursive static leaf sites")
+      end
+      plan.role_count
       canonical_bytes = canonical.bytesize.to_u64
       budget.ensure_wire_bytes(canonical_bytes)
       budget.charge_wire_bytes(canonical_bytes)

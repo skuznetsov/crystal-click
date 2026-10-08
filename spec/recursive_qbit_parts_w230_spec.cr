@@ -577,14 +577,18 @@ describe "W230 recursive QBit complete-part and typed consumers" do
     end
   end
 
-  it "keeps legacy root and Nullable QBit owners while refusing unrelated static wrappers" do
+  it "keeps legacy owners, admits static products, and refuses unrelated wrappers" do
     qbit = CrystalClick::BinaryDataType.qbit(CrystalClick::QBitType.new("Float32", 9_u64))
     CrystalClick::WidePart.supports_typed_type?(qbit.name).should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(#{qbit.name})").should be_true
     CrystalClick::WidePart.supports_typed_type?("Array(#{qbit.name})").should be_true
     CrystalClick::WidePart.supports_typed_type?("Array(Array(#{qbit.name}))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Tuple(#{qbit.name})").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Tuple(#{qbit.name}))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Map(UInt8, #{qbit.name})").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Nested(embedding #{qbit.name})").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Nullable(Tuple(#{qbit.name}))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(#{qbit.name}))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Tuple(#{qbit.name}))").should be_false
 
     dynamic = CrystalClick::BinaryDataType.dynamic
     array_candidate = w230_parts_try_array_type(qbit)

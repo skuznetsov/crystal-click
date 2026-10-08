@@ -421,7 +421,7 @@ describe "W230 static recursive QBit values" do
     end
   end
 
-  it "rejects plane-lane disagreement and retains the closed non-Array composition boundaries" do
+  it "rejects plane-lane disagreement and retains the closed Nullable(Array) boundary" do
     qbit_type = CrystalClick::QBitType.new("Int8", 9_u64)
     qbit_descriptor = CrystalClick::BinaryDataType.qbit(qbit_type)
     array_candidate = w230_try_array_type(qbit_descriptor)
@@ -450,9 +450,8 @@ describe "W230 static recursive QBit values" do
       end
     end
 
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.tuple([qbit_descriptor] of CrystalClick::BinaryDataType)
-    end
+    tuple_type = CrystalClick::BinaryDataType.tuple([qbit_descriptor] of CrystalClick::BinaryDataType)
+    tuple_type.name.should eq("Tuple(QBit(Int8, 9))")
     # Nullable(Array(QBit)) remains rejected once Array(QBit) is admitted.
     if recursive_array = w230_try_array_type(qbit_descriptor)
       expect_raises(ArgumentError) do

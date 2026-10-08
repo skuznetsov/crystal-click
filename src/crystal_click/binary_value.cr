@@ -354,12 +354,12 @@ module CrystalClick
         return left.nil? ? right.nil? : left == right
       end
       return same?(other) unless @type.contains_qbit?
-      return false unless @null == other.@null
-      return true if @null
       if @type.tag == BinaryDataType::TAG_QBIT
-        qbit_value == other.qbit_value
+        return false unless @null == other.@null
+        return true if @null
+        return qbit_value == other.qbit_value
       else
-        @elements == other.@elements
+        qbit_owned_tree_equal?(other)
       end
     end
 
@@ -374,14 +374,128 @@ module CrystalClick
       end
       hasher = @type.hash(hasher)
       hasher = @null.hash(hasher)
-      unless @null
-        if @type.tag == BinaryDataType::TAG_QBIT
-          hasher = qbit_value.hash(hasher)
+      if @type.tag == BinaryDataType::TAG_QBIT && !@null
+        return qbit_value.hash(hasher)
+      end
+      qbit_owned_tree_hash(hasher)
+    end
+
+    # A QBit-bearing parent opts into structural comparison for its complete
+    # value subtree. Ordinary roots intentionally retain object-identity
+    # semantics; do not call their public == recursively because that would
+    # restore the very identity mismatch this scoped owner handles.
+    private def qbit_owned_tree_equal?(other : BinaryValue) : Bool
+      pending = Array(Tuple(BinaryValue, BinaryValue)).new
+      pending << {self, other}
+
+      until pending.empty?
+        left, right = pending.pop
+        return false unless left.@type == right.@type
+        return false unless left.@null == right.@null
+        return false unless left.@variant_index == right.@variant_index
+        return false unless exact_payload_equal?(left.@payload, right.@payload)
+
+        left_qbit = left.@qbit_value
+        right_qbit = right.@qbit_value
+        return false unless left_qbit.nil? == right_qbit.nil?
+        if left_value = left_qbit
+          return false unless left_value == right_qbit.not_nil!
+        end
+
+        left_json = left.@json_row
+        right_json = right.@json_row
+        return false unless left_json.nil? == right_json.nil?
+        if left_row = left_json
+          right_row = right_json.not_nil!
+          return false unless left_row.type == right_row.type && left_row.path_count == right_row.path_count
+          left_row.path_count.times do |index|
+            return false unless exact_json_path_equal?(left_row, right_row, index)
+          end
+          index = left_row.path_count - 1
+          while index >= 0
+            pending << {left_row.value_at(index), right_row.value_at(index)}
+            index -= 1
+          end
         else
-          @elements.each { |element| hasher = element.hash(hasher) }
+          return false unless left.@elements.size == right.@elements.size
+          index = left.@elements.size - 1
+          while index >= 0
+            pending << {left.@elements[index], right.@elements[index]}
+            index -= 1
+          end
+        end
+      end
+      true
+    end
+
+    # Hash with the same scoped value grammar used by qbit_owned_tree_equal?.
+    # Include raw payload bytes and explicit child counts so exact float bits,
+    # NULL placement, Variant discriminators, JSON paths, and child order all
+    # contribute without changing standalone ordinary-value hashing.
+    private def qbit_owned_tree_hash(hasher)
+      pending = Array(BinaryValue).new
+      pending << self
+
+      until pending.empty?
+        value = pending.pop
+        hasher = value.@type.hash(hasher)
+        hasher = value.@null.hash(hasher)
+        hasher = value.@variant_index.hash(hasher)
+
+        payload = value.@payload
+        hasher = payload.nil?.hash(hasher)
+        if bytes = payload
+          hasher = bytes.size.hash(hasher)
+          bytes.each { |byte| hasher = byte.hash(hasher) }
+        end
+
+        qbit = value.@qbit_value
+        hasher = qbit.nil?.hash(hasher)
+        hasher = qbit.hash(hasher) if qbit
+
+        row = value.@json_row
+        hasher = row.nil?.hash(hasher)
+        if json = row
+          hasher = json.path_count.hash(hasher)
+          json.path_count.times do |index|
+            path_size = json.path_byte_size(index)
+            hasher = path_size.hash(hasher)
+            path_size.times do |byte_index|
+              hasher = json.path_byte_at(index, byte_index).hash(hasher)
+            end
+          end
+          index = json.path_count - 1
+          while index >= 0
+            pending << json.value_at(index)
+            index -= 1
+          end
+        else
+          hasher = value.@elements.size.hash(hasher)
+          index = value.@elements.size - 1
+          while index >= 0
+            pending << value.@elements[index]
+            index -= 1
+          end
         end
       end
       hasher
+    end
+
+    private def exact_payload_equal?(left : Bytes?, right : Bytes?) : Bool
+      left_bytes = left
+      right_bytes = right
+      return right_bytes.nil? unless left_bytes
+      return false unless right_bytes
+      return false unless left_bytes.size == right_bytes.size
+      left_bytes.size.times { |index| return false unless left_bytes[index] == right_bytes[index] }
+      true
+    end
+
+    private def exact_json_path_equal?(left : BinaryJsonRow, right : BinaryJsonRow, index : Int) : Bool
+      size = left.path_byte_size(index)
+      return false unless size == right.path_byte_size(index)
+      size.times { |byte_index| return false unless left.path_byte_at(index, byte_index) == right.path_byte_at(index, byte_index) }
+      true
     end
 
     def variant_index? : UInt8?

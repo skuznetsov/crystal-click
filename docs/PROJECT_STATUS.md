@@ -1,6 +1,37 @@
 # CrystalClick project status
 
-Current recursive QBit Array slice (W230, 2026-10-08): VERIFIED within finite
+Current recursive QBit static-product slice (W231, 2026-10-08): VERIFIED within
+finite quiescent Wide/LZ4/Default/plain-mrk2 profiles with BASIC Map/Nullable
+serialization (scoped verdict: ROBUST). Array, Tuple, Map keys/values, nominal
+Nested and eligible Nullable(Tuple) reuse existing QBit leaf serde through one
+path-keyed static site roster and complete occurrence schedule. Reader, writer,
+typed full/window consumers and owned `.values` share exact declarations.
+Existing direct root/Nullable and Array-chain routes retain their contracts.
+
+The same 62 affected spec files pass 448 examples in each of DEBUG and RELEASE;
+the focused DEBUG roster passes 58. Both fresh native captures and separate raw
+audits qualify eight profiles and 139 raw process records per mode. Stock reads,
+library publication, native ATTACH/CHECK and literal full/middle/zero RowBinary
+agree; typed EOF scans retain complete preflight. All 572 generated files match
+across modes by actual bytes. An omitted-schedule defect seed fails both late
+sibling and nullable-ancestor corruption controls; exact restoration passes.
+Each raw audit rejects six CHECK/status-label forgeries and passes after exact
+restoration. The auditor's recorder-schema mismatch was corrected before fresh
+captures; Count's unchanged argument guard gains an explicit exception effect,
+supported by lexical-rescue and LLVM probes, not a proven compiler root cause.
+
+This is recursive leaf reuse plus wrapper state, not all-type/layout coverage.
+Variant/runtime Dynamic/JSON/Object QBit products, LC(QBit), QBit aggregate
+arguments, Nullable(Array/Map/Nested) and unqualified physical versions retain
+guards. Complete shape validation is not unselected-payload authentication;
+logical workspace/transport bounds are not RSS or throughput guarantees.
+The separately pinned source and runtime differ. Memory/performance remains
+deferred, as do general MV/projection execution/writing and broad facade
+decomposition. The overall goal remains active. Details:
+[RECURSIVE_QBIT_FRONTIER.md](RECURSIVE_QBIT_FRONTIER.md),
+[W231 evidence packet](../.landmark/evidence/recursive-qbit-static-w231.json).
+
+Previous recursive QBit Array slice (W230, 2026-10-08): VERIFIED within finite
 quiescent Wide/LZ4/Default/plain-mrk2 profiles (scoped verdict: ROBUST).
 `Array^n(QBit)` and `Array^n(Nullable(QBit))` reuse existing leaf serde and the
 shared static part publisher, typed full/window readers and owned `.values`.

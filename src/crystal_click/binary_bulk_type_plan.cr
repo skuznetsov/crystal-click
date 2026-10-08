@@ -12,6 +12,7 @@ module CrystalClick
     @allow_bound_json : Bool
     @qbit_column : QBitColumnType?
     @qbit_recursive_site : BinaryQBitRecursiveAdmission::StaticArraySite?
+    @qbit_static_sites : Array(BinaryQBitRecursiveAdmission::StaticSite)
 
     struct LowCardinalitySite
       getter type : BinaryDataType
@@ -45,19 +46,26 @@ module CrystalClick
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end
       # Dynamic QBit leaves have per-actual-site roles owned by the supplied
-      # Dynamic plan. Static recursive QBit has one exact Array-chain site;
-      # all other descriptors retain the root-column adapter and its guards.
+      # Dynamic plan. Static recursive QBit has path-keyed leaf sites; root
+      # QBit and Nullable(QBit) retain their dedicated W179 column owner.
       if @dynamic_plan
+        @qbit_static_sites = [] of BinaryQBitRecursiveAdmission::StaticSite
         @qbit_recursive_site = nil
         @qbit_column = nil
       else
-        @qbit_recursive_site = BinaryQBitRecursiveAdmission.static_array_site(@type, @limits, @writing)
-        if site = @qbit_recursive_site
-          @qbit_column = nil
+        BinaryQBitRecursiveAdmission.validate_static_type!(@type)
+        @qbit_static_sites = BinaryQBitRecursiveAdmission.static_sites(@type, @limits, @writing)
+        if type.qbit_array_chain? && (site = @qbit_static_sites.first?)
+          @qbit_recursive_site = BinaryQBitRecursiveAdmission::StaticArraySite.new(
+            site.column,
+            site.size_roles,
+            site.nullable_role?,
+            site.plane_roles,
+          )
         else
-          BinaryQBitRecursiveAdmission.validate_static_type!(@type)
-          @qbit_column = BinaryQBitBulkCodec.column_type(@type)
+          @qbit_recursive_site = nil
         end
+        @qbit_column = @qbit_static_sites.empty? ? BinaryQBitBulkCodec.column_type(@type) : nil
       end
       if column = @qbit_column
         BinaryQBitBulkCodec.preflight_role_metadata!(column, "root", @limits, @writing)
@@ -77,6 +85,14 @@ module CrystalClick
 
     def qbit_array_site : BinaryQBitRecursiveAdmission::StaticArraySite?
       @qbit_recursive_site
+    end
+
+    def qbit_static_sites : Array(BinaryQBitRecursiveAdmission::StaticSite)
+      @qbit_static_sites.dup
+    end
+
+    def qbit_static_site(path : String) : BinaryQBitRecursiveAdmission::StaticSite?
+      @qbit_static_sites.find { |site| site.matches_path?(path) }
     end
 
     # Numeric group-major plane role order for the QBit bulk visitor. This is

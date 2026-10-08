@@ -56,15 +56,19 @@ describe "W179 QBit binary kernel admission" do
     CrystalClick::BinaryValueCodec.encode(value).should eq(envelope)
   end
 
-  it "classifies an unqualified unnamed Tuple(QBit) wire descriptor" do
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x1f_u8, 0x01, 0x36, 0x07, 0x03])
-    end
+  it "round trips a source-valid unnamed Tuple(QBit) wire descriptor" do
+    descriptor = Bytes[0x1f_u8, 0x01, 0x36, 0x07, 0x03]
+    type = CrystalClick::BinaryDataTypeCodec.decode(descriptor)
+    type.name.should eq("Tuple(QBit(Int8, 3))")
+    CrystalClick::BinaryDataTypeCodec.encode(type).should eq(descriptor)
   end
 
-  it "classifies a Tuple(QBit) envelope before reading its stored value" do
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryValueCodec.decode(Bytes[0x1f_u8, 0x01, 0x36, 0x07, 0x03, 0x03, 1, 2, 3])
-    end
+  it "round trips a Tuple(QBit) value envelope without flattening its nominal parent" do
+    envelope = Bytes[0x1f_u8, 0x01, 0x36, 0x07, 0x03, 0x03, 1, 2, 3]
+    value = CrystalClick::BinaryValueCodec.decode(envelope)
+    value.type.name.should eq("Tuple(QBit(Int8, 3))")
+    value.child_count.should eq(1)
+    value.child_at(0).qbit_value.raw_bytes.should eq(Bytes[1_u8, 2, 3])
+    CrystalClick::BinaryValueCodec.encode(value).should eq(envelope)
   end
 end

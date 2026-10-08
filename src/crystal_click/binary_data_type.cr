@@ -120,9 +120,9 @@ module CrystalClick
       @contains_aggregate_count = @aggregate_count_type != nil || @children.any?(&.contains_aggregate_count?)
       @contains_aggregate_function = @tag == TAG_AGGREGATE_FUNCTION || @children.any?(&.contains_aggregate_function?)
       @contains_qbit = @tag == TAG_QBIT || @children.any?(&.contains_qbit?)
-      # This cached shape admits only Array^n(QBit) and
-      # Array^n(Nullable(QBit)). It is computed from one immutable child so
-      # construction does not recursively walk an unbudgeted descriptor tree.
+      # Legacy W230 adapter shape. General static QBit products are admitted
+      # by `admitted_qbit_static_composition?`; this flag remains exact for
+      # callers that need the old Array-chain compatibility path.
       @qbit_array_chain = if @tag == TAG_ARRAY && @children.size == 1
                             child = @children[0]
                             child.tag == TAG_QBIT ||
@@ -241,14 +241,52 @@ module CrystalClick
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
 
-    # One narrow QBit composition law shared by the public constructor and
-    # binary descriptor reader. This does not admit any non-QBit profile; it
-    # only prevents the codec boundary from diverging from Array construction.
+    # QBit leaf admission for static recursive owners. Runtime-owned wrappers
+    # (Dynamic/JSON/Object/LowCardinality/Variant/custom state) remain outside
+    # this grammar and keep their independent admission policies.
     def self.admitted_array_qbit_child?(child : BinaryDataType) : Bool
       !child.contains_qbit? ||
-        child.tag == TAG_QBIT ||
-        (child.tag == TAG_NULLABLE && child.child_count == 1 && child.child_at(0).tag == TAG_QBIT) ||
-        child.qbit_array_chain?
+        admitted_qbit_static_composition?(child)
+    end
+
+    # Iterative so public constructor checks do not recurse on a caller-owned
+    # descriptor before the bounded codec traversal. The same law is shared by
+    # Array, Tuple, Map, Nested and the eligible Nullable(Tuple) wrapper.
+    def self.admitted_qbit_static_composition?(type : BinaryDataType) : Bool
+      return true unless type.contains_qbit?
+
+      stack = [] of BinaryDataType
+      stack << type
+      until stack.empty?
+        current = stack.pop
+        next unless current.contains_qbit?
+
+        case current.tag
+        when TAG_QBIT
+          nil
+        when TAG_ARRAY, TAG_NESTED
+          stack << current.child_at(0)
+        when TAG_UNNAMED_TUPLE, TAG_NAMED_TUPLE
+          current.child_count.times do |index|
+            child = current.child_at(index)
+            stack << child if child.contains_qbit?
+          end
+        when TAG_MAP
+          key = current.child_at(0)
+          value = current.child_at(1)
+          stack << value if value.contains_qbit?
+          stack << key if key.contains_qbit?
+        when TAG_NULLABLE
+          child = current.child_at(0)
+          unless child.tag == TAG_QBIT || child.tag == TAG_UNNAMED_TUPLE || child.tag == TAG_NAMED_TUPLE
+            return false
+          end
+          stack << child
+        else
+          return false
+        end
+      end
+      true
     end
 
     # Nested is nominally distinct from Array(Tuple(...)). Its one implicit
@@ -265,8 +303,8 @@ module CrystalClick
         raise ArgumentError.new("Nested requires a non-empty named Tuple")
       end
       BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(tuple_type)
-      tuple_type.child_count.times do |index|
-        reject_qbit_child!(tuple_type.child_at(index))
+      unless admitted_qbit_static_composition?(tuple_type)
+        reject_qbit_child!(tuple_type)
       end
       new(TAG_NESTED, nil, [tuple_type] of BinaryDataType, [] of String, nil)
     end
@@ -357,8 +395,10 @@ module CrystalClick
           raise ArgumentError.new("Nullable can contain AggregateFunction only through a direct Tuple child")
         end
       end
-      if child.contains_qbit? && child.tag != TAG_QBIT
-        raise ArgumentError.new("Nullable can contain QBit only as its direct scalar child")
+      if child.contains_qbit? &&
+         !(child.tag == TAG_QBIT ||
+         ((child.tag == TAG_UNNAMED_TUPLE || child.tag == TAG_NAMED_TUPLE) && admitted_qbit_static_composition?(child)))
+        raise ArgumentError.new("Nullable can contain QBit only as its direct scalar or eligible Tuple child")
       end
       if child.tag == TAG_SIMPLE_AGGREGATE
         storage_type = child.simple_aggregate_type.not_nil!.storage_type
@@ -459,7 +499,9 @@ module CrystalClick
       raise ArgumentError.new("Tuple arity exceeds ClickHouse's supported maximum") if children.size > MAX_TUPLE_ARITY
       children.each do |child|
         BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(child)
-        reject_qbit_child!(child)
+        unless admitted_qbit_static_composition?(child)
+          reject_qbit_child!(child)
+        end
       end
 
       if names
@@ -486,8 +528,12 @@ module CrystalClick
     def self.map(key : BinaryDataType, value : BinaryDataType) : BinaryDataType
       reject_aggregate_function_child!(key)
       BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(value)
-      reject_qbit_child!(key)
-      reject_qbit_child!(value)
+      unless admitted_qbit_static_composition?(key)
+        reject_qbit_child!(key)
+      end
+      unless admitted_qbit_static_composition?(value)
+        reject_qbit_child!(value)
+      end
       if BinaryLowCardinalityTypePolicy.nullable_map_key?(key)
         raise ArgumentError.new("Map key type cannot be Nullable or LowCardinality(Nullable(...))")
       end

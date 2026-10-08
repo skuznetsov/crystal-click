@@ -1,5 +1,48 @@
 # Crystal Click landmarks
 
+## Recursive QBit static products — W231
+
+- Active objective remains CH-compatible read/write types and MV/projection
+  inspection. Performance stays deferred; the overall goal is not complete.
+- Baseline: `79fa1b806056fd26c45bc7e1ff2eb028c799ad34`. Scoped result:
+  VERIFIED finite quiescent Wide/LZ4/Default/plain-mrk2 Array/Tuple/BASIC Map/
+  nominal Nested/eligible Nullable(Tuple) QBit products; adversary ROBUST.
+  Shared leaf serde, path-keyed static sites and a complete occurrence schedule
+  replace per-product work. New site/schedule owners have separate files.
+  Reader/writer, typed full/windows and owned values share exact declarations.
+- Evidence: the same 62 affected files pass 448 examples per mode; focused
+  DEBUG passes 58. Both fresh native modes and separate raw audits pass eight
+  profiles and 139 raw process records per mode. All 572 generated files match
+  across modes by actual bytes, names, size and SHA-256 (75,570 bytes/mode).
+  Final formatting passes for 24 Crystal files; 80 frozen inputs and both
+  helper hashes match. Source and runtime are distinct pins.
+- Refuted routes: row/first-sibling binding misses late second-site corruption.
+  A schedule-omission seed fails second-sibling and nullable-ancestor controls;
+  exact restoration passes. Mixed QBit subtree identity needs ordinary sibling
+  values too, not only QBit leaves. Count rescue failures survive fresh cache
+  and multi-module probes; lexical rescues and LLVM show a missing inferred
+  effect edge. Explicit `@[Raises]` restores catches without widening the guard;
+  the exact compiler cause remains unproven. The raw auditor's omitted recorder
+  label failed closed; corrected-schema captures were regenerated. Each final
+  audit rejects six CHECK/status-label forgeries and passes after restoration.
+- Boundary: complete shape checks are not unselected-payload authentication.
+  Shared size lanes consume one open-time budget. Known UInt64 schedule vectors
+  are preflighted, but logical caps do not bound all allocation/RSS. No
+  performance, all-depth/parameter/version/layout or whole-suite claim.
+  Runtime Variant/Dynamic/JSON/Object products, LC(QBit), aggregate arguments
+  and Nullable(Array/Map/Nested) retain their current guards.
+- Return pointer: [W231 frontier](docs/RECURSIVE_QBIT_FRONTIER.md),
+  [evidence index](.landmark/evidence/recursive-qbit-static-w231.json).
+- Next discriminator: one concrete runtime/dictionary/physical-version boundary
+  or genuinely missing aggregate-state leaf. Reuse admitted child codecs; an
+  unqualified product is not automatically absent serde. General MV/projection
+  execution/writing and large-facade decomposition remain open.
+- Standing authority: bounded local implementation and atomic local commits;
+  no push, production mutation or resumed performance work.
+- Decay: refresh after owner/consumer, fixture/helper/auditor, source/runtime or
+  profile changes. Temporary raw roots are regenerable caches, not substantive
+  proof when absent. Luna review is correlated, not independent replication.
+
 ## Recursive QBit Array storage — W230
 
 - Active objective remains CH-compatible read/write types and MV/projection

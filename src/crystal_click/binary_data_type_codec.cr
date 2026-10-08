@@ -354,10 +354,11 @@ module CrystalClick
         children = Array(BinaryDataType).new(count) do
           read_from(context, depth + 1)
         end
-        if children.any?(&.contains_qbit?)
-          context.unsupported!("QBit is outside the admitted Tuple profile")
+        begin
+          BinaryDataType.tuple(children)
+        rescue ex : ArgumentError
+          context.corrupt!("invalid Tuple child types: #{ex.message}")
         end
-        BinaryDataType.tuple(children)
       else
         context.ensure_depth(depth + 1) unless count == 0
         children = [] of BinaryDataType

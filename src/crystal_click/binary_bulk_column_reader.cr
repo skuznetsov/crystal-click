@@ -175,13 +175,15 @@ module CrystalClick
         raise CorruptPartError.new("Binary bulk parent mark grid differs from count.txt")
       end
 
-      # Validate every mark's complete Array-to-QBit occurrence schedule
-      # before publishing the reader. This reads only bounded Array size
-      # buffers and compares plane/null-map grid deltas; it does not decode
-      # unselected QBit plane payloads.
-      if site = static_plan.qbit_array_site
-        BinaryQBitArrayOccurrenceSchedule.validate!(
-          site,
+      # Validate every mark's complete static QBit occurrence schedule before
+      # publishing the reader. Shared Array/Map size lanes are read once;
+      # nullable-ancestor and QBit plane grid deltas are checked, while their
+      # unselected payloads stay unread.
+      qbit_sites = static_plan.qbit_static_sites
+      unless qbit_sites.empty?
+        BinaryQBitStaticOccurrenceSchedule.validate!(
+          @type,
+          qbit_sites,
           @physical,
           @source,
           grids,

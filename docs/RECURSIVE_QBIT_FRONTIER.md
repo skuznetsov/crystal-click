@@ -1,5 +1,142 @@
 # Recursive QBit storage frontier
 
+## Static product composition — W231
+
+Document status: VERIFIED within the finite W231 scope (2026-10-08).
+Scoped adversary verdict: ROBUST; not an all-product/layout qualification.
+Baseline: `79fa1b806056fd26c45bc7e1ff2eb028c799ad34`.
+Current frontier: multiple static QBit leaf sites inside recursively composed
+Array, Tuple, Map keys/values, nominal Nested and eligible Nullable(Tuple) owners.
+This is one shared leaf-codec integration, not a serializer per type product.
+Bounded context: quiescent Wide/LZ4/Default/plain-mrk2 parts, BASIC Map and
+Nullable serialization, exact nominal declarations and staged publication.
+Memory/performance and the overall compatibility objective remain open.
+
+The current pinned stock runtime accepted all four wrapper families in a
+fresh Memory-table constructor probe. That establishes constructor acceptance,
+not persisted MergeTree support. The source pin remains
+`0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`; source and runtime builds differ.
+An additional stock INSERT SELECT probe persisted
+`Map(QBit(Int8, 3), UInt64)` with one nonempty and one empty row and exact
+`CHECK TABLE` success. The initial Values-expression parse failure was
+inconclusive; only the valid INSERT SELECT probe supports this anchor.
+
+### Admission and design laws
+
+- Preserve the existing dedicated root/direct-Nullable owners and W230 Array
+  behavior. Admit additional static products only after paired storage tests.
+- A static QBit site is identified by its exact structural path and nominal
+  carrier/dimension/stride, not by the physical plane width alone.
+- Tuple preserves its incoming occurrence axis. Array and BASIC Map add a
+  sizes-derived child axis; nominal Nested shares its Array-of-Tuple axis.
+  Nullable does not filter hidden physical defaults out of child counts.
+- Enumerate every leaf site and account for the cumulative roster/scratch
+  before allocation. Reuse the existing QBit bit-plane codec; do not duplicate
+  transposition, default generation or scalar RowBinary logic.
+- Validate the complete shape of every site before reader publication and
+  callbacks, including first-window and EOF scans. Shared ancestor size lanes
+  must not replay their complete index/payload independently for each leaf.
+  Inspection and shape reads consume one open-time transport budget.
+- Keep Variant, runtime Dynamic/JSON/Object, LC(QBit), QBit aggregate arguments,
+  Nullable(Array/Map/Nested), Compact/sparse/custom serializers
+  and alternate unqualified physical versions guarded. Source-valid rejected
+  products are library guards, not claims of ClickHouse invalidity.
+
+### Executed Definition of Done
+
+Risk: CAUTION (serialization, recursive admission and complete part schedules).
+Rollback: exact local diff from the clean baseline, followed by one atomic
+local commit after verification; no push. Root owns all serial guarded jobs
+and hostile review. Luna owns disjoint implementation/test/harness surfaces.
+
+1. Add `spec/recursive_qbit_static_products_w231_spec.cr` and
+   `spec/recursive_qbit_static_parts_w231_spec.cr` against unchanged production.
+   Run the root-owned guarded DEBUG commands and require actual missing-
+   admission assertion failures, not compilation or infrastructure errors.
+2. Widen the shared static admission/site owner, descriptor and bulk visitors;
+   integrate a complete path-keyed occurrence schedule and exact declaration
+   routing into staged publication, typed full/windows and owned values.
+3. Run both new specs and the enumerated affected QBit/recursive/consumer
+   roster in DEBUG and RELEASE. Expected signal: nonzero example counts with
+   zero failures/errors/pending and retained runtime/aggregate guards.
+4. Build helpers and execute paired stock-authored/library-written native
+   profiles for independent siblings, a no-Array leaf, shared Nested/Array
+   ancestors, Map keys/values and nullable hidden defaults. Require exact nominal
+   declarations and literal full/window/empty RowBinary, ATTACH/CHECK success,
+   separate raw audit, and an executed hostile CHECK/shape defect control.
+5. Inspect the final source state and evidence scope, update this frontier and
+   current status, then commit exact relevant paths only after the signals pass.
+
+The main falsifier is a second sibling with an independent late-mark size
+corruption that leaves the first site's early window intact: opening and EOF
+scanning must reject before callbacks. Other controls cover unequal sibling
+counts, shared size-lane read counts, null hidden defaults, role/name/scratch
+limits, physically equal but nominally different leaves and retained guards.
+Stop rather than relaxing a guard if stock persistence contradicts the
+source-derived contract. Performance, general MV/projection execution/writing
+and full all-layout compatibility remain open, not redefined as this slice.
+
+### Observed qualification
+
+- Unchanged-production admission RED: 13 examples, 12 assertion failures,
+  zero errors. A separate mixed-value identity RED has two failures in two
+  examples. These distinguish missing admission/identity from a build failure.
+- The final focused DEBUG roster passes 58 examples. The same 62 affected files,
+  partitioned into six serial cohorts, pass 448 examples in each of DEBUG and
+  RELEASE with zero failures/errors/pending. This is not a whole-suite run.
+- Both fresh paired native captures and separate read-only raw audits qualify
+  eight profiles and 139 raw process records per mode (66 stock, 73 evidence).
+  Independent unequal/empty sibling Arrays, direct and nullable QBit siblings,
+  Array-of-Tuple, nominal Nested, Map keys, Map values and Nullable(Tuple) hidden
+  defaults preserve their exact declarations. No metadata is relabelled to
+  bypass a nominal guard. Stock reads, typed full/middle/zero/EOF windows,
+  library publication, native ATTACH/CHECK and literal native full/middle/zero
+  RowBinary agree. All 572 generated files match across modes by actual bytes,
+  relative names, size and SHA-256 (75,570 bytes per mode).
+- Omitting the complete static schedule causes both new checksummed late-size
+  controls to fail: second sibling and Nullable(Tuple) ancestor. Restoring the
+  exact reader bytes makes both pass. Shape preflight precedes callbacks even
+  for an early or EOF selection. Shared size lanes are inspected/read once;
+  inspection and shape reads consume the same open-time transport budget.
+- An initial raw audit failed closed because its schema omitted the recorder's
+  `label`. The auditor now requires that field and its exact expected value.
+  Fresh captures bind the corrected auditor; old captures are not edited into
+  passing evidence. Each final audit rejects six coherent stock/native CHECK
+  zero/message and status-label attacks, then passes after exact restoration.
+- Recursive QBit-bearing value identity covers the whole mixed subtree,
+  retaining raw-bit and nominal metadata, including NaNs and nested JSON,
+  Variant and Nullable values. Ordinary non-QBit roots keep existing identity.
+- The wider descriptor graph exposed missing inferred exception edges at
+  Count argument-guard rescue sites under Crystal 1.21.0. Typed and untyped
+  lexical probes and LLVM `call`/`invoke` inspection discriminate the symptom;
+  an explicit `@[Raises]` on the existing policy restores both catches without
+  widening Count admission. Fresh-cache and multi-module probes refuted those
+  explanations. The exact compiler-internal cause is not established.
+- Final formatting passes for all 24 changed Crystal files. All 80 frozen
+  source/spec/helper/harness inputs and both helper binaries retain their
+  qualified hashes. Only the auditor Ruby file changed after helper builds;
+  the final native captures were regenerated after that correction.
+
+Known logical workspace is preflighted as `(unique_sizes + 2) * marks * 8`
+bytes before the per-mark UInt64 vectors are allocated. This does not include
+all allocator overhead and is not an RSS guarantee. Complete size/plane shape
+checks do not authenticate unselected QBit or NULL payloads.
+
+Evidence and exact commands: [W231 packet](../.landmark/evidence/recursive-qbit-static-w231.json).
+The pinned source has 18 relevant file hashes; the stock runtime is separately
+pinned at 26.10.1.1201, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`.
+No latest-master/runtime correlation or all-version claim follows.
+
+Continuation: retain static composition and inspect one concrete remaining
+runtime Dynamic/Variant/JSON, dictionary or physical-version boundary before
+widening it. An unqualified type product is not necessarily missing leaf serde.
+General MV/projection execution/writing, other AggregateFunction state leaves
+and broad facade decomposition remain open. Refresh qualification after owner,
+consumer, helper, harness, source, runtime or profile changes; absent temporary
+raw roots require regeneration, not trust in the evidence index alone.
+
+## Previous Array-chain qualification — W230
+
 Document status: VERIFIED within the finite W230 scope (2026-10-08).
 Scoped adversary verdict: ROBUST; not an all-product qualification.
 Baseline: `ac628f8a90c5c50e6ca9bfb204e64f65e9220b8a`.

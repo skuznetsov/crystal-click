@@ -465,7 +465,7 @@ describe "W201 recursive specialized Nested bulk composition" do
     end
   end
 
-  it "retains byte-budget, JSON, QBit, and Nullable(Nested) boundaries" do
+  it "retains byte-budget, JSON, and Nullable(Nested) guards while admitting Nested(QBit)" do
     string = CrystalClick::BinaryDataType.primitive("String")
     nullable = CrystalClick::BinaryDataType.nullable(string)
     low = CrystalClick::BinaryDataType.low_cardinality(nullable)
@@ -503,8 +503,21 @@ describe "W201 recursive specialized Nested bulk composition" do
     end
 
     qbit = CrystalClick::BinaryDataType.qbit(CrystalClick::QBitType.new("Int8", 8_u64))
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.nested([qbit] of CrystalClick::BinaryDataType, ["embedding"] of String)
-    end
+    qbit_nested = CrystalClick::BinaryDataType.nested(
+      [qbit] of CrystalClick::BinaryDataType,
+      ["embedding"] of String,
+    )
+    qbit_nested.tag.should eq(CrystalClick::BinaryDataType::TAG_NESTED)
+    CrystalClick::BinaryDataTypeCodec.decode(
+      CrystalClick::BinaryDataTypeCodec.encode(qbit_nested)
+    ).should eq(qbit_nested)
+
+    qbit_plan = CrystalClick::BinaryBulkTypePlan.new(
+      qbit_nested,
+      CrystalClick::BinaryBulkProfile.single_stream,
+    )
+    qbit_plan.qbit_static_sites.size.should eq(1)
+    qbit_plan.qbit_static_sites[0].path.should eq("root.elements.field.0")
+    qbit_plan.qbit_static_sites[0].qbit_type.should eq(CrystalClick::QBitType.new("Int8", 8_u64))
   end
 end

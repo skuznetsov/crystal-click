@@ -63,6 +63,7 @@ module CrystalClick
       metadata_records.times { budget.charge_node }
 
       qbit_column = plan.qbit_column
+      qbit_static_sites = plan.qbit_static_sites
       all_roles = plan.roles
       unless all_roles.size.to_u64 == planned_role_count
         raise UnsupportedFormatError.new("binary bulk role plan changed while it was materialized")
@@ -90,7 +91,7 @@ module CrystalClick
       budget.ensure_future_elements(total[:edges])
       budget.ensure_wire_bytes(total[:wire_bytes])
       qbit_site_scratch = if total[:wire_bytes] > 0_u64
-                            prepare_dynamic_qbit_scratch(dynamic_plan, budget)
+                            prepare_qbit_site_scratch(dynamic_plan, qbit_static_sites, budget)
                           else
                             nil
                           end
@@ -101,12 +102,6 @@ module CrystalClick
       if total[:wire_bytes] > 0_u64
         if column = qbit_column
           qbit_scratch = Bytes.new(column.value_type.plane_width, 0_u8)
-        elsif site = plan.qbit_array_site
-          scratch_width = site.qbit_type.plane_width
-          if scratch_width.to_u64 > budget.limits.max_bytes.to_u64
-            raise UnsupportedFormatError.new("static QBit Array scratch exceeds configured byte limit")
-          end
-          qbit_scratch = Bytes.new(scratch_width, 0_u8)
         end
       end
 
@@ -119,7 +114,7 @@ module CrystalClick
 
       granules.each_with_index do |rows, mark_index|
         rows.each do |value|
-          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key, shared_value_depth_origin)
+          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key, shared_value_depth_origin, qbit_static_sites)
         end
         roles.each do |role|
           offsets[role] << lanes[role].size.to_u64
@@ -153,15 +148,19 @@ module CrystalClick
       {nodes: 0_u64, edges: 0_u64, wire_bytes: 0_u64}
     end
 
-    private def self.prepare_dynamic_qbit_scratch(
+    private def self.prepare_qbit_site_scratch(
       dynamic_plan : BinaryDynamicBulkPlan?,
+      static_sites : Array(BinaryQBitRecursiveAdmission::StaticSite),
       budget : BinaryCodecBudget,
     ) : Hash(QBitType, Bytes)?
-      return nil unless dynamic_plan
-
       widths = Hash(QBitType, Int32).new
-      dynamic_plan.each_qbit_site do |site|
-        widths[site.qbit_type] = site.plane_width
+      if plan = dynamic_plan
+        plan.each_qbit_site do |site|
+          widths[site.qbit_type] = site.plane_width
+        end
+      end
+      static_sites.each do |site|
+        widths[site.qbit_type] = site.qbit_type.plane_width
       end
       return nil if widths.empty?
 
@@ -170,7 +169,7 @@ module CrystalClick
         total_bytes = checked_add(total_bytes, width.to_u64)
       end
       if total_bytes > budget.limits.max_bytes.to_u64
-        raise UnsupportedFormatError.new("Dynamic QBit scratch exceeds configured byte limit")
+        raise UnsupportedFormatError.new("aggregate QBit site scratch exceeds configured byte limit")
       end
 
       scratch = Hash(QBitType, Bytes).new
@@ -560,6 +559,7 @@ module CrystalClick
       json_object_writer : BinaryDynamicBulkJsonObjectWriter? = nil,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
       shared_value_depth_origin : Int = 1,
+      qbit_static_sites : Array(BinaryQBitRecursiveAdmission::StaticSite)? = nil,
     ) : Nil
       unless value.type == type
         raise UnsupportedFormatError.new("binary bulk value does not match its descriptor")
@@ -581,6 +581,14 @@ module CrystalClick
             end
             return nil
           end
+        end
+        if site = static_qbit_site_for(path, qbit_static_sites)
+          scratch_by_type = qbit_site_scratch || raise UnsupportedFormatError.new("static QBit plane scratch was not preflighted")
+          scratch = scratch_by_type[site.qbit_type]? || raise UnsupportedFormatError.new("static QBit plane scratch is missing its nominal type")
+          site.append_plane_row(value.qbit_value, scratch) do |role, byte|
+            write_byte(lanes, role, byte, budget)
+          end
+          return nil
         end
         roles = qbit_roles || raise UnsupportedFormatError.new("QBit bulk plane roles were not planned")
         scratch = qbit_scratch || raise UnsupportedFormatError.new("QBit bulk plane scratch was not preflighted")
@@ -623,7 +631,7 @@ module CrystalClick
           selected_path = child_path(path, ".arm.", index.to_i, budget, dynamic_plan)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, child_value, selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(index.to_i) }, shared_value_depth_origin)
+          write_value(child_type, child_value, selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(index.to_i) }, shared_value_depth_origin, qbit_static_sites)
         end
       when BinaryDataType::TAG_DYNAMIC
         plan = dynamic_plan || raise UnsupportedFormatError.new("Dynamic bulk value has no structure plan")
@@ -664,7 +672,7 @@ module CrystalClick
                        end
             traversal.preflight_children(1_u64)
             traversal.ensure_depth(depth + 1)
-            write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, leaf_key, shared_value_depth_origin)
+            write_value(child_type, child_value, arm_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, leaf_key, shared_value_depth_origin, qbit_static_sites)
           end
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
@@ -673,7 +681,7 @@ module CrystalClick
         traversal.ensure_depth(depth + 1) unless count == 0
         write_u64(lanes, "#{path}.sizes", count.to_u64, budget)
         count.times do |index|
-          write_value(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+          write_value(type.child_at(0), value.element_at(index), child_path(path, ".elements", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, qbit_static_sites)
         end
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = value.element_count
@@ -688,7 +696,7 @@ module CrystalClick
           traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           count.times do |index|
-            write_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin)
+            write_value(type.child_at(index), value.element_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin, qbit_static_sites)
           end
         end
       when BinaryDataType::TAG_MAP
@@ -708,7 +716,7 @@ module CrystalClick
         flat_count.times do |index|
           child_index = index.even? ? 0 : 1
           selected_path = child_path(path, ".elements.field.", child_index, budget, dynamic_plan)
-          write_value(type.child_at(child_index), value.element_at(index), selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(child_index) }, shared_value_depth_origin)
+          write_value(type.child_at(child_index), value.element_at(index), selected_path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(child_index) }, shared_value_depth_origin, qbit_static_sites)
         end
       when BinaryDataType::TAG_NULLABLE
         child_type = type.child_at(0)
@@ -716,18 +724,18 @@ module CrystalClick
           write_byte(lanes, "#{path}.nulls", 1_u8, budget)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_default_value(child_type, child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(0) })
+          write_default_value(child_type, child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(0) }, qbit_site_scratch, qbit_static_sites)
         else
           write_byte(lanes, "#{path}.nulls", 0_u8, budget)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+          write_value(child_type, value.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, qbit_static_sites)
         end
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         child_type = type.child_at(0)
         preflight_child_type(traversal, child_type, 1_u64)
         traversal.ensure_depth(depth + 1)
-        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, qbit_static_sites)
       when BinaryDataType::TAG_JSON
         writer = json_object_writer || raise(UnsupportedFormatError.new("bound Dynamic JSON leaf has no paired Object writer"))
         key = json_leaf_key || raise(UnsupportedFormatError.new("bound Dynamic JSON leaf has no exact binding key"))
@@ -759,6 +767,8 @@ module CrystalClick
       json_object_writer : BinaryDynamicBulkJsonObjectWriter? = nil,
       mark_index : Int = 0,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
+      qbit_site_scratch : Hash(QBitType, Bytes)? = nil,
+      qbit_static_sites : Array(BinaryQBitRecursiveAdmission::StaticSite)? = nil,
     ) : Nil
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
         traversal.ensure_depth(depth)
@@ -767,12 +777,20 @@ module CrystalClick
       traversal.visit_node(depth)
       case type.tag
       when BinaryDataType::TAG_QBIT
-        roles = qbit_roles || raise(UnsupportedFormatError.new("QBit bulk plane roles were not planned"))
-        scratch = qbit_scratch || raise(UnsupportedFormatError.new("QBit bulk plane scratch was not preflighted"))
-        qbit_type = type.qbit_type || raise(UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type"))
-        column = QBitColumnType.new(qbit_type)
-        BinaryQBitBulkCodec.append_zero_planes(column, roles, qbit_role_offset, scratch) do |role, byte|
-          write_byte(lanes, role, byte, budget)
+        if site = static_qbit_site_for(path, qbit_static_sites)
+          scratch_by_type = qbit_site_scratch || raise UnsupportedFormatError.new("static QBit plane scratch was not preflighted")
+          scratch = scratch_by_type[site.qbit_type]? || raise UnsupportedFormatError.new("static QBit plane scratch is missing its nominal type")
+          site.append_zero_planes(scratch) do |role, byte|
+            write_byte(lanes, role, byte, budget)
+          end
+        else
+          roles = qbit_roles || raise UnsupportedFormatError.new("QBit bulk plane roles were not planned")
+          scratch = qbit_scratch || raise UnsupportedFormatError.new("QBit bulk plane scratch was not preflighted")
+          qbit_type = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
+          column = QBitColumnType.new(qbit_type)
+          BinaryQBitBulkCodec.append_zero_planes(column, roles, qbit_role_offset, scratch) do |role, byte|
+            write_byte(lanes, role, byte, budget)
+          end
         end
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
@@ -809,12 +827,12 @@ module CrystalClick
         child_type = type.child_at(0)
         preflight_child_type(traversal, child_type, 1_u64)
         traversal.ensure_depth(depth + 1)
-        write_default_value(child_type, child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(0) })
+        write_default_value(child_type, child_path(path, ".nested", nil, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(0) }, qbit_site_scratch, qbit_static_sites)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         child_type = type.child_at(0)
         preflight_child_type(traversal, child_type, 1_u64)
         traversal.ensure_depth(depth + 1)
-        write_default_value(child_type, path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(0) })
+        write_default_value(child_type, path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(0) }, qbit_site_scratch, qbit_static_sites)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           write_byte(lanes, "#{path}.data", 0x30_u8, budget)
@@ -827,7 +845,7 @@ module CrystalClick
           traversal.ensure_future_nodes(ordinary_nodes)
           traversal.ensure_depth(depth + 1)
           type.child_count.times do |index|
-            write_default_value(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(index) })
+            write_default_value(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(index) }, qbit_site_scratch, qbit_static_sites)
           end
         end
       else
@@ -835,6 +853,14 @@ module CrystalClick
         width.times { write_byte(lanes, "#{path}.data", 0_u8, budget) }
       end
       nil
+    end
+
+    private def self.static_qbit_site_for(
+      path : String,
+      sites : Array(BinaryQBitRecursiveAdmission::StaticSite)?,
+    ) : BinaryQBitRecursiveAdmission::StaticSite?
+      return nil unless entries = sites
+      entries.find { |site| site.matches_path?(path) }
     end
 
     private def self.child_path(

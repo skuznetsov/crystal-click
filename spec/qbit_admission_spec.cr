@@ -10,15 +10,20 @@ describe "paired QBit type admission" do
     end
   end
 
-  it "admits only Array chains ending in QBit or direct Nullable(QBit)" do
+  it "admits static Array, Tuple, Map, and Nested QBit compositions" do
     scalar = "QBit(Float32, 9)"
     CrystalClick::WidePart.supports_typed_type?("Array(#{scalar})").should be_true
     CrystalClick::WidePart.supports_typed_type?("Array(Array(#{scalar}))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Array(Nullable(#{scalar}))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Array(Array(Nullable(#{scalar})))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Tuple(#{scalar})").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Array(Tuple(#{scalar}))").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Map(UInt8, #{scalar})").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Map(#{scalar}, UInt8)").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Nested(embedding #{scalar})").should be_true
+    CrystalClick::WidePart.supports_typed_type?("Nullable(Tuple(#{scalar}))").should be_true
     CrystalClick::WidePart.supports_typed_type?("Nullable(Array(#{scalar}))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Tuple(#{scalar}))").should be_false
-    CrystalClick::WidePart.supports_typed_type?("Array(Map(UInt8, #{scalar}))").should be_false
+    CrystalClick::WidePart.supports_typed_type?("Array(Variant(#{scalar}, UInt8))").should be_false
   end
 
   it "does not admit unsupported elements, illegal strides, or adjacent compositions" do

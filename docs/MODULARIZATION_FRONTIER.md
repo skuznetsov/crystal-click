@@ -9,7 +9,35 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility reuse — W215
+## Current responsibility reuse — W231
+
+Static QBit products reuse the existing scalar/bit-plane leaf codec and generic
+descriptor/bulk visitors, rather than adding classes for every wrapper product.
+`BinaryQBitRecursiveAdmission::StaticSite` has its own file and owns detached
+structural-path, nominal QBit and physical-role identity.
+`BinaryQBitStaticOccurrenceSchedule` has its own file and owns complete,
+parent-first occurrence validation over unique shared size lanes and nullable
+ancestry. The existing `BinaryQBitBulkColumnDeclaration` owns exact consumer
+admission; existing staged publisher, typed readers and private offline values
+materializer reuse the resulting plans. Direct root/Nullable owners remain.
+
+Status: VERIFIED, scoped ROBUST for the finite Wide/LZ4/Default/plain-mrk2
+Array/Tuple/BASIC Map/Nested/eligible Nullable(Tuple) QBit products. Root
+qualifies 448 examples across the same 62 spec files per mode, a 58-example
+focused DEBUG gate and paired eight-profile native captures with separate raw
+audits. All 572 generated files reconcile by actual bytes across modes. A
+schedule-omission defect seed and coherent CHECK/status-label attacks reject;
+exact restoration passes. The source and runtime are separately pinned.
+
+This is cohesive responsibility reuse, not completion of broad facade
+decomposition or proof of reduced coupling, compiler/RSS or throughput. Runtime
+container/dictionary/version state must be qualified separately. Logical
+workspace and shared transport limits are not allocator guarantees. Broad
+facade decomposition remains IN_PROGRESS and performance remains deferred.
+Details: [RECURSIVE_QBIT_FRONTIER.md](RECURSIVE_QBIT_FRONTIER.md),
+[W231 evidence packet](../.landmark/evidence/recursive-qbit-static-w231.json).
+
+## Previous responsibility reuse — W215
 
 Ordinary JSON actual leaves at declared Object typed-Dynamic sites reuse the
 generic recursive visitor and existing Object child serializer. The cohesive

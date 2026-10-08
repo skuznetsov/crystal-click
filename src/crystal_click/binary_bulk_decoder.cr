@@ -96,14 +96,25 @@ module CrystalClick
         selected_rows = checked_add(selected_rows, count)
       end
 
-      qbit_site_roles = prepare_dynamic_qbit_site_roles(
-        dynamic_plan,
-        streams,
-        real_marks,
-        selected_first,
-        selected_count,
-        budget,
-      )
+      qbit_site_roles = if dynamic_plan
+                          prepare_dynamic_qbit_site_roles(
+                            dynamic_plan,
+                            streams,
+                            real_marks,
+                            selected_first,
+                            selected_count,
+                            budget,
+                          )
+                        else
+                          prepare_static_qbit_site_roles(
+                            plan.qbit_static_sites,
+                            streams,
+                            real_marks,
+                            selected_first,
+                            selected_count,
+                            budget,
+                          )
+                        end
       qbit_roles = plan.qbit_plane_roles
       qbit_role_offset = 0
       if column = qbit_column
@@ -294,6 +305,81 @@ module CrystalClick
 
       if total_materialization > budget.limits.max_bytes.to_u64
         corrupt!("Dynamic QBit aggregate materialization exceeds configured byte limit")
+      end
+      sites
+    end
+
+    private def self.prepare_static_qbit_site_roles(
+      static_sites : Array(BinaryQBitRecursiveAdmission::StaticSite),
+      streams : BinaryBulkStreams,
+      real_marks : Int32,
+      selected_first : Int32,
+      selected_count : Int32,
+      budget : BinaryCodecBudget,
+    ) : Hash(String, Tuple(QBitType, Array(String)))?
+      return nil if static_sites.empty?
+
+      role_copy_bytes = 0_u64
+      static_sites.each do |site|
+        role_copy_bytes = checked_add(role_copy_bytes, site.path_bytesize)
+        role_copy_bytes = checked_add(role_copy_bytes, site.plane_role_bytesize)
+      end
+      # The lookup map retains detached paths and plane-name arrays. Charge its
+      # complete size before allocating any of those copies.
+      budget.ensure_wire_bytes(role_copy_bytes)
+      budget.charge_wire_bytes(role_copy_bytes)
+
+      sites = Hash(String, Tuple(QBitType, Array(String))).new
+      total_materialization = 0_u64
+      selected_end = selected_first + selected_count
+      static_sites.each do |site|
+        path = site.path
+        qbit_type = site.qbit_type
+        roles = site.plane_roles
+        unless roles.size == qbit_type.plane_count
+          corrupt!("static QBit plane-role count does not match its descriptor")
+        end
+        sites[path] = {qbit_type, roles}
+
+        selected_site_rows = 0_u64
+        mark = 0
+        while mark < real_marks
+          expected_size = nil.as(UInt64?)
+          roles.each do |role|
+            unless streams.has_role?(role)
+              corrupt!("static QBit plane lane is missing")
+            end
+            stream = streams.stream(role)
+            size = stream.offset_at(mark + 1) - stream.offset_at(mark)
+            if previous = expected_size
+              unless size == previous
+                corrupt!("static QBit plane lanes disagree on occurrence count")
+              end
+            else
+              expected_size = size
+            end
+          end
+          size = expected_size || corrupt!("static QBit site has no plane roles")
+          width = qbit_type.plane_width.to_u64
+          unless width > 0_u64 && size % width == 0_u64
+            corrupt!("static QBit plane lane is not aligned to its row width")
+          end
+          if mark >= selected_first && mark < selected_end
+            selected_site_rows = checked_add(selected_site_rows, size // width)
+          end
+          mark += 1
+        end
+
+        charge = begin
+          site.column.materialization_charge(selected_site_rows)
+        rescue ex : ArgumentError
+          corrupt!("static QBit materialization exceeds its bounded range")
+        end
+        total_materialization = checked_add(total_materialization, charge)
+      end
+
+      if total_materialization > budget.limits.max_bytes.to_u64
+        corrupt!("static QBit aggregate materialization exceeds configured byte limit")
       end
       sites
     end

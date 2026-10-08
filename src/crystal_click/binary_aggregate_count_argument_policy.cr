@@ -45,6 +45,8 @@ module CrystalClick
       false
     end
 
+    # Recursive descriptor call graphs must retain this method's exception edge.
+    @[Raises]
     def self.require!(argument_type : BinaryDataType?, limits : BinaryCodecLimits = DEFAULT_LIMITS) : Nil
       unless admitted?(argument_type, limits)
         raise ArgumentError.new("AggregateFunction(count) argument is outside the bounded canonical profile")
