@@ -213,14 +213,16 @@ describe "W163 SimpleAggregateFunction numeric carrier descriptors" do
         CrystalClick::BinaryDataType.low_cardinality(CrystalClick::BinaryDataType.primitive("UInt64"))
       )
     end
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.simple_aggregate(
-        function,
-        CrystalClick::BinaryDataType.tuple([
-          CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.primitive("UInt64")),
-        ] of CrystalClick::BinaryDataType)
-      )
-    end
+    comparable_collection = CrystalClick::BinaryDataType.tuple([
+      CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.primitive("UInt64")),
+    ] of CrystalClick::BinaryDataType)
+    collection_aggregate = CrystalClick::BinaryDataType.simple_aggregate(function, comparable_collection)
+    collection_aggregate.child_at(0).should eq(comparable_collection)
+    collection_aggregate.name.should eq("SimpleAggregateFunction(min, Tuple(Array(UInt64)))")
+    CrystalClick::BinaryDataTypeCodec.decode(
+      CrystalClick::BinaryDataTypeCodec.encode(collection_aggregate),
+    ).should eq(collection_aggregate)
+    CrystalClick::SimpleAggregateColumnType.parse(collection_aggregate.name).should be_nil
   end
 
   it "preserves function and same-width child identity in SQL names and type equality" do

@@ -1,5 +1,32 @@
 # CrystalClick project status
 
+Current recursive SimpleAggregateFunction slice (W222, 2026-10-08): VERIFIED
+within the finite root-SAF-column scope (scoped verdict: ROBUST). Existing
+Array/Tuple/Map/Nullable child codecs compose eligible SAF storage without a
+serializer per product. Eight additional canonical identities and bounded
+positive UInt64 function parameters bring descriptor coverage to nineteen
+canonical identities; the pinned source has twenty-two factory spellings,
+including three mapped-array aliases. Canonical identity, result/storage
+equality and physical-profile admission remain separate responsibilities.
+The neutral recursive grammar, SAF admission and parameter owners each have
+their own file. Count shares syntax, not the broadened SAF policy; legacy
+scalar APIs retain their narrower contracts.
+
+The same 49 affected spec files pass 261 examples in each of DEBUG/RELEASE,
+zero failures/errors/pending. Fresh native runs per mode pass 39 stock reads,
+39 library ATTACH/CHECK/literal-value witnesses and public batch/owned-values
+checks. Both raw audits pass with external helper pins; all 626 generated file
+inventories agree across modes. A failed-process sidecar is rejected despite
+unchanged green summaries; exact restoration returns the audit to green.
+Test-infrastructure contract defects were corrected without relaxing production
+guards. The finite profile is Wide/LZ4/plain-mrk2 with the measured String modes,
+five rows and real mark grid [2,2,1]. Arbitrary products, generic nested-SAF
+physical qualification, LC/JSON/Dynamic/Variant children, remaining layouts,
+non-Count states, MV/projection semantics/writing and broader facade cleanup
+remain open. Memory/performance stays deferred; the full goal stays active.
+Details: [SIMPLE_AGGREGATE_RECURSIVE_STORAGE_FRONTIER.md](SIMPLE_AGGREGATE_RECURSIVE_STORAGE_FRONTIER.md),
+[W222 evidence packet](../.landmark/evidence/simple-aggregate-recursive-w222.json).
+
 Current nullable-storage SimpleAggregateFunction slice (W221, 2026-10-08):
 VERIFIED within the finite declared scope (scoped verdict: ROBUST). Existing
 child codecs now compose `any_respect_nulls`, `anyLast_respect_nulls` and one
@@ -28,8 +55,9 @@ leaf/parameter witnesses, three legal nominal shapes, both String profiles
 and six old-function controls. Production assumes quiescent parts and checks
 declared sizes, not complete payload hashes. Logical ownership accounting
 is not peak RSS. Public multi-part/projection controls are synthetic, not a
-native full-catalog discovery certificate. SAF has eleven of the pinned
-source's twenty-two function identities; the remaining functions/products,
+native full-catalog discovery certificate. At W221 SAF had eleven canonical
+identities; the source's twenty-two allowlist spellings are not twenty-two
+distinct canonical identities (see W222 above). At that closure, other products,
 non-Count states, physical layouts, MV/projection writing/semantics and broad
 facade decomposition stay open. Memory/performance remains deferred; the
 full goal stays active. Details:

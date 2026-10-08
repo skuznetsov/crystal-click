@@ -51,6 +51,15 @@ module CrystalClick
       name_budget.charge_wire_bytes(canonical_bytes)
       @schema_declaration = String.new(canonical.to_slice)
 
+      # Root SimpleAggregateFunction declarations enter through the shared
+      # static declaration policy even when callers bypass WidePart's table
+      # admission adapter. Preserve all non-SAF generic-reader behavior.
+      if @type.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE ||
+         (@type.tag == BinaryDataType::TAG_NULLABLE &&
+         @type.child_at(0).tag == BinaryDataType::TAG_SIMPLE_AGGREGATE)
+        SimpleAggregateBulkColumnDeclaration.new(@type, @limits)
+      end
+
       # Validate static no-JSON/no-Dynamic binary admission only after the
       # bounded type-name walk has established the descriptor's depth/node
       # boundary. Profile-dependent planning follows metadata inspection.

@@ -719,11 +719,26 @@ describe "W168 SimpleAggregateFunction String and FixedString core admission" do
       [0x1e_u8, 0x15_u8],
     ]
     wrapped_children.each_with_index do |child, index|
-      expect_raises(ArgumentError) do
-        CrystalClick::BinaryDataType.simple_aggregate(CrystalClick::BinarySimpleAggregateType::Function::Any, child)
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDataTypeCodec.decode(w168_literal_descriptor("any", wrapped_child_wires[index]))
+      aggregate = CrystalClick::BinaryDataType.simple_aggregate(
+        CrystalClick::BinarySimpleAggregateType::Function::Any,
+        child,
+      )
+      aggregate.child_at(0).should eq(child)
+      aggregate_name = "SimpleAggregateFunction(any, #{child.name})"
+      aggregate.name.should eq(aggregate_name)
+      aggregate_wire = w168_literal_descriptor("any", wrapped_child_wires[index])
+      CrystalClick::BinaryDataTypeCodec.encode(aggregate).should eq(aggregate_wire)
+      CrystalClick::BinaryDataTypeCodec.decode(aggregate_wire).should eq(aggregate)
+
+      # Legacy scalar facades intentionally remain narrower than the generic
+      # descriptor grammar.
+      CrystalClick::BinarySimpleAggregateType.parse(aggregate_name).should be_nil
+      CrystalClick::SimpleAggregateColumnType.parse(aggregate_name).should be_nil
+
+      # Logical LowCardinality(String) is source-valid for Any, but it is not
+      # admitted by the current static Bulk declaration profile.
+      if child.tag == CrystalClick::BinaryDataType::TAG_LOW_CARDINALITY
+        CrystalClick::SimpleAggregateBulkColumnDeclaration.parse(aggregate_name).should be_nil
       end
     end
 

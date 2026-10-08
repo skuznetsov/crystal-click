@@ -132,6 +132,13 @@ performance stays deferred until types and MV/projections.
 
 ## Previous responsibility separation — W178
 
+Current W222 note: the private Count grammar reader named below has been
+replaced by `BinaryRecursiveDataTypeNameReader`, shared with SAF. Separate
+admission adapters preserve Count's old policy. New SAF admission and parameter
+owners each have their own file; the large-facade decomposition remains open.
+See [SIMPLE_AGGREGATE_RECURSIVE_STORAGE_FRONTIER.md](SIMPLE_AGGREGATE_RECURSIVE_STORAGE_FRONTIER.md).
+The following owner/count statements describe the W178 revision.
+
 Count argument admission now uses cohesive loaded owners in separate files:
 `BinaryAggregateCountArgumentNameReader` (362 lines) owns bounded recursive
 grammar; `BinaryAggregateCountArgumentNameParser` (28) owns canonical

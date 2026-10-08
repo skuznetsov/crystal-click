@@ -1,4 +1,4 @@
-require "./binary_aggregate_count_argument_name_reader"
+require "./binary_recursive_data_type_name_reader"
 
 module CrystalClick
   # Parses the canonical SQL name of one AggregateFunction(count) argument.
@@ -14,15 +14,27 @@ module CrystalClick
       source : String,
       limits : BinaryCodecLimits = BinaryCodecLimits.default,
     ) : BinaryDataType?
-      return nil if source.bytesize.to_i64 > limits.max_bytes
+      type = BinaryRecursiveDataTypeNameReader.parse_canonical(source, limits) || return nil
+      legacy_simple_aggregate_tree?(type) ? type : nil
+    end
 
-      type = BinaryAggregateCountArgumentNameReader.new(source, limits).parse || return nil
-      budget = BinaryCodecBudget.new(limits, true)
-      bounds = BinaryTypeNameBudget.measure(type, budget)
-      rendered = BinaryTypeNameBudget.materialize(type, budget, bounds)
-      rendered == source ? type : nil
-    rescue ex : ArgumentError | CorruptPartError | UnsupportedFormatError
-      nil
+    # Count's syntax parser shares the neutral recursive grammar, but its
+    # existing semantic profile stays closed to the new recursive and
+    # parameterized SAF families.
+    private def self.legacy_simple_aggregate_tree?(root : BinaryDataType) : Bool
+      pending = [root] of BinaryDataType
+      until pending.empty?
+        type = pending.pop
+        if type.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE
+          descriptor = type.simple_aggregate_type.not_nil!
+          return false unless descriptor.parameters.empty? &&
+                              BinarySimpleAggregateType.legacy_storage_type?(descriptor.function, descriptor.storage_type)
+        end
+        type.child_count.times do |index|
+          pending << type.child_at(index)
+        end
+      end
+      true
     end
   end
 end

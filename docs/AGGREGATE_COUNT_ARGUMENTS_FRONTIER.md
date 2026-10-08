@@ -153,6 +153,13 @@ same serial guard and actual test assertions.
 
 ## Historical preparation certificate, not production admission
 
+Current W222 note: the private grammar reader named in this historical
+certificate is replaced by the shared `BinaryRecursiveDataTypeNameReader`.
+Count's canonical render-back and admission adapter retain the prior policy;
+the SAF recursive widening is not inherited by Count. The affected Count
+regressions pass within the W222 DEBUG/RELEASE gate. See
+[SIMPLE_AGGREGATE_RECURSIVE_STORAGE_FRONTIER.md](SIMPLE_AGGREGATE_RECURSIVE_STORAGE_FRONTIER.md).
+
 This section records the preparation at `67db3be`, before the W178 production
 candidate below. Its unloaded-loader and closed-factory statements describe
 that revision, not the current implementation diff awaiting RELEASE closure.

@@ -78,7 +78,7 @@ module CrystalClick
                  # teaching each parent consumer about another wrapper.
                  add(16_u64, children[0][0])
                when BinaryDataType::TAG_SIMPLE_AGGREGATE
-                 function_name_bytes = type.simple_aggregate_type.not_nil!.function_name.bytesize.to_u64
+                 function_name_bytes = type.simple_aggregate_type.not_nil!.function_signature_byte_size
                  add(27_u64, add(function_name_bytes, children[0][0]))
                when BinaryDataType::TAG_AGGREGATE_COUNT
                  if argument_bounds = aggregate_count_argument_bounds

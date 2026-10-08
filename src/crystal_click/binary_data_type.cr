@@ -245,61 +245,25 @@ module CrystalClick
     def self.simple_aggregate(
       function : BinarySimpleAggregateType::Function,
       storage_type : BinaryDataType = primitive("UInt64"),
+      parameters : BinarySimpleAggregateParameters = BinarySimpleAggregateParameters.empty,
     ) : BinaryDataType
       reject_aggregate_count_child!(storage_type)
       reject_qbit_child!(storage_type)
       reject_json_child!(storage_type)
-      inner_nullable = storage_type.tag == TAG_NULLABLE
-      storage_leaf = inner_nullable ? storage_type.child_at(0) : storage_type
-      if inner_nullable && storage_leaf.tag == TAG_NULLABLE
-        raise ArgumentError.new("SimpleAggregateFunction storage cannot contain repeated Nullable")
-      end
-      storage_type_name = case storage_leaf.tag
-                          when TAG_UINT8    then "UInt8"
-                          when TAG_UINT16   then "UInt16"
-                          when TAG_UINT32   then "UInt32"
-                          when TAG_UINT64   then "UInt64"
-                          when TAG_UINT128  then "UInt128"
-                          when TAG_UINT256  then "UInt256"
-                          when TAG_INT8     then "Int8"
-                          when TAG_INT16    then "Int16"
-                          when TAG_INT32    then "Int32"
-                          when TAG_INT64    then "Int64"
-                          when TAG_INT128   then "Int128"
-                          when TAG_INT256   then "Int256"
-                          when TAG_FLOAT32  then "Float32"
-                          when TAG_FLOAT64  then "Float64"
-                          when TAG_BFLOAT16 then "BFloat16"
-                          when TAG_STRING   then "String"
-                          when TAG_DATE     then "Date"
-                          when TAG_DATE32   then "Date32"
-                          when TAG_TIME     then "Time"
-                          when TAG_DATETIME, TAG_DATETIME_ZONE,
-                               TAG_DATETIME64, TAG_DATETIME64_ZONE,
-                               TAG_TIME64
-                            storage_leaf.temporal_type.not_nil!.type_name
-                          when TAG_FIXED_STRING
-                            width = storage_leaf.fixed_size.not_nil!
-                            unless width <= BinarySimpleAggregateType::MAX_FIXED_STRING_WIDTH
-                              raise ArgumentError.new("SimpleAggregateFunction FixedString width exceeds the admitted library limit")
-                            end
-                            "FixedString(#{width})"
-                          when TAG_DECIMAL32, TAG_DECIMAL64, TAG_DECIMAL128, TAG_DECIMAL256
-                            binary_decimal = storage_leaf.decimal_type.not_nil!
-                            decimal = DecimalType.new(binary_decimal.precision, binary_decimal.scale)
-                            canonical_width_bits = decimal.storage_width * 8
-                            unless binary_decimal.width_bits == canonical_width_bits
-                              raise ArgumentError.new("SimpleAggregateFunction Decimal width does not match its canonical precision width")
-                            end
-                            decimal.type_name
-                          else
-                            # Reject from the exact tag before asking an
-                            # arbitrary child to render a recursive SQL name.
-                            raise ArgumentError.new("SimpleAggregateFunction storage type is outside the admitted profile")
-                          end
-      storage_type_name = "Nullable(#{storage_type_name})" if inner_nullable
-      descriptor = BinarySimpleAggregateType.new(function, storage_type_name)
-      new(TAG_SIMPLE_AGGREGATE, nil, [storage_type] of BinaryDataType, [] of String, nil, nil, nil, nil, nil, nil, descriptor)
+      descriptor = BinarySimpleAggregateType.from_storage(function, storage_type, parameters)
+      new(
+        TAG_SIMPLE_AGGREGATE,
+        nil,
+        [descriptor.storage_type] of BinaryDataType,
+        [] of String,
+        nil,
+        nil,
+        nil,
+        nil,
+        nil,
+        nil,
+        descriptor,
+      )
     end
 
     # A top-level count state is nominally distinct from UInt64 despite using
@@ -328,8 +292,11 @@ module CrystalClick
       if child.contains_qbit? && child.tag != TAG_QBIT
         raise ArgumentError.new("Nullable can contain QBit only as its direct scalar child")
       end
-      if child.tag == TAG_SIMPLE_AGGREGATE && child.child_at(0).tag == TAG_NULLABLE
-        raise ArgumentError.new("Nullable cannot wrap SimpleAggregateFunction with Nullable storage")
+      if child.tag == TAG_SIMPLE_AGGREGATE
+        storage_type = child.simple_aggregate_type.not_nil!.storage_type
+        unless BinarySimpleAggregateAdmission.outer_nullable_eligible?(storage_type)
+          raise ArgumentError.new("Nullable cannot wrap SimpleAggregateFunction with ineligible storage")
+        end
       end
       if child.tag == TAG_ARRAY || child.tag == TAG_NESTED || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
         raise ArgumentError.new("Nullable cannot directly contain Array, Nested, Map, Nullable, LowCardinality, Variant, or Dynamic")
@@ -543,7 +510,11 @@ module CrystalClick
     # Enum declarations are metadata edges/nodes in the binary budget, not
     # recursive DataType children and therefore do not increase tree depth.
     def metadata_entry_count : Int32
-      @enum_definition.try(&.size) || 0
+      count = @enum_definition.try(&.size) || 0
+      if descriptor = @simple_aggregate_type
+        count += descriptor.parameters.count
+      end
+      count
     end
 
     def named_tuple? : Bool
@@ -594,7 +565,7 @@ module CrystalClick
       when TAG_LOW_CARDINALITY
         "LowCardinality(#{@children[0].name})"
       when TAG_SIMPLE_AGGREGATE
-        "SimpleAggregateFunction(#{@simple_aggregate_type.not_nil!.function_name}, #{@children[0].name})"
+        @simple_aggregate_type.not_nil!.type_name
       when TAG_AGGREGATE_COUNT
         @aggregate_count_type.not_nil!.type_name
       when TAG_QBIT

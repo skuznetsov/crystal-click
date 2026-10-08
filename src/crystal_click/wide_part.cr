@@ -1532,9 +1532,10 @@ module CrystalClick
       SelectedJsonMetadataProbe.read_dynamic_bulk(part_path, column_name)
     end
 
-    # Return the exact stored declaration only for the narrow static
-    # SimpleAggregate bulk route with one Nullable storage child. The legacy
-    # typed facade remains responsible for bare/outer-Nullable declarations.
+    # Return the exact stored declaration only for the static SimpleAggregate
+    # bulk route. Recursive Array/Tuple/Map roots share the generic physical
+    # role grammar; the legacy typed facade remains responsible for bare and
+    # outer-Nullable scalar declarations.
     def self.selected_simple_aggregate_bulk_declaration(part_path : String, column_name : String) : String?
       raise ArgumentError.new("selected column name must not be empty") if column_name.empty?
       return nil if column_name.bytesize > MAX_METADATA_LINE_BYTES
@@ -1572,8 +1573,20 @@ module CrystalClick
 
     def self.supports_simple_aggregate_bulk_type?(type : String) : Bool
       descriptor = SimpleAggregateBulkColumnDeclaration.parse(type) || return false
-      descriptor.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE &&
-        descriptor.child_at(0).tag == BinaryDataType::TAG_NULLABLE
+      # The declaration adapter has already enforced the low-level static
+      # child policy. Preserve the historical table route distinction for
+      # scalar SAFs, and admit only root recursive collection children here.
+      return false unless descriptor.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE
+
+      storage = descriptor.child_at(0)
+      case storage.tag
+      when BinaryDataType::TAG_NULLABLE,
+           BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_MAP,
+           BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        true
+      else
+        false
+      end
     end
 
     # Parse the intentionally small JSON typed-path declaration grammar used

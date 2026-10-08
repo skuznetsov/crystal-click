@@ -9,9 +9,9 @@ module CrystalClick
     DEFAULT_STORAGE_TYPE_NAME = "UInt64"
     # Bounds the longest admitted function name, one inner Nullable shell, and
     # the complete bounded timezone token in a canonical temporal leaf.
-    MAX_FUNCTION_NAME_BYTES = 21
+    MAX_FUNCTION_NAME_BYTES = 22
     # The 107-byte descriptor cap leaves 59 bytes for its storage name.
-    MAX_STORAGE_TYPE_BYTES = 59
+    MAX_STORAGE_TYPE_BYTES =  59
     MAX_TYPE_BYTES         = 107
     # Existing local FixedString materialization limit; ClickHouse itself
     # permits wider declarations than this library profile admits.
@@ -29,64 +29,134 @@ module CrystalClick
       GroupBitXor
       AnyRespectNulls
       AnyLastRespectNulls
+      SumMap
+      MinMap
+      MaxMap
+      GroupArrayArray
+      GroupArrayLastArray
+      GroupUniqArrayArray
+      GroupUniqArrayArrayMap
+      TimeSeriesGroupArray
     end
 
     getter function : Function
-    @storage_type_name : String
+    getter storage_type : BinaryDataType
+    getter parameters : BinarySimpleAggregateParameters
 
     def initialize(
-      @function : Function,
+      function : Function,
       storage_type_name : String = DEFAULT_STORAGE_TYPE_NAME,
+    )
+      unless valid_function?(function)
+        raise ArgumentError.new("invalid SimpleAggregateFunction function")
+      end
+      unless self.class.admitted_function_storage?(function, storage_type_name)
+        raise ArgumentError.new("SimpleAggregateFunction function/storage pair is outside the admitted profile")
+      end
+      unless storage_type_name.bytesize <= MAX_STORAGE_TYPE_BYTES
+        raise ArgumentError.new("legacy SimpleAggregateFunction storage name exceeds its bounded profile")
+      end
+      @function = function
+      @storage_type = self.class.legacy_storage_type(storage_type_name)
+      @parameters = BinarySimpleAggregateParameters.empty
+    end
+
+    # The recursive descriptor path owns an already-parsed exact child tree.
+    # It must never stringify/reparse that tree: nested SAF identity, Tuple
+    # field names, and metadata budgets all remain attached to the child.
+    def initialize(
+      @function : Function,
+      @storage_type : BinaryDataType,
+      @parameters : BinarySimpleAggregateParameters = BinarySimpleAggregateParameters.empty,
     )
       unless valid_function?(@function)
         raise ArgumentError.new("invalid SimpleAggregateFunction function")
       end
-      unless self.class.admitted_function_storage?(@function, storage_type_name)
+      unless BinarySimpleAggregateAdmission.admitted?(@function, @storage_type, @parameters)
         raise ArgumentError.new("SimpleAggregateFunction function/storage pair is outside the admitted profile")
       end
-      @storage_type_name = String.new(storage_type_name.to_slice)
+    end
+
+    def self.from_storage(
+      function : Function,
+      storage_type : BinaryDataType,
+      parameters : BinarySimpleAggregateParameters = BinarySimpleAggregateParameters.empty,
+    ) : BinarySimpleAggregateType
+      new(function, storage_type, parameters)
     end
 
     def storage_type_name : String
-      String.new(@storage_type_name.to_slice)
+      @storage_type.name
     end
 
     # Exact canonical Decimal(P, S) parameters when storage is exactly a
     # Decimal leaf. An inner Nullable wrapper is intentionally not erased.
     def decimal_type : DecimalType?
-      DecimalType.parse(@storage_type_name)
+      DecimalType.parse(storage_type_name)
     end
 
     # Exact canonical temporal identity when storage is exactly one of the six
     # scalar temporal leaves. An inner Nullable wrapper is not erased.
     def temporal_storage_type : TemporalStorageType?
-      TemporalStorageType.parse(@storage_type_name)
+      TemporalStorageType.parse(storage_type_name)
     end
 
     def function_name : String
       case @function
-      when Function::Any                 then "any"
-      when Function::AnyLast             then "anyLast"
-      when Function::AnyRespectNulls     then "any_respect_nulls"
-      when Function::AnyLastRespectNulls then "anyLast_respect_nulls"
-      when Function::Min                 then "min"
-      when Function::Max                 then "max"
-      when Function::Sum                 then "sum"
-      when Function::SumWithOverflow     then "sumWithOverflow"
-      when Function::GroupBitAnd         then "groupBitAnd"
-      when Function::GroupBitOr          then "groupBitOr"
-      when Function::GroupBitXor         then "groupBitXor"
+      when Function::Any                    then "any"
+      when Function::AnyLast                then "anyLast"
+      when Function::AnyRespectNulls        then "any_respect_nulls"
+      when Function::AnyLastRespectNulls    then "anyLast_respect_nulls"
+      when Function::Min                    then "min"
+      when Function::Max                    then "max"
+      when Function::Sum                    then "sum"
+      when Function::SumWithOverflow        then "sumWithOverflow"
+      when Function::GroupBitAnd            then "groupBitAnd"
+      when Function::GroupBitOr             then "groupBitOr"
+      when Function::GroupBitXor            then "groupBitXor"
+      when Function::SumMap                 then "sumMap"
+      when Function::MinMap                 then "minMap"
+      when Function::MaxMap                 then "maxMap"
+      when Function::GroupArrayArray        then "groupArrayArray"
+      when Function::GroupArrayLastArray    then "groupArrayLastArray"
+      when Function::GroupUniqArrayArray    then "groupUniqArrayArray"
+      when Function::GroupUniqArrayArrayMap then "groupUniqArrayArrayMap"
+      when Function::TimeSeriesGroupArray   then "timeSeriesGroupArray"
       else
         raise ArgumentError.new("invalid SimpleAggregateFunction function")
       end
     end
 
+    def function_signature : String
+      String.build do |io|
+        io << function_name
+        unless @parameters.empty?
+          io << '(' << @parameters.value_at(0) << ')'
+        end
+      end
+    end
+
+    def function_signature_byte_size : UInt64
+      size = function_name.bytesize.to_u64
+      unless @parameters.empty?
+        value = @parameters.value_at(0)
+        size += 2_u64 # opening and closing parentheses
+        digits = 1_u64
+        while value >= 10_u64
+          digits += 1_u64
+          value //= 10_u64
+        end
+        size += digits
+      end
+      size
+    end
+
     def type_name : String
-      "#{TYPE_PREFIX}#{function_name}, #{@storage_type_name})"
+      "#{TYPE_PREFIX}#{function_signature}, #{@storage_type.name})"
     end
 
     def name_byte_size : UInt64
-      (TYPE_PREFIX.bytesize + function_name.bytesize + 2 + @storage_type_name.bytesize + 1).to_u64
+      TYPE_PREFIX.bytesize.to_u64 + function_signature_byte_size + 2_u64 + @storage_type.name.bytesize.to_u64 + 1_u64
     end
 
     def self.parse(type_name : String) : BinarySimpleAggregateType?
@@ -120,23 +190,38 @@ module CrystalClick
       name : String,
       storage_type_name : String = DEFAULT_STORAGE_TYPE_NAME,
     ) : BinarySimpleAggregateType?
-      function = case name
-                 when "any"                   then Function::Any
-                 when "anyLast"               then Function::AnyLast
-                 when "any_respect_nulls"     then Function::AnyRespectNulls
-                 when "anyLast_respect_nulls" then Function::AnyLastRespectNulls
-                 when "min"                   then Function::Min
-                 when "max"                   then Function::Max
-                 when "sum"                   then Function::Sum
-                 when "sumWithOverflow"       then Function::SumWithOverflow
-                 when "groupBitAnd"            then Function::GroupBitAnd
-                 when "groupBitOr"             then Function::GroupBitOr
-                 when "groupBitXor"            then Function::GroupBitXor
-                 else
-                   return nil
-                 end
+      function = function_from_name(name) || return nil
       return nil unless admitted_function_storage?(function, storage_type_name)
       new(function, storage_type_name)
+    end
+
+    # Exact canonical identity lookup is separate from storage admission. The
+    # recursive descriptor parser uses this owner, then validates the complete
+    # parsed child tree through BinarySimpleAggregateAdmission.
+    def self.function_from_name(name : String) : Function?
+      case name
+      when "any"                    then Function::Any
+      when "anyLast"                then Function::AnyLast
+      when "any_respect_nulls"      then Function::AnyRespectNulls
+      when "anyLast_respect_nulls"  then Function::AnyLastRespectNulls
+      when "min"                    then Function::Min
+      when "max"                    then Function::Max
+      when "sum"                    then Function::Sum
+      when "sumWithOverflow"        then Function::SumWithOverflow
+      when "groupBitAnd"            then Function::GroupBitAnd
+      when "groupBitOr"             then Function::GroupBitOr
+      when "groupBitXor"            then Function::GroupBitXor
+      when "sumMap"                 then Function::SumMap
+      when "minMap"                 then Function::MinMap
+      when "maxMap"                 then Function::MaxMap
+      when "groupArrayArray"        then Function::GroupArrayArray
+      when "groupArrayLastArray"    then Function::GroupArrayLastArray
+      when "groupUniqArrayArray"    then Function::GroupUniqArrayArray
+      when "groupUniqArrayArrayMap" then Function::GroupUniqArrayArrayMap
+      when "timeSeriesGroupArray"   then Function::TimeSeriesGroupArray
+      else
+        nil
+      end
     end
 
     def self.storage_width(storage_type_name : String) : Int32?
@@ -184,9 +269,55 @@ module CrystalClick
       storage_type_name == "String"
     end
 
+    # Legacy String APIs stay scalar-only. This conversion runs only after the
+    # old exact-name law accepts the source and never feeds recursive storage
+    # back through the descriptor constructor.
+    def self.legacy_storage_type(storage_type_name : String) : BinaryDataType
+      type = BinaryRecursiveDataTypeNameReader.parse_canonical(storage_type_name) ||
+             raise ArgumentError.new("legacy SimpleAggregateFunction storage name is not canonical")
+      leaf = type.tag == BinaryDataType::TAG_NULLABLE ? type.child_at(0) : type
+      unless legacy_scalar_tag?(leaf.tag)
+        raise ArgumentError.new("legacy SimpleAggregateFunction storage must be scalar")
+      end
+      type
+    end
+
+    def self.legacy_storage_type?(function : Function, storage_type : BinaryDataType) : Bool
+      leaf = storage_type
+      if leaf.tag == BinaryDataType::TAG_NULLABLE
+        return false if leaf.child_count != 1 || leaf.child_at(0).tag == BinaryDataType::TAG_NULLABLE
+        leaf = leaf.child_at(0)
+      end
+      return false unless legacy_scalar_tag?(leaf.tag)
+      admitted_function_storage?(function, storage_type.name)
+    end
+
     private def self.admitted_text_function?(function : Function) : Bool
       case function
       when Function::Any, Function::AnyLast, Function::Min, Function::Max
+        true
+      else
+        false
+      end
+    end
+
+    private def self.legacy_scalar_tag?(tag : UInt8) : Bool
+      case tag
+      when BinaryDataType::TAG_UINT8, BinaryDataType::TAG_UINT16,
+           BinaryDataType::TAG_UINT32, BinaryDataType::TAG_UINT64,
+           BinaryDataType::TAG_UINT128, BinaryDataType::TAG_UINT256,
+           BinaryDataType::TAG_INT8, BinaryDataType::TAG_INT16,
+           BinaryDataType::TAG_INT32, BinaryDataType::TAG_INT64,
+           BinaryDataType::TAG_INT128, BinaryDataType::TAG_INT256,
+           BinaryDataType::TAG_FLOAT32, BinaryDataType::TAG_FLOAT64,
+           BinaryDataType::TAG_BFLOAT16, BinaryDataType::TAG_STRING,
+           BinaryDataType::TAG_FIXED_STRING, BinaryDataType::TAG_DATE,
+           BinaryDataType::TAG_DATE32, BinaryDataType::TAG_DATETIME,
+           BinaryDataType::TAG_DATETIME_ZONE, BinaryDataType::TAG_DATETIME64,
+           BinaryDataType::TAG_DATETIME64_ZONE, BinaryDataType::TAG_TIME,
+           BinaryDataType::TAG_TIME64, BinaryDataType::TAG_DECIMAL32,
+           BinaryDataType::TAG_DECIMAL64, BinaryDataType::TAG_DECIMAL128,
+           BinaryDataType::TAG_DECIMAL256
         true
       else
         false
@@ -284,17 +415,20 @@ module CrystalClick
     end
 
     def ==(other : BinarySimpleAggregateType) : Bool
-      @function == other.function && @storage_type_name == other.storage_type_name
+      @function == other.function && @storage_type == other.storage_type && @parameters == other.parameters
     end
 
-    def_hash @function, @storage_type_name
+    def_hash @function, @storage_type, @parameters
 
     private def valid_function?(function : Function) : Bool
       case function
       when Function::Any, Function::AnyLast, Function::Min, Function::Max,
            Function::AnyRespectNulls, Function::AnyLastRespectNulls,
            Function::Sum, Function::SumWithOverflow, Function::GroupBitAnd,
-           Function::GroupBitOr, Function::GroupBitXor
+           Function::GroupBitOr, Function::GroupBitXor, Function::SumMap,
+           Function::MinMap, Function::MaxMap, Function::GroupArrayArray,
+           Function::GroupArrayLastArray, Function::GroupUniqArrayArray,
+           Function::GroupUniqArrayArrayMap, Function::TimeSeriesGroupArray
         true
       else
         false

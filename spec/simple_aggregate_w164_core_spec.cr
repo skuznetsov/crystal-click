@@ -172,21 +172,37 @@ describe "W164 SimpleAggregateFunction wide numeric carrier descriptors" do
       CrystalClick::BinaryDataTypeCodec.decode(w164_bytes(double_nullable_wire))
     end
 
-    [
-      {CrystalClick::BinaryDataType.low_cardinality(bfloat_storage), [0x26_u8, 0x31_u8]},
-      {CrystalClick::BinaryDataType.array(bfloat_storage), [0x1e_u8, 0x31_u8]},
-    ].each do |wrapped_child, child_wire|
-      expect_raises(ArgumentError) do
-        CrystalClick::BinaryDataType.simple_aggregate(
-          CrystalClick::BinarySimpleAggregateType::Function::Any,
-          wrapped_child
-        )
-      end
-      aggregate_wire = [0x2e_u8, 3_u8] + "any".to_slice.to_a + [0_u8, 1_u8] + child_wire
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDataTypeCodec.decode(w164_bytes(aggregate_wire))
-      end
+    array_bfloat_child = CrystalClick::BinaryDataType.array(bfloat_storage)
+    array_bfloat_name = "SimpleAggregateFunction(any, Array(BFloat16))"
+    array_bfloat_aggregate = CrystalClick::BinaryDataType.simple_aggregate(
+      CrystalClick::BinarySimpleAggregateType::Function::Any,
+      array_bfloat_child,
+    )
+    array_bfloat_aggregate.child_at(0).should eq(array_bfloat_child)
+    array_bfloat_aggregate.name.should eq(array_bfloat_name)
+    array_bfloat_wire = [0x2e_u8, 3_u8] + "any".to_slice.to_a + [0_u8, 1_u8, 0x1e_u8, 0x31_u8]
+    CrystalClick::BinaryDataTypeCodec.encode(array_bfloat_aggregate).to_a.should eq(array_bfloat_wire)
+    CrystalClick::BinaryDataTypeCodec.decode(w164_bytes(array_bfloat_wire)).should eq(array_bfloat_aggregate)
+    CrystalClick::BinarySimpleAggregateType.parse(array_bfloat_name).should be_nil
+    CrystalClick::SimpleAggregateColumnType.parse(array_bfloat_name).should be_nil
+
+    low_cardinality_bfloat = CrystalClick::BinaryDataType.low_cardinality(bfloat_storage)
+    low_cardinality_wire = [0x2e_u8, 3_u8] + "any".to_slice.to_a + [0_u8, 1_u8, 0x26_u8, 0x31_u8]
+    expect_raises(ArgumentError) do
+      CrystalClick::BinaryDataType.simple_aggregate(
+        CrystalClick::BinarySimpleAggregateType::Function::Any,
+        low_cardinality_bfloat,
+      )
     end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryDataTypeCodec.decode(w164_bytes(low_cardinality_wire))
+    end
+    CrystalClick::BinarySimpleAggregateType.parse(
+      "SimpleAggregateFunction(any, LowCardinality(BFloat16))",
+    ).should be_nil
+    CrystalClick::SimpleAggregateColumnType.parse(
+      "SimpleAggregateFunction(any, LowCardinality(BFloat16))",
+    ).should be_nil
   end
 
   it "preserves signedness, same-width carrier, and function identity" do

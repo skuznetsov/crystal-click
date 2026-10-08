@@ -1,7 +1,7 @@
 module CrystalClick
   class OfflineTable
-    # Owns the public .values result for the narrow inner-Nullable
-    # SimpleAggregate route using the generic static BinaryBulk reader. The
+    # Owns the public .values result for admitted static SimpleAggregate
+    # trees using the generic BinaryBulk reader. The
     # shared budget accounts retained BinaryValue trees plus known reader/grid
     # workspace; it is logical ownership accounting, not an RSS bound.
     private class StaticBulkValuesMaterializer
@@ -19,7 +19,7 @@ module CrystalClick
 
         declaration = SimpleAggregateBulkColumnDeclaration.new(type).declaration
         unless WidePart.supports_simple_aggregate_bulk_type?(declaration)
-          raise UnsupportedFormatError.new("static bulk materializer requires an inner-Nullable SimpleAggregate declaration")
+          raise UnsupportedFormatError.new("static bulk materializer requires an admitted SimpleAggregate recursive profile")
         end
 
         candidate_rows = sum_candidate_rows(candidates)

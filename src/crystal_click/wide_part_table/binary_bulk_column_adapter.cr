@@ -1,7 +1,7 @@
 module CrystalClick
   class WidePartTable
-    # Adapts one exact inner-Nullable SimpleAggregateFunction declaration to
-    # the generic static BinaryBulk reader and the table's per-mark budget.
+    # Adapts one exact statically admitted SimpleAggregateFunction tree to
+    # the generic BinaryBulk reader and the table's per-mark budget.
     private class BinaryBulkColumnAdapter
       def self.open(
         part_path : String,
@@ -11,7 +11,7 @@ module CrystalClick
         expected_type = SimpleAggregateBulkColumnDeclaration.parse(source_declaration) ||
                         raise(UnsupportedFormatError.new("selected column is not an admitted SimpleAggregate bulk declaration"))
         unless WidePart.supports_simple_aggregate_bulk_type?(source_declaration)
-          raise UnsupportedFormatError.new("selected SimpleAggregate bulk declaration requires one inner Nullable storage child")
+          raise UnsupportedFormatError.new("selected SimpleAggregate declaration is outside the admitted static recursive bulk profile")
         end
 
         reader = BinaryBulkColumnReader.open(part_path, column, expected_type)

@@ -42,10 +42,18 @@ module CrystalClick
         context.ensure_depth(depth + 1)
         write_to(type.child_at(0), context, depth + 1)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        function_name = type.simple_aggregate_type.not_nil!.function_name.to_slice
+        descriptor = type.simple_aggregate_type.not_nil!
+        function_name = descriptor.function_name.to_slice
         context.write_var_uint(function_name.size.to_u64)
         context.write_slice(function_name)
-        context.write_var_uint(0_u64) # parameters
+        parameter_count = descriptor.parameters.count.to_u64
+        context.preflight_metadata(parameter_count, maximum_count: 1_u64, label: "SimpleAggregateFunction parameter count")
+        context.write_var_uint(parameter_count)
+        descriptor.parameters.count.times do |index|
+          context.visit_node(depth)
+          context.write_byte(1_u8) # Field::UInt64
+          context.write_var_uint(descriptor.parameters.value_at(index))
+        end
         context.write_var_uint(1_u64) # argument types
         preflight_descriptor_children(type, context)
         context.ensure_depth(depth + 1)
@@ -180,13 +188,40 @@ module CrystalClick
           context.unsupported!("SimpleAggregateFunction name is outside the admitted function profile")
         end
         raw_name = context.read_slice(name_length)
-        descriptor = BinarySimpleAggregateType.from_name(String.new(raw_name))
-        unless simple_aggregate_type = descriptor
+        function_name = String.new(raw_name)
+        unless function = BinarySimpleAggregateType.function_from_name(function_name)
           context.unsupported!("SimpleAggregateFunction function is outside the admitted function profile")
         end
         parameter_count = context.read_var_uint
-        if parameter_count != 0_u64
-          context.unsupported!("parameterized SimpleAggregateFunction is outside the admitted profile")
+        if parameter_count > 1_u64
+          context.unsupported!("SimpleAggregateFunction parameter count is outside the admitted profile")
+        end
+        unless BinarySimpleAggregateAdmission.parameter_count_allowed?(function, parameter_count)
+          context.unsupported!("SimpleAggregateFunction function does not admit this parameter count")
+        end
+        context.preflight_metadata(
+          parameter_count,
+          2_u64,
+          1_u64,
+          "SimpleAggregateFunction parameter count",
+        )
+        context.visit_metadata_nodes(parameter_count, depth)
+        parameter_values = [] of UInt64
+        parameter_count.to_i.times do
+          field_tag = context.read_byte
+          unless field_tag == 1_u8
+            context.unsupported!("SimpleAggregateFunction parameter Field kind is outside the UInt64 profile")
+          end
+          value = context.read_var_uint
+          if value == 0_u64
+            context.unsupported!("SimpleAggregateFunction UInt64 parameter must be positive")
+          end
+          parameter_values << value
+        end
+        parameters = begin
+          BinarySimpleAggregateParameters.new(parameter_values)
+        rescue ex : ArgumentError
+          context.unsupported!("SimpleAggregateFunction parameters are outside the admitted Field profile")
         end
         argument_count = context.read_var_uint
         if argument_count != 1_u64
@@ -196,7 +231,7 @@ module CrystalClick
         context.ensure_depth(depth + 1)
         child = read_from(context, depth + 1)
         begin
-          BinaryDataType.simple_aggregate(simple_aggregate_type.function, child)
+          BinaryDataType.simple_aggregate(function, child, parameters)
         rescue ex : ArgumentError
           context.unsupported!("SimpleAggregateFunction function/storage pair is outside the admitted storage profile")
         end

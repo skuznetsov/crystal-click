@@ -1,7 +1,24 @@
 module CrystalClick
-  # Bounded recursive syntax reader for the canonical Count argument-name
-  # parser. Kept separate from its render-back policy owner.
-  private class BinaryAggregateCountArgumentNameReader
+  # Bounded neutral parser for one full canonical SQL DataType tree. This
+  # grammar owns syntax and descriptor construction only; Count, Object, and
+  # physical callers apply their own narrower admission policies afterward.
+  class BinaryRecursiveDataTypeNameReader
+    def self.parse_canonical(
+      source : String,
+      limits : BinaryCodecLimits = BinaryCodecLimits.default,
+    ) : BinaryDataType?
+      return nil if source.bytesize.to_i64 > limits.max_bytes
+
+      reader = new(source, limits)
+      type = reader.parse || return nil
+      budget = BinaryCodecBudget.new(limits, true)
+      bounds = BinaryTypeNameBudget.measure(type, budget)
+      rendered = BinaryTypeNameBudget.materialize(type, budget, bounds)
+      rendered == source ? type : nil
+    rescue ex : ArgumentError | CorruptPartError | UnsupportedFormatError
+      nil
+    end
+
     MAX_ENUM8_ENTRIES  = BinaryEnumDefinition::MAX_ENUM8_ENTRIES
     MAX_ENUM16_ENTRIES = BinaryEnumDefinition::MAX_ENUM16_ENTRIES
 
@@ -105,18 +122,28 @@ module CrystalClick
         expect(')')
         BinaryDataType.dynamic(maximum.to_i32)
       when "SimpleAggregateFunction"
-        function_name = read_identifier || invalid!("SimpleAggregateFunction name is missing")
+        function_name = read_identifier(BinarySimpleAggregateType::MAX_FUNCTION_NAME_BYTES) ||
+                        invalid!("SimpleAggregateFunction name is missing")
+        function = BinarySimpleAggregateType.function_from_name(function_name) ||
+                   invalid!("SimpleAggregateFunction function is outside the canonical profile")
+        parameters = if consume('(')
+                       # Function parameters are descriptor metadata at this
+                       # type's depth. Reserve the edge and node before parsing
+                       # or allocating their bounded Field owner.
+                       @budget.preflight_children(1_u64)
+                       @budget.visit_node(depth)
+                       value = read_unsigned(UInt64::MAX)
+                       expect(')')
+                       BinarySimpleAggregateParameters.one(value)
+                     else
+                       BinarySimpleAggregateParameters.empty
+                     end
         expect(',')
         child = parse_child(depth + 1)
         expect(')')
-        name_budget = BinaryCodecBudget.new(@limits, true)
-        name_bounds = BinaryTypeNameBudget.measure(child, name_budget)
-        storage_name = BinaryTypeNameBudget.materialize(child, name_budget, name_bounds)
-        function = BinarySimpleAggregateType.from_name(function_name, storage_name) ||
-                   invalid!("SimpleAggregateFunction pair is outside the admitted profile")
-        BinaryDataType.simple_aggregate(function.function, child)
+        BinaryDataType.simple_aggregate(function, child, parameters)
       else
-        invalid!("unsupported parameterized Count argument type")
+        invalid!("unsupported parameterized data type")
       end
     end
 
@@ -312,11 +339,14 @@ module CrystalClick
       invalid!("expected #{expected}") unless actual == expected
     end
 
-    private def read_identifier : String?
+    private def read_identifier(maximum_bytes : Int32? = nil) : String?
       start = @offset
       return nil unless identifier_start?(@bytes[@offset]?)
       @offset += 1
       while identifier_continue?(@bytes[@offset]?)
+        if maximum = maximum_bytes
+          invalid!("identifier exceeds its bounded profile") if @offset - start >= maximum
+        end
         @offset += 1
       end
       String.new(@bytes[start, @offset - start])
