@@ -217,15 +217,17 @@ describe "W225 AggregateFunction Variant core" do
       0,
       CrystalClick::BinaryValue.aggregate_count_state(count, 7_u64)
     )
-    expect_raises(ArgumentError) { CrystalClick::BinaryValue.dynamic(dynamic, state) }
+    dynamic_value = CrystalClick::BinaryValue.dynamic(dynamic, state)
+    dynamic_value.type.should eq(dynamic)
+    dynamic_value.child_at(0).type.should eq(state.type)
     expect_raises(ArgumentError) { CrystalClick::DynamicStructure.new([state.type] of CrystalClick::BinaryDataType) }
     envelope = w225_variant_join([
       CrystalClick::BinaryDataTypeCodec.encode(state.type),
       CrystalClick::BinaryValueCodec.encode_value(state),
     ] of Bytes)
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryValueCodec.decode_value(dynamic, envelope)
-    end
+    decoded_dynamic_value = CrystalClick::BinaryValueCodec.decode_value(dynamic, envelope)
+    decoded_dynamic_value.type.should eq(dynamic)
+    decoded_dynamic_value.child_at(0).variant_child?.not_nil!.count_state.should eq(7_u64)
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.json(typed_paths: {"state" => state.type})
     end

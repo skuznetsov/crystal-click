@@ -22,8 +22,9 @@ module CrystalClick
       seen = Set(String).new
       seen.add(names[0])
       @types.each do |type|
-        if type.contains_aggregate_function?
-          raise ArgumentError.new("AggregateFunction alternatives are not admitted in Dynamic V3")
+        if type.contains_aggregate_function? &&
+           !BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(type)
+          raise ArgumentError.new("AggregateFunction alternatives are outside the admitted static Dynamic V3 profile")
         end
         if type.tag == BinaryDataType::TAG_DYNAMIC
           raise ArgumentError.new("Dynamic alternatives are not admitted in Dynamic V3")

@@ -634,7 +634,13 @@ module CrystalClick
             shared_scalar_depth = depth.to_i64 + shared_value_depth_origin.to_i64
             traversal.ensure_depth(shared_scalar_depth)
             envelope = BinaryValueCodec.encode_dynamic_bulk_child(
-              child_value, budget, shared_scalar_depth.to_i32, reserved_framing, allow_json: true)
+              child_value,
+              budget,
+              shared_scalar_depth.to_i32,
+              reserved_framing,
+              allow_json: true,
+              allow_aggregate_function: true,
+            )
             framing_bytes = profile.with_size_stream? ? 8_u64 : var_uint_size(envelope.size.to_u64)
             budget.ensure_wire_bytes(checked_add(framing_bytes, envelope.size.to_u64))
             if profile.with_size_stream?

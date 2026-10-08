@@ -73,12 +73,13 @@ module CrystalClick
       depth : Int32,
       reserved_wire_bytes : UInt64 = 0_u64,
       allow_json : Bool = false,
+      allow_aggregate_function : Bool = false,
     ) : Bytes
       unless budget.writing?
         raise ArgumentError.new("Dynamic bulk child encoder requires a write-direction budget")
       end
-      if value.type.contains_aggregate_function?
-        raise UnsupportedFormatError.new("AggregateFunction is not admitted as a Dynamic actual type")
+      unless dynamic_aggregate_actual_allowed?(value.type, allow_aggregate_function)
+        raise UnsupportedFormatError.new("AggregateFunction is not admitted as this Dynamic shared actual type")
       end
       if value.type.contains_qbit? && value.type.tag != BinaryDataType::TAG_QBIT
         raise UnsupportedFormatError.new("QBit is admitted only as a direct Dynamic actual type")
@@ -95,6 +96,7 @@ module CrystalClick
         false,
         false,
         budget.remaining_wire_bytes - reserved_wire_bytes,
+        allow_aggregate_function,
       )
       BinaryDataTypeCodec.write_to(value.type, context, depth)
       if value.type.tag == BinaryDataType::TAG_NOTHING
@@ -118,11 +120,21 @@ module CrystalClick
       depth : Int32,
       charge_parent_value_edge : Bool = false,
       allow_json : Bool = false,
+      allow_aggregate_function : Bool = false,
     ) : Tuple(BinaryDataType, BinaryValue?)
-      context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
+      context = BinaryCodecContext.new(
+        budget.limits,
+        bytes,
+        false,
+        budget,
+        false,
+        true,
+        nil,
+        allow_aggregate_function,
+      )
       type = BinaryDataTypeCodec.read_from(context, depth)
-      if type.contains_aggregate_function?
-        context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
+      unless dynamic_aggregate_actual_allowed?(type, allow_aggregate_function)
+        context.unsupported!("AggregateFunction is not admitted as this Dynamic shared actual type")
       end
       if type.contains_qbit? && type.tag != BinaryDataType::TAG_QBIT
         context.unsupported!("QBit is admitted only as a direct Dynamic actual type")
@@ -269,7 +281,8 @@ module CrystalClick
           write_value(child, context, depth + 1)
         end
       when BinaryDataType::TAG_DYNAMIC
-        if value.element_count > 0 && value.child_at(0).type.contains_aggregate_function?
+        if value.element_count > 0 &&
+           !dynamic_aggregate_actual_allowed?(value.child_at(0).type, context.allow_dynamic_aggregate_function)
           context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
         end
         BinaryDynamicEnvelope.write(value, context, depth) do |selected, selected_depth|
@@ -398,7 +411,7 @@ module CrystalClick
         end
       when BinaryDataType::TAG_DYNAMIC
         BinaryDynamicEnvelope.read(type, context, depth) do |selected_type, selected_depth|
-          if selected_type.contains_aggregate_function?
+          unless dynamic_aggregate_actual_allowed?(selected_type, context.allow_dynamic_aggregate_function)
             context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
           end
           read_value(selected_type, context, selected_depth)
@@ -414,6 +427,11 @@ module CrystalClick
       if type.contains_dynamic?
         context.unsupported!("Dynamic values are outside the admitted RowBinary value profile")
       end
+    end
+
+    private def self.dynamic_aggregate_actual_allowed?(type : BinaryDataType, allow_aggregate_function : Bool) : Bool
+      return true unless type.contains_aggregate_function?
+      allow_aggregate_function && BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(type)
     end
 
     private def self.reject_borrowed_type!(type : BinaryDataType, context : BinaryCodecContext) : Nil

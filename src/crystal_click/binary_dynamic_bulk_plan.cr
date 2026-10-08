@@ -1450,7 +1450,7 @@ module CrystalClick
         count
       when BinaryDataType::TAG_LOW_CARDINALITY
         2_u64
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_FUNCTION
         1_u64
       when BinaryDataType::TAG_QBIT
         qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
@@ -1577,7 +1577,7 @@ module CrystalClick
           plane_roles << role
         end
         qbit_sites << BinaryDynamicQBitSite.new(path, type, plane_roles)
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_FUNCTION
         append_role(context, path, ".data", roles)
       else
         if type.fixed_width
@@ -1648,7 +1648,7 @@ module CrystalClick
       when BinaryDataType::TAG_QBIT
         qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
         qbit.plane_count.to_u64
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_FUNCTION
         1_u64
       else
         type.fixed_width ? 1_u64 : raise(UnsupportedFormatError.new("unsupported binary Dynamic bulk DataType"))
@@ -1864,7 +1864,7 @@ module CrystalClick
           role = generated_name(context, path, BinaryQBitBulkCodec::ROLE_SUFFIX, plane)
           roles << role
         end
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_FUNCTION
         append_role(context, path, ".data", roles)
       else
         if type.fixed_width

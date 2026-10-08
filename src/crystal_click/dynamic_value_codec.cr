@@ -958,6 +958,9 @@ module CrystalClick
       structure.type_count.times do |index|
         type = structure.type_at(index)
         context.validate_type_tree(type, inferred_actual_root_depth)
+        if type.contains_aggregate_function?
+          raise UnsupportedFormatError.new("AggregateFunction alternatives are not admitted in legacy Dynamic V3")
+        end
         if type.contains_json? && !allow_json
           raise UnsupportedFormatError.new("JSON is not admitted as an unbound Dynamic actual type")
         end
@@ -983,6 +986,9 @@ module CrystalClick
       granules.each do |granule|
         granule.each do |value|
           context.validate_type_tree(value.type, inferred_actual_root_depth)
+          if value.type.contains_aggregate_function?
+            raise UnsupportedFormatError.new("AggregateFunction values are not admitted in legacy Dynamic V3")
+          end
           if value.type.contains_dynamic?
             raise UnsupportedFormatError.new("Dynamic values are outside the admitted Dynamic value profile")
           end

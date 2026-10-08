@@ -4,6 +4,7 @@ module CrystalClick
   class BinaryCodecContext
     getter limits : BinaryCodecLimits
     getter input_offset : Int32
+    getter allow_dynamic_aggregate_function : Bool
 
     @input : Bytes?
     @output : Array(UInt8)
@@ -25,6 +26,7 @@ module CrystalClick
       account_input_bytes : Bool = true,
       account_output_bytes : Bool = true,
       output_byte_limit : UInt64? = nil,
+      @allow_dynamic_aggregate_function : Bool = true,
     )
       @input = input
       @output = [] of UInt8

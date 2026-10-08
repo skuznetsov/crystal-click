@@ -53,7 +53,7 @@ describe "W223 root aggregate-state counterexamples" do
     CrystalClick::BinaryValueCodec.encode_value(value).should eq(Bytes[7_u8])
   end
 
-  it "keeps Sum outside borrowed and Dynamic persisted-envelope bypasses" do
+  it "admits Sum through generic Dynamic while keeping borrowed and default helper closed" do
     type = CrystalClick::BinaryDataType.aggregate_function("sum", CrystalClick::BinaryDataType.primitive("UInt8"))
     value = CrystalClick::BinaryValue.aggregate_function_state(type, Bytes[1_u8, 0, 0, 0, 0, 0, 0, 0])
     limits = CrystalClick::BinaryCodecLimits.default
@@ -66,7 +66,10 @@ describe "W223 root aggregate-state counterexamples" do
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.encode_dynamic_bulk_child(value, CrystalClick::BinaryCodecBudget.new(limits, true), 1)
     end
-    expect_raises(ArgumentError) { CrystalClick::BinaryValue.dynamic(CrystalClick::BinaryDataType.dynamic, value) }
+    dynamic_value = CrystalClick::BinaryValue.dynamic(CrystalClick::BinaryDataType.dynamic, value)
+    dynamic_value.type.should eq(CrystalClick::BinaryDataType.dynamic)
+    dynamic_value.child_at(0).type.should eq(type)
+    dynamic_value.child_at(0).aggregate_function_state_bytes.should eq(Bytes[1_u8, 0, 0, 0, 0, 0, 0, 0])
   end
 
   it "charges argument metadata depth, nodes and edges without creating value children" do

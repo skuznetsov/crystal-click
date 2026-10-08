@@ -240,7 +240,7 @@ describe "W224 recursive AggregateFunction admission RED" do
     end
   end
 
-  it "keeps direct Nullable and out-of-scope state envelopes outside this profile" do
+  it "admits direct Sum state through Dynamic while keeping excluded wrappers closed" do
     [
       "Nullable(AggregateFunction(sum, UInt8))",
       "LowCardinality(AggregateFunction(sum, UInt8))",
@@ -256,8 +256,9 @@ describe "W224 recursive AggregateFunction admission RED" do
       CrystalClick::BinaryDataType.primitive("UInt8")
     )
     aggregate_value = w224_sum_state(aggregate_type, 1_u64)
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryValue.dynamic(CrystalClick::BinaryDataType.dynamic, aggregate_value)
-    end
+    dynamic_value = CrystalClick::BinaryValue.dynamic(CrystalClick::BinaryDataType.dynamic, aggregate_value)
+    dynamic_value.type.should eq(CrystalClick::BinaryDataType.dynamic)
+    dynamic_value.child_at(0).type.should eq(aggregate_type)
+    dynamic_value.child_at(0).aggregate_function_state_bytes.should eq(w224_u64_bytes(1_u64))
   end
 end

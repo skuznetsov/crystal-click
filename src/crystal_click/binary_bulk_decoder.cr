@@ -537,6 +537,7 @@ module CrystalClick
               shared_scalar_depth.to_i32,
               true,
               allow_json: true,
+              allow_aggregate_function: true,
             )
             if value = child_value
               BinaryValue.dynamic(type, value)

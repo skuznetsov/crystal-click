@@ -500,7 +500,7 @@ module CrystalClick
         key = BinaryDynamicJsonLeafKey.new(site, arm, descriptor_path)
         @prepared.json_object_binding(key)
         @json_object_binding_count = add_size(@json_object_binding_count, 1_u64)
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_FUNCTION
         add_data_role(path, ".data")
       else
         unless type.fixed_width
@@ -603,7 +603,7 @@ module CrystalClick
         measure_variant_site(type, path, prefix_length, array_level, true)
       when BinaryDataType::TAG_VARIANT
         measure_variant_site(type, path, prefix_length, array_level, false)
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_FUNCTION
         add_physical_name(prefix_length)
       else
         unless type.fixed_width
@@ -738,7 +738,7 @@ module CrystalClick
         append_json_object_site(
           BinaryDynamicJsonLeafKey.new(site, arm, descriptor_path), prefix, array_level
         )
-      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
+      when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL, BinaryDataType::TAG_AGGREGATE_FUNCTION
         add_data_binding("#{path}.data", String.new(prefix.to_slice))
       else
         unless type.fixed_width

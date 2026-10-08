@@ -345,7 +345,7 @@ describe "W175 paired AggregateFunction(count) core" do
     end
   end
 
-  it "admits Count in static compositions but keeps excluded routes and envelopes closed" do
+  it "admits Count in static compositions and generic Dynamic while keeping other routes closed" do
     count = w175_count_types[0]
     uint64 = CrystalClick::BinaryDataType.primitive("UInt64")
     array_count = CrystalClick::BinaryDataType.array(count)
@@ -365,14 +365,22 @@ describe "W175 paired AggregateFunction(count) core" do
 
     value = CrystalClick::BinaryValue.aggregate_count_state(count, 7_u64)
     dynamic = CrystalClick::BinaryDataType.dynamic
-    expect_raises(ArgumentError) { CrystalClick::BinaryValue.dynamic(dynamic, value) }
-    expect_raises(ArgumentError) { CrystalClick::DynamicStructure.new([count] of CrystalClick::BinaryDataType) }
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryValueCodec.decode_value(
-        dynamic,
-        w175_count_concat([CrystalClick::BinaryDataTypeCodec.encode(count), Bytes[0x07_u8]] of Bytes),
-      )
-    end
+    dynamic_value = CrystalClick::BinaryValue.dynamic(dynamic, value)
+    dynamic_value.type.should eq(dynamic)
+    dynamic_value.child_at(0).type.should eq(count)
+    dynamic_value.child_at(0).count_state.should eq(7_u64)
+
+    structure = CrystalClick::DynamicStructure.new([count] of CrystalClick::BinaryDataType)
+    structure.types.should eq([count])
+    structure.canonical_index_for(count).should eq(0)
+
+    decoded_dynamic_value = CrystalClick::BinaryValueCodec.decode_value(
+      dynamic,
+      w175_count_concat([CrystalClick::BinaryDataTypeCodec.encode(count), Bytes[0x07_u8]] of Bytes),
+    )
+    decoded_dynamic_value.type.should eq(dynamic)
+    decoded_dynamic_value.child_at(0).type.should eq(count)
+    decoded_dynamic_value.child_at(0).count_state.should eq(7_u64)
 
     limits = w175_count_limits
     write_budget = CrystalClick::BinaryCodecBudget.new(limits, true)

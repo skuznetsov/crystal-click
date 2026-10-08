@@ -151,8 +151,9 @@ module CrystalClick
       unless type.tag == BinaryDataType::TAG_DYNAMIC
         raise ArgumentError.new("Dynamic value requires Dynamic type")
       end
-      if child && child.type.contains_aggregate_function?
-        raise ArgumentError.new("AggregateFunction is not admitted as a Dynamic actual type")
+      if child && child.type.contains_aggregate_function? &&
+         !BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(child.type)
+        raise ArgumentError.new("AggregateFunction is outside the admitted static Dynamic actual profile")
       end
       if child && child.type.contains_qbit? && child.type.tag != BinaryDataType::TAG_QBIT
         raise ArgumentError.new("QBit is not admitted as a Dynamic actual type")
