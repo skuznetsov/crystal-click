@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current AggregateFunction Avg slice (W227, 2026-10-08): VERIFIED within 148
+Current offline MV metadata slice (W228, 2026-10-08): VERIFIED within the
+bounded offline declaration and current-local physical-target identity scope
+(scoped adversary verdict: ROBUST). `OfflineTable#materialized_view` exposes
+detached target/query/context metadata, and explicit catalog target resolution
+checks current physical table identities without reading a view UUID store.
+Descriptor/reference/target, target-prefix parsing and query analysis have
+separate single-file owners. Full SELECT/WITH text is preserved without widening
+the W88 detached-only SELECT-body materializer.
+
+Root hostile probes found and corrected two false-complete inventories: SAMPLE
+followed by a second comma relation, and a discarded table-as-string literal
+that manufactured an `AS` table reference. Unsupported shapes now return
+unknown, a reason and no partial references. Final DEBUG and RELEASE reruns
+each pass 187 examples in the same 35 affected catalog/offline/projection spec
+files, with no failures, errors or pending. Paired native runs and independent
+raw audits each qualify 11 stock-authored views, 26 actual metadata files and
+20 raw processes per mode (19 successes plus one expected table-function
+refusal). Both audits reject coherent equal-width cross-database target-reference
+forgery in both captured helper JSON and raw stdout; exact restoration passes.
+Final formatting passed for 10 Crystal files and the 12-file source-hash check
+matched frozen inputs; only two Ruby harness fixes changed harness hashes.
+Frozen helper SHA-256 values are DEBUG
+`c6962ed70ac99ecdd0b91ef2ebd8cf391aab1807f1113d8ddbf1f0d2421588c5` and
+RELEASE `105f1d7fe16b50dcbe6328130ae56817816f4580d0b643fdc4ce26a8da2948a2`.
+The scoped result does not claim full SQL, all MV/projection behavior, server
+activation/freshness, query execution or full-repository coverage.
+Details: [MATERIALIZED_VIEW_METADATA_FRONTIER.md](MATERIALIZED_VIEW_METADATA_FRONTIER.md).
+
+Remaining type work must distinguish new leaf serde, physical envelope/layout
+state, consumer/admission integration, missing stock-authored qualification
+and source-invalid shapes. Existing child codecs already compose recursively;
+an unmeasured type/layout product is not automatically an unimplemented codec.
+General MV/projection execution/writing, broad facade decomposition and the
+full compatibility objective remain open. Memory/performance stays deferred.
+
+Previous AggregateFunction Avg slice (W227, 2026-10-08): VERIFIED within 148
 finite quiescent root Wide/LZ4/Default/plain-mrk2 profiles (scoped verdict:
 ROBUST). Reader and writer now share an immutable avg-state leaf with promoted
 8/16/32-byte numerator and canonical UInt64 VarUInt denominator. Nullable

@@ -1,0 +1,458 @@
+{
+  "format": "crystal_click_scoped_evidence_v1",
+  "slice": "W228 offline structured materialized-view metadata and explicit physical target identity",
+  "date": "2026-10-08",
+  "baseline_commit": "6a8a31ee125188363361d50408159341dbb1318a",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Bounded quiescent Atomic declarations and current-local target identity, with the finite 11-case native catalog fixture and measured affected library controls.",
+    "statement": "Detached MV query/context/tagged target metadata and conservative direct syntactic FROM inventory are exposed separately from explicit target resolution; view data-access and W88 materializer fences remain intact.",
+    "adversary_verdict": "ROBUST within the declared bounded scope after two source-backed analyzer counterexamples, corrected harness runtime boundaries, raw semantic forgery rejection and exact restoration.",
+    "F": "Executed compiling RED, source law checks, behavioral suites and raw audits; not a formal proof.",
+    "G": "One pinned source snapshot, separately pinned native runtime, 11 view cases, two guarded declarations, two negative resolver controls and one ordinary projection control. Not full SQL or all MV/layout forms.",
+    "R": "Root independently inspected delegated changes and serialized all heavy jobs. Luna review is correlated, not independent replication; a proposed restriction was retracted after root checked its enclosing parser context."
+  },
+  "boundaries": {
+    "risk": "CAUTION: public offline catalog API, bounded SQL interpretation and local metadata identity resolution.",
+    "rollback": "Revert the containing exact-path atomic local feature commit without discarding unrelated work; no remote push or history rewrite.",
+    "allowed_paths": [
+      "src/crystal_click/offline_catalog.cr",
+      "src/crystal_click/offline_catalog/database_location.cr",
+      "src/crystal_click/offline_table.cr",
+      "src/crystal_click/offline_table_reference.cr",
+      "src/crystal_click/offline_materialized_view_target.cr",
+      "src/crystal_click/offline_materialized_view.cr",
+      "src/crystal_click/offline_materialized_view_target_parser.cr",
+      "src/crystal_click/offline_materialized_view_query_analyzer.cr",
+      "spec/offline_materialized_view_w228_spec.cr",
+      "scripts/check_materialized_view_metadata_w228.cr",
+      "scripts/recheck_materialized_view_metadata_w228.rb",
+      "scripts/check_materialized_view_metadata_evidence_w228.rb",
+      "docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/materialized-view-metadata-w228.json"
+    ],
+    "changed_paths": [
+      "src/crystal_click/offline_catalog.cr",
+      "src/crystal_click/offline_catalog/database_location.cr",
+      "src/crystal_click/offline_table.cr",
+      "src/crystal_click/offline_table_reference.cr",
+      "src/crystal_click/offline_materialized_view_target.cr",
+      "src/crystal_click/offline_materialized_view.cr",
+      "src/crystal_click/offline_materialized_view_target_parser.cr",
+      "src/crystal_click/offline_materialized_view_query_analyzer.cr",
+      "spec/offline_materialized_view_w228_spec.cr",
+      "scripts/check_materialized_view_metadata_w228.cr",
+      "scripts/recheck_materialized_view_metadata_w228.rb",
+      "scripts/check_materialized_view_metadata_evidence_w228.rb",
+      "docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/materialized-view-metadata-w228.json"
+    ],
+    "admitted": [
+      "OfflineTable#materialized_view returns a detached descriptor; ordinary/synthetic tables return nil.",
+      "Preserved SELECT/WITH slice and declaring database; named, explicit inner UUID and implicit inner-engine tagged targets.",
+      "Source-free or one recognized direct relation may be complete; unsupported shapes report unknown, a reason and no partial references.",
+      "Catalog target-resolution overloads retain ownership/current database UUID checks and require the declared named or unique physical inner identity.",
+      "Reading an MV object stays guarded; resolving its target does not execute its query or prove Active/freshness."
+    ],
+    "retained_guards": [
+      "Refresh/security/parameterized target declarations, unsafe statement/comment controls, source-invalid external TO plus inner ENGINE.",
+      "CTE/JOIN/multiple relation/subquery/table-function/set/IN ambiguities, SAMPLE and unrecognized suffixes, string-literal table names.",
+      "Missing/ambiguous/wrong-kind/changed targets and absent inner metadata; synthetic system targets.",
+      "W87 child completeness/preflight and W88 exact detached-only identity materialization."
+    ],
+    "not_claimed": [
+      "Full SQL validation or a runtime INSERT-trigger, dictionary/function or refresh dependency graph.",
+      "Live activation, snapshot atomicity under concurrent metadata mutation, target data contents or freshness.",
+      "General MV/projection execution/writing, all types/layouts, full repository suite, broad facade decomposition.",
+      "Memory/performance optimization or the <=10 percent stock-reader gap; overall goal remains active."
+    ]
+  },
+  "architecture": {
+    "owners": [
+      "OfflineMaterializedView",
+      "OfflineMaterializedViewTarget",
+      "OfflineTableReference",
+      "OfflineMaterializedViewTargetParser",
+      "OfflineMaterializedViewQueryAnalyzer"
+    ],
+    "organization": "One file per new public descriptor/reference/parser owner; OfflineCatalog keeps bounded file and identity orchestration. W88's body-only SELECT gate is not widened.",
+    "type_roadmap_correction": "Existing child serde composes recursively. Distinguish new leaf codecs, physical per-occurrence layout/state, consumer/admission integration, missing stock qualification and source-invalid trees rather than counting every unmeasured product as a missing serializer.",
+    "context_law": "ParserCreateTableQuery's SharedSet/SharedJoin TO INNER UUID restriction is not an MV law; ParserCreateViewQuery has its own target construction. Persisted canonical qualification/UUID may differ from authored CREATE spelling."
+  },
+  "source_reference": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+    "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+    "dirty": false,
+    "distinction": "Shallow source snapshot and executable are separate pins, not one build or a continuing latest-master assertion.",
+    "decisive_file_manifest": [
+      {
+        "path": "src/Parsers/ParserCreateQuery.cpp",
+        "sha256": "6883c364cde6effcab825dcc772393ad8e82e98bf7e044c614ab140d8846a16f"
+      },
+      {
+        "path": "src/Parsers/ASTViewTargets.h",
+        "sha256": "3d1627f77be92e7befa836b557128b976821d3407d80607114bd18e173809685"
+      },
+      {
+        "path": "src/Parsers/ExpressionElementParsers.cpp",
+        "sha256": "4c8221e93e9747ca271880d17c0c322b35527de78fb4ef6ee9ab9787389a80a0"
+      },
+      {
+        "path": "src/Parsers/ParserTablesInSelectQuery.cpp",
+        "sha256": "dc76157c9fbcf780f5fbb479ee81106f494cd89c00d63d68859c6bbbf5165ed9"
+      },
+      {
+        "path": "src/Storages/StorageMaterializedView.cpp",
+        "sha256": "069a9cd56a66849a3eb7d77544aa322f011a969fef085cef025bcc05d4f51c75"
+      },
+      {
+        "path": "src/Storages/SelectQueryDescription.cpp",
+        "sha256": "a95eb67fdaeb45e4ea7ead3250d55a9d0c74728ef895a89151ecc87d29e003d7"
+      },
+      {
+        "path": "src/Interpreters/InterpreterCreateQuery.cpp",
+        "sha256": "32749c45b588f6a0722e983be503ed737e24d9f4a79caf65225358698636b2a0"
+      }
+    ]
+  },
+  "runtime": {
+    "binary": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "verification": {
+    "execution_owner": "Root; compiler/native/Ruby/formatter jobs serialized, unchanged run_safe, min-free50%, one Crystal worker and isolated cache.",
+    "guard": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "budgets": {
+      "compiler_native_seconds": 600,
+      "compiler_native_mib": 12288,
+      "ruby_seconds": 120,
+      "ruby_mib": 512,
+      "formatter_seconds": 120,
+      "formatter_mib": 4096
+    },
+    "final_source_manifest": [
+      {
+        "path": "src/crystal_click/offline_catalog.cr",
+        "sha256": "6fd9a6662490052808ea149c9823ca5e14c02560938dbeeb43b33824616ce62e"
+      },
+      {
+        "path": "src/crystal_click/offline_catalog/database_location.cr",
+        "sha256": "f748adb716bd5c1d8f4483357b5d807b9b3241cc38e1918398a8ab7dec3dfb5d"
+      },
+      {
+        "path": "src/crystal_click/offline_table.cr",
+        "sha256": "7167e46dec6353f064ef59a80607918e5d0dba47fe37ebe51f61fa9a26386822"
+      },
+      {
+        "path": "src/crystal_click/offline_table_reference.cr",
+        "sha256": "dabf1a156e06f60c5040cedc5e16b8789043b23c600ef6118f8ddff69b46d00f"
+      },
+      {
+        "path": "src/crystal_click/offline_materialized_view_target.cr",
+        "sha256": "c78c27d12afe3730209bf0dd141e5c1cd0b9d06a2d3f782538c3f5bee3e780e8"
+      },
+      {
+        "path": "src/crystal_click/offline_materialized_view.cr",
+        "sha256": "d9889e59e82cb241fa7ce4c5235757b695e40891dd42cc403c087880a5f46aae"
+      },
+      {
+        "path": "src/crystal_click/offline_materialized_view_target_parser.cr",
+        "sha256": "c61f436d2cb231be4f9a1f6557c419c942486ca0baea9c8b657ecd0b6c3601da"
+      },
+      {
+        "path": "src/crystal_click/offline_materialized_view_query_analyzer.cr",
+        "sha256": "19822998c3a112b58ca05edaf7a44bb27ce31ed26c1e96f5a5f0aed7ee15f076"
+      },
+      {
+        "path": "spec/offline_materialized_view_w228_spec.cr",
+        "sha256": "cd52ccace248bb07dda4ffe3080fe5b132326b1ff36197d954be71777a31ea5c"
+      },
+      {
+        "path": "scripts/check_materialized_view_metadata_w228.cr",
+        "sha256": "040900df78557f9f51f78418002a3e0a778d6efe03edc70319c8a67477581958"
+      },
+      {
+        "path": "scripts/recheck_materialized_view_metadata_w228.rb",
+        "sha256": "857477039c07b4e0d53231d389c837e96202f77a6e320ed5b8026118b72d2594"
+      },
+      {
+        "path": "scripts/check_materialized_view_metadata_evidence_w228.rb",
+        "sha256": "ffec8652b711c8c34585f9b0edbb0e1faf263a3dcf52b9521eadeb6fd421c84d"
+      }
+    ],
+    "red": {
+      "examples": 36,
+      "failures": 6,
+      "errors": 2,
+      "pending": 0,
+      "exit": 1,
+      "existing_controls_passed": 28,
+      "log": "/private/tmp/crystal-click-w228.t5rWWK/red.log",
+      "signal": "Baseline compiles but new descriptor/resolver and bounded parsing cases fail; existing W86/W87/W88 controls pass."
+    },
+    "analyzer_falsifiers": [
+      {
+        "query": "SELECT s.k FROM lab.source AS s SAMPLE 1/2, other.source AS o",
+        "before": "complete with only lab.source",
+        "after": "unknown with no partial references",
+        "exit_before": 1,
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 run /private/tmp/crystal-click-w228.t5rWWK/analyzer_sample_falsifier.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w228.t5rWWK/analyzer-sample-red.log 2>&1",
+        "log": "/private/tmp/crystal-click-w228.t5rWWK/analyzer-sample-red.log"
+      },
+      {
+        "query": "SELECT k FROM 'source' AS s",
+        "before": "complete with phantom lab.AS",
+        "after": "unknown, opaque literal token retained; positive literal projections remain recognized",
+        "exit_before": 1,
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 run /private/tmp/crystal-click-w228.t5rWWK/analyzer_string_relation_falsifier.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w228.t5rWWK/analyzer-string-red.log 2>&1",
+        "log": "/private/tmp/crystal-click-w228.t5rWWK/analyzer-string-red.log"
+      }
+    ],
+    "specs": {
+      "roster": [
+        "spec/aggregate_count_offline_w177_spec.cr",
+        "spec/object_catalog_w129_root_spec.cr",
+        "spec/object_catalog_w129_spec.cr",
+        "spec/object_offline_table_w130_spec.cr",
+        "spec/offline_catalog_projection_w87_spec.cr",
+        "spec/offline_catalog_spec.cr",
+        "spec/offline_catalog_w27_spec.cr",
+        "spec/offline_catalog_w28_spec.cr",
+        "spec/offline_catalog_w29_spec.cr",
+        "spec/offline_catalog_w53_spec.cr",
+        "spec/offline_catalog_w54_spec.cr",
+        "spec/offline_catalog_w60_spec.cr",
+        "spec/offline_catalog_w63_spec.cr",
+        "spec/offline_catalog_w68_spec.cr",
+        "spec/offline_catalog_w69_spec.cr",
+        "spec/offline_catalog_w70_spec.cr",
+        "spec/offline_catalog_w71_spec.cr",
+        "spec/offline_catalog_w73_spec.cr",
+        "spec/offline_catalog_w76_spec.cr",
+        "spec/offline_catalog_w77_spec.cr",
+        "spec/offline_catalog_w78_spec.cr",
+        "spec/offline_catalog_w79_spec.cr",
+        "spec/offline_catalog_w80_spec.cr",
+        "spec/offline_catalog_w81_spec.cr",
+        "spec/offline_catalog_w82_spec.cr",
+        "spec/offline_catalog_w83_spec.cr",
+        "spec/offline_catalog_w84_spec.cr",
+        "spec/offline_catalog_w85_spec.cr",
+        "spec/offline_catalog_w86_spec.cr",
+        "spec/offline_catalog_w95_tuple_values_spec.cr",
+        "spec/offline_materialized_view_w228_spec.cr",
+        "spec/offline_mv_materialization_w88_spec.cr",
+        "spec/offline_tui_page_source_spec.cr",
+        "spec/projection_specialized_consumers_w217_spec.cr",
+        "spec/wide_part_table_projection_w87_spec.cr"
+      ],
+      "debug": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_offline_w177_spec.cr spec/object_catalog_w129_root_spec.cr spec/object_catalog_w129_spec.cr spec/object_offline_table_w130_spec.cr spec/offline_catalog_projection_w87_spec.cr spec/offline_catalog_spec.cr spec/offline_catalog_w27_spec.cr spec/offline_catalog_w28_spec.cr spec/offline_catalog_w29_spec.cr spec/offline_catalog_w53_spec.cr spec/offline_catalog_w54_spec.cr spec/offline_catalog_w60_spec.cr spec/offline_catalog_w63_spec.cr spec/offline_catalog_w68_spec.cr spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w76_spec.cr spec/offline_catalog_w77_spec.cr spec/offline_catalog_w78_spec.cr spec/offline_catalog_w79_spec.cr spec/offline_catalog_w80_spec.cr spec/offline_catalog_w81_spec.cr spec/offline_catalog_w82_spec.cr spec/offline_catalog_w83_spec.cr spec/offline_catalog_w84_spec.cr spec/offline_catalog_w85_spec.cr spec/offline_catalog_w86_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/offline_materialized_view_w228_spec.cr spec/offline_mv_materialization_w88_spec.cr spec/offline_tui_page_source_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/wide_part_table_projection_w87_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w228.t5rWWK/catalog-debug-final.log 2>&1",
+        "examples": 187,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit": 0
+      },
+      "release": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_offline_w177_spec.cr spec/object_catalog_w129_root_spec.cr spec/object_catalog_w129_spec.cr spec/object_offline_table_w130_spec.cr spec/offline_catalog_projection_w87_spec.cr spec/offline_catalog_spec.cr spec/offline_catalog_w27_spec.cr spec/offline_catalog_w28_spec.cr spec/offline_catalog_w29_spec.cr spec/offline_catalog_w53_spec.cr spec/offline_catalog_w54_spec.cr spec/offline_catalog_w60_spec.cr spec/offline_catalog_w63_spec.cr spec/offline_catalog_w68_spec.cr spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w76_spec.cr spec/offline_catalog_w77_spec.cr spec/offline_catalog_w78_spec.cr spec/offline_catalog_w79_spec.cr spec/offline_catalog_w80_spec.cr spec/offline_catalog_w81_spec.cr spec/offline_catalog_w82_spec.cr spec/offline_catalog_w83_spec.cr spec/offline_catalog_w84_spec.cr spec/offline_catalog_w85_spec.cr spec/offline_catalog_w86_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/offline_materialized_view_w228_spec.cr spec/offline_mv_materialization_w88_spec.cr spec/offline_tui_page_source_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/wide_part_table_projection_w87_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w228.t5rWWK/catalog-release-final.log 2>&1",
+        "examples": 187,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit": 0
+      },
+      "scope": "Same 35-file affected roster, final production/spec/helper bytes; two later Ruby-only runtime fixes do not change compiled test/helper state."
+    },
+    "formatting": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 4096 tool format --check src/crystal_click/offline_catalog.cr src/crystal_click/offline_catalog/database_location.cr src/crystal_click/offline_table.cr src/crystal_click/offline_table_reference.cr src/crystal_click/offline_materialized_view_target.cr src/crystal_click/offline_materialized_view.cr src/crystal_click/offline_materialized_view_target_parser.cr src/crystal_click/offline_materialized_view_query_analyzer.cr spec/offline_materialized_view_w228_spec.cr scripts/check_materialized_view_metadata_w228.cr > /private/tmp/crystal-click-w228.t5rWWK/format-check-final.log 2>&1",
+      "crystal_files": 10,
+      "exit": 0
+    },
+    "native": {
+      "case_ids": [
+        "named_unqualified",
+        "cross_database_target",
+        "cross_database_source",
+        "source_free_named_target",
+        "cte_unknown",
+        "inner_uuid_explicit",
+        "engine_canonical_inner_uuid",
+        "join_unknown",
+        "subquery_unknown",
+        "literal_fake_from_to",
+        "quoted_identifiers"
+      ],
+      "expected_signal": "11 descriptors and both target-resolution overloads agree with independent case maps, raw system TSV, actual persisted DDL bytes/inventory and UUIDs; all MV reads remain guarded with zero callbacks.",
+      "controls": {
+        "unsupported_declarations": [
+          "refresh_control",
+          "security_control"
+        ],
+        "resolver_negative": [
+          "ordinary_table",
+          "missing_view"
+        ],
+        "ordinary_projection": "projection_source.by_v",
+        "stock_table_function": "Expected QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW refusal, not a successful descriptor witness."
+      },
+      "modes": {
+        "debug": {
+          "helper": "/private/tmp/crystal-click-w228.t5rWWK/helper-debug",
+          "helper_sha256": "c6962ed70ac99ecdd0b91ef2ebd8cf391aab1807f1113d8ddbf1f0d2421588c5",
+          "native_root": "/private/tmp/crystal-click-w228-native.debug-retry.IDUWCz",
+          "evidence_root": "/private/tmp/crystal-click-w228-evidence.debug-retry.H8o6Jb",
+          "helper_input_sha256": "c26edc2c31bc428d57b6efffa9ed38bfebb047b1c2e524758d7dd481ba98eff3",
+          "original_helper_output_sha256": "7253d46bc895d9abe56b56c2639a48f53fcf0cf1614912c12b1d3e6c7f30fcd4",
+          "counts": {
+            "views_expected": 11,
+            "views_observed": 11,
+            "stock_metadata_files": 26,
+            "processes": 20
+          },
+          "process_status_counts": {
+            "success_exit0": 19,
+            "nonzero_or_signaled": 1,
+            "timeout": 0,
+            "spawn_failure": 0
+          },
+          "exits": {
+            "native": 0,
+            "raw_audit": 0,
+            "semantic_seed_audit": 1,
+            "exact_restored_audit": 0
+          },
+          "commands": {
+            "helper_build": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_materialized_view_metadata_w228.cr -o /private/tmp/crystal-click-w228.t5rWWK/helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w228.t5rWWK/helper-debug-build.log 2>&1",
+            "native": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_materialized_view_metadata_w228.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w228.t5rWWK/helper-debug --helper-sha256 c6962ed70ac99ecdd0b91ef2ebd8cf391aab1807f1113d8ddbf1f0d2421588c5 --native-root /private/tmp/crystal-click-w228-native.debug-retry.IDUWCz --evidence-root /private/tmp/crystal-click-w228-evidence.debug-retry.H8o6Jb > /private/tmp/crystal-click-w228.t5rWWK/native-debug-final.log 2>&1",
+            "raw_audit": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_materialized_view_metadata_evidence_w228.rb --native-root /private/tmp/crystal-click-w228-native.debug-retry.IDUWCz --evidence-root /private/tmp/crystal-click-w228-evidence.debug-retry.H8o6Jb --helper-sha256 c6962ed70ac99ecdd0b91ef2ebd8cf391aab1807f1113d8ddbf1f0d2421588c5 > /private/tmp/crystal-click-w228.t5rWWK/audit-debug-final.log 2>&1",
+            "semantic_seed_audit": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_materialized_view_metadata_evidence_w228.rb --native-root /private/tmp/crystal-click-w228-native.debug-retry.IDUWCz --evidence-root /private/tmp/crystal-click-w228-evidence.debug-retry.H8o6Jb --helper-sha256 c6962ed70ac99ecdd0b91ef2ebd8cf391aab1807f1113d8ddbf1f0d2421588c5 > /private/tmp/crystal-click-w228.t5rWWK/audit-debug-semantic-seed.log 2>&1",
+            "exact_restored_audit": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_materialized_view_metadata_evidence_w228.rb --native-root /private/tmp/crystal-click-w228-native.debug-retry.IDUWCz --evidence-root /private/tmp/crystal-click-w228-evidence.debug-retry.H8o6Jb --helper-sha256 c6962ed70ac99ecdd0b91ef2ebd8cf391aab1807f1113d8ddbf1f0d2421588c5 > /private/tmp/crystal-click-w228.t5rWWK/audit-debug-restored.log 2>&1"
+          }
+        },
+        "release": {
+          "helper": "/private/tmp/crystal-click-w228.t5rWWK/helper-release",
+          "helper_sha256": "105f1d7fe16b50dcbe6328130ae56817816f4580d0b643fdc4ce26a8da2948a2",
+          "native_root": "/private/tmp/crystal-click-w228-native.release.HXprUA",
+          "evidence_root": "/private/tmp/crystal-click-w228-evidence.release.Oi7pHN",
+          "helper_input_sha256": "7f851a7e624109c3520608bbf22f43efe82bb373495e7c46b0d41a63b0c399f7",
+          "original_helper_output_sha256": "d01151d8b22646b9776f4f8629809f60a494bababa7ad5b5de4f65164089fbd0",
+          "counts": {
+            "views_expected": 11,
+            "views_observed": 11,
+            "stock_metadata_files": 26,
+            "processes": 20
+          },
+          "process_status_counts": {
+            "success_exit0": 19,
+            "nonzero_or_signaled": 1,
+            "timeout": 0,
+            "spawn_failure": 0
+          },
+          "exits": {
+            "native": 0,
+            "raw_audit": 0,
+            "semantic_seed_audit": 1,
+            "exact_restored_audit": 0
+          },
+          "commands": {
+            "helper_build": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_materialized_view_metadata_w228.cr -o /private/tmp/crystal-click-w228.t5rWWK/helper-release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w228.t5rWWK/helper-release-build.log 2>&1",
+            "native": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_materialized_view_metadata_w228.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w228.t5rWWK/helper-release --helper-sha256 105f1d7fe16b50dcbe6328130ae56817816f4580d0b643fdc4ce26a8da2948a2 --native-root /private/tmp/crystal-click-w228-native.release.HXprUA --evidence-root /private/tmp/crystal-click-w228-evidence.release.Oi7pHN > /private/tmp/crystal-click-w228.t5rWWK/native-release.log 2>&1",
+            "raw_audit": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_materialized_view_metadata_evidence_w228.rb --native-root /private/tmp/crystal-click-w228-native.release.HXprUA --evidence-root /private/tmp/crystal-click-w228-evidence.release.Oi7pHN --helper-sha256 105f1d7fe16b50dcbe6328130ae56817816f4580d0b643fdc4ce26a8da2948a2 > /private/tmp/crystal-click-w228.t5rWWK/audit-release.log 2>&1",
+            "semantic_seed_audit": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_materialized_view_metadata_evidence_w228.rb --native-root /private/tmp/crystal-click-w228-native.release.HXprUA --evidence-root /private/tmp/crystal-click-w228-evidence.release.Oi7pHN --helper-sha256 105f1d7fe16b50dcbe6328130ae56817816f4580d0b643fdc4ce26a8da2948a2 > /private/tmp/crystal-click-w228.t5rWWK/audit-release-semantic-seed.log 2>&1",
+            "exact_restored_audit": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w228.t5rWWK/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_materialized_view_metadata_evidence_w228.rb --native-root /private/tmp/crystal-click-w228-native.release.HXprUA --evidence-root /private/tmp/crystal-click-w228-evidence.release.Oi7pHN --helper-sha256 105f1d7fe16b50dcbe6328130ae56817816f4580d0b643fdc4ce26a8da2948a2 > /private/tmp/crystal-click-w228.t5rWWK/audit-release-restored.log 2>&1"
+          }
+        }
+      }
+    },
+    "semantic_attack": {
+      "mutation": "Only cross_database_target descriptor.target.reference.database changes w228_target -> w228_source in both helper.json and raw crystal-helper.stdout.",
+      "carrier_bytes_before_after": 15387,
+      "unchanged": "Successful exit0/no-timeout/no-signal process status and green summary remain unchanged; both carriers are still identical.",
+      "expected_signal": "Independent semantic target map rejects, not a byte-count/carrier mismatch.",
+      "observed_both_modes": "ArgumentError: cross_database_target: target reference differs from fixed map",
+      "restoration": "Root compared restored helper output with saved original bytes; raw audits confirm helper/stdout equality and all native expectations again pass."
+    },
+    "harness_failures": {
+      "runner": "First native attempt failed after runtime-version-pin because checked_success! belongs to W224 Probe, not its module; replaced with exact local process success assertion.",
+      "auditor": "First raw audit called nonexistent Dir.directory?; replaced with File.directory?.",
+      "refreshed_path": "Final runner executes in fresh DEBUG and RELEASE roots; final separate audits and semantic seed/restoration paths execute the corrected scripts."
+    },
+    "logs": [
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/catalog-debug-final.log",
+        "sha256": "6239bdcb96fbdfe281841f6a84f15127af9b7dc62d8487fbe5319e67cf03e84c",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/catalog-release-final.log",
+        "sha256": "f6d74c69d53fa52d38a95ba0116c183d72b2e116f124b1f1aad71b1e713cf069",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/native-debug-final.log",
+        "sha256": "81eb54075aacf5bd6d20257c625da3cc29470c5f5b082db34c18d324980f5072",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/native-release.log",
+        "sha256": "bc74a4a93fec20cc469d118e0cc73a658c508f4405c43e58331a31228ea8d13f",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/audit-debug-final.log",
+        "sha256": "4b49ce13da2dfacbb646754f315bae51b73037b71524c0b8ff281ad672d3dfb0",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/audit-release.log",
+        "sha256": "d4f980c25484125cf5abbee2bf7e8cafcb7acc576e1d6be526966f69842749db",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/audit-debug-semantic-seed.log",
+        "sha256": "4176990645db184c726acc5568ea2b13a6656590f251c008a1b5c06fe8b07c8a",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/audit-release-semantic-seed.log",
+        "sha256": "34d0aa66c090d4201183ae8d7d27a587cd0a9c9f0c1babdc8432766995c32e5d",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/audit-debug-restored.log",
+        "sha256": "d4f980c25484125cf5abbee2bf7e8cafcb7acc576e1d6be526966f69842749db",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w228.t5rWWK/audit-release-restored.log",
+        "sha256": "d4f980c25484125cf5abbee2bf7e8cafcb7acc576e1d6be526966f69842749db",
+        "availability": "Temporary local evidence cache; absence or changed digest requires refresh, not success."
+      }
+    ]
+  },
+  "links": {
+    "frontier": "docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md",
+    "status": "docs/PROJECT_STATUS.md",
+    "continuity": "LANDMARKS.md"
+  },
+  "continuity": {
+    "active_goal": "Full ClickHouse-compatible read/write types and MV/projection support remains open; memory/performance is deferred.",
+    "next_signal": "Choose a source-valid next MV/projection inspection form or a genuine type leaf/layout/integration gap, then add a discriminating stock-authored witness before widening support.",
+    "standing_authority": "Bounded local work, hostile review and atomic local commits; no push, production data mutation or performance restart inferred.",
+    "decay": "Refresh after parser/context/descriptor/resolver/spec/helper/fixture/source/runtime changes.",
+    "regeneration": "Build pinned helpers with recorded flags, create NEW canonical /private/tmp native/evidence roots with accepted prefixes, substitute them in recorded commands, rerun native/raw-audit/semantic-seed/exact-restoration. Never reuse dirty roots.",
+    "failure_policy": "Missing, stale or refuted evidence reopens dependent claims; green summaries and packet shape/hashes do not prove behavior."
+  },
+  "validation_boundary": {
+    "format": "Existing repository crystal_click_scoped_evidence_v1 shape, not a universal schema.",
+    "graph_validator": "Not run: docs/landmark-evidence-packet-template.md and scripts/validate-landmark-graph.sh are absent. No graph-validation claim.",
+    "packet_role": "Curated index to executed evidence, not proof by fields, hashes, commands or model agreement."
+  }
+}

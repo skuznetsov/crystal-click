@@ -2,6 +2,11 @@ require "./offline_column_value"
 require "./offline_column"
 require "./offline_projection"
 require "./offline_part_candidate"
+require "./offline_table_reference"
+require "./offline_materialized_view_target"
+require "./offline_materialized_view"
+require "./offline_materialized_view_target_parser"
+require "./offline_materialized_view_query_analyzer"
 require "./offline_table"
 require "./offline_column_selection"
 require "./offline_database"
@@ -262,6 +267,27 @@ module CrystalClick
       table(location, name)
     end
 
+    # Resolve only the current local metadata identity declared by an MV.
+    # This does not inspect activation, data contents, or the view UUID store.
+    def resolve_materialized_view_target(database : String, view_name : String) : OfflineTable
+      validate_identifier(view_name, "MATERIALIZED VIEW name")
+      location = resolve_database(database)
+      resolve_materialized_view_target(location, view_name)
+    end
+
+    def resolve_materialized_view_target(database : OfflineDatabase, view_name : String) : OfflineTable
+      validate_database_owner!(database)
+      validate_identifier(view_name, "MATERIALIZED VIEW name")
+      if database.virtual_system?
+        validate_virtual_system_database!(database)
+        raise InvalidPartError.new("synthetic system database has no MATERIALIZED VIEW targets")
+      end
+
+      location = resolve_database(database.name)
+      validate_database_identity!(database, location)
+      resolve_materialized_view_target(location, view_name)
+    end
+
     # Recompute one deliberately narrow persisted MATERIALIZED VIEW projection
     # from one resolved source part and publish it only below a detached/ path.
     # This is an offline artifact, not the server's current MV target state.
@@ -434,7 +460,7 @@ module CrystalClick
 
       ddl_path = File.join(location.metadata_path, "#{encode_identifier(name)}.sql")
       ddl = read_bounded_file(ddl_path, MAX_METADATA_BYTES, "table DDL")
-      uuid, columns, engine, primary_key_column, kind, projections = parse_table_ddl(ddl)
+      uuid, columns, engine, primary_key_column, kind, projections, materialized_view = parse_table_ddl(ddl, location.name)
 
       part_candidates = if kind == :table && engine == "MergeTree"
                           table_path = validate_store_directory(uuid)
@@ -443,7 +469,7 @@ module CrystalClick
                           nil
                         end
 
-      OfflineTable.new(name, uuid, engine, columns, part_candidates, primary_key_column, nil, kind, ddl, projections)
+      OfflineTable.new(name, uuid, engine, columns, part_candidates, primary_key_column, nil, kind, ddl, projections, materialized_view)
     end
 
     private def w88_validate_table_shape!(table : OfflineTable, role : String) : Nil
@@ -635,7 +661,7 @@ module CrystalClick
         raise InvalidPartError.new("database metadata symlink is dangling: #{name}")
       end
 
-      DatabaseLocation.new(uuid, store_path)
+      DatabaseLocation.new(name, uuid, store_path)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot resolve database metadata")
     end
@@ -648,9 +674,94 @@ module CrystalClick
       normalize_uuid(match[1])
     end
 
-    private def parse_table_ddl(ddl : String) : {String, Array(OfflineColumn), String, String?, Symbol, Array(OfflineProjection)}
+    private def resolve_materialized_view_target(location : DatabaseLocation, view_name : String) : OfflineTable
+      view = table(location, view_name)
+      unless view.kind == :materialized_view
+        raise InvalidPartError.new("selected object is not a MATERIALIZED VIEW: #{view_name}")
+      end
+      descriptor = view.materialized_view || raise(InvalidPartError.new("MATERIALIZED VIEW target declaration is unavailable"))
+
+      target = descriptor.target
+      if target.kind == :named
+        reference = target.reference || raise(InvalidPartError.new("named MATERIALIZED VIEW target reference is missing"))
+        if reference.database == SYSTEM_DATABASE_NAME
+          raise InvalidPartError.new("named MATERIALIZED VIEW target cannot resolve to the synthetic system database")
+        end
+        physical = table(reference.database, reference.name)
+        unless physical.kind == :table
+          raise InvalidPartError.new("named MATERIALIZED VIEW target is not a physical table")
+        end
+        if declared_uuid = target.uuid
+          unless physical.uuid == declared_uuid
+            raise InvalidPartError.new("named MATERIALIZED VIEW target UUID changed")
+          end
+        end
+        physical
+      elsif target.kind == :inner_uuid
+        declared_uuid = target.uuid || raise(InvalidPartError.new("INNER UUID MATERIALIZED VIEW target UUID is missing"))
+        resolve_inner_uuid_target(location, declared_uuid)
+      elsif target.kind == :implicit_inner
+        inner_name = ".inner_id.#{view.uuid}"
+        physical = table(location, inner_name)
+        unless physical.kind == :table
+          raise InvalidPartError.new("implicit MATERIALIZED VIEW target is not a physical table")
+        end
+        physical
+      else
+        raise InvalidPartError.new("unknown MATERIALIZED VIEW target kind")
+      end
+    end
+
+    private def resolve_inner_uuid_target(location : DatabaseLocation, uuid : String) : OfflineTable
+      names = list_table_names(location)
+      known_names = Set(String).new
+      names.each { |name| known_names << name }
+
+      matched_names = [] of String
+      matched_kinds = [] of Symbol
+      names.each do |name|
+        ddl_path = File.join(location.metadata_path, "#{encode_identifier(name)}.sql")
+        ddl = read_bounded_file(ddl_path, MAX_METADATA_BYTES, "table DDL")
+        identity = metadata_header_identity(ddl)
+        if identity[0] == uuid
+          matched_names << name
+          matched_kinds << identity[1]
+        end
+      end
+
+      unless matched_names.size == 1
+        message = matched_names.empty? ? "INNER UUID MATERIALIZED VIEW target is absent" : "INNER UUID MATERIALIZED VIEW target identity is ambiguous"
+        raise InvalidPartError.new(message)
+      end
+      unless matched_kinds.first == :table
+        raise InvalidPartError.new("INNER UUID MATERIALIZED VIEW target is not a physical table")
+      end
+
+      physical = table(location, matched_names.first, known_names)
+      unless physical.kind == :table && physical.uuid == uuid
+        raise InvalidPartError.new("INNER UUID MATERIALIZED VIEW target identity changed")
+      end
+      physical
+    end
+
+    # Read only the common metadata identity header so unrelated guarded MV
+    # forms do not need full DDL parsing during UUID inventory.
+    private def metadata_header_identity(ddl : String) : {String, Symbol}
+      if match = /\A\s*ATTACH\s+TABLE\s+_\s+UUID\s+'([^']+)'/i.match(ddl)
+        {normalize_uuid(match[1]), :table}
+      elsif match = /\A\s*ATTACH\s+MATERIALIZED\s+VIEW\s+_\s+UUID\s+'([^']+)'/i.match(ddl)
+        {normalize_uuid(match[1]), :materialized_view}
+      else
+        raise UnsupportedFormatError.new("unsupported table metadata identity header")
+      end
+    end
+
+    private def parse_table_ddl(
+      ddl : String,
+      declaring_database : String,
+    ) : {String, Array(OfflineColumn), String, String?, Symbol, Array(OfflineProjection), OfflineMaterializedView?}
       if materialized_view_header = /\A\s*ATTACH\s+MATERIALIZED\s+VIEW\s+_\s+UUID\s+'([^']+)'/i.match(ddl)
-        return parse_materialized_view_ddl(ddl, materialized_view_header)
+        return parse_materialized_view_ddl(ddl, materialized_view_header, declaring_database)
       end
 
       header = /\A\s*ATTACH\s+TABLE\s+_\s+UUID\s+'([^']+)'\s*\(/i.match(ddl)
@@ -671,22 +782,23 @@ module CrystalClick
 
       columns, projections = parse_column_declarations(columns_text)
       primary_key_column = engine.compare("MergeTree", case_insensitive: true) == 0 ? parse_simple_order_key(trailing, columns) : nil
-      {uuid, columns, engine, primary_key_column, :table, projections}
+      {uuid, columns, engine, primary_key_column, :table, projections, nil}
     end
 
     private def parse_materialized_view_ddl(
       ddl : String,
       header : Regex::MatchData,
-    ) : {String, Array(OfflineColumn), String, String?, Symbol, Array(OfflineProjection)}
+      declaring_database : String,
+    ) : {String, Array(OfflineColumn), String, String?, Symbol, Array(OfflineProjection), OfflineMaterializedView?}
       uuid = normalize_uuid(header[1])
       tail_offset = header.end(0)
       tail = ddl.byte_slice(tail_offset, ddl.bytesize - tail_offset)
-      has_target = false
+      target = nil.as(OfflineMaterializedViewTarget?)
 
-      if target = consume_materialized_view_target(tail)
-        has_target = true
-        tail_offset += target[0]
-        tail = target[1]
+      if parsed_target = OfflineMaterializedViewTargetParser.consume(tail, declaring_database)
+        target = parsed_target[1]
+        tail_offset += parsed_target[0]
+        tail = ddl.byte_slice(tail_offset, ddl.bytesize - tail_offset)
       end
 
       tail = tail.lstrip
@@ -704,58 +816,78 @@ module CrystalClick
         tail_offset = ddl.bytesize - tail.bytesize
       end
 
-      if target = consume_materialized_view_target(tail)
-        raise UnsupportedFormatError.new("duplicate MATERIALIZED VIEW TO clause") if has_target
-        has_target = true
-        tail_offset += target[0]
-        tail = target[1].lstrip
+      if parsed_target = OfflineMaterializedViewTargetParser.consume(tail, declaring_database)
+        raise UnsupportedFormatError.new("duplicate MATERIALIZED VIEW TO clause") if target
+        target = parsed_target[1]
+        tail_offset += parsed_target[0]
+        tail = ddl.byte_slice(tail_offset, ddl.bytesize - tail_offset).lstrip
         tail_offset = ddl.bytesize - tail.bytesize
       end
 
       engine_match = /\AENGINE\s*=\s*([A-Za-z][A-Za-z0-9_]*)\b/i.match(tail)
+      inner_engine = nil.as(String?)
+      query = nil.as(String?)
       if engine_match
         # The storage ENGINE belongs to the MV's inner target; expose the
         # logical kind instead and never use the view UUID as a data path.
+        inner_engine = String.new(engine_match[1].to_slice)
         suffix = tail.byte_slice(engine_match.end(0), tail.bytesize - engine_match.end(0))
-        before_select, query = split_materialized_view_select(suffix)
+        before_select, parsed_query = split_materialized_view_query(suffix)
         unless before_select.empty? || supported_materialized_view_storage_tail?(before_select)
           raise UnsupportedFormatError.new("unsupported MATERIALIZED VIEW storage clause")
         end
+        query = parsed_query
       else
-        raise UnsupportedFormatError.new("MATERIALIZED VIEW requires an inner ENGINE or TO clause") unless has_target
-        before_select, query = split_materialized_view_select(tail)
+        raise UnsupportedFormatError.new("MATERIALIZED VIEW requires an inner ENGINE or TO clause") unless target
+        before_select, parsed_query = split_materialized_view_query(tail)
         raise UnsupportedFormatError.new("unsupported MATERIALIZED VIEW suffix") unless before_select.empty?
+        query = parsed_query
       end
 
-      {uuid, columns, "MaterializedView", nil, :materialized_view, projections}
+      case target.try(&.kind)
+      when :named
+        raise UnsupportedFormatError.new("named MATERIALIZED VIEW target cannot declare an inner ENGINE") if inner_engine
+      when :inner_uuid
+        raise UnsupportedFormatError.new("INNER UUID MATERIALIZED VIEW target requires an inner ENGINE") unless inner_engine
+      when nil
+        raise UnsupportedFormatError.new("MATERIALIZED VIEW without TO requires an inner ENGINE") unless inner_engine
+        target = OfflineMaterializedViewTarget.implicit_inner
+      end
+
+      parsed_query = query || raise(UnsupportedFormatError.new("MATERIALIZED VIEW SELECT definition is missing"))
+      references, status, reason = OfflineMaterializedViewQueryAnalyzer.analyze(parsed_query, declaring_database)
+      descriptor = OfflineMaterializedView.new(
+        declaring_database: declaring_database,
+        query: parsed_query,
+        inner_engine: inner_engine,
+        target: target || raise(UnsupportedFormatError.new("MATERIALIZED VIEW target declaration is missing")),
+        source_references: references,
+        source_references_status: status,
+        source_references_reason: reason
+      )
+      {uuid, columns, "MaterializedView", nil, :materialized_view, projections, descriptor}
     end
 
-    # Recognize the serialized inner-UUID target and ordinary table targets,
-    # but deliberately do not resolve or validate target state.
-    private def consume_materialized_view_target(text : String) : {Int32, String}?
-      source = text.lstrip
-      leading_bytes = text.bytesize - source.bytesize
-      inner = /\ATO\s+INNER\s+UUID\s+'([^']+)'/i.match(source)
-      if inner
-        normalize_uuid(inner[1])
-        consumed = leading_bytes + inner.end(0)
-        return {consumed, text.byte_slice(consumed, text.bytesize - consumed)}
-      end
-
-      target = /\ATO\s+((?:`(?:\\.|[^`])+`|[A-Za-z_][A-Za-z0-9_]*)(?:\.(?:`(?:\\.|[^`])+`|[A-Za-z_][A-Za-z0-9_]*))?)(?=\s|\z)/i.match(source)
-      if target
-        consumed = leading_bytes + target.end(0)
-        return {consumed, text.byte_slice(consumed, text.bytesize - consumed)}
-      end
-
-      nil
-    end
-
-    private def split_materialized_view_select(text : String) : {String, String}
-      delimiter = find_materialized_view_select(text)
-      raise UnsupportedFormatError.new("MATERIALIZED VIEW is missing AS SELECT") unless delimiter
+    private def split_materialized_view_query(text : String) : {String, String}
+      delimiter = find_materialized_view_query(text)
+      raise UnsupportedFormatError.new("MATERIALIZED VIEW is missing AS SELECT or AS WITH") unless delimiter
       prefix = text.byte_slice(0, delimiter[0]).strip
       query = text.byte_slice(delimiter[1], text.bytesize - delimiter[1]).strip
+      body = text.byte_slice(delimiter[2], text.bytesize - delimiter[2]).strip
+      raise UnsupportedFormatError.new("MATERIALIZED VIEW SELECT definition is empty") if body.empty?
+      if contains_unsafe_sql_control?(query)
+        raise UnsupportedFormatError.new("MATERIALIZED VIEW SELECT has an unsupported statement or comment control")
+      end
+      {prefix, query}
+    end
+
+    # W88 retains its historical body-only, SELECT-only gate. The new
+    # descriptor uses split_materialized_view_query and preserves the keyword.
+    private def split_materialized_view_select(text : String) : {String, String}
+      delimiter = find_materialized_view_query(text)
+      raise UnsupportedFormatError.new("MATERIALIZED VIEW is missing AS SELECT") unless delimiter && delimiter[3] == :select
+      prefix = text.byte_slice(0, delimiter[0]).strip
+      query = text.byte_slice(delimiter[2], text.bytesize - delimiter[2]).strip
       raise UnsupportedFormatError.new("MATERIALIZED VIEW SELECT definition is empty") if query.empty?
       if contains_unsafe_sql_control?(query)
         raise UnsupportedFormatError.new("MATERIALIZED VIEW SELECT has an unsupported statement or comment control")
@@ -763,10 +895,10 @@ module CrystalClick
       {prefix, query}
     end
 
-    # Locate AS SELECT only at top-level and outside quoted storage metadata.
+    # Locate AS SELECT or AS WITH only at top-level and outside quoted storage metadata.
     # This keeps an identifier or setting value containing those words from
     # manufacturing the DDL boundary.
-    private def find_materialized_view_select(text : String) : {Int32, Int32}?
+    private def find_materialized_view_query(text : String) : {Int32, Int32, Int32, Symbol}?
       bytes = text.to_slice
       depth = 0
       quote = 0_u8
@@ -793,8 +925,8 @@ module CrystalClick
           depth -= 1
           raise UnsupportedFormatError.new("unbalanced MATERIALIZED VIEW storage suffix") if depth < 0
         elsif depth == 0
-          if select_end = materialized_view_as_select_end(bytes, index)
-            return {index, select_end}
+          if query = materialized_view_query_positions(bytes, index)
+            return {index, query[0], query[1], query[2]}
           end
         end
         index += 1
@@ -804,7 +936,7 @@ module CrystalClick
       nil
     end
 
-    private def materialized_view_as_select_end(bytes : Bytes, index : Int32) : Int32?
+    private def materialized_view_query_positions(bytes : Bytes, index : Int32) : {Int32, Int32, Symbol}?
       return nil if index > 0 && identifier_byte?(bytes[index - 1])
       return nil if index + 2 > bytes.size
       return nil unless String.new(bytes[index, 2]).compare("AS", case_insensitive: true) == 0
@@ -814,11 +946,17 @@ module CrystalClick
       while cursor < bytes.size && whitespace?(bytes[cursor])
         cursor += 1
       end
-      return nil if cursor + 6 > bytes.size
-      return nil unless String.new(bytes[cursor, 6]).compare("SELECT", case_insensitive: true) == 0
-      return nil if cursor + 6 < bytes.size && identifier_byte?(bytes[cursor + 6])
+      if cursor + 6 <= bytes.size && String.new(bytes[cursor, 6]).compare("SELECT", case_insensitive: true) == 0
+        return nil if cursor + 6 < bytes.size && identifier_byte?(bytes[cursor + 6])
+        return {cursor, cursor + 6, :select}
+      end
 
-      cursor + 6
+      if cursor + 4 <= bytes.size && String.new(bytes[cursor, 4]).compare("WITH", case_insensitive: true) == 0
+        return nil if cursor + 4 < bytes.size && identifier_byte?(bytes[cursor + 4])
+        return {cursor, cursor + 4, :with}
+      end
+
+      nil
     end
 
     private def contains_unsafe_sql_control?(text : String) : Bool

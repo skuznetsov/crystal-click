@@ -18,6 +18,7 @@ module CrystalClick
     @part_candidates_catalog : OfflineCatalog?
     @metadata_ddl : String?
     @projections : Array(OfflineProjection)
+    @materialized_view : OfflineMaterializedView?
     @flattened_nested_binding : OfflineFlattenedNestedBinding?
 
     def initialize(
@@ -31,10 +32,18 @@ module CrystalClick
       @kind : Symbol = :table,
       metadata_ddl : String? = nil,
       projections : Array(OfflineProjection) = [] of OfflineProjection,
+      materialized_view : OfflineMaterializedView? = nil,
     )
       @metadata_ddl = metadata_ddl.try(&.dup)
       @projections = projections.map(&.copy)
+      @materialized_view = materialized_view.try(&.copy)
       @flattened_nested_binding = nil
+    end
+
+    # Returns detached persisted MV declaration metadata; ordinary and
+    # synthetic tables deliberately have no descriptor.
+    def materialized_view : OfflineMaterializedView?
+      @materialized_view.try(&.copy)
     end
 
     def uuid : String
@@ -95,7 +104,8 @@ module CrystalClick
         nil,
         @kind,
         @metadata_ddl.try { |value| detached_string(value) },
-        @projections.map(&.copy)
+        @projections.map(&.copy),
+        @materialized_view.try(&.copy)
       )
       view.install_flattened_nested_binding(binding)
       view

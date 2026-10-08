@@ -1,5 +1,55 @@
 # Crystal Click landmarks
 
+## Offline materialized-view metadata — W228
+
+- Active objective remains ClickHouse-compatible read/write types and MV/
+  projection inspection. Memory/performance is deferred; this slice does not
+  complete the overall objective.
+- Baseline: `6a8a31ee125188363361d50408159341dbb1318a`.
+- Scoped result: VERIFIED offline MV declaration inspection and explicit
+  resolution against current local physical-table metadata only (adversary
+  verdict: ROBUST). Detached declarations preserve exact SELECT/WITH text,
+  optional inner engine and tagged named/explicit-inner/implicit-inner target.
+  Direct source-reference completeness is conservative and syntactic; unknown
+  query shapes have no partial references. Resolution proves identity, not
+  target contents.
+- Evidence: same 35 affected specs pass 187 examples in DEBUG and RELEASE,
+  zero failures/errors/pending. Paired native runs and separate raw audits each
+  qualify 11 views, 26 actual metadata files and 20 process records per mode
+  (19 successes and one expected stock table-function refusal). Two refresh/
+  security guards, two resolver negative controls and an ordinary projection
+  metadata control are included. Both audits reject coherent equal-width
+  cross-database target-reference forgery in helper JSON and captured raw
+  stdout despite green original statuses; exact restoration returns both
+  audits to pass.
+- Frozen helper SHA-256: DEBUG
+  `c6962ed70ac99ecdd0b91ef2ebd8cf391aab1807f1113d8ddbf1f0d2421588c5`;
+  RELEASE `105f1d7fe16b50dcbe6328130ae56817816f4580d0b643fdc4ce26a8da2948a2`.
+  Native/evidence roots and run logs are indexed by
+  [the W228 evidence packet](.landmark/evidence/materialized-view-metadata-w228.json)
+  and [the W228 frontier](docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md).
+- Refuted routes: ignoring SAMPLE/comma suffixes falsely completed a partial
+  relation inventory; discarding table-as-string-literal tokens manufactured
+  `lab.AS`. Both are fixed by conservative unknown classification and have
+  source-backed regression coverage. A suggested SharedSet/Join inner-target
+  restriction was also rejected: that parser guard belongs to table creation,
+  while the MV target parser accepts the measured MergeTree form.
+- Scope boundary: not full SQL analysis, source existence/dependency graph,
+  INSERT-trigger completeness, query execution, Active/freshness state, general
+  MV/projection support, full-repository coverage or performance.
+- Return pointer: [W228 frontier](docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md).
+  Full goal stays active; performance stays deferred; no push authority.
+- Type-roadmap correction: child serde already composes recursively; distinguish
+  a new leaf codec from per-occurrence physical state/layout, consumer admission,
+  missing native qualification and source-invalid trees. Do not count every
+  unmeasured recursive product as an unimplemented serializer.
+- Next discriminator: qualify the next source-valid MV/projection inspection
+  form or a genuine remaining leaf/layout integration gap before widening it;
+  retain unknown-versus-empty and declaration-versus-runtime-state boundaries.
+- Decay: refresh after parser/analyzer, descriptor/resolver, fixture/helper,
+  source or runtime changes. Temporary raw roots are evidence caches and must
+  be regenerated if missing; do not interpret their absence as success.
+
 ## Aggregate state boundary — W227
 
 - Active objective: ClickHouse-compatible read/write types and MV/projection
