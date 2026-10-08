@@ -4691,18 +4691,6 @@ module CrystalClick
             array_object_declaration = WidePart.selected_array_json_declaration(path, column)
             recursive_declaration = WidePart.selected_recursive_json_declaration(path, column)
             dynamic_bulk_declaration = WidePart.selected_dynamic_bulk_declaration(path, column)
-            if projection_name && object_declaration
-              raise UnsupportedFormatError.new("Object columns are unsupported in typed projections")
-            end
-            if projection_name && array_object_declaration
-              raise UnsupportedFormatError.new("Array(JSON) columns are unsupported in typed projections")
-            end
-            if projection_name && recursive_declaration
-              raise UnsupportedFormatError.new("recursive Tuple/Array JSON columns are unsupported in typed projections")
-            end
-            if projection_name && dynamic_bulk_declaration
-              raise UnsupportedFormatError.new("Dynamic bulk columns are unsupported in typed projections")
-            end
           end
 
           mark_rows = [] of UInt64
@@ -4778,9 +4766,6 @@ module CrystalClick
             end
             selected_checksum_names = reader.selected_checksum_names
             if WideAggregateCountStoragePlan.for_type_name(column_type)
-              if projection_name
-                raise UnsupportedFormatError.new("AggregateFunction(count) is unsupported in typed projections")
-              end
               count_pair = WideAggregateCountPairAdmission.open(
                 path,
                 reader,

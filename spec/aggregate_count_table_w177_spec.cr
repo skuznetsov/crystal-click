@@ -258,12 +258,29 @@ describe "W177 Count table admission guards" do
       end
     end
 
-    it "continues to refuse Count selected from an explicit projection" do
+    it "reads Count payload from a projection child with parent identity" do
       W177CountTableGuardFixtures.with_pair(stock_root, "none") do |_root, parts|
         FileUtils.cp_r(File.join(stock_root, "part-none"), File.join(parts[0], "p.proj"))
-        expect_raises(CrystalClick::UnsupportedFormatError) do
-          CrystalClick::WidePartTable.open_selected_projection_typed([parts[0]], "p", ["c"])
+        type = CrystalClick::BinaryDataType.aggregate_count
+        parent_table = CrystalClick::WidePartTable.open_selected_typed([parts[0]], ["c"])
+        projection_table = CrystalClick::WidePartTable.open_selected_projection_typed([parts[0]], "p", ["c"])
+        projection_table.total_row_count.should eq(parent_table.total_row_count)
+        projection_table.part_mark_row_counts.should eq(parent_table.part_mark_row_counts)
+
+        expected = [] of UInt64
+        parent_table.scan_typed do |batch|
+          batch.aggregate_count_states_for("c", type).each { |state| expected << state.count_state }
         end
+        observed = [] of UInt64
+        parent_paths = [] of String
+        projection_table.scan_typed do |batch|
+          batch.column_names.should eq(["c"])
+          parent_paths << batch.part_path
+          batch.aggregate_count_states_for("c", type).each { |state| observed << state.count_state }
+        end
+        observed.should eq(expected)
+        observed.size.to_u64.should eq(projection_table.total_row_count)
+        parent_paths.uniq.should eq([parts[0]])
       end
     end
   end

@@ -2470,8 +2470,10 @@ module CrystalClick
       plan = WideAggregateCountStoragePlan.require(expected_type)
       raise UnsupportedFormatError.new("AggregateFunction(count) accessor does not match the selected column") unless plan.type_name == @column_type
 
-      stream = @streams[column]
-      unless stream.name == column
+      physical_stream_name = plan.physical_streams(column).first
+      stream = @streams[physical_stream_name]? ||
+               raise(UnsupportedFormatError.new("AggregateFunction(count) physical value stream is missing from its plan"))
+      unless stream.name == physical_stream_name
         raise UnsupportedFormatError.new("AggregateFunction(count) requires its exact one-stream physical plan")
       end
       _start_mark, _end_mark, rows = checked_stream_mark_range(stream, first_mark, mark_count)
@@ -11930,7 +11932,7 @@ module CrystalClick
       unless File.exists?(file)
         raise UnsupportedFormatError.new("columns_substreams.txt is required for multi-column parts") unless columns.size == 1
         raise UnsupportedFormatError.new("columns_substreams.txt is required for JSON typed paths") unless json_paths.empty?
-        expected_streams = expected_physical_streams(selected_column, selected_type)
+        expected_streams = expected_physical_streams(selected_column, selected_type, escape_simple_uint64_column: true)
         raise UnsupportedFormatError.new("columns_substreams.txt is required for this serialization shape") unless expected_streams == [selected_column]
         return [selected_column]
       end
@@ -11968,18 +11970,21 @@ module CrystalClick
           streams << stream
         end
         if column == source_column
+          streams.each do |stream_name|
+            PartMetadataTextParser.validate_selected_stream_name(stream_name)
+          end
           if json_paths.empty?
             if selected_type == "Dynamic"
               raise UnsupportedFormatError.new("Dynamic physical substreams do not match a supported arm subset") unless valid_dynamic_substream_inventory?(column, streams)
             else
-              expected_streams = expected_physical_streams(column, selected_type)
+              expected_streams = expected_physical_streams(column, selected_type, escape_simple_uint64_column: true)
               raise UnsupportedFormatError.new("selected physical substreams do not match exact serialization shape") unless streams == expected_streams
             end
             selected_streams = streams
           else
             expected_json_streams = expected_json_typed_path_substreams(source_column, json_paths)
             raise UnsupportedFormatError.new("JSON physical substreams do not match declared typed-path shape") unless streams == expected_json_streams
-            selected_streams = expected_physical_streams(selected_column, selected_type)
+            selected_streams = expected_physical_streams(selected_column, selected_type, escape_simple_uint64_column: false)
           end
         elsif w51_array_tuple_pair_schema?(columns, selected_column)
           sibling_type = columns[index][1]
@@ -12047,7 +12052,7 @@ module CrystalClick
     private def expected_json_typed_path_substreams(column : String, paths : Array({String, String})) : Array(String)
       streams = ["#{column}.object_structure"]
       paths.sort_by(&.[0]).each do |path, type|
-        streams.concat(expected_physical_streams("#{column}.#{path}", type))
+        streams.concat(expected_physical_streams("#{column}.#{path}", type, escape_simple_uint64_column: false))
       end
       streams << "#{column}.object_shared_data.0.size0"
       streams << "#{column}.object_shared_data.0%2Epaths"
@@ -12055,11 +12060,17 @@ module CrystalClick
       streams
     end
 
-    private def expected_physical_streams(column : String, type : String) : Array(String)
+    private def expected_physical_streams(
+      column : String,
+      type : String,
+      escape_simple_uint64_column : Bool = false,
+    ) : Array(String)
       if type == "Dynamic"
         ["#{column}.dynamic_structure", "#{column}.variant_discr", "#{column}.SharedVariant.size", "#{column}.SharedVariant", "#{column}.String.size", "#{column}.String"]
       elsif plan = WideAggregateCountStoragePlan.for_type_name(type)
         plan.physical_streams(column)
+      elsif type == "UInt64" && escape_simple_uint64_column
+        [PhysicalStreamName.escape(column)]
       elsif interval_type = IntervalColumnType.parse(type)
         interval_type.shape == IntervalColumnType::Shape::Nullable ? ["#{column}.null", column] : [column]
       elsif text_plan = SimpleAggregateTextStoragePlan.for_type_name(type)
@@ -13632,6 +13643,16 @@ module CrystalClick
     end
 
     private def primary_stream_name(stream_names : Array(String)) : String
+      if plan = WideAggregateCountStoragePlan.for_type_name(@column_type)
+        stream = plan.physical_streams(@column).first
+        raise CorruptPartError.new("selected AggregateFunction(count) stream is missing from its plan") unless stream_names.includes?(stream)
+        return stream
+      end
+      if @column_type == "UInt64" && @source_column_name == @column && !@json_typed_path && @flattened_nested_context.nil?
+        stream = PhysicalStreamName.escape(@column)
+        raise CorruptPartError.new("selected UInt64 stream is missing from its physical name binding") unless stream_names.includes?(stream)
+        return stream
+      end
       if @column_type == "Dynamic"
         stream = "#{@column}.variant_discr"
         raise CorruptPartError.new("selected Dynamic discriminator stream is missing") unless stream_names.includes?(stream)
@@ -16077,7 +16098,15 @@ module CrystalClick
       & : Bytes -> Nil
     ) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
-      each_mark_range_bytes(@streams[@column], start_mark.not_nil!, end_mark, expected_bytes, element_width) do |bytes|
+      stream = if @column_type == "UInt64" &&
+                  @source_column_name == @column &&
+                  !@json_typed_path &&
+                  @flattened_nested_context.nil?
+                 @streams[PhysicalStreamName.escape(@column)]
+               else
+                 @streams[@column]
+               end
+      each_mark_range_bytes(stream, start_mark.not_nil!, end_mark, expected_bytes, element_width) do |bytes|
         yield bytes
       end
     end

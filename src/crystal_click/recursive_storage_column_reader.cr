@@ -89,6 +89,14 @@ module CrystalClick
           end
           nil
         },
+        ->(subcolumns : Array(JSON::Any), row_count : UInt64) {
+          RecursiveTupleSerializationMetadata.validate_subcolumns!(
+            subcolumns,
+            expected_schema,
+            row_count,
+            @limits,
+          )
+        },
       )
       @source_declaration = metadata.source_declaration
       @schema_declaration = String.new(expected_schema.declaration.to_slice)

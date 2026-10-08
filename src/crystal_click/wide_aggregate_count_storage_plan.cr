@@ -76,11 +76,12 @@ module CrystalClick
     end
 
     def physical_streams(column : String) : Array(String)
-      [column]
+      [PhysicalStreamName.escape(column)]
     end
 
     def stream_width(column : String, stream_name : String) : Int32
-      raise UnsupportedFormatError.new("AggregateFunction(count) has one exact value stream") unless stream_name == column
+      expected_stream = PhysicalStreamName.escape(column)
+      raise UnsupportedFormatError.new("AggregateFunction(count) has one exact value stream") unless stream_name == expected_stream
       1
     end
 

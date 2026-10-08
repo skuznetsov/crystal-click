@@ -755,8 +755,8 @@ describe "W211 exact Dynamic and nominal JSON accessor boundaries" do
   end
 end
 
-describe "W211 Dynamic projection guard" do
-  it "rejects a Dynamic-bearing projection child before callbacks" do
+describe "W211 Dynamic projection child reader" do
+  it "reads Dynamic projection child payload and child-local rows" do
     root = File.tempname("crystal-click-w211-dynamic-projection-")
     Dir.mkdir(root)
     begin
@@ -774,17 +774,26 @@ describe "W211 Dynamic projection guard" do
       projection = File.join(parent, "by_dynamic.proj")
       w211_write_fixture(projection, fixture, CrystalClick::BinaryBulkProfile.single_stream)
 
-      callbacks = 0
-      expect_raises(
-        CrystalClick::UnsupportedFormatError,
-        "Dynamic bulk columns are unsupported in typed projections",
-      ) do
-        table = CrystalClick::WidePartTable.open_selected_projection_typed(
-          [parent], "by_dynamic", ["pk", "payload"]
-        )
-        table.scan_typed { |_batch| callbacks += 1 }
+      table = CrystalClick::WidePartTable.open_selected_projection_typed(
+        [parent], "by_dynamic", ["pk", "payload"]
+      )
+      table.total_row_count.should eq(8_u64)
+      table.part_mark_row_counts.should eq([[2_u64, 2_u64, 2_u64, 2_u64]])
+      observed = Array(Array(CrystalClick::BinaryValue)).new(fixture[:granules].size) do
+        [] of CrystalClick::BinaryValue
       end
-      callbacks.should eq(0)
+      parent_paths = [] of String
+      child_keys = [] of UInt64
+      table.scan_typed do |batch|
+        batch.part_index.should eq(0)
+        parent_paths << batch.part_path
+        child_keys.concat(batch.values_for("pk", UInt64))
+        observed[batch.mark_index] = batch.dynamic_bulk_values_for("payload").to_a
+        nil
+      end
+      w211_expect_marks!(observed, fixture[:granules])
+      child_keys.should eq((1_u64..8_u64).to_a)
+      parent_paths.uniq.should eq([parent])
     ensure
       FileUtils.rm_rf(root)
     end

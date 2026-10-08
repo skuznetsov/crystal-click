@@ -1,5 +1,37 @@
 # CrystalClick project status
 
+Current specialized projection-reader slice (W217/W218/W219, 2026-10-08):
+VERIFIED within the finite declared scope (scoped verdict: ROBUST).
+Selected Wide projection children reuse existing Object, Array(JSON),
+recursive JSON, Dynamic bulk and exact Count owners. The two real stock
+context gaps discovered during qualification are closed: ordered Default
+Tuple serializer metadata has a bounded schema-bound owner in its own file;
+Count and ordinary UInt64 expression columns bind canonical escaped physical
+names through admission, primary selection and mark-range reads.
+
+The same 48 affected spec files pass 252 examples in DEBUG and 252 in RELEASE
+(26 focused plus five regression cohorts). Fresh native runs pass all six
+original families per mode through low-level and OfflineTable projection
+consumers, with exact literal stock/library values and successful stock
+CHECKs. Grouped Count has three child rows/[2,1] versus six parent rows/[2,2,2].
+The separate read-only audit passes both raw evidence trees, exact source
+hashes and complete unchanged physical inputs. Actual parent-path and Tuple
+validator-bypass seeds discriminate defects and are restored. A missed raw
+UInt64 mark-range lookup and historical unsafe-filename error precedence were
+also caught by executed tests and corrected without changing their assertions.
+
+This is recursive owner/context composition, not a codec per type product or
+all-layout compatibility. Writer profiles are unchanged. Owned generic
+Dynamic offline values, other JSON/shared layouts and wrapper admission gaps,
+MV SQL execution, projection writing/optimizer/freshness/provenance and broad
+facade decomposition remain open. Memory/performance work stays deferred; no
+benchmark, RSS, production checksum-hash or whole-scan callback-atomicity claim
+is made. Details:
+[PROJECTION_SPECIALIZED_READERS_FRONTIER.md](PROJECTION_SPECIALIZED_READERS_FRONTIER.md),
+[RECURSIVE_TUPLE_METADATA_FRONTIER.md](RECURSIVE_TUPLE_METADATA_FRONTIER.md),
+[AGGREGATE_COUNT_PHYSICAL_NAMES_FRONTIER.md](AGGREGATE_COUNT_PHYSICAL_NAMES_FRONTIER.md),
+[W217 evidence packet](../.landmark/evidence/specialized-projection-readers-w217.json).
+
 Current Object composition slice (W216, 2026-10-07): bound ordinary JSON
 actual leaves at inferred Object Dynamic paths are VERIFIED within a finite
 scope (scoped verdict: ROBUST). The existing recursive visitor and child

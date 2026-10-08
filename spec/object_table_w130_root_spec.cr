@@ -225,16 +225,24 @@ describe "W130 independently authored Object table contract" do
     end
   end
 
-  it "explicitly rejects a whole-Object projection child before delivery" do
+  it "reads whole-Object projection child values and preserves parent identity" do
     with_w130_root do |root|
       parent = w130_root_write(File.join(root, "all_1_1_0"))
-      w130_root_write(File.join(parent, "by_payload.proj"))
-      callbacks = 0
-      expect_raises(CrystalClick::UnsupportedFormatError, "Object columns are unsupported in typed projections") do
-        table = CrystalClick::WidePartTable.open_selected_projection_typed([parent], "by_payload", ["payload"])
-        table.scan_typed { |_batch| callbacks += 1; nil }
+      w130_root_write(File.join(parent, "by_payload.proj"), Slice[100_u64, 101_u64, 102_u64])
+      table = CrystalClick::WidePartTable.open_selected_projection_typed([parent], "by_payload", ["pk", "payload"])
+      table.total_row_count.should eq(3_u64)
+      table.part_mark_row_counts.should eq([[2_u64, 1_u64]])
+      observed = [] of Tuple(UInt64, UInt64)
+      parent_paths = [] of String
+      table.scan_typed do |batch|
+        parent_paths << batch.part_path
+        batch.column_names.should eq(["pk", "payload"])
+        documents = batch.object_documents_for("payload")
+        keys = batch.values_for("pk", UInt64)
+        keys.each_with_index { |key, index| observed << {key, documents[index].value_for("t").as_uint64} }
       end
-      callbacks.should eq(0)
+      observed.should eq([{100_u64, 4_u64}, {101_u64, 5_u64}, {102_u64, 6_u64}])
+      parent_paths.uniq.should eq([parent])
     end
   end
 
