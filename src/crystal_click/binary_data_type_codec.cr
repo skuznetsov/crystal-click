@@ -19,9 +19,6 @@ module CrystalClick
     # Internal shared entry point used by the typed value envelope so its type
     # and scalar visits consume one combined context budget.
     def self.write_to(type : BinaryDataType, context : BinaryCodecContext, depth : Int = 1) : Nil
-      if type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION && depth != 1
-        context.unsupported!("AggregateFunction is admitted only as a top-level descriptor")
-      end
       context.visit_node(depth)
       tag = type.tag
       if type.tag == BinaryDataType::TAG_QBIT
@@ -236,9 +233,6 @@ module CrystalClick
           context.unsupported!("SimpleAggregateFunction function/storage pair is outside the admitted storage profile")
         end
       when BinaryDataType::TAG_AGGREGATE_FUNCTION
-        unless depth == 1
-          context.unsupported!("AggregateFunction is admitted only as a top-level descriptor")
-        end
         version = context.read_var_uint
         unless version == BinaryAggregateFunctionType::VERSION.to_u64
           context.unsupported!("AggregateFunction version is outside the admitted profile")

@@ -1,6 +1,39 @@
 # CrystalClick project status
 
-Current AggregateFunction Sum-family slice (W223, 2026-10-08): VERIFIED within
+Current recursive AggregateFunction storage slice (W224, 2026-10-08): VERIFIED
+within the nine measured static profiles (scoped verdict: ROBUST). Array,
+named/unnamed Tuple, Map values, nominal Nested and eligible Nullable(Tuple)
+reuse existing child codecs and physical schedules around Count/W223 Sum
+states. One contextual admission owner replaces root-only guards; aggregate
+arguments remain descriptor metadata, not child row domains. Root Count keeps
+exact nominal dispatch. Shared readers/writers, typed batches, owned column
+`.values` and ordinary offline typed callbacks/windows reuse existing owners.
+The new private Frame has its own file; broad legacy facade cleanup stays open.
+
+The 69-file affected roster passes 382 examples per DEBUG/RELEASE mode. After
+behavior-neutral file extraction/formatting and a diagnostic-only change,
+the final seven-file focused/Count-control roster passes 39 examples per mode.
+All runs have zero failures/errors/pending; this is explicit composed lineage,
+not a whole-suite rerun at the final file layout. Fresh final-layout native
+helpers qualify nine stock reads and nine library ATTACH/CHECK/exact-value
+witnesses per mode. Both separate raw audits pass 177 process records (175
+successes plus two expected type refusals). Executed raw CHECK-result-zero
+seeds reject despite green summaries, and exact restoration returns to green.
+All 146 generated file inventories agree across modes.
+
+The finite profile is quiescent Wide/LZ4/Default/plain-mrk2, five rows and real
+marks [2,2,1] plus terminal zero. Nested is exact nominal on this runtime.
+Map aggregate keys remain a library guard despite observed stock constructor
+acceptance. Aggregate-bearing LC/Variant/Dynamic/JSON envelopes, other state
+families, remaining physical layouts, native MV/projection writing/semantics
+and broad facade decomposition remain open. Stock public native checks use
+WidePartTable; offline `.values` uses synthetic library-part catalogs, and
+W224 projection-child controls are unit-level, not new native offline coverage.
+Memory/performance remains deferred; the full goal stays active. Details:
+[AGGREGATE_FUNCTION_RECURSIVE_STORAGE_FRONTIER.md](AGGREGATE_FUNCTION_RECURSIVE_STORAGE_FRONTIER.md),
+[W224 evidence packet](../.landmark/evidence/aggregate-function-recursive-w224.json).
+
+Previous AggregateFunction Sum-family slice (W223, 2026-10-08): VERIFIED within
 the finite root-column scope (scoped verdict: ROBUST). Shared tag `0x25` now
 has an immutable generic descriptor and separate state admission/plan/codec
 owners; Count retains exact nominal dispatch and its existing VarUInt wire.
@@ -20,7 +53,7 @@ were corrected without relaxing production admission or physical guards.
 
 This qualifies finite Wide/LZ4/Default/plain-mrk2 root columns, five rows and
 real marks [2,2,1], not arbitrary wrapper products or aggregate execution.
-Ordinary OfflineTable.scan_typed/window Sum callbacks, outer aggregate-state
+At the W223 closure, ordinary OfflineTable.scan_typed/window Sum callbacks, outer aggregate-state
 composition, other AggregateFunction families, remaining JSON/Dynamic/Variant/
 LC/Nested physical profiles, native MV/projection writing/semantics and broader
 facade cleanup remain open. Memory/performance remains deferred; the full goal

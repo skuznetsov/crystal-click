@@ -148,9 +148,9 @@ module CrystalClick
       )
     end
 
-    # Write one nominal Sum-family AggregateFunction state column through the
-    # shared static lane encoder and two-column staged publisher. The argument
-    # type is descriptor metadata; each value remains its opaque state bytes.
+    # Write one nominal AggregateFunction state column through the shared
+    # static lane encoder and two-column staged publisher. The argument type is
+    # descriptor metadata; each state leaf remains opaque bytes.
     def self.write_uint64_and_aggregate_function_part(
       destination : String,
       key_name : String,

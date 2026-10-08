@@ -222,7 +222,7 @@ module CrystalClick
     end
 
     def self.array(child : BinaryDataType) : BinaryDataType
-      reject_aggregate_function_child!(child)
+      BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(child)
       reject_qbit_child!(child)
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
     end
@@ -240,10 +240,9 @@ module CrystalClick
       unless tuple_type.tag == TAG_NAMED_TUPLE && tuple_type.child_count > 0
         raise ArgumentError.new("Nested requires a non-empty named Tuple")
       end
+      BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(tuple_type)
       tuple_type.child_count.times do |index|
-        child = tuple_type.child_at(index)
-        reject_aggregate_function_child!(child)
-        reject_qbit_child!(child)
+        reject_qbit_child!(tuple_type.child_at(index))
       end
       new(TAG_NESTED, nil, [tuple_type] of BinaryDataType, [] of String, nil)
     end
@@ -328,7 +327,12 @@ module CrystalClick
     end
 
     def self.nullable(child : BinaryDataType) : BinaryDataType
-      reject_aggregate_function_child!(child)
+      if child.contains_aggregate_function?
+        unless (child.tag == TAG_UNNAMED_TUPLE || child.tag == TAG_NAMED_TUPLE) &&
+               BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(child)
+          raise ArgumentError.new("Nullable can contain AggregateFunction only through a direct Tuple child")
+        end
+      end
       if child.contains_qbit? && child.tag != TAG_QBIT
         raise ArgumentError.new("Nullable can contain QBit only as its direct scalar child")
       end
@@ -430,7 +434,7 @@ module CrystalClick
     def self.tuple(children : Array(BinaryDataType), names : Array(String)? = nil) : BinaryDataType
       raise ArgumentError.new("Tuple arity exceeds ClickHouse's supported maximum") if children.size > MAX_TUPLE_ARITY
       children.each do |child|
-        reject_aggregate_function_child!(child)
+        BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(child)
         reject_qbit_child!(child)
       end
 
@@ -457,7 +461,7 @@ module CrystalClick
 
     def self.map(key : BinaryDataType, value : BinaryDataType) : BinaryDataType
       reject_aggregate_function_child!(key)
-      reject_aggregate_function_child!(value)
+      BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(value)
       reject_qbit_child!(key)
       reject_qbit_child!(value)
       if BinaryLowCardinalityTypePolicy.nullable_map_key?(key)
@@ -726,7 +730,7 @@ module CrystalClick
 
     private def self.reject_aggregate_function_child!(type : BinaryDataType) : Nil
       if type.contains_aggregate_function?
-        raise ArgumentError.new("AggregateFunction is admitted only as a top-level scalar type")
+        raise ArgumentError.new("AggregateFunction is outside this container's admitted storage profile")
       end
     end
 

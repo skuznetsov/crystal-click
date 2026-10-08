@@ -1,7 +1,8 @@
 module CrystalClick
   class WidePartTable
-    # Adapts one exact nominal static BinaryBulk type to the generic reader
-    # and table budget. Family admission remains owned by its declaration.
+    # Adapts one exact nominal static BinaryBulk type, including recursive
+    # AggregateFunction state trees, to the generic reader and table budget.
+    # Family admission remains owned by its declaration.
     private class BinaryBulkColumnAdapter
       def self.open(
         part_path : String,

@@ -59,13 +59,11 @@ module CrystalClick
         SimpleAggregateBulkColumnDeclaration.new(@type, @limits)
       end
       if @type.contains_aggregate_function?
-        unless @type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION
-          raise UnsupportedFormatError.new("static BinaryBulk does not admit nested AggregateFunction states")
-        end
-        # Count predates the generic Sum-family route and retains its existing
-        # fixed-state BinaryBulk behavior. All other root AggregateFunction
-        # descriptors must pass the exact Sum static profile.
-        unless @type.aggregate_count_type
+        # Root Count predates the generic Sum-family route and retains its
+        # specialized BinaryBulk admission. Every other admitted tree uses the
+        # shared recursive static profile, with aggregate leaves remaining
+        # opaque to their argument descriptors.
+        unless @type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION && @type.aggregate_count_type
           BinaryAggregateFunctionBulkColumnDeclaration.new(@type, @limits)
         end
       end

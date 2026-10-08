@@ -2626,7 +2626,7 @@ module CrystalClick
                 remaining_bytes
               )
               if charge > remaining_bytes
-                raise CorruptPartError.new("selected SimpleAggregate bulk mark exceeds aggregate materialization limit")
+                raise CorruptPartError.new("selected static BinaryBulk mark exceeds aggregate materialization limit")
               end
               actual_string_bytes += charge
               binary_bulk_values[selected.name] = values
@@ -2934,7 +2934,7 @@ module CrystalClick
               end
               part.binary_bulk_readers.each do |selected|
                 values = binary_bulk_values[selected.name]? ||
-                         raise(CorruptPartError.new("selected SimpleAggregate bulk column was not materialized"))
+                         raise(CorruptPartError.new("selected static BinaryBulk column was not materialized"))
                 selected_slice = values.to_unsafe.to_slice(values.size)[mark_row_offset.to_i, size]
                 batch.install_binary_bulk_values(selected.name, selected_slice, size)
               end

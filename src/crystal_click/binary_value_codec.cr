@@ -192,9 +192,6 @@ module CrystalClick
           write_value(child, context, child_depth)
         end
       when BinaryDataType::TAG_AGGREGATE_FUNCTION
-        unless depth == 1
-          context.unsupported!("AggregateFunction is admitted only as a top-level value")
-        end
         if type.aggregate_count_type
           BinaryAggregateCountStateCodec.write(value.count_state, context)
         else
@@ -272,6 +269,9 @@ module CrystalClick
           write_value(child, context, depth + 1)
         end
       when BinaryDataType::TAG_DYNAMIC
+        if value.element_count > 0 && value.child_at(0).type.contains_aggregate_function?
+          context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
+        end
         BinaryDynamicEnvelope.write(value, context, depth) do |selected, selected_depth|
           write_value(selected, context, selected_depth)
         end
@@ -297,9 +297,6 @@ module CrystalClick
         end
         BinaryValue.json(type, row)
       when BinaryDataType::TAG_AGGREGATE_FUNCTION
-        unless depth == 1
-          context.unsupported!("AggregateFunction is admitted only as a top-level value")
-        end
         if type.aggregate_count_type
           BinaryValue.aggregate_count_state(type, BinaryAggregateCountStateCodec.read(context))
         else
@@ -401,6 +398,9 @@ module CrystalClick
         end
       when BinaryDataType::TAG_DYNAMIC
         BinaryDynamicEnvelope.read(type, context, depth) do |selected_type, selected_depth|
+          if selected_type.contains_aggregate_function?
+            context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
+          end
           read_value(selected_type, context, selected_depth)
         end
       else

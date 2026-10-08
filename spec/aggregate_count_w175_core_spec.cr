@@ -345,19 +345,22 @@ describe "W175 paired AggregateFunction(count) core" do
     end
   end
 
-  it "keeps aggregate states out of compositions, Dynamic, borrowed frames, and Object typed fields" do
+  it "admits Count in static compositions but keeps excluded routes and envelopes closed" do
     count = w175_count_types[0]
     uint64 = CrystalClick::BinaryDataType.primitive("UInt64")
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.array(count) }
+    array_count = CrystalClick::BinaryDataType.array(count)
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.nullable(count) }
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.tuple([count] of CrystalClick::BinaryDataType) }
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.nested([count] of CrystalClick::BinaryDataType, ["c"] of String) }
+    tuple_count = CrystalClick::BinaryDataType.tuple([count] of CrystalClick::BinaryDataType)
+    nested_count = CrystalClick::BinaryDataType.nested([count] of CrystalClick::BinaryDataType, ["c"] of String)
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.map(count, uint64) }
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.map(uint64, count) }
+    map_value_count = CrystalClick::BinaryDataType.map(uint64, count)
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.variant([count] of CrystalClick::BinaryDataType) }
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.low_cardinality(count) }
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.simple_aggregate(CrystalClick::BinarySimpleAggregateType::Function::Sum, count)
+    end
+    [array_count, tuple_count, nested_count, map_value_count].each do |type|
+      CrystalClick::BinaryDataTypeCodec.decode(CrystalClick::BinaryDataTypeCodec.encode(type)).should eq(type)
     end
 
     value = CrystalClick::BinaryValue.aggregate_count_state(count, 7_u64)

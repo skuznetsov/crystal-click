@@ -1,7 +1,7 @@
 module CrystalClick
   class OfflineTable
-    # Owns the public .values result for admitted static SimpleAggregate
-    # trees using the generic BinaryBulk reader. The
+    # Owns the public .values result for admitted static SimpleAggregate and
+    # AggregateFunction trees using the generic BinaryBulk reader. The
     # shared budget accounts retained BinaryValue trees plus known reader/grid
     # workspace; it is logical ownership accounting, not an RSS bound.
     private class StaticBulkValuesMaterializer
@@ -14,10 +14,10 @@ module CrystalClick
         max_string_bytes : UInt64,
         max_tuple_cells : UInt64,
       ) : Array(OfflineColumnValue)
-        raise BoundsError.new("SimpleAggregate catalog exceeds part limit") if candidates.size > WidePartTable::MAX_PARTS
-        raise BoundsError.new("SimpleAggregate catalog exceeds row limit") if expected_rows > OfflineTable::MAX_MATERIALIZED_VALUES_ROWS
+        raise BoundsError.new("static BinaryBulk catalog exceeds part limit") if candidates.size > WidePartTable::MAX_PARTS
+        raise BoundsError.new("static BinaryBulk catalog exceeds row limit") if expected_rows > OfflineTable::MAX_MATERIALIZED_VALUES_ROWS
 
-        declaration = if type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION
+        declaration = if type.contains_aggregate_function?
                         BinaryAggregateFunctionBulkColumnDeclaration.new(type).declaration
                       else
                         SimpleAggregateBulkColumnDeclaration.new(type).declaration
@@ -28,7 +28,7 @@ module CrystalClick
 
         candidate_rows = sum_candidate_rows(candidates)
         unless candidate_rows == expected_rows
-          raise CorruptPartError.new("SimpleAggregate catalog candidate count differs from preflight row count")
+          raise CorruptPartError.new("static BinaryBulk catalog candidate count differs from preflight row count")
         end
 
         budget = ObjectValuesMaterializationBudget.new(
@@ -63,16 +63,16 @@ module CrystalClick
             budget.ensure_workspace(workspace)
             selected = reader.read_marks(mark_index, 1)
             unless selected.size == 1 && selected[0].size.to_u64 == expected_mark_rows
-              raise CorruptPartError.new("SimpleAggregate catalog mark row count changed during materialization")
+              raise CorruptPartError.new("static BinaryBulk catalog mark row count changed during materialization")
             end
 
             mark_values = selected[0]
             if observed_rows > expected_rows || mark_values.size.to_u64 > expected_rows - observed_rows
-              raise CorruptPartError.new("SimpleAggregate catalog observed more rows than preflight")
+              raise CorruptPartError.new("static BinaryBulk catalog observed more rows than preflight")
             end
             mark_values.each do |value|
               unless value.type == type
-                raise CorruptPartError.new("SimpleAggregate value type differs from its declaration")
+                raise CorruptPartError.new("static BinaryBulk value type differs from its declaration")
               end
             end
 
@@ -85,7 +85,7 @@ module CrystalClick
         end
 
         unless observed_rows == expected_rows && values.size.to_u64 == expected_rows
-          raise CorruptPartError.new("SimpleAggregate catalog row count differs from its preflight result")
+          raise CorruptPartError.new("static BinaryBulk catalog row count differs from its preflight result")
         end
         values
       end
@@ -98,27 +98,27 @@ module CrystalClick
         expected_rows : UInt64,
       ) : Nil
         unless reader.row_count == candidate.row_count
-          raise CorruptPartError.new("SimpleAggregate catalog part row count differs from candidate metadata")
+          raise CorruptPartError.new("static BinaryBulk catalog part row count differs from candidate metadata")
         end
         unless reader.mark_count == mark_rows.size && !mark_rows.empty?
-          raise CorruptPartError.new("SimpleAggregate catalog mark grid differs from its part")
+          raise CorruptPartError.new("static BinaryBulk catalog mark grid differs from its part")
         end
 
         rows_from_marks = 0_u64
         mark_rows.each do |rows|
           if rows > UInt64::MAX - rows_from_marks
-            raise CorruptPartError.new("SimpleAggregate catalog mark row count overflows UInt64")
+            raise CorruptPartError.new("static BinaryBulk catalog mark row count overflows UInt64")
           end
           rows_from_marks += rows
         end
         unless rows_from_marks == reader.row_count
-          raise CorruptPartError.new("SimpleAggregate catalog mark grid differs from part row count")
+          raise CorruptPartError.new("static BinaryBulk catalog mark grid differs from part row count")
         end
         unless reader.schema_declaration == type.name && reader.source_declaration == reader.schema_declaration
-          raise CorruptPartError.new("SimpleAggregate catalog source declaration is not canonical")
+          raise CorruptPartError.new("static BinaryBulk catalog source declaration is not canonical")
         end
         unless reader.row_count <= expected_rows
-          raise CorruptPartError.new("SimpleAggregate catalog part count exceeds table preflight")
+          raise CorruptPartError.new("static BinaryBulk catalog part count exceeds table preflight")
         end
         nil
       end
@@ -177,7 +177,7 @@ module CrystalClick
         total = 0_u64
         candidates.each do |candidate|
           if candidate.row_count > UInt64::MAX - total
-            raise CorruptPartError.new("SimpleAggregate catalog candidate row count overflows UInt64")
+            raise CorruptPartError.new("static BinaryBulk catalog candidate row count overflows UInt64")
           end
           total += candidate.row_count
         end
@@ -185,12 +185,12 @@ module CrystalClick
       end
 
       private def self.checked_add(left : UInt64, right : UInt64) : UInt64
-        raise BoundsError.new("SimpleAggregate logical charge overflows UInt64") if right > UInt64::MAX - left
+        raise BoundsError.new("static BinaryBulk logical charge overflows UInt64") if right > UInt64::MAX - left
         left + right
       end
 
       private def self.checked_multiply(left : UInt64, right : UInt64) : UInt64
-        raise BoundsError.new("SimpleAggregate logical charge overflows UInt64") if left > 0_u64 && right > UInt64::MAX // left
+        raise BoundsError.new("static BinaryBulk logical charge overflows UInt64") if left > 0_u64 && right > UInt64::MAX // left
         left * right
       end
     end

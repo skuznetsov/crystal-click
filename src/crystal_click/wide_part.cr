@@ -1493,7 +1493,8 @@ module CrystalClick
         supports_map_uint64_nullable_string_type?(type) || supports_map_string_nullable_string_type?(type) ||
         supports_named_scalar_tuple_type?(type) || supports_nested_type?(type) || supports_named_array_tuple_type?(type) ||
         supports_named_map_tuple_type?(type) ||
-        supports_variant_type?(type) || type == "Dynamic"
+        supports_variant_type?(type) || type == "Dynamic" ||
+        supports_aggregate_function_bulk_type?(type)
     end
 
     def self.json_type?(type : String) : Bool
@@ -1542,8 +1543,9 @@ module CrystalClick
       end
     end
 
-    # Sum-family states use the same selected physical declaration reader, but
-    # a separate exact root-type admission policy from SimpleAggregateFunction.
+    # AggregateFunction states use the same selected physical declaration
+    # reader, with recursive state-tree admission separate from the nominal
+    # SimpleAggregateFunction policy.
     def self.selected_aggregate_function_bulk_declaration(part_path : String, column_name : String) : String?
       selected_static_binary_bulk_declaration(part_path, column_name) do |declaration|
         supports_aggregate_function_bulk_type?(declaration)
@@ -1551,11 +1553,20 @@ module CrystalClick
     end
 
     def self.supports_aggregate_function_bulk_type?(type : String) : Bool
-      BinaryAggregateFunctionBulkColumnDeclaration.parse(type) != nil
+      parsed = BinaryAggregateFunctionBulkColumnDeclaration.parse(type) || return false
+      BinaryBulkTypePlan.new(
+        parsed,
+        BinaryBulkProfile.single_stream,
+        nil,
+        BinaryBulkCodec::DEFAULT_LIMITS,
+        true
+      ).role_count > 0
+    rescue ex : ArgumentError | BoundsError | UnsupportedFormatError
+      false
     end
 
     # Single predicate for the static BinaryBulk consumer surface. This does
-    # not widen the legacy typed-value API or Dynamic admission.
+    # not widen Dynamic admission.
     def self.supports_static_binary_bulk_type?(type : String) : Bool
       supports_simple_aggregate_bulk_type?(type) || supports_aggregate_function_bulk_type?(type)
     end

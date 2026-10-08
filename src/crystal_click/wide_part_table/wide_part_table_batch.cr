@@ -523,7 +523,8 @@ module CrystalClick
     # Return generic static or Dynamic BinaryBulk rows. The outer slice is
     # callback-scoped; immutable BinaryValue trees may be retained by callers.
     # Admission remains exact to the already-owned Dynamic declaration or the
-    # narrow inner-Nullable SimpleAggregate bulk profile.
+    # admitted static BinaryBulk declaration, including recursive opaque
+    # AggregateFunction state trees.
     def binary_bulk_values_for(column : String) : Slice(BinaryValue)
       index = column_index(column)
       column_type = @column_types[index]

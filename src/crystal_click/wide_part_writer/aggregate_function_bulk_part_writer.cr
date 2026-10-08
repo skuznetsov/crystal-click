@@ -1,7 +1,7 @@
 module CrystalClick
   module WidePartWriter
-    # Nominal Sum-family adapter over the shared static BinaryBulk part writer.
-    # Aggregate states remain one raw data lane, distinct from their argument.
+    # Nominal AggregateFunction adapter over the shared static BinaryBulk part
+    # writer. Recursive state leaves remain opaque and distinct from arguments.
     private class AggregateFunctionBulkPartWriter
       def self.write(
         destination : String,
