@@ -19,8 +19,8 @@ module CrystalClick
     # Internal shared entry point used by the typed value envelope so its type
     # and scalar visits consume one combined context budget.
     def self.write_to(type : BinaryDataType, context : BinaryCodecContext, depth : Int = 1) : Nil
-      if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT && depth != 1
-        context.unsupported!("AggregateFunction(count) is admitted only as a top-level descriptor")
+      if type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION && depth != 1
+        context.unsupported!("AggregateFunction is admitted only as a top-level descriptor")
       end
       context.visit_node(depth)
       tag = type.tag
@@ -58,14 +58,14 @@ module CrystalClick
         preflight_descriptor_children(type, context)
         context.ensure_depth(depth + 1)
         write_to(type.child_at(0), context, depth + 1)
-      when BinaryDataType::TAG_AGGREGATE_COUNT
-        descriptor = type.aggregate_count_type.not_nil!
-        context.write_var_uint(BinaryAggregateCountType::VERSION.to_u64)
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
+        descriptor = type.aggregate_function_type || context.unsupported!("AggregateFunction descriptor metadata is missing")
+        context.write_var_uint(descriptor.version.to_u64)
         function_name = descriptor.function_name.to_slice
         context.write_var_uint(function_name.size.to_u64)
         context.write_slice(function_name)
         context.write_var_uint(0_u64) # parameters
-        argument = type.aggregate_count_argument_type
+        argument = descriptor.argument_type
         context.write_var_uint(argument.nil? ? 0_u64 : 1_u64)
         if argument
           context.preflight_children(1_u64)
@@ -235,40 +235,55 @@ module CrystalClick
         rescue ex : ArgumentError
           context.unsupported!("SimpleAggregateFunction function/storage pair is outside the admitted storage profile")
         end
-      when BinaryDataType::TAG_AGGREGATE_COUNT
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
         unless depth == 1
-          context.unsupported!("AggregateFunction(count) is admitted only as a top-level descriptor")
+          context.unsupported!("AggregateFunction is admitted only as a top-level descriptor")
         end
         version = context.read_var_uint
-        unless version == BinaryAggregateCountType::VERSION.to_u64
-          context.unsupported!("AggregateFunction(count) version is outside the admitted profile")
+        unless version == BinaryAggregateFunctionType::VERSION.to_u64
+          context.unsupported!("AggregateFunction version is outside the admitted profile")
         end
         name_length = context.read_var_uint
-        unless name_length == "count".bytesize.to_u64
-          context.unsupported!("AggregateFunction function is outside the admitted profile")
+        if name_length == 0_u64 || name_length > BinaryAggregateFunctionAdmission::MAX_FUNCTION_NAME_BYTES.to_u64
+          context.unsupported!("AggregateFunction name is outside the admitted function profile")
         end
         function_name = String.new(context.read_slice(name_length))
-        unless function_name == "count"
+        unless function_name == "count" || function_name == "sum" || function_name == "sumWithOverflow" || function_name == "sumKahan"
           context.unsupported!("AggregateFunction function is outside the admitted profile")
         end
         parameter_count = context.read_var_uint
         unless parameter_count == 0_u64
-          context.unsupported!("parameterized AggregateFunction(count) is outside the admitted profile")
+          # These functions all have zero parameters. Refuse the count before
+          # attempting to decode any Field payload so malformed parameter
+          # bytes cannot hide an unsupported function signature.
+          context.unsupported!("parameterized AggregateFunction is outside the admitted profile")
         end
         argument_count = context.read_var_uint
-        unless argument_count <= 1_u64
-          context.unsupported!("AggregateFunction(count) argument count is outside the admitted profile")
+        if function_name == "count"
+          unless argument_count <= 1_u64
+            context.unsupported!("AggregateFunction(count) argument count is outside the admitted profile")
+          end
+        elsif argument_count != 1_u64
+          context.unsupported!("AggregateFunction Sum argument count is outside the admitted unary profile")
         end
-        if argument_count == 0_u64
+        if function_name == "count" && argument_count == 0_u64
           BinaryDataType.aggregate_count
         else
           context.preflight_children(1_u64)
           context.ensure_depth(depth + 1)
           argument = read_from(context, depth + 1)
           begin
-            BinaryDataType.aggregate_count(argument)
+            type = if function_name == "count"
+                     BinaryDataType.aggregate_count(argument)
+                   else
+                     BinaryDataType.aggregate_function(function_name, argument)
+                   end
+            unless type.aggregate_function_type.try(&.function_name) == function_name
+              context.unsupported!("AggregateFunction function identity is not canonical for its argument")
+            end
+            type
           rescue ex : ArgumentError
-            context.unsupported!("AggregateFunction(count) argument type is outside the admitted profile")
+            context.unsupported!("AggregateFunction argument type is outside the admitted profile")
           end
         end
       when BinaryDataType::TAG_NULLABLE

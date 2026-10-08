@@ -15,6 +15,7 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryCodecLimits.default,
     ) : BinaryDataType?
       type = BinaryRecursiveDataTypeNameReader.parse_canonical(source, limits) || return nil
+      return nil if type.contains_aggregate_function?
       legacy_simple_aggregate_tree?(type) ? type : nil
     end
 

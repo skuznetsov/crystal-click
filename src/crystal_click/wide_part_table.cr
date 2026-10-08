@@ -4737,12 +4737,14 @@ module CrystalClick
           recursive_declaration = nil.as(String?)
           dynamic_bulk_declaration = nil.as(String?)
           simple_aggregate_bulk_declaration = nil.as(String?)
+          aggregate_function_bulk_declaration = nil.as(String?)
           if @typed_mode && !@numeric_mode && flattened_context.nil?
             object_declaration = WidePart.selected_json_declaration(path, column)
             array_object_declaration = WidePart.selected_array_json_declaration(path, column)
             recursive_declaration = WidePart.selected_recursive_json_declaration(path, column)
             dynamic_bulk_declaration = WidePart.selected_dynamic_bulk_declaration(path, column)
             simple_aggregate_bulk_declaration = WidePart.selected_simple_aggregate_bulk_declaration(path, column)
+            aggregate_function_bulk_declaration = WidePart.selected_aggregate_function_bulk_declaration(path, column)
           end
 
           mark_rows = [] of UInt64
@@ -4793,7 +4795,7 @@ module CrystalClick
             column_source = {column, column, dynamic_reader.source_declaration}
             selected_checksum_names = dynamic_reader.selected_checksum_names
             dynamic_bulk_readers << DynamicBulkColumnReaderEntry.new(column, dynamic_reader, dynamic_value_type, column_type)
-          elsif source_declaration = simple_aggregate_bulk_declaration
+          elsif source_declaration = (simple_aggregate_bulk_declaration || aggregate_function_bulk_declaration)
             binary_reader, binary_value_type = BinaryBulkColumnAdapter.open(path, column, source_declaration)
             mark_rows = binary_reader.mark_row_counts
             raise BoundsError.new("mark count exceeds per-reader limit") if mark_rows.size > MAX_MARKS_PER_READER

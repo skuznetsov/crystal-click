@@ -236,8 +236,12 @@ module CrystalClick
         wire_bytes = checked_multiply(qbit_type.plane_count.to_u64, qbit_type.plane_width.to_u64)
       when BinaryDataType::TAG_BOOL, BinaryDataType::TAG_NOTHING
         wire_bytes = 1_u64
-      when BinaryDataType::TAG_AGGREGATE_COUNT
-        wire_bytes = BinaryAggregateCountStateCodec.encoded_size(value.count_state)
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
+        if type.aggregate_count_type
+          wire_bytes = BinaryAggregateCountStateCodec.encoded_size(value.count_state)
+        else
+          wire_bytes = value.aggregate_function_state_bytes.size.to_u64
+        end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         count = value.element_count.to_u64
         child = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type.child_at(0), profile, default_costs, dynamic_plan, allow_bound_json)
@@ -401,8 +405,12 @@ module CrystalClick
         wire_bytes = checked_multiply(qbit_type.plane_count.to_u64, qbit_type.plane_width.to_u64)
       when BinaryDataType::TAG_BOOL
         wire_bytes = 1_u64
-      when BinaryDataType::TAG_AGGREGATE_COUNT
-        wire_bytes = BinaryAggregateCountStateCodec.encoded_size(value.count_state)
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
+        if type.aggregate_count_type
+          wire_bytes = BinaryAggregateCountStateCodec.encoded_size(value.count_state)
+        else
+          wire_bytes = value.aggregate_function_state_bytes.size.to_u64
+        end
       when BinaryDataType::TAG_NOTHING
         unless value.is_null?
           raise UnsupportedFormatError.new("Nothing bulk values must use the NULL sentinel")
@@ -573,9 +581,15 @@ module CrystalClick
         BinaryQBitBulkCodec.append_plane_row(value.qbit_value, roles, qbit_role_offset, scratch) do |role, byte|
           write_byte(lanes, role, byte, budget)
         end
-      when BinaryDataType::TAG_AGGREGATE_COUNT
-        BinaryAggregateCountStateCodec.write_lane(value.count_state) do |byte|
-          write_byte(lanes, "#{path}.data", byte, budget)
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
+        if type.aggregate_count_type
+          BinaryAggregateCountStateCodec.write_lane(value.count_state) do |byte|
+            write_byte(lanes, "#{path}.data", byte, budget)
+          end
+        else
+          BinaryAggregateFunctionStateCodec.write_lane(value.aggregate_function_state_bytes) do |byte|
+            write_byte(lanes, "#{path}.data", byte, budget)
+          end
         end
       when BinaryDataType::TAG_STRING
         size = value.byte_size
@@ -758,9 +772,15 @@ module CrystalClick
         write_byte(lanes, "#{path}.data", BoolValueCodec.encode(false), budget)
       when BinaryDataType::TAG_NOTHING
         write_byte(lanes, "#{path}.data", 0x30_u8, budget)
-      when BinaryDataType::TAG_AGGREGATE_COUNT
-        BinaryAggregateCountStateCodec.write_lane(0_u64) do |byte|
-          write_byte(lanes, "#{path}.data", byte, budget)
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
+        if type.aggregate_count_type
+          BinaryAggregateCountStateCodec.write_lane(0_u64) do |byte|
+            write_byte(lanes, "#{path}.data", byte, budget)
+          end
+        else
+          BinaryAggregateFunctionStateCodec.write_lane(BinaryAggregateFunctionStatePlan.for_type(type).default_state_bytes) do |byte|
+            write_byte(lanes, "#{path}.data", byte, budget)
+          end
         end
       when BinaryDataType::TAG_VARIANT
         write_byte(lanes, "#{path}.discriminators", 0xff_u8, budget)

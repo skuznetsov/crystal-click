@@ -18,7 +18,7 @@ module CrystalClick
       end
 
       argument = argument_type.not_nil!
-      return false if argument.contains_aggregate_count?
+      return false if argument.contains_aggregate_function?
       return false if nullable_nothing?(argument)
 
       # Count is the root descriptor, and its argument is a metadata edge.

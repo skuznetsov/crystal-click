@@ -1,0 +1,520 @@
+{
+  "format": "crystal_click_scoped_evidence_v1",
+  "post_qualification_check": {
+    "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e 'require \"json\"\nrequire \"digest\"\np = JSON.parse(File.read(ARGV.fetch(0)))\np.fetch(\"source_lineage\").fetch(\"qualification_file_sha256\").each { |path, hash| raise \"source hash mismatch: #{path}\" unless Digest::SHA256.file(path).hexdigest == hash }\np.fetch(\"helper_builds\").each { |r| raise \"helper hash mismatch\" unless Digest::SHA256.file(r.fetch(\"artifact\")).hexdigest == r.fetch(\"sha256\") }\ntotals = Hash.new(0)\np.fetch(\"unit_evidence\").fetch(\"runs\").each do |r|\n  m = File.read(r.fetch(\"log\")).scan(/(\\d+) examples, (\\d+) failures, (\\d+) errors, (\\d+) pending/).last\n  raise \"missing unit result\" unless m\n  nums = m.map(&:to_i)\n  raise \"unit result mismatch\" unless nums[1..3] == [0,0,0] && r.fetch(\"exit\") == 0\n  totals[r.fetch(\"mode\")] += nums[0]\nend\nraise \"total mismatch\" unless totals == {\"DEBUG\"=>291,\"RELEASE\"=>291}\np.fetch(\"native_evidence\").fetch(\"runs\").each do |r|\n  s = JSON.parse(File.read(File.join(r.fetch(\"evidence_root\"), \"summary.json\")))\n  raise \"native summary mismatch\" unless s.fetch(\"success\") && s.fetch(\"counts\") == {\"expected_profiles\"=>43,\"expected_construction_cases\"=>78,\"construction_observed\"=>78,\"stock_observed\"=>43,\"generic_helper_observed\"=>43,\"native_attached_observed\"=>43,\"invocations\"=>984}\n  raise \"native processes mismatch\" unless s.fetch(\"process_status_counts\") == {\"success_exit0\"=>984,\"failed_timed_out_or_spawn_error\"=>0}\nend\nroots = p.fetch(\"native_evidence\").fetch(\"runs\").map { |r| r.fetch(\"evidence_root\") }\ninventories = roots.map do |root|\n  j = JSON.parse(File.read(File.join(root,\"generated/helper-output.json\")))\n  j.fetch(\"profiles\").to_h { |r| [r.fetch(\"id\"), r.fetch(\"library_part_inventory\")] }\nend\nraise \"cross-mode generated inventory differs\" unless inventories[0] == inventories[1] && inventories[0].size == 43\nputs JSON.pretty_generate({\"result\"=>\"packet_index_checks_passed\",\"unit_examples\"=>totals,\"cross_mode_exact_generated_inventories\"=>inventories[0].size})\n' .landmark/evidence/aggregate-function-sum-w223.json > /private/tmp/crystal-click-w223.Th0mNR/packet-index-check.log 2>&1",
+    "log": "/private/tmp/crystal-click-w223.Th0mNR/packet-index-check.log",
+    "exit": 0,
+    "observed": {
+      "unit_examples": {
+        "DEBUG": 291,
+        "RELEASE": 291
+      },
+      "cross_mode_exact_generated_inventories": 43
+    },
+    "limit": "This checks packet references and exact cross-mode generated inventories, not a replacement for the raw audits.",
+    "source_freeze_precommit": {
+      "command": "shasum -a 256 -c /private/tmp/crystal-click-w223.Th0mNR/source-freeze-final.sha256 > /private/tmp/crystal-click-w223.Th0mNR/source-freeze-precommit-check.log 2>&1",
+      "exit": 0
+    }
+  },
+  "slice": "W223 root AggregateFunction Sum-family state storage",
+  "date": "2026-10-08",
+  "observed_final_utc": "2026-10-08 12:23:38 UTC",
+  "baseline_commit": "57584d50b5842ed9d826cbe08ccf9f976167830b",
+  "status": "VERIFIED within the finite root-column scope",
+  "claim": {
+    "level": "VERIFIED",
+    "statement": "Root sum, sumWithOverflow and sumKahan state columns reuse shared BinaryBulk readers, writers and public consumers. Exact nominal AggregateFunction metadata and opaque canonical state bytes are separate from scalar argument codecs. Legacy Count retains its exact nominal dispatch and VarUInt wire.",
+    "adversary_verdict": "ROBUST within the 43 finite root-column profiles and quiescent Wide/LZ4/Default/plain-mrk2 parts; general enclosing aggregate-state products are not qualified.",
+    "trust": {
+      "F": "Executed behavioral tests, independent literal state oracles, pinned stock/native reads and two executed negative audit controls; not formal proof.",
+      "G": "42 Sum-family physical branches plus one Count control; 78 stock construction cases; not all aggregate functions, type products or storage layouts.",
+      "R": "Root independently executed all compiler/native/audit jobs and inspected source, diffs, process records and restored hashes. Luna review is correlated static evidence, not independent runtime replication."
+    }
+  },
+  "boundaries": {
+    "risk": "CAUTION: shared binary tag, nominal dispatch, aggregate state serialization and persistent part writing",
+    "rollback": "Revert the coherent local W223 feature commit without discarding unrelated work. No push or remote history changes.",
+    "accepted": [
+      "Version-zero, empty-parameter exact nominal root Sum-family descriptors.",
+      "15 numeric leaves, Bool, Enum8/16, Decimal32/64/128/256 and 11 Intervals; eligible Nullable and LC/LCNullable argument metadata.",
+      "Paired root-column read/write through common BinaryBulk physical owners, generic WidePartTable typed batches and owned offline column values.",
+      "Quiescent Wide/LZ4/Default/plain-mrk2 parts, keys [11,22,33,44,55], real mark grid [2,2,1] plus terminal zero."
+    ],
+    "rejected_or_not_claimed": [
+      "Other AggregateFunction families/combinators, nonzero versions, parameters, Nothing, nonnumeric containers, Nullable(LowCardinality), LC Decimal and LC Enum.",
+      "Outer Array/Tuple/Map/Nullable/LC/Variant/Dynamic/JSON aggregate-state physical composition.",
+      "Ordinary OfflineTable.scan_typed/window Sum facade; use column .values or generic WidePartTable typed batches.",
+      "Aggregate execution/finalization, native projection writing, MV execution/writing, freshness or provenance.",
+      "Whole-repository tests, full catalog discovery, mutable/live parts, complete production payload-hash authentication.",
+      "Performance, peak RSS, <=10 percent read-gap or whole-repository facade decomposition."
+    ]
+  },
+  "architecture": {
+    "law": "Recursively compose type/value codecs and wrapper-specific physical stream, row-domain, prefix and mark context separately; do not add a serializer for every product.",
+    "argument_boundary": "AggregateFunction arguments are descriptor metadata, recursively budgeted but not stored value children. sum(UInt8) uses an eight-byte accumulator, not the UInt8 scalar codec.",
+    "state_boundary": "Preserve exact wire state bytes, raw IEEE payloads and Kahan compensation. Bool/Enum scalar validity is not accumulator validity. Nullable argument state uses aggregate presence, not ordinary row NULL.",
+    "count_boundary": "Shared tag 0x25 is not sufficient for Count dispatch; exact function metadata guards every legacy Count route.",
+    "new_owners": [
+      "src/crystal_click/binary_aggregate_function_type.cr",
+      "src/crystal_click/binary_aggregate_function_admission.cr",
+      "src/crystal_click/binary_aggregate_function_state_plan.cr",
+      "src/crystal_click/binary_aggregate_function_state_codec.cr",
+      "src/crystal_click/binary_aggregate_function_bulk_column_declaration.cr",
+      "src/crystal_click/wide_part_writer/aggregate_function_bulk_part_writer.cr"
+    ],
+    "class_layout": "Each new production class has its own file. Large legacy facade decomposition remains open."
+  },
+  "source_reference": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+    "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+    "distinction": "Pinned shallow comparison source and runtime build are separate; neither same-build nor perpetual latest-master compatibility is asserted.",
+    "anchors": [
+      "src/AggregateFunctions/AggregateFunctionSum.cpp:20-84",
+      "src/AggregateFunctions/AggregateFunctionSum.h:269-281,417-431,456-464,580-599",
+      "src/AggregateFunctions/Helpers.h:10-23,161-175",
+      "src/AggregateFunctions/Combinators/AggregateFunctionNull.h:221-257",
+      "src/DataTypes/DataTypeAggregateFunction.cpp:349-359",
+      "src/DataTypes/Serializations/SerializationArray.cpp:352-394: sizes lane, changed child row domain and delegation"
+    ]
+  },
+  "runtime": {
+    "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build_hash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "source_lineage": {
+    "final_freeze": {
+      "path": "/private/tmp/crystal-click-w223.Th0mNR/source-freeze-final.sha256",
+      "entries": 1293,
+      "sha256": "e5ead33bb5151f011a2a872aa238118d6ff8098616996bb449daf94a44db4986",
+      "command": "rg --files src scripts spec -g '*.cr' -g '*.rb' | LC_ALL=C sort | xargs shasum -a 256 > /private/tmp/crystal-click-w223.Th0mNR/source-freeze-final.sha256",
+      "check_command": "shasum -a 256 -c /private/tmp/crystal-click-w223.Th0mNR/source-freeze-final.sha256 > /private/tmp/crystal-click-w223.Th0mNR/source-freeze-final-check.log 2>&1",
+      "check_exit": 0
+    },
+    "distinction": "Production and spec inputs were frozen before the final 16 green cohorts. Helper/runner/auditor fixes preceded both final native runs. Documentation was updated after qualification.",
+    "qualification_file_sha256": {
+      "scripts/check_aggregate_sum_w223.cr": "3d63f7797b1c0473e21fbcebde328bbf78691d7a37151f3e10266d869d1acfc8",
+      "scripts/recheck_aggregate_sum_w223.rb": "d421df7bd5d58d711346938039c2d7ed4c83d7fbc6c82b83ed6efa5fbb1b89de",
+      "scripts/check_aggregate_sum_evidence_w223.rb": "d1b5a949de1da2e4db728845e3b7ba8e490b58b23f4299c3f5e569ed4bf15a22"
+    }
+  },
+  "red_evidence": {
+    "kind": "Existing API behavioral admission RED, not compile RED",
+    "baseline": "57584d50b5842ed9d826cbe08ccf9f976167830b",
+    "descriptor_bytes": [
+      37,
+      0,
+      3,
+      115,
+      117,
+      109,
+      0,
+      1,
+      1
+    ],
+    "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_sum_w223_admission_red_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/admission-red.log 2>&1",
+    "examples": 2,
+    "failures": 1,
+    "errors": 0,
+    "pending": 0,
+    "exit": 1,
+    "log": "/private/tmp/crystal-click-w223.Th0mNR/admission-red.log",
+    "control": "Count VarUInt control passes; literal AggregateFunction(sum, UInt8) descriptor was rejected."
+  },
+  "unit_evidence": {
+    "scope": "Affected suite, not whole repository.",
+    "unique_spec_files": 55,
+    "examples_per_mode": 291,
+    "failures": 0,
+    "errors": 0,
+    "pending": 0,
+    "counts_per_cohort": [
+      30,
+      25,
+      52,
+      43,
+      45,
+      36,
+      23,
+      37
+    ],
+    "runs": [
+      {
+        "mode": "DEBUG",
+        "cohort": 0,
+        "spec_files": [
+          "spec/aggregate_sum_w223_admission_red_spec.cr",
+          "spec/aggregate_sum_w223_core_spec.cr",
+          "spec/aggregate_sum_w223_bulk_spec.cr",
+          "spec/aggregate_sum_w223_part_spec.cr",
+          "spec/aggregate_sum_w223_consumers_spec.cr",
+          "spec/aggregate_sum_w223_root_adversary_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-0.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-0.log",
+        "exit": 0
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 1,
+        "spec_files": [
+          "spec/simple_aggregate_recursive_w222_admission_red_spec.cr",
+          "spec/simple_aggregate_recursive_w222_part_spec.cr",
+          "spec/simple_aggregate_recursive_w222_core_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_recursive_w222_admission_red_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-1.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-1.log",
+        "exit": 0
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 2,
+        "spec_files": [
+          "spec/simple_aggregate_nullable_w221_admission_red_spec.cr",
+          "spec/simple_aggregate_bulk_w221_spec.cr",
+          "spec/simple_aggregate_bulk_part_w221_spec.cr",
+          "spec/nested_bulk_part_w202_spec.cr",
+          "spec/simple_aggregate_w161_core_spec.cr",
+          "spec/simple_aggregate_w161_guards_spec.cr",
+          "spec/simple_aggregate_w161_recursive_spec.cr",
+          "spec/simple_aggregate_w163_core_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_nullable_w221_admission_red_spec.cr spec/simple_aggregate_bulk_w221_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr spec/nested_bulk_part_w202_spec.cr spec/simple_aggregate_w161_core_spec.cr spec/simple_aggregate_w161_guards_spec.cr spec/simple_aggregate_w161_recursive_spec.cr spec/simple_aggregate_w163_core_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-2.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-2.log",
+        "exit": 0
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 3,
+        "spec_files": [
+          "spec/simple_aggregate_w164_core_spec.cr",
+          "spec/simple_aggregate_w168_core_spec.cr",
+          "spec/simple_aggregate_decimal_w169_spec.cr",
+          "spec/simple_aggregate_temporal_w170_spec.cr",
+          "spec/binary_bulk_w122_spec.cr",
+          "spec/binary_bulk_physical_prefix_w151_spec.cr",
+          "spec/low_cardinality_binary_codec_spec.cr",
+          "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_w164_core_spec.cr spec/simple_aggregate_w168_core_spec.cr spec/simple_aggregate_decimal_w169_spec.cr spec/simple_aggregate_temporal_w170_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/low_cardinality_binary_codec_spec.cr spec/simple_aggregate_bulk_consumers_w221_native_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-3.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-3.log",
+        "exit": 0
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 4,
+        "spec_files": [
+          "spec/simple_aggregate_w161_wide_spec.cr",
+          "spec/simple_aggregate_w163_wide_spec.cr",
+          "spec/simple_aggregate_w164_wide_spec.cr",
+          "spec/simple_aggregate_w168_wide_spec.cr",
+          "spec/wide_part_simple_aggregate_decimal_w169_spec.cr",
+          "spec/wide_part_simple_aggregate_temporal_w170_spec.cr",
+          "spec/dynamic_owned_values_w220_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_w161_wide_spec.cr spec/simple_aggregate_w163_wide_spec.cr spec/simple_aggregate_w164_wide_spec.cr spec/simple_aggregate_w168_wide_spec.cr spec/wide_part_simple_aggregate_decimal_w169_spec.cr spec/wide_part_simple_aggregate_temporal_w170_spec.cr spec/dynamic_owned_values_w220_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-4.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-4.log",
+        "exit": 0
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 5,
+        "spec_files": [
+          "spec/dynamic_table_consumer_w211_spec.cr",
+          "spec/dynamic_table_consumer_w211_red_spec.cr",
+          "spec/dynamic_table_budget_w211_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr",
+          "spec/wide_part_table_projection_w87_spec.cr",
+          "spec/object_offline_table_w130_spec.cr",
+          "spec/dynamic_bulk_part_w203_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_consumer_w211_red_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/object_offline_table_w130_spec.cr spec/dynamic_bulk_part_w203_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-5.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-5.log",
+        "exit": 0
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 6,
+        "spec_files": [
+          "spec/aggregate_count_arguments_w178_admission_spec.cr",
+          "spec/aggregate_count_arguments_w178_consumers_spec.cr",
+          "spec/aggregate_count_arguments_w178_core_spec.cr",
+          "spec/aggregate_count_arguments_w178_parser_spec.cr",
+          "spec/aggregate_count_arguments_w178_plan_spec.cr",
+          "spec/aggregate_count_consumers_w177_admission_spec.cr",
+          "spec/aggregate_count_consumers_w177_oracle_spec.cr",
+          "spec/aggregate_count_offline_w177_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_consumers_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_consumers_w177_admission_spec.cr spec/aggregate_count_consumers_w177_oracle_spec.cr spec/aggregate_count_offline_w177_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-6.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-6.log",
+        "exit": 0
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 7,
+        "spec_files": [
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/aggregate_count_table_w177_spec.cr",
+          "spec/aggregate_count_w175_admission_red_spec.cr",
+          "spec/aggregate_count_w175_core_spec.cr",
+          "spec/aggregate_count_w175_native_spec.cr",
+          "spec/aggregate_count_w176_admission_spec.cr",
+          "spec/aggregate_count_w176_reader_spec.cr",
+          "spec/aggregate_count_w176_writer_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_physical_names_w219_spec.cr spec/aggregate_count_table_w177_spec.cr spec/aggregate_count_w175_admission_red_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w175_native_spec.cr spec/aggregate_count_w176_admission_spec.cr spec/aggregate_count_w176_reader_spec.cr spec/aggregate_count_w176_writer_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-debug-7.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-debug-7.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 0,
+        "spec_files": [
+          "spec/aggregate_sum_w223_admission_red_spec.cr",
+          "spec/aggregate_sum_w223_core_spec.cr",
+          "spec/aggregate_sum_w223_bulk_spec.cr",
+          "spec/aggregate_sum_w223_part_spec.cr",
+          "spec/aggregate_sum_w223_consumers_spec.cr",
+          "spec/aggregate_sum_w223_root_adversary_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-0.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-0.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 1,
+        "spec_files": [
+          "spec/simple_aggregate_recursive_w222_admission_red_spec.cr",
+          "spec/simple_aggregate_recursive_w222_part_spec.cr",
+          "spec/simple_aggregate_recursive_w222_core_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_recursive_w222_admission_red_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-1.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-1.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 2,
+        "spec_files": [
+          "spec/simple_aggregate_nullable_w221_admission_red_spec.cr",
+          "spec/simple_aggregate_bulk_w221_spec.cr",
+          "spec/simple_aggregate_bulk_part_w221_spec.cr",
+          "spec/nested_bulk_part_w202_spec.cr",
+          "spec/simple_aggregate_w161_core_spec.cr",
+          "spec/simple_aggregate_w161_guards_spec.cr",
+          "spec/simple_aggregate_w161_recursive_spec.cr",
+          "spec/simple_aggregate_w163_core_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_nullable_w221_admission_red_spec.cr spec/simple_aggregate_bulk_w221_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr spec/nested_bulk_part_w202_spec.cr spec/simple_aggregate_w161_core_spec.cr spec/simple_aggregate_w161_guards_spec.cr spec/simple_aggregate_w161_recursive_spec.cr spec/simple_aggregate_w163_core_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-2.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-2.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 3,
+        "spec_files": [
+          "spec/simple_aggregate_w164_core_spec.cr",
+          "spec/simple_aggregate_w168_core_spec.cr",
+          "spec/simple_aggregate_decimal_w169_spec.cr",
+          "spec/simple_aggregate_temporal_w170_spec.cr",
+          "spec/binary_bulk_w122_spec.cr",
+          "spec/binary_bulk_physical_prefix_w151_spec.cr",
+          "spec/low_cardinality_binary_codec_spec.cr",
+          "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_w164_core_spec.cr spec/simple_aggregate_w168_core_spec.cr spec/simple_aggregate_decimal_w169_spec.cr spec/simple_aggregate_temporal_w170_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/low_cardinality_binary_codec_spec.cr spec/simple_aggregate_bulk_consumers_w221_native_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-3.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-3.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 4,
+        "spec_files": [
+          "spec/simple_aggregate_w161_wide_spec.cr",
+          "spec/simple_aggregate_w163_wide_spec.cr",
+          "spec/simple_aggregate_w164_wide_spec.cr",
+          "spec/simple_aggregate_w168_wide_spec.cr",
+          "spec/wide_part_simple_aggregate_decimal_w169_spec.cr",
+          "spec/wide_part_simple_aggregate_temporal_w170_spec.cr",
+          "spec/dynamic_owned_values_w220_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_w161_wide_spec.cr spec/simple_aggregate_w163_wide_spec.cr spec/simple_aggregate_w164_wide_spec.cr spec/simple_aggregate_w168_wide_spec.cr spec/wide_part_simple_aggregate_decimal_w169_spec.cr spec/wide_part_simple_aggregate_temporal_w170_spec.cr spec/dynamic_owned_values_w220_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-4.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-4.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 5,
+        "spec_files": [
+          "spec/dynamic_table_consumer_w211_spec.cr",
+          "spec/dynamic_table_consumer_w211_red_spec.cr",
+          "spec/dynamic_table_budget_w211_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr",
+          "spec/wide_part_table_projection_w87_spec.cr",
+          "spec/object_offline_table_w130_spec.cr",
+          "spec/dynamic_bulk_part_w203_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_consumer_w211_red_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/object_offline_table_w130_spec.cr spec/dynamic_bulk_part_w203_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-5.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-5.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 6,
+        "spec_files": [
+          "spec/aggregate_count_arguments_w178_admission_spec.cr",
+          "spec/aggregate_count_arguments_w178_consumers_spec.cr",
+          "spec/aggregate_count_arguments_w178_core_spec.cr",
+          "spec/aggregate_count_arguments_w178_parser_spec.cr",
+          "spec/aggregate_count_arguments_w178_plan_spec.cr",
+          "spec/aggregate_count_consumers_w177_admission_spec.cr",
+          "spec/aggregate_count_consumers_w177_oracle_spec.cr",
+          "spec/aggregate_count_offline_w177_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_consumers_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_consumers_w177_admission_spec.cr spec/aggregate_count_consumers_w177_oracle_spec.cr spec/aggregate_count_offline_w177_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-6.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-6.log",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 7,
+        "spec_files": [
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/aggregate_count_table_w177_spec.cr",
+          "spec/aggregate_count_w175_admission_red_spec.cr",
+          "spec/aggregate_count_w175_core_spec.cr",
+          "spec/aggregate_count_w175_native_spec.cr",
+          "spec/aggregate_count_w176_admission_spec.cr",
+          "spec/aggregate_count_w176_reader_spec.cr",
+          "spec/aggregate_count_w176_writer_spec.cr"
+        ],
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_physical_names_w219_spec.cr spec/aggregate_count_table_w177_spec.cr spec/aggregate_count_w175_admission_red_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w175_native_spec.cr spec/aggregate_count_w176_admission_spec.cr spec/aggregate_count_w176_reader_spec.cr spec/aggregate_count_w176_writer_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --release --error-trace > /private/tmp/crystal-click-w223.Th0mNR/cohort-release-7.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/cohort-release-7.log",
+        "exit": 0
+      }
+    ]
+  },
+  "helper_builds": [
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_aggregate_sum_w223.cr --single-module --threads 1 --link-flags=-fuse-ld=ld -o /private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-debug > /private/tmp/crystal-click-w223.Th0mNR/helper-build-debug-v2.log 2>&1",
+      "log": "/private/tmp/crystal-click-w223.Th0mNR/helper-build-debug-v2.log",
+      "exit": 0,
+      "mode": "DEBUG",
+      "artifact": "/private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-debug",
+      "sha256": "c6a3be921168afcaa4dabd9ff43fc4d4ab8dc83e104654a09c05ceb0695c79ea"
+    },
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w223.Th0mNR/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_aggregate_sum_w223.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld -o /private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-release > /private/tmp/crystal-click-w223.Th0mNR/helper-build-release.log 2>&1",
+      "log": "/private/tmp/crystal-click-w223.Th0mNR/helper-build-release.log",
+      "exit": 0,
+      "mode": "RELEASE",
+      "artifact": "/private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-release",
+      "sha256": "cf608d93e2b3d846fa9ba06cca7b474c4c7e21a92665b6841c9f5fa72e9be6e6"
+    }
+  ],
+  "native_evidence": {
+    "counts_per_mode": {
+      "physical_profiles": 43,
+      "sum_profiles": 42,
+      "count_controls": 1,
+      "construction_cases": 78,
+      "successful_invocations": 984,
+      "failed_timed_out_or_spawn_error": 0
+    },
+    "construction_breakdown": {
+      "sum": 33,
+      "sumWithOverflow": 33,
+      "targeted_sumKahan": 12
+    },
+    "runs": [
+      {
+        "mode": "DEBUG",
+        "source_root": "/private/tmp/crystal-click-w223-physical.3xbHZL",
+        "evidence_root": "/private/tmp/crystal-click-w223-bulk.ETlUtK",
+        "helper": "/private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-debug",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/native-debug-v3.log",
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 900 1536 scripts/recheck_aggregate_sum_w223.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-debug --source-root /private/tmp/crystal-click-w223-physical.3xbHZL --evidence-root /private/tmp/crystal-click-w223-bulk.ETlUtK > /private/tmp/crystal-click-w223.Th0mNR/native-debug-v3.log 2>&1",
+        "exit": 0
+      },
+      {
+        "mode": "RELEASE",
+        "source_root": "/private/tmp/crystal-click-w223-physical.W1f0JL",
+        "evidence_root": "/private/tmp/crystal-click-w223-bulk.5byZo4",
+        "helper": "/private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-release",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/native-release.log",
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 900 1536 scripts/recheck_aggregate_sum_w223.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w223.Th0mNR/check-aggregate-sum-release --source-root /private/tmp/crystal-click-w223-physical.W1f0JL --evidence-root /private/tmp/crystal-click-w223-bulk.5byZo4 > /private/tmp/crystal-click-w223.Th0mNR/native-release.log 2>&1",
+        "exit": 0
+      }
+    ],
+    "oracle": "Independent Ruby literal RowBinary states, exact declared nominal types and state hex. Full, middle-key [22,44] and empty native windows in both directions; no production codec used for expected bytes.",
+    "consumers": "Helper mark windows full/first/middle/short-final/EOF-empty; public typed batch schedule [[0,0,2],[1,2,2],[2,4,1]] and owned offline column values.",
+    "inventory": "Each raw audit checks original source, generated, detached and attached inventories. Only exact invalidated_system_columns.txt containing _block_number and _block_offset is allowed as attached auxiliary.",
+    "auxiliary_policy": "Pinned-runtime observation, not a hash-pinned C++ source proof.",
+    "metadata": "Count retains its distinct legacy serialization metadata; generic Sum writer uses its own exact pinned metadata profile. Stock/library byte-identical whole parts are not asserted.",
+    "audits": [
+      {
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_aggregate_sum_evidence_w223.rb /private/tmp/crystal-click-w223-bulk.ETlUtK > /private/tmp/crystal-click-w223.Th0mNR/audit-debug-restored.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/audit-debug-restored.log",
+        "exit": 0
+      },
+      {
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_aggregate_sum_evidence_w223.rb /private/tmp/crystal-click-w223-bulk.5byZo4 > /private/tmp/crystal-click-w223.Th0mNR/audit-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/audit-release.log",
+        "exit": 0
+      }
+    ]
+  },
+  "adversary": {
+    "negative_controls": [
+      {
+        "path": "/private/tmp/crystal-click-w223-bulk.ETlUtK/invocations/00001-runtime-version.status.json",
+        "original_sha256": "f7fbd16af475f5fa590fe08769478dd3f470c4ab4de07805a6210fc6fd836a39",
+        "seed": "success=true with exitstatus=17; summary and success counts unchanged",
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_aggregate_sum_evidence_w223.rb /private/tmp/crystal-click-w223-bulk.ETlUtK > /private/tmp/crystal-click-w223.Th0mNR/audit-negative-status.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/audit-negative-status.log",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_rejection": "runtime-version process did not exit successfully",
+        "restored_sha256": "f7fbd16af475f5fa590fe08769478dd3f470c4ab4de07805a6210fc6fd836a39"
+      },
+      {
+        "stdout_path": "/private/tmp/crystal-click-w223-bulk.ETlUtK/invocations/00599-native-check-sum_uint8.stdout",
+        "case_path": "/private/tmp/crystal-click-w223-bulk.ETlUtK/cases/profiles/sum_uint8-native.json",
+        "original_stdout_sha256": "4a71c31d748c9d4bd32d6a322c7e1e4817798a6b46d1301ab766203d482fe4cb",
+        "original_case_sha256": "b4b02e146c449f60fcd61616e40b064229200843bb4a46e5231ae651ea8cdc9d",
+        "seed": "exact part name and process exit0 with CHECK result0; coherent stdout hash reference; summary unchanged",
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_aggregate_sum_evidence_w223.rb /private/tmp/crystal-click-w223-bulk.ETlUtK > /private/tmp/crystal-click-w223.Th0mNR/audit-negative-check-result.log 2>&1",
+        "log": "/private/tmp/crystal-click-w223.Th0mNR/audit-negative-check-result.log",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_rejection": "exact three-field TSVRaw CHECK output differs, not a hash mismatch",
+        "mutant_stdout_sha256": "f055d026ff5a1e5d3b4a0727209fc032ebad3c09679d1156fe062a95903202fd",
+        "restored_stdout_sha256": "4a71c31d748c9d4bd32d6a322c7e1e4817798a6b46d1301ab766203d482fe4cb",
+        "restored_case_sha256": "b4b02e146c449f60fcd61616e40b064229200843bb4a46e5231ae651ea8cdc9d"
+      }
+    ],
+    "restored_audit": {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_aggregate_sum_evidence_w223.rb /private/tmp/crystal-click-w223-bulk.ETlUtK > /private/tmp/crystal-click-w223.Th0mNR/audit-debug-restored.log 2>&1",
+      "log": "/private/tmp/crystal-click-w223.Th0mNR/audit-debug-restored.log",
+      "exit": 0
+    },
+    "production_falsifiers": "UInt8 accumulator width, Enum/Bool overflow outside scalar constraints, Kahan second word/raw bits, all-null flag-only states, truncation/trailing/noncanonical presence, arity/version/parameters, exact Count accessor on Sum, nominal LC mismatch, lane/grid/sparse substitutions, consumer budgets and selected projection child path.",
+    "projection_limit": "Synthetic selected-child path only; no new native projection qualification.",
+    "tooling_corrections": "Helper Array#to_slice, Count stream roster, three-field CHECK parsing, exact process labels/cardinality, construction ID casing, distinct Count metadata, nonempty Code diagnostics and exact auxiliary policy. No production guard relaxed for native success."
+  },
+  "evidence_retention": {
+    "packet": "Curated index, not substantive proof by field presence.",
+    "temporary_artifacts": "Logs, raw roots and binaries are outside Git under /private/tmp and may be removed by the OS; refresh rather than treating missing evidence as verified.",
+    "decay_triggers": "Serializer, admission, physical context, consumer ownership, source/runtime pin or helper/runner/auditor changes invalidate the corresponding claim.",
+    "refresh": "Execute the affected cohorts and fresh DEBUG/RELEASE native runs plus raw audits and executed negative/restored controls at the changed source state.",
+    "failure_policy": "Reject unsupported layouts and reopen stale claims; do not infer Cartesian product compatibility."
+  },
+  "continuation": {
+    "active_goal": "Read/write type compatibility and MV/projection support remain active; performance/memory is deferred.",
+    "next_falsifier": "Stock Array(AggregateFunction(sum, UInt8)) with uneven/empty arrays and short final mark before widening enclosing-wrapper guards.",
+    "open": "Other function-specific AggregateFunction states, remaining context-sensitive JSON/Dynamic/Variant/LC/Nested layouts, ordinary offline Sum scan facade, MV/projection writing and legacy facade decomposition."
+  }
+}

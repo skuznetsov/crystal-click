@@ -533,6 +533,11 @@ module CrystalClick
                         else
                           nil
                         end
+      expected_type ||= if WidePart.supports_aggregate_function_bulk_type?(column_type)
+                          BinaryAggregateFunctionBulkColumnDeclaration.parse(column_type)
+                        else
+                          nil
+                        end
       unless expected_type
         raise UnsupportedFormatError.new("Binary bulk accessor requires an admitted static or Dynamic declaration")
       end
@@ -556,6 +561,11 @@ module CrystalClick
       expected_type = DynamicBulkColumnDeclaration.parse(column_type)
       expected_type ||= if WidePart.supports_simple_aggregate_bulk_type?(column_type)
                           SimpleAggregateBulkColumnDeclaration.parse(column_type)
+                        else
+                          nil
+                        end
+      expected_type ||= if WidePart.supports_aggregate_function_bulk_type?(column_type)
+                          BinaryAggregateFunctionBulkColumnDeclaration.parse(column_type)
                         else
                           nil
                         end

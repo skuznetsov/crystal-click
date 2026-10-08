@@ -151,10 +151,11 @@ module CrystalClick
         validate_type_tree(type.qbit_element_descriptor, depth + 1)
         return nil
       end
-      if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT
-        # Count's argument belongs to its descriptor grammar and budget, but
-        # is not a generic child that value/bulk walkers may recurse through.
-        if argument = type.aggregate_count_argument_type
+      if type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION
+        # AggregateFunction's argument belongs to its descriptor grammar and
+        # budget, but is not a generic child that value/bulk walkers recurse
+        # through as an ordinary value.
+        if argument = type.aggregate_function_argument_type
           preflight_children(1_u64)
           validate_type_tree(argument, depth + 1)
         end

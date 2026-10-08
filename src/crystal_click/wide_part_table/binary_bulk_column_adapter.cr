@@ -1,23 +1,23 @@
 module CrystalClick
   class WidePartTable
-    # Adapts one exact statically admitted SimpleAggregateFunction tree to
-    # the generic BinaryBulk reader and the table's per-mark budget.
+    # Adapts one exact nominal static BinaryBulk type to the generic reader
+    # and table budget. Family admission remains owned by its declaration.
     private class BinaryBulkColumnAdapter
       def self.open(
         part_path : String,
         column : String,
         source_declaration : String,
       ) : {BinaryBulkColumnReader, BinaryDataType}
-        expected_type = SimpleAggregateBulkColumnDeclaration.parse(source_declaration) ||
-                        raise(UnsupportedFormatError.new("selected column is not an admitted SimpleAggregate bulk declaration"))
-        unless WidePart.supports_simple_aggregate_bulk_type?(source_declaration)
-          raise UnsupportedFormatError.new("selected SimpleAggregate declaration is outside the admitted static recursive bulk profile")
+        expected_type = SimpleAggregateBulkColumnDeclaration.parse(source_declaration)
+        expected_type ||= BinaryAggregateFunctionBulkColumnDeclaration.parse(source_declaration)
+        unless expected_type && WidePart.supports_static_binary_bulk_type?(source_declaration)
+          raise UnsupportedFormatError.new("selected declaration is outside the admitted static BinaryBulk profile")
         end
 
         reader = BinaryBulkColumnReader.open(part_path, column, expected_type)
         unless reader.schema_declaration == source_declaration &&
                reader.source_declaration == source_declaration
-          raise CorruptPartError.new("selected SimpleAggregate bulk declaration changed while opening the reader")
+          raise CorruptPartError.new("selected static BinaryBulk declaration changed while opening the reader")
         end
         {reader, expected_type}
       end
@@ -31,18 +31,18 @@ module CrystalClick
         unless reader.row_count == expected_row_count &&
                reader.mark_count == expected_mark_rows.size &&
                mark_rows == expected_mark_rows
-          raise CorruptPartError.new("selected SimpleAggregate bulk grid differs from its part")
+          raise CorruptPartError.new("selected static BinaryBulk grid differs from its part")
         end
 
         rows = 0_u64
         mark_rows.each do |count|
           if count > UInt64::MAX - rows
-            raise CorruptPartError.new("selected SimpleAggregate bulk row count overflows")
+            raise CorruptPartError.new("selected static BinaryBulk row count overflows")
           end
           rows += count
         end
         unless rows == reader.row_count
-          raise CorruptPartError.new("selected SimpleAggregate bulk schedule differs from its row count")
+          raise CorruptPartError.new("selected static BinaryBulk schedule differs from its row count")
         end
         nil
       end
@@ -62,7 +62,7 @@ module CrystalClick
         budget.reserve_binary_values_base(expected_rows, workspace)
         checked_add(budget.retained_logical_bytes, workspace)
       rescue ex : BoundsError
-        raise CorruptPartError.new("selected SimpleAggregate bulk mark exceeds aggregate materialization limit")
+        raise CorruptPartError.new("selected static BinaryBulk mark exceeds aggregate materialization limit")
       end
 
       # Decode one physical parent mark, verify the full nominal descriptor
@@ -80,25 +80,25 @@ module CrystalClick
         begin
           budget.reserve_binary_values_base(expected_rows, workspace)
         rescue ex : BoundsError
-          raise CorruptPartError.new("selected SimpleAggregate bulk mark exceeds aggregate materialization limit")
+          raise CorruptPartError.new("selected static BinaryBulk mark exceeds aggregate materialization limit")
         end
 
         selected = reader.read_marks(mark_index, 1)
-        raise CorruptPartError.new("selected SimpleAggregate bulk mark count changed") unless selected.size == 1
+        raise CorruptPartError.new("selected static BinaryBulk mark count changed") unless selected.size == 1
         values = selected[0]
         unless values.size.to_u64 == expected_rows
-          raise CorruptPartError.new("selected SimpleAggregate bulk mark row count changed")
+          raise CorruptPartError.new("selected static BinaryBulk mark row count changed")
         end
         values.each do |value|
           unless value.type == expected_type
-            raise CorruptPartError.new("selected SimpleAggregate bulk value type differs from its declaration")
+            raise CorruptPartError.new("selected static BinaryBulk value type differs from its declaration")
           end
         end
 
         begin
           budget.charge_binary_values(values, workspace)
         rescue ex : BoundsError
-          raise CorruptPartError.new("selected SimpleAggregate bulk mark exceeds aggregate materialization limit")
+          raise CorruptPartError.new("selected static BinaryBulk mark exceeds aggregate materialization limit")
         end
         {values, checked_add(budget.retained_logical_bytes, workspace)}
       end
@@ -110,13 +110,13 @@ module CrystalClick
       ) : Nil
         mark_rows = reader.mark_row_counts[mark_index]?
         unless mark_rows && mark_rows == expected_rows
-          raise CorruptPartError.new("selected SimpleAggregate bulk mark row count differs from its part grid")
+          raise CorruptPartError.new("selected static BinaryBulk mark row count differs from its part grid")
         end
         nil
       end
 
       private def self.checked_add(left : UInt64, right : UInt64) : UInt64
-        raise BoundsError.new("SimpleAggregate bulk logical charge overflows UInt64") if right > UInt64::MAX - left
+        raise BoundsError.new("static BinaryBulk logical charge overflows UInt64") if right > UInt64::MAX - left
         left + right
       end
     end

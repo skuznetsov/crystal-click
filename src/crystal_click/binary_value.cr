@@ -115,6 +115,19 @@ module CrystalClick
       new(type, little_endian(count, 8))
     end
 
+    # Sum-family aggregate state is an opaque canonical byte sequence. The
+    # descriptor validates its fixed-width/presence envelope, while this value
+    # owner copies bytes so callers cannot mutate an already-owned state.
+    def self.aggregate_function_state(type : BinaryDataType, canonical_bytes : Bytes) : BinaryValue
+      descriptor = type.aggregate_function_type || raise ArgumentError.new("AggregateFunction state requires its nominal type")
+      if descriptor.function_name == "count" || type.aggregate_count_type
+        raise ArgumentError.new("AggregateFunction(count) state requires the Count compatibility carrier")
+      end
+      plan = BinaryAggregateFunctionStatePlan.for_type(type)
+      plan.validate_state_bytes(canonical_bytes)
+      new(type, canonical_bytes)
+    end
+
     def self.float32_bits(bits : UInt32) : BinaryValue
       new(BinaryDataType.primitive("Float32"), little_endian(bits.to_u64, 4))
     end
@@ -138,8 +151,8 @@ module CrystalClick
       unless type.tag == BinaryDataType::TAG_DYNAMIC
         raise ArgumentError.new("Dynamic value requires Dynamic type")
       end
-      if child && child.type.contains_aggregate_count?
-        raise ArgumentError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
+      if child && child.type.contains_aggregate_function?
+        raise ArgumentError.new("AggregateFunction is not admitted as a Dynamic actual type")
       end
       if child && child.type.contains_qbit? && child.type.tag != BinaryDataType::TAG_QBIT
         raise ArgumentError.new("QBit is not admitted as a Dynamic actual type")
@@ -407,8 +420,21 @@ module CrystalClick
     end
 
     def count_state : UInt64
-      require_tag(BinaryDataType::TAG_AGGREGATE_COUNT, "AggregateFunction(count)")
+      require_tag(BinaryDataType::TAG_AGGREGATE_FUNCTION, "AggregateFunction(count)")
+      unless @type.aggregate_count_type
+        raise ArgumentError.new("value is not an AggregateFunction(count) state")
+      end
       read_le_u64
+    end
+
+    def aggregate_function_state_bytes : Bytes
+      require_tag(BinaryDataType::TAG_AGGREGATE_FUNCTION, "AggregateFunction")
+      descriptor = @type.aggregate_function_type || raise ArgumentError.new("AggregateFunction metadata is missing")
+      if descriptor.function_name == "count" || @type.aggregate_count_type
+        raise ArgumentError.new("AggregateFunction(count) uses its compatibility carrier")
+      end
+      payload = @payload || raise ArgumentError.new("AggregateFunction state payload is missing")
+      Bytes.new(payload.size) { |index| payload[index] }
     end
 
     def as_simple_aggregate : BinaryValue

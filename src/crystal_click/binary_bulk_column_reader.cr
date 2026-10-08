@@ -51,13 +51,23 @@ module CrystalClick
       name_budget.charge_wire_bytes(canonical_bytes)
       @schema_declaration = String.new(canonical.to_slice)
 
-      # Root SimpleAggregateFunction declarations enter through the shared
-      # static declaration policy even when callers bypass WidePart's table
-      # admission adapter. Preserve all non-SAF generic-reader behavior.
+      # Nominal static declarations enter through their exact declaration
+      # policy even when callers bypass WidePart's table admission adapter.
       if @type.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE ||
          (@type.tag == BinaryDataType::TAG_NULLABLE &&
          @type.child_at(0).tag == BinaryDataType::TAG_SIMPLE_AGGREGATE)
         SimpleAggregateBulkColumnDeclaration.new(@type, @limits)
+      end
+      if @type.contains_aggregate_function?
+        unless @type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION
+          raise UnsupportedFormatError.new("static BinaryBulk does not admit nested AggregateFunction states")
+        end
+        # Count predates the generic Sum-family route and retains its existing
+        # fixed-state BinaryBulk behavior. All other root AggregateFunction
+        # descriptors must pass the exact Sum static profile.
+        unless @type.aggregate_count_type
+          BinaryAggregateFunctionBulkColumnDeclaration.new(@type, @limits)
+        end
       end
 
       # Validate static no-JSON/no-Dynamic binary admission only after the

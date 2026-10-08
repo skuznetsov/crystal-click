@@ -17,9 +17,13 @@ module CrystalClick
         raise BoundsError.new("SimpleAggregate catalog exceeds part limit") if candidates.size > WidePartTable::MAX_PARTS
         raise BoundsError.new("SimpleAggregate catalog exceeds row limit") if expected_rows > OfflineTable::MAX_MATERIALIZED_VALUES_ROWS
 
-        declaration = SimpleAggregateBulkColumnDeclaration.new(type).declaration
-        unless WidePart.supports_simple_aggregate_bulk_type?(declaration)
-          raise UnsupportedFormatError.new("static bulk materializer requires an admitted SimpleAggregate recursive profile")
+        declaration = if type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION
+                        BinaryAggregateFunctionBulkColumnDeclaration.new(type).declaration
+                      else
+                        SimpleAggregateBulkColumnDeclaration.new(type).declaration
+                      end
+        unless WidePart.supports_static_binary_bulk_type?(declaration)
+          raise UnsupportedFormatError.new("static bulk materializer requires an admitted nominal BinaryBulk profile")
         end
 
         candidate_rows = sum_candidate_rows(candidates)

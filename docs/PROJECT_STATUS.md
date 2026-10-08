@@ -1,5 +1,33 @@
 # CrystalClick project status
 
+Current AggregateFunction Sum-family slice (W223, 2026-10-08): VERIFIED within
+the finite root-column scope (scoped verdict: ROBUST). Shared tag `0x25` now
+has an immutable generic descriptor and separate state admission/plan/codec
+owners; Count retains exact nominal dispatch and its existing VarUInt wire.
+Root sum, sumWithOverflow and sumKahan states preserve accumulator bytes,
+Nullable presence and declared LC metadata without treating argument metadata
+as stored value children. Shared bulk publication, generic typed batches and
+owned offline column `.values` reuse existing owners. Each new production
+class has its own file; broad legacy facade decomposition remains open.
+
+The same 55 affected spec files pass 291 examples in each DEBUG/RELEASE, zero
+failures/errors/pending. Fresh native runs per mode pass 43 stock reads and
+43 library ATTACH/CHECK/exact-state witnesses, plus 78 stock construction cases.
+Both raw audits pass all 984 process records per mode. Executed inconsistent
+status and coherent CHECK-result-zero seeds reject despite green summaries;
+exact restoration returns the audit to green. Tooling profile/record defects
+were corrected without relaxing production admission or physical guards.
+
+This qualifies finite Wide/LZ4/Default/plain-mrk2 root columns, five rows and
+real marks [2,2,1], not arbitrary wrapper products or aggregate execution.
+Ordinary OfflineTable.scan_typed/window Sum callbacks, outer aggregate-state
+composition, other AggregateFunction families, remaining JSON/Dynamic/Variant/
+LC/Nested physical profiles, native MV/projection writing/semantics and broader
+facade cleanup remain open. Memory/performance remains deferred; the full goal
+stays active. Details:
+[AGGREGATE_FUNCTION_SUM_FRONTIER.md](AGGREGATE_FUNCTION_SUM_FRONTIER.md),
+[W223 evidence packet](../.landmark/evidence/aggregate-function-sum-w223.json).
+
 Current recursive SimpleAggregateFunction slice (W222, 2026-10-08): VERIFIED
 within the finite root-SAF-column scope (scoped verdict: ROBUST). Existing
 Array/Tuple/Map/Nullable child codecs compose eligible SAF storage without a

@@ -1537,6 +1537,34 @@ module CrystalClick
     # role grammar; the legacy typed facade remains responsible for bare and
     # outer-Nullable scalar declarations.
     def self.selected_simple_aggregate_bulk_declaration(part_path : String, column_name : String) : String?
+      selected_static_binary_bulk_declaration(part_path, column_name) do |declaration|
+        supports_simple_aggregate_bulk_type?(declaration)
+      end
+    end
+
+    # Sum-family states use the same selected physical declaration reader, but
+    # a separate exact root-type admission policy from SimpleAggregateFunction.
+    def self.selected_aggregate_function_bulk_declaration(part_path : String, column_name : String) : String?
+      selected_static_binary_bulk_declaration(part_path, column_name) do |declaration|
+        supports_aggregate_function_bulk_type?(declaration)
+      end
+    end
+
+    def self.supports_aggregate_function_bulk_type?(type : String) : Bool
+      BinaryAggregateFunctionBulkColumnDeclaration.parse(type) != nil
+    end
+
+    # Single predicate for the static BinaryBulk consumer surface. This does
+    # not widen the legacy typed-value API or Dynamic admission.
+    def self.supports_static_binary_bulk_type?(type : String) : Bool
+      supports_simple_aggregate_bulk_type?(type) || supports_aggregate_function_bulk_type?(type)
+    end
+
+    private def self.selected_static_binary_bulk_declaration(
+      part_path : String,
+      column_name : String,
+      &admitted : String -> Bool
+    ) : String?
       raise ArgumentError.new("selected column name must not be empty") if column_name.empty?
       return nil if column_name.bytesize > MAX_METADATA_LINE_BYTES
 
@@ -1565,10 +1593,10 @@ module CrystalClick
         raise UnsupportedFormatError.new("selected column is ambiguous between a literal dotted column and a JSON typed path")
       end
       return nil unless selected = exact
-      return nil unless supports_simple_aggregate_bulk_type?(selected[1])
+      return nil unless admitted.call(selected[1])
       String.new(selected[1].to_slice)
     rescue ex : IO::Error
-      raise InvalidPartError.new(ex.message || "cannot read selected SimpleAggregate declaration")
+      raise InvalidPartError.new(ex.message || "cannot read selected static BinaryBulk declaration")
     end
 
     def self.supports_simple_aggregate_bulk_type?(type : String) : Bool

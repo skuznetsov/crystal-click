@@ -142,6 +142,29 @@ module CrystalClick
         child = parse_child(depth + 1)
         expect(')')
         BinaryDataType.simple_aggregate(function, child, parameters)
+      when "AggregateFunction"
+        function_name = read_identifier(BinaryAggregateFunctionAdmission::MAX_FUNCTION_NAME_BYTES) ||
+                        invalid!("AggregateFunction name is missing")
+        if function_name == "count"
+          skip_whitespace
+          if consume(')')
+            BinaryDataType.aggregate_count
+          else
+            expect(',')
+            argument = parse_child(depth + 1)
+            expect(')')
+            BinaryDataType.aggregate_count(argument)
+          end
+        else
+          expect(',')
+          argument = parse_child(depth + 1)
+          expect(')')
+          descriptor = BinaryDataType.aggregate_function(function_name, argument)
+          unless descriptor.aggregate_function_type.try(&.function_name) == function_name
+            invalid!("AggregateFunction function identity is not canonical for its argument")
+          end
+          descriptor
+        end
       else
         invalid!("unsupported parameterized data type")
       end

@@ -369,8 +369,8 @@ module CrystalClick
 
     private def validate_type(type : BinaryDataType, depth : Int) : Nil
       @context.record_type_node(depth)
-      if type.tag == BinaryDataType::TAG_AGGREGATE_COUNT
-        if argument = type.aggregate_count_argument_type
+      if type.tag == BinaryDataType::TAG_AGGREGATE_FUNCTION
+        if argument = type.aggregate_function_argument_type
           @context.record_elements(1_u64)
           validate_type(argument, depth + 1)
         end

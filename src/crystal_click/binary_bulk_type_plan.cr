@@ -37,6 +37,9 @@ module CrystalClick
       @allow_bound_json : Bool = false,
     )
       @allow_bound_json = allow_bound_json
+      if @type.contains_aggregate_function? && @type.tag != BinaryDataType::TAG_AGGREGATE_FUNCTION
+        raise UnsupportedFormatError.new("AggregateFunction state cannot be nested in a generic BinaryBulk value tree")
+      end
       if @type.contains_json? && !@allow_bound_json
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end

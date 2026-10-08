@@ -366,8 +366,13 @@ module CrystalClick
         qbit_type.plane_count.times do |plane|
           ensure_role_minimum(contexts, roles[qbit_role_offset + plane], count, qbit_type.plane_width.to_u64)
         end
-      when BinaryDataType::TAG_AGGREGATE_COUNT
-        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
+        minimum = if type.aggregate_count_type
+                    1_u64
+                  else
+                    BinaryAggregateFunctionStatePlan.for_type(type).minimum_state_bytes.to_u64
+                  end
+        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, minimum)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
           ensure_role_minimum(contexts, child_path(path, ".string_sizes", nil, budget, dynamic_plan), count, 8_u64)
@@ -472,9 +477,14 @@ module CrystalClick
           context_for(contexts, roles[qbit_role_offset + plane]).read_byte
         end
         BinaryValue.qbit(value)
-      when BinaryDataType::TAG_AGGREGATE_COUNT
-        count = BinaryAggregateCountStateCodec.read(context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)))
-        BinaryValue.aggregate_count_state(type, count)
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
+        context = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan))
+        if type.aggregate_count_type
+          count = BinaryAggregateCountStateCodec.read(context)
+          BinaryValue.aggregate_count_state(type, count)
+        else
+          BinaryValue.aggregate_function_state(type, BinaryAggregateFunctionStateCodec.read(type, context))
+        end
       when BinaryDataType::TAG_VARIANT
         discriminator = context_for(contexts, child_path(path, ".discriminators", nil, traversal.budget, dynamic_plan)).read_byte
         if discriminator == 0xff_u8

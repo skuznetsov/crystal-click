@@ -77,8 +77,8 @@ module CrystalClick
       unless budget.writing?
         raise ArgumentError.new("Dynamic bulk child encoder requires a write-direction budget")
       end
-      if value.type.contains_aggregate_count?
-        raise UnsupportedFormatError.new("AggregateFunction(count) is not admitted as a Dynamic actual type")
+      if value.type.contains_aggregate_function?
+        raise UnsupportedFormatError.new("AggregateFunction is not admitted as a Dynamic actual type")
       end
       if value.type.contains_qbit? && value.type.tag != BinaryDataType::TAG_QBIT
         raise UnsupportedFormatError.new("QBit is admitted only as a direct Dynamic actual type")
@@ -121,8 +121,8 @@ module CrystalClick
     ) : Tuple(BinaryDataType, BinaryValue?)
       context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
       type = BinaryDataTypeCodec.read_from(context, depth)
-      if type.contains_aggregate_count?
-        context.unsupported!("AggregateFunction(count) is not admitted as a Dynamic actual type")
+      if type.contains_aggregate_function?
+        context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
       end
       if type.contains_qbit? && type.tag != BinaryDataType::TAG_QBIT
         context.unsupported!("QBit is admitted only as a direct Dynamic actual type")
@@ -191,11 +191,15 @@ module CrystalClick
         BinaryJsonValueCodec.write(value.json_row, context, depth) do |child, child_depth|
           write_value(child, context, child_depth)
         end
-      when BinaryDataType::TAG_AGGREGATE_COUNT
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
         unless depth == 1
-          context.unsupported!("AggregateFunction(count) is admitted only as a top-level value")
+          context.unsupported!("AggregateFunction is admitted only as a top-level value")
         end
-        BinaryAggregateCountStateCodec.write(value.count_state, context)
+        if type.aggregate_count_type
+          BinaryAggregateCountStateCodec.write(value.count_state, context)
+        else
+          BinaryAggregateFunctionStateCodec.write(type, value.aggregate_function_state_bytes, context)
+        end
       when BinaryDataType::TAG_STRING
         size = value.byte_size
         context.write_var_uint(size.to_u64)
@@ -292,11 +296,15 @@ module CrystalClick
           read_value(child_type, context, child_depth)
         end
         BinaryValue.json(type, row)
-      when BinaryDataType::TAG_AGGREGATE_COUNT
+      when BinaryDataType::TAG_AGGREGATE_FUNCTION
         unless depth == 1
-          context.unsupported!("AggregateFunction(count) is admitted only as a top-level value")
+          context.unsupported!("AggregateFunction is admitted only as a top-level value")
         end
-        BinaryValue.aggregate_count_state(type, BinaryAggregateCountStateCodec.read(context))
+        if type.aggregate_count_type
+          BinaryValue.aggregate_count_state(type, BinaryAggregateCountStateCodec.read(context))
+        else
+          BinaryValue.aggregate_function_state(type, BinaryAggregateFunctionStateCodec.read(type, context))
+        end
       when BinaryDataType::TAG_STRING
         length = context.read_var_uint
         raw = context.read_slice(length)
@@ -418,8 +426,8 @@ module CrystalClick
       if BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
         context.unsupported!("LowCardinality is outside the borrowed persisted-envelope profile")
       end
-      if type.contains_aggregate_count?
-        context.unsupported!("AggregateFunction(count) is outside the borrowed persisted-envelope profile")
+      if type.contains_aggregate_function?
+        context.unsupported!("AggregateFunction is outside the borrowed persisted-envelope profile")
       end
       if type.contains_qbit?
         context.unsupported!("QBit is outside the borrowed persisted-envelope profile")
