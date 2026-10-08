@@ -76,6 +76,10 @@ module CrystalClick
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
         codec_budget, transport_budget, frame_bytes, profile
       )
+      ObjectDocumentRootDynamicJsonPhysical.append_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
 
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
@@ -155,6 +159,10 @@ module CrystalClick
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
         codec_budget, transport_budget, frame_bytes, profile
       )
+      ObjectDocumentRootDynamicJsonPhysical.append_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
 
@@ -225,6 +233,10 @@ module CrystalClick
         codec_budget, transport_budget, frame_bytes, profile
       )
       ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
+        pairs, physical_plan, fresh_plan, streams, rows_per_mark,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
+      ObjectDocumentRootDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
         codec_budget, transport_budget, frame_bytes, profile
       )
@@ -306,6 +318,10 @@ module CrystalClick
         codec_budget, transport_budget, frame_bytes, profile
       )
       ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
+        pairs, physical_plan, fresh_plan, streams, physical_rows,
+        codec_budget, transport_budget, frame_bytes, profile
+      )
+      ObjectDocumentRootDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, physical_rows,
         codec_budget, transport_budget, frame_bytes, profile
       )

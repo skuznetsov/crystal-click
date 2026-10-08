@@ -2,7 +2,10 @@ module CrystalClick
   # Collects exact Dynamic JSON actual rows during generic bulk preflight, then
   # hands their ObjectDocuments to the existing Object child-site codec.
   class BinaryDynamicBulkJsonObjectWriter
-    @plan : BinaryDynamicBulkPlan
+    @plan : BinaryDynamicBulkPlan?
+    @root_roster : DynamicJsonObjectBindingRoster?
+    @root_arm_type : BinaryDataType?
+    @canonical_arm_index : Int32
     @budget : BinaryCodecBudget
     @initial_descriptor_depth : Int32
     @physical_rows : Array(UInt64)
@@ -10,27 +13,103 @@ module CrystalClick
     @consumed : Hash(BinaryDynamicJsonLeafKey, Array(Int32))
 
     def initialize(
-      @plan : BinaryDynamicBulkPlan,
+      plan : BinaryDynamicBulkPlan,
       @budget : BinaryCodecBudget,
       granules : Array(Array(BinaryValue)),
       inherited_grid : StorageOccurrenceGrid? = nil,
       initial_descriptor_depth : Int32 = 1,
     )
+      @plan = plan
+      @root_roster = nil
+      @root_arm_type = nil
+      @canonical_arm_index = -1_i32
+      # Assign every non-nilable owner field in each initializer. Crystal does
+      # not treat assignments performed by a later private helper as definite
+      # initialization of the instance variables.
+      @physical_rows = [] of UInt64
+      @documents = Hash(BinaryDynamicJsonLeafKey, Array(Array(ObjectDocument))).new
+      @consumed = Hash(BinaryDynamicJsonLeafKey, Array(Int32)).new
       unless @budget.writing?
         raise ArgumentError.new("Dynamic JSON Object writer requires a writing budget")
       end
       @budget.ensure_depth(initial_descriptor_depth)
       @initial_descriptor_depth = initial_descriptor_depth
+      initialize_documents(granules, inherited_grid, plan.json_object_leaf_keys(@budget))
+    end
+
+    def initialize(
+      roster : DynamicJsonObjectBindingRoster,
+      @budget : BinaryCodecBudget,
+      granules : Array(Array(BinaryValue)),
+      root_arm_type : BinaryDataType,
+      canonical_arm_index : Int32,
+      inherited_grid : StorageOccurrenceGrid? = nil,
+      initial_descriptor_depth : Int32 = 1,
+    )
+      @plan = nil
+      @root_roster = roster
+      @root_arm_type = root_arm_type
+      @canonical_arm_index = canonical_arm_index
+      @physical_rows = [] of UInt64
+      @documents = Hash(BinaryDynamicJsonLeafKey, Array(Array(ObjectDocument))).new
+      @consumed = Hash(BinaryDynamicJsonLeafKey, Array(Int32)).new
+      unless @budget.writing?
+        raise ArgumentError.new("inferred Dynamic JSON Object writer requires a writing budget")
+      end
+      unless roster.matches_operation?(roster, @budget)
+        raise ArgumentError.new("inferred Dynamic JSON Object roster belongs to a different operation budget")
+      end
+      unless roster.matches_root_json_arm_operation?(canonical_arm_index, root_arm_type, @budget)
+        raise ArgumentError.new("inferred Dynamic JSON Object writer arm does not match its complete binding roster")
+      end
+      unless initial_descriptor_depth == roster.inferred_actual_root_depth
+        raise ArgumentError.new("inferred Dynamic JSON Object writer origin differs from its binding roster")
+      end
+      @budget.ensure_depth(initial_descriptor_depth)
+      @initial_descriptor_depth = initial_descriptor_depth
+      unless root_arm_type.contains_json?
+        raise ArgumentError.new("inferred Dynamic JSON Object writer arm has no JSON leaf")
+      end
+      initialize_documents(
+        granules,
+        inherited_grid,
+        roster.json_object_leaf_keys_for_arm(canonical_arm_index, @budget),
+      )
+    end
+
+    def self.for_root(
+      roster : DynamicJsonObjectBindingRoster,
+      budget : BinaryCodecBudget,
+      granules : Array(Array(BinaryValue)),
+      arm_type : BinaryDataType,
+      canonical_arm_index : Int32,
+      inherited_grid : StorageOccurrenceGrid? = nil,
+      initial_descriptor_depth : Int32 = 1,
+    ) : BinaryDynamicBulkJsonObjectWriter
+      new(roster, budget, granules, arm_type, canonical_arm_index, inherited_grid, initial_descriptor_depth)
+    end
+
+    private def initialize_documents(
+      granules : Array(Array(BinaryValue)),
+      inherited_grid : StorageOccurrenceGrid?,
+      binding_keys : Array(BinaryDynamicJsonLeafKey),
+    ) : Nil
       if grid = inherited_grid
         unless grid.mark_count == granules.size
           raise ArgumentError.new("Dynamic JSON Object writer grid differs from the parent mark count")
         end
       end
 
-      binding_keys = @plan.json_object_leaf_keys(@budget)
+      if binding_keys.empty?
+        raise ArgumentError.new("Dynamic JSON Object writer arm has no bound JSON leaf")
+      end
       binding_keys.each do |key|
-        binding = @plan.json_object_binding(key)
-        self.class.preflight_binding!(binding, @budget, @plan.json_object_leaf_depth(key, @initial_descriptor_depth))
+        binding = json_object_binding(key)
+        if @root_roster
+          self.class.preflight_root_binding!(binding, @budget, json_object_leaf_depth(key))
+        else
+          self.class.preflight_binding!(binding, @budget, json_object_leaf_depth(key))
+        end
       end
 
       mark_count = granules.size.to_u64
@@ -42,7 +121,7 @@ module CrystalClick
       retained_records = checked_add(mark_count, checked_multiply(binding_count, per_binding_records))
       @budget.preflight_children(retained_records) if retained_records > 0_u64
       retained_records.times { @budget.charge_node }
-      key_copy_bytes = checked_multiply(@plan.json_object_binding_key_bytesize_total, 2_u64)
+      key_copy_bytes = checked_multiply(binding_key_bytesize_total(binding_keys), 2_u64)
       @budget.charge_wire_bytes(key_copy_bytes) if key_copy_bytes > 0_u64
 
       @physical_rows = Array(UInt64).new(granules.size)
@@ -64,10 +143,35 @@ module CrystalClick
         @documents[key] = marks
         @consumed[key] = cursors
       end
+      nil
     end
 
     def matches_operation?(plan : BinaryDynamicBulkPlan, budget : BinaryCodecBudget) : Bool
-      @plan.same?(plan) && @budget.same?(budget)
+      @plan.try(&.same?(plan)) == true && @budget.same?(budget)
+    end
+
+    def matches_root_operation?(roster : DynamicJsonObjectBindingRoster, budget : BinaryCodecBudget) : Bool
+      @root_roster.try(&.matches_operation?(roster, budget)) == true && @budget.same?(budget)
+    end
+
+    # Generic bulk root entry point for one ordinary actual arm. The seed key
+    # is the explicit authority to route root JSON leaves without wrapping the
+    # descriptor in a nominal Dynamic plan.
+    def matches_root_operation?(
+      arm_type : BinaryDataType,
+      leaf_key : BinaryDynamicJsonLeafKey,
+      budget : BinaryCodecBudget,
+      shared_value_depth_origin : Int = 1,
+    ) : Bool
+      roster = @root_roster
+      return false unless roster
+      @plan.nil? && @budget.same?(budget) && @root_arm_type == arm_type &&
+        roster.matches_root_json_arm_operation?(@canonical_arm_index, arm_type, budget) &&
+        @canonical_arm_index == leaf_key.canonical_arm_index &&
+        leaf_key.dynamic_site == "root" && leaf_key.descriptor_path_size == 0 &&
+        @initial_descriptor_depth == shared_value_depth_origin &&
+        @initial_descriptor_depth == roster.inferred_actual_root_depth &&
+        @documents.keys.any? { |key| key.canonical_arm_index == leaf_key.canonical_arm_index }
     end
 
     # Called by BinaryBulkEncoder's whole-input cost pass, before ordinary
@@ -93,9 +197,9 @@ module CrystalClick
       mark_index : Int,
       depth : Int,
     ) : Nil
-      binding = @plan.json_object_binding(key)
+      binding = json_object_binding(key)
       absolute_depth = absolute_json_depth(depth)
-      expected_depth = @plan.json_object_leaf_depth(key, @initial_descriptor_depth)
+      expected_depth = json_object_leaf_depth(key)
       unless absolute_depth == expected_depth
         raise UnsupportedFormatError.new("Dynamic JSON Object row reached an unexpected inherited depth")
       end
@@ -117,7 +221,7 @@ module CrystalClick
       depth : Int,
       profile : BinaryBulkProfile,
     ) : Nil
-      binding = @plan.json_object_binding(key)
+      binding = json_object_binding(key)
       descriptor = binding.json_type.json_type ||
                    raise(UnsupportedFormatError.new("bound Dynamic JSON leaf has no descriptor"))
       absolute_depth = absolute_json_depth(depth)
@@ -127,7 +231,7 @@ module CrystalClick
       total_wire_bytes = 0_u64
       descriptor.typed_path_count.times do |index|
         type = descriptor.typed_type_at(index)
-        cost = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, defaults, @plan)
+        cost = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, defaults, @plan, true)
         total_nodes = checked_add(total_nodes, cost.nodes)
         total_edges = checked_add(total_edges, cost.edges)
         total_wire_bytes = checked_add(total_wire_bytes, cost.wire_bytes)
@@ -158,7 +262,7 @@ module CrystalClick
     end
 
     def consume(key : BinaryDynamicJsonLeafKey, mark_index : Int) : Nil
-      @plan.json_object_binding(key)
+      json_object_binding(key)
       marks = @documents[key]? || raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no bound child owner"))
       cursors = @consumed[key]? || raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no child cursor"))
       unless 0 <= mark_index < marks.size
@@ -206,17 +310,26 @@ module CrystalClick
       retained_records = checked_multiply(binding_count, checked_add(mark_count, 1_u64))
       @budget.preflight_children(retained_records) if retained_records > 0_u64
       retained_records.times { @budget.charge_node }
-      key_bytes = @plan.json_object_binding_key_bytesize_total
+      key_bytes = binding_key_bytesize_total(@documents.keys)
       @budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
       output = Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams).new(initial_capacity: @documents.size)
       @documents.each do |key, granules|
-        binding = @plan.json_object_binding(key)
+        binding = json_object_binding(key)
         logical_rows = Array(UInt64).new(granules.size)
         granules.each { |rows| logical_rows << rows.size.to_u64 }
         grid = StorageOccurrenceGrid.new(@physical_rows, logical_rows, @budget)
-        child_root_depth64 = @plan.json_object_leaf_depth(key, @initial_descriptor_depth).to_i64 + 1_i64
+        json_depth = json_object_leaf_depth(key)
+        child_root_depth64 = json_depth.to_i64 + 1_i64
         @budget.ensure_depth(child_root_depth64)
         child_root_depth = child_root_depth64.to_i32
+        child_inferred_offset = if @plan.nil? || binding.plan.structures.object.dynamic_path_count == 0
+                                  1_i64
+                                else
+                                  2_i64
+                                end
+        child_inferred_root_depth64 = json_depth.to_i64 + child_inferred_offset
+        @budget.ensure_depth(child_inferred_root_depth64)
+        child_inferred_root_depth = child_inferred_root_depth64.to_i32
         output[key] = ObjectDocumentCodec.encode_child_site_with_budget(
           binding.plan,
           granules,
@@ -225,6 +338,7 @@ module CrystalClick
           profile: profile,
           shared_profile: child_shared_profile,
           typed_descriptor_root_depth: child_root_depth,
+          inferred_actual_root_depth: child_inferred_root_depth,
         )
       end
       output
@@ -244,7 +358,7 @@ module CrystalClick
       key : BinaryDynamicJsonLeafKey,
     ) : Tuple(Array(Array(ObjectDocument)), StorageOccurrenceGrid)
       ensure_consumed!
-      @plan.json_object_binding(key)
+      json_object_binding(key)
       granules = @documents[key]? ||
                  raise(UnsupportedFormatError.new("Dynamic JSON Object writer has no bound child owner"))
       mark_count = granules.size.to_u64
@@ -271,10 +385,36 @@ module CrystalClick
       left + right
     end
 
+    private def binding_key_bytesize_total(keys : Array(BinaryDynamicJsonLeafKey)) : UInt64
+      total = 0_u64
+      keys.each do |key|
+        path_bytes = checked_multiply(key.descriptor_path_size.to_u64, 4_u64)
+        total = checked_add(total, key.dynamic_site_bytesize.to_u64)
+        total = checked_add(total, path_bytes)
+      end
+      total
+    end
+
     private def absolute_json_depth(relative_depth : Int) : Int32
       depth = @initial_descriptor_depth.to_i64 - 1_i64 + relative_depth.to_i64
       @budget.ensure_depth(depth)
       depth.to_i32
+    end
+
+    private def json_object_binding(key : BinaryDynamicJsonLeafKey) : DynamicJsonObjectBinding
+      if plan = @plan
+        plan.json_object_binding(key)
+      else
+        @root_roster.not_nil!.json_object_binding(key)
+      end
+    end
+
+    private def json_object_leaf_depth(key : BinaryDynamicJsonLeafKey) : Int32
+      if plan = @plan
+        plan.json_object_leaf_depth(key, @initial_descriptor_depth)
+      else
+        @root_roster.not_nil!.json_object_leaf_depth(key, @initial_descriptor_depth)
+      end
     end
 
     private def checked_multiply(left : UInt64, right : UInt64) : UInt64
@@ -292,6 +432,25 @@ module CrystalClick
       binding : DynamicJsonObjectBinding,
       budget : BinaryCodecBudget,
       depth : Int32,
+    ) : Nil
+      self.preflight_binding_with_actual_root_offset!(binding, budget, depth, 2_i64)
+    end
+
+    # An inferred-root JSON child has no enclosing nominal Dynamic descriptor;
+    # its child Object actuals begin one edge below the JSON descriptor.
+    def self.preflight_root_binding!(
+      binding : DynamicJsonObjectBinding,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+    ) : Nil
+      self.preflight_binding_with_actual_root_offset!(binding, budget, depth, 1_i64)
+    end
+
+    private def self.preflight_binding_with_actual_root_offset!(
+      binding : DynamicJsonObjectBinding,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+      actual_root_offset : Int64,
     ) : Nil
       binding.schema.validate_plan(binding.plan, budget, depth: depth)
 
@@ -314,9 +473,14 @@ module CrystalClick
       end
 
       object = binding.plan.structures.object
-      object.dynamic_path_count.times do |path_index|
-        structure = binding.plan.structures.dynamic_for(object.dynamic_path_at(path_index))
-        preflight_actual_roster!(structure, budget, depth + 2)
+      if object.dynamic_path_count > 0
+        actual_root_depth64 = depth.to_i64 + actual_root_offset
+        budget.ensure_depth(actual_root_depth64)
+        actual_root_depth = actual_root_depth64.to_i32
+        object.dynamic_path_count.times do |path_index|
+          structure = binding.plan.structures.dynamic_for(object.dynamic_path_at(path_index))
+          preflight_actual_roster!(structure, budget, actual_root_depth)
+        end
       end
       nil
     end

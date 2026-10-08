@@ -14,9 +14,20 @@ module CrystalClick
       granules : Array(Array(BinaryValue)),
       limits : BinaryCodecLimits = DEFAULT_LIMITS,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      json_object_writer : BinaryDynamicBulkJsonObjectWriter? = nil,
+      json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
+      shared_value_depth_origin : Int = 1,
     ) : BinaryBulkStreams
       budget = BinaryCodecBudget.new(limits, true)
-      encode_with_budget(type, granules, budget, profile: profile)
+      encode_with_budget(
+        type,
+        granules,
+        budget,
+        profile: profile,
+        json_object_writer: json_object_writer,
+        json_leaf_key: json_leaf_key,
+        shared_value_depth_origin: shared_value_depth_origin,
+      )
     end
 
     def self.encode_with_budget(
@@ -24,8 +35,19 @@ module CrystalClick
       granules : Array(Array(BinaryValue)),
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      json_object_writer : BinaryDynamicBulkJsonObjectWriter? = nil,
+      json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
+      shared_value_depth_origin : Int = 1,
     ) : BinaryBulkStreams
-      BinaryBulkEncoder.encode(type, granules, budget, profile)
+      BinaryBulkEncoder.encode(
+        type,
+        granules,
+        budget,
+        profile,
+        json_object_writer: json_object_writer,
+        json_leaf_key: json_leaf_key,
+        shared_value_depth_origin: shared_value_depth_origin,
+      )
     end
 
     def self.decode(
@@ -36,6 +58,9 @@ module CrystalClick
       mark_count : Int? = nil,
       limits : BinaryCodecLimits = DEFAULT_LIMITS,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
+      json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
+      shared_value_depth_origin : Int = 1,
     ) : Array(Array(BinaryValue))
       budget = BinaryCodecBudget.new(limits)
       decode_with_budget(
@@ -45,7 +70,10 @@ module CrystalClick
         budget,
         first_mark: first_mark,
         mark_count: mark_count,
-        profile: profile
+        profile: profile,
+        json_object_reader: json_object_reader,
+        json_leaf_key: json_leaf_key,
+        shared_value_depth_origin: shared_value_depth_origin,
       )
     end
 
@@ -57,6 +85,9 @@ module CrystalClick
       first_mark : Int = 0,
       mark_count : Int? = nil,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
+      json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
+      shared_value_depth_origin : Int = 1,
     ) : Array(Array(BinaryValue))
       BinaryBulkDecoder.decode(
         type,
@@ -65,7 +96,10 @@ module CrystalClick
         budget,
         first_mark,
         mark_count,
-        profile
+        profile,
+        json_object_reader: json_object_reader,
+        json_leaf_key: json_leaf_key,
+        shared_value_depth_origin: shared_value_depth_origin,
       )
     end
   end

@@ -1,9 +1,36 @@
 # ClickHouse Source Reference
 
-## Current source snapshot (2026-10-05, tenth refresh)
+## Current comparison snapshot (2026-10-07)
+
+The recursive Object/Dynamic composition work uses the separate checkout
+`/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1`, revision
+`0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`, committer timestamp
+`2026-10-07T09:04:00Z`. Root rechecks the revision, clean working tree, shallow
+state and one reachable commit. This is a pinned comparison snapshot, not a
+claim that upstream master still has this HEAD or a complete audit of changes
+since the prior inventory. Older source directories remain untouched.
+
+The native oracle remains the separately pinned executable `26.10.1.1201`,
+build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+It is not a build of this source revision. The source-linked composition
+checks and their admitted runtime profiles are recorded in
+[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md).
+
+The former temporary runtime path disappeared before the W216 native gates.
+Root recovered the same immutable official CI carrier, expanded it and applied
+the source-defined strip recipe; the carrier, expanded and stripped SHA256s
+matched the existing pins in
+[LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md](LOW_CARDINALITY_FLOAT_IDENTITY_FRONTIER.md#runtime-recovery-2026-10-03).
+The recovered executable is
+`/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped`.
+No runtime pin was changed and the shallow source was not built. Missing old
+temporary evidence was not recreated or treated as a fresh execution.
+
+## Previous source snapshot (2026-10-05, tenth refresh)
 
 Use `/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60`
-for new comparisons. Root queried public master before and after cloning;
+for that bounded inventory. Root queried public master before and after cloning;
 both lookups and checkout HEAD agree on
 `ef037e60fc7f5654c8c80eefb8be82e3c56f9a67`, committer timestamp
 `2026-10-05T22:03:55Z`. The separate checkout is clean, shallow, unbuilt and

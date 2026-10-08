@@ -45,11 +45,15 @@ module CrystalClick::ObjectDocumentCodec
     mode : UInt64 = DEFAULT_MODE,
     profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    inferred_actual_root_depth : Int32? = nil,
   ) : ObjectDocumentStreams
     if ObjectColumnLaneBinderProbe.enabled
       ObjectColumnLaneBinderProbe.codec_budgets << budget
     end
-    previous_def(plan, granules, budget, mode: mode, profile: profile, shared_profile: shared_profile)
+    previous_def(
+      plan, granules, budget, mode: mode, profile: profile,
+      shared_profile: shared_profile, inferred_actual_root_depth: inferred_actual_root_depth,
+    )
   end
 end
 

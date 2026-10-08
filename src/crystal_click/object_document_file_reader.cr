@@ -38,6 +38,7 @@ module CrystalClick
     private struct PreparedRead
       getter source : PartStreamSource
       getter physical_plan : ObjectDocumentPhysicalPlan
+      getter document_plan : ObjectDocumentPlan
       getter name_context : PhysicalStreamPlanContext
       getter hashed : Bool
       getter schema_snapshot : Hash(String, BinaryDataType)
@@ -70,6 +71,7 @@ module CrystalClick
       def initialize(
         @source : PartStreamSource,
         @physical_plan : ObjectDocumentPhysicalPlan,
+        @document_plan : ObjectDocumentPlan,
         @name_context : PhysicalStreamPlanContext,
         @hashed : Bool,
         @schema_snapshot : Hash(String, BinaryDataType),
@@ -167,6 +169,8 @@ module CrystalClick
       initial_array_level : UInt64 = 0_u64,
       expected_mark_row_counts : Array(UInt64)? = nil,
       typed_schema_depth : Int32 = 1,
+      inferred_actual_root_depth : Int32 = 1,
+      typed_dynamic_json_child : Bool = false,
     ) : ObjectDocumentFileDescriptor
       prepared = prepare_site_read(
         source,
@@ -188,6 +192,8 @@ module CrystalClick
         nil,
         1,
         typed_schema_depth,
+        inferred_actual_root_depth,
+        typed_dynamic_json_child,
       )
       prepared.descriptor.not_nil!
     end
@@ -339,6 +345,7 @@ module CrystalClick
       expected_schema : ObjectDocumentSchema? = nil,
       expected_schema_depth : Int32 = 1,
       typed_schema_depth : Int32 = 1,
+      inferred_actual_root_depth : Int32 = 1,
     ) : Array(Array(ObjectDocument))
       prepared = prepare_site_read(
         source,
@@ -360,6 +367,7 @@ module CrystalClick
         expected_schema,
         expected_schema_depth,
         typed_schema_depth,
+        inferred_actual_root_depth,
       )
       read_prepared(prepared)
     end
@@ -384,6 +392,8 @@ module CrystalClick
       expected_schema : ObjectDocumentSchema? = nil,
       expected_schema_depth : Int32 = 1,
       typed_schema_depth : Int32 = 1,
+      inferred_actual_root_depth : Int32 = 1,
+      typed_dynamic_json_child : Bool = false,
     ) : PreparedRead
       unless !codec_budget.writing? && !transport_budget.writing?
         raise ArgumentError.new("Object site reader requires read-direction budgets")
@@ -417,6 +427,8 @@ module CrystalClick
         expected_schema,
         expected_schema_depth,
         typed_schema_depth,
+        inferred_actual_root_depth,
+        typed_dynamic_json_child,
       )
     end
 
@@ -445,6 +457,8 @@ module CrystalClick
       expected_schema_override : ObjectDocumentSchema? = nil,
       expected_schema_depth : Int32 = 1,
       typed_schema_depth : Int32 = 1,
+      inferred_actual_root_depth : Int32 = 1,
+      typed_dynamic_json_child : Bool = false,
     ) : PreparedRead
       validate_selection_arguments!(first_mark, mark_count)
       reject_json_schema!(typed_schema)
@@ -496,6 +510,15 @@ module CrystalClick
       ensure_logical_size!(object_bytes, object_grid)
       object, object_statistics_offset = parse_object_metadata(object_bytes, limits, codec_budget)
       validate_layout!(object)
+      effective_inferred_actual_root_depth = inferred_actual_root_depth
+      if typed_dynamic_json_child && object.dynamic_path_count > 0
+        effective_depth64 = inferred_actual_root_depth.to_i64 + 1_i64
+        if effective_depth64 <= 0_i64 || effective_depth64 > Int32::MAX.to_i64
+          raise CorruptPartError.new("typed Dynamic JSON child inferred descriptor depth exceeds Int32")
+        end
+        effective_inferred_actual_root_depth = effective_depth64.to_i32
+        codec_budget.ensure_depth(effective_inferred_actual_root_depth)
+      end
       shared_bucket_count = ObjectSharedBucketLayout.bucket_count(object)
       validate_metadata_grid!(object_grid, object_statistics_offset, object_bytes.size)
       charge_source_roster!(object_grid, codec_budget)
@@ -549,7 +572,12 @@ module CrystalClick
         charge_metadata_read!(grid, codec_budget)
         bytes = source.read_all(data_name, transport_budget)
         ensure_logical_size!(bytes, grid)
-        dynamic, statistics_offset = parse_dynamic_metadata(bytes, limits, codec_budget)
+        dynamic, statistics_offset = parse_dynamic_metadata(
+          bytes,
+          limits,
+          codec_budget,
+          effective_inferred_actual_root_depth,
+        )
         validate_metadata_grid!(grid, statistics_offset, bytes.size)
         dynamic_bytes[String.new(raw_path.to_slice)] = bytes
         dynamic_structures[String.new(raw_path.to_slice)] = dynamic
@@ -563,6 +591,9 @@ module CrystalClick
       typed_dynamic_json_object_leaf_plans = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new
       typed_dynamic_json_leaf_coordinates = Hash(String, Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectSiteCoordinates)).new
       typed_dynamic_json_logical_read_bytes = 0_u64
+      root_dynamic_json_object_leaf_plans = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new
+      root_dynamic_json_leaf_coordinates = Hash(String, Hash(BinaryDynamicJsonLeafKey, ObjectRootDynamicJsonCoordinates)).new
+      root_dynamic_json_logical_read_bytes = 0_u64
       schema_snapshot.each do |path, type|
         next unless type.contains_dynamic?
         names = typed_dynamic_metadata_names[path]?
@@ -620,6 +651,8 @@ module CrystalClick
             coordinates.array_level,
             outer_rows,
             json_descriptor_depth + 1,
+            json_descriptor_depth + 1,
+            typed_dynamic_json_child: true,
           )
           typed_dynamic_json_logical_read_bytes = checked_add_u64(
             typed_dynamic_json_logical_read_bytes,
@@ -682,6 +715,106 @@ module CrystalClick
         end
       end
 
+      # Inferred Object Dynamic paths have no declared descriptor. Discover
+      # every JSON actual arm directly from the persisted DynamicStructure,
+      # then bind the exact child Object metadata before selected values are
+      # exposed. The standalone actual root keeps its own depth origin; a
+      # nested child Object passes that origin explicitly through this call.
+      object.dynamic_path_count.times do |index|
+        raw_path = object.dynamic_path_at(index)
+        structure = dynamic_structures[raw_path]? ||
+                    raise(CorruptPartError.new("Object Dynamic metadata is missing a discovered path"))
+        has_json_actual = false
+        structure.type_count.times do |type_index|
+          has_json_actual ||= structure.type_at(type_index).contains_json?
+        end
+        # Keep the pre-W216 route for no-JSON Dynamic domains. Metadata parsing
+        # above bounded each descriptor at the inherited origin before
+        # DynamicStructure computes its cached summary flags; this census does
+        # not require canonical-name materialization.
+        next unless has_json_actual
+
+        json_leaf_types = DynamicJsonObjectBindingRoster.json_leaf_types_for_root(
+          structure,
+          codec_budget,
+          effective_inferred_actual_root_depth,
+        )
+        next if json_leaf_types.empty?
+
+        records = checked_add_u64(checked_multiply_u64(json_leaf_types.size.to_u64, 2_u64), 2_u64)
+        codec_budget.preflight_children(records)
+        codec_budget.charge_wire_bytes(raw_path.bytesize.to_u64)
+        records.times { codec_budget.charge_node }
+        path_prefix = PhysicalStreamName.append_escaped_component(column_prefix, raw_path, name_context)
+        json_site_resolver = ObjectRootDynamicJsonSiteResolver.new(
+          path_prefix,
+          structure,
+          codec_budget,
+          name_context,
+          initial_array_level,
+          effective_inferred_actual_root_depth,
+        )
+        leaf_plans = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(json_leaf_types.size)
+        coordinates_by_key = Hash(BinaryDynamicJsonLeafKey, ObjectRootDynamicJsonCoordinates).new(
+          initial_capacity: json_leaf_types.size
+        )
+        json_leaf_types.each do |entry|
+          key = entry[0]
+          json_type = entry[1]
+          json_depth = entry[2]
+          coordinates = json_site_resolver.resolve_json_leaf(key)
+          unless coordinates.json_type == json_type && coordinates.json_depth == json_depth
+            raise CorruptPartError.new("inferred Dynamic JSON leaf coordinates differ from the persisted descriptor roster")
+          end
+          if coordinates_by_key.has_key?(key)
+            raise CorruptPartError.new("inferred Dynamic JSON leaf coordinates are duplicated")
+          end
+          descriptor = json_type.json_type ||
+                       raise(CorruptPartError.new("inferred Dynamic JSON actual has no persisted JSON descriptor"))
+          json_schema = copy_json_typed_schema(descriptor, codec_budget)
+          child_root_depth64 = json_depth.to_i64 + 1_i64
+          if child_root_depth64 > Int32::MAX.to_i64
+            raise CorruptPartError.new("inferred Dynamic JSON child descriptor depth exceeds Int32")
+          end
+          child_root_depth = child_root_depth64.to_i32
+          child_descriptor = inspect_at_site(
+            source,
+            coordinates.escaped_prefix,
+            json_schema,
+            codec_budget,
+            name_context,
+            transport_budget,
+            profile,
+            shared_profile,
+            hashed,
+            coordinates.array_level,
+            outer_rows,
+            child_root_depth,
+            child_root_depth,
+          )
+          root_dynamic_json_logical_read_bytes = checked_add_u64(
+            root_dynamic_json_logical_read_bytes,
+            child_descriptor.logical_read_bytes
+          )
+          coordinates_by_key[key] = coordinates
+          leaf_plans << {key, child_descriptor.plan}
+        end
+
+        unless leaf_plans.size == json_leaf_types.size
+          raise CorruptPartError.new("inferred Dynamic JSON child plan roster changed during discovery")
+        end
+        copied_path = String.new(raw_path.to_slice)
+        root_dynamic_json_object_leaf_plans[copied_path] = leaf_plans
+        root_dynamic_json_leaf_coordinates[copied_path] = coordinates_by_key
+      end
+
+      # A root Dynamic JSON census consumes absolute parent marks. Keep the
+      # Object parent P grid and all Dynamic discriminator marks in that same
+      # coordinate system; the original first_mark is applied only when the
+      # Object codec returns its selected slice. Reading a rebased discriminator
+      # window here would pair full JSON Q schedules with the wrong parent P.
+      replay_complete = replay_complete || !root_dynamic_json_leaf_coordinates.empty?
+
       structure_set = ObjectDynamicStructureSet.new(object, dynamic_structures)
       recursive_typed_dynamic_structures = Hash(String, Hash(String, DynamicStructure)).new
       typed_dynamic_structures.each do |path, sites|
@@ -693,6 +826,9 @@ module CrystalClick
         typed_dynamic_direct_structures,
         recursive_typed_dynamic_structures,
         typed_dynamic_json_object_leaf_plans,
+        root_dynamic_json_object_leaf_plans: root_dynamic_json_object_leaf_plans,
+        root_dynamic_json_budget: codec_budget,
+        inferred_actual_root_depth: effective_inferred_actual_root_depth,
       )
       if expected_schema = expected_schema_override
         begin
@@ -703,7 +839,11 @@ module CrystalClick
       end
       if expected_plan = expected_document_plan_override
         unless same_document_plan_rosters?(
-                 document_plan, expected_plan, codec_budget, expected_schema_depth
+                 document_plan,
+                 expected_plan,
+                 codec_budget,
+                 expected_schema_depth,
+                 effective_inferred_actual_root_depth,
                )
           raise CorruptPartError.new("Object child metadata changed after Dynamic JSON binding")
         end
@@ -717,6 +857,8 @@ module CrystalClick
         initial_array_level,
         name_context,
         object_declared_dynamic_root_depth(typed_schema_depth),
+        effective_inferred_actual_root_depth,
+        codec_budget,
       )
 
       typed_dynamic_metadata_names.each do |path, names|
@@ -748,6 +890,38 @@ module CrystalClick
                  site.binding.leaf_key == key &&
                  site.binding.json_type == coordinates.json_type
             raise CorruptPartError.new("typed Dynamic JSON physical coordinates changed after metadata discovery")
+          end
+        end
+      end
+      root_dynamic_json_leaf_coordinates.each do |path, coordinates_by_key|
+        physical = physical_plan.root_dynamic_json(path)
+        expected_leaf_plans = root_dynamic_json_object_leaf_plans[path]?
+        unless expected_leaf_plans && physical.json_object_site_count == coordinates_by_key.size &&
+               expected_leaf_plans.size == coordinates_by_key.size
+          raise CorruptPartError.new("inferred Dynamic JSON physical sites differ from discovered metadata")
+        end
+        expected_leaf_plans.each do |entry|
+          key = entry[0]
+          expected_plan = entry[1]
+          coordinates = coordinates_by_key[key]?
+          unless coordinates
+            raise CorruptPartError.new("inferred Dynamic JSON discovered coordinate is missing")
+          end
+          site = physical.json_object_site(key)
+          child_root_depth64 = coordinates.json_depth.to_i64 + 1_i64
+          if child_root_depth64 <= 0_i64 || child_root_depth64 > Int32::MAX.to_i64
+            raise CorruptPartError.new("inferred Dynamic JSON child descriptor depth exceeds Int32")
+          end
+          child_root_depth = child_root_depth64.to_i32
+          unless site.escaped_prefix == coordinates.escaped_prefix &&
+                 site.array_level == coordinates.array_level &&
+                 site.json_depth == coordinates.json_depth &&
+                 site.binding.leaf_key == key &&
+                 site.binding.json_type == coordinates.json_type &&
+                 site.binding.plan.same?(expected_plan) &&
+                 site.physical_plan.typed_descriptor_root_depth == child_root_depth &&
+                 site.physical_plan.inferred_actual_root_depth == child_root_depth
+            raise CorruptPartError.new("inferred Dynamic JSON physical binding changed after metadata discovery")
           end
         end
       end
@@ -817,6 +991,7 @@ module CrystalClick
 
       logical_read_bytes = checked_add_u64(metadata_size, logical_lane_bytes)
       logical_read_bytes = checked_add_u64(logical_read_bytes, typed_dynamic_json_logical_read_bytes)
+      logical_read_bytes = checked_add_u64(logical_read_bytes, root_dynamic_json_logical_read_bytes)
       descriptor = nil.as(ObjectDocumentFileDescriptor?)
       if build_descriptor
         logical_names, checksum_names = descriptor_stream_names!(
@@ -840,6 +1015,7 @@ module CrystalClick
       PreparedRead.new(
         source,
         physical_plan,
+        document_plan,
         name_context,
         hashed,
         schema_snapshot,
@@ -1127,6 +1303,32 @@ module CrystalClick
           occurrence_grid ? read_first : 0
         )
         arms = Hash(String, BinaryBulkStreams).new
+        if prepared.physical_plan.has_root_dynamic_json?(binding.path)
+          dynamic_structure = prepared.document_plan.structures.dynamic_for(binding.path)
+          canonical_names = dynamic_structure.canonical_variant_names
+          existing_arms = dynamic_roles[binding.path]?
+          empty_arm_count = 0_u64
+          empty_arm_name_bytes = 0_u64
+          canonical_names.each do |arm|
+            next if existing_arms && existing_arms.has_key?(arm)
+            next unless prepared.physical_plan.dynamic_arm(binding.path, arm).stream_count == 0
+            empty_arm_count = checked_add_u64(empty_arm_count, 1_u64)
+            empty_arm_name_bytes = checked_add_u64(empty_arm_name_bytes, arm.bytesize.to_u64)
+          end
+          if empty_arm_count > 0_u64
+            codec_budget.preflight_children(empty_arm_count)
+            codec_budget.ensure_future_nodes(empty_arm_count)
+            codec_budget.ensure_future_elements(empty_arm_count)
+            codec_budget.charge_wire_bytes(empty_arm_name_bytes)
+            empty_arm_count.times { codec_budget.charge_node }
+            codec_budget.charge_elements(empty_arm_count)
+            canonical_names.each do |arm|
+              next if existing_arms && existing_arms.has_key?(arm)
+              next unless prepared.physical_plan.dynamic_arm(binding.path, arm).stream_count == 0
+              arms[arm] = BinaryBulkStreams.new(read_count, Hash(String, BinaryBulkStream).new)
+            end
+          end
+        end
         if arm_roles = dynamic_roles[binding.path]?
           arm_roles.each do |arm, roles|
             arms[arm] = BinaryBulkStreams.new(read_count, roles)
@@ -1162,6 +1364,65 @@ module CrystalClick
         advanced_shared_rows: advanced_shared_rows,
       )
 
+      physical_root_dynamic_json_object_leaf_loader = ->(path : String, key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, grid : StorageOccurrenceGrid, json_depth : Int32, budget : BinaryCodecBudget) {
+        site = prepared.physical_plan.root_dynamic_json(path).json_object_site(key)
+        child_physical = site.physical_plan
+        child_root_depth64 = json_depth.to_i64 + 1_i64
+        if child_root_depth64 <= 0_i64 || child_root_depth64 > Int32::MAX.to_i64
+          raise CorruptPartError.new("inferred Dynamic JSON child descriptor depth exceeds Int32")
+        end
+        child_root_depth = child_root_depth64.to_i32
+        unless grid.mark_count == outer_rows.size
+          raise CorruptPartError.new("inferred Dynamic JSON child grid differs from the complete Object domain")
+        end
+        outer_rows.size.times do |mark|
+          unless grid.physical_rows_at(mark) == outer_rows[mark]
+            raise CorruptPartError.new("inferred Dynamic JSON child physical grid differs from its parent Object")
+          end
+        end
+        unless site.leaf_key == key && site.json_depth == json_depth &&
+               site.binding.leaf_key == key && site.binding.json_type == binding.json_type &&
+               site.binding.plan.same?(binding.plan) &&
+               site.binding.schema.typed_paths == binding.schema.typed_paths &&
+               child_physical.typed_descriptor_root_depth == child_root_depth &&
+               child_physical.inferred_actual_root_depth == child_root_depth
+          raise CorruptPartError.new("inferred Dynamic JSON physical and logical child bindings differ")
+        end
+
+        descriptor = binding.json_type.json_type ||
+                     raise(CorruptPartError.new("inferred Dynamic JSON child binding lost its descriptor"))
+        typed_schema = copy_json_typed_schema(descriptor, budget)
+        documents = ObjectDocumentFileReader.read_child_at_site(
+          source,
+          site.escaped_prefix,
+          typed_schema,
+          grid,
+          budget,
+          prepared.name_context,
+          transport_budget,
+          0,
+          outer_rows.size,
+          profile,
+          shared_profile,
+          prepared.hashed,
+          site.array_level,
+          binding.plan,
+          binding.schema,
+          json_depth,
+          child_root_depth,
+          child_root_depth,
+        )
+        unless documents.size == grid.mark_count
+          raise CorruptPartError.new("inferred Dynamic JSON child documents differ from the complete Q grid")
+        end
+        grid.mark_count.times do |mark|
+          unless documents[mark].size.to_u64 == grid.logical_occurrences_at(mark)
+            raise CorruptPartError.new("inferred Dynamic JSON child documents differ from their discriminator schedule")
+          end
+        end
+        documents
+      }
+
       result = if full_grid = occurrence_grid
                  decode_grid = if replay_complete
                                  full_grid
@@ -1177,7 +1438,10 @@ module CrystalClick
                    mark_count: selected_count,
                    profile: profile,
                    shared_profile: shared_profile,
-                   typed_descriptor_root_depth: prepared.physical_plan.typed_descriptor_root_depth
+                   typed_descriptor_root_depth: prepared.physical_plan.typed_descriptor_root_depth,
+                   inferred_actual_root_depth: prepared.physical_plan.inferred_actual_root_depth,
+                   root_dynamic_json_object_leaf_plans: prepared.document_plan.root_dynamic_json_object_leaf_plans(codec_budget),
+                   physical_root_dynamic_json_object_leaf_loader: physical_root_dynamic_json_object_leaf_loader,
                  )
                else
                  ObjectDocumentCodec.decode_with_budget(
@@ -1188,7 +1452,10 @@ module CrystalClick
                    mark_count: selected_count,
                    profile: profile,
                    shared_profile: shared_profile,
-                   typed_descriptor_root_depth: prepared.physical_plan.typed_descriptor_root_depth
+                   typed_descriptor_root_depth: prepared.physical_plan.typed_descriptor_root_depth,
+                   inferred_actual_root_depth: prepared.physical_plan.inferred_actual_root_depth,
+                   root_dynamic_json_object_leaf_plans: prepared.document_plan.root_dynamic_json_object_leaf_plans(codec_budget),
+                   physical_root_dynamic_json_object_leaf_loader: physical_root_dynamic_json_object_leaf_loader,
                  )
                end
       typed_dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
@@ -1221,6 +1488,26 @@ module CrystalClick
             descriptor = binding.json_type.json_type ||
                          raise(CorruptPartError.new("typed Dynamic JSON child binding lost its descriptor"))
             typed_schema = copy_json_typed_schema(descriptor, budget)
+            typed_child_root_depth64 = json_depth.to_i64 + 1_i64
+            if typed_child_root_depth64 <= 0_i64 || typed_child_root_depth64 > Int32::MAX.to_i64
+              raise CorruptPartError.new("typed Dynamic JSON child descriptor depth exceeds Int32")
+            end
+            typed_child_root_depth = typed_child_root_depth64.to_i32
+            inferred_child_root_depth64 = typed_child_root_depth64
+            if binding.plan.structures.object.dynamic_path_count > 0
+              inferred_child_root_depth64 += 1_i64
+            end
+            if inferred_child_root_depth64 <= 0_i64 || inferred_child_root_depth64 > Int32::MAX.to_i64
+              raise CorruptPartError.new("typed Dynamic JSON child inferred descriptor depth exceeds Int32")
+            end
+            inferred_child_root_depth = inferred_child_root_depth64.to_i32
+            if binding.plan.structures.object.dynamic_path_count > 0
+              budget.ensure_depth(inferred_child_root_depth)
+            end
+            unless site.physical_plan.typed_descriptor_root_depth == typed_child_root_depth &&
+                   site.physical_plan.inferred_actual_root_depth == inferred_child_root_depth
+              raise CorruptPartError.new("typed Dynamic JSON physical child descriptor origins changed")
+            end
             ObjectDocumentFileReader.read_child_at_site(
               prepared.source,
               site.escaped_prefix,
@@ -1238,7 +1525,8 @@ module CrystalClick
               binding.plan,
               binding.schema,
               json_depth,
-              json_depth + 1,
+              typed_child_root_depth,
+              inferred_child_root_depth,
             )
           }
           json_reader = BinaryDynamicBulkJsonObjectReader.new(
@@ -1839,9 +2127,13 @@ module CrystalClick
       bytes : Bytes,
       limits : BinaryCodecLimits,
       budget : BinaryCodecBudget,
+      type_depth : Int32 = 1,
     ) : Tuple(DynamicStructure, Int32)
       context = BinaryCodecContext.new(limits, bytes, false, budget, false, false)
-      structure, statistics_offset = DynamicStructureCodec.read_with_statistics_offset(context)
+      structure, statistics_offset = DynamicStructureCodec.read_with_statistics_offset(
+        context,
+        type_depth: type_depth,
+      )
       context.ensure_consumed
       {structure, statistics_offset}
     end
@@ -1918,6 +2210,7 @@ module CrystalClick
       expected : ObjectDocumentPlan,
       budget : BinaryCodecBudget,
       json_descriptor_depth : Int32,
+      inferred_actual_root_depth : Int32,
     ) : Bool
       actual_object = actual.structures.object
       expected_object = expected.structures.object
@@ -1929,8 +2222,48 @@ module CrystalClick
         actual_dynamic = actual.structures.dynamic_for(path)
         expected_dynamic = expected.structures.dynamic_for(path)
         return false unless same_dynamic_roster?(
-                              actual_dynamic, expected_dynamic, context, json_descriptor_depth + 2
+                              actual_dynamic, expected_dynamic, context, inferred_actual_root_depth
                             )
+
+        actual_json_bindings = actual.root_dynamic_json_object_leaf_plans_for(path, budget)
+        expected_json_bindings = expected.root_dynamic_json_object_leaf_plans_for(path, budget)
+        return false unless actual_json_bindings.size == expected_json_bindings.size
+
+        actual_json_bindings.sort! do |left, right|
+          compare_dynamic_json_leaf_keys(left[0], right[0])
+        end
+        expected_json_bindings.sort! do |left, right|
+          compare_dynamic_json_leaf_keys(left[0], right[0])
+        end
+
+        inferred_actual_depth64 = inferred_actual_root_depth.to_i64
+        if inferred_actual_depth64 <= 0_i64 || inferred_actual_depth64 > budget.limits.max_depth.to_i64
+          raise CorruptPartError.new("inferred Object Dynamic descriptor depth exceeds the configured limit")
+        end
+        actual_json_bindings.size.times do |binding_index|
+          actual_entry = actual_json_bindings[binding_index]
+          expected_entry = expected_json_bindings[binding_index]
+          key = actual_entry[0]
+          return false unless key == expected_entry[0]
+
+          leaf_depth64 = inferred_actual_depth64 + key.descriptor_path_size.to_i64
+          if leaf_depth64 <= 0_i64 || leaf_depth64 > budget.limits.max_depth.to_i64
+            raise CorruptPartError.new("inferred Dynamic JSON descriptor depth exceeds the configured limit")
+          end
+          child_root_depth64 = leaf_depth64 + 1_i64
+          if child_root_depth64 > Int32::MAX.to_i64
+            raise CorruptPartError.new("inferred Dynamic JSON child descriptor depth exceeds Int32")
+          end
+          unless same_document_plan_rosters?(
+                   actual_entry[1],
+                   expected_entry[1],
+                   budget,
+                   leaf_depth64.to_i32,
+                   child_root_depth64.to_i32,
+                 )
+            return false
+          end
+        end
       end
 
       return false unless actual.typed_path_count == expected.typed_path_count
@@ -1986,6 +2319,22 @@ module CrystalClick
         end
       end
       true
+    end
+
+    private def self.compare_dynamic_json_leaf_keys(
+      left : BinaryDynamicJsonLeafKey,
+      right : BinaryDynamicJsonLeafKey,
+    ) : Int32
+      site_order = left.compare_dynamic_site(right)
+      return site_order unless site_order == 0
+      arm_order = left.canonical_arm_index <=> right.canonical_arm_index
+      return arm_order unless arm_order == 0
+      common_path = Math.min(left.descriptor_path_size, right.descriptor_path_size)
+      common_path.times do |index|
+        order = left.descriptor_child_at(index) <=> right.descriptor_child_at(index)
+        return order unless order == 0
+      end
+      left.descriptor_path_size <=> right.descriptor_path_size
     end
 
     private def self.same_object_roster?(actual : ObjectStructure, expected : ObjectStructure) : Bool

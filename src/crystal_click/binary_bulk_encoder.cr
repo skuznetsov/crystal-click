@@ -10,6 +10,7 @@ module CrystalClick
       low_cardinality_policy : BinaryLowCardinalityStoragePolicy = BinaryLowCardinalityStoragePolicy::PartGlobalDictionary,
       json_object_writer : BinaryDynamicBulkJsonObjectWriter? = nil,
       shared_value_depth_origin : Int = 1,
+      json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
     ) : BinaryBulkStreams
       unless budget.writing?
         raise ArgumentError.new("binary bulk encoder requires a write-direction budget")
@@ -21,10 +22,22 @@ module CrystalClick
       if dynamic_plan.try(&.has_json_object_bindings?) && json_object_writer.nil?
         raise UnsupportedFormatError.new("bound Dynamic JSON arms require the paired Object child owner")
       end
+      root_json_bound = false
       if writer = json_object_writer
-        unless dynamic_plan && writer.matches_operation?(dynamic_plan, budget)
-          raise ArgumentError.new("Dynamic JSON Object writer does not match the bulk plan")
+        if plan = dynamic_plan
+          unless json_leaf_key.nil? && writer.matches_operation?(plan, budget)
+            raise ArgumentError.new("Dynamic JSON Object writer does not match the bulk plan")
+          end
+        elsif key = json_leaf_key
+          unless writer.matches_root_operation?(type, key, budget, shared_value_depth_origin)
+            raise ArgumentError.new("inferred Dynamic JSON Object writer does not match the root leaf")
+          end
+          root_json_bound = true
+        else
+          raise ArgumentError.new("root Dynamic JSON Object writer requires an exact seed leaf key")
         end
+      elsif json_leaf_key
+        raise ArgumentError.new("binary bulk JSON seed key has no paired Object writer")
       end
       if granules.size == Int32::MAX
         raise UnsupportedFormatError.new("binary bulk mark grid exceeds the supported domain")
@@ -32,7 +45,7 @@ module CrystalClick
 
       traversal = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
       traversal.validate_type_tree(type)
-      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan, budget.limits)
+      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan, budget.limits, true, root_json_bound)
       planned_role_count = plan.role_count
       ordinary_role_count = plan.ordinary_role_count
 
@@ -68,9 +81,9 @@ module CrystalClick
       default_costs = Hash(Tuple(UInt64, Bool), BinaryBulkDefaultValue::Cost).new
       granules.each_with_index do |rows, mark_index|
         rows.each do |value|
-          minimum = minimum_value_cost(type, value, profile, default_costs, dynamic_plan)
+          minimum = minimum_value_cost(type, value, profile, default_costs, dynamic_plan, root_json_bound)
           ensure_cost_fits(budget, add_cost(total, minimum))
-          total = add_cost(total, value_cost(type, value, "root", profile, budget, total, default_costs, dynamic_plan, 1, mark_index, json_object_writer))
+          total = add_cost(total, value_cost(type, value, "root", profile, budget, total, default_costs, dynamic_plan, 1, mark_index, json_object_writer, json_leaf_key))
         end
       end
       budget.ensure_future_nodes(total[:nodes])
@@ -100,7 +113,7 @@ module CrystalClick
 
       granules.each_with_index do |rows, mark_index|
         rows.each do |value|
-          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, nil, shared_value_depth_origin)
+          write_value(type, value, "root", 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key, shared_value_depth_origin)
         end
         roles.each do |role|
           offsets[role] << lanes[role].size.to_u64

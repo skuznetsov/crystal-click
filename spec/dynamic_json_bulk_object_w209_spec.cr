@@ -267,11 +267,13 @@ module CrystalClick::ObjectDocumentCodec
     profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     typed_descriptor_root_depth : Int32 = 2,
+    inferred_actual_root_depth : Int32? = nil,
   ) : ObjectDocumentStreams
     entry_nodes = W209ObjectChildBudgetProbe.enter("encode", budget)
     result = previous_def(
       plan, granules, grid, budget, mode: mode, profile: profile,
       shared_profile: shared_profile, typed_descriptor_root_depth: typed_descriptor_root_depth,
+      inferred_actual_root_depth: inferred_actual_root_depth,
     )
     W209ObjectChildBudgetProbe.complete("encode", budget, entry_nodes)
     result
@@ -288,6 +290,9 @@ module CrystalClick::ObjectDocumentCodec
     shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
     typed_descriptor_root_depth : Int32 = 2,
+    root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans = RootDynamicJsonLeafPlans.new,
+    inferred_actual_root_depth : Int32 = 1_i32,
+    physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader? = nil,
   ) : Array(Array(ObjectDocument))
     entry_nodes = W209ObjectChildBudgetProbe.enter("decode", budget)
     result = previous_def(
@@ -301,6 +306,9 @@ module CrystalClick::ObjectDocumentCodec
       shared_profile: shared_profile,
       typed_dynamic_json_object_leaf_plans: typed_dynamic_json_object_leaf_plans,
       typed_descriptor_root_depth: typed_descriptor_root_depth,
+      root_dynamic_json_object_leaf_plans: root_dynamic_json_object_leaf_plans,
+      inferred_actual_root_depth: inferred_actual_root_depth,
+      physical_root_dynamic_json_object_leaf_loader: physical_root_dynamic_json_object_leaf_loader,
     )
     W209ObjectChildBudgetProbe.complete("decode", budget, entry_nodes)
     result

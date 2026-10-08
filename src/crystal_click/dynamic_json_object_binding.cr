@@ -36,6 +36,7 @@ module CrystalClick
       @plan : ObjectDocumentPlan,
       budget : BinaryCodecBudget,
       depth : Int = 1,
+      descriptor_root_depth : Int? = nil,
     )
       budget.visit_node(depth)
       site_key_bytes = @leaf_key.dynamic_site_bytesize.to_u64
@@ -43,7 +44,11 @@ module CrystalClick
       budget.charge_wire_bytes(site_key_bytes)
       @site_key = @leaf_key.dynamic_site
 
-      json_type, arm_name = resolve_json_arm(structure, @leaf_key, budget, depth)
+      actual_root_depth = descriptor_root_depth || depth - @leaf_key.descriptor_path_size
+      if actual_root_depth <= 0
+        raise ArgumentError.new("Dynamic JSON binding descriptor root depth must be positive")
+      end
+      json_type, arm_name = resolve_json_arm(structure, @leaf_key, budget, actual_root_depth)
       @structure = structure
       @canonical_arm_index = @leaf_key.canonical_arm_index
       @arm_name = arm_name
@@ -85,14 +90,19 @@ module CrystalClick
       structure : DynamicStructure,
       budget : BinaryCodecBudget,
       depth : Int = 1,
+      descriptor_root_depth : Int? = nil,
     ) : Nil
       budget.charge_wire_bytes(leaf_key.dynamic_site_bytesize.to_u64)
       unless @leaf_key == leaf_key
         raise ArgumentError.new("Dynamic JSON binding belongs to a different JSON leaf")
       end
 
-      expected_types = canonical_descriptors(@structure, budget, depth)
-      actual_types = canonical_descriptors(structure, budget, depth)
+      actual_root_depth = descriptor_root_depth || depth - leaf_key.descriptor_path_size
+      if actual_root_depth <= 0
+        raise ArgumentError.new("Dynamic JSON binding descriptor root depth must be positive")
+      end
+      expected_types = canonical_descriptors(@structure, budget, actual_root_depth)
+      actual_types = canonical_descriptors(structure, budget, actual_root_depth)
       expected_names = canonical_names(expected_types)
       actual_names = canonical_names(actual_types)
       unless expected_names == actual_names && expected_types.size == actual_types.size

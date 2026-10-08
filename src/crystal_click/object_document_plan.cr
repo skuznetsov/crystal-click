@@ -23,6 +23,8 @@ module CrystalClick
     @typed_dynamic_site_paths : Hash(String, Array(String))
     @typed_dynamic_paths : Array(String)
     @typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)))
+    @root_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)))
+    @inferred_actual_root_depth : Int32
 
     def initialize(
       structures : ObjectDynamicStructureSet,
@@ -30,22 +32,14 @@ module CrystalClick
       typed_dynamics : Hash(String, DynamicStructure) = Hash(String, DynamicStructure).new,
       typed_dynamic_sites : Hash(String, Hash(String, DynamicStructure)) = Hash(String, Hash(String, DynamicStructure)).new,
       typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+      root_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+      root_dynamic_json_budget : BinaryCodecBudget? = nil,
+      inferred_actual_root_depth : Int32 = 1_i32,
     )
-      # Root Object Dynamic metadata is representable without a child binding,
-      # but this value-ready plan has no JSON arm-to-Object association. Reject
-      # those actuals before copying any plan roster or allocating lane maps.
       object = structures.object
-      object.dynamic_path_count.times do |index|
-        path = object.dynamic_path_at(index)
-        structure = structures.dynamic_for(path)
-        structure.type_count.times do |type_index|
-          if structure.type_at(type_index).contains_json?
-            raise ArgumentError.new("JSON is not admitted as an unbound root Object Dynamic actual type")
-          end
-        end
-      end
 
       @structures = structures
+      @inferred_actual_root_depth = inferred_actual_root_depth
       limits = DEFAULT_LIMITS
       raise ArgumentError.new("typed Object paths exceed the admitted count") if typed_paths.size > MAX_TYPED_PATHS
 
@@ -55,6 +49,88 @@ module CrystalClick
       budget = BinaryCodecBudget.new(limits, true)
       budget.visit_node(1)
       budget.preflight_children(typed_paths.size.to_u64) if typed_paths.size > 0
+      root_json_budget = root_dynamic_json_budget || budget
+      root_json_budget.ensure_depth(inferred_actual_root_depth)
+      if root_dynamic_json_object_leaf_plans.size > object.dynamic_path_count
+        root_plan_error!("root Object Dynamic JSON binding roster has an unknown path", root_json_budget)
+      end
+      root_binding_count = 0_u64
+      root_binding_bytes = 0_u64
+      root_dynamic_json_object_leaf_plans.each do |path, leaf_plans|
+        unless object.has_dynamic_path?(path)
+          root_plan_error!("root Object Dynamic JSON binding has no declared Object path", root_json_budget)
+        end
+        if leaf_plans.empty?
+          root_plan_error!("root Object Dynamic JSON binding roster cannot be empty", root_json_budget)
+        end
+        root_binding_count = checked_add(root_binding_count, leaf_plans.size.to_u64)
+        root_binding_bytes = checked_add(root_binding_bytes, path.bytesize.to_u64)
+        leaf_plans.each do |entry|
+          key = entry[0]
+          root_binding_bytes = checked_add(root_binding_bytes, key.dynamic_site_bytesize.to_u64)
+          root_binding_bytes = checked_add(root_binding_bytes, checked_multiply(key.descriptor_path_size.to_u64, 4_u64))
+        end
+      end
+      if root_binding_count > limits.max_nodes.to_u64 ||
+         root_binding_count > limits.max_elements.to_u64 ||
+         root_binding_bytes > limits.max_bytes.to_u64
+        root_plan_error!("root Object Dynamic JSON bindings exceed codec limits", root_json_budget)
+      end
+      root_json_budget.preflight_children(root_binding_count) if root_binding_count > 0_u64
+      root_json_budget.charge_wire_bytes(root_binding_bytes) if root_binding_bytes > 0_u64
+      root_binding_count.times { root_json_budget.charge_node }
+      root_json_budget.charge_elements(root_binding_count) if root_binding_count > 0_u64
+
+      @root_dynamic_json_object_leaf_plans = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new(
+        initial_capacity: root_dynamic_json_object_leaf_plans.size,
+      )
+      object.dynamic_path_count.times do |index|
+        path = object.dynamic_path_at(index)
+        structure = structures.dynamic_for(path)
+        supplied = root_dynamic_json_object_leaf_plans[path]?
+        leaf_plans = supplied || [] of Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)
+        roster = nil.as(DynamicJsonObjectBindingRoster?)
+        begin
+          roster = DynamicJsonObjectBindingRoster.for_root_if_json(
+            structure,
+            leaf_plans,
+            root_json_budget,
+            inferred_actual_root_depth,
+          )
+        rescue ex : CorruptPartError | UnsupportedFormatError
+          if root_json_budget.writing?
+            raise ArgumentError.new("invalid root Object Dynamic JSON binding: #{ex.message}")
+          else
+            raise ex
+          end
+        rescue ex : ArgumentError
+          if root_json_budget.writing?
+            raise ArgumentError.new("invalid root Object Dynamic JSON binding: #{ex.message}")
+          else
+            raise CorruptPartError.new("invalid root Object Dynamic JSON binding: #{ex.message}")
+          end
+        end
+        unless selected_roster = roster
+          if supplied
+            root_plan_error!("root Object Dynamic JSON binding has no JSON actual leaf", root_json_budget)
+          end
+          next
+        end
+        unless selected_roster.has_json_object_bindings?
+          if supplied
+            root_plan_error!("root Object Dynamic JSON binding has no JSON actual leaf", root_json_budget)
+          end
+          next
+        end
+        unless supplied
+          root_plan_error!("root Object Dynamic JSON bindings must cover every JSON actual leaf", root_json_budget)
+        end
+        detached_path = String.new(path.to_slice)
+        detached_plans = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(leaf_plans.size)
+        leaf_plans.each { |entry| detached_plans << entry }
+        @root_dynamic_json_object_leaf_plans[detached_path] = detached_plans
+      end
+
       schema_context = BinaryCodecContext.new(limits, nil, true, budget, false, false)
       path_copy_bytes = 0_u64
       site_count = 0_u64
@@ -62,13 +138,12 @@ module CrystalClick
       generated_path_bytes = 0_u64
       typed_paths.each do |path, type|
         budget.visit_node(2)
+        # Bound the complete raw descriptor before recursive summary
+        # predicates inspect it.
+        schema_context.validate_type_tree(type, 2)
         if type.contains_json?
           raise ArgumentError.new("root JSON is outside the persisted Object declaration grammar")
         end
-        # Bound every raw descriptor before contains_dynamic? can recurse. This
-        # generic walk preserves the constructor's prior ordinary-field
-        # admission policy while making the new recursive predicate finite.
-        schema_context.validate_type_tree(type, 2)
         if type.contains_qbit?
           raise ArgumentError.new("typed Object QBit descriptor is outside the persisted Object declaration grammar")
         end
@@ -307,6 +382,10 @@ module CrystalClick
       @typed_paths.size
     end
 
+    def inferred_actual_root_depth : Int32
+      @inferred_actual_root_depth
+    end
+
     def typed_path_at(index : Int) : String
       String.new(@typed_paths[index].to_slice)
     end
@@ -465,6 +544,82 @@ module CrystalClick
       detached
     end
 
+    # Borrowed-budget snapshot of the exact JSON child bindings for one
+    # inferred root Object Dynamic path. This is separate from declared typed
+    # Dynamic fields, which retain their own structural root and depth.
+    def root_dynamic_json_object_leaf_plans_for(
+      path : String,
+      budget : BinaryCodecBudget,
+    ) : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))
+      entries = @root_dynamic_json_object_leaf_plans[path]?
+      return [] of Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan) unless entries
+      count = entries.size.to_u64
+      path_elements = 0_u64
+      key_bytes = 0_u64
+      entries.each do |entry|
+        key = entry[0]
+        path_elements = checked_add(path_elements, key.descriptor_path_size.to_u64)
+        key_bytes = checked_add(key_bytes, key.dynamic_site_bytesize.to_u64)
+        key_bytes = checked_add(key_bytes, checked_multiply(key.descriptor_path_size.to_u64, 4_u64))
+      end
+      budget.preflight_children(count) if count > 0_u64
+      budget.ensure_future_elements(path_elements)
+      budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
+      count.times { budget.charge_node }
+      budget.charge_elements(path_elements) if path_elements > 0_u64
+      copied = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(entries.size)
+      entries.each do |entry|
+        copied << {
+          BinaryDynamicJsonLeafKey.new(entry[0].dynamic_site, entry[0].canonical_arm_index, entry[0].descriptor_child_path),
+          entry[1],
+        }
+      end
+      copied
+    end
+
+    # Full detached root binding snapshot used by normalized decode. Each
+    # path and leaf key is copied under the caller's aggregate operation
+    # budget; child plans remain immutable shared owners.
+    def root_dynamic_json_object_leaf_plans(
+      budget : BinaryCodecBudget,
+    ) : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)))
+      path_count = @root_dynamic_json_object_leaf_plans.size.to_u64
+      leaf_count = 0_u64
+      path_bytes = 0_u64
+      key_bytes = 0_u64
+      path_elements = 0_u64
+      @root_dynamic_json_object_leaf_plans.each do |path, entries|
+        path_bytes = checked_add(path_bytes, path.bytesize.to_u64)
+        leaf_count = checked_add(leaf_count, entries.size.to_u64)
+        entries.each do |entry|
+          key = entry[0]
+          key_bytes = checked_add(key_bytes, key.dynamic_site_bytesize.to_u64)
+          key_bytes = checked_add(key_bytes, checked_multiply(key.descriptor_path_size.to_u64, 4_u64))
+          path_elements = checked_add(path_elements, key.descriptor_path_size.to_u64)
+        end
+      end
+      records = checked_add(path_count, leaf_count)
+      budget.preflight_children(records) if records > 0_u64
+      budget.ensure_future_elements(path_elements)
+      budget.charge_wire_bytes(checked_add(path_bytes, key_bytes)) if path_bytes > 0_u64 || key_bytes > 0_u64
+      records.times { budget.charge_node }
+      budget.charge_elements(path_elements) if path_elements > 0_u64
+      detached = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new(
+        initial_capacity: @root_dynamic_json_object_leaf_plans.size,
+      )
+      @root_dynamic_json_object_leaf_plans.each do |path, entries|
+        copied_entries = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(entries.size)
+        entries.each do |entry|
+          copied_entries << {
+            BinaryDynamicJsonLeafKey.new(entry[0].dynamic_site, entry[0].canonical_arm_index, entry[0].descriptor_child_path),
+            entry[1],
+          }
+        end
+        detached[String.new(path.to_slice)] = copied_entries
+      end
+      detached
+    end
+
     private def typed_dynamic_site_map(path : String) : Hash(String, TypedDynamicSite)
       @typed_dynamic_sites[path]? || raise(KeyError.new("typed Object Dynamic sites not found: #{path.inspect}"))
     end
@@ -485,6 +640,14 @@ module CrystalClick
         raise ArgumentError.new("typed Object Dynamic plan size overflows UInt64")
       end
       left + right
+    end
+
+    private def root_plan_error!(message : String, budget : BinaryCodecBudget) : NoReturn
+      if budget.writing?
+        raise ArgumentError.new(message)
+      else
+        raise CorruptPartError.new(message)
+      end
     end
 
     private def checked_multiply(left : UInt64, right : UInt64) : UInt64

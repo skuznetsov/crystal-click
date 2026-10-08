@@ -5,6 +5,20 @@ module CrystalClick
     DEFAULT_LIMITS = BinaryBulkCodec::DEFAULT_LIMITS
     DEFAULT_MODE   = DynamicDiscriminatorCodec::DEFAULT_MODE
 
+    alias RootDynamicJsonLeafPlans = Hash(
+      String,
+      Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)),
+    )
+    alias PhysicalRootDynamicJsonObjectLeafLoader = Proc(
+      String,
+      BinaryDynamicJsonLeafKey,
+      DynamicJsonObjectBinding,
+      StorageOccurrenceGrid,
+      Int32,
+      BinaryCodecBudget,
+      Array(Array(ObjectDocument)),
+    )
+
     def self.encode(
       plan : ObjectDocumentPlan,
       granules : Array(Array(ObjectDocument)),
@@ -12,9 +26,18 @@ module CrystalClick
       limits : BinaryCodecLimits = DEFAULT_LIMITS,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      inferred_actual_root_depth : Int32? = nil,
     ) : ObjectDocumentStreams
       budget = BinaryCodecBudget.new(limits, true)
-      encode_with_budget(plan, granules, budget, mode: mode, profile: profile, shared_profile: shared_profile)
+      encode_with_budget(
+        plan,
+        granules,
+        budget,
+        mode: mode,
+        profile: profile,
+        shared_profile: shared_profile,
+        inferred_actual_root_depth: inferred_actual_root_depth,
+      )
     end
 
     def self.encode_with_budget(
@@ -24,8 +47,19 @@ module CrystalClick
       mode : UInt64 = DEFAULT_MODE,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      inferred_actual_root_depth : Int32? = nil,
     ) : ObjectDocumentStreams
-      encode_core_with_budget(plan, granules, budget, mode, profile, shared_profile, nil, 2)
+      encode_core_with_budget(
+        plan,
+        granules,
+        budget,
+        mode,
+        profile,
+        shared_profile,
+        nil,
+        2,
+        inferred_actual_root_depth || plan.inferred_actual_root_depth,
+      )
     end
 
     # Explicit child-site composition keeps the parent physical row grid
@@ -41,6 +75,7 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       typed_descriptor_root_depth : Int32 = 2,
+      inferred_actual_root_depth : Int32? = nil,
     ) : ObjectDocumentStreams
       encode_core_with_budget(
         plan,
@@ -51,6 +86,7 @@ module CrystalClick
         shared_profile,
         grid,
         typed_descriptor_root_depth,
+        inferred_actual_root_depth || plan.inferred_actual_root_depth,
       )
     end
 
@@ -63,6 +99,7 @@ module CrystalClick
       shared_profile : BinaryBulkProfile,
       occurrence_grid : StorageOccurrenceGrid?,
       typed_descriptor_root_depth : Int32,
+      inferred_actual_root_depth : Int32,
     ) : ObjectDocumentStreams
       unless budget.writing?
         raise ArgumentError.new("Object document encode requires a writing budget")
@@ -71,6 +108,10 @@ module CrystalClick
         raise UnsupportedFormatError.new("Object typed descriptor root depth must be at least 2 (got #{typed_descriptor_root_depth})")
       end
       budget.ensure_depth(typed_descriptor_root_depth) if plan.typed_path_count > 0
+      if inferred_actual_root_depth <= 0 || inferred_actual_root_depth > budget.limits.max_depth
+        raise UnsupportedFormatError.new("inferred Dynamic actual root depth exceeds the configured limit")
+      end
+      budget.ensure_depth(inferred_actual_root_depth)
       reject_json_plan!(plan)
       unless mode == DynamicDiscriminatorCodec::BASIC_MODE || mode == DynamicDiscriminatorCodec::COMPACT_MODE
         raise ArgumentError.new("unsupported Dynamic discriminator write mode")
@@ -165,7 +206,11 @@ module CrystalClick
 
       # Encode metadata first using this operation's budget. No child output is
       # published if a later lane fails.
-      metadata = ObjectDynamicStructureCodec.encode_with_budget(plan.structures, budget)
+      metadata = ObjectDynamicStructureCodec.encode_with_budget(
+        plan.structures,
+        budget,
+        inferred_actual_root_depth: inferred_actual_root_depth,
+      )
       typed_lanes = Hash(String, BinaryBulkStreams).new
       typed_dynamic_lanes = Hash(String, BinaryDynamicBulkStreams).new
       typed_dynamic_statistics_offsets = Hash(String, Int32).new
@@ -254,6 +299,7 @@ module CrystalClick
       object = plan.structures.object
       object.dynamic_path_count.times do |dynamic_index|
         path = object.dynamic_path_at(dynamic_index)
+        json_leaf_plans = plan.root_dynamic_json_object_leaf_plans_for(path, budget)
         dynamic_granules = Array(Array(BinaryValue)).new(mark_count)
         granules.each do |mark_rows|
           budget.ensure_future_nodes(mark_rows.size.to_u64)
@@ -274,7 +320,10 @@ module CrystalClick
             grid,
             budget,
             mode: mode,
-            profile: profile
+            profile: profile,
+            json_object_leaf_plans: json_leaf_plans,
+            inferred_actual_root_depth: inferred_actual_root_depth,
+            child_shared_profile: shared_profile,
           )
         else
           dynamic_lanes[path] = DynamicValueCodec.encode_with_budget(
@@ -282,7 +331,10 @@ module CrystalClick
             dynamic_granules,
             budget,
             mode: mode,
-            profile: profile
+            profile: profile,
+            json_object_leaf_plans: json_leaf_plans,
+            inferred_actual_root_depth: inferred_actual_root_depth,
+            child_shared_profile: shared_profile,
           )
         end
       end
@@ -372,6 +424,9 @@ module CrystalClick
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
       typed_descriptor_root_depth : Int32 = 2,
+      root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans = RootDynamicJsonLeafPlans.new,
+      inferred_actual_root_depth : Int32 = 1_i32,
+      physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader? = nil,
     ) : Array(Array(ObjectDocument))
       budget = BinaryCodecBudget.new(limits)
       decode_with_budget(
@@ -384,6 +439,9 @@ module CrystalClick
         shared_profile: shared_profile,
         typed_dynamic_json_object_leaf_plans: typed_dynamic_json_object_leaf_plans,
         typed_descriptor_root_depth: typed_descriptor_root_depth,
+        root_dynamic_json_object_leaf_plans: root_dynamic_json_object_leaf_plans,
+        inferred_actual_root_depth: inferred_actual_root_depth,
+        physical_root_dynamic_json_object_leaf_loader: physical_root_dynamic_json_object_leaf_loader,
       )
     end
 
@@ -397,6 +455,9 @@ module CrystalClick
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
       typed_descriptor_root_depth : Int32 = 2,
+      root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans = RootDynamicJsonLeafPlans.new,
+      inferred_actual_root_depth : Int32 = 1_i32,
+      physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader? = nil,
     ) : Array(Array(ObjectDocument))
       decode_core_with_budget(
         typed_schema,
@@ -408,6 +469,9 @@ module CrystalClick
         shared_profile,
         typed_dynamic_json_object_leaf_plans,
         typed_descriptor_root_depth,
+        root_dynamic_json_object_leaf_plans,
+        inferred_actual_root_depth,
+        physical_root_dynamic_json_object_leaf_loader,
         nil,
       )
     end
@@ -425,6 +489,9 @@ module CrystalClick
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))) = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
       typed_descriptor_root_depth : Int32 = 2,
+      root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans = RootDynamicJsonLeafPlans.new,
+      inferred_actual_root_depth : Int32 = 1_i32,
+      physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader? = nil,
     ) : Array(Array(ObjectDocument))
       decode_core_with_budget(
         typed_schema,
@@ -436,6 +503,9 @@ module CrystalClick
         shared_profile,
         typed_dynamic_json_object_leaf_plans,
         typed_descriptor_root_depth,
+        root_dynamic_json_object_leaf_plans,
+        inferred_actual_root_depth,
+        physical_root_dynamic_json_object_leaf_loader,
         grid,
       )
     end
@@ -450,6 +520,9 @@ module CrystalClick
       shared_profile : BinaryBulkProfile,
       typed_dynamic_json_object_leaf_plans : Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))),
       typed_descriptor_root_depth : Int32,
+      root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans,
+      inferred_actual_root_depth : Int32,
+      physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader?,
       occurrence_grid : StorageOccurrenceGrid?,
     ) : Array(Array(ObjectDocument))
       if budget.writing?
@@ -459,6 +532,10 @@ module CrystalClick
         raise CorruptPartError.new("Object typed descriptor root depth must be at least 2 (got #{typed_descriptor_root_depth})")
       end
       budget.ensure_depth(typed_descriptor_root_depth) unless typed_schema.empty?
+      if inferred_actual_root_depth <= 0 || inferred_actual_root_depth > budget.limits.max_depth
+        corrupt!("inferred Dynamic actual root depth exceeds the configured limit")
+      end
+      budget.ensure_depth(inferred_actual_root_depth)
       validate_typed_json_binding_input!(typed_dynamic_json_object_leaf_plans, typed_schema, budget)
 
       real_marks = streams.mark_count
@@ -505,9 +582,14 @@ module CrystalClick
         end
       end
 
-      structure_set = ObjectDynamicStructureCodec.decode_with_budget(streams.structures, budget)
+      structure_set = ObjectDynamicStructureCodec.decode_with_budget(
+        streams.structures,
+        budget,
+        inferred_actual_root_depth: inferred_actual_root_depth,
+      )
       validate_read_structure(structure_set)
       object = structure_set.object
+      validate_root_json_binding_input!(root_dynamic_json_object_leaf_plans, object, budget)
       typed_schema.each_key do |path|
         if object.has_dynamic_path?(path)
           corrupt!("typed and Dynamic Object paths must be disjoint")
@@ -697,6 +779,27 @@ module CrystalClick
       dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
       object.dynamic_path_count.times do |dynamic_index|
         path = object.dynamic_path_at(dynamic_index)
+        json_leaf_plans = root_dynamic_json_object_leaf_plans[path]? ||
+                          [] of Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)
+        physical_loader : Proc(
+          BinaryDynamicJsonLeafKey,
+          DynamicJsonObjectBinding,
+          StorageOccurrenceGrid,
+          Int32,
+          BinaryCodecBudget,
+          Array(Array(ObjectDocument)),
+        )? = if physical_root_dynamic_json_object_leaf_loader && !json_leaf_plans.empty?
+          ->(key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, grid : StorageOccurrenceGrid, json_depth : Int32, child_budget : BinaryCodecBudget) {
+            physical_root_dynamic_json_object_leaf_loader.call(
+              path,
+              key,
+              binding,
+              grid,
+              json_depth,
+              child_budget,
+            )
+          }
+        end
         if grid = occurrence_grid
           dynamic_rows[path] = DynamicValueCodec.decode_child_site_with_budget(
             structure_set.dynamic_for(path),
@@ -705,7 +808,11 @@ module CrystalClick
             budget,
             first_mark: selected_first,
             mark_count: selected_count,
-            profile: profile
+            profile: profile,
+            json_object_leaf_plans: json_leaf_plans,
+            inferred_actual_root_depth: inferred_actual_root_depth,
+            child_shared_profile: shared_profile,
+            physical_json_object_leaf_loader: physical_loader,
           )
         else
           dynamic_rows[path] = DynamicValueCodec.decode_with_budget(
@@ -714,7 +821,11 @@ module CrystalClick
             budget,
             first_mark: selected_first,
             mark_count: selected_count,
-            profile: profile
+            profile: profile,
+            json_object_leaf_plans: json_leaf_plans,
+            inferred_actual_root_depth: inferred_actual_root_depth,
+            child_shared_profile: shared_profile,
+            physical_json_object_leaf_loader: physical_loader,
           )
         end
       end
@@ -960,6 +1071,51 @@ module CrystalClick
       record_count.times { budget.charge_node }
       budget.charge_elements(element_count) if element_count > 0_u64
       budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
+      nil
+    end
+
+    private def self.validate_root_json_binding_input!(
+      bindings : RootDynamicJsonLeafPlans,
+      object : ObjectStructure,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      if bindings.size > object.dynamic_path_count
+        corrupt!("inferred Dynamic JSON Object binding roster exceeds the Object path roster")
+      end
+      record_count = bindings.size.to_u64
+      path_bytes = 0_u64
+      key_bytes = 0_u64
+      path_elements = 0_u64
+      bindings.each do |path, leaves|
+        unless object.has_dynamic_path?(path)
+          corrupt!("inferred Dynamic JSON Object binding names an unknown Dynamic path")
+        end
+        if leaves.empty?
+          corrupt!("inferred Dynamic JSON Object binding roster cannot be empty")
+        end
+        path_bytes = checked_add(path_bytes, path.bytesize.to_u64, false)
+        record_count = checked_add(record_count, leaves.size.to_u64, false)
+        leaves.each do |entry|
+          key = entry[0]
+          path_elements = checked_add(path_elements, key.descriptor_path_size.to_u64, false)
+          key_bytes = checked_add(key_bytes, key.dynamic_site_bytesize.to_u64, false)
+          key_bytes = checked_add(key_bytes, checked_multiply(key.descriptor_path_size.to_u64, 4_u64, false), false)
+        end
+      end
+      unless record_count <= budget.limits.max_nodes.to_u64 && record_count <= budget.limits.max_elements.to_u64
+        corrupt!("inferred Dynamic JSON Object binding roster exceeds codec limits")
+      end
+      unless path_elements <= budget.limits.max_elements.to_u64 &&
+             checked_add(path_bytes, key_bytes, false) <= budget.limits.max_bytes.to_u64
+        corrupt!("inferred Dynamic JSON Object binding keys exceed codec limits")
+      end
+      budget.preflight_children(record_count) if record_count > 0_u64
+      budget.ensure_future_elements(checked_add(record_count, path_elements, false))
+      budget.ensure_wire_bytes(checked_add(path_bytes, key_bytes, false))
+      record_count.times { budget.charge_node }
+      budget.charge_elements(checked_add(record_count, path_elements, false)) if record_count > 0_u64 || path_elements > 0_u64
+      key_and_path_bytes = checked_add(path_bytes, key_bytes, false)
+      budget.charge_wire_bytes(key_and_path_bytes) if key_and_path_bytes > 0_u64
       nil
     end
 

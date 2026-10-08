@@ -100,10 +100,20 @@ module CrystalClick
           grid = child_grid(physical_rows, child_streams, codec_budget)
           child_physical = site.physical_plan
           json_depth = dynamic_physical.json_object_leaf_depth(key)
-          expected_root_depth64 = json_depth.to_i64 + 1_i64
-          codec_budget.ensure_depth(expected_root_depth64)
-          unless child_physical.typed_descriptor_root_depth == expected_root_depth64.to_i32
+          expected_descriptor_root_depth64 = json_depth.to_i64 + 1_i64
+          codec_budget.ensure_depth(expected_descriptor_root_depth64)
+          unless child_physical.typed_descriptor_root_depth == expected_descriptor_root_depth64.to_i32
             raise UnsupportedFormatError.new("typed Dynamic JSON child physical plan lost its inherited descriptor depth")
+          end
+          inferred_root_offset = if child_plan.structures.object.dynamic_path_count > 0
+                                   2_i64
+                                 else
+                                   1_i64
+                                 end
+          expected_inferred_root_depth64 = json_depth.to_i64 + inferred_root_offset
+          codec_budget.ensure_depth(expected_inferred_root_depth64)
+          unless child_physical.inferred_actual_root_depth == expected_inferred_root_depth64.to_i32
+            raise UnsupportedFormatError.new("typed Dynamic JSON child physical plan lost its inferred-actual root depth")
           end
 
           begin
@@ -153,6 +163,17 @@ module CrystalClick
           # normalized streams supply Q, and this call repeats that rule for
           # every deeper typed Dynamic JSON leaf.
           append_pairs!(
+            child_pairs,
+            child_physical,
+            child_plan,
+            child_streams,
+            physical_rows,
+            codec_budget,
+            transport_budget,
+            frame_bytes,
+            profile,
+          )
+          ObjectDocumentRootDynamicJsonPhysical.append_pairs!(
             child_pairs,
             child_physical,
             child_plan,

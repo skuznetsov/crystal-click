@@ -3,7 +3,8 @@ module CrystalClick
   # discriminators and the wrapper shape lanes in the same operation budget.
   # This is a census only; value serde remains in BinaryBulkDecoder.
   class BinaryDynamicJsonObjectSchedule
-    @plan : BinaryDynamicBulkPlan
+    @plan : BinaryDynamicBulkPlan?
+    @root_type : BinaryDataType?
     @budget : BinaryCodecBudget
     @initial_descriptor_depth : Int32
 
@@ -18,11 +19,31 @@ module CrystalClick
       new(plan, budget, initial_descriptor_depth).build(streams, mark_count, binding_keys)
     end
 
+    def self.build_root(
+      type : BinaryDataType,
+      streams : BinaryBulkStreams,
+      rows_per_mark : Array(UInt64),
+      binding_keys : Array(BinaryDynamicJsonLeafKey),
+      budget : BinaryCodecBudget,
+      initial_descriptor_depth : Int32,
+    ) : Hash(BinaryDynamicJsonLeafKey, Array(UInt64))
+      new(type, budget, initial_descriptor_depth).build_root(streams, rows_per_mark, binding_keys)
+    end
+
     private def initialize(
       @plan : BinaryDynamicBulkPlan,
       @budget : BinaryCodecBudget,
       @initial_descriptor_depth : Int32,
     )
+      @root_type = nil
+    end
+
+    private def initialize(
+      @root_type : BinaryDataType,
+      @budget : BinaryCodecBudget,
+      @initial_descriptor_depth : Int32,
+    )
+      @plan = nil
     end
 
     protected def build(
@@ -30,12 +51,13 @@ module CrystalClick
       mark_count : Int,
       binding_keys : Array(BinaryDynamicJsonLeafKey),
     ) : Hash(BinaryDynamicJsonLeafKey, Array(UInt64))
+      plan = @plan || raise(ArgumentError.new("Dynamic JSON schedule requires a Dynamic plan"))
       mark_records = mark_count.to_u64
       binding_records = binding_keys.size.to_u64
       retained_records = checked_multiply(binding_records, checked_add(mark_records, 1_u64))
       @budget.preflight_children(retained_records) if retained_records > 0_u64
       retained_records.times { @budget.charge_node }
-      key_bytes = @plan.json_object_binding_key_bytesize_total
+      key_bytes = plan.json_object_binding_key_bytesize_total
       @budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
 
       counts = Hash(BinaryDynamicJsonLeafKey, Array(UInt64)).new(initial_capacity: binding_keys.size)
@@ -44,19 +66,19 @@ module CrystalClick
       end
 
       discriminator_bytes = 0_u64
-      @plan.each_site_path do |site|
-        role = @plan.discriminator_role_for(site)
+      plan.each_site_path do |site|
+        role = plan.discriminator_role_for(site)
         lane = streams.stream(role)
         discriminator_bytes = checked_add(discriminator_bytes, lane.byte_size.to_u64)
       end
       @budget.charge_wire_bytes(discriminator_bytes)
 
       shape_role_count = 0_u64
-      @plan.each_site_path do |site|
-        @plan.arm_count(site).times do |arm_index|
+      plan.each_site_path do |site|
+        plan.arm_count(site).times do |arm_index|
           shape_role_count = checked_add(
             shape_role_count,
-            json_shape_role_count(@plan.arm_type(site, arm_index)),
+            json_shape_role_count(plan.arm_type(site, arm_index)),
           )
         end
       end
@@ -71,9 +93,9 @@ module CrystalClick
       cursor_cells.times { @budget.charge_node }
 
       shape_roles = Array(String).new(shape_role_count.to_i)
-      @plan.each_site_path do |site|
-        @plan.arm_count(site).times do |arm_index|
-          arm_type = @plan.arm_type(site, arm_index)
+      plan.each_site_path do |site|
+        plan.arm_count(site).times do |arm_index|
+          arm_type = plan.arm_type(site, arm_index)
           next unless has_json_leaf?(arm_type)
           arm_path = schedule_child_path(site, ".arm.", arm_index)
           append_json_shape_roles(arm_type, arm_path, shape_roles)
@@ -96,11 +118,11 @@ module CrystalClick
       @budget.charge_wire_bytes(cursor_key_bytes) if cursor_key_bytes > 0_u64
 
       shape_cursors = Hash(Tuple(String, Int32), UInt64).new
-      @plan.each_site_path do |site|
-        arm_count = @plan.arm_count(site)
+      plan.each_site_path do |site|
+        arm_count = plan.arm_count(site)
         json_arm_count = 0_u64
         arm_count.times do |arm_index|
-          json_arm_count += 1_u64 if has_json_leaf?(@plan.arm_type(site, arm_index))
+          json_arm_count += 1_u64 if has_json_leaf?(plan.arm_type(site, arm_index))
         end
         next if json_arm_count == 0_u64
 
@@ -110,18 +132,18 @@ module CrystalClick
         arm_records.times { @budget.charge_node }
         arm_counts = Array(Array(UInt64)?).new(arm_count, nil)
         arm_count.times do |arm_index|
-          next unless has_json_leaf?(@plan.arm_type(site, arm_index))
+          next unless has_json_leaf?(plan.arm_type(site, arm_index))
           arm_counts[arm_index] = Array(UInt64).new(mark_count, 0_u64)
         end
 
-        discriminator_role = @plan.discriminator_role_for(site)
+        discriminator_role = plan.discriminator_role_for(site)
         lane = streams.stream(discriminator_role)
         mark_count.times do |mark|
           cursor = lane.offset_at(mark)
           end_offset = lane.offset_at(mark + 1)
           while cursor < end_offset
             discriminator = lane.byte_at(cursor.to_i)
-            unless discriminator == 0xff_u8 || discriminator.to_i < @plan.arm_count(site)
+            unless discriminator == 0xff_u8 || discriminator.to_i < plan.arm_count(site)
               corrupt!("Dynamic bulk discriminator is outside its actual arm roster")
             end
             if discriminator != 0xff_u8
@@ -136,7 +158,7 @@ module CrystalClick
         arm_count.times do |arm_index|
           mark_counts = arm_counts[arm_index]?
           next unless mark_counts
-          arm_type = @plan.arm_type(site, arm_index)
+          arm_type = plan.arm_type(site, arm_index)
           arm_path = schedule_child_path(site, ".arm.", arm_index)
           leaf_key = BinaryDynamicJsonLeafKey.new(site, arm_index, [] of Int32)
           mark_count.times do |mark|
@@ -151,7 +173,7 @@ module CrystalClick
               streams,
               shape_cursors,
               counts,
-              @initial_descriptor_depth + @plan.depth_for_site(site),
+              @initial_descriptor_depth + plan.depth_for_site(site),
             )
           end
         end
@@ -159,6 +181,162 @@ module CrystalClick
 
       validate_shape_cursors!(streams, shape_cursors, shape_roles, mark_count)
       counts
+    end
+
+    protected def build_root(
+      streams : BinaryBulkStreams,
+      rows_per_mark : Array(UInt64),
+      binding_keys : Array(BinaryDynamicJsonLeafKey),
+    ) : Hash(BinaryDynamicJsonLeafKey, Array(UInt64))
+      type = @root_type || raise(ArgumentError.new("root JSON schedule requires an actual type"))
+      validate_root_binding_keys!(type, binding_keys)
+      unless streams.mark_count == rows_per_mark.size
+        corrupt!("root JSON row-count grid does not match its mark domain")
+      end
+
+      mark_records = rows_per_mark.size.to_u64
+      binding_records = binding_keys.size.to_u64
+      retained_records = checked_multiply(binding_records, checked_add(mark_records, 1_u64))
+      @budget.preflight_children(retained_records) if retained_records > 0_u64
+      retained_records.times { @budget.charge_node }
+      key_bytes = 0_u64
+      binding_keys.each do |key|
+        key_bytes = checked_add(key_bytes, key.dynamic_site_bytesize.to_u64)
+        key_bytes = checked_add(key_bytes, checked_multiply(key.descriptor_path_size.to_u64, 4_u64))
+      end
+      @budget.charge_wire_bytes(key_bytes) if key_bytes > 0_u64
+
+      counts = Hash(BinaryDynamicJsonLeafKey, Array(UInt64)).new(initial_capacity: binding_keys.size)
+      binding_keys.each do |key|
+        counts[key] = Array(UInt64).new(rows_per_mark.size, 0_u64)
+      end
+
+      shape_role_count = json_shape_role_count(type)
+      @budget.preflight_children(shape_role_count) if shape_role_count > 0_u64
+      shape_role_count.times { @budget.charge_node }
+      cursor_cells = checked_multiply(shape_role_count, mark_records)
+      @budget.preflight_children(cursor_cells) if cursor_cells > 0_u64
+      cursor_cells.times { @budget.charge_node }
+      shape_roles = Array(String).new(shape_role_count.to_i)
+      append_json_shape_roles(type, "root", shape_roles)
+      unless shape_roles.size.to_u64 == shape_role_count
+        corrupt!("root JSON shape-role census differs from its descriptor")
+      end
+
+      cursor_key_bytes = 0_u64
+      shape_roles.each do |role|
+        cursor_key_bytes = checked_add(cursor_key_bytes, checked_multiply(role.bytesize.to_u64, mark_records))
+      end
+      @budget.charge_wire_bytes(cursor_key_bytes) if cursor_key_bytes > 0_u64
+      shape_cursors = Hash(Tuple(String, Int32), UInt64).new
+
+      root_key = BinaryDynamicJsonLeafKey.new(
+        "root",
+        binding_keys[0].canonical_arm_index,
+        [] of Int32,
+      )
+      rows_per_mark.each_with_index do |rows, mark|
+        if rows > Int32::MAX.to_u64
+          corrupt!("root JSON actual mark row count exceeds Int32")
+        end
+        census_json_type(
+          type,
+          "root",
+          root_key,
+          rows,
+          mark,
+          streams,
+          shape_cursors,
+          counts,
+          @initial_descriptor_depth,
+        )
+      end
+      validate_shape_cursors!(streams, shape_cursors, shape_roles, rows_per_mark.size)
+      counts
+    end
+
+    # `build_root` is public, so it cannot rely on BinaryDynamicBulkJsonObjectReader
+    # having validated the descriptor first. Bound the complete descriptor
+    # before any recursive shape/JSON summary and prove the caller's leaf-key
+    # array is an exact, unique cover rather than accepting it as a census
+    # certificate.
+    private def validate_root_binding_keys!(
+      type : BinaryDataType,
+      binding_keys : Array(BinaryDynamicJsonLeafKey),
+    ) : Nil
+      unless @initial_descriptor_depth > 0 && @initial_descriptor_depth <= @budget.limits.max_depth
+        corrupt!("root JSON descriptor depth exceeds the configured limit")
+      end
+      context = BinaryCodecContext.new(
+        @budget.limits,
+        nil,
+        @budget.writing?,
+        @budget,
+        false,
+        false,
+      )
+      context.validate_type_tree(type, @initial_descriptor_depth)
+
+      if type.contains_dynamic? || type.contains_variant? ||
+         BinaryLowCardinalityTypePolicy.contains_low_cardinality?(type)
+        corrupt!("root JSON actual descriptor contains an unsupported Dynamic, Variant, or LowCardinality node")
+      end
+      leaf_count = root_json_leaf_count(type, @initial_descriptor_depth)
+      unless leaf_count > 0_u64 && !binding_keys.empty?
+        corrupt!("root JSON binding roster is empty or its descriptor has no JSON leaves")
+      end
+
+      canonical_arm = binding_keys[0].canonical_arm_index
+      seen = Hash(BinaryDynamicJsonLeafKey, Bool).new(initial_capacity: binding_keys.size)
+      binding_keys.each do |key|
+        unless key.dynamic_site == "root" && key.canonical_arm_index == canonical_arm
+          corrupt!("root JSON binding keys do not identify one canonical ordinary arm")
+        end
+        begin
+          key.resolve_json_type(type)
+        rescue ex : ArgumentError | IndexError
+          corrupt!(ex.message || "root JSON binding key does not identify a JSON leaf")
+        end
+        if seen.has_key?(key)
+          corrupt!("root JSON binding key is duplicated")
+        end
+        seen[key] = true
+      end
+      unless binding_keys.size.to_u64 == leaf_count
+        corrupt!("root JSON binding roster does not exactly cover every descriptor JSON leaf")
+      end
+      nil
+    end
+
+    private def root_json_leaf_count(type : BinaryDataType, depth : Int32) : UInt64
+      @budget.visit_node(depth)
+      case type.tag
+      when BinaryDataType::TAG_JSON
+        1_u64
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE,
+           BinaryDataType::TAG_SIMPLE_AGGREGATE
+        unless type.child_count == 1
+          corrupt!("root JSON wrapper has an invalid child count")
+        end
+        root_json_leaf_count(type.child_at(0), root_json_child_depth(depth))
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
+        count = 0_u64
+        type.child_count.times do |index|
+          count = checked_add(count, root_json_leaf_count(type.child_at(index), root_json_child_depth(depth)))
+        end
+        count
+      else
+        if type.contains_json?
+          corrupt!("root JSON leaf crosses an unsupported descriptor wrapper")
+        end
+        0_u64
+      end
+    end
+
+    private def root_json_child_depth(depth : Int32) : Int32
+      value = depth.to_i64 + 1_i64
+      @budget.ensure_depth(value)
+      value.to_i32
     end
 
     # The schedule pass follows only ordinary JSON-bearing descriptor paths.

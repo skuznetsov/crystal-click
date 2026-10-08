@@ -197,7 +197,10 @@ module CrystalClick
       dynamic_plan : BinaryDynamicBulkPlan?,
       allow_bound_json : Bool = false,
     ) : Nil
-      if type.contains_json? && !(allow_bound_json && dynamic_plan.try(&.has_json_object_bindings?))
+      # `allow_bound_json` is set only by a paired leaf owner at the generic
+      # codec boundary. Root inferred-Object JSON has no nominal Dynamic plan,
+      # so the owner proof is carried independently from `dynamic_plan`.
+      if type.contains_json? && !allow_bound_json
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk default-value profile")
       end
       if type.contains_dynamic? && dynamic_plan.nil?

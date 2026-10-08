@@ -1,6 +1,118 @@
 # Recursive declared Object Dynamic frontier
 
-## Active composition track — W215 (2026-10-07)
+## Current composition slice — W216 (2026-10-07)
+
+Status: VERIFIED, scoped ROBUST for bound ordinary JSON leaves at inferred
+Object Dynamic paths. Baseline: `ff1cd49`. The full types, MV/projections,
+then memory/performance objective remains active. Recursive leaf serializers
+are reused; this is not a serializer per type product or all-layout closure.
+
+Admission and ownership:
+
+- Root path values remain bare `BinaryValue` actuals. `DynamicValueCodec`
+  owns their legacy discriminator/arm envelope, not the nominal
+  `BinaryDynamicBulkCodec` envelope.
+- `DynamicJsonObjectBindingRoster` derives the complete census under the
+  current operation budget. Every JSON descriptor leaf, including unused arms,
+  has exactly one matching child Object plan. Root path, canonical arm and
+  descriptor-child path identify the binding. Missing, extra, duplicate and
+  wrong-schema bindings reject. Exact whole-arm identity is sealed before a
+  root adapter is used; a matching JSON leaf alone is insufficient.
+- The generic recursive visitor composes normalized Array/Tuple/Map/Nullable
+  wrappers through the existing child Object owner. Legal grammar remains a
+  separate admission condition. JSON-bearing Dynamic V3 actual rosters retain
+  their recursive-Dynamic, Variant-containing and ordinary LowCardinality
+  refusals; supported base types do not authorize forbidden products.
+- Parent physical mark rows P and logical child occurrences Q stay distinct,
+  including P>0/Q=0 and terminal zero. Complete child domains and persisted
+  schemas are validated before selected values or EOF are exposed. Ordinary
+  no-JSON selected reads keep their previous route.
+- The same operation budget and explicit absolute typed/inferred origins cross
+  Object/JSON handoffs. An inferred-root JSON leaf at depth D gives both child
+  origins D+1. A declared typed-Dynamic leaf keeps child typed origin D+1;
+  its child inferred-actual origin is D+2 only when persisted child Object
+  metadata contains inferred Dynamic paths. No phantom edge is charged to a
+  child without inferred paths, and no real edge may reset.
+- Inferred-root children inherit the enclosing Object shared-data profile;
+  the default remains `single_stream`. Existing typed-Dynamic child profile
+  policy is unchanged. Public unbound bulk constructors, Dynamic SharedVariant
+  defaults and outer Object shared MAP/Copy guards are not widened.
+- Statistics, normalized streams, complete-part writing, automatic physical
+  discovery, column and typed-table consumers share the checked handoff.
+  Five cohesive new owners each have their own source file; broad facade
+  decomposition remains open.
+
+Observed final DoD:
+
+1. The same 152 unique affected spec files pass 914 examples in each of DEBUG
+   and RELEASE, in 19 serial cohorts per mode. All 38 actual guarded exits are
+   zero, with zero failures, errors and pending examples. The five-file
+   W215/W216 focused gate passes 34 examples per mode. Source/spec/helper/
+   runner bytes are unchanged throughout these final gates.
+2. Fresh native probes pass four cells per mode: `single_stream` and
+   `with_size_stream` String profiles x BASIC/COMPACT Dynamic discriminators,
+   finite Wide/LZ4 parts. COMPACT is not the Compact MergeTree part layout.
+   Each mode reads four stock-authored parts and directly ATTACHes four
+   independently library-authored parts, with four source CHECKs and eight
+   attached source/library CHECKs.
+3. Native stock and library declarations are identical:
+   parent `JSON(max_dynamic_paths=16, max_dynamic_types=4)`, direct and
+   Array-wrapped child `JSON(max_dynamic_types=0, max_dynamic_paths=0, v UInt8)`.
+   Eight independent literal Object RowBinary rows exercise sparse sibling
+   paths, empty arrays, four marks [2,2,2,2], full/first/later/final windows and
+   EOF. This finite matrix does not qualify every normalized wrapper product.
+4. The root raw-artifact audit independently checks the literal input bytes,
+   exact INSERT paths/types, ordered SELECT predicates/results, empty-window
+   framing, actual process records and immutable part contents. It exits zero;
+   all 228 generated library-part files reconcile across DEBUG/RELEASE,
+   including current modes. The original source snapshot did not record
+   permissions, so its pre/post permission preservation is not claimed.
+   ATTACH permits only the checked 28-byte, mode-0644
+   `_block_offset\n_block_number\n` file addition.
+5. Four in-memory raw-auditor mutations are rejected: literal path substitution,
+   omitted empty SELECT, changed selected predicate and reversed EOF boundaries.
+   These audit-contract tests execute neither native serde nor the library and
+   are not source-to-binary build attestation.
+6. Unchanged W215 depth coverage first exposed a real typed/inferred-origin
+   regression (32 examples, one failure). The paired fix preserves its original
+   assertion. A new public root-writer whole-arm witness was observed RED
+   before the seal fix (10 examples, one failure). A current production
+   inferred-origin-reset seed also fails the unchanged shifted-origin assertion
+   (10 examples, one failure); the codec is then restored byte-for-byte.
+   Restored focused, broad and native gates pass.
+7. Physical corruption witnesses refresh test fixture checksum metadata to
+   reach child validation: excluded nonempty direct/Array child bodies with
+   trailing bytes and an excluded wrong parent row grid reject even for EOF.
+   These prove the exercised full-domain guard, not production checksum-hash
+   verification or whole-scan callback atomicity.
+
+All resource jobs are serial under the unchanged 50%-free-memory guard.
+Exact commands, source/log/artifact pins and observed exits are indexed in
+[the W216 evidence packet](../.landmark/evidence/object-inferred-dynamic-json-w216.json).
+The packet is an index to executed evidence, not proof by its structure.
+
+Source comparison uses the clean one-commit shallow checkout
+`/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1`, revision
+`0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native qualification uses the
+separately pinned `26.10.1.1201` executable, build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`;
+it is not a build of that source revision. Earlier stock-only direct/tuple
+RowBinary probes established fixture routes, not library qualification.
+Ruby Range/tag/key-roster and raw-audit manifest-schema mistakes were corrected
+as instrumentation errors; their failed runs are not native format successes.
+
+Risk: CAUTION (persisted format and API propagation). Rollback is only the
+coherent local feature commit, without push. Strongest attacked failure:
+losing inherited depth or confusing sibling leaf/whole-arm physical ownership.
+
+Open: outer Object shared MAP/Copy and advanced layouts/profiles, generic
+Dynamic owned offline values, MV/projection propagation and broad facade
+decomposition. No all-type/all-layout, RSS or performance claim follows.
+Refresh if descriptors, bindings, origins, budgets, physical profiles,
+consumers, source/runtime pins or relevant source bytes change. Raw temporary
+evidence is not durable storage; if it disappears, re-execute rather than
+reconstructing an observed run.
+
+## Previous composition slice — W215 (2026-10-07)
 
 Status: VERIFIED, scoped ROBUST for ordinary JSON actual leaves at declared
 Object typed-Dynamic sites. Baseline: `52ff690`. The complete types,

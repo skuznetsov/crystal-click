@@ -8,6 +8,7 @@ module CrystalClick
     getter canonical_arm_index : Int32
     getter escaped_prefix : String
     getter array_level : UInt64
+    getter json_depth : Int32
     getter binding : DynamicJsonObjectBinding
     getter physical_plan : ObjectDocumentPhysicalPlan
 
@@ -17,6 +18,7 @@ module CrystalClick
       @array_level : UInt64,
       @binding : DynamicJsonObjectBinding,
       @physical_plan : ObjectDocumentPhysicalPlan,
+      @json_depth : Int32 = 1_i32,
     )
       @leaf_key = leaf_key
       @site_path = String.new(leaf_key.dynamic_site.to_slice)

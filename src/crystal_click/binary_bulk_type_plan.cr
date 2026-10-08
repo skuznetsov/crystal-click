@@ -9,6 +9,7 @@ module CrystalClick
     @dynamic_plan : BinaryDynamicBulkPlan?
     @limits : BinaryCodecLimits
     @writing : Bool
+    @allow_bound_json : Bool
     @qbit_column : QBitColumnType?
 
     struct LowCardinalitySite
@@ -33,8 +34,10 @@ module CrystalClick
       @dynamic_plan : BinaryDynamicBulkPlan? = nil,
       @limits : BinaryCodecLimits = BinaryCodecLimits.default,
       @writing : Bool = true,
+      @allow_bound_json : Bool = false,
     )
-      if @type.contains_json?
+      @allow_bound_json = allow_bound_json
+      if @type.contains_json? && !@allow_bound_json
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end
       # Dynamic QBit leaves have per-actual-site roles owned by the supplied
@@ -150,6 +153,8 @@ module CrystalClick
 
     private def count_roles(type : BinaryDataType) : UInt64
       case type.tag
+      when BinaryDataType::TAG_JSON
+        0_u64
       when BinaryDataType::TAG_STRING
         @profile.with_size_stream? ? 2_u64 : 1_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE
@@ -193,6 +198,8 @@ module CrystalClick
     private def count_ordinary_roles(type : BinaryDataType) : UInt64
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
+        0_u64
+      when BinaryDataType::TAG_JSON
         0_u64
       when BinaryDataType::TAG_QBIT
         qbit = type.qbit_type || raise UnsupportedFormatError.new("QBit bulk descriptor is missing its nominal type")
@@ -304,6 +311,8 @@ module CrystalClick
 
     private def append_roles(type : BinaryDataType, path : String, roles : Array(String)) : Nil
       case type.tag
+      when BinaryDataType::TAG_JSON
+        nil
       when BinaryDataType::TAG_STRING
         roles << "#{path}.data"
         roles << "#{path}.string_sizes" if @profile.with_size_stream?
@@ -355,6 +364,8 @@ module CrystalClick
     private def append_ordinary_roles(type : BinaryDataType, path : String, roles : Array(String)) : Nil
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
+        nil
+      when BinaryDataType::TAG_JSON
         nil
       when BinaryDataType::TAG_STRING
         roles << "#{path}.data"

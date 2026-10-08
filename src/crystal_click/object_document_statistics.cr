@@ -75,7 +75,7 @@ module CrystalClick
       # copied into ObjectStructure, copied into ObjectDynamicStructureSet,
       # then read once by that set's roster check. Typed paths are read once
       # and copied into the returned ObjectDocumentPlan.
-      dynamic_paths, typed_paths, typed_types, typed_dynamic_sites, typed_dynamic_json_object_leaf_plans = copy_rosters(plan, budget)
+      dynamic_paths, typed_paths, typed_types, typed_dynamic_sites, typed_dynamic_json_object_leaf_plans, root_dynamic_json_object_leaf_plans = copy_rosters(plan, budget)
       typed_by_path = Hash(String, BinaryDataType).new
       typed_paths.each_with_index do |path, index|
         typed_by_path[path] = typed_types[index]
@@ -167,9 +167,14 @@ module CrystalClick
               if value.type.tag == BinaryDataType::TAG_NULLABLE
                 raise UnsupportedFormatError.new("top-level Nullable is outside the Dynamic V3 canonical profile")
               end
+              context.validate_type_tree(value.type, plan.inferred_actual_root_depth)
 
               routing = routings[dynamic_index]
-              name_bounds = BinaryTypeNameBudget.measure(value.type, budget)
+              name_bounds = BinaryTypeNameBudget.measure(
+                value.type,
+                budget,
+                plan.inferred_actual_root_depth,
+              )
               name = BinaryTypeNameBudget.materialize(value.type, budget, name_bounds)
               arm_index = DynamicValueCodec.route_index(value.type, name, routing[3], routing[4]).to_i
               increment!(object_counts, dynamic_index)
@@ -236,6 +241,9 @@ module CrystalClick
         typed_schema,
         typed_dynamic_sites: typed_dynamic_sites,
         typed_dynamic_json_object_leaf_plans: typed_dynamic_json_object_leaf_plans,
+        root_dynamic_json_object_leaf_plans: root_dynamic_json_object_leaf_plans,
+        root_dynamic_json_budget: budget,
+        inferred_actual_root_depth: plan.inferred_actual_root_depth,
       )
     end
 
@@ -247,6 +255,7 @@ module CrystalClick
       Array(String),
       Array(BinaryDataType),
       Hash(String, Hash(String, DynamicStructure)),
+      Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))),
       Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))),
     )
       object = plan.structures.object
@@ -292,6 +301,7 @@ module CrystalClick
         typed_dynamic_paths << plan.typed_dynamic_path_at(index)
       end
       typed_dynamic_json_object_leaf_plans = plan.typed_dynamic_json_object_leaf_plans(budget)
+      root_dynamic_json_object_leaf_plans = plan.root_dynamic_json_object_leaf_plans(budget)
 
       typed_dynamic_site_count = 0_u64
       typed_dynamic_paths.each do |path|
@@ -359,7 +369,14 @@ module CrystalClick
         end
         typed_dynamic_sites[path] = site_roster
       end
-      {dynamic_paths, typed_paths, typed_types, typed_dynamic_sites, typed_dynamic_json_object_leaf_plans}
+      {
+        dynamic_paths,
+        typed_paths,
+        typed_types,
+        typed_dynamic_sites,
+        typed_dynamic_json_object_leaf_plans,
+        root_dynamic_json_object_leaf_plans,
+      }
     end
 
     private def self.build_routings(
@@ -378,7 +395,11 @@ module CrystalClick
         bounds = Array(BinaryTypeNameBudget::Bounds).new(type_count)
         aggregate_roster_bound = DynamicStructure::SHARED_VARIANT_NAME.bytesize.to_u64
         type_count.times do |index|
-          bound = BinaryTypeNameBudget.measure(structure.type_at(index), budget)
+          bound = BinaryTypeNameBudget.measure(
+            structure.type_at(index),
+            budget,
+            plan.inferred_actual_root_depth,
+          )
           bounds << bound
           aggregate_roster_bound = checked_add(aggregate_roster_bound, bound[0])
         end

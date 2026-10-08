@@ -45,20 +45,39 @@ module CrystalClick
       limits : BinaryCodecLimits,
       context : PhysicalStreamPlanContext?,
       initial_array_level : UInt64,
+      root_json_authority : Tuple(DynamicJsonObjectBindingRoster, Int32, BinaryCodecBudget)? = nil,
     )
-      reject_json_type!(type)
+      allow_bound_json = false
+      if type.contains_json?
+        authority = root_json_authority || raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
+        roster, canonical_arm_index, budget = authority
+        unless same_limits?(limits, budget.limits) && roster.matches_root_json_arm_operation?(canonical_arm_index, type, budget)
+          raise UnsupportedFormatError.new("root Dynamic JSON physical arm is not authorized by its complete binding roster")
+        end
+        allow_bound_json = true
+      elsif root_json_authority
+        raise UnsupportedFormatError.new("root Dynamic JSON physical arm authorization does not match a JSON-bearing type")
+      end
       BinaryQBitBulkCodec.column_type(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
+      if root_json_authority && !same_limits?(limits, @context.limits)
+        raise ArgumentError.new("binary bulk physical plan context limits do not match")
+      end
       @prefix_sizes = Hash(String, Int32).new
       validate_initial_array_level!(initial_array_level, limits)
       @context.preflight_name_bytes(escaped_prefix.value.bytesize.to_u64)
-      @names = build_bindings(type, escaped_prefix.value, initial_array_level)
+      @names = build_bindings(type, escaped_prefix.value, initial_array_level, allow_bound_json)
     end
 
-    private def build_bindings(type : BinaryDataType, prefix : String, initial_array_level : UInt64) : Hash(String, String)
+    private def build_bindings(
+      type : BinaryDataType,
+      prefix : String,
+      initial_array_level : UInt64,
+      allow_bound_json : Bool = false,
+    ) : Hash(String, String)
       validate_type(type, 0)
-      role_plan = BinaryBulkTypePlan.new(type, @profile, nil, @context.limits)
+      role_plan = BinaryBulkTypePlan.new(type, @profile, nil, @context.limits, allow_bound_json: allow_bound_json)
       role_count = role_plan.role_count
       @context.record_elements(role_count)
       if type.contains_variant?
@@ -229,6 +248,47 @@ module CrystalClick
       new(type, EscapedPrefix.validated(escaped_prefix), profile, limits, selected_context, initial_array_level)
     end
 
+    # Composition entry point for one canonical ordinary arm of an inferred
+    # Object Dynamic root. Its complete roster authorizes JSON stop-sites;
+    # the physical role visitor contributes only wrapper/ordinary roles while
+    # each bound child Object plan owns the JSON leaf's physical lanes.
+    def self.for_root_json_arm(
+      type : BinaryDataType,
+      canonical_arm_index : Int32,
+      roster : DynamicJsonObjectBindingRoster,
+      budget : BinaryCodecBudget,
+      escaped_prefix : String,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      context : PhysicalStreamPlanContext? = nil,
+      initial_array_level : UInt64 = 0_u64,
+    ) : BinaryBulkPhysicalPlan
+      unless same_limits?(limits, budget.limits)
+        raise ArgumentError.new("root Dynamic JSON binding budget limits do not match the physical plan")
+      end
+      selected_context = context || PhysicalStreamPlanContext.new(limits)
+      unless same_limits?(limits, selected_context.limits)
+        raise ArgumentError.new("binary bulk physical plan context limits do not match")
+      end
+      unless roster.matches_root_json_arm_operation?(canonical_arm_index, type, budget)
+        raise UnsupportedFormatError.new("root Dynamic JSON physical arm is not authorized by its complete binding roster")
+      end
+      BinaryQBitBulkCodec.column_type(type)
+      if type.contains_dynamic?
+        raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")
+      end
+      selected_context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
+      new(
+        type,
+        EscapedPrefix.validated(escaped_prefix),
+        profile,
+        limits,
+        selected_context,
+        initial_array_level,
+        {roster, canonical_arm_index, budget},
+      )
+    end
+
     private def validate_initial_array_level!(level : UInt64, limits : BinaryCodecLimits) : Nil
       if level > UInt64::MAX - limits.max_depth.to_u64
         raise UnsupportedFormatError.new("binary bulk initial Array level overflows the physical name coordinate")
@@ -343,6 +403,9 @@ module CrystalClick
       role_bytes = 0_u64
       name_bytes = 0_u64
       case type.tag
+      when BinaryDataType::TAG_JSON
+        # The bound root JSON child Object plan owns the JSON leaf lanes.
+        {0_u64, 0_u64}
       when BinaryDataType::TAG_STRING
         role_bytes = add_size(role_bytes, add_size(role_length, 5_u64))
         name_bytes = add_size(name_bytes, name_length)
@@ -452,6 +515,9 @@ module CrystalClick
       variant_names : BinaryBulkVariantNamePlan? = nil,
     ) : Nil
       case type.tag
+      when BinaryDataType::TAG_JSON
+        # The bound root JSON child Object plan owns the JSON leaf lanes.
+        nil
       when BinaryDataType::TAG_STRING
         names["#{role}.data"] = String.new(prefix.to_slice)
         if @profile.with_size_stream?
@@ -667,6 +733,20 @@ module CrystalClick
         raise UnsupportedFormatError.new("physical stream roster size overflows UInt64")
       end
       left * right
+    end
+
+    private def same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth &&
+        left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements &&
+        left.max_bytes == right.max_bytes
+    end
+
+    private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth &&
+        left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements &&
+        left.max_bytes == right.max_bytes
     end
   end
 end

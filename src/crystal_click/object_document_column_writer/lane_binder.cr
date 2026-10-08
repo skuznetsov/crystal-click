@@ -88,6 +88,13 @@ module CrystalClick
               streams.mark_count
             )
           end
+          defer_root_json_object_child_lanes!(
+            expected,
+            deferred_json_names,
+            physical_plan,
+            path,
+            dynamic_streams,
+          )
         end
 
         typed_paths = [] of String
@@ -305,6 +312,63 @@ module CrystalClick
         end
         unless seen.size == stream_keys.size
           raise UnsupportedFormatError.new("typed Dynamic JSON child stream roster omitted a bound leaf")
+        end
+        nil
+      end
+
+      # Inferred-root Dynamic JSON children are appended by the dedicated root
+      # composer after ordinary Object lanes have been encoded. Defer only the
+      # exact names in the already checked root physical-site roster, so the
+      # ordinary lane cover remains strict while the no-JSON path stays empty.
+      private def self.defer_root_json_object_child_lanes!(
+        expected : Hash(String, Bool),
+        deferred : Hash(String, Bool),
+        physical_plan : ObjectDocumentPhysicalPlan,
+        path : String,
+        streams : DynamicValueStreams,
+      ) : Nil
+        stream_count = streams.json_object_leaf_count
+        has_physical_sites = physical_plan.has_root_dynamic_json?(path)
+        if stream_count == 0
+          if has_physical_sites
+            raise UnsupportedFormatError.new("no-JSON root Dynamic path acquired physical child sites")
+          end
+          return nil
+        end
+        unless has_physical_sites
+          raise UnsupportedFormatError.new("root Dynamic JSON child streams have no physical site roster")
+        end
+
+        child_sites = physical_plan.root_dynamic_json(path)
+        unless child_sites.json_object_site_count == stream_count
+          raise UnsupportedFormatError.new("root Dynamic JSON child streams do not match their physical site roster")
+        end
+        stream_keys = streams.json_object_leaf_keys
+        unless stream_keys.size == stream_count
+          raise UnsupportedFormatError.new("root Dynamic JSON child key snapshot changed its stream count")
+        end
+        seen = Hash(BinaryDynamicJsonLeafKey, Bool).new(initial_capacity: stream_count)
+        stream_keys.each do |key|
+          site = begin
+            child_sites.json_object_site(key)
+          rescue ex : KeyError
+            raise UnsupportedFormatError.new("root Dynamic JSON child stream has no physical leaf site")
+          end
+          unless !seen.has_key?(key) && streams.has_json_object_leaf?(key) &&
+                 site.leaf_key == key && site.binding.leaf_key == key
+            raise UnsupportedFormatError.new("root Dynamic JSON child binding differs from its physical leaf roster")
+          end
+          seen[key] = true
+          site.physical_plan.stream_names.each do |name|
+            unless expected.has_key?(name) && !expected[name] && !deferred.has_key?(name)
+              raise UnsupportedFormatError.new("root Dynamic JSON child lane has no unique physical filename binding")
+            end
+            expected[name] = true
+            deferred[name] = true
+          end
+        end
+        unless seen.size == child_sites.json_object_site_count
+          raise UnsupportedFormatError.new("root Dynamic JSON physical roster contains an unbound child site")
         end
         nil
       end

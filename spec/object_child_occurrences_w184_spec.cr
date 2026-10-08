@@ -32,11 +32,13 @@ module CrystalClick::ObjectDocumentCodec
     profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     typed_descriptor_root_depth : Int32 = 2,
+    inferred_actual_root_depth : Int32? = nil,
   ) : ObjectDocumentStreams
     W184ChildOccurrenceProbe.observe_budget("object", budget)
     previous_def(
       plan, granules, grid, budget, mode: mode, profile: profile,
       shared_profile: shared_profile, typed_descriptor_root_depth: typed_descriptor_root_depth,
+      inferred_actual_root_depth: inferred_actual_root_depth,
     )
   end
 end
@@ -49,9 +51,17 @@ class CrystalClick::DynamicValueCodec
     budget : BinaryCodecBudget,
     mode : UInt64 = DynamicDiscriminatorCodec::BASIC_MODE,
     profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)) = [] of Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan),
+    inferred_actual_root_depth : Int32 = 1_i32,
+    child_shared_profile : BinaryBulkProfile = profile,
   ) : DynamicValueStreams
     W184ChildOccurrenceProbe.observe_budget("dynamic", budget)
-    previous_def(structure, granules, grid, budget, mode: mode, profile: profile)
+    previous_def(
+      structure, granules, grid, budget, mode: mode, profile: profile,
+      json_object_leaf_plans: json_object_leaf_plans,
+      inferred_actual_root_depth: inferred_actual_root_depth,
+      child_shared_profile: child_shared_profile,
+    )
   end
 end
 

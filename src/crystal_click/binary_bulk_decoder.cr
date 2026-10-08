@@ -12,6 +12,7 @@ module CrystalClick
       dynamic_plan : BinaryDynamicBulkPlan? = nil,
       json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
       shared_value_depth_origin : Int = 1,
+      json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
     ) : Array(Array(BinaryValue))
       unless !budget.writing?
         raise ArgumentError.new("binary bulk decoder requires a read-direction budget")
@@ -23,10 +24,22 @@ module CrystalClick
       if dynamic_plan.try(&.has_json_object_bindings?) && json_object_reader.nil?
         corrupt!("bound Dynamic JSON arms require the paired Object child reader")
       end
+      root_json_bound = false
       if reader = json_object_reader
-        unless dynamic_plan && reader.matches_operation?(dynamic_plan, budget)
-          raise ArgumentError.new("Dynamic JSON Object reader does not match the bulk plan")
+        if plan = dynamic_plan
+          unless json_leaf_key.nil? && reader.matches_operation?(plan, budget)
+            raise ArgumentError.new("Dynamic JSON Object reader does not match the bulk plan")
+          end
+        elsif key = json_leaf_key
+          unless reader.matches_root_operation?(type, key, budget, shared_value_depth_origin)
+            raise ArgumentError.new("inferred Dynamic JSON Object reader does not match the root leaf")
+          end
+          root_json_bound = true
+        else
+          raise ArgumentError.new("root Dynamic JSON Object reader requires an exact seed leaf key")
         end
+      elsif json_leaf_key
+        raise ArgumentError.new("binary bulk JSON seed key has no paired Object reader")
       end
 
       real_marks = streams.mark_count
@@ -37,7 +50,7 @@ module CrystalClick
 
       traversal = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
       traversal.validate_type_tree(type)
-      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan, budget.limits, false)
+      plan = BinaryBulkTypePlan.new(type, profile, dynamic_plan, budget.limits, false, root_json_bound)
       planned_role_count = plan.role_count
       ordinary_role_count = plan.ordinary_role_count
       low_cardinality_sites = plan.low_cardinality_sites
@@ -97,7 +110,7 @@ module CrystalClick
         BinaryQBitBulkCodec.preflight_materialization!(column, selected_rows, budget.limits, false)
       end
 
-      minimum = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, nil, dynamic_plan)
+      minimum = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, nil, dynamic_plan, root_json_bound)
       minimum_nodes = checked_multiply(selected_rows, minimum.nodes)
       minimum_edges = checked_multiply(selected_rows, minimum.edges)
       budget.ensure_future_nodes(minimum_nodes)
@@ -140,7 +153,7 @@ module CrystalClick
         lc_cursors = Hash(String, Int32).new(0)
         json_object_reader.try(&.begin_mark(mark))
         values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, nil, shared_value_depth_origin)
+          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key, shared_value_depth_origin)
         end
         contexts.each_value do |context|
           context.ensure_consumed

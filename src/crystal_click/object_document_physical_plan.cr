@@ -32,6 +32,7 @@ module CrystalClick
       getter typed_plans : Hash(String, BinaryBulkPhysicalPlan)
       getter typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
       getter dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
+      getter root_dynamic_json_plans : Hash(String, ObjectDocumentRootDynamicJsonPhysicalPlan)
       getter shared_plans : Array(BinaryBulkPhysicalPlan)
       getter shared_bucket_count : Int32
       getter advanced_copy_stream_names : Hash(String, String)
@@ -45,6 +46,7 @@ module CrystalClick
         @typed_plans : Hash(String, BinaryBulkPhysicalPlan),
         @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan),
         @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan)),
+        @root_dynamic_json_plans : Hash(String, ObjectDocumentRootDynamicJsonPhysicalPlan),
         @shared_plans : Array(BinaryBulkPhysicalPlan),
         @shared_bucket_count : Int32,
         @advanced_copy_stream_names : Hash(String, String),
@@ -60,6 +62,7 @@ module CrystalClick
     @typed_plans : Hash(String, BinaryBulkPhysicalPlan)
     @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPhysicalPlan)
     @dynamic_arm_plans : Hash(String, Hash(String, BinaryBulkPhysicalPlan))
+    @root_dynamic_json_plans : Hash(String, ObjectDocumentRootDynamicJsonPhysicalPlan)
     @shared_plans : Array(BinaryBulkPhysicalPlan)
     @shared_bucket_count : Int32
     @advanced_copy_stream_names : Hash(String, String)
@@ -69,6 +72,8 @@ module CrystalClick
     @shared_data_version : UInt64
     @initial_array_level : UInt64
     @typed_descriptor_root_depth : Int32
+    @inferred_actual_root_depth : Int32
+    @shared_profile : BinaryBulkProfile
 
     # Discover only declared Dynamic structure basenames, without constructing
     # a dummy BinaryDynamicBulkPlan. This is used before metadata is available;
@@ -230,6 +235,8 @@ module CrystalClick
       initial_array_level : UInt64 = 0_u64,
       context : PhysicalStreamPlanContext? = nil,
       typed_descriptor_root_depth : Int32 = 2,
+      inferred_actual_root_depth : Int32? = nil,
+      root_dynamic_json_budget : BinaryCodecBudget? = nil,
     ) : ObjectDocumentPhysicalPlan
       PhysicalStreamName.validate_canonical_escaped_prefix(escaped_prefix)
       unless escaped_prefix.bytesize.to_u64 <= limits.max_bytes.to_u64 &&
@@ -243,7 +250,9 @@ module CrystalClick
       end
       new(
         EscapedPrefix.validated(escaped_prefix), plan, profile, shared_profile, limits,
-        initial_array_level, context, typed_descriptor_root_depth
+        initial_array_level, context, typed_descriptor_root_depth,
+        inferred_actual_root_depth || plan.inferred_actual_root_depth,
+        root_dynamic_json_budget,
       )
     end
 
@@ -255,20 +264,27 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       initial_array_level : UInt64 = 0_u64,
       typed_descriptor_root_depth : Int32 = 2,
+      inferred_actual_root_depth : Int32? = nil,
+      root_dynamic_json_budget : BinaryCodecBudget? = nil,
     )
+      inferred_depth = inferred_actual_root_depth || plan.inferred_actual_root_depth
+      selected_root_budget = root_dynamic_json_budget || BinaryCodecBudget.new(limits, false)
       state = build_plan(
         column_name, nil, plan, profile, shared_profile, limits, initial_array_level, nil,
-        typed_descriptor_root_depth
+        typed_descriptor_root_depth, inferred_depth, selected_root_budget
       )
       @profile = profile
+      @shared_profile = shared_profile
       @initial_array_level = initial_array_level
       @typed_descriptor_root_depth = typed_descriptor_root_depth
+      @inferred_actual_root_depth = inferred_depth
       @object_structure_stream = state.object_structure_stream
       @dynamic_structure_streams = state.dynamic_structure_streams
       @discriminator_streams = state.discriminator_streams
       @typed_plans = state.typed_plans
       @typed_dynamic_plans = state.typed_dynamic_plans
       @dynamic_arm_plans = state.dynamic_arm_plans
+      @root_dynamic_json_plans = state.root_dynamic_json_plans
       @shared_plans = state.shared_plans
       @shared_bucket_count = state.shared_bucket_count
       @advanced_copy_stream_names = state.advanced_copy_stream_names
@@ -287,20 +303,26 @@ module CrystalClick
       initial_array_level : UInt64,
       context : PhysicalStreamPlanContext?,
       typed_descriptor_root_depth : Int32,
+      inferred_actual_root_depth : Int32,
+      root_dynamic_json_budget : BinaryCodecBudget?,
     )
+      selected_budget = root_dynamic_json_budget || BinaryCodecBudget.new(limits, false)
       state = build_plan(
         nil, escaped_prefix.value, plan, profile, shared_profile, limits, initial_array_level,
-        context, typed_descriptor_root_depth
+        context, typed_descriptor_root_depth, inferred_actual_root_depth, selected_budget
       )
       @profile = profile
+      @shared_profile = shared_profile
       @initial_array_level = initial_array_level
       @typed_descriptor_root_depth = typed_descriptor_root_depth
+      @inferred_actual_root_depth = inferred_actual_root_depth
       @object_structure_stream = state.object_structure_stream
       @dynamic_structure_streams = state.dynamic_structure_streams
       @discriminator_streams = state.discriminator_streams
       @typed_plans = state.typed_plans
       @typed_dynamic_plans = state.typed_dynamic_plans
       @dynamic_arm_plans = state.dynamic_arm_plans
+      @root_dynamic_json_plans = state.root_dynamic_json_plans
       @shared_plans = state.shared_plans
       @shared_bucket_count = state.shared_bucket_count
       @advanced_copy_stream_names = state.advanced_copy_stream_names
@@ -320,6 +342,8 @@ module CrystalClick
       initial_array_level : UInt64,
       provided_context : PhysicalStreamPlanContext?,
       typed_descriptor_root_depth : Int32,
+      inferred_actual_root_depth : Int32,
+      root_dynamic_json_budget : BinaryCodecBudget,
     ) : PlanState
       if initial_array_level > UInt64::MAX - limits.max_depth.to_u64
         raise UnsupportedFormatError.new("physical Object initial Array level overflows the name coordinate")
@@ -330,6 +354,12 @@ module CrystalClick
       end
       if plan.typed_dynamic_count > 0 && typed_descriptor_root_depth < 2
         raise UnsupportedFormatError.new("physical Object typed Dynamic descriptor root depth must be at least 2")
+      end
+      if inferred_actual_root_depth <= 0 || inferred_actual_root_depth > limits.max_depth
+        raise UnsupportedFormatError.new("physical Object inferred Dynamic actual root depth exceeds the configured limit")
+      end
+      unless same_limits?(root_dynamic_json_budget.limits, limits)
+        raise ArgumentError.new("physical Object root JSON budget limits differ from the site limits")
       end
       object = plan.structures.object
       unless ObjectSharedBucketLayout.supported?(object)
@@ -380,6 +410,7 @@ module CrystalClick
       dynamic_structure_streams = Hash(String, String).new
       discriminator_streams = Hash(String, String).new
       dynamic_arm_plans = Hash(String, Hash(String, BinaryBulkPhysicalPlan)).new
+      root_dynamic_json_plans = Hash(String, ObjectDocumentRootDynamicJsonPhysicalPlan).new
       object.dynamic_path_count.times do |index|
         preflight_object_path(object, index, column_prefix.bytesize.to_u64, context)
         raw_path = object.dynamic_path_at(index)
@@ -403,18 +434,41 @@ module CrystalClick
         arm_plans[String.new(DynamicStructure::SHARED_VARIANT_NAME.to_slice)] = shared_arm
         collect_plan_names!(shared_arm, seen_names)
 
+        # Bound every actual descriptor before asking any cached recursive
+        # summary whether the arm contains JSON. Root JSON discovery reuses
+        # these already bounded actuals and returns a complete arm roster.
+        dynamic.type_count.times do |type_index|
+          preflight_dynamic_type(dynamic.type_at(type_index), limits.max_depth, 0, context, 0_u64, 0_u64)
+        end
+        leaf_plans = plan.root_dynamic_json_object_leaf_plans_for(raw_path, root_dynamic_json_budget)
+        roster = DynamicJsonObjectBindingRoster.for_root_if_json(
+          dynamic,
+          leaf_plans,
+          root_dynamic_json_budget,
+          inferred_actual_root_depth,
+        )
+
         dynamic.type_count.times do |type_index|
           type = dynamic.type_at(type_index)
-          preflight_dynamic_type(type, limits.max_depth, 0, context, 0_u64, 0_u64)
           if type.contains_variant?
             raise UnsupportedFormatError.new("physical Object Dynamic Variant alternatives are not admitted")
           end
-          name_bound = display_name_bound(type, limits.max_depth, 0)
+          has_json_name = type.contains_json?
+          name_bounds = if has_json_name
+                          BinaryTypeNameBudget.measure(type, root_dynamic_json_budget, inferred_actual_root_depth)
+                        else
+                          {display_name_bound(type, limits.max_depth, 0), 0_u64}
+                        end
+          name_bound = name_bounds[0]
           escaped_name_bound = multiply_size(name_bound, 3_u64)
           context.preflight_name_bytes(escaped_name_bound)
           context.preflight_name_bytes(add_size(path_prefix.bytesize.to_u64, add_size(1_u64, escaped_name_bound)))
 
-          arm_name = type.name
+          arm_name = if has_json_name
+                       BinaryTypeNameBudget.materialize(type, root_dynamic_json_budget, name_bounds)
+                     else
+                       type.name
+                     end
           unless arm_name.bytesize.to_u64 <= name_bound
             raise UnsupportedFormatError.new("Dynamic SQL display name exceeded its metadata preflight bound")
           end
@@ -423,13 +477,90 @@ module CrystalClick
             raise UnsupportedFormatError.new("Dynamic alternatives collide on SQL display name")
           end
           arm_prefix = PhysicalStreamName.append_escaped_component(path_prefix, arm_name, context)
-          arm_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
-            type, arm_prefix, profile, limits, context, initial_array_level
-          )
+          arm_plan = if has_json_name
+                       root_roster = roster || raise UnsupportedFormatError.new("root Dynamic JSON arm is missing its complete binding roster")
+                       BinaryBulkPhysicalPlan.for_root_json_arm(
+                         type,
+                         dynamic.canonical_index_for(type),
+                         root_roster,
+                         root_dynamic_json_budget,
+                         arm_prefix,
+                         profile,
+                         limits,
+                         context,
+                         initial_array_level,
+                       )
+                     else
+                       BinaryBulkPhysicalPlan.from_escaped_prefix(
+                         type, arm_prefix, profile, limits, context, initial_array_level
+                       )
+                     end
           arm_plans[String.new(arm_name.to_slice)] = arm_plan
           collect_plan_names!(arm_plan, seen_names)
         end
         dynamic_arm_plans[String.new(raw_path.to_slice)] = arm_plans
+
+        # The legacy Object Dynamic actuals are bare root values. Reuse the
+        # complete root JSON roster and the same path-coordinate resolver as
+        # the reader; no nominal Dynamic physical plan or extra envelope is
+        # introduced here.
+        if root_roster = roster
+          sites = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectPhysicalSite).new(initial_capacity: leaf_plans.size)
+          resolver = ObjectRootDynamicJsonSiteResolver.new(
+            path_prefix,
+            dynamic,
+            root_dynamic_json_budget,
+            context,
+            initial_array_level,
+            inferred_actual_root_depth,
+          )
+          leaf_plans.each do |entry|
+            key = entry[0]
+            child_plan = entry[1]
+            binding = root_roster.json_object_binding(key)
+            coordinates = resolver.resolve_json_leaf(key)
+            unless coordinates.json_type == binding.json_type &&
+                   coordinates.json_depth == root_roster.json_object_leaf_depth(key)
+              raise UnsupportedFormatError.new("root Dynamic JSON physical coordinates differ from the bound descriptor")
+            end
+            child_depth64 = coordinates.json_depth.to_i64 + 1_i64
+            unless child_depth64 <= Int32::MAX.to_i64 && child_depth64 <= limits.max_depth.to_i64
+              raise UnsupportedFormatError.new("root Dynamic JSON child descriptor depth exceeds the configured limit")
+            end
+            child_depth = child_depth64.to_i32
+            child_physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(
+              coordinates.escaped_prefix,
+              child_plan,
+              profile,
+              shared_profile,
+              limits,
+              coordinates.array_level,
+              context,
+              child_depth,
+              child_depth,
+              root_dynamic_json_budget,
+            )
+            site = DynamicJsonObjectPhysicalSite.new(
+              key,
+              coordinates.escaped_prefix,
+              coordinates.array_level,
+              binding,
+              child_physical,
+              coordinates.json_depth,
+            )
+            if sites.has_key?(key)
+              raise UnsupportedFormatError.new("root Dynamic JSON physical leaf is duplicated")
+            end
+            sites[key] = site
+            child_physical.stream_names.each do |name|
+              reject_collision!(name, seen_names)
+            end
+          end
+          unless sites.size == leaf_plans.size
+            raise UnsupportedFormatError.new("root Dynamic JSON physical roster differs from its complete binding map")
+          end
+          root_dynamic_json_plans[String.new(raw_path.to_slice)] = ObjectDocumentRootDynamicJsonPhysicalPlan.new(sites)
+        end
       end
 
       typed_plans = Hash(String, BinaryBulkPhysicalPlan).new
@@ -442,7 +573,13 @@ module CrystalClick
         if plan.has_typed_dynamic?(raw_path)
           prepared = typed_dynamic_write_plans[raw_path]
           typed_dynamic_plan = BinaryDynamicBulkPhysicalPlan.from_escaped_prefix(
-            prepared, path_prefix, limits, context, initial_array_level, typed_descriptor_root_depth
+            prepared,
+            path_prefix,
+            limits,
+            context,
+            initial_array_level,
+            typed_descriptor_root_depth,
+            root_dynamic_json_budget,
           )
           typed_dynamic_plans[String.new(raw_path.to_slice)] = typed_dynamic_plan
           collect_plan_names!(typed_dynamic_plan, seen_names)
@@ -528,6 +665,7 @@ module CrystalClick
         typed_plans,
         typed_dynamic_plans,
         dynamic_arm_plans,
+        root_dynamic_json_plans,
         shared_plans,
         shared_bucket_count,
         advanced_copy_stream_names,
@@ -537,6 +675,11 @@ module CrystalClick
     end
 
     private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
+    end
+
+    private def same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
       left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
         left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
     end
@@ -640,6 +783,23 @@ module CrystalClick
       @typed_descriptor_root_depth
     end
 
+    def inferred_actual_root_depth : Int32
+      @inferred_actual_root_depth
+    end
+
+    def shared_profile : BinaryBulkProfile
+      @shared_profile
+    end
+
+    def root_dynamic_json(path : String) : ObjectDocumentRootDynamicJsonPhysicalPlan
+      @root_dynamic_json_plans[path]? ||
+        raise(KeyError.new("root Dynamic JSON Object physical plan not found: #{path.inspect}"))
+    end
+
+    def has_root_dynamic_json?(path : String) : Bool
+      @root_dynamic_json_plans.has_key?(path)
+    end
+
     # Scalar count from the collision-checked construction roster. This lets
     # callers enforce entry caps before materializing the detached name list.
     def stream_count : Int32
@@ -662,6 +822,14 @@ module CrystalClick
       @dynamic_arm_plans.each_value do |arms|
         arms.each_value do |physical|
           physical.stream_names.each_value { |name| names << String.new(name.to_slice) }
+        end
+      end
+      @root_dynamic_json_plans.each_value do |root_plan|
+        # The root plan stores child Object names rather than a synthetic
+        # Dynamic stream map, preserving independent physical domains.
+        # Child names are already collision-checked during construction.
+        root_plan.each_site do |site|
+          site.physical_plan.stream_names.each { |name| names << String.new(name.to_slice) }
         end
       end
       @shared_plans.each do |physical|

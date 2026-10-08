@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current Object composition slice (W215, 2026-10-07): ordinary JSON actual
+Current Object composition slice (W216, 2026-10-07): bound ordinary JSON
+actual leaves at inferred Object Dynamic paths are VERIFIED within a finite
+scope (scoped verdict: ROBUST). The existing recursive visitor and child
+Object serializer now share an exact root-path/arm/leaf binding roster with
+complete-part writers, automatic metadata readers and column/table consumers.
+No codec is added per wrapper product. Physical P, logical Q, whole-arm
+identity and absolute typed/inferred origins remain separate and checked.
+
+The same 152 affected spec files pass 914 examples in each of DEBUG and
+RELEASE, in 19 serial cohorts per mode; the five-file W215/W216 focused gates
+pass 34 examples per mode. Fresh native qualification passes four cells per
+mode (two String profiles x BASIC/COMPACT Dynamic discriminators, not Compact
+parts): four stock reads and four library direct ATTACHes with CHECKs. Stock
+and library use identical finite declarations. Independent raw input, SQL,
+result and manifest audits pass; all 228 generated part files reconcile
+across modes. Actual origin-reset and whole-arm-seal falsifiers discriminate
+the attacked defects; the original W215 depth regression remains guarded.
+
+This closes one recursive handoff, not every type/layout product. Outer Object
+shared MAP/Copy and advanced layouts/profiles, generic Dynamic owned offline
+values, MV/projection propagation and broad facade decomposition remain open.
+Memory/performance work remains deferred; the overall goal stays active.
+No benchmark, RSS, production checksum-hash or whole-scan callback-atomicity
+claim is made. Details:
+[OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md),
+[W216 evidence packet](../.landmark/evidence/object-inferred-dynamic-json-w216.json).
+
+Previous Object composition slice (W215, 2026-10-07): ordinary JSON actual
 leaves at declared Object typed-Dynamic sites are VERIFIED within the finite
 scope below (scoped verdict: ROBUST). Exact persisted child bindings reuse the
 generic recursive visitor and existing Object child serializer;
@@ -21,9 +48,10 @@ library output, so this is not an equivalent-descriptor claim. The empty
 advanced Object `max_depth=1` regression and depth-origin reset falsifiers were
 also caught and corrected/guarded within this slice.
 
-The evidence is scoped to declared typed-Dynamic JSON leaves and the recorded
-fixtures. Root-inferred Object paths, outer shared MAP/Copy, other layouts,
-owned offline values and MV/projection propagation remain open; no all-type,
+The W215 evidence is scoped to declared typed-Dynamic JSON leaves and the
+recorded fixtures. At that closure, root-inferred Object paths, outer shared
+MAP/Copy, other layouts, owned offline values and MV/projection propagation
+remained open; no all-type,
 whole-scan callback-atomicity, checksum-hash, benchmark or RSS claim is made.
 Broad facade decomposition remains open and the overall goal stays active.
 Details: [OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md](OBJECT_RECURSIVE_DYNAMIC_FRONTIER.md),
@@ -2410,11 +2438,13 @@ source/runtime identities and executed evidence.
 
 ## Source reference
 
-The newest separate shallow checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-05-depth1-ef037e60`, revision
-`ef037e60fc7f5654c8c80eefb8be82e3c56f9a67` (2026-10-05).
-[CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records the
-six-directory comparison and earlier identities. Root independently
+The current pinned comparison checkout is
+`/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1`, revision
+`0ca8150d9b1d0886edb2e3b4ab65eebb768d0357` (2026-10-07), rechecked clean and
+shallow with one reachable commit. This is not a continuing upstream freshness
+claim. [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records
+the previous six-directory comparison and earlier identities. In that prior
+October 5 inventory, root independently
 hash-checks 24 decisive JSON/Dynamic/QBit/Count/descriptor owners against
 `29e0e201`; all are content-identical. Aggregate state-version propagation and
 `uniq` v1 are separate changed consumers, not newly qualified library types.
