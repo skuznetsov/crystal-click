@@ -1,5 +1,39 @@
 # Crystal Click landmarks
 
+## Offline projection child windows — W229
+
+- Active objective remains compatible read/write types and MV/projection
+  inspection. Performance stays deferred; the overall goal is not complete.
+- Baseline: `3eeeb10cda0aabde95cf776b0ff9dc8120a21d45`. Scoped result:
+  VERIFIED finite quiescent Atomic/exact-MergeTree offline child windows;
+  adversary verdict ROBUST within that scope. The new facade delegates to
+  existing child serde/window readers, not a new codec. Full and window
+  admission share one private class in its own file.
+- Evidence: the same 37 affected files pass 200 examples in DEBUG and RELEASE.
+  Both native modes and separate raw audits pass six finite stock profiles,
+  30 direct child window queries, 60 library results and 62 native processes.
+  Count children have three rows per six-row parent; intra-mark and complete
+  later-child preflight controls are included.
+- Refuted routes: retaining only the first parent fails three controls and
+  errors on a fourth. An auditor that ignores CHECK failure messages accepts a
+  coherent forgery. Exact three-column success comparison now rejects that
+  forgery in both final modes; exact restoration returns audits to PASS.
+- Boundary: no parent substitution, live Active/freshness, general engines,
+  new type admission, projection writing/execution, whole-suite or speed claim.
+  Native empty past-EOF and library BoundsError are intentional distinct APIs.
+- Return pointer: [W229 frontier](docs/PROJECTION_WINDOW_FRONTIER.md) and
+  [evidence index](.landmark/evidence/projection-window-w229.json).
+- Next concrete type discriminator: a stock Wide `Array(QBit(BFloat16, 16))`
+  with empty and uneven arrays across marks. Reuse the QBit leaf; distinguish
+  per-occurrence plane binding from a missing codec. The source Memory witness
+  alone does not qualify persisted MergeTree support. Numeric min/max aggregate
+  states are a genuinely new grammar; wrapped Avg needs separate qualification.
+- Standing authority: bounded local implementation, hostile review and atomic
+  local commits; no push, production mutation or resumed performance work.
+- Decay: refresh after facade/admission/child reader, fixture/helper/auditor,
+  source or runtime changes. Temporary raw roots are regenerable evidence
+  caches, not proof when absent. Luna review is correlated, not replication.
+
 ## Offline materialized-view metadata — W228
 
 - Active objective remains ClickHouse-compatible read/write types and MV/

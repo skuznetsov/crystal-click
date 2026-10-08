@@ -1,6 +1,26 @@
 # CrystalClick project status
 
-Current offline MV metadata slice (W228, 2026-10-08): VERIFIED within the
+Current offline projection window slice (W229, 2026-10-08): VERIFIED within
+finite quiescent Atomic/exact-MergeTree selected-child reading (scoped verdict:
+ROBUST). `OfflineTable#scan_projection_typed_window` reuses the existing Wide
+child reader; full and window scans share a private single-file admission
+owner. Complete resolved-parent child/schema preflight precedes callbacks,
+including EOF and children outside the window. Coordinates belong to physical
+child rows and marks, while batch identity retains its parent.
+
+The same 37 affected spec files pass 200 examples in DEBUG and RELEASE with
+zero failures/errors/pending. Paired native runs and separate raw audits each
+qualify six stock-authored JSON/recursive/Dynamic/Count profiles, 30 direct
+`mergeTreeProjection` window queries, 60 library window results and 62 native
+processes per mode. Count child and parent row axes differ. A first-parent-only
+defect seed fails the new controls. A coherent CHECK-message forgery exposed
+and closed an auditor-only gap; both final audits reject it and pass after
+exact restoration. No base-row fallback, Active/freshness, projection writing,
+all-layout or whole-repository claim is made. Details:
+[PROJECTION_WINDOW_FRONTIER.md](PROJECTION_WINDOW_FRONTIER.md),
+[W229 evidence packet](../.landmark/evidence/projection-window-w229.json).
+
+Previous offline MV metadata slice (W228, 2026-10-08): VERIFIED within the
 bounded offline declaration and current-local physical-target identity scope
 (scoped adversary verdict: ROBUST). `OfflineTable#materialized_view` exposes
 detached target/query/context metadata, and explicit catalog target resolution

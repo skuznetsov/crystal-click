@@ -1,0 +1,391 @@
+{
+  "format": "crystal_click_scoped_evidence_v1",
+  "slice": "W229 offline typed projection child-row windows",
+  "date": "2026-10-08",
+  "baseline_commit": "3eeeb10cda0aabde95cf776b0ff9dc8120a21d45",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Finite quiescent Atomic/exact-MergeTree catalogs, selected Wide projection children and the measured six stock profiles plus affected guards.",
+    "statement": "OfflineTable exposes bounded typed projection windows through the existing child reader; full and window scans share one private admission owner.",
+    "adversary_verdict": "ROBUST within declared scope after first-parent defect rejection, native child-axis witnesses, exact CHECK-message auditor repair and coherent forgery rejection/restoration.",
+    "F": "Executed behavioral RED, compiling suites, stock raw audits and falsifiers; no formal proof.",
+    "G": "37 affected spec files; six finite stock profiles, two resolved parents each, full/middle/cross-child/EOF/past-EOF windows. Not all layouts or live operation.",
+    "R": "Root inspected delegated changes and owned serialized jobs; Luna reviews are correlated, not independent replication. The raw auditor's CHECK gap was independently reproduced."
+  },
+  "boundaries": {
+    "risk": "CAUTION: public storage consumer and shared admission extraction.",
+    "rollback": "Revert the exact-path atomic local feature commit without discarding unrelated work; no push or history rewrite.",
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/offline_table.cr",
+      "src/crystal_click/offline_table/projection_reader_admission.cr",
+      "spec/offline_projection_window_w229_spec.cr",
+      "scripts/check_projection_window_w229.cr",
+      "scripts/recheck_projection_window_w229.rb",
+      "scripts/check_projection_window_evidence_w229.rb",
+      "docs/PROJECTION_WINDOW_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      "examples/README.md",
+      ".landmark/evidence/projection-window-w229.json"
+    ],
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/offline_table.cr",
+      "src/crystal_click/offline_table/projection_reader_admission.cr",
+      "spec/offline_projection_window_w229_spec.cr",
+      "scripts/check_projection_window_w229.cr",
+      "scripts/recheck_projection_window_w229.rb",
+      "scripts/check_projection_window_evidence_w229.rb",
+      "docs/PROJECTION_WINDOW_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      "examples/README.md",
+      ".landmark/evidence/projection-window-w229.json"
+    ],
+    "admitted": [
+      "Explicit declared projection windows in concatenated physical child-row order.",
+      "Complete resolved-parent child/schema preflight before any callback, even EOF/out-of-interval children.",
+      "Parent batch identity with child mark, mark-local, part-local and global-child row offsets.",
+      "Bounded positive max_rows; empty set start zero; EOF no callbacks; library past EOF BoundsError."
+    ],
+    "retained_guards": [
+      "Direct MV access and non-exact-MergeTree engines.",
+      "Unsafe/undeclared names, duplicate/empty/oversized selections and invalid row limits.",
+      "Missing/symlink/malformed child and unsupported inherited specialized profiles.",
+      "Borrowed callback lifetime, existing per-mark memory budgets and complete specialized schedule validation."
+    ],
+    "not_claimed": [
+      "Server Active/freshness, live consistent snapshot or query optimizer selection.",
+      "Parent/base fallback, general engines, projection execution or writing.",
+      "New type/layout admission, full repository suite, full compatibility or broad facade refactoring.",
+      "Performance work or <=10 percent stock-reader gap. Overall goal remains active."
+    ]
+  },
+  "architecture": {
+    "owner": "OfflineTable::ProjectionReaderAdmission",
+    "file": "src/crystal_click/offline_table/projection_reader_admission.cr",
+    "law": "Container serde delegates to child codecs; physical per-occurrence bindings and state schedules are separate from new leaf grammars or missing native qualification.",
+    "next_discriminator": "Stock Wide Array(QBit(BFloat16,16)) with empty/uneven arrays across marks; Memory source witness does not qualify persisted support. Reuse existing leaf and preserve reader/writer parity."
+  },
+  "source_reference": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+    "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+    "dirty": false,
+    "distinction": "Shallow source and runtime executable are separate pins, not a same-build or continuing latest-master assertion.",
+    "native_audited_files": [
+      "src/TableFunctions/TableFunctionProjection.cpp",
+      "src/Storages/System/StorageSystemProjectionParts.cpp",
+      "src/Storages/System/StorageSystemProjectionPartsColumns.cpp",
+      "src/Storages/MergeTree/IMergeTreeDataPart.h",
+      "src/Storages/MergeTree/MergeTreeDataWriter.cpp"
+    ],
+    "additional_inspected_check_laws": [
+      {
+        "path": "src/Interpreters/InterpreterCheckQuery.cpp",
+        "sha256": "99cf4e69a1b1e0c3222a745b115139d5f48f1b9eb8cf02b7fafdd474fa1e4a3b"
+      },
+      {
+        "path": "src/Storages/CheckResults.h",
+        "sha256": "07af9f54e42a273c9c60c7195f4a68f1275141360685d1ca5a34d9ada068377d"
+      }
+    ]
+  },
+  "runtime": {
+    "binary": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "verification": {
+    "execution_owner": "Root; compiler/native/Ruby/formatter/Git serialized, unchanged run_safe min-free50%, one Crystal worker and isolated cache.",
+    "guard": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "budgets": {
+      "compiler_native_seconds": 600,
+      "compiler_native_mib": 12288,
+      "audit_seconds": 120,
+      "audit_mib": 512,
+      "formatter_seconds": 120,
+      "formatter_mib": 4096
+    },
+    "final_source_manifest": [
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "2e757e7d145ef8cdb2cce1cad19d424b19adfaf261d60c89e23d9fc489661e97"
+      },
+      {
+        "path": "src/crystal_click/offline_table.cr",
+        "sha256": "672b3cf27081e2b66de296ad715d1a3392d5240f87f8eea7bc1cf889f55243c7"
+      },
+      {
+        "path": "src/crystal_click/offline_table/projection_reader_admission.cr",
+        "sha256": "6c33011e0caac5c6ffc54229fdec82da9d5683722e71242185d57d047e97eb06"
+      },
+      {
+        "path": "src/crystal_click/wide_part_table.cr",
+        "sha256": "813846246ec25f252f983cf7ceb9ac0dfbc36094ac182d591afa88e22e8de09f"
+      },
+      {
+        "path": "src/crystal_click/wide_part_table/wide_part_table_batch.cr",
+        "sha256": "56056e99bb1593f295a83c9ea16a597a1030b1ff17c0f1e49ab92567dc80ce08"
+      },
+      {
+        "path": "scripts/check_projection_specialized_w217_oracle.cr",
+        "sha256": "37f66c35ce60547e57ea7b3135a0d6d1a7d9131fc3fb5a5b6657d9e3a9872b9e"
+      },
+      {
+        "path": "scripts/audit_projection_specialized_w217.rb",
+        "sha256": "a5f7adc2908e6e1703b873a2dbf3c51002e92b0c23b1cede87e71a3cda568523"
+      },
+      {
+        "path": "scripts/check_projection_window_w229.cr",
+        "sha256": "b177dfaf951c4bfed88b1b5cbf957daf12aec78de84227e337ca46dcc5ab0e97"
+      },
+      {
+        "path": "scripts/recheck_projection_window_w229.rb",
+        "sha256": "19312120cbc4089bbf63d98aadcd94daf2672c5f3dff11283482facb154011b1"
+      },
+      {
+        "path": "scripts/check_projection_window_evidence_w229.rb",
+        "sha256": "6f81c2fa2d02d6f0457e5ed9bcfef88e534c087cd678d4654d0ff076072c86c8"
+      },
+      {
+        "path": "spec/offline_projection_window_w229_spec.cr",
+        "sha256": "81a72d008280d877e6e7dddb6b578939e736604336775c5b920c41a02c195c6b"
+      }
+    ],
+    "build_provenance": "Externally root-recorded guarded builds and measured binary hashes. Source manifests/auditor summaries alone do not establish helper provenance.",
+    "helper_pins": {
+      "debug": {
+        "path": "/private/tmp/crystal-click-w229.eNOplr/w229-debug",
+        "sha256": "f058800b91e8ff08a05fada18908fd50207fac310bf99585ce0964f037a3e08f"
+      },
+      "release": {
+        "path": "/private/tmp/crystal-click-w229.eNOplr/w229-release",
+        "sha256": "274bae7170a14e93972c7d18755b43435b516dc9b0ef583a2a6b08cd89d8ee03"
+      },
+      "fixture_debug": {
+        "path": "/private/tmp/crystal-click-w229.eNOplr/w217-debug",
+        "sha256": "58def62674a634686befa44d641b95b35b4a4864fc33a63d6a5e9447ad915852"
+      },
+      "fixture_release": {
+        "path": "/private/tmp/crystal-click-w229.eNOplr/w217-release",
+        "sha256": "edecb114dc0fe9b35e9c0315857b8500d778a938f127619ce0b90cd55feefdee"
+      }
+    },
+    "raw_roots": {
+      "fixture_debug": "/private/tmp/crystal-click-w229-fixtures-debug.tPEDdQ",
+      "fixture_release": "/private/tmp/crystal-click-w229-fixtures-release.7FeMHl",
+      "window_debug": "/private/tmp/crystal-click-w229-native-debug-final.bvaa7a",
+      "window_release": "/private/tmp/crystal-click-w229-native-release.4k1muL"
+    },
+    "profiles": [
+      "whole_json",
+      "array_json",
+      "recursive_json",
+      "dynamic_root",
+      "dynamic_array",
+      "count"
+    ],
+    "events": [
+      {
+        "id": "behavioral_red",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_projection_window_w229_spec.cr spec/offline_catalog_projection_w87_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/lazy_window_reader_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/red-clean.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/red-clean.log",
+        "observed_exit": 1,
+        "signal": "28 examples; 6 expected failures, 0 errors, 0 pending; 22 retained controls pass"
+      },
+      {
+        "id": "focused_debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_projection_window_w229_spec.cr spec/offline_catalog_projection_w87_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/lazy_window_reader_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/focused-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/focused-debug.log",
+        "observed_exit": 0,
+        "signal": "28 examples; 0 failures/errors/pending"
+      },
+      {
+        "id": "first_parent_defect",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_projection_window_w229_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/seed-incomplete-parent-roster.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/seed-incomplete-parent-roster.log",
+        "observed_exit": 1,
+        "signal": "6 examples; 3 failures and 1 error; exact production restoration"
+      },
+      {
+        "id": "affected_debug_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_offline_w177_spec.cr spec/object_catalog_w129_root_spec.cr spec/object_catalog_w129_spec.cr spec/object_offline_table_w130_spec.cr spec/offline_catalog_projection_w87_spec.cr spec/offline_catalog_spec.cr spec/offline_catalog_w27_spec.cr spec/offline_catalog_w28_spec.cr spec/offline_catalog_w29_spec.cr spec/offline_catalog_w53_spec.cr spec/offline_catalog_w54_spec.cr spec/offline_catalog_w60_spec.cr spec/offline_catalog_w63_spec.cr spec/offline_catalog_w68_spec.cr spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w76_spec.cr spec/offline_catalog_w77_spec.cr spec/offline_catalog_w78_spec.cr spec/offline_catalog_w79_spec.cr spec/offline_catalog_w80_spec.cr spec/offline_catalog_w81_spec.cr spec/offline_catalog_w82_spec.cr spec/offline_catalog_w83_spec.cr spec/offline_catalog_w84_spec.cr spec/offline_catalog_w85_spec.cr spec/offline_catalog_w86_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/offline_materialized_view_w228_spec.cr spec/offline_mv_materialization_w88_spec.cr spec/offline_tui_page_source_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/lazy_window_reader_spec.cr spec/offline_projection_window_w229_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/affected-debug-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/affected-debug-final.log",
+        "observed_exit": 0,
+        "signal": "37 spec files; 200 examples, 0 failures/errors/pending; intra-mark crop included"
+      },
+      {
+        "id": "affected_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_offline_w177_spec.cr spec/object_catalog_w129_root_spec.cr spec/object_catalog_w129_spec.cr spec/object_offline_table_w130_spec.cr spec/offline_catalog_projection_w87_spec.cr spec/offline_catalog_spec.cr spec/offline_catalog_w27_spec.cr spec/offline_catalog_w28_spec.cr spec/offline_catalog_w29_spec.cr spec/offline_catalog_w53_spec.cr spec/offline_catalog_w54_spec.cr spec/offline_catalog_w60_spec.cr spec/offline_catalog_w63_spec.cr spec/offline_catalog_w68_spec.cr spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w76_spec.cr spec/offline_catalog_w77_spec.cr spec/offline_catalog_w78_spec.cr spec/offline_catalog_w79_spec.cr spec/offline_catalog_w80_spec.cr spec/offline_catalog_w81_spec.cr spec/offline_catalog_w82_spec.cr spec/offline_catalog_w83_spec.cr spec/offline_catalog_w84_spec.cr spec/offline_catalog_w85_spec.cr spec/offline_catalog_w86_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/offline_materialized_view_w228_spec.cr spec/offline_mv_materialization_w88_spec.cr spec/offline_tui_page_source_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/lazy_window_reader_spec.cr spec/offline_projection_window_w229_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/affected-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/affected-release.log",
+        "observed_exit": 0,
+        "signal": "same 37 spec files; 200 examples, 0 failures/errors/pending; intra-mark crop included"
+      },
+      {
+        "id": "fixture_build_debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_projection_specialized_w217_oracle.cr -o /private/tmp/crystal-click-w229.eNOplr/w217-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/build-w217-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/build-w217-debug.log",
+        "observed_exit": 0,
+        "signal": "W217 DEBUG generator built"
+      },
+      {
+        "id": "fixture_build_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_projection_specialized_w217_oracle.cr -o /private/tmp/crystal-click-w229.eNOplr/w217-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/build-w217-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/build-w217-release.log",
+        "observed_exit": 0,
+        "signal": "W217 RELEASE generator built"
+      },
+      {
+        "id": "window_build_debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_projection_window_w229.cr -o /private/tmp/crystal-click-w229.eNOplr/w229-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/build-w229-debug-output.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/build-w229-debug-output.log",
+        "observed_exit": 0,
+        "signal": "final W229 DEBUG helper built"
+      },
+      {
+        "id": "window_build_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_projection_window_w229.cr -o /private/tmp/crystal-click-w229.eNOplr/w229-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w229.eNOplr/build-w229-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/build-w229-release.log",
+        "observed_exit": 0,
+        "signal": "final W229 RELEASE helper built"
+      },
+      {
+        "id": "fixture_debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 W217_EVIDENCE_ROOT=/private/tmp/crystal-click-w229-fixtures-debug.tPEDdQ W217_SOURCE_REVISION=3eeeb10cda0aabde95cf776b0ff9dc8120a21d45 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w229.eNOplr/w217-debug 600 12288 > /private/tmp/crystal-click-w229.eNOplr/fixture-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/fixture-debug.log",
+        "observed_exit": 0,
+        "signal": "6 stock profiles; stable physical before/after manifest"
+      },
+      {
+        "id": "fixture_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 W217_EVIDENCE_ROOT=/private/tmp/crystal-click-w229-fixtures-release.7FeMHl W217_SOURCE_REVISION=3eeeb10cda0aabde95cf776b0ff9dc8120a21d45 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w229.eNOplr/w217-release 600 12288 > /private/tmp/crystal-click-w229.eNOplr/fixture-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/fixture-release.log",
+        "observed_exit": 0,
+        "signal": "6 fresh stock profiles; stable physical before/after manifest"
+      },
+      {
+        "id": "fixture_raw_audit_paired",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/audit_projection_specialized_w217.rb /private/tmp/crystal-click-w229-fixtures-debug.tPEDdQ /private/tmp/crystal-click-w229-fixtures-release.7FeMHl > /private/tmp/crystal-click-w229.eNOplr/audit-fixtures-paired.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/audit-fixtures-paired.log",
+        "observed_exit": 0,
+        "signal": "actual stock CHECK/schema/SELECT/files/source records qualify; library self-reports supplementary only"
+      },
+      {
+        "id": "window_native_debug_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_projection_window_w229.rb --fixture-root /private/tmp/crystal-click-w229-fixtures-debug.tPEDdQ --helper /private/tmp/crystal-click-w229.eNOplr/w229-debug --helper-sha256 f058800b91e8ff08a05fada18908fd50207fac310bf99585ce0964f037a3e08f --evidence-root /private/tmp/crystal-click-w229-native-debug-final.bvaa7a > /private/tmp/crystal-click-w229.eNOplr/native-window-debug-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/native-window-debug-final.log",
+        "observed_exit": 0,
+        "signal": "62 successful native processes"
+      },
+      {
+        "id": "window_native_release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_projection_window_w229.rb --fixture-root /private/tmp/crystal-click-w229-fixtures-release.7FeMHl --helper /private/tmp/crystal-click-w229.eNOplr/w229-release --helper-sha256 274bae7170a14e93972c7d18755b43435b516dc9b0ef583a2a6b08cd89d8ee03 --evidence-root /private/tmp/crystal-click-w229-native-release.4k1muL > /private/tmp/crystal-click-w229.eNOplr/native-window-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/native-window-release.log",
+        "observed_exit": 0,
+        "signal": "62 successful native processes"
+      },
+      {
+        "id": "window_raw_audit_paired",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_projection_window_evidence_w229.rb /private/tmp/crystal-click-w229-native-debug-final.bvaa7a /private/tmp/crystal-click-w229-native-release.4k1muL > /private/tmp/crystal-click-w229.eNOplr/audit-window-paired.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/audit-window-paired.log",
+        "observed_exit": 0,
+        "signal": "6 profiles, 30 child queries and 60 library window records per mode"
+      },
+      {
+        "id": "check_forgery_before_fix",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_projection_window_evidence_w229.rb /private/tmp/crystal-click-w229-native-debug.QvsHb5 > /private/tmp/crystal-click-w229.eNOplr/seed-check-message-coherent-before-fix.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/seed-check-message-coherent-before-fix.log",
+        "observed_exit": 0,
+        "signal": "genuine auditor false positive: nonempty CHECK failure message accepted with coherent carriers"
+      },
+      {
+        "id": "check_forgery_debug_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_projection_window_evidence_w229.rb /private/tmp/crystal-click-w229-native-debug-final.bvaa7a > /private/tmp/crystal-click-w229.eNOplr/seed-check-message-debug-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/seed-check-message-debug-final.log",
+        "observed_exit": 1,
+        "signal": "rejects exact semantic CHECK message mismatch, not hashes/byte counts"
+      },
+      {
+        "id": "check_forgery_release_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_projection_window_evidence_w229.rb /private/tmp/crystal-click-w229-native-release.4k1muL > /private/tmp/crystal-click-w229.eNOplr/seed-check-message-release-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/seed-check-message-release-final.log",
+        "observed_exit": 1,
+        "signal": "rejects exact semantic CHECK message mismatch, not hashes/byte counts"
+      },
+      {
+        "id": "window_raw_audit_restored",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_projection_window_evidence_w229.rb /private/tmp/crystal-click-w229-native-debug-final.bvaa7a /private/tmp/crystal-click-w229-native-release.4k1muL > /private/tmp/crystal-click-w229.eNOplr/audit-window-restored-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/audit-window-restored-final.log",
+        "observed_exit": 0,
+        "signal": "both final raw audits PASS after exact restoration of all six forged evidence files"
+      },
+      {
+        "id": "format_check_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 4096 tool format --check src/crystal_click.cr src/crystal_click/offline_table.cr src/crystal_click/offline_table/projection_reader_admission.cr spec/offline_projection_window_w229_spec.cr scripts/check_projection_window_w229.cr > /private/tmp/crystal-click-w229.eNOplr/format-check-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/format-check-final.log",
+        "observed_exit": 0,
+        "signal": "5 Crystal files satisfy format --check"
+      },
+      {
+        "id": "auditor_syntax_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/check_projection_window_evidence_w229.rb > /private/tmp/crystal-click-w229.eNOplr/auditor-syntax-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/auditor-syntax-final.log",
+        "observed_exit": 0,
+        "signal": "Syntax OK"
+      },
+      {
+        "id": "packet_json_and_final_source_freeze",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w229.eNOplr/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e 'require '\\''json'\\''; require '\\''digest'\\''; packet = JSON.parse(File.read(ARGV.fetch(0))); abort('\\''wrong packet identity'\\'') unless packet['\\''format'\\''] == '\\''crystal_click_scoped_evidence_v1'\\'' && packet['\\''baseline_commit'\\''] == '\\''3eeeb10cda0aabde95cf776b0ff9dc8120a21d45'\\''; entries = packet.fetch('\\''verification'\\'').fetch('\\''final_source_manifest'\\''); entries.each { |entry| abort('\\''source hash drift: '\\'' + entry['\\''path'\\'']) unless Digest::SHA256.file(entry['\\''path'\\'']).hexdigest == entry['\\''sha256'\\''] }; packet.fetch('\\''verification'\\'').fetch('\\''helper_pins'\\'').each { |mode, pin| abort('\\''helper hash drift: '\\'' + mode) unless Digest::SHA256.file(pin['\\''path'\\'']).hexdigest == pin['\\''sha256'\\''] }; puts('\\''W229 packet JSON and 11 source/4 helper hashes PASS; behavioral claims require recorded external evidence'\\'')' .landmark/evidence/projection-window-w229.json > /private/tmp/crystal-click-w229.eNOplr/packet-source-freeze-final.log 2>&1",
+        "log": "/private/tmp/crystal-click-w229.eNOplr/packet-source-freeze-final.log",
+        "observed_exit": 0,
+        "signal": "JSON parsed; 11 source files and 4 helper binaries match measured hashes. This does not substantiate behavioral claims by itself."
+      }
+    ],
+    "native_laws": "Direct mergeTreeProjection reads, not base SELECTs. Native past EOF is empty; library past EOF intentionally rejects. Count children have 3 rows/[2,1] per 6-row/[2,2,2] parent. Literal rows/schema/CHECK and all library coordinate fields are independently checked. No exact callback-count claim.",
+    "failed_or_inconclusive_attempts": [
+      {
+        "log": "/private/tmp/crystal-click-w229.eNOplr/red.log",
+        "classification": "Compile-time missing API; not behavioral RED."
+      },
+      {
+        "log": "/private/tmp/crystal-click-w229.eNOplr/red-behavioral.log",
+        "classification": "First behavioral attempt included an unsupported MV fixture grammar; corrected before clean RED."
+      },
+      {
+        "log": "/private/tmp/crystal-click-w229.eNOplr/build-w229-debug.log",
+        "classification": "Helper-only branch-local union and lazy Iterator issues; repaired before final build."
+      },
+      {
+        "log": "/private/tmp/crystal-click-w229.eNOplr/build-w229-debug-final.log",
+        "classification": "Helper-only puts/JSON.build block binding error; repaired before final build."
+      },
+      {
+        "log": "/private/tmp/crystal-click-w229.eNOplr/seed-check-message-before-fix.log",
+        "classification": "Scratch patch trimmed terminal tab; byte-count rejection is inconclusive for the semantic CHECK law."
+      }
+    ],
+    "retired_debug_capture": "/private/tmp/crystal-click-w229-native-debug.QvsHb5",
+    "retired_capture_reason": "Original auditor pin predates exact CHECK-message fix. Final DEBUG recapture uses final code pins.",
+    "structural_validation": "No generic packet validator was available. JSON parse, intended-path diff review, source freeze and git diff --check are separate checks, not proof of recorded behavior.",
+    "diff_check": {
+      "command": "git diff --check",
+      "observed_exit": 0,
+      "scope": "Tracked diff before exact-path staging; staged checks also required before commit."
+    }
+  },
+  "continuity": {
+    "active_goal": "ClickHouse-compatible read/write types and MV/projection inspection; memory/performance deferred.",
+    "return_pointer": "docs/PROJECTION_WINDOW_FRONTIER.md",
+    "next_falsifier": "Qualify source-valid static Array(QBit) persisted layout on stock Wide parts before changing its guarded per-site bindings; do not add per-product leaf serializers.",
+    "refresh_after": [
+      "facade/admission",
+      "child reader or coordinate semantics",
+      "fixture/helper/auditor",
+      "source/runtime"
+    ],
+    "failure_policy": "Reopen affected claims and rerun recorded DoD after decay. Temporary roots are caches; regenerate if absent, never treat missing evidence as success.",
+    "standing_authority": "Bounded local implementation, hostile review and atomic commits; no push, remote history mutation or production-data writes."
+  }
+}

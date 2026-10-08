@@ -164,6 +164,22 @@ returns named, opaque projection definitions. These accessors return metadata,
 not executed SELECT results. The explicit `scan_projection_typed` API can read
 physical projection subparts only when every resolved parent has a validated
 child; it does not choose projections automatically or fall back to base rows.
+For a declared projection `p` with a physical `pk UInt64` column, read a bounded
+child-row window through the same admission:
+
+```crystal
+table.scan_projection_typed_window("p", ["pk"], 0_u64, 64) do |batch|
+  batch.values_for("pk", UInt64).each { |key| puts key }
+end
+```
+
+Offsets count concatenated child rows, not parent/base rows. Batch identity
+retains the parent; mark and local row offsets belong to its child. Values are
+borrowed inside the callback; copy them if retaining them. EOF yields no
+callbacks, past EOF raises, and even an EOF window preflights every selected
+parent's child. See the [W229 frontier](../docs/PROJECTION_WINDOW_FRONTIER.md)
+for the finite qualified profiles and quiescent-copy requirement.
+
 The separate `materialize_view_part` API writes a detached part for the exact
 same-database `TO ... SELECT k, v FROM ...` identity-MV profile with `k UInt64`
 and `v String`. It provides no INSERT trigger or view-freshness guarantee. See

@@ -1681,34 +1681,28 @@ module CrystalClick
     ) : Nil
       reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
-      if projection_name.bytesize > WidePartTable::MAX_PART_NAME_BYTES - ".proj".bytesize
-        raise BoundsError.new("projection child name exceeds limit")
+      if reader = ProjectionReaderAdmission.open(self, projection_name, columns, batch_rows, "batch")
+        reader.scan_typed(batch_rows: batch_rows, &block)
       end
-      unless /\A[A-Za-z0-9_]+\z/.matches?(projection_name)
-        raise InvalidPartError.new("invalid projection name: #{projection_name}")
-      end
-      unless @projections.any? { |projection| projection.name == projection_name }
-        raise UnsupportedFormatError.new("selected projection is not declared by table DDL")
-      end
-      raise BoundsError.new("no columns selected") if columns.empty?
-      raise BoundsError.new("column count exceeds limit") if columns.size > WidePartTable::MAX_COLUMNS
-      raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > WidePartTable::MAX_BATCH_ROWS
+    end
 
-      selected = Set(String).new
-      columns.each do |column_name|
-        raise BoundsError.new("column name is empty or exceeds limit") if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
-        raise BoundsError.new("duplicate selected column") if selected.includes?(column_name)
-        selected << column_name
+    # Read a bounded physical-row window across the selected projection's child
+    # parts. The window is in the child's row domain, while each batch retains
+    # its parent part identity and the child's mark and row offsets.
+    def scan_projection_typed_window(
+      projection_name : String,
+      columns : Array(String),
+      start_row : UInt64,
+      max_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+      &block : WidePartTableBatch -> Nil
+    ) : Nil
+      reject_materialized_view_data_access!
+      raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
+      if reader = ProjectionReaderAdmission.open(self, projection_name, columns, max_rows, "window")
+        reader.scan_typed_window(start_row, max_rows, &block)
+      elsif start_row > 0
+        raise BoundsError.new("window start row is past the end of the table")
       end
-
-      candidates = resolved_scan_parts
-      return nil if candidates.empty?
-
-      # The projection factory preflights child coverage and the selected
-      # physical schemas/checksums across the complete resolved parent set.
-      # Deliberately do not compare its column types with the base-table DDL.
-      reader = WidePartTable.open_selected_projection_typed(candidates.map(&.path), projection_name, columns)
-      reader.scan_typed(batch_rows: batch_rows, &block)
     end
 
     # Read a bounded physical-row window from a MergeTree table. Batches borrow
