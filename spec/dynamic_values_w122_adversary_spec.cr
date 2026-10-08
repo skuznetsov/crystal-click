@@ -35,22 +35,23 @@ describe "W122 independent Dynamic shared-envelope and late-failure attack" do
     values = [[CrystalClick::BinaryValue.bool(true), CrystalClick::BinaryValue.null]]
     # W121: 5 nodes / 9 edges. Bulk String descriptor + 3 metadata +
     # one value: 5 nodes / 3 edges. Shared Bool envelope: 2 nodes.
+    # The per-arm full-mark count vector adds 1 owner node / 1 edge.
     # Read assembly (owner, mark, both rows, including NULL): 4 nodes / 3
     # edges. Write validates two input descriptors and has no read assembly.
-    read_limits = CrystalClick::BinaryCodecLimits.new(max_depth: 64, max_nodes: 16, max_elements: 15, max_bytes: 15)
+    read_limits = CrystalClick::BinaryCodecLimits.new(max_depth: 64, max_nodes: 17, max_elements: 16, max_bytes: 15)
     write_limits = CrystalClick::BinaryCodecLimits.new(max_depth: 64, max_nodes: 14, max_elements: 12, max_bytes: 15)
     read = CrystalClick::BinaryCodecBudget.new(read_limits)
     decoded = CrystalClick::DynamicValueCodec.decode_with_budget(structure, literal, read).first
     decoded.size.should eq(2)
     decoded.first.as_bool.should be_true
     decoded.last.is_null?.should be_true
-    {read.node_count, read.element_count, read.wire_byte_count}.should eq({16_i64, 15_i64, 15_i64})
+    {read.node_count, read.element_count, read.wire_byte_count}.should eq({17_i64, 16_i64, 15_i64})
     write = CrystalClick::BinaryCodecBudget.new(write_limits, true)
     encoded = CrystalClick::DynamicValueCodec.encode_with_budget(structure, values, write)
     encoded.discriminators.bytes.should eq(discriminator.bytes)
     encoded.arm("SharedVariant").stream("root.data").bytes.should eq(Bytes[2, 45, 1])
     {write.node_count, write.element_count, write.wire_byte_count}.should eq({14_i64, 12_i64, 15_i64})
-    [{15, 15, 15}, {16, 14, 15}, {16, 15, 14}].each do |nodes, edges, bytes|
+    [{16, 16, 15}, {17, 15, 15}, {17, 16, 14}].each do |nodes, edges, bytes|
       expect_raises(CrystalClick::CorruptPartError) do
         CrystalClick::DynamicValueCodec.decode(structure, literal,
           limits: CrystalClick::BinaryCodecLimits.new(max_depth: 64, max_nodes: nodes, max_elements: edges, max_bytes: bytes))
@@ -137,6 +138,17 @@ describe "W122 independent Dynamic shared-envelope and late-failure attack" do
     expect_raises(ArgumentError) do
       CrystalClick::DynamicValueCodec.decode(structure, malformed, first_mark: Int128::MAX, mark_count: 0)
     end
+    # Invalid caller coordinates must not be classified as corrupt storage,
+    # even when the unselected last body is independently malformed.
+    [{-1, 0}, {3, 0}, {0, -1}, {0, 3}, {1, 2}, {2, 1}].each do |first, count|
+      expect_raises(ArgumentError) do
+        CrystalClick::DynamicValueCodec.decode(structure, malformed, first_mark: first, mark_count: count)
+      end
+    end
+    expect_raises(ArgumentError) do
+      CrystalClick::DynamicValueCodec.decode(structure, malformed, first_mark: 0, mark_count: Int128::MAX)
+    end
+    CrystalClick::DynamicValueCodec.decode(structure, malformed, first_mark: 2, mark_count: 0).should be_empty
   end
 
   it "charges one aggregate selected physical budget including shared String framing" do

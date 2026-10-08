@@ -638,11 +638,11 @@ module CrystalClick
       first = first_mark.to_i128
       marks = real_marks.to_i128
       if first < 0_i128 || first > marks
-        corrupt!("Dynamic selected mark range is outside the real grid")
+        raise ArgumentError.new("Dynamic selected mark range is outside the real grid")
       end
       count = mark_count.try(&.to_i128) || (marks - first)
       if count < 0_i128 || count > marks - first
-        corrupt!("Dynamic selected mark range is outside the real grid")
+        raise ArgumentError.new("Dynamic selected mark range is outside the real grid")
       end
       {first.to_i32, count.to_i32}
     end
