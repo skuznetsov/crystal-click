@@ -125,6 +125,10 @@ module CrystalClick
       @site_reader.selected_checksum_names
     end
 
+    def retained_grid_workspace_bytes : UInt64
+      @site_reader.retained_grid_workspace_bytes
+    end
+
     # Validate the complete parent schedule without selecting a mark. The
     # site reader performs any required full-domain replay for bound JSON or
     # LowCardinality state; table consumers must call this even for empty

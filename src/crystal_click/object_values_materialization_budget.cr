@@ -146,6 +146,14 @@ module CrystalClick
       admit_usage(usage, workspace_bytes)
     end
 
+    # Charge the nominal BinaryValue descriptor with the same bounded visitor
+    # used for descriptors retained under decoded values.
+    def charge_binary_type(type : BinaryDataType, workspace_bytes : UInt64 = 0_u64) : Nil
+      ensure_base_reserved!
+      usage = measure_type(type, 1, Usage.new)
+      admit_usage(usage, workspace_bytes)
+    end
+
     private def admit_usage(usage : Usage, workspace_bytes : UInt64) : Nil
       retained = checked_add(@retained_logical_bytes, usage.bytes)
       strings = checked_add(@string_payload_bytes, usage.string_bytes)

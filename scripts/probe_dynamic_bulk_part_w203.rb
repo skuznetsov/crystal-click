@@ -870,6 +870,80 @@ module ProbeDynamicBulkPartW203
       fail!("native table has unknown origin: #{table_name.inspect}")
     end
 
+    def owned_dynamic_signature(value)
+      return "#{DYNAMIC}=NULL" if value.nil?
+
+      child = case value
+              when Integer then "#{UINT64}=#{value}"
+              when String then "#{STRING}=#{JSON.generate(value)}"
+              else fail!("unrostered W203 Dynamic fixture value #{value.inspect}")
+              end
+      "#{DYNAMIC}=#{child}"
+    end
+
+    def owned_nested_record_signature(record)
+      label, choice, payload, text = record
+      label_signature = if label.nil?
+                          'LowCardinality(Nullable(String))=Nullable(String)=NULL'
+                        else
+                          "LowCardinality(Nullable(String))=Nullable(String)=String=#{JSON.generate(label)}"
+                        end
+      choice_signature = case choice.fetch(0)
+                         when :string
+                           "#{VARIANT}[0:String]=String=#{JSON.generate(choice.fetch(1))}"
+                         when :uint64
+                           "#{VARIANT}[1:UInt64]=UInt64=#{choice.fetch(1)}"
+                         when :null
+                           "#{VARIANT}=NULL"
+                         else
+                           fail!("unrostered W203 Nested Variant literal #{choice.inspect}")
+                         end
+      tuple_type = 'Tuple(label LowCardinality(Nullable(String)), choice Variant(String, UInt64), d Dynamic(max_types=1), text String)'
+      fields = [label_signature, choice_signature, owned_dynamic_signature(payload), "String=#{JSON.generate(text)}"]
+      "#{tuple_type}=[#{fields.join(',')}]"
+    end
+
+    def expected_owned_signature(case_id, value)
+      case case_id
+      when 'root_dynamic'
+        owned_dynamic_signature(value)
+      when 'array_dynamic'
+        "Array(#{DYNAMIC})=[#{value.map { |item| owned_dynamic_signature(item) }.join(',')}]"
+      when 'tuple_dynamic'
+        dynamic, text = value
+        "Tuple(d #{DYNAMIC}, text String)=[#{owned_dynamic_signature(dynamic)},String=#{JSON.generate(text)}]"
+      when 'nested_dynamic'
+        "#{NESTED}=[#{value.map { |record| owned_nested_record_signature(record) }.join(',')}]"
+      when 'dynamic_tuple_dynamic'
+        if value.nil?
+          "#{DYNAMIC}=NULL"
+        elsif value.is_a?(Array) && value.first == :tuple
+          inner_dynamic = owned_dynamic_signature(value.fetch(1))
+          "#{DYNAMIC}=#{INNER_TUPLE}=[#{inner_dynamic}]"
+        else
+          owned_dynamic_signature(value)
+        end
+      else
+        fail!("unrostered W203 owned-value case #{case_id.inspect}")
+      end
+    end
+
+    def assert_owned_values!(case_id, side)
+      observation = side.fetch('owned_values')
+      expected_rows = FIXTURES.fetch(case_id).map { |value| expected_owned_signature(case_id, value) }.each_slice(2).map(&:to_a)
+      expected_declaration = ProbeDynamicBulkPartW203.type_for(case_id)
+      fail!("#{case_id} owned-values observation keys differ") unless
+        observation.keys.sort == %w[mark_row_counts nominal_type_names_by_mark row_count schema_declaration values_by_mark]
+      fail!("#{case_id} owned-values schema or mark census differs") unless
+        observation['schema_declaration'] == expected_declaration && observation['row_count'] == 8 &&
+        observation['mark_row_counts'] == [2, 2, 2, 2]
+      expected_type_names = Array.new(4) { Array.new(2, expected_declaration) }
+      fail!("#{case_id} owned-values nominal descriptors differ") unless
+        observation['nominal_type_names_by_mark'] == expected_type_names
+      fail!("#{case_id} owned-values rows differ from stock fixture literals") unless
+        observation['values_by_mark'] == expected_rows
+    end
+
     def assert_helper_output!(data)
       fail!('Crystal helper keys or format differ') unless data.keys.sort == %w[case_ids cases format profile_ids] && data['format'] == FORMAT_OUTPUT
       fail!('Crystal helper carrier/profile roster differs') unless data['case_ids'] == CASE_IDS && data['profile_ids'] == PROFILE_IDS
@@ -882,7 +956,9 @@ module ProbeDynamicBulkPartW203
         fail!('Crystal helper result keys differ') unless item.keys.sort == %w[case_id library library_part_path profile_id source]
         fail!('Crystal helper source/library type or windows differ') unless %w[source library].all? do |origin|
           side = item.fetch(origin)
-          side.keys.sort == %w[dynamic_site_paths logical_stream_roles mark_count mark_row_counts ordinary_profile physical_stream_names row_count schema_declaration windows] &&
+          expected_side_keys = %w[dynamic_site_paths logical_stream_roles mark_count mark_row_counts ordinary_profile physical_stream_names row_count schema_declaration windows]
+          expected_side_keys << 'owned_values' if origin == 'source'
+          side.keys.sort == expected_side_keys.sort &&
             side['schema_declaration'] == type_for(case_id) && side['row_count'] == 8 && side['mark_count'] == 4 &&
             side['mark_row_counts'] == [2, 2, 2, 2] && side['ordinary_profile'] == profile &&
             side['windows'] == %w[full first_empty_mark mark_1 mark_2 final_mark zero_end_window]
@@ -913,6 +989,7 @@ module ProbeDynamicBulkPartW203
                         File.join(@root, 'generated', case_id, profile, 'all_1_1_0')
                       end
           assert_independent_part_roster!(part_path, case_id, origin, profile, expected_streams)
+          assert_owned_values!(case_id, side) if origin == 'source'
         end
         expected_path = File.join(@root, 'generated', case_id, profile, 'all_1_1_0')
         fail!('helper library part path escaped its fixed output') unless File.expand_path(item['library_part_path']) == expected_path

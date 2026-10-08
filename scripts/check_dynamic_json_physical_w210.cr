@@ -1,5 +1,6 @@
 require "../src/crystal_click"
 require "json"
+require "./support/dynamic_owned_values_w220"
 
 module CheckDynamicJSONPhysicalW210
   extend self
@@ -233,6 +234,7 @@ module CheckDynamicJSONPhysicalW210
     require!(reader.mark_row_counts == PARENT_ROWS, "#{origin} physical parent mark grid P differs")
     require!(reader.ordinary_profile == profile(profile_name), "#{origin} Dynamic profile differs")
     marks = rows_by_mark(reader, fixed[:case_id], origin)
+    low_level_by_mark = reader.read_marks(0, reader.mark_count)
     require!(reader.read_marks(0, 1).map { |mark| mark.map { |v| row_signature(v, fixed[:case_id]) } } == marks[0, 1],
       "#{origin} first mark selection differs")
     require!(reader.read_marks(1, 1).map { |mark| mark.map { |v| row_signature(v, fixed[:case_id]) } } == marks[1, 1],
@@ -334,7 +336,7 @@ module CheckDynamicJSONPhysicalW210
       child_names.each { |name| check_mark_file!(part, name) } if validate_child_grid
     end
 
-    JSON::Any.new({
+    record = {
       "case_id"                   => JSON::Any.new(fixed[:case_id]),
       "profile_id"                => JSON::Any.new(profile_name),
       "schema_declaration"        => JSON::Any.new(reader.schema_declaration),
@@ -347,7 +349,22 @@ module CheckDynamicJSONPhysicalW210
       "object_child_stream_names" => JSON::Any.new(child_names.sort!.map { |name| JSON::Any.new(name) }),
       "bound_json_type_names"     => JSON::Any.new(expected_child_types.sort!.map { |name| JSON::Any.new(name) }),
       "windows"                   => JSON::Any.new(["full", "first_empty_or_first", "middle", "final", "eof_zero"].map { |name| JSON::Any.new(name) }),
-    } of String => JSON::Any)
+    } of String => JSON::Any
+    if origin == "source"
+      observation = CrystalClick::DynamicOwnedValuesW220.materialize(
+        part,
+        COLUMN,
+        fixed[:type],
+        reader.row_count,
+        reader.mark_row_counts,
+        fixed[:granules],
+        low_level_by_mark,
+      )
+      record["owned_values"] = CrystalClick::DynamicOwnedValuesW220.to_json(observation) do |value|
+        row_signature(value, fixed[:case_id])
+      end
+    end
+    JSON::Any.new(record)
   end
 
   private def write_library_part!(path : String, fixed : Fixture, profile_name : String) : Nil

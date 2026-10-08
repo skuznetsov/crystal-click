@@ -149,9 +149,14 @@ module CrystalClick
       end
       reject_materialized_view_data_access!
 
-      source_name, _source_type, selected_type, _json_path = resolve_typed_ddl_selection(column_name, allow_unsupported_exact: true)
+      source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name, allow_unsupported_exact: true)
+      dynamic_type = if !json_path && source_name == column_name
+                       DynamicBulkColumnDeclaration.parse(source_type)
+                     else
+                       nil
+                     end
       object_root = WidePart.json_type?(selected_type)
-      unless object_root || WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
+      unless object_root || dynamic_type || WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
         raise UnsupportedFormatError.new("selected table column type is unsupported")
       end
       source_column = @columns.find { |entry| entry.name == source_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
@@ -180,6 +185,18 @@ module CrystalClick
 
       if object_root
         return ObjectValuesMaterializer.materialize(self, candidates, column_name, selected_type, expected_rows, max_string_bytes, max_tuple_cells)
+      end
+
+      if type = dynamic_type
+        return DynamicBulkValuesMaterializer.materialize(
+          self,
+          candidates,
+          column_name,
+          type,
+          expected_rows,
+          max_string_bytes,
+          max_tuple_cells
+        )
       end
 
       if plan = tuple_plan

@@ -356,6 +356,14 @@ module CrystalClick
       copy_strings(@selected_checksum_names)
     end
 
+    # Logical retained-owner charge for the actual data and structure grids.
+    # Each grid's own mark_count determines its positions (K+1) and row (K)
+    # slots; do not infer the map cardinalities from another site or part.
+    def retained_grid_workspace_bytes : UInt64
+      bytes = grid_map_workspace_bytes(@grids)
+      checked_grid_workspace_add(bytes, grid_map_workspace_bytes(@structure_grids))
+    end
+
     def contains_bound_dynamic_json? : Bool
       @plan.has_json_object_bindings?
     end
@@ -642,6 +650,54 @@ module CrystalClick
 
     private def copy_strings(values : Array(String)) : Array(String)
       values.map { |value| String.new(value.to_slice) }
+    end
+
+    private def grid_map_workspace_bytes(grids : Hash(String, CompressedMarkGrid)) : UInt64
+      bytes = instance_sizeof(Hash(String, CompressedMarkGrid)).to_u64
+      key_and_value_slots = sizeof(Pointer(String)).to_u64 +
+                            sizeof(Pointer(CompressedMarkGrid)).to_u64 +
+                            sizeof(UInt64).to_u64
+      bytes = checked_grid_workspace_add(
+        bytes,
+        checked_grid_workspace_multiply(grids.size.to_u64, key_and_value_slots)
+      )
+      grids.each do |key, grid|
+        bytes = checked_grid_workspace_add(bytes, grid_key_workspace_bytes(key))
+        bytes = checked_grid_workspace_add(bytes, compressed_grid_workspace_bytes(grid))
+      end
+      bytes
+    end
+
+    private def compressed_grid_workspace_bytes(grid : CompressedMarkGrid) : UInt64
+      marks = grid.mark_count.to_u64
+      positions = checked_grid_workspace_add(marks, 1_u64)
+      bytes = instance_sizeof(CompressedMarkGrid).to_u64
+      bytes = checked_grid_workspace_add(bytes, instance_sizeof(Array(Int64)).to_u64)
+      bytes = checked_grid_workspace_add(
+        bytes,
+        checked_grid_workspace_multiply(positions, sizeof(Int64).to_u64)
+      )
+      bytes = checked_grid_workspace_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+      checked_grid_workspace_add(bytes, checked_grid_workspace_multiply(marks, sizeof(UInt64).to_u64))
+    end
+
+    private def grid_key_workspace_bytes(key : String) : UInt64
+      checked_grid_workspace_add(
+        instance_sizeof(String).to_u64,
+        checked_grid_workspace_add(key.bytesize.to_u64, 1_u64)
+      )
+    end
+
+    private def checked_grid_workspace_add(left : UInt64, right : UInt64) : UInt64
+      raise BoundsError.new("Dynamic retained grid workspace overflows UInt64") if right > UInt64::MAX - left
+      left + right
+    end
+
+    private def checked_grid_workspace_multiply(left : UInt64, right : UInt64) : UInt64
+      if left > 0_u64 && right > UInt64::MAX // left
+        raise BoundsError.new("Dynamic retained grid workspace overflows UInt64")
+      end
+      left * right
     end
 
     private def same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool

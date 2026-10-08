@@ -1,6 +1,7 @@
 require "../src/crystal_click"
 require "digest/sha256"
 require "json"
+require "./support/dynamic_owned_values_w220"
 
 module CheckDynamicSharedJSONW213
   extend self
@@ -649,7 +650,8 @@ module CheckDynamicSharedJSONW213
     require!(reader.row_count == 8_u64 && reader.mark_count == 4, "#{origin} row/mark census differs")
     require!(reader.mark_row_counts == PARENT_ROWS, "#{origin} parent row grid P differs")
     require!(reader.ordinary_profile == profile(profile_name), "#{origin} String profile differs")
-    marks = reader.read_marks(0, reader.mark_count).map { |mark| mark.map { |value| signature(value) } }
+    low_level_by_mark = reader.read_marks(0, reader.mark_count)
+    marks = low_level_by_mark.map { |mark| mark.map { |value| signature(value) } }
     require!(marks == fixed[:expected_rows], "#{origin} row values differ from independent literals")
     [0, 1, 3].each do |mark_index|
       require!(reader.read_marks(mark_index, 1).map { |mark| mark.map { |value| signature(value) } } == [fixed[:expected_rows][mark_index]],
@@ -717,7 +719,7 @@ module CheckDynamicSharedJSONW213
 
     raw_hex = Array(Array(String?)).new(raw[:envelopes].size)
     raw[:envelopes].each { |mark| raw_hex << mark }
-    JSON::Any.new({
+    record = {
       "schema_declaration"           => JSON::Any.new(reader.schema_declaration),
       "row_count"                    => JSON::Any.new(reader.row_count.to_i64),
       "mark_count"                   => JSON::Any.new(reader.mark_count),
@@ -733,7 +735,22 @@ module CheckDynamicSharedJSONW213
       "shared_envelope_hex_by_mark"  => JSON::Any.new(raw_hex.map { |mark| JSON::Any.new(mark.map { |hex| hex ? JSON::Any.new(hex) : JSON::Any.new(nil) }) }),
       "literal_envelope_hex_by_mark" => JSON::Any.new(raw[:literal_envelopes].map { |mark| JSON::Any.new(mark.map { |hex| hex ? JSON::Any.new(hex) : JSON::Any.new(nil) }) }),
       "windows"                      => JSON::Any.new(["full", "first", "middle", "final", "eof_zero"].map { |name| JSON::Any.new(name) }),
-    } of String => JSON::Any)
+    } of String => JSON::Any
+    if origin == "source"
+      observation = CrystalClick::DynamicOwnedValuesW220.materialize(
+        part,
+        COLUMN,
+        fixed[:type],
+        reader.row_count,
+        reader.mark_row_counts,
+        fixed[:granules],
+        low_level_by_mark,
+      )
+      record["owned_values"] = CrystalClick::DynamicOwnedValuesW220.to_json(observation) do |value|
+        signature(value)
+      end
+    end
+    JSON::Any.new(record)
   end
 
   private def write_library_part!(path : String, fixed : Fixture, profile_name : String) : Nil

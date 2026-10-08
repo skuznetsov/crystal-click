@@ -1,5 +1,6 @@
 require "../src/crystal_click"
 require "json"
+require "./support/dynamic_owned_values_w220"
 
 module CheckDynamicBulkPartW203
   extend self
@@ -194,6 +195,33 @@ module CheckDynamicBulkPartW203
     left.type == right.type && CrystalClick::BinaryValueCodec.encode(left) == CrystalClick::BinaryValueCodec.encode(right)
   end
 
+  private def owned_signature(value : CrystalClick::BinaryValue) : String
+    type = value.type
+    return "#{type.name}=NULL" if value.is_null?
+
+    case type.tag
+    when CrystalClick::BinaryDataType::TAG_DYNAMIC
+      "#{type.name}=#{owned_signature(value.child_at(0))}"
+    when CrystalClick::BinaryDataType::TAG_ARRAY,
+         CrystalClick::BinaryDataType::TAG_UNNAMED_TUPLE,
+         CrystalClick::BinaryDataType::TAG_NAMED_TUPLE,
+         CrystalClick::BinaryDataType::TAG_NESTED
+      "#{type.name}=[#{value.elements.map { |child| owned_signature(child) }.join(",")}]"
+    when CrystalClick::BinaryDataType::TAG_NULLABLE,
+         CrystalClick::BinaryDataType::TAG_LOW_CARDINALITY
+      "#{type.name}=#{owned_signature(value.child_at(0))}"
+    when CrystalClick::BinaryDataType::TAG_VARIANT
+      index = value.variant_index?.not_nil!
+      "#{type.name}[#{index}:#{type.child_at(index).name}]=#{owned_signature(value.variant_child?.not_nil!)}"
+    when CrystalClick::BinaryDataType::TAG_UINT64
+      "#{type.name}=#{value.as_uint64}"
+    when CrystalClick::BinaryDataType::TAG_STRING
+      "#{type.name}=#{JSON::Any.new(value.as_string).to_json}"
+    else
+      raise CrystalClick::CorruptPartError.new("W203 owned witness encountered an unrostered value type")
+    end
+  end
+
   private def compare_marks!(
     actual : Array(Array(CrystalClick::BinaryValue)),
     expected : Array(Array(CrystalClick::BinaryValue)),
@@ -257,7 +285,8 @@ module CheckDynamicBulkPartW203
     require!(actual_names == expected_names && actual_names.uniq == actual_names,
       "#{origin} exact physical stream roster differs from the occurrence plan")
 
-    compare_marks!(reader.read_marks(0, reader.mark_count), fixture[:granules], "#{origin} full")
+    low_level_by_mark = reader.read_marks(0, reader.mark_count)
+    compare_marks!(low_level_by_mark, fixture[:granules], "#{origin} full")
     compare_marks!(reader.read_marks(0, 1), fixture[:granules][0, 1], "#{origin} first-empty mark")
     compare_marks!(reader.read_marks(1, 1), fixture[:granules][1, 1], "#{origin} later mark")
     compare_marks!(reader.read_marks(2, 1), fixture[:granules][2, 1], "#{origin} middle mark")
@@ -290,7 +319,7 @@ module CheckDynamicBulkPartW203
     table.scan_typed_window(table.total_row_count, 1) { |_batch| eof_callbacks += 1 }
     require!(eof_callbacks == 0, "#{origin} typed-table EOF window exposed a callback")
 
-    JSON::Any.new({
+    record = {
       "schema_declaration"    => JSON::Any.new(reader.schema_declaration),
       "row_count"             => JSON::Any.new(reader.row_count.to_i64),
       "mark_count"            => JSON::Any.new(reader.mark_count),
@@ -300,7 +329,22 @@ module CheckDynamicBulkPartW203
       "logical_stream_roles"  => JSON::Any.new(roles.map { |name| JSON::Any.new(name) }),
       "physical_stream_names" => JSON::Any.new(actual_names.map { |name| JSON::Any.new(name) }),
       "windows"               => JSON::Any.new(["full", "first_empty_mark", "mark_1", "mark_2", "final_mark", "zero_end_window"].map { |name| JSON::Any.new(name) }),
-    } of String => JSON::Any)
+    } of String => JSON::Any
+    if origin.starts_with?("stock/")
+      observation = CrystalClick::DynamicOwnedValuesW220.materialize(
+        part,
+        COLUMN,
+        fixture[:type],
+        ROW_COUNT,
+        MARK_ROWS,
+        fixture[:granules],
+        low_level_by_mark,
+      )
+      record["owned_values"] = CrystalClick::DynamicOwnedValuesW220.to_json(observation) do |value|
+        owned_signature(value)
+      end
+    end
+    JSON::Any.new(record)
   end
 
   private def write_library_part!(

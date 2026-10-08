@@ -1,5 +1,35 @@
 # CrystalClick project status
 
+Current owned Dynamic consumer slice (W220, 2026-10-08): VERIFIED within the
+finite declared scope (scoped verdict: ROBUST). Public column `.values`
+materializes the existing generic Dynamic-bearing grammar as detached
+immutable `BinaryValue` roots. One private materializer composes existing
+physical readers and recursive budget visitors; no per-product codec, new
+writer profile or public return union is introduced. Exact bare `Dynamic`
+retains its legacy route. Cumulative retained-owner limits cross marks/parts;
+known logical workspace includes the actual retained mark grids, not a
+complete transient-decoded-owner or peak-RSS bound.
+
+The focused gate passes 10 examples and seven regression cohorts pass 271
+examples (40 unique files) in each of DEBUG/RELEASE, with zero failures/errors/
+pending. Fresh native runs per mode pass 34 stock-authored source part reads
+through public `OfflineTable[column].values` and the existing 34 library
+direct ATTACH/CHECK witnesses. Both raw matrices pass a separately executed
+audit with externally measured helper artifact pins. Eight actual clean
+controls pass and 66 semantic/identity mutants are rejected. The audit checks
+reported signatures; exact recursive fixture equality is asserted inside the
+pinned Crystal helper. Native catalog discovery and library-side `.values`
+are not qualified by these witnesses. The unrelated legacy range-error/budget
+regression was reproduced on a clean baseline and repaired separately in
+`551642a07d3284122d8b0e50d4a16a9f84929c10`.
+
+The full types/MV/projection goal remains active. Residual physical profiles,
+aggregate states beyond Count, broader SimpleAggregateFunction admission,
+MV/projection writing/semantics and facade decomposition remain open;
+memory/performance stays deferred. Details:
+[DYNAMIC_OWNED_VALUES_FRONTIER.md](DYNAMIC_OWNED_VALUES_FRONTIER.md),
+[W220 evidence packet](../.landmark/evidence/dynamic-owned-values-w220.json).
+
 Current specialized projection-reader slice (W217/W218/W219, 2026-10-08):
 VERIFIED within the finite declared scope (scoped verdict: ROBUST).
 Selected Wide projection children reuse existing Object, Array(JSON),
@@ -21,8 +51,9 @@ UInt64 mark-range lookup and historical unsafe-filename error precedence were
 also caught by executed tests and corrected without changing their assertions.
 
 This is recursive owner/context composition, not a codec per type product or
-all-layout compatibility. Writer profiles are unchanged. Owned generic
-Dynamic offline values, other JSON/shared layouts and wrapper admission gaps,
+all-layout compatibility. Writer profiles are unchanged. At that closure,
+owned generic Dynamic offline values remained open (now covered by W220's
+finite consumer slice above). Other JSON/shared layouts and wrapper admission gaps,
 MV SQL execution, projection writing/optimizer/freshness/provenance and broad
 facade decomposition remain open. Memory/performance work stays deferred; no
 benchmark, RSS, production checksum-hash or whole-scan callback-atomicity claim
@@ -2228,13 +2259,15 @@ source/runtime identities and executed evidence.
    See [JSON_BINARY_KERNEL_FRONTIER.md](JSON_BINARY_KERNEL_FRONTIER.md).
    Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
-   required, and whole-Object projection child reads remain refused. See
+   required. W217 now qualifies selected whole-Object projection child reads
+   in its finite schema-bound profile; freshness/provenance is not implied. See
    [JSON_GENERAL_STORAGE_FRONTIER.md](JSON_GENERAL_STORAGE_FRONTIER.md).
    W140's finite physical profile and executed gates are in
    [OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md](OBJECT_RECURSIVE_DECLARATIONS_FRONTIER.md).
 2. **Additional physical profiles and recursive composition.** Normalized
    Wide/SUFFIX Object V3 with explicit rosters and one-bucket MAP is not general
-   JSON/Dynamic compatibility. Bucketed/advanced layouts, other structure
+   JSON/Dynamic compatibility. W190/W195 already qualify finite bucketed MAP
+   and advanced v2/v3 profiles; remaining layouts/products and other structure
    versions, Compact parts and unqualified wrapper/container combinations need
    their own paired evidence. Existing logical binary codecs alone do not
    widen public part admission. W147 qualifies the generic Variant logical

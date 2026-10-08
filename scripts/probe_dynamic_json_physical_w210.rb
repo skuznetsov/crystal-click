@@ -672,11 +672,25 @@ module ProbeDynamicJSONPhysicalW210
         %w[source library].each do |origin|
           side = item.fetch(origin)
           required = %w[bound_json_type_names case_id mark_count mark_row_counts object_child_stream_names physical_stream_names profile_id row_count rows_by_mark schema_declaration selected_checksum_names windows]
-          fail!("#{case_id}/#{profile}/#{origin} helper side keys differ") unless side.keys.sort == required
+          required << 'owned_values' if origin == 'source'
+          fail!("#{case_id}/#{profile}/#{origin} helper side keys differ") unless side.keys.sort == required.sort
           fail!("#{case_id}/#{profile}/#{origin} helper shape differs") unless
             side['case_id'] == case_id && side['profile_id'] == profile && side['schema_declaration'] == ProbeDynamicJSONPhysicalW210.type_for(case_id) &&
             side['row_count'] == 6 && side['mark_count'] == 3 && side['mark_row_counts'] == PARENT_MARK_ROWS &&
             side['windows'] == %w[full first_empty_or_first middle final eof_zero] && side['rows_by_mark'] == expected_rows.fetch(case_id)
+          if origin == 'source'
+            owned = side.fetch('owned_values')
+            declaration = ProbeDynamicJSONPhysicalW210.type_for(case_id)
+            fail!("#{case_id}/#{profile} owned-values observation keys differ") unless
+              owned.keys.sort == %w[mark_row_counts nominal_type_names_by_mark row_count schema_declaration values_by_mark]
+            fail!("#{case_id}/#{profile} owned-values nominal schema or row/mark census differs") unless
+              owned['schema_declaration'] == declaration && owned['row_count'] == 6 && owned['mark_row_counts'] == PARENT_MARK_ROWS
+            expected_types = Array.new(PARENT_MARK_ROWS.size) { Array.new(2, declaration) }
+            fail!("#{case_id}/#{profile} owned-values actual nominal descriptors differ") unless
+              owned['nominal_type_names_by_mark'] == expected_types
+            fail!("#{case_id}/#{profile} owned-values values differ from independent stock literals") unless
+              owned['values_by_mark'] == expected_rows.fetch(case_id)
+          end
           fail!("#{case_id}/#{profile}/#{origin} physical/checksum names are malformed") unless
             side['physical_stream_names'].is_a?(Array) && !side['physical_stream_names'].empty? && side['physical_stream_names'].uniq == side['physical_stream_names'] &&
             side['selected_checksum_names'].is_a?(Array) && side['selected_checksum_names'].uniq == side['selected_checksum_names']
