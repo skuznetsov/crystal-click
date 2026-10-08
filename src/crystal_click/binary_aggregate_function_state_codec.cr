@@ -1,7 +1,7 @@
 module CrystalClick
   # Canonical raw state bytes for admitted non-Count AggregateFunction roots.
-  # The function state is opaque to the scalar value grammar; this codec only
-  # enforces the source-derived width and nullable-presence envelope.
+  # Fixed Sum states and variable Avg states retain their own grammars; neither
+  # is treated as a generic length-prefixed scalar blob.
   module BinaryAggregateFunctionStateCodec
     def self.write(type : BinaryDataType, bytes : Bytes, context : BinaryCodecContext) : Nil
       plan = BinaryAggregateFunctionStatePlan.for_type(type)
@@ -21,17 +21,28 @@ module CrystalClick
         when 0_u8
           Bytes[0_u8]
         when 1_u8
-          raw = context.read_slice(plan.state_width.to_u64)
-          bytes = Bytes.new(raw.size + 1)
-          bytes[0] = 1_u8
-          raw.size.times { |index| bytes[index + 1] = raw[index] }
-          bytes
+          prepend_presence(read_inner_state(plan, context))
         else
           context.corrupt!("AggregateFunction nullable state has an invalid presence byte")
         end
       else
+        read_inner_state(plan, context)
+      end
+    end
+
+    private def self.read_inner_state(plan : BinaryAggregateFunctionStatePlan, context : BinaryCodecContext) : Bytes
+      if layout = plan.avg_layout
+        layout.read_state(context)
+      else
         context.read_slice(plan.state_width.to_u64)
       end
+    end
+
+    private def self.prepend_presence(raw : Bytes) : Bytes
+      bytes = Bytes.new(raw.size + 1)
+      bytes[0] = 1_u8
+      raw.size.times { |index| bytes[index + 1] = raw[index] }
+      bytes
     end
 
     # Bulk lane owner emits the same canonical state sequence without adding a

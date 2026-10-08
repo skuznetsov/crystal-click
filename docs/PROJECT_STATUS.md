@@ -1,6 +1,62 @@
 # CrystalClick project status
 
-Current recursive AggregateFunction Variant slice (W225, 2026-10-08): VERIFIED
+Current AggregateFunction Avg slice (W227, 2026-10-08): VERIFIED within 148
+finite quiescent root Wide/LZ4/Default/plain-mrk2 profiles (scoped verdict:
+ROBUST). Reader and writer now share an immutable avg-state leaf with promoted
+8/16/32-byte numerator and canonical UInt64 VarUInt denominator. Nullable
+argument presence and exact Decimal/temporal/LC metadata are preserved.
+The new layout owner has its own file; existing static/Variant/Dynamic routes
+reuse that leaf rather than adding a serializer per recursive type product.
+
+The same 58 affected spec files pass 346 examples in DEBUG and RELEASE with
+no failures, errors or pending examples. Each fresh paired native run qualifies
+136 base signatures over 37 source-valid leaf kinds plus 12 metadata witnesses,
+13 computed avgState probes and 162 raw processes (160 successes, two expected
+Enum construction refusals). Stock reads, library publication, native
+ATTACH/CHECK=1, exact full/middle/zero RowBinary, later-mark reads and owned
+values pass. Both raw audits reject coherent CHECK-zero and retained-file
+forgeries despite green summaries; exact restoration passes. The latter attack
+exposed and closed a real auditor-only inventory gap. All 1,776 generated part
+files agree across modes by actual bytes, relative path, size and SHA-256.
+
+This qualifies root parts and measured library composition controls, not every
+outer native layout/parameter product or aggregate arithmetic. Count, finite
+Sum-family and Avg storage are paired; other AggregateFunction states, residual
+JSON/Dynamic/Variant/LC/Nested layouts, broader MV/projection inspection and
+writing, and large-facade decomposition remain open. Performance is deferred
+and the full goal remains active. Details:
+[AGGREGATE_FUNCTION_AVG_FRONTIER.md](AGGREGATE_FUNCTION_AVG_FRONTIER.md),
+[W227 evidence packet](../.landmark/evidence/aggregate-function-avg-w227.json).
+
+Previous generic AggregateFunction Dynamic slice (W226, 2026-10-08): VERIFIED
+within eight finite quiescent Wide/LZ4/Default/plain-mrk2 Dynamic V3/BASIC
+profiles (scoped verdict: ROBUST). Existing Count and finite Sum-family leaf
+serde now composes through generic Dynamic scalar, ordinary and shared paths.
+The missing bulk work was one aggregate data leaf in four logical role and
+three physical visitors, not a new serializer per recursive type product.
+The default shared-child helper propagates its closed permission through
+hidden runtime Dynamic actuals; JSON, borrowed persisted envelopes and the
+legacy fixed-union Dynamic API retain their aggregate guards.
+
+The same 55 affected spec files pass 327 examples in DEBUG and RELEASE with
+no failures, errors or pending examples. Both paired native runs and separate
+raw audits pass eight profiles and 171 successful process records per mode:
+stock reads, library part publication, native ATTACH/CHECK=1 and exact
+full/middle/zero RowBinary plus known/shared placement. Coherent successful-exit
+CHECK-zero seeds reject despite green summaries; exact restoration returns
+both audits to green. All 156 generated part files match across modes by
+path, size and SHA-256; this is not a substitute for literal native reads.
+DEBUG evidence predates whitespace-only helper/consumer-spec formatting;
+production bytes are unchanged and RELEASE uses the final formatted sources.
+
+Local implementation commit: `0402a6bbfd8512105589acb8b1500a75780dbadc`.
+No all-product/all-layout, whole-catalog/projection-native, aggregate execution,
+MV/projection writing or performance claim is made. The full goal remains
+active and performance work remains deferred. Details:
+[AGGREGATE_FUNCTION_DYNAMIC_FRONTIER.md](AGGREGATE_FUNCTION_DYNAMIC_FRONTIER.md),
+[W226 evidence packet](../.landmark/evidence/aggregate-function-dynamic-w226.json).
+
+Previous recursive AggregateFunction Variant slice (W225, 2026-10-08): VERIFIED
 within seven finite profiles (scoped verdict: ROBUST). The shared contextual
 admission visitor now traverses AggregateFunction-bearing Variant alternatives.
 Normal and wire constructors admit those shapes; generic values and bulk routes
@@ -2468,9 +2524,12 @@ source/runtime identities and executed evidence.
    Count state to bounded canonical argument metadata through logical codecs,
    explicit Wide/LZ4 part readers/writers, typed table/window/candidate scans
    and exact DDL-bound offline `.values`. Its finite native matrix covers 63
-   canonical argument profiles, not every recursive argument product. Other
-   AggregateFunction states and unqualified outer/storage products/layouts
-   remain outside the certificate. Broader
+   canonical argument profiles, not every recursive argument product. W223
+   adds finite Sum-family state storage; W224-W226 add source-eligible static,
+   Variant and generic Dynamic composition. W227 adds Avg over source-valid
+   leaf kinds with 148 finite paired root profiles. Other AggregateFunction
+   states and unqualified outer/storage products/layouts remain outside their
+   certificates. Broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -2497,9 +2556,14 @@ source/runtime identities and executed evidence.
    not a public whole-part certificate for every composition.
    W172 pairs the nominal Nested descriptor and ordinary logical value/bulk
    kernel; specialized Nested LC/Variant/Dynamic products remain refused.
-   The general descriptor kernel admits AggregateFunction only for W178's
-   ordinary Count canonical-argument profile; other aggregate states and Custom
-   remain outside it. W180 now admits root JSON v0 descriptors and structured
+   The general descriptor kernel admits W178's ordinary Count canonical
+   arguments, W223's finite sum/sumWithOverflow/sumKahan state families and
+   W227's source-valid avg argument family.
+   W224 adds source-eligible static composition, W225 adds static Variant
+   alternatives, and W226 adds generic Dynamic scalar/V3 known/shared state
+   routes. Other aggregate families/versions and Custom remain outside it;
+   logical admission does not qualify every physical product. W180 admits
+   root JSON v0 descriptors and structured
    scalar RowBinary values, not parent products, SKIP/regexp or general persisted
    JSON. Its finite native witnesses do not qualify every recursive child type.
    W179 now pairs QBit/QBitWithStride tags,
@@ -2664,6 +2728,9 @@ source/runtime identities and executed evidence.
    W175-W177 close the three exact scalar Count state signatures through
    logical codecs, parts and consumers, not the broader AggregateFunction
    state family. A stored-value wrapper does not certify aggregate execution.
+   W223-W227 add finite Sum/Avg families and recursive static/Variant/Dynamic
+   composition; remaining state families and physical products still require
+   distinct source laws and native witnesses, not a generic opaque-blob fallback.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
 4. Only then reopen memory/performance work. No current claim of stock-reader

@@ -115,9 +115,9 @@ module CrystalClick
       new(type, little_endian(count, 8))
     end
 
-    # Sum-family aggregate state is an opaque canonical byte sequence. The
-    # descriptor validates its fixed-width/presence envelope, while this value
-    # owner copies bytes so callers cannot mutate an already-owned state.
+    # Non-Count aggregate states are opaque canonical byte sequences. The
+    # family-specific plan validates their state and presence grammar, while
+    # this value owner copies bytes so callers cannot mutate owned states.
     def self.aggregate_function_state(type : BinaryDataType, canonical_bytes : Bytes) : BinaryValue
       descriptor = type.aggregate_function_type || raise ArgumentError.new("AggregateFunction state requires its nominal type")
       if descriptor.function_name == "count" || type.aggregate_count_type

@@ -1,0 +1,547 @@
+{
+  "format": "crystal_click_scoped_evidence_v1",
+  "slice": "W227 AggregateFunction(avg,T) variable-width immutable state storage",
+  "date": "2026-10-08",
+  "baseline_commit": "0402a6bbfd8512105589acb8b1500a75780dbadc",
+  "claim": {
+    "level": "VERIFIED within declared finite scope",
+    "statement": "Paired opaque Avg states over source-valid leaf kinds and eligible argument shells; one leaf owner composes through existing library wrappers without per-product serializers.",
+    "adversary_verdict": "ROBUST within 148 measured quiescent root Wide profiles and the tested library integration controls, not all native wrapper/layout products.",
+    "F": "Compiling RED, source laws, independent literals and executed raw audits; not a formal proof.",
+    "G": "37 leaf kinds; 136 base signatures plus 12 metadata witnesses; five rows and [2,2,1] marks plus terminal zero. Not every precision/scale/zone or recursive product.",
+    "R": "Root executed guarded jobs and independently inspected delegated changes. Luna static review is same-lineage correlated, not independent replication."
+  },
+  "boundaries": {
+    "risk": "CAUTION: shared admission, descriptor and state framing.",
+    "rollback": "Revert this exact-path local atomic feature commit without discarding unrelated work. No push/history rewrite.",
+    "admitted": [
+      "Canonical unary avg, no parameters, descriptor version 0.",
+      "Fixed 8/16/32-byte numerator plus canonical bounded UInt64 VarUInt count, no blob-length prefix.",
+      "Aggregate-argument Nullable presence, exact nominal LC/Decimal/temporal metadata; arguments are not value children.",
+      "Root paired parts, public typed reads/windows and owned values; static/Variant/generic Dynamic library integration controls reuse the leaf."
+    ],
+    "retained_guards": [
+      "Enum/String/Nothing/container Avg arguments and source-invalid shells.",
+      "LC Decimal/scaled temporal, nonzero versions, parameters and other aggregate families/combinators.",
+      "JSON aggregate actuals, borrowed shared envelopes, legacy fixed-union Dynamic API and Map keys."
+    ],
+    "not_claimed": [
+      "All native wrapper/layout Cartesian products, Compact/sparse/custom layouts, mutable live-part safety or whole-repository tests.",
+      "Native full offline-catalog or projection coverage; owned-value witnesses use synthetic offline catalogs.",
+      "Aggregate arithmetic/finalization, MV/projection writing/execution, broad facade refactor, memory/performance or the <=10 percent read-gap objective."
+    ]
+  },
+  "architecture": {
+    "new_owner": "src/crystal_click/binary_aggregate_avg_state_layout.cr",
+    "law": "Leaf serde is reused; wrappers still carry physical names, child domains, state/prefix and marks. Logical root.data is not persisted column stream v.",
+    "sum_compatibility": "Existing Sum state_width remains fixed; Avg rejects that API and exposes bounded variable state parsing.",
+    "controls": [
+      "All nine seven-bit VarUInt length transitions with sentinel adjacency for 8/16/32-byte numerator widths.",
+      "Nullable present counts128/16384, absent00 and following sentinel; malformed/truncated/nonminimal/overflow/overlong counts.",
+      "Exact nominal identities, scalar/shared budgets, later and short-final marks, Count/Sum regression and pre-callback compressed-frame corruption."
+    ]
+  },
+  "source_reference": {
+    "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+    "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+    "source_pin_sha256": "fb750503f3c2e1dbca015c027f6ded8ccd0094ca79f732a059914242f6c1c0b0",
+    "source_pin_identical_between_modes": true,
+    "distinction": "Source snapshot and executable are separate pins, not the same build or continuing latest master.",
+    "decisive_file_manifest": [
+      {
+        "path": "src/AggregateFunctions/AggregateFunctionAvg.cpp",
+        "sha256": "fa4b350334ca402d4e17928823ca244cc4ca698ee1cb1fd465646ec770cfb48c"
+      },
+      {
+        "path": "src/AggregateFunctions/AggregateFunctionAvg.h",
+        "sha256": "f9760157c55129578105501dc771896cc6ac9995a3b1809552a00911f3406c6e"
+      },
+      {
+        "path": "src/AggregateFunctions/AggregateFunctionFactory.cpp",
+        "sha256": "19edf542a3fc0364ffece33db8051d788613fd2125354679f501b9ddd038330a"
+      },
+      {
+        "path": "src/AggregateFunctions/Combinators/AggregateFunctionNull.cpp",
+        "sha256": "829d45d95c8c17471a6093cc5a2ae3238c8728fd73cb57e0b908b412d4012efc"
+      },
+      {
+        "path": "src/AggregateFunctions/Combinators/AggregateFunctionNull.h",
+        "sha256": "94eee4ce82872fb54d40b440519278282eae46871fe94d7d4f8c64f6caeb9501"
+      },
+      {
+        "path": "src/AggregateFunctions/IAggregateFunction.h",
+        "sha256": "07b52aa8d08744674ee677f2b1ec55089c72870cf16e2aafaa0f815c34073b0d"
+      },
+      {
+        "path": "src/AggregateFunctions/FactoryHelpers.h",
+        "sha256": "abe6d4e6f20b93b1089c0c0bce90999dd58a421918d70b5dd1d186f5ed278b96"
+      },
+      {
+        "path": "src/AggregateFunctions/Helpers.h",
+        "sha256": "1ef65dadd04fcf968998f35db36f300877550d7732c88d25b8e0fe8109857892"
+      },
+      {
+        "path": "src/Core/Field.h",
+        "sha256": "42fd21be18892643bcfae9962485b0605441fa39e8d56df2a6e13da5554ea0c4"
+      },
+      {
+        "path": "base/base/Decimal_fwd.h",
+        "sha256": "6f2bca44c9ded6aceabbbac2316a4100983655939a386c35aeffe11a4c1bf9da"
+      },
+      {
+        "path": "src/DataTypes/IDataType.h",
+        "sha256": "6e9befee2cf642d989912710a4857c5a122fb7ba337eafc6b923c10f8eb33d5c"
+      },
+      {
+        "path": "src/DataTypes/DataTypeDomainBool.cpp",
+        "sha256": "3de0e1b9e943e381270216d676c46ab8a5cf19bd70f7c41b52831ef0fa9a8d68"
+      },
+      {
+        "path": "src/DataTypes/DataTypeLowCardinality.cpp",
+        "sha256": "e75ef3196f929ed61313394fe8ba13c0a377446f73fac12f2b2425128d625c5c"
+      },
+      {
+        "path": "src/DataTypes/DataTypeLowCardinality.h",
+        "sha256": "5f2e0e468177df1ce933240f7303d3558a2ba94a63e4dcdf4f92951f9520f0b2"
+      },
+      {
+        "path": "src/DataTypes/DataTypeNumberBase.h",
+        "sha256": "277d1f9233b3ec0c58a02f8865b28f75320dc09587fe303a0425be47297d54e0"
+      },
+      {
+        "path": "src/DataTypes/DataTypeDecimalBase.h",
+        "sha256": "9cc360ca7218629d9b697c46acdf0e2855604d78704d760e5d5fe620368f1955"
+      },
+      {
+        "path": "src/DataTypes/DataTypesDecimal.cpp",
+        "sha256": "c5aafee0387ea3bdd9b558759c654b8d48e492b4c6bc6b2b486b2283e2d17d6e"
+      },
+      {
+        "path": "src/DataTypes/DataTypeInterval.h",
+        "sha256": "5ad4cc9f20ea828d13f531f25a6d4cfacc8669ea54e26bc1f4fd06d866d6d8a7"
+      },
+      {
+        "path": "src/DataTypes/DataTypeInterval.cpp",
+        "sha256": "feac362223d5a6445f810574c625f245acf6ebe183d4f97f506422b94daf347a"
+      },
+      {
+        "path": "src/Common/IntervalKind.h",
+        "sha256": "c4ad758a9d01d3c935bd2399c1c6aad7df668fab14ff881b731cc4d9bbf161ed"
+      },
+      {
+        "path": "src/DataTypes/DataTypeAggregateFunction.cpp",
+        "sha256": "81a26eab248379dd3f055fb716a4e7cb3a5f08a90239116f6df3af5b8c83b4ec"
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationAggregateFunction.cpp",
+        "sha256": "1fa59453165a7cdb33811e8cf8eb55d7f7b18abd4d28281397470dd217dd4950"
+      },
+      {
+        "path": "src/DataTypes/DataTypeDateTime64.cpp",
+        "sha256": "e585bd8190c92fd52bbcb28165a272e41a8c507e823d246716c38e942e888adf"
+      },
+      {
+        "path": "src/DataTypes/DataTypeDateTime64.h",
+        "sha256": "587ca9498e2321309578e0dde78937875e2bd241ad9e90edb15d9b4266c6e098"
+      },
+      {
+        "path": "src/DataTypes/DataTypeTime64.cpp",
+        "sha256": "01d3e9ab70e1dcb71b02e0040383cbda2273a2ec50decf8a69af23292ccad8a9"
+      },
+      {
+        "path": "src/DataTypes/DataTypeTime64.h",
+        "sha256": "fd3b4eb7d7c730366ac45747a7793e1e1777c182b8b15145b63ccb73684df55f"
+      },
+      {
+        "path": "src/DataTypes/DataTypeDate.cpp",
+        "sha256": "a93159bbe79e556a896698250b5cd2b1fea46ab267f5fcef95b47a2b7e967ea8"
+      },
+      {
+        "path": "src/DataTypes/DataTypeDate32.cpp",
+        "sha256": "54850ab01593a1edc9698b2e11149dbd148dec1c9c9d46e39b4599786a5ee665"
+      },
+      {
+        "path": "src/DataTypes/DataTypeDateTime.cpp",
+        "sha256": "f9d5fbfe0d896bd55e995e5f71bfb759ee02f6b4a6880e8c5abd25dac2be0f7c"
+      },
+      {
+        "path": "src/DataTypes/DataTypeTime.cpp",
+        "sha256": "8c35c3bb4e01a35ffa82c273091d6a42d4e9459214b738130d355c3ed9e5a65b"
+      }
+    ]
+  },
+  "runtime": {
+    "binary": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+  },
+  "verification": {
+    "execution_owner": "Root; compiler/native/Ruby/formatter jobs serialized under unchanged run_safe, min-free50%, one Crystal worker, isolated cache.",
+    "compiler": "Crystal 1.21.0; --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace; RELEASE adds --release --no-debug.",
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "min_free_percent": 50,
+      "workers": 1,
+      "compiler_native_seconds": 600,
+      "compiler_native_mib": 12288,
+      "ruby_seconds": 120,
+      "ruby_mib": 512
+    },
+    "red": {
+      "exit": 1,
+      "examples": 5,
+      "failures": 0,
+      "errors": 4,
+      "pending": 0,
+      "log": "/private/tmp/crystal-click-w227.xlO76A/red.log",
+      "cause": "Baseline Avg admission/descriptor refusal; Count/Sum control passed."
+    },
+    "stock_prerequisite": {
+      "exit": 0,
+      "evidence_root": "/private/tmp/crystal-click-w227-prerequisite.4TZ1Ok",
+      "computed_probes": 3,
+      "parts": 3,
+      "raw_processes": 6
+    },
+    "specs": {
+      "files": 58,
+      "roster": [
+        "spec/aggregate_avg_w227_adversary_spec.cr",
+        "spec/aggregate_avg_w227_consumers_spec.cr",
+        "spec/aggregate_avg_w227_core_spec.cr",
+        "spec/aggregate_count_w175_core_spec.cr",
+        "spec/aggregate_dynamic_w226_adversary_spec.cr",
+        "spec/aggregate_dynamic_w226_consumers_spec.cr",
+        "spec/aggregate_dynamic_w226_core_spec.cr",
+        "spec/aggregate_recursive_w224_admission_red_spec.cr",
+        "spec/aggregate_recursive_w224_adversary_spec.cr",
+        "spec/aggregate_recursive_w224_bulk_spec.cr",
+        "spec/aggregate_recursive_w224_consumers_spec.cr",
+        "spec/aggregate_recursive_w224_core_spec.cr",
+        "spec/aggregate_recursive_w224_part_spec.cr",
+        "spec/aggregate_sum_w223_admission_red_spec.cr",
+        "spec/aggregate_sum_w223_bulk_spec.cr",
+        "spec/aggregate_sum_w223_consumers_spec.cr",
+        "spec/aggregate_sum_w223_core_spec.cr",
+        "spec/aggregate_sum_w223_part_spec.cr",
+        "spec/aggregate_sum_w223_root_adversary_spec.cr",
+        "spec/aggregate_variant_w225_adversary_spec.cr",
+        "spec/aggregate_variant_w225_consumers_spec.cr",
+        "spec/aggregate_variant_w225_core_spec.cr",
+        "spec/array_object_dynamic_w185_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+        "spec/binary_dynamic_bulk_shared_context_w155_spec.cr",
+        "spec/binary_dynamic_bulk_values_w155_adversary_spec.cr",
+        "spec/binary_dynamic_bulk_values_w155_red_spec.cr",
+        "spec/binary_dynamic_bulk_values_w155_spec.cr",
+        "spec/binary_dynamic_descriptor_w152_spec.cr",
+        "spec/binary_dynamic_physical_w156_adversary_spec.cr",
+        "spec/binary_dynamic_physical_w156_red_spec.cr",
+        "spec/binary_dynamic_physical_w156_spec.cr",
+        "spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr",
+        "spec/binary_dynamic_statistics_offsets_w157_spec.cr",
+        "spec/binary_dynamic_value_w153_red_spec.cr",
+        "spec/binary_dynamic_value_w153_spec.cr",
+        "spec/dynamic_bulk_part_w203_spec.cr",
+        "spec/dynamic_descriptor_consumer_guards_w152_spec.cr",
+        "spec/dynamic_owned_values_w220_spec.cr",
+        "spec/dynamic_shared_json_physical_w213_spec.cr",
+        "spec/dynamic_shared_json_w213_spec.cr",
+        "spec/dynamic_structure_roster_w154_red_spec.cr",
+        "spec/dynamic_table_budget_w211_spec.cr",
+        "spec/dynamic_table_consumer_w211_spec.cr",
+        "spec/json_binary_kernel_w180_guards_spec.cr",
+        "spec/json_nested_scalar_w182_guards_spec.cr",
+        "spec/json_nested_shared_dynamic_w182_spec.cr",
+        "spec/json_recursive_scalar_w181_guards_spec.cr",
+        "spec/object_declared_dynamic_w158_adversary_spec.cr",
+        "spec/object_declared_dynamic_w158_spec.cr",
+        "spec/object_recursive_dynamic_w159_adversary_spec.cr",
+        "spec/object_recursive_dynamic_w159_spec.cr",
+        "spec/object_shared_copy_w192_adversary_spec.cr",
+        "spec/object_shared_copy_w192_spec.cr",
+        "spec/object_typed_dynamic_json_context_w215_spec.cr",
+        "spec/object_typed_dynamic_shared_json_physical_w214_spec.cr",
+        "spec/object_typed_dynamic_shared_json_w214_spec.cr"
+      ],
+      "debug": {
+        "exit": 0,
+        "examples": 346,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "log": "/private/tmp/crystal-click-w227.xlO76A/affected-debug-final.log"
+      },
+      "release": {
+        "exit": 0,
+        "examples": 346,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "log": "/private/tmp/crystal-click-w227.xlO76A/affected-release.log"
+      }
+    },
+    "native": {
+      "debug": {
+        "success": true,
+        "classification": "paired_aggregate_avg_profiles_observed",
+        "profile_count_expected": 148,
+        "base_source_valid_count": 136,
+        "metadata_witness_count": 12,
+        "stock_profile_count": 148,
+        "helper_profile_count": 148,
+        "native_profile_count": 148,
+        "construction_count": 148,
+        "computed_probe_count": 13,
+        "process_count": 162,
+        "process_status_counts": {
+          "success_exit0": 160,
+          "nonzero_or_signaled": 2,
+          "timeout": 0,
+          "spawn_failure": 0
+        },
+        "source_matrix_sha256": "b04563ba4702634f420c3a410b906947a777298e6433fdfc8b012cc5fe4bbc5c",
+        "helper_input_sha256": "f4f4d2004948d0bddc52e0f098b0236d6cd78ea712042dac9dc54b3586a76299",
+        "native_matrix_sha256": "d975fde548b63ee10591aa2732de84773c676e4337f649b1cf05d3878249b91a",
+        "source_root": "/private/tmp/crystal-click-w227-native.debug.PXMvch",
+        "evidence_root": "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo",
+        "helper": "/private/tmp/crystal-click-w227.xlO76A/check_aggregate_avg_w227-debug",
+        "helper_sha256": "2f03b836a7f0344e3d4cb566c62c18b311eface65899987e88281138fa7c1c9f",
+        "runner_exit": 0,
+        "audit_exit": 0,
+        "build_log": "/private/tmp/crystal-click-w227.xlO76A/helper-debug-build-hierarchy.log",
+        "runner_log": "/private/tmp/crystal-click-w227.xlO76A/native-debug-physical-name.log",
+        "final_audit_log": "/private/tmp/crystal-click-w227.xlO76A/audit-debug-final.log"
+      },
+      "release": {
+        "success": true,
+        "classification": "paired_aggregate_avg_profiles_observed",
+        "profile_count_expected": 148,
+        "base_source_valid_count": 136,
+        "metadata_witness_count": 12,
+        "stock_profile_count": 148,
+        "helper_profile_count": 148,
+        "native_profile_count": 148,
+        "construction_count": 148,
+        "computed_probe_count": 13,
+        "process_count": 162,
+        "process_status_counts": {
+          "success_exit0": 160,
+          "nonzero_or_signaled": 2,
+          "timeout": 0,
+          "spawn_failure": 0
+        },
+        "source_matrix_sha256": "5db37499c20cc73833420f1f6444efffb32c5fcf12f46a1e4527037414a208a6",
+        "helper_input_sha256": "9fd056b2314c2dfe19a15ecdb14b5d31530c3afd78f8a7a1fad42d28669c3dc6",
+        "native_matrix_sha256": "abffd0fa32debebb17549be37d31a6eed84716fb46672cb6bd4d3cce3b3a9e1e",
+        "source_root": "/private/tmp/crystal-click-w227-native.release.aD6pcg",
+        "evidence_root": "/private/tmp/crystal-click-w227-evidence.release.DMl71o",
+        "helper": "/private/tmp/crystal-click-w227.xlO76A/check_aggregate_avg_w227-release",
+        "helper_sha256": "f4cb8c1c3284a7a13a8238a8a7bb5bf7c8a9728a306e649975bd6e81d10f7de3",
+        "runner_exit": 0,
+        "audit_exit": 0,
+        "build_log": "/private/tmp/crystal-click-w227.xlO76A/helper-release-build.log",
+        "runner_log": "/private/tmp/crystal-click-w227.xlO76A/native-release.log",
+        "final_audit_log": "/private/tmp/crystal-click-w227.xlO76A/audit-release-final.log"
+      }
+    },
+    "adversary_seeds": {
+      "observations": {
+        "inventory-debug-red": {
+          "profile_id": "avg_uint8_bare",
+          "expectation": "expose",
+          "seed_audit_exit": 0,
+          "restored_audit_exit": 0,
+          "restored_sha256": {
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/stores/native/store/372/372efe19-348f-4ab2-a847-73b2b22afb17/all_1_1_0/checksums.txt": "8e07bba4382efce7edbd59335d93807d910f6ee7323479935ba6987e89b582e9",
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/cases/native-matrix.json": "d975fde548b63ee10591aa2732de84773c676e4337f649b1cf05d3878249b91a",
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/summary.json": "5e06c34115e717d72aec2378d319dd3d24111d4e97b3c6223040fc95702f8152"
+          },
+          "mutated_relative_path": "checksums.txt",
+          "same_length_byte_flip": true,
+          "reported_changed_preserved": [],
+          "raw_capture_exit_preserved": 0,
+          "summary_success_preserved": true
+        },
+        "inventory-debug-guard": {
+          "profile_id": "avg_uint8_bare",
+          "expectation": "guard",
+          "seed_audit_exit": 1,
+          "restored_audit_exit": 0,
+          "restored_sha256": {
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/stores/native/store/372/372efe19-348f-4ab2-a847-73b2b22afb17/all_1_1_0/checksums.txt": "8e07bba4382efce7edbd59335d93807d910f6ee7323479935ba6987e89b582e9",
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/cases/native-matrix.json": "d975fde548b63ee10591aa2732de84773c676e4337f649b1cf05d3878249b91a",
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/summary.json": "5e06c34115e717d72aec2378d319dd3d24111d4e97b3c6223040fc95702f8152"
+          },
+          "mutated_relative_path": "checksums.txt",
+          "same_length_byte_flip": true,
+          "reported_changed_preserved": [],
+          "raw_capture_exit_preserved": 0,
+          "summary_success_preserved": true
+        },
+        "inventory-release-guard": {
+          "profile_id": "avg_uint8_bare",
+          "expectation": "guard",
+          "seed_audit_exit": 1,
+          "restored_audit_exit": 0,
+          "restored_sha256": {
+            "/private/tmp/crystal-click-w227-evidence.release.DMl71o/stores/native/store/bba/bbab0834-6e4b-435b-9c6a-d439b9761c64/all_1_1_0/checksums.txt": "8e07bba4382efce7edbd59335d93807d910f6ee7323479935ba6987e89b582e9",
+            "/private/tmp/crystal-click-w227-evidence.release.DMl71o/cases/native-matrix.json": "abffd0fa32debebb17549be37d31a6eed84716fb46672cb6bd4d3cce3b3a9e1e",
+            "/private/tmp/crystal-click-w227-evidence.release.DMl71o/summary.json": "245201e0edc3bc939e47d8d774276cd68a48bc09f82a85c3cc33f2d84467371d"
+          },
+          "mutated_relative_path": "checksums.txt",
+          "same_length_byte_flip": true,
+          "reported_changed_preserved": [],
+          "raw_capture_exit_preserved": 0,
+          "summary_success_preserved": true
+        },
+        "check-zero-debug": {
+          "profile_id": "avg_uint8_bare",
+          "seed_audit_exit": 1,
+          "restored_audit_exit": 0,
+          "restored_sha256": {
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/invocations/0161-native-attach-and-capture-all.stdout": "77f0435ad2375c969c03c41a381580b70a229ada4e30d72a72f0a6f8545d01ef",
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/cases/native-matrix.json": "d975fde548b63ee10591aa2732de84773c676e4337f649b1cf05d3878249b91a",
+            "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo/summary.json": "5e06c34115e717d72aec2378d319dd3d24111d4e97b3c6223040fc95702f8152"
+          },
+          "raw_capture_exit_preserved": 0,
+          "summary_success_preserved": true
+        },
+        "check-zero-release": {
+          "profile_id": "avg_uint8_bare",
+          "seed_audit_exit": 1,
+          "restored_audit_exit": 0,
+          "restored_sha256": {
+            "/private/tmp/crystal-click-w227-evidence.release.DMl71o/invocations/0161-native-attach-and-capture-all.stdout": "77f0435ad2375c969c03c41a381580b70a229ada4e30d72a72f0a6f8545d01ef",
+            "/private/tmp/crystal-click-w227-evidence.release.DMl71o/cases/native-matrix.json": "abffd0fa32debebb17549be37d31a6eed84716fb46672cb6bd4d3cce3b3a9e1e",
+            "/private/tmp/crystal-click-w227-evidence.release.DMl71o/summary.json": "245201e0edc3bc939e47d8d774276cd68a48bc09f82a85c3cc33f2d84467371d"
+          },
+          "raw_capture_exit_preserved": 0,
+          "summary_success_preserved": true
+        }
+      },
+      "scope": "Auditor-refusal probes, not AF semantic corruption. Same-length CHECK stdout or attached checksums.txt flips with coherent carriers preserve process exit0/green summary; exact restoration is hash-checked."
+    },
+    "cross_mode": {
+      "profiles": 148,
+      "files_compared": 1776,
+      "all_identical": true,
+      "actual_bytes_compared": true,
+      "debug_evidence": "/private/tmp/crystal-click-w227-evidence.debug.rdT5zo",
+      "release_evidence": "/private/tmp/crystal-click-w227-evidence.release.DMl71o",
+      "exit": 0,
+      "log": "/private/tmp/crystal-click-w227.xlO76A/cross-mode-parts.log",
+      "result": "/private/tmp/crystal-click-w227.xlO76A/cross-mode-parts.json",
+      "scope": "Actual generated file bytes and path/size/hash equality are secondary controls, not the compatibility oracle."
+    },
+    "formatting": {
+      "exit": 0,
+      "files": 13,
+      "log": "/private/tmp/crystal-click-w227.xlO76A/format-check-final.log"
+    },
+    "source_freeze": {
+      "passed": true,
+      "files": 15,
+      "manifest": [
+        {
+          "path": "src/crystal_click.cr",
+          "sha256": "71330bb43dbe7555886ff79fb6002d23bf73aa68a8b8caca7a633217ccd20f64"
+        },
+        {
+          "path": "src/crystal_click/binary_aggregate_avg_state_layout.cr",
+          "sha256": "9bcffaeb8761ff7081768a94521faea3d73aec4eb67bb8ae9fa00a75999d7c50"
+        },
+        {
+          "path": "src/crystal_click/binary_aggregate_function_admission.cr",
+          "sha256": "ec7a1db01a565ee4a9ee666c84393f182ced5af49a579b4a39dd0a9dc5438447"
+        },
+        {
+          "path": "src/crystal_click/binary_aggregate_function_type.cr",
+          "sha256": "7bee2b141877bc32b313685651ae5f82c27fca62d8193215e16b3f6ad23ddfee"
+        },
+        {
+          "path": "src/crystal_click/binary_data_type_codec.cr",
+          "sha256": "700c1e1f8b1e5f47630f3a520fa64e0566fff7077f07c5f5f4b5f601a5b6bc59"
+        },
+        {
+          "path": "src/crystal_click/binary_aggregate_function_state_plan.cr",
+          "sha256": "37ee54d328de39908b6a2bcbebe31b17893c16d698bfa6ad5aa96766a2d3587e"
+        },
+        {
+          "path": "src/crystal_click/binary_aggregate_function_state_codec.cr",
+          "sha256": "174db5956163f3be8bacd764b615ce25688be6cd6b2e2e715b55b11499c73c90"
+        },
+        {
+          "path": "src/crystal_click/binary_value.cr",
+          "sha256": "7179ed877bf2be301138574e7a4cb12e06867739ff1b15cad4ce04acb7816aa9"
+        },
+        {
+          "path": "spec/aggregate_avg_w227_core_spec.cr",
+          "sha256": "9b6c7b70caeb36541d2b30246d2edcb1d1c52dbc6c2ce95a71cb3e44b1656e49"
+        },
+        {
+          "path": "spec/aggregate_avg_w227_consumers_spec.cr",
+          "sha256": "8f1befe9fe910d6a5878b9d20bb2ea10b45dc77e4dca130f59786d8d3d9cb157"
+        },
+        {
+          "path": "spec/aggregate_avg_w227_adversary_spec.cr",
+          "sha256": "32b404974cec761354025f48d270299251b65f333474c1541b6ec4174ff23424"
+        },
+        {
+          "path": "spec/aggregate_sum_w223_core_spec.cr",
+          "sha256": "e1fe447e91b227b3368861655ad56a823193e038257d65af0342da41a506e0c6"
+        },
+        {
+          "path": "scripts/check_aggregate_avg_w227.cr",
+          "sha256": "d946d898595f5980c59734c6a352220c71751bb3a6b21db47909301de61d6ab0"
+        },
+        {
+          "path": "scripts/recheck_aggregate_avg_w227.rb",
+          "sha256": "43d451bd1d064dc2eed9cd327137e9fc06ddaaa63cbb05200202ebc3025c590a"
+        },
+        {
+          "path": "scripts/check_aggregate_avg_evidence_w227.rb",
+          "sha256": "9ce75108efedf89b519e03000a614a81a77fd91200edc1f0967e4fce373ea4c4"
+        }
+      ]
+    },
+    "lineage": [
+      "First full DEBUG run errored only in an adversary fixture using guessed v.bin; it was fixed to use the physical-plan filename before final346 runs.",
+      "Ruby receiver and generated part-basename mistakes were corrected; native captures restarted with unchanged148 corpus.",
+      "Logical role root.data and physical v stream were conflated in grid oracles; source/API evidence corrected only the harness expectation.",
+      "DEBUG capture succeeded before final auditor-only inventory guard. A coherent retained-file forgery exposed audit exit0; same forgery rejected after guard, exact restore audited0 in both modes.",
+      "Production/spec bytes were unchanged after final346 DEBUG/RELEASE runs; helpers use final formatted sources."
+    ],
+    "commands": {
+      "affected_debug_final": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_dynamic_w226_adversary_spec.cr spec/aggregate_dynamic_w226_consumers_spec.cr spec/aggregate_dynamic_w226_core_spec.cr spec/aggregate_recursive_w224_admission_red_spec.cr spec/aggregate_recursive_w224_adversary_spec.cr spec/aggregate_recursive_w224_bulk_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_recursive_w224_core_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr spec/aggregate_variant_w225_adversary_spec.cr spec/aggregate_variant_w225_consumers_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/array_object_dynamic_w185_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_values_w155_red_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_descriptor_w152_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr spec/binary_dynamic_statistics_offsets_w157_spec.cr spec/binary_dynamic_value_w153_red_spec.cr spec/binary_dynamic_value_w153_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/dynamic_descriptor_consumer_guards_w152_spec.cr spec/dynamic_owned_values_w220_spec.cr spec/dynamic_shared_json_physical_w213_spec.cr spec/dynamic_shared_json_w213_spec.cr spec/dynamic_structure_roster_w154_red_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/json_binary_kernel_w180_guards_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_nested_shared_dynamic_w182_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_declared_dynamic_w158_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_shared_copy_w192_adversary_spec.cr spec/object_shared_copy_w192_spec.cr spec/object_typed_dynamic_json_context_w215_spec.cr spec/object_typed_dynamic_shared_json_physical_w214_spec.cr spec/object_typed_dynamic_shared_json_w214_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w227.xlO76A/affected-debug-final.log 2>&1",
+      "affected_release": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_dynamic_w226_adversary_spec.cr spec/aggregate_dynamic_w226_consumers_spec.cr spec/aggregate_dynamic_w226_core_spec.cr spec/aggregate_recursive_w224_admission_red_spec.cr spec/aggregate_recursive_w224_adversary_spec.cr spec/aggregate_recursive_w224_bulk_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_recursive_w224_core_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr spec/aggregate_variant_w225_adversary_spec.cr spec/aggregate_variant_w225_consumers_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/array_object_dynamic_w185_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_values_w155_red_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_descriptor_w152_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_statistics_offsets_w157_adversary_spec.cr spec/binary_dynamic_statistics_offsets_w157_spec.cr spec/binary_dynamic_value_w153_red_spec.cr spec/binary_dynamic_value_w153_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/dynamic_descriptor_consumer_guards_w152_spec.cr spec/dynamic_owned_values_w220_spec.cr spec/dynamic_shared_json_physical_w213_spec.cr spec/dynamic_shared_json_w213_spec.cr spec/dynamic_structure_roster_w154_red_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/json_binary_kernel_w180_guards_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_nested_shared_dynamic_w182_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_declared_dynamic_w158_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_shared_copy_w192_adversary_spec.cr spec/object_shared_copy_w192_spec.cr spec/object_typed_dynamic_json_context_w215_spec.cr spec/object_typed_dynamic_shared_json_physical_w214_spec.cr spec/object_typed_dynamic_shared_json_w214_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w227.xlO76A/affected-release.log 2>&1",
+      "helper_debug_build_hierarchy": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_aggregate_avg_w227.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w227.xlO76A/check_aggregate_avg_w227-debug > /private/tmp/crystal-click-w227.xlO76A/helper-debug-build-hierarchy.log 2>&1",
+      "helper_release_build": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_aggregate_avg_w227.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w227.xlO76A/check_aggregate_avg_w227-release > /private/tmp/crystal-click-w227.xlO76A/helper-release-build.log 2>&1",
+      "native_debug_physical_name": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_aggregate_avg_w227.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w227.xlO76A/check_aggregate_avg_w227-debug --helper-sha256 2f03b836a7f0344e3d4cb566c62c18b311eface65899987e88281138fa7c1c9f --source-root /private/tmp/crystal-click-w227-native.debug.PXMvch --evidence-root /private/tmp/crystal-click-w227-evidence.debug.rdT5zo > /private/tmp/crystal-click-w227.xlO76A/native-debug-physical-name.log 2>&1",
+      "native_release": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_aggregate_avg_w227.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w227.xlO76A/check_aggregate_avg_w227-release --helper-sha256 f4cb8c1c3284a7a13a8238a8a7bb5bf7c8a9728a306e649975bd6e81d10f7de3 --source-root /private/tmp/crystal-click-w227-native.release.aD6pcg --evidence-root /private/tmp/crystal-click-w227-evidence.release.DMl71o > /private/tmp/crystal-click-w227.xlO76A/native-release.log 2>&1",
+      "audit_debug_final": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_aggregate_avg_evidence_w227.rb --source-root /private/tmp/crystal-click-w227-native.debug.PXMvch --evidence-root /private/tmp/crystal-click-w227-evidence.debug.rdT5zo --helper-sha256 2f03b836a7f0344e3d4cb566c62c18b311eface65899987e88281138fa7c1c9f > /private/tmp/crystal-click-w227.xlO76A/audit-debug-final.log 2>&1",
+      "audit_release_final": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_aggregate_avg_evidence_w227.rb --source-root /private/tmp/crystal-click-w227-native.release.aD6pcg --evidence-root /private/tmp/crystal-click-w227-evidence.release.DMl71o --helper-sha256 f4cb8c1c3284a7a13a8238a8a7bb5bf7c8a9728a306e649975bd6e81d10f7de3 > /private/tmp/crystal-click-w227.xlO76A/audit-release-final.log 2>&1",
+      "inventory_debug_red": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w227.xlO76A/attach_inventory_seed.rb /private/tmp/crystal-click-w227-native.debug.PXMvch /private/tmp/crystal-click-w227-evidence.debug.rdT5zo 2f03b836a7f0344e3d4cb566c62c18b311eface65899987e88281138fa7c1c9f /Users/sergey/Projects/Crystal/crystal-click/scripts/check_aggregate_avg_evidence_w227.rb /private/tmp/crystal-click-w227.xlO76A/inventory-debug-red expose > /private/tmp/crystal-click-w227.xlO76A/inventory-debug-red.log 2>&1",
+      "inventory_debug_guard": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w227.xlO76A/attach_inventory_seed.rb /private/tmp/crystal-click-w227-native.debug.PXMvch /private/tmp/crystal-click-w227-evidence.debug.rdT5zo 2f03b836a7f0344e3d4cb566c62c18b311eface65899987e88281138fa7c1c9f /Users/sergey/Projects/Crystal/crystal-click/scripts/check_aggregate_avg_evidence_w227.rb /private/tmp/crystal-click-w227.xlO76A/inventory-debug-guard guard > /private/tmp/crystal-click-w227.xlO76A/inventory-debug-guard.log 2>&1",
+      "inventory_release_guard": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w227.xlO76A/attach_inventory_seed.rb /private/tmp/crystal-click-w227-native.release.aD6pcg /private/tmp/crystal-click-w227-evidence.release.DMl71o f4cb8c1c3284a7a13a8238a8a7bb5bf7c8a9728a306e649975bd6e81d10f7de3 /Users/sergey/Projects/Crystal/crystal-click/scripts/check_aggregate_avg_evidence_w227.rb /private/tmp/crystal-click-w227.xlO76A/inventory-release-guard guard > /private/tmp/crystal-click-w227.xlO76A/inventory-release-guard.log 2>&1",
+      "check_zero_debug": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w227.xlO76A/check_zero_seed.rb /private/tmp/crystal-click-w227-native.debug.PXMvch /private/tmp/crystal-click-w227-evidence.debug.rdT5zo 2f03b836a7f0344e3d4cb566c62c18b311eface65899987e88281138fa7c1c9f /Users/sergey/Projects/Crystal/crystal-click/scripts/check_aggregate_avg_evidence_w227.rb /private/tmp/crystal-click-w227.xlO76A/check-zero-debug > /private/tmp/crystal-click-w227.xlO76A/check-zero-debug.log 2>&1",
+      "check_zero_release": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w227.xlO76A/check_zero_seed.rb /private/tmp/crystal-click-w227-native.release.aD6pcg /private/tmp/crystal-click-w227-evidence.release.DMl71o f4cb8c1c3284a7a13a8238a8a7bb5bf7c8a9728a306e649975bd6e81d10f7de3 /Users/sergey/Projects/Crystal/crystal-click/scripts/check_aggregate_avg_evidence_w227.rb /private/tmp/crystal-click-w227.xlO76A/check-zero-release > /private/tmp/crystal-click-w227.xlO76A/check-zero-release.log 2>&1",
+      "cross_mode": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w227.xlO76A/cross_mode_parts.rb /private/tmp/crystal-click-w227-evidence.debug.rdT5zo /private/tmp/crystal-click-w227-evidence.release.DMl71o /private/tmp/crystal-click-w227.xlO76A/cross-mode-parts.json > /private/tmp/crystal-click-w227.xlO76A/cross-mode-parts.log 2>&1",
+      "format_check_final": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 4096 tool format --check src/crystal_click.cr src/crystal_click/binary_aggregate_avg_state_layout.cr src/crystal_click/binary_aggregate_function_admission.cr src/crystal_click/binary_aggregate_function_type.cr src/crystal_click/binary_data_type_codec.cr src/crystal_click/binary_aggregate_function_state_plan.cr src/crystal_click/binary_aggregate_function_state_codec.cr src/crystal_click/binary_value.cr spec/aggregate_avg_w227_core_spec.cr spec/aggregate_avg_w227_consumers_spec.cr spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_sum_w223_core_spec.cr scripts/check_aggregate_avg_w227.cr > /private/tmp/crystal-click-w227.xlO76A/format-check-final.log 2>&1",
+      "ruby_syntax_runner_final": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/recheck_aggregate_avg_w227.rb > /private/tmp/crystal-click-w227.xlO76A/ruby-syntax-runner-final.log 2>&1",
+      "ruby_syntax_auditor_final": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w227.xlO76A/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/check_aggregate_avg_evidence_w227.rb > /private/tmp/crystal-click-w227.xlO76A/ruby-syntax-auditor-final.log 2>&1"
+    },
+    "artifact_root": "/private/tmp/crystal-click-w227.xlO76A"
+  },
+  "residual": {
+    "audit_limits": "Inventory covers files, not empty-directory topology. Helper SHA is externally supplied; provenance is root-recorded builds/source freeze, not a self-authenticating auditor.",
+    "next_frontier": "Remaining aggregate grammars and MV declaration/target/dependency inspection; distinguish leaf gaps, wrapper contexts, consumer integration and source-invalid shapes.",
+    "goal_status": "Active; full storage/types/MV/projection objective and subsequent performance gate are not complete.",
+    "decay_trigger": "Refresh after admission/state/bulk/consumer/fixture/helper/source/runtime changes; raw temporary roots may disappear.",
+    "refresh": "Rerun recorded specs/builds with fresh canonical temp roots and independent auditor. Recreate reversible adversary seeds from the exact mutation/restoration laws if scratch scripts disappeared.",
+    "failure_policy": "Missing/stale/refuted evidence reopens dependent claims. A green summary or JSON/hash validator is never replacement behavioral proof."
+  },
+  "validation_boundary": "This packet is a curated index, not proof by its shape, fields, hashes or claimed commands."
+}

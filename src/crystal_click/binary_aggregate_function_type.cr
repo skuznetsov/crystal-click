@@ -1,7 +1,7 @@
 module CrystalClick
   # Immutable nominal AggregateFunction descriptor. The declared argument is
-  # metadata, not a generic value child; Sum-family normalization preserves
-  # LC/Nullable metadata while canonicalizing only the function identity.
+  # metadata, not a generic value child; family-specific admission preserves
+  # nominal wrappers and metadata while canonicalizing function identity.
   class BinaryAggregateFunctionType
     VERSION = 0_u8
 

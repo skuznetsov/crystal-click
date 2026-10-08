@@ -242,7 +242,7 @@ module CrystalClick
           context.unsupported!("AggregateFunction name is outside the admitted function profile")
         end
         function_name = String.new(context.read_slice(name_length))
-        unless function_name == "count" || function_name == "sum" || function_name == "sumWithOverflow" || function_name == "sumKahan"
+        unless function_name == "count" || function_name == "sum" || function_name == "sumWithOverflow" || function_name == "sumKahan" || function_name == "avg"
           context.unsupported!("AggregateFunction function is outside the admitted profile")
         end
         parameter_count = context.read_var_uint
@@ -258,7 +258,11 @@ module CrystalClick
             context.unsupported!("AggregateFunction(count) argument count is outside the admitted profile")
           end
         elsif argument_count != 1_u64
-          context.unsupported!("AggregateFunction Sum argument count is outside the admitted unary profile")
+          if function_name == "avg"
+            context.unsupported!("AggregateFunction avg argument count is outside the admitted unary profile")
+          else
+            context.unsupported!("AggregateFunction Sum argument count is outside the admitted unary profile")
+          end
         end
         if function_name == "count" && argument_count == 0_u64
           BinaryDataType.aggregate_count
