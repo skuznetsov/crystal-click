@@ -359,7 +359,7 @@ module CrystalClick
       if @type.tag == BinaryDataType::TAG_QBIT
         qbit_value == other.qbit_value
       else
-        @elements.size == 1 && other.@elements.size == 1 && @elements[0] == other.@elements[0]
+        @elements == other.@elements
       end
     end
 
@@ -378,7 +378,7 @@ module CrystalClick
         if @type.tag == BinaryDataType::TAG_QBIT
           hasher = qbit_value.hash(hasher)
         else
-          hasher = @elements[0].hash(hasher)
+          @elements.each { |element| hasher = element.hash(hasher) }
         end
       end
       hasher

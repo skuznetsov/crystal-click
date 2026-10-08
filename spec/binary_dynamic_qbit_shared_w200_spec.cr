@@ -185,7 +185,7 @@ describe "W200 direct QBit Object shared Copy child" do
     end
   end
 
-  it "keeps wrong nominal payloads and Array(QBit) outside the child admission" do
+  it "keeps wrong nominal payloads and Array(QBit) outside Dynamic child admission" do
     qbit_type = w200_shared_copy_qbit_type
     qbit_value = CrystalClick::QBitValue.new(qbit_type, w200_shared_copy_qbit_raw)
     wrong_type = CrystalClick::QBitType.new("Float32", 16_u64, 8_u64)
@@ -219,9 +219,22 @@ describe "W200 direct QBit Object shared Copy child" do
       )
     end
 
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.array(qbit_data_type) }
-    # Also test the retained wire-side descriptor guard independently of the
-    # public constructor, so a forged Copy child cannot smuggle in Array(QBit).
+    array_qbit_type = CrystalClick::BinaryDataType.array(qbit_data_type)
+    array_qbit_type.name.should eq("Array(QBit(Int8, 16, 8))")
+    array_qbit_value = CrystalClick::BinaryValue.array(
+      array_qbit_type,
+      [CrystalClick::BinaryValue.qbit(qbit_data_type, qbit_value)] of CrystalClick::BinaryValue,
+    )
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryValueCodec.encode_dynamic_bulk_child(
+        array_qbit_value,
+        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default, true),
+        1,
+      )
+    end
+
+    # Also test the retained wire-side guard independently of the public
+    # constructor, so a forged Copy child cannot smuggle in Array(QBit).
     array_qbit_child = Bytes[
       0x1e_u8, 0x37_u8, 0x07_u8, 0x10_u8, 0x08_u8, 0x01_u8, 0x10_u8,
       0x80_u8, 0x40_u8, 0x20_u8, 0x10_u8, 0x08_u8, 0x04_u8, 0x02_u8, 0x01_u8,

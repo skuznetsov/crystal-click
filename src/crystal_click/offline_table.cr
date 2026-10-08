@@ -177,8 +177,14 @@ module CrystalClick
                                      else
                                        nil
                                      end
+      qbit_bulk_type = if !json_path && source_name == column_name &&
+                          WidePart.supports_qbit_bulk_type?(selected_type)
+                         BinaryQBitBulkColumnDeclaration.parse(selected_type)
+                       else
+                         nil
+                       end
       object_root = WidePart.json_type?(selected_type)
-      unless object_root || dynamic_type || simple_aggregate_bulk_type || aggregate_function_bulk_type ||
+      unless object_root || dynamic_type || simple_aggregate_bulk_type || aggregate_function_bulk_type || qbit_bulk_type ||
              WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
         raise UnsupportedFormatError.new("selected table column type is unsupported")
       end
@@ -222,7 +228,7 @@ module CrystalClick
         )
       end
 
-      if type = (simple_aggregate_bulk_type || aggregate_function_bulk_type)
+      if type = (qbit_bulk_type || simple_aggregate_bulk_type || aggregate_function_bulk_type)
         return StaticBulkValuesMaterializer.materialize(
           self,
           candidates,

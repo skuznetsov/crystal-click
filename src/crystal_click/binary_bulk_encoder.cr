@@ -101,6 +101,12 @@ module CrystalClick
       if total[:wire_bytes] > 0_u64
         if column = qbit_column
           qbit_scratch = Bytes.new(column.value_type.plane_width, 0_u8)
+        elsif site = plan.qbit_array_site
+          scratch_width = site.qbit_type.plane_width
+          if scratch_width.to_u64 > budget.limits.max_bytes.to_u64
+            raise UnsupportedFormatError.new("static QBit Array scratch exceeds configured byte limit")
+          end
+          qbit_scratch = Bytes.new(scratch_width, 0_u8)
         end
       end
 

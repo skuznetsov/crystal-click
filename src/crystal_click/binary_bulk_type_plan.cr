@@ -11,6 +11,7 @@ module CrystalClick
     @writing : Bool
     @allow_bound_json : Bool
     @qbit_column : QBitColumnType?
+    @qbit_recursive_site : BinaryQBitRecursiveAdmission::StaticArraySite?
 
     struct LowCardinalitySite
       getter type : BinaryDataType
@@ -44,9 +45,20 @@ module CrystalClick
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end
       # Dynamic QBit leaves have per-actual-site roles owned by the supplied
-      # Dynamic plan. The root-column adapter remains limited to standalone
-      # QBit/Nullable(QBit) descriptors and keeps static container guards.
-      @qbit_column = @dynamic_plan ? nil : BinaryQBitBulkCodec.column_type(@type)
+      # Dynamic plan. Static recursive QBit has one exact Array-chain site;
+      # all other descriptors retain the root-column adapter and its guards.
+      if @dynamic_plan
+        @qbit_recursive_site = nil
+        @qbit_column = nil
+      else
+        @qbit_recursive_site = BinaryQBitRecursiveAdmission.static_array_site(@type, @limits, @writing)
+        if site = @qbit_recursive_site
+          @qbit_column = nil
+        else
+          BinaryQBitRecursiveAdmission.validate_static_type!(@type)
+          @qbit_column = BinaryQBitBulkCodec.column_type(@type)
+        end
+      end
       if column = @qbit_column
         BinaryQBitBulkCodec.preflight_role_metadata!(column, "root", @limits, @writing)
       end
@@ -63,9 +75,16 @@ module CrystalClick
       @qbit_column
     end
 
+    def qbit_array_site : BinaryQBitRecursiveAdmission::StaticArraySite?
+      @qbit_recursive_site
+    end
+
     # Numeric group-major plane role order for the QBit bulk visitor. This is
     # intentionally separate from the public lexically sorted role roster.
     def qbit_plane_roles : Array(String)?
+      if site = @qbit_recursive_site
+        return site.plane_roles
+      end
       column = @qbit_column
       return nil unless column
       BinaryQBitBulkCodec.plane_roles(column, "root", @limits, @writing)

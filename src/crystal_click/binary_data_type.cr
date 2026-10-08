@@ -74,6 +74,7 @@ module CrystalClick
     getter? contains_aggregate_count : Bool
     getter? contains_aggregate_function : Bool
     getter? contains_qbit : Bool
+    getter? qbit_array_chain : Bool
     getter? contains_json : Bool
     getter dynamic_max_types : UInt8?
 
@@ -119,6 +120,17 @@ module CrystalClick
       @contains_aggregate_count = @aggregate_count_type != nil || @children.any?(&.contains_aggregate_count?)
       @contains_aggregate_function = @tag == TAG_AGGREGATE_FUNCTION || @children.any?(&.contains_aggregate_function?)
       @contains_qbit = @tag == TAG_QBIT || @children.any?(&.contains_qbit?)
+      # This cached shape admits only Array^n(QBit) and
+      # Array^n(Nullable(QBit)). It is computed from one immutable child so
+      # construction does not recursively walk an unbudgeted descriptor tree.
+      @qbit_array_chain = if @tag == TAG_ARRAY && @children.size == 1
+                            child = @children[0]
+                            child.tag == TAG_QBIT ||
+                              (child.tag == TAG_NULLABLE && child.child_count == 1 && child.child_at(0).tag == TAG_QBIT) ||
+                              child.qbit_array_chain?
+                          else
+                            false
+                          end
       @contains_json = @tag == TAG_JSON || @children.any?(&.contains_json?)
     end
 
@@ -223,8 +235,20 @@ module CrystalClick
 
     def self.array(child : BinaryDataType) : BinaryDataType
       BinaryAggregateFunctionRecursiveAdmission.require_static_tree!(child)
-      reject_qbit_child!(child)
+      unless admitted_array_qbit_child?(child)
+        reject_qbit_child!(child)
+      end
       new(TAG_ARRAY, nil, [child] of BinaryDataType, [] of String, nil)
+    end
+
+    # One narrow QBit composition law shared by the public constructor and
+    # binary descriptor reader. This does not admit any non-QBit profile; it
+    # only prevents the codec boundary from diverging from Array construction.
+    def self.admitted_array_qbit_child?(child : BinaryDataType) : Bool
+      !child.contains_qbit? ||
+        child.tag == TAG_QBIT ||
+        (child.tag == TAG_NULLABLE && child.child_count == 1 && child.child_at(0).tag == TAG_QBIT) ||
+        child.qbit_array_chain?
     end
 
     # Nested is nominally distinct from Array(Tuple(...)). Its one implicit
@@ -736,7 +760,7 @@ module CrystalClick
 
     private def self.reject_qbit_child!(type : BinaryDataType) : Nil
       if type.contains_qbit?
-        raise ArgumentError.new("QBit is admitted only as a root scalar or direct Nullable child")
+        raise ArgumentError.new("QBit is outside this container's admitted composition profile")
       end
     end
 

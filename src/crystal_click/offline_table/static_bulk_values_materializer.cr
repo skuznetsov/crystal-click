@@ -17,7 +17,9 @@ module CrystalClick
         raise BoundsError.new("static BinaryBulk catalog exceeds part limit") if candidates.size > WidePartTable::MAX_PARTS
         raise BoundsError.new("static BinaryBulk catalog exceeds row limit") if expected_rows > OfflineTable::MAX_MATERIALIZED_VALUES_ROWS
 
-        declaration = if type.contains_aggregate_function?
+        declaration = if type.qbit_array_chain?
+                        BinaryQBitBulkColumnDeclaration.new(type).declaration
+                      elsif type.contains_aggregate_function?
                         BinaryAggregateFunctionBulkColumnDeclaration.new(type).declaration
                       else
                         SimpleAggregateBulkColumnDeclaration.new(type).declaration

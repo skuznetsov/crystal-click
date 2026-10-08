@@ -175,7 +175,7 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY
         context.preflight_children(1_u64)
         child = read_from(context, depth + 1)
-        if child.contains_qbit?
+        unless BinaryDataType.admitted_array_qbit_child?(child)
           context.unsupported!("QBit is outside the admitted Array profile")
         end
         BinaryDataType.array(child)

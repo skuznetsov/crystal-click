@@ -109,6 +109,12 @@ module CrystalClick
       if column = qbit_column
         BinaryQBitBulkCodec.preflight_materialization!(column, selected_rows, budget.limits, false)
       end
+      if site = plan.qbit_array_site
+        selected_site_rows = BinaryQBitArrayOccurrenceSchedule.selected_occurrences(
+          site, streams, selected_first, selected_count
+        )
+        BinaryQBitBulkCodec.preflight_materialization!(site.column, selected_site_rows, budget.limits, false)
+      end
 
       minimum = BinaryBulkDefaultValue.measure_excluding_low_cardinality(type, profile, nil, dynamic_plan, root_json_bound)
       minimum_nodes = checked_multiply(selected_rows, minimum.nodes)

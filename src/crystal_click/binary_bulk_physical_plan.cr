@@ -29,7 +29,7 @@ module CrystalClick
       context : PhysicalStreamPlanContext? = nil,
     )
       reject_json_type!(type)
-      BinaryQBitBulkCodec.column_type(type)
+      BinaryQBitRecursiveAdmission.validate_static_type!(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       @prefix_sizes = Hash(String, Int32).new
@@ -58,7 +58,7 @@ module CrystalClick
       elsif root_json_authority
         raise UnsupportedFormatError.new("root Dynamic JSON physical arm authorization does not match a JSON-bearing type")
       end
-      BinaryQBitBulkCodec.column_type(type)
+      BinaryQBitRecursiveAdmission.validate_static_type!(type)
       reject_dynamic_type!(type)
       @context = context || PhysicalStreamPlanContext.new(limits)
       if root_json_authority && !same_limits?(limits, @context.limits)
@@ -239,7 +239,7 @@ module CrystalClick
       if type.contains_json?
         raise UnsupportedFormatError.new("JSON is outside the admitted physical bulk storage profile")
       end
-      BinaryQBitBulkCodec.column_type(type)
+      BinaryQBitRecursiveAdmission.validate_static_type!(type)
       if type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")
       end
@@ -273,7 +273,7 @@ module CrystalClick
       unless roster.matches_root_json_arm_operation?(canonical_arm_index, type, budget)
         raise UnsupportedFormatError.new("root Dynamic JSON physical arm is not authorized by its complete binding roster")
       end
-      BinaryQBitBulkCodec.column_type(type)
+      BinaryQBitRecursiveAdmission.validate_static_type!(type)
       if type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic is outside the admitted physical bulk storage profile")
       end

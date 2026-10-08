@@ -1,6 +1,31 @@
 # CrystalClick project status
 
-Current offline projection window slice (W229, 2026-10-08): VERIFIED within
+Current recursive QBit Array slice (W230, 2026-10-08): VERIFIED within finite
+quiescent Wide/LZ4/Default/plain-mrk2 profiles (scoped verdict: ROBUST).
+`Array^n(QBit)` and `Array^n(Nullable(QBit))` reuse existing leaf serde and the
+shared static part publisher, typed full/window readers and owned `.values`.
+New admission/site, declaration and complete occurrence-schedule owners have
+separate files. Array sizes bind child occurrences, including NULL slots;
+complete shape checks precede reader publication and EOF callbacks.
+
+The same 54 affected files pass 353 examples in DEBUG and RELEASE; the final
+focused DEBUG roster passes 92. Both fresh native runs and separate raw audits
+qualify eight profiles and 155 raw process records per mode. Stock reads,
+library publication, native ATTACH/CHECK and literal full/middle/empty/EOF
+RowBinary agree. All 484 generated files match across modes by actual bytes.
+Counting and exact inspection-byte falsifiers exposed and closed per-mark
+index replay and an open-time transport-budget reset. Count's retained QBit
+argument guard remains closed. Both audits reject coherent CHECK-zero/message
+forgeries and pass after exact restoration.
+
+This is reuse of a leaf plus wrapper state, not an all-type/layout claim.
+Only Array chains ending in QBit/direct Nullable(QBit) widen; other QBit
+container owners retain guards. Logical work limits are not an RSS guarantee.
+The pinned source checkout and runtime build are separate; memory/performance
+stays deferred. Details: [RECURSIVE_QBIT_FRONTIER.md](RECURSIVE_QBIT_FRONTIER.md),
+[W230 evidence packet](../.landmark/evidence/recursive-qbit-w230.json).
+
+Previous offline projection window slice (W229, 2026-10-08): VERIFIED within
 finite quiescent Atomic/exact-MergeTree selected-child reading (scoped verdict:
 ROBUST). `OfflineTable#scan_projection_typed_window` reuses the existing Wide
 child reader; full and window scans share a private single-file admission

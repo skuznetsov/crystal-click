@@ -77,9 +77,10 @@ module CrystalClick
       if @type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic requires a bound column-specific physical context")
       end
-      BinaryBulkTypePlan.new(
+      static_plan = BinaryBulkTypePlan.new(
         @type, BinaryBulkProfile.single_stream, nil, @limits, false
-      ).role_count
+      )
+      static_plan.role_count
 
       raise ArgumentError.new("Binary bulk column name must be nonempty") if column_name.empty?
       @part_path = File.expand_path(part_path)
@@ -172,6 +173,22 @@ module CrystalClick
       end
       unless total_rows == metadata.row_count
         raise CorruptPartError.new("Binary bulk parent mark grid differs from count.txt")
+      end
+
+      # Validate every mark's complete Array-to-QBit occurrence schedule
+      # before publishing the reader. This reads only bounded Array size
+      # buffers and compares plane/null-map grid deltas; it does not decode
+      # unselected QBit plane payloads.
+      if site = static_plan.qbit_array_site
+        BinaryQBitArrayOccurrenceSchedule.validate!(
+          site,
+          @physical,
+          @source,
+          grids,
+          rows,
+          @limits,
+          transport_budget,
+        )
       end
 
       @grids = grids

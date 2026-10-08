@@ -6,6 +6,8 @@ module CrystalClick
     ROLE_SUFFIX        = ".qbit_plane."
     NULL_ROLE_SUFFIX   = ".nulls"
     NESTED_ROLE_SUFFIX = ".nested"
+    ARRAY_SIZE_SUFFIX  = ".sizes"
+    ARRAY_PATH_SUFFIX  = ".elements"
 
     def self.column_type(type : BinaryDataType) : QBitColumnType?
       case type.tag
@@ -37,17 +39,61 @@ module CrystalClick
       limits : BinaryCodecLimits,
       writing : Bool,
     ) : Nil
+      preflight_recursive_role_metadata!(column, path.bytesize.to_u64, 0_u64, limits, writing)
+    end
+
+    # Preflight all role count and name bytes for one static Array^n(QBit)
+    # site before the caller allocates any role-name Strings. `path_bytes`
+    # names the initial path; Array suffix lengths and every later role are
+    # accounted numerically, without constructing intermediate paths.
+    def self.preflight_recursive_role_metadata!(
+      column : QBitColumnType,
+      path_bytes : UInt64,
+      array_depth : UInt64,
+      limits : BinaryCodecLimits,
+      writing : Bool,
+    ) : Nil
+      array_role_bytes = 0_u64
+      qbit_path_bytes = path_bytes
+      level = 0_u64
+      while level < array_depth
+        size_role_bytes = checked_add(qbit_path_bytes, ARRAY_SIZE_SUFFIX.bytesize.to_u64)
+        array_role_bytes = checked_add(array_role_bytes, size_role_bytes)
+        qbit_path_bytes = checked_add(qbit_path_bytes, ARRAY_PATH_SUFFIX.bytesize.to_u64)
+        level += 1_u64
+      end
+
+      preflight_role_metadata_bytes!(
+        column,
+        qbit_path_bytes,
+        limits,
+        writing,
+        array_depth,
+        array_role_bytes,
+      )
+    end
+
+    private def self.preflight_role_metadata_bytes!(
+      column : QBitColumnType,
+      path_bytes : UInt64,
+      limits : BinaryCodecLimits,
+      writing : Bool,
+      additional_role_count : UInt64,
+      additional_role_bytes : UInt64,
+    ) : Nil
       plane_count = column.value_type.plane_count.to_u64
       role_count = checked_add(plane_count, column.nullable ? 1_u64 : 0_u64)
+      role_count = checked_add(role_count, additional_role_count)
       if role_count > Int32::MAX.to_u64 || role_count > limits.max_elements.to_u64
         fail_limit!(writing, "QBit bulk role count exceeds configured limit")
       end
 
-      total = 0_u64
+      total = additional_role_bytes
       if column.nullable
-        total = checked_add(path.bytesize.to_u64, NULL_ROLE_SUFFIX.bytesize.to_u64)
+        null_role_bytes = checked_add(path_bytes, NULL_ROLE_SUFFIX.bytesize.to_u64)
+        total = checked_add(total, null_role_bytes)
       end
-      plane_path_bytes = path.bytesize.to_u64
+      plane_path_bytes = path_bytes
       if column.nullable
         plane_path_bytes = checked_add(plane_path_bytes, NESTED_ROLE_SUFFIX.bytesize.to_u64)
       end

@@ -231,7 +231,8 @@ describe "QBit binary descriptor and scalar kernel" do
     nullable.child_count.should eq(1)
     nullable.child_at(0).should eq(qbit)
 
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.array(qbit) }
+    recursive_array = CrystalClick::BinaryDataType.array(qbit)
+    recursive_array.name.should eq("Array(QBit(Int8, 3))")
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.tuple([qbit]) }
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.map(CrystalClick::BinaryDataType.primitive("UInt8"), qbit) }
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.variant([qbit]) }

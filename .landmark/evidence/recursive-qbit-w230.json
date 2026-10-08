@@ -1,0 +1,903 @@
+{
+  "format": "crystal_click_recursive_qbit_evidence_v1",
+  "slice": "W230 static recursive QBit Array storage",
+  "created_at_utc": "2026-10-08 21:57:04 UTC",
+  "baseline_revision": "ac628f8a90c5c50e6ca9bfb204e64f65e9220b8a",
+  "claim_level": "VERIFIED",
+  "adversary_verdict": {
+    "value": "ROBUST",
+    "scope": "finite static Array-chain storage and named consumer controls; root executed tests/native/audits, with correlated Luna source review"
+  },
+  "active_objective": "ClickHouse-compatible read/write types and MV/projection inspection; overall objective remains active; performance deferred",
+  "claim": {
+    "admitted": "Static Array^n(QBit) and Array^n(Nullable(QBit)), bounded by existing metadata/codec/transport limits",
+    "leaf_reuse": "Existing QBit raw-bit scalar and numeric group-major plane transpose; no serializer per recursive product",
+    "consumers": [
+      "BinaryBulkCodec",
+      "BinaryBulkColumnReader.open/read_marks",
+      "WidePartWriter.write_uint64_qbit_bulk_part",
+      "WidePart typed full/window scans",
+      "WidePartTable and OfflineTable owned .values"
+    ],
+    "physical_assumptions": [
+      "quiescent complete Wide parts",
+      "LZ4",
+      "Default serialization",
+      "plain mrk2",
+      "exact nominal declarations"
+    ],
+    "complete_preflight": "All Array size schedules and plane/null-map normalized deltas validated before reader publication, including later marks and EOF",
+    "bounded_transport": "One complete read per size lane; shared open-time inspection/shape transport budget; three UInt64 accounting vectors bounded before allocation",
+    "failure_policy": "Reject unsupported owners/layouts and malformed/over-limit schedules; do not silently substitute primitive, parent or base-projection readers"
+  },
+  "exclusions": [
+    "all wrapper products, native depths or parameters",
+    "Tuple/Map/Nested/Variant static QBit widening",
+    "QBit-bearing Dynamic actual containers or JSON typed/shared container widening",
+    "LowCardinality(QBit), Nullable(Array(...)), borrowed persisted-envelope QBit",
+    "Compact, sparse, custom serialization or unqualified physical versions",
+    "unselected QBit payload authentication at open",
+    "RSS, allocator, throughput or full-repository claims",
+    "MV/projection execution/writing and broad facade decomposition"
+  ],
+  "pins": {
+    "clickhouse_source": {
+      "root": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+      "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "files": [
+        {
+          "path": "src/DataTypes/DataTypeQBit.cpp",
+          "sha256": "9713cd968e6a8252bba54aaf9dd49cbe2e31edc9af7e4e1d473d74d435ce87d9"
+        },
+        {
+          "path": "src/DataTypes/DataTypeQBit.h",
+          "sha256": "14ef033053d9585e42e84b26a50934836fe083d8f002b69a415ad698df276911"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationArray.cpp",
+          "sha256": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationQBit.cpp",
+          "sha256": "64a1638077a5807512dff9fb25ad310f5a8da80eb76d39d9c76d083d980fc5da"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationNullable.cpp",
+          "sha256": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationTuple.cpp",
+          "sha256": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884"
+        },
+        {
+          "path": "src/DataTypes/Serializations/ISerialization.cpp",
+          "sha256": "87ca6647aeb0dd4022e3437a155f923f817d4447c547eff9ec29ab6876d16dd2"
+        },
+        {
+          "path": "src/DataTypes/DataTypeArray.h",
+          "sha256": "660e6f37210922c200a7cbba5f25a0f01d579f79a51611768de72d1a3002be37"
+        },
+        {
+          "path": "src/DataTypes/DataTypeLowCardinality.cpp",
+          "sha256": "e75ef3196f929ed61313394fe8ba13c0a377446f73fac12f2b2425128d625c5c"
+        },
+        {
+          "path": "src/DataTypes/IDataType.h",
+          "sha256": "6e9befee2cf642d989912710a4857c5a122fb7ba337eafc6b923c10f8eb33d5c"
+        }
+      ]
+    },
+    "clickhouse_runtime": {
+      "binary": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "version": "26.10.1.1201",
+      "build_hash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "source_correlation": "runtime binary and pinned source checkout are separate pins"
+    },
+    "compiler": "Crystal 1.21.0 on macOS arm64",
+    "source_runtime_distinction": "Pinned source and runtime are different builds; no latest-master/runtime correlation claim"
+  },
+  "executed_guard": {
+    "prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "serialization": "Root ran one compiler/native/other guarded job at a time",
+    "compiler_native_limits": {
+      "seconds": 600,
+      "max_mem_mib": 12288
+    },
+    "audit_git_limits": {
+      "seconds": 120,
+      "max_mem_mib": 512
+    }
+  },
+  "frozen_inputs": {
+    "files": [
+      {
+        "path": "scripts/check_recursive_qbit_w230.cr",
+        "sha256": "162c28dd70ee33be3ee1515997e99ca95a5119eea8797684f0331742b1ecb286"
+      },
+      {
+        "path": "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+        "sha256": "59024958928a4a54dcaf683b00af963a6a720884002ec304b8f6084620a7cc99"
+      },
+      {
+        "path": "spec/qbit_admission_spec.cr",
+        "sha256": "64fda21091041bdb77cb912df444c7ea8d4c423e1171a68202373b0fa16aa481"
+      },
+      {
+        "path": "spec/qbit_binary_kernel_spec.cr",
+        "sha256": "5f3742dda07ae2d594058c0d3f15840fffb3f5fb1ad822c3582fe78ee13c94ef"
+      },
+      {
+        "path": "spec/qbit_binary_kernel_w179_admission_spec.cr",
+        "sha256": "6d96d4434c21e9f2e8561b92a5def7518ec1f5b71326b62590494ab55e130155"
+      },
+      {
+        "path": "spec/recursive_qbit_owner_guards_w230_spec.cr",
+        "sha256": "2e95292413314baa3adab90d835ffb22f1297039c0e1c9a002067f3647f9ff99"
+      },
+      {
+        "path": "spec/recursive_qbit_parts_w230_spec.cr",
+        "sha256": "c5c1659f49b4c87af0b4c1a38eec6bd329a1d0d8e2b335aede0296bcb14dc4aa"
+      },
+      {
+        "path": "spec/recursive_qbit_size_transport_w230_spec.cr",
+        "sha256": "4cc978f276b82876033b9a7419a3ef1318d802935b53c8779f585c9d10ce7c9c"
+      },
+      {
+        "path": "spec/recursive_qbit_w230_spec.cr",
+        "sha256": "7344759338065d624b61b71b6c6a34ebdefa9cd484cebfd26596a6616bd7d499"
+      },
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "94ff3b6699e4309f603982a2c280c166cba7b3a5a89deb3cb7ef2a49e8ff1e82"
+      },
+      {
+        "path": "src/crystal_click/binary_aggregate_count_argument_policy.cr",
+        "sha256": "6503defa2d43664e114e35193c8d1207055a9ae887c1e40c90fb554cd26c46bb"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_column_reader.cr",
+        "sha256": "5ed77878a92756cb292fe7ffa73d33c16159a19923dc4c95c6f200c1f208b0bd"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_decoder.cr",
+        "sha256": "a3f222e50a0fb8b39f6b695364c240976bf5bfd3d75f44e301deca2af37ba99f"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_encoder.cr",
+        "sha256": "7cfc2db9997ffd6be7aea7919fed7e4e12facc608b31fb9f41045a3239a9d7d9"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_physical_plan.cr",
+        "sha256": "a01673f24b4591f660abae8587e140a4899f98c391233cc3c6651c1555e83f53"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_type_plan.cr",
+        "sha256": "10f3172c172e92432ce7fbc0a751dcf7c2b3cef85179725ab4614d8267af5959"
+      },
+      {
+        "path": "src/crystal_click/binary_data_type.cr",
+        "sha256": "29a06ca859283e8504846b2723732d01ad6934e1136e3d614aec77620aaeb98a"
+      },
+      {
+        "path": "src/crystal_click/binary_data_type_codec.cr",
+        "sha256": "7e6b8b5c45c67797708f6e585b02b3a8d799f4a8af647727e769d4ab747ca1ab"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_array_occurrence_schedule.cr",
+        "sha256": "605091e9139aa77ec3a10ad1054eb1efc87be3879f584b5f6264dbb0c4bbb633"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_bulk_codec.cr",
+        "sha256": "4a5b12ed1bd1bda5e6bed4a5a1dbd2d00c32a7423ef00c708010350bac8499da"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_bulk_column_declaration.cr",
+        "sha256": "d6ed8edcfc890d20237cda59ab524352d9e106a0b62e0078b4f505d4b40d2e67"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_recursive_admission.cr",
+        "sha256": "24bb4f4a92db53f27047a0b9a37744530adee39c4bb311af4042ad63a6a5ab06"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_recursive_admission/static_array_site.cr",
+        "sha256": "c5957031c3dd04b241423781e13044f81be3948545305bdf1656161cf1b91100"
+      },
+      {
+        "path": "src/crystal_click/binary_recursive_data_type_name_reader.cr",
+        "sha256": "4e91ca2d1eeb944bd92afe81a141a586b3bdfda5a4dbdfff180fb220d4bee5ca"
+      },
+      {
+        "path": "src/crystal_click/binary_value.cr",
+        "sha256": "cd6c21083d99ce7cc0408ba817c1cfb307bf8d90df0eb249c49e6b16a5e90902"
+      },
+      {
+        "path": "src/crystal_click/offline_table.cr",
+        "sha256": "83be31ccc9a9ad31ce29f3dd5e36602c52c7e603d1d9272ce47b58f8797d01f2"
+      },
+      {
+        "path": "src/crystal_click/offline_table/static_bulk_values_materializer.cr",
+        "sha256": "cfe6951dd18a8ded5451eeba8e61194994ff9580188c6a67acba37ecd78ad3c9"
+      },
+      {
+        "path": "src/crystal_click/wide_part.cr",
+        "sha256": "cdf87e8ebad9c1d0bedbee70d6c8c6afb682618aeddf19d071c60851bc4f2671"
+      },
+      {
+        "path": "src/crystal_click/wide_part_table.cr",
+        "sha256": "268604b932474b09526535f4f27e5194e8301765548974633b5cea0ea2740c49"
+      },
+      {
+        "path": "src/crystal_click/wide_part_table/binary_bulk_column_adapter.cr",
+        "sha256": "77e81290a199dd94ac7a842f85743adab05c1ccf8f3ef228a4db9eeecfd115e4"
+      },
+      {
+        "path": "src/crystal_click/wide_part_table/wide_part_table_batch.cr",
+        "sha256": "a157ad43fa076eb5e9d27d6454f8d163c3e9cadf465f01a4a88b97b0838f7507"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer.cr",
+        "sha256": "e7ab9b5beafd2013da3e00f233d287f75c3700e073b6d3f032e56f4baec64f81"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/qbit_bulk_part_writer.cr",
+        "sha256": "c0a5cb4c9164a829031ff761127a05cde71b8b1b2217744b0e2289d5bd0bc88c"
+      },
+      {
+        "path": "scripts/recheck_recursive_qbit_w230.rb",
+        "sha256": "aa1ab367c4083bbb29282407209ad20ba79fe3b5071eec92a04b877aa6d6109d"
+      },
+      {
+        "path": "scripts/check_recursive_qbit_evidence_w230.rb",
+        "sha256": "b0612d94883a01c532c2fe35a853fa4e16aac9735c226e42bb50b852d8463cd7"
+      }
+    ],
+    "matched_after_affected_cohorts": true,
+    "matched_after_native_qualification": true,
+    "format": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 4096 tool format --check scripts/check_recursive_qbit_w230.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/qbit_admission_spec.cr spec/qbit_binary_kernel_spec.cr spec/qbit_binary_kernel_w179_admission_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/recursive_qbit_parts_w230_spec.cr spec/recursive_qbit_size_transport_w230_spec.cr spec/recursive_qbit_w230_spec.cr src/crystal_click.cr src/crystal_click/binary_aggregate_count_argument_policy.cr src/crystal_click/binary_bulk_column_reader.cr src/crystal_click/binary_bulk_decoder.cr src/crystal_click/binary_bulk_encoder.cr src/crystal_click/binary_bulk_physical_plan.cr src/crystal_click/binary_bulk_type_plan.cr src/crystal_click/binary_data_type.cr src/crystal_click/binary_data_type_codec.cr src/crystal_click/binary_qbit_array_occurrence_schedule.cr src/crystal_click/binary_qbit_bulk_codec.cr src/crystal_click/binary_qbit_bulk_column_declaration.cr src/crystal_click/binary_qbit_recursive_admission.cr src/crystal_click/binary_qbit_recursive_admission/static_array_site.cr src/crystal_click/binary_recursive_data_type_name_reader.cr src/crystal_click/binary_value.cr src/crystal_click/offline_table.cr src/crystal_click/offline_table/static_bulk_values_materializer.cr src/crystal_click/wide_part.cr src/crystal_click/wide_part_table.cr src/crystal_click/wide_part_table/binary_bulk_column_adapter.cr src/crystal_click/wide_part_table/wide_part_table_batch.cr src/crystal_click/wide_part_writer.cr src/crystal_click/wide_part_writer/qbit_bulk_part_writer.cr > /private/tmp/crystal-click-w230.UeOsKn/format-shared-open-budget.log 2>&1",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/format-shared-open-budget.log",
+      "exit_code": 0,
+      "crystal_files": 33
+    },
+    "scope": "35 changed code/spec/helper/Ruby inputs on baseline; documentation added afterward without changing them"
+  },
+  "focused_final": {
+    "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_w230_spec.cr spec/recursive_qbit_parts_w230_spec.cr spec/qbit_binary_kernel_spec.cr spec/qbit_binary_kernel_w179_admission_spec.cr spec/qbit_hostile_spec.cr spec/qbit_admission_spec.cr spec/qbit_binary_kernel_parts_spec.cr spec/qbit_reader_consumers_w103_spec.cr spec/qbit_writer_w103_spec.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/recursive_qbit_size_transport_w230_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/focused-debug-shared-open-budget.log 2>&1",
+    "examples": 92,
+    "failures": 0,
+    "errors": 0,
+    "pending": 0,
+    "exit_code": 0,
+    "log": "/private/tmp/crystal-click-w230.UeOsKn/focused-debug-shared-open-budget.log",
+    "files": [
+      "spec/recursive_qbit_w230_spec.cr",
+      "spec/recursive_qbit_parts_w230_spec.cr",
+      "spec/qbit_binary_kernel_spec.cr",
+      "spec/qbit_binary_kernel_w179_admission_spec.cr",
+      "spec/qbit_hostile_spec.cr",
+      "spec/qbit_admission_spec.cr",
+      "spec/qbit_binary_kernel_parts_spec.cr",
+      "spec/qbit_reader_consumers_w103_spec.cr",
+      "spec/qbit_writer_w103_spec.cr",
+      "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+      "spec/recursive_qbit_owner_guards_w230_spec.cr",
+      "spec/recursive_qbit_size_transport_w230_spec.cr"
+    ]
+  },
+  "affected_final": {
+    "unique_files": 54,
+    "files": [
+      "spec/recursive_qbit_w230_spec.cr",
+      "spec/qbit_admission_spec.cr",
+      "spec/qbit_binary_kernel_spec.cr",
+      "spec/qbit_binary_kernel_w179_admission_spec.cr",
+      "spec/qbit_hostile_spec.cr",
+      "spec/binary_value_codec_w117_spec.cr",
+      "spec/binary_bulk_w122_spec.cr",
+      "spec/physical_stream_plan_w125_spec.cr",
+      "spec/bulk_budget_w122_adversary_spec.cr",
+      "spec/bulk_nominal_w122_spec.cr",
+      "spec/bulk_string_size_w122_spec.cr",
+      "spec/recursive_qbit_parts_w230_spec.cr",
+      "spec/qbit_reader_consumers_w103_spec.cr",
+      "spec/qbit_writer_w103_spec.cr",
+      "spec/qbit_binary_kernel_parts_spec.cr",
+      "spec/wide_part_reader_w46_spec.cr",
+      "spec/wide_array_tuple_w107_admission_spec.cr",
+      "spec/wide_array_tuple_w107_model_spec.cr",
+      "spec/wide_array_tuple_w107_consumer_spec.cr",
+      "spec/wide_array_tuple_w107_reader_spec.cr",
+      "spec/wide_part_writer_array_tuple_w107_spec.cr",
+      "spec/recursive_array_table_w187_spec.cr",
+      "spec/recursive_qbit_size_transport_w230_spec.cr",
+      "spec/recursive_qbit_owner_guards_w230_spec.cr",
+      "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+      "spec/binary_dynamic_qbit_w199_spec.cr",
+      "spec/qbit_binary_kernel_object_boundary_spec.cr",
+      "spec/object_shared_path_qbit_w199_spec.cr",
+      "spec/object_shared_qbit_parts_w200_spec.cr",
+      "spec/binary_nested_specialized_w201_spec.cr",
+      "spec/simple_aggregate_recursive_w222_part_spec.cr",
+      "spec/aggregate_variant_w225_core_spec.cr",
+      "spec/json_recursive_scalar_w181_guards_spec.cr",
+      "spec/array_object_part_w185_spec.cr",
+      "spec/simple_aggregate_bulk_part_w221_spec.cr",
+      "spec/aggregate_recursive_w224_part_spec.cr",
+      "spec/aggregate_sum_w223_bulk_spec.cr",
+      "spec/aggregate_avg_w227_core_spec.cr",
+      "spec/offline_projection_window_w229_spec.cr",
+      "spec/projection_specialized_consumers_w217_spec.cr",
+      "spec/simple_aggregate_recursive_w222_core_spec.cr",
+      "spec/recursive_storage_array_w187_spec.cr",
+      "spec/recursive_array_schema_w187_spec.cr",
+      "spec/binary_bulk_physical_prefix_w151_spec.cr",
+      "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+      "spec/binary_variant_bulk_w148_spec.cr",
+      "spec/aggregate_count_arguments_w178_admission_spec.cr",
+      "spec/aggregate_count_arguments_w178_core_spec.cr",
+      "spec/aggregate_count_arguments_w178_parser_spec.cr",
+      "spec/aggregate_count_arguments_w178_plan_spec.cr",
+      "spec/aggregate_count_physical_names_w219_spec.cr",
+      "spec/array_object_column_core_w185_spec.cr",
+      "spec/aggregate_avg_w227_adversary_spec.cr",
+      "spec/aggregate_avg_w227_consumers_spec.cr"
+    ],
+    "expected_signal": "same roster in DEBUG/RELEASE, zero failures/errors/pending",
+    "totals_by_mode": [
+      {
+        "mode": "debug",
+        "examples": 353,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "release",
+        "examples": 353,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      }
+    ],
+    "cohorts": [
+      {
+        "mode": "debug",
+        "label": "kernel-values",
+        "files": [
+          "spec/recursive_qbit_w230_spec.cr",
+          "spec/qbit_admission_spec.cr",
+          "spec/qbit_binary_kernel_spec.cr",
+          "spec/qbit_binary_kernel_w179_admission_spec.cr",
+          "spec/qbit_hostile_spec.cr",
+          "spec/binary_value_codec_w117_spec.cr",
+          "spec/binary_bulk_w122_spec.cr",
+          "spec/physical_stream_plan_w125_spec.cr",
+          "spec/bulk_budget_w122_adversary_spec.cr",
+          "spec/bulk_nominal_w122_spec.cr",
+          "spec/bulk_string_size_w122_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_w230_spec.cr spec/qbit_admission_spec.cr spec/qbit_binary_kernel_spec.cr spec/qbit_binary_kernel_w179_admission_spec.cr spec/qbit_hostile_spec.cr spec/binary_value_codec_w117_spec.cr spec/binary_bulk_w122_spec.cr spec/physical_stream_plan_w125_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/bulk_nominal_w122_spec.cr spec/bulk_string_size_w122_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/final-debug-kernel-values.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-debug-kernel-values.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 99,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "debug",
+        "label": "qbit-parts-ordinary-arrays",
+        "files": [
+          "spec/recursive_qbit_parts_w230_spec.cr",
+          "spec/qbit_reader_consumers_w103_spec.cr",
+          "spec/qbit_writer_w103_spec.cr",
+          "spec/qbit_binary_kernel_parts_spec.cr",
+          "spec/wide_part_reader_w46_spec.cr",
+          "spec/wide_array_tuple_w107_admission_spec.cr",
+          "spec/wide_array_tuple_w107_model_spec.cr",
+          "spec/wide_array_tuple_w107_consumer_spec.cr",
+          "spec/wide_array_tuple_w107_reader_spec.cr",
+          "spec/wide_part_writer_array_tuple_w107_spec.cr",
+          "spec/recursive_array_table_w187_spec.cr",
+          "spec/recursive_qbit_size_transport_w230_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_parts_w230_spec.cr spec/qbit_reader_consumers_w103_spec.cr spec/qbit_writer_w103_spec.cr spec/qbit_binary_kernel_parts_spec.cr spec/wide_part_reader_w46_spec.cr spec/wide_array_tuple_w107_admission_spec.cr spec/wide_array_tuple_w107_model_spec.cr spec/wide_array_tuple_w107_consumer_spec.cr spec/wide_array_tuple_w107_reader_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_qbit_size_transport_w230_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/final-debug-qbit-parts-ordinary-arrays.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-debug-qbit-parts-ordinary-arrays.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 63,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "debug",
+        "label": "nominal-owner-guards",
+        "files": [
+          "spec/recursive_qbit_owner_guards_w230_spec.cr",
+          "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+          "spec/binary_dynamic_qbit_w199_spec.cr",
+          "spec/qbit_binary_kernel_object_boundary_spec.cr",
+          "spec/object_shared_path_qbit_w199_spec.cr",
+          "spec/object_shared_qbit_parts_w200_spec.cr",
+          "spec/binary_nested_specialized_w201_spec.cr",
+          "spec/simple_aggregate_recursive_w222_part_spec.cr",
+          "spec/aggregate_variant_w225_core_spec.cr",
+          "spec/json_recursive_scalar_w181_guards_spec.cr",
+          "spec/array_object_part_w185_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_owner_guards_w230_spec.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/binary_dynamic_qbit_w199_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/object_shared_path_qbit_w199_spec.cr spec/object_shared_qbit_parts_w200_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/array_object_part_w185_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/final-debug-nominal-owner-guards.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-debug-nominal-owner-guards.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 66,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "debug",
+        "label": "shared-publisher-consumers",
+        "files": [
+          "spec/simple_aggregate_bulk_part_w221_spec.cr",
+          "spec/aggregate_recursive_w224_part_spec.cr",
+          "spec/aggregate_sum_w223_bulk_spec.cr",
+          "spec/aggregate_avg_w227_core_spec.cr",
+          "spec/offline_projection_window_w229_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr",
+          "spec/simple_aggregate_recursive_w222_core_spec.cr",
+          "spec/recursive_storage_array_w187_spec.cr",
+          "spec/recursive_array_schema_w187_spec.cr",
+          "spec/binary_bulk_physical_prefix_w151_spec.cr",
+          "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+          "spec/binary_variant_bulk_w148_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_bulk_part_w221_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/offline_projection_window_w229_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_variant_bulk_w148_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/final-debug-shared-publisher-consumers.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-debug-shared-publisher-consumers.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 81,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "debug",
+        "label": "canonical-count-argument-guards",
+        "files": [
+          "spec/aggregate_count_arguments_w178_admission_spec.cr",
+          "spec/aggregate_count_arguments_w178_core_spec.cr",
+          "spec/aggregate_count_arguments_w178_parser_spec.cr",
+          "spec/aggregate_count_arguments_w178_plan_spec.cr",
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/array_object_column_core_w185_spec.cr",
+          "spec/aggregate_avg_w227_adversary_spec.cr",
+          "spec/aggregate_avg_w227_consumers_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_physical_names_w219_spec.cr spec/array_object_column_core_w185_spec.cr spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/final-debug-canonical-count-argument-guards.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-debug-canonical-count-argument-guards.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 44,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "release",
+        "label": "kernel-values",
+        "files": [
+          "spec/recursive_qbit_w230_spec.cr",
+          "spec/qbit_admission_spec.cr",
+          "spec/qbit_binary_kernel_spec.cr",
+          "spec/qbit_binary_kernel_w179_admission_spec.cr",
+          "spec/qbit_hostile_spec.cr",
+          "spec/binary_value_codec_w117_spec.cr",
+          "spec/binary_bulk_w122_spec.cr",
+          "spec/physical_stream_plan_w125_spec.cr",
+          "spec/bulk_budget_w122_adversary_spec.cr",
+          "spec/bulk_nominal_w122_spec.cr",
+          "spec/bulk_string_size_w122_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_w230_spec.cr spec/qbit_admission_spec.cr spec/qbit_binary_kernel_spec.cr spec/qbit_binary_kernel_w179_admission_spec.cr spec/qbit_hostile_spec.cr spec/binary_value_codec_w117_spec.cr spec/binary_bulk_w122_spec.cr spec/physical_stream_plan_w125_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/bulk_nominal_w122_spec.cr spec/bulk_string_size_w122_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w230.UeOsKn/final-release-kernel-values.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-release-kernel-values.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 99,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "release",
+        "label": "qbit-parts-ordinary-arrays",
+        "files": [
+          "spec/recursive_qbit_parts_w230_spec.cr",
+          "spec/qbit_reader_consumers_w103_spec.cr",
+          "spec/qbit_writer_w103_spec.cr",
+          "spec/qbit_binary_kernel_parts_spec.cr",
+          "spec/wide_part_reader_w46_spec.cr",
+          "spec/wide_array_tuple_w107_admission_spec.cr",
+          "spec/wide_array_tuple_w107_model_spec.cr",
+          "spec/wide_array_tuple_w107_consumer_spec.cr",
+          "spec/wide_array_tuple_w107_reader_spec.cr",
+          "spec/wide_part_writer_array_tuple_w107_spec.cr",
+          "spec/recursive_array_table_w187_spec.cr",
+          "spec/recursive_qbit_size_transport_w230_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_parts_w230_spec.cr spec/qbit_reader_consumers_w103_spec.cr spec/qbit_writer_w103_spec.cr spec/qbit_binary_kernel_parts_spec.cr spec/wide_part_reader_w46_spec.cr spec/wide_array_tuple_w107_admission_spec.cr spec/wide_array_tuple_w107_model_spec.cr spec/wide_array_tuple_w107_consumer_spec.cr spec/wide_array_tuple_w107_reader_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_qbit_size_transport_w230_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w230.UeOsKn/final-release-qbit-parts-ordinary-arrays.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-release-qbit-parts-ordinary-arrays.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 63,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "release",
+        "label": "nominal-owner-guards",
+        "files": [
+          "spec/recursive_qbit_owner_guards_w230_spec.cr",
+          "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+          "spec/binary_dynamic_qbit_w199_spec.cr",
+          "spec/qbit_binary_kernel_object_boundary_spec.cr",
+          "spec/object_shared_path_qbit_w199_spec.cr",
+          "spec/object_shared_qbit_parts_w200_spec.cr",
+          "spec/binary_nested_specialized_w201_spec.cr",
+          "spec/simple_aggregate_recursive_w222_part_spec.cr",
+          "spec/aggregate_variant_w225_core_spec.cr",
+          "spec/json_recursive_scalar_w181_guards_spec.cr",
+          "spec/array_object_part_w185_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_owner_guards_w230_spec.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/binary_dynamic_qbit_w199_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/object_shared_path_qbit_w199_spec.cr spec/object_shared_qbit_parts_w200_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/array_object_part_w185_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w230.UeOsKn/final-release-nominal-owner-guards.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-release-nominal-owner-guards.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 66,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "release",
+        "label": "shared-publisher-consumers",
+        "files": [
+          "spec/simple_aggregate_bulk_part_w221_spec.cr",
+          "spec/aggregate_recursive_w224_part_spec.cr",
+          "spec/aggregate_sum_w223_bulk_spec.cr",
+          "spec/aggregate_avg_w227_core_spec.cr",
+          "spec/offline_projection_window_w229_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr",
+          "spec/simple_aggregate_recursive_w222_core_spec.cr",
+          "spec/recursive_storage_array_w187_spec.cr",
+          "spec/recursive_array_schema_w187_spec.cr",
+          "spec/binary_bulk_physical_prefix_w151_spec.cr",
+          "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+          "spec/binary_variant_bulk_w148_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_bulk_part_w221_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/offline_projection_window_w229_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_variant_bulk_w148_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w230.UeOsKn/final-release-shared-publisher-consumers.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-release-shared-publisher-consumers.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 81,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      {
+        "mode": "release",
+        "label": "canonical-count-argument-guards",
+        "files": [
+          "spec/aggregate_count_arguments_w178_admission_spec.cr",
+          "spec/aggregate_count_arguments_w178_core_spec.cr",
+          "spec/aggregate_count_arguments_w178_parser_spec.cr",
+          "spec/aggregate_count_arguments_w178_plan_spec.cr",
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/array_object_column_core_w185_spec.cr",
+          "spec/aggregate_avg_w227_adversary_spec.cr",
+          "spec/aggregate_avg_w227_consumers_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_physical_names_w219_spec.cr spec/array_object_column_core_w185_spec.cr spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w230.UeOsKn/final-release-canonical-count-argument-guards.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-release-canonical-count-argument-guards.log",
+        "exit_code": 0,
+        "counts": {
+          "examples": 44,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      }
+    ],
+    "boundary": "Finite affected roster; no whole-repository claim or assertion that conditional external-fixture branches were all exercised"
+  },
+  "root_observed_falsifiers": [
+    {
+      "name": "initial Array admission",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/red-kernel.log",
+      "examples": 42,
+      "failures": 4,
+      "errors": 0,
+      "pending": 0,
+      "scope": "pre-production Array/QBit descriptor/value controls; retained controls green"
+    },
+    {
+      "name": "complete part consumers",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/red-parts-fixed-test.log",
+      "examples": 5,
+      "failures": 5,
+      "errors": 0,
+      "pending": 0,
+      "scope": "compiled baseline controls; earlier test BoundsError/compile attempts were inconclusive"
+    },
+    {
+      "name": "recursive role and empty scratch bounds",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/kernel-budget-red.log",
+      "examples": 47,
+      "failures": 2,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "name": "retained Count argument policy",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/owner-guards-red.log",
+      "examples": 5,
+      "failures": 1,
+      "errors": 0,
+      "pending": 0,
+      "scope": "neutral QBit metadata recognition must not bypass direct Count constructors"
+    },
+    {
+      "name": "per-mark complete-index replay",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/size-transport-red-compiling.log",
+      "exit_code": 1,
+      "examples": 1,
+      "failures": 1,
+      "errors": 0,
+      "pending": 0,
+      "expected_reads": 2,
+      "actual_reads": 5,
+      "scope": "expected two complete size-lane reads, got five; earlier abstract-Int test compile was inconclusive"
+    },
+    {
+      "name": "open inspection/shape budget reset",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_size_transport_w230_spec.cr --example 'keeps the open-time inspection and size-shape pass in one transport budget' --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/open-transport-budget-red-compiling.log 2>&1",
+      "exit_code": 1,
+      "examples": 1,
+      "failures": 1,
+      "errors": 0,
+      "pending": 0,
+      "message": "Expected CrystalClick::CorruptPartError but nothing was raised",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/open-transport-budget-red-compiling.log",
+      "scope": "inspection exactly consumes max_file_bytes; old reset accepted shape rereads; initial String|Nil assertion compile was inconclusive"
+    },
+    {
+      "name": "omitted complete schedule defect seed",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/seed-omitted-full-schedule.log",
+      "examples": 1,
+      "failures": 1,
+      "errors": 0,
+      "pending": 0,
+      "restored_exactly": true,
+      "scope": "first-window late-corruption failure observed; seed's later EOF assertion was not reached"
+    },
+    {
+      "name": "physical-offset and late-corruption controls",
+      "scope": "final positive Int8 dimension17 plane width3 split inside an LZ4 frame; checksummed later size mutation preserves early bytes but rejects first-window/valid-EOF with no callbacks"
+    },
+    {
+      "name": "additional size budget controls",
+      "scope": "final GREEN controls for 24 bytes/mark workspace and cumulative full-size results; do not claim they were all RED-observed before the lane-major change"
+    }
+  ],
+  "helpers": [
+    {
+      "mode": "debug",
+      "path": "/private/tmp/crystal-click-w230.UeOsKn/qbit-helper-debug",
+      "sha256": "a0b7122bdde5333d2948b404407419b753026d3685fe1f6889d434ba65710c73",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_qbit_w230.cr -o /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w230.UeOsKn/helper-build-debug.log 2>&1",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/helper-build-debug.log",
+      "exit_code": 0
+    },
+    {
+      "mode": "release",
+      "path": "/private/tmp/crystal-click-w230.UeOsKn/qbit-helper-release",
+      "sha256": "3131283646d75abf4f7a9582fb70a3bd224c66c657a64f1523c6c1bdb39c84d0",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_qbit_w230.cr -o /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w230.UeOsKn/helper-build-release.log 2>&1",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/helper-build-release.log",
+      "exit_code": 0
+    }
+  ],
+  "native_qualification": {
+    "expected_signal": "8 paired finite profiles per mode; exact full/middle/empty/EOF RowBinary, nominal metadata, stock read and native ATTACH/CHECK success",
+    "profiles": [
+      {
+        "id": "array_qbit_int8_9",
+        "declaration": "Array(QBit(Int8, 9))"
+      },
+      {
+        "id": "array_qbit_bfloat16_9",
+        "declaration": "Array(QBit(BFloat16, 9))"
+      },
+      {
+        "id": "array_qbit_float32_9",
+        "declaration": "Array(QBit(Float32, 9))"
+      },
+      {
+        "id": "array_qbit_float64_9",
+        "declaration": "Array(QBit(Float64, 9))"
+      },
+      {
+        "id": "array_qbit_bfloat16_16_stride8",
+        "declaration": "Array(QBit(BFloat16, 16, 8))"
+      },
+      {
+        "id": "array_nullable_qbit_bfloat16_16",
+        "declaration": "Array(Nullable(QBit(BFloat16, 16)))"
+      },
+      {
+        "id": "array_array_qbit_int8_3",
+        "declaration": "Array(Array(QBit(Int8, 3)))"
+      },
+      {
+        "id": "array_qbit_bfloat16_16_all_empty",
+        "declaration": "Array(QBit(BFloat16, 16))"
+      }
+    ],
+    "runs": [
+      {
+        "mode": "debug",
+        "source_root": "/private/tmp/crystal-click-w230-stock.y6w2Rt",
+        "evidence_root": "/private/tmp/crystal-click-w230-evidence.EhQpli",
+        "helper": "/private/tmp/crystal-click-w230.UeOsKn/qbit-helper-debug",
+        "helper_sha256": "a0b7122bdde5333d2948b404407419b753026d3685fe1f6889d434ba65710c73",
+        "result": "/private/tmp/crystal-click-w230-evidence.EhQpli/result.json",
+        "counts": {
+          "source_processes": 74,
+          "evidence_processes": 81,
+          "profiles": 8,
+          "source_parts": 8,
+          "library_parts": 8,
+          "attached_parts": 8
+        },
+        "generated_files": 484
+      },
+      {
+        "mode": "release",
+        "source_root": "/private/tmp/crystal-click-w230-stock.CBnIU2",
+        "evidence_root": "/private/tmp/crystal-click-w230-evidence.E6fhuP",
+        "helper": "/private/tmp/crystal-click-w230.UeOsKn/qbit-helper-release",
+        "helper_sha256": "3131283646d75abf4f7a9582fb70a3bd224c66c657a64f1523c6c1bdb39c84d0",
+        "result": "/private/tmp/crystal-click-w230-evidence.E6fhuP/result.json",
+        "counts": {
+          "source_processes": 74,
+          "evidence_processes": 81,
+          "profiles": 8,
+          "source_parts": 8,
+          "library_parts": 8,
+          "attached_parts": 8
+        },
+        "generated_files": 484
+      }
+    ],
+    "jobs": [
+      {
+        "kind": "syntax",
+        "mode": "both",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/recheck_recursive_qbit_w230.rb > /private/tmp/crystal-click-w230.UeOsKn/final-syntax-runner.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-syntax-runner.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 79% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+      },
+      {
+        "kind": "syntax",
+        "mode": "both",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/check_recursive_qbit_evidence_w230.rb > /private/tmp/crystal-click-w230.UeOsKn/final-syntax-auditor.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-syntax-auditor.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 79% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+      },
+      {
+        "kind": "syntax",
+        "mode": "both",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c /private/tmp/crystal-click-w230.UeOsKn/hostile-check-w230.rb > /private/tmp/crystal-click-w230.UeOsKn/final-syntax-hostile.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/final-syntax-hostile.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 79% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+      },
+      {
+        "kind": "native-capture",
+        "mode": "debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_recursive_qbit_w230.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --source-root /private/tmp/crystal-click-w230-stock.y6w2Rt --evidence-root /private/tmp/crystal-click-w230-evidence.EhQpli --helper /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-debug --helper-sha256 a0b7122bdde5333d2948b404407419b753026d3685fe1f6889d434ba65710c73 > /private/tmp/crystal-click-w230.UeOsKn/native-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/native-debug.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 79% > 50%\nW230 paired recursive QBit capture: 8 profiles; source processes=74; evidence processes=81; root=/private/tmp/crystal-click-w230-evidence.EhQpli\n[EXIT: 0] after ~9s\n"
+      },
+      {
+        "kind": "raw-audit",
+        "mode": "debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_evidence_w230.rb --source-root /private/tmp/crystal-click-w230-stock.y6w2Rt --evidence-root /private/tmp/crystal-click-w230-evidence.EhQpli --helper /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-debug --helper-sha256 a0b7122bdde5333d2948b404407419b753026d3685fe1f6889d434ba65710c73 > /private/tmp/crystal-click-w230.UeOsKn/raw-audit-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/raw-audit-debug.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 79% > 50%\nW230 raw evidence audit: 8 profiles, 74 source and 81 evidence processes; raw CHECK/RowBinary/part bytes agree.\n[EXIT: 0] after ~0s\n"
+      },
+      {
+        "kind": "hostile-check",
+        "mode": "debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w230.UeOsKn/hostile-check-w230.rb --source-root /private/tmp/crystal-click-w230-stock.y6w2Rt --evidence-root /private/tmp/crystal-click-w230-evidence.EhQpli --helper /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-debug --helper-sha256 a0b7122bdde5333d2948b404407419b753026d3685fe1f6889d434ba65710c73 > /private/tmp/crystal-click-w230.UeOsKn/hostile-check-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/hostile-check-debug.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 79% > 50%\nW230 stock zero: auditor rejected altered raw CHECK via CHECK guard\nW230 stock nonempty_message: auditor rejected altered raw CHECK via CHECK guard\nW230 native zero: auditor rejected altered raw CHECK via CHECK guard\nW230 native nonempty_message: auditor rejected altered raw CHECK via CHECK guard\nW230 restoration: exact original bytes restored; frozen raw auditor passed.\n[EXIT: 0] after ~2s\n"
+      },
+      {
+        "kind": "native-capture",
+        "mode": "release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_recursive_qbit_w230.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --source-root /private/tmp/crystal-click-w230-stock.CBnIU2 --evidence-root /private/tmp/crystal-click-w230-evidence.E6fhuP --helper /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-release --helper-sha256 3131283646d75abf4f7a9582fb70a3bd224c66c657a64f1523c6c1bdb39c84d0 > /private/tmp/crystal-click-w230.UeOsKn/native-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/native-release.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 78% > 50%\nW230 paired recursive QBit capture: 8 profiles; source processes=74; evidence processes=81; root=/private/tmp/crystal-click-w230-evidence.E6fhuP\n[EXIT: 0] after ~8s\n"
+      },
+      {
+        "kind": "raw-audit",
+        "mode": "release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_evidence_w230.rb --source-root /private/tmp/crystal-click-w230-stock.CBnIU2 --evidence-root /private/tmp/crystal-click-w230-evidence.E6fhuP --helper /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-release --helper-sha256 3131283646d75abf4f7a9582fb70a3bd224c66c657a64f1523c6c1bdb39c84d0 > /private/tmp/crystal-click-w230.UeOsKn/raw-audit-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/raw-audit-release.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 78% > 50%\nW230 raw evidence audit: 8 profiles, 74 source and 81 evidence processes; raw CHECK/RowBinary/part bytes agree.\n[EXIT: 0] after ~0s\n"
+      },
+      {
+        "kind": "hostile-check",
+        "mode": "release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w230.UeOsKn/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w230.UeOsKn/hostile-check-w230.rb --source-root /private/tmp/crystal-click-w230-stock.CBnIU2 --evidence-root /private/tmp/crystal-click-w230-evidence.E6fhuP --helper /private/tmp/crystal-click-w230.UeOsKn/qbit-helper-release --helper-sha256 3131283646d75abf4f7a9582fb70a3bd224c66c657a64f1523c6c1bdb39c84d0 > /private/tmp/crystal-click-w230.UeOsKn/hostile-check-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w230.UeOsKn/hostile-check-release.log",
+        "exit_code": 0,
+        "output": "[PREFLIGHT] System memory free 79% > 50%\nW230 stock zero: auditor rejected altered raw CHECK via CHECK guard\nW230 stock nonempty_message: auditor rejected altered raw CHECK via CHECK guard\nW230 native zero: auditor rejected altered raw CHECK via CHECK guard\nW230 native nonempty_message: auditor rejected altered raw CHECK via CHECK guard\nW230 restoration: exact original bytes restored; frozen raw auditor passed.\n[EXIT: 0] after ~2s\n"
+      }
+    ],
+    "process_count_note": "74 stock-source plus 81 evidence process records per mode; the latter includes the prebuilt Crystal helper invocation",
+    "raw_audits": "Separate read-only audits reconstruct exact SQL, raw process/status/version/build/RowBinary, helper input/output and actual pre/post part inventory; not summary-only checks",
+    "hostile_checks": "Both audits reject zero and nonempty-message CHECK forgeries for stock and library-attached parts, with coherent mirrored fields/byte counts, then pass after exact file restoration",
+    "hostile_driver": {
+      "path": "/private/tmp/crystal-click-w230.UeOsKn/hostile-check-w230.rb",
+      "boundary": "test fixture mutations only under validated temporary roots; frozen auditor; no native/helper processes"
+    },
+    "cross_mode_generated_files": {
+      "profiles": 8,
+      "generated_files": 484,
+      "total_bytes_per_mode": 61362,
+      "comparison": "actual names, size, SHA-256 and literal bytes",
+      "script": "/private/tmp/crystal-click-w230.UeOsKn/check-cross-mode-files.rb",
+      "log": "/private/tmp/crystal-click-w230.UeOsKn/cross-mode-generated-files.log",
+      "exit_code": 0
+    }
+  },
+  "evidence_semantics": {
+    "index_not_proof": true,
+    "provenance": "Root-owned local captures; no signed attestation or independent model-lineage replication",
+    "decay_triggers": [
+      "owner/consumer changes",
+      "fixture/helper/runner/auditor changes",
+      "source/runtime changes",
+      "temporary raw roots missing or changed"
+    ],
+    "refresh": "Rerun recorded bounded rosters, build helpers, allocate fresh matching-prefix temp roots, rerun paired runner and raw audit; reopen dependent claims until refreshed",
+    "temporary_roots": "Regenerable evidence caches, not proof when absent",
+    "recovery": "Exact atomic local commit from baseline; no destructive history edits, remote push or production mutation"
+  },
+  "continuation": {
+    "next_discriminator": "A genuine remaining AggregateFunction state leaf or concrete multi-site/static/runtime physical-state boundary; reuse leaf codecs, do not infer missing serde from unqualified products",
+    "remaining": "Other aggregate states, residual JSON/Dynamic/Variant/LC/Nested layouts and native products; broader MV/projection inspection/write/execution and facade modularization",
+    "standing_authority": "bounded local implementation, verification and atomic local commit; no push or performance resumption"
+  }
+}

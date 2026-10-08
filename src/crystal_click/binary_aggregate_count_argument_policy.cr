@@ -18,6 +18,7 @@ module CrystalClick
       end
 
       argument = argument_type.not_nil!
+      return false if argument.contains_qbit?
       return false if argument.contains_aggregate_function?
       return false if nullable_nothing?(argument)
 

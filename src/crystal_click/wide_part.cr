@@ -1461,7 +1461,7 @@ module CrystalClick
     end
 
     def self.supports_typed_type?(type : String) : Bool
-      !GeometryColumnType.for_type(type).nil? || !GeoArrayColumnType.for_type(type).nil? || !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
+      !GeometryColumnType.for_type(type).nil? || !GeoArrayColumnType.for_type(type).nil? || !PointColumnType.for_type(type).nil? || !QBitColumnType.for_type(type).nil? || supports_qbit_bulk_type?(type) || supports_semantic_fixed_width_type?(type) || supports_nullable_semantic_fixed_width_type?(type) ||
         !WideAggregateCountStoragePlan.for_type_name(type).nil? ||
         !DateTimeColumnType.parse(type).nil? ||
         !IntervalColumnType.parse(type).nil? ||
@@ -1552,6 +1552,27 @@ module CrystalClick
       end
     end
 
+    # Recursive static QBit values share the BinaryBulk reader but retain a
+    # separate nominal admission from AggregateFunction and SAF declarations.
+    def self.selected_qbit_bulk_declaration(part_path : String, column_name : String) : String?
+      selected_static_binary_bulk_declaration(part_path, column_name) do |declaration|
+        supports_qbit_bulk_type?(declaration)
+      end
+    end
+
+    def self.supports_qbit_bulk_type?(type : String) : Bool
+      descriptor = BinaryQBitBulkColumnDeclaration.parse(type) || return false
+      BinaryBulkTypePlan.new(
+        descriptor,
+        BinaryBulkProfile.single_stream,
+        nil,
+        BinaryBulkCodec::DEFAULT_LIMITS,
+        true
+      ).role_count > 0
+    rescue ex : ArgumentError | BoundsError | UnsupportedFormatError
+      false
+    end
+
     def self.supports_aggregate_function_bulk_type?(type : String) : Bool
       parsed = BinaryAggregateFunctionBulkColumnDeclaration.parse(type) || return false
       BinaryBulkTypePlan.new(
@@ -1568,7 +1589,7 @@ module CrystalClick
     # Single predicate for the static BinaryBulk consumer surface. This does
     # not widen Dynamic admission.
     def self.supports_static_binary_bulk_type?(type : String) : Bool
-      supports_simple_aggregate_bulk_type?(type) || supports_aggregate_function_bulk_type?(type)
+      supports_simple_aggregate_bulk_type?(type) || supports_aggregate_function_bulk_type?(type) || supports_qbit_bulk_type?(type)
     end
 
     private def self.selected_static_binary_bulk_declaration(

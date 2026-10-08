@@ -123,6 +123,29 @@ module CrystalClick
       )
     end
 
+    # Write one static Array chain ending in QBit or direct Nullable(QBit)
+    # through the shared BinaryBulk codec and complete-part publisher.
+    def self.write_uint64_qbit_bulk_part(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type : BinaryDataType,
+      granules : Array(Array(BinaryValue)),
+      rows_per_mark : Int32 = 8192,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : String
+      QBitBulkPartWriter.write(
+        destination, key_name, keys, value_name, type, granules,
+        rows_per_mark, profile, frame_bytes, metadata_version, limits,
+        transport_limits
+      )
+    end
+
     # Write one nominal SimpleAggregateFunction BinaryBulk column through
     # the shared static lane encoder and two-column staged publisher. An
     # inner Nullable child remains distinct from the optional root Nullable

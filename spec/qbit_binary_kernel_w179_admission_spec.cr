@@ -41,16 +41,19 @@ describe "W179 QBit binary kernel admission" do
     CrystalClick::BinaryValueCodec.encode_value(value).should eq(scalar)
   end
 
-  it "classifies an unqualified Array(QBit) wire descriptor at the codec boundary" do
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x1e_u8, 0x36, 0x07, 0x03])
-    end
+  it "admits the exact static Array(QBit) descriptor and empty row envelope" do
+    descriptor = Bytes[0x1e_u8, 0x36, 0x07, 0x03]
+    type = CrystalClick::BinaryDataTypeCodec.decode(descriptor)
+    type.name.should eq("Array(QBit(Int8, 3))")
+    CrystalClick::BinaryDataTypeCodec.encode(type).should eq(descriptor)
   end
 
-  it "classifies an empty Array(QBit) envelope before accepting an empty value" do
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryValueCodec.decode(Bytes[0x1e_u8, 0x36, 0x07, 0x03, 0x00])
-    end
+  it "round trips an empty Array(QBit) value without inventing a leaf row" do
+    envelope = Bytes[0x1e_u8, 0x36, 0x07, 0x03, 0x00]
+    value = CrystalClick::BinaryValueCodec.decode(envelope)
+    value.type.name.should eq("Array(QBit(Int8, 3))")
+    value.element_count.should eq(0)
+    CrystalClick::BinaryValueCodec.encode(value).should eq(envelope)
   end
 
   it "classifies an unqualified unnamed Tuple(QBit) wire descriptor" do

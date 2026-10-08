@@ -1,5 +1,42 @@
 # Crystal Click landmarks
 
+## Recursive QBit Array storage — W230
+
+- Active objective remains CH-compatible read/write types and MV/projection
+  inspection. Performance stays deferred; the overall goal is not complete.
+- Baseline: `ac628f8a90c5c50e6ca9bfb204e64f65e9220b8a`. Scoped result:
+  VERIFIED finite quiescent Wide/LZ4/Default/plain-mrk2 Array-chain QBit
+  storage; adversary verdict ROBUST. Existing QBit leaf serde is reused.
+  Admission/site, declaration, schedule and private writer adapter owners have
+  separate files. Typed full/window and owned values share exact declarations.
+- Evidence: the same 54 affected files pass 353 examples in DEBUG and RELEASE;
+  final focused DEBUG passes 92. Each native mode and separate raw audit passes
+  eight finite stock/library profiles and 155 raw process records. All 484
+  generated files match across modes by actual bytes, names, size and SHA-256.
+- Refuted routes: parent-row plane binding is not child-occurrence binding;
+  NULL slots need planes. Per-mark complete-index replay fails a two-read
+  control. A fresh shape-pass budget accepts an inspection-exhausted cap;
+  sharing the open-time budget closes it. Neutral QBit metadata parsing must
+  not bypass Count or runtime-container admission. An omitted-schedule seed
+  fails late-corruption first-window preflight; exact restoration is verified.
+  Raw CHECK-zero/nonempty-message forgeries reject in both final audits;
+  original raw bytes restore exactly and audits pass.
+- Boundary: complete shape validation is not unselected-payload authentication;
+  full size lanes are bounded, but transient copies may overlap. No RSS,
+  throughput, all-depth/native-parameter, all-layout or whole-suite claim.
+  Tuple/Map/Nested/Variant and runtime-container QBit widening remain guarded.
+- Return pointer: [W230 frontier](docs/RECURSIVE_QBIT_FRONTIER.md),
+  [evidence index](.landmark/evidence/recursive-qbit-w230.json).
+- Next discriminator: a genuinely missing aggregate-state leaf or one concrete
+  multi-site/static/runtime physical state boundary. Reuse child codecs; do
+  not equate an unqualified product with missing serde. General MV/projection
+  writing/execution and large-facade decomposition remain open.
+- Standing authority: bounded local implementation and atomic local commits;
+  no push, production mutation or resumed performance work.
+- Decay: refresh after owner/consumer, fixture/helper/auditor, source or runtime
+  changes. Source and runtime pins differ. Temporary raw roots are regenerable
+  caches, not proof when absent; Luna review is correlated, not replication.
+
 ## Offline projection child windows — W229
 
 - Active objective remains compatible read/write types and MV/projection

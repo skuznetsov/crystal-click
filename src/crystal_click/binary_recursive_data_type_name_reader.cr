@@ -46,11 +46,14 @@ module CrystalClick
     private def parse_type(depth : Int32) : BinaryDataType
       skip_whitespace
       @budget.visit_node(depth)
+      type_start = @offset
       name = read_identifier || invalid!("type name is missing")
       skip_whitespace
       return parse_atom(name) unless consume('(')
 
       case name
+      when "QBit"
+        parse_qbit_type(type_start)
       when "Array"
         child = parse_child(depth + 1)
         expect(')')
@@ -168,6 +171,26 @@ module CrystalClick
       else
         invalid!("unsupported parameterized data type")
       end
+    end
+
+    private def parse_qbit_type(type_start : Int32) : BinaryDataType
+      # Delegate syntax, element admission, dimension/stride laws, and exact
+      # canonical spelling to QBitType.for_type. Scan only a bounded candidate
+      # first, so hostile parameter text is never copied into a String before
+      # its local metadata limit is known.
+      loop do
+        byte = @bytes[@offset]? || invalid!("QBit type name is unterminated")
+        @offset += 1
+        if byte == ')'.ord.to_u8
+          invalid!("QBit type name exceeds its bounded profile") if @offset - type_start > 128
+          break
+        end
+        invalid!("QBit type name exceeds its bounded profile") if @offset - type_start >= 128
+      end
+
+      type_name = String.new(@bytes[type_start, @offset - type_start])
+      qbit_type = QBitType.for_type(type_name) || invalid!("QBit type name is not canonical or supported")
+      BinaryDataType.qbit(qbit_type)
     end
 
     private def parse_atom(name : String) : BinaryDataType
