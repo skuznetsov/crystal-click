@@ -1,7 +1,9 @@
 module CrystalClick
   # Exact static BinaryBulk declaration adapter for admitted recursive QBit
   # products. Root QBit and Nullable(QBit) retain their dedicated owners;
-  # Dynamic, Object, Variant and other runtime layouts remain out of scope.
+  # Static Variant compositions now reuse these sites when every QBit-bearing
+  # arm path stays in the admitted grammar; Dynamic, Object and other
+  # runtime-owned layouts remain out of scope.
   class BinaryQBitBulkColumnDeclaration
     getter type : BinaryDataType
     getter declaration : String

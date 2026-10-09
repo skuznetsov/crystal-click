@@ -508,9 +508,10 @@ describe "W231 static recursive QBit products" do
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.low_cardinality(qbit)
     end
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.variant([qbit])
-    end
+    qbit_variant = CrystalClick::BinaryDataType.variant([
+      qbit, CrystalClick::BinaryDataType.primitive("UInt8"),
+    ] of CrystalClick::BinaryDataType)
+    qbit_variant.contains_qbit?.should be_true
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.map(nullable_uint64, uint64)
     end

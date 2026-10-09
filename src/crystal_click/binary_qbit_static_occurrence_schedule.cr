@@ -1,25 +1,62 @@
 module CrystalClick
   # Complete shape-only census for every QBit leaf in an admitted static
-  # product tree. Unique Array/Map size lanes are replayed once in parent-first
-  # order; QBit plane payload remains unread until a selected value window.
+  # product tree. Unique Array/Map size lanes and Variant discriminator axes
+  # are replayed once in parent-first order; QBit plane payload remains unread
+  # until a selected value window.
   module BinaryQBitStaticOccurrenceSchedule
+    SIZE_STEP    = 0_u8
+    VARIANT_STEP = 1_u8
+
     private struct SizeLane
       getter role : String
-      getter parent_role : String?
+      getter parent_axis : String
 
-      def initialize(role : String, parent_role : String?)
+      def initialize(role : String, parent_axis : String)
         @role = String.new(role.to_slice)
-        @parent_role = parent_role.try { |value| String.new(value.to_slice) }
+        @parent_axis = String.new(parent_axis.to_slice)
       end
     end
 
     private struct NullableLane
       getter role : String
-      getter parent_role : String?
+      getter parent_axis : String
 
-      def initialize(role : String, parent_role : String?)
+      def initialize(role : String, parent_axis : String)
         @role = String.new(role.to_slice)
-        @parent_role = parent_role.try { |value| String.new(value.to_slice) }
+        @parent_axis = String.new(parent_axis.to_slice)
+      end
+    end
+
+    private struct VariantArmAxis
+      getter index : Int32
+      getter path : String
+
+      def initialize(index : Int, path : String)
+        @index = index.to_i32
+        @path = String.new(path.to_slice)
+      end
+    end
+
+    private struct VariantLane
+      getter role : String
+      getter parent_axis : String
+      getter arm_count : Int32
+      getter qbit_arms : Array(VariantArmAxis)
+
+      def initialize(role : String, parent_axis : String, arm_count : Int, qbit_arms : Array(VariantArmAxis))
+        @role = String.new(role.to_slice)
+        @parent_axis = String.new(parent_axis.to_slice)
+        @arm_count = arm_count.to_i32
+        @qbit_arms = qbit_arms
+      end
+    end
+
+    private struct ShapeStep
+      getter kind : UInt8
+      getter index : Int32
+
+      def initialize(@kind : UInt8, index : Int)
+        @index = index.to_i32
       end
     end
 
@@ -60,11 +97,15 @@ module CrystalClick
       size_indexes = Hash(String, Int32).new(initial_capacity: sites.size)
       nullable_lanes = [] of NullableLane
       nullable_indexes = Hash(String, Int32).new(initial_capacity: sites.size)
+      variant_lanes = [] of VariantLane
+      variant_indexes = Hash(String, Int32).new(initial_capacity: sites.size)
+      shape_steps = [] of ShapeStep
       visited_sites = Hash(String, Bool).new(initial_capacity: sites.size)
+      site_axes = Hash(String, String).new(initial_capacity: sites.size)
       collect_shape!(
         type,
         "root",
-        nil,
+        "root",
         [] of String,
         [] of String,
         sites_by_path,
@@ -72,18 +113,25 @@ module CrystalClick
         size_indexes,
         nullable_lanes,
         nullable_indexes,
+        variant_lanes,
+        variant_indexes,
+        shape_steps,
         visited_sites,
+        site_axes,
       )
-      unless visited_sites.size == sites_by_path.size
+      unless visited_sites.size == sites_by_path.size && site_axes.size == sites_by_path.size
         raise CorruptPartError.new("static QBit schedule omits a planned leaf site")
       end
 
-      # The retained child-count vector for each unique size lane plus two
-      # shared per-mark codec accumulators form the known schedule workspace.
-      # Reject from scalar dimensions before allocating any of those arrays or
-      # reading a size lane.
-      if !size_lanes.empty?
-        vector_count = size_lanes.size.to_u64
+      # Each unique size lane and each QBit-bearing Variant arm retains one
+      # per-mark count vector. Two additional per-mark codec accumulators are
+      # shared across the parent-first census. Reject from scalar dimensions
+      # before allocating any of those arrays or reading a shape lane.
+      vector_count = size_lanes.size.to_u64
+      variant_lanes.each do |lane|
+        vector_count = checked_add(vector_count, lane.qbit_arms.size.to_u64)
+      end
+      if vector_count > 0_u64
         if vector_count > UInt64::MAX - 2_u64
           raise CorruptPartError.new("static QBit schedule workspace size overflows")
         end
@@ -96,89 +144,58 @@ module CrystalClick
         end
       end
 
-      size_counts = Hash(String, Array(UInt64)).new(initial_capacity: size_lanes.size)
-      mark_element_totals = size_lanes.empty? ? nil : Array(UInt64).new(mark_count, 0_u64)
-      mark_wire_totals = size_lanes.empty? ? nil : Array(UInt64).new(mark_count, 0_u64)
+      axis_counts = Hash(String, Array(UInt64)).new(initial_capacity: (size_lanes.size + variant_lanes.size + 1))
+      axis_counts["root"] = parent_rows
+      shape_has_axes = vector_count > 0_u64
+      mark_element_totals = shape_has_axes ? Array(UInt64).new(mark_count, 0_u64) : nil
+      mark_wire_totals = shape_has_axes ? Array(UInt64).new(mark_count, 0_u64) : nil
 
-      size_lanes.each do |lane|
-        item_counts = if parent_role = lane.parent_role
-                        size_counts[parent_role]? || raise(CorruptPartError.new("static QBit size lane parent was not scheduled first"))
-                      else
-                        parent_rows
-                      end
-        grid = grids[lane.role]? || raise(CorruptPartError.new("static QBit Array/Map size lane has no inspected mark grid"))
-        prefix = physical.prefix_size_for(lane.role)
-        validate_parent_grid!(grid, lane.role, prefix, parent_rows, mark_count)
-
-        expected_lane_bytes = 0_u64
-        mark_count.times do |mark|
-          items = item_counts[mark]
-          expected_bytes = checked_multiply(items, 8_u64)
-          require_mark_delta!(grid, mark, expected_bytes, "Array/Map size")
-          unless expected_bytes <= Int32::MAX.to_u64
-            raise CorruptPartError.new("static QBit size mark exceeds its bounded buffer domain")
-          end
-
-          if element_totals = mark_element_totals
-            element_limit = codec_limits.max_elements.to_u64
-            if element_totals[mark] > element_limit || items > element_limit - element_totals[mark]
-              raise CorruptPartError.new("binary codec element limit exceeded")
-            end
-            element_totals[mark] = checked_add(element_totals[mark], items)
-          end
-          if wire_totals = mark_wire_totals
-            wire_limit = codec_limits.max_bytes.to_u64
-            if wire_totals[mark] > wire_limit || expected_bytes > wire_limit - wire_totals[mark]
-              raise CorruptPartError.new("binary codec byte limit exceeded")
-            end
-            wire_totals[mark] = checked_add(wire_totals[mark], expected_bytes)
-          end
-          expected_lane_bytes = checked_add(expected_lane_bytes, expected_bytes)
+      shape_steps.each do |step|
+        case step.kind
+        when SIZE_STEP
+          lane = size_lanes[step.index]
+          parent_counts = axis_counts[lane.parent_axis]? ||
+                          raise(CorruptPartError.new("static QBit size lane parent was not scheduled first"))
+          census_size_lane!(
+            lane,
+            parent_counts,
+            physical,
+            source,
+            grids,
+            parent_rows,
+            mark_count,
+            codec_limits,
+            transport_budget,
+            mark_element_totals,
+            mark_wire_totals,
+            axis_counts,
+          )
+        when VARIANT_STEP
+          lane = variant_lanes[step.index]
+          parent_counts = axis_counts[lane.parent_axis]? ||
+                          raise(CorruptPartError.new("static QBit Variant parent was not scheduled first"))
+          census_variant_lane!(
+            lane,
+            parent_counts,
+            physical,
+            source,
+            grids,
+            parent_rows,
+            mark_count,
+            codec_limits,
+            transport_budget,
+            mark_element_totals,
+            mark_wire_totals,
+            axis_counts,
+          )
+        else
+          raise CorruptPartError.new("static QBit shape schedule has an unknown step")
         end
-
-        require_lane_logical_size!(grid, lane.role, prefix, expected_lane_bytes)
-        transport_budget.preflight_result_bytes(grid.logical_size)
-        window = source.read_window(
-          physical.data_file_for(lane.role, true),
-          physical.marks_file_for(lane.role, true),
-          0,
-          mark_count,
-          prefix,
-          transport_budget,
-        )
-        validate_window_grid!(window, grid, lane.role, prefix, parent_rows, mark_count)
-
-        child_counts = Array(UInt64).new(mark_count, 0_u64)
-        bytes = window.bytes
-        mark_count.times do |mark|
-          start = window.offsets[mark]
-          finish = window.offsets[mark + 1]
-          expected_bytes = checked_multiply(item_counts[mark], 8_u64)
-          unless finish >= start && finish - start == expected_bytes && finish <= bytes.size.to_u64
-            raise CorruptPartError.new("static QBit size mark payload differs from its inspected grid")
-          end
-          unless start <= Int32::MAX.to_u64 && finish <= Int32::MAX.to_u64
-            raise CorruptPartError.new("static QBit size mark exceeds its bounded buffer domain")
-          end
-
-          next_items = 0_u64
-          offset = start.to_i
-          end_offset = finish.to_i
-          while offset < end_offset
-            next_items = checked_add(next_items, read_u64_le(bytes, offset))
-            offset += 8
-          end
-          child_counts[mark] = next_items
-        end
-        size_counts[lane.role] = child_counts
       end
 
       nullable_lanes.each do |lane|
-        expected_rows = if parent_role = lane.parent_role
-                          size_counts[parent_role]? || raise(CorruptPartError.new("static QBit nullable domain size lane was not scheduled"))
-                        else
-                          parent_rows
-                        end
+        expected_rows = axis_counts[lane.parent_axis]? ||
+                        raise(CorruptPartError.new("static QBit nullable domain was not scheduled"))
         grid = grids[lane.role]? || raise(CorruptPartError.new("static QBit nullable map has no inspected mark grid"))
         prefix = physical.prefix_size_for(lane.role)
         validate_parent_grid!(grid, lane.role, prefix, parent_rows, mark_count)
@@ -191,11 +208,8 @@ module CrystalClick
       end
 
       sites.each do |site|
-        expected_rows = if role = site.size_roles.last?
-                          size_counts[role]? || raise(CorruptPartError.new("static QBit leaf size lane was not scheduled"))
-                        else
-                          parent_rows
-                        end
+        axis = site_axes[site.path]? || raise(CorruptPartError.new("static QBit leaf occurrence axis was not scheduled"))
+        expected_rows = axis_counts[axis]? || raise(CorruptPartError.new("static QBit leaf occurrence counts are missing"))
         plane_roles = site.plane_roles
         unless plane_roles.size == site.qbit_type.plane_count
           raise CorruptPartError.new("static QBit leaf plane roster differs from its nominal type")
@@ -218,10 +232,200 @@ module CrystalClick
       raise CorruptPartError.new("static QBit physical schedule exceeds configured codec limits")
     end
 
+    private def self.census_size_lane!(
+      lane : SizeLane,
+      parent_counts : Array(UInt64),
+      physical : BinaryBulkPhysicalPlan,
+      source : PartStreamSource,
+      grids : Hash(String, CompressedMarkGrid),
+      parent_rows : Array(UInt64),
+      mark_count : Int32,
+      codec_limits : BinaryCodecLimits,
+      transport_budget : CompressedStreamBudget,
+      mark_element_totals : Array(UInt64)?,
+      mark_wire_totals : Array(UInt64)?,
+      axis_counts : Hash(String, Array(UInt64)),
+    ) : Nil
+      unless parent_counts.size == mark_count
+        raise CorruptPartError.new("static QBit size lane parent has the wrong mark domain")
+      end
+      grid = grids[lane.role]? || raise(CorruptPartError.new("static QBit Array/Map size lane has no inspected mark grid"))
+      prefix = physical.prefix_size_for(lane.role)
+      validate_parent_grid!(grid, lane.role, prefix, parent_rows, mark_count)
+
+      expected_lane_bytes = 0_u64
+      mark_count.times do |mark|
+        items = parent_counts[mark]
+        expected_bytes = checked_multiply(items, 8_u64)
+        require_mark_delta!(grid, mark, expected_bytes, "Array/Map size")
+        unless expected_bytes <= Int32::MAX.to_u64
+          raise CorruptPartError.new("static QBit size mark exceeds its bounded buffer domain")
+        end
+
+        if element_totals = mark_element_totals
+          element_limit = codec_limits.max_elements.to_u64
+          if element_totals[mark] > element_limit || items > element_limit - element_totals[mark]
+            raise CorruptPartError.new("binary codec element limit exceeded")
+          end
+          element_totals[mark] = checked_add(element_totals[mark], items)
+        end
+        if wire_totals = mark_wire_totals
+          wire_limit = codec_limits.max_bytes.to_u64
+          if wire_totals[mark] > wire_limit || expected_bytes > wire_limit - wire_totals[mark]
+            raise CorruptPartError.new("binary codec byte limit exceeded")
+          end
+          wire_totals[mark] = checked_add(wire_totals[mark], expected_bytes)
+        end
+        expected_lane_bytes = checked_add(expected_lane_bytes, expected_bytes)
+      end
+
+      require_lane_logical_size!(grid, lane.role, prefix, expected_lane_bytes)
+      transport_budget.preflight_result_bytes(grid.logical_size)
+      window = source.read_window(
+        physical.data_file_for(lane.role, true),
+        physical.marks_file_for(lane.role, true),
+        0,
+        mark_count,
+        prefix,
+        transport_budget,
+      )
+      validate_window_grid!(window, grid, lane.role, prefix, parent_rows, mark_count)
+
+      child_counts = Array(UInt64).new(mark_count, 0_u64)
+      bytes = window.bytes
+      mark_count.times do |mark|
+        start = window.offsets[mark]
+        finish = window.offsets[mark + 1]
+        expected_bytes = checked_multiply(parent_counts[mark], 8_u64)
+        unless finish >= start && finish - start == expected_bytes && finish <= bytes.size.to_u64
+          raise CorruptPartError.new("static QBit size mark payload differs from its inspected grid")
+        end
+        unless start <= Int32::MAX.to_u64 && finish <= Int32::MAX.to_u64
+          raise CorruptPartError.new("static QBit size mark exceeds its bounded buffer domain")
+        end
+
+        next_items = 0_u64
+        offset = start.to_i
+        end_offset = finish.to_i
+        while offset < end_offset
+          next_items = checked_add(next_items, read_u64_le(bytes, offset))
+          offset += 8
+        end
+        child_counts[mark] = next_items
+      end
+      axis_counts[lane.role] = child_counts
+      nil
+    end
+
+    private def self.census_variant_lane!(
+      lane : VariantLane,
+      parent_counts : Array(UInt64),
+      physical : BinaryBulkPhysicalPlan,
+      source : PartStreamSource,
+      grids : Hash(String, CompressedMarkGrid),
+      parent_rows : Array(UInt64),
+      mark_count : Int32,
+      codec_limits : BinaryCodecLimits,
+      transport_budget : CompressedStreamBudget,
+      mark_element_totals : Array(UInt64)?,
+      mark_wire_totals : Array(UInt64)?,
+      axis_counts : Hash(String, Array(UInt64)),
+    ) : Nil
+      unless parent_counts.size == mark_count && lane.arm_count > 0 && lane.arm_count <= 0xff
+        raise CorruptPartError.new("static QBit Variant lane has an invalid parent or arm domain")
+      end
+      grid = grids[lane.role]? || raise(CorruptPartError.new("static QBit Variant discriminator lane has no inspected mark grid"))
+      prefix = physical.prefix_size_for(lane.role)
+      validate_parent_grid!(grid, lane.role, prefix, parent_rows, mark_count)
+
+      expected_lane_bytes = 0_u64
+      mark_count.times do |mark|
+        items = parent_counts[mark]
+        require_mark_delta!(grid, mark, items, "Variant discriminator")
+        unless items <= Int32::MAX.to_u64
+          raise CorruptPartError.new("static QBit Variant mark exceeds its bounded buffer domain")
+        end
+
+        if element_totals = mark_element_totals
+          element_limit = codec_limits.max_elements.to_u64
+          if element_totals[mark] > element_limit || items > element_limit - element_totals[mark]
+            raise CorruptPartError.new("binary codec element limit exceeded")
+          end
+          element_totals[mark] = checked_add(element_totals[mark], items)
+        end
+        if wire_totals = mark_wire_totals
+          wire_limit = codec_limits.max_bytes.to_u64
+          if wire_totals[mark] > wire_limit || items > wire_limit - wire_totals[mark]
+            raise CorruptPartError.new("binary codec byte limit exceeded")
+          end
+          wire_totals[mark] = checked_add(wire_totals[mark], items)
+        end
+        expected_lane_bytes = checked_add(expected_lane_bytes, items)
+      end
+
+      require_lane_logical_size!(grid, lane.role, prefix, expected_lane_bytes)
+      transport_budget.preflight_result_bytes(grid.logical_size)
+      window = source.read_window(
+        physical.data_file_for(lane.role, true),
+        physical.marks_file_for(lane.role, true),
+        0,
+        mark_count,
+        prefix,
+        transport_budget,
+      )
+      validate_window_grid!(window, grid, lane.role, prefix, parent_rows, mark_count)
+
+      qbit_counts = Hash(Int32, Array(UInt64)).new(initial_capacity: lane.qbit_arms.size)
+      lane.qbit_arms.each do |arm|
+        if arm.index < 0 || arm.index >= lane.arm_count
+          raise CorruptPartError.new("static QBit Variant arm axis is outside its discriminator roster")
+        end
+        qbit_counts[arm.index] = Array(UInt64).new(mark_count, 0_u64)
+      end
+
+      bytes = window.bytes
+      mark_count.times do |mark|
+        start = window.offsets[mark]
+        finish = window.offsets[mark + 1]
+        expected_bytes = parent_counts[mark]
+        unless finish >= start && finish - start == expected_bytes && finish <= bytes.size.to_u64
+          raise CorruptPartError.new("static QBit Variant mark payload differs from its inspected grid")
+        end
+        unless start <= Int32::MAX.to_u64 && finish <= Int32::MAX.to_u64
+          raise CorruptPartError.new("static QBit Variant mark exceeds its bounded buffer domain")
+        end
+
+        offset = start.to_i
+        end_offset = finish.to_i
+        while offset < end_offset
+          discriminator = bytes[offset]
+          offset += 1
+          next if discriminator == 0xff_u8
+          arm_index = discriminator.to_i
+          if arm_index >= lane.arm_count
+            raise CorruptPartError.new("static QBit Variant discriminator is outside its arm roster")
+          end
+          if counts = qbit_counts[arm_index.to_i32]?
+            current = counts[mark]
+            if current == UInt64::MAX
+              raise CorruptPartError.new("static QBit Variant occurrence count overflows UInt64")
+            end
+            counts[mark] = current + 1_u64
+          end
+        end
+      end
+
+      lane.qbit_arms.each do |arm|
+        counts = qbit_counts[arm.index]? || raise(CorruptPartError.new("static QBit Variant arm counts are missing"))
+        axis_counts[arm.path] = counts
+      end
+      nil
+    end
+
     private def self.collect_shape!(
       type : BinaryDataType,
       path : String,
-      parent_size_role : String?,
+      parent_axis : String,
       size_ancestors : Array(String),
       nullable_ancestors : Array(String),
       sites_by_path : Hash(String, BinaryQBitRecursiveAdmission::StaticSite),
@@ -229,7 +433,11 @@ module CrystalClick
       size_indexes : Hash(String, Int32),
       nullable_lanes : Array(NullableLane),
       nullable_indexes : Hash(String, Int32),
+      variant_lanes : Array(VariantLane),
+      variant_indexes : Hash(String, Int32),
+      shape_steps : Array(ShapeStep),
       visited_sites : Hash(String, Bool),
+      site_axes : Hash(String, String),
     ) : Nil
       return unless type.contains_qbit?
 
@@ -240,40 +448,47 @@ module CrystalClick
           raise CorruptPartError.new("static QBit leaf shape roles differ from the descriptor path")
         end
         visited_sites[path] = true
+        site_axes[String.new(path.to_slice)] = String.new(parent_axis.to_slice)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         role = "#{path}.sizes"
-        add_size_lane!(size_lanes, size_indexes, role, parent_size_role)
+        if add_size_lane!(size_lanes, size_indexes, role, parent_axis)
+          shape_steps << ShapeStep.new(SIZE_STEP, size_lanes.size - 1)
+        end
         child_sizes = size_ancestors.dup
         child_sizes << role
         collect_shape!(
           type.child_at(0), "#{path}.elements", role, child_sizes,
           nullable_ancestors, sites_by_path, size_lanes, size_indexes,
-          nullable_lanes, nullable_indexes, visited_sites,
+          nullable_lanes, nullable_indexes, variant_lanes, variant_indexes,
+          shape_steps, visited_sites, site_axes,
         )
       when BinaryDataType::TAG_NULLABLE
         role = "#{path}.nulls"
-        add_nullable_lane!(nullable_lanes, nullable_indexes, role, parent_size_role)
+        add_nullable_lane!(nullable_lanes, nullable_indexes, role, parent_axis)
         child_nullables = nullable_ancestors.dup
         child_nullables << role
         collect_shape!(
-          type.child_at(0), "#{path}.nested", parent_size_role, size_ancestors,
-          child_nullables, sites_by_path, size_lanes, size_indexes,
-          nullable_lanes, nullable_indexes, visited_sites,
+          type.child_at(0), "#{path}.nested", parent_axis,
+          size_ancestors, child_nullables, sites_by_path, size_lanes, size_indexes,
+          nullable_lanes, nullable_indexes, variant_lanes, variant_indexes,
+          shape_steps, visited_sites, site_axes,
         )
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = type.child_at(index)
           next unless child.contains_qbit?
           collect_shape!(
-            child, "#{path}.field.#{index}", parent_size_role,
-            size_ancestors, nullable_ancestors, sites_by_path,
-            size_lanes, size_indexes, nullable_lanes, nullable_indexes,
-            visited_sites,
+            child, "#{path}.field.#{index}", parent_axis,
+            size_ancestors, nullable_ancestors, sites_by_path, size_lanes,
+            size_indexes, nullable_lanes, nullable_indexes, variant_lanes,
+            variant_indexes, shape_steps, visited_sites, site_axes,
           )
         end
       when BinaryDataType::TAG_MAP
         role = "#{path}.sizes"
-        add_size_lane!(size_lanes, size_indexes, role, parent_size_role)
+        if add_size_lane!(size_lanes, size_indexes, role, parent_axis)
+          shape_steps << ShapeStep.new(SIZE_STEP, size_lanes.size - 1)
+        end
         child_sizes = size_ancestors.dup
         child_sizes << role
         key = type.child_at(0)
@@ -282,14 +497,35 @@ module CrystalClick
           collect_shape!(
             key, "#{path}.elements.field.0", role, child_sizes,
             nullable_ancestors, sites_by_path, size_lanes, size_indexes,
-            nullable_lanes, nullable_indexes, visited_sites,
+            nullable_lanes, nullable_indexes, variant_lanes, variant_indexes,
+            shape_steps, visited_sites, site_axes,
           )
         end
         if value.contains_qbit?
           collect_shape!(
             value, "#{path}.elements.field.1", role, child_sizes,
             nullable_ancestors, sites_by_path, size_lanes, size_indexes,
-            nullable_lanes, nullable_indexes, visited_sites,
+            nullable_lanes, nullable_indexes, variant_lanes, variant_indexes,
+            shape_steps, visited_sites, site_axes,
+          )
+        end
+      when BinaryDataType::TAG_VARIANT
+        role = "#{path}.discriminators"
+        qbit_arms = [] of VariantArmAxis
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_qbit?
+          qbit_arms << VariantArmAxis.new(index, "#{path}.arm.#{index}")
+        end
+        if add_variant_lane!(variant_lanes, variant_indexes, role, parent_axis, type.child_count, qbit_arms)
+          shape_steps << ShapeStep.new(VARIANT_STEP, variant_lanes.size - 1)
+        end
+        qbit_arms.each do |arm|
+          collect_shape!(
+            type.child_at(arm.index), arm.path, arm.path,
+            size_ancestors, nullable_ancestors, sites_by_path, size_lanes,
+            size_indexes, nullable_lanes, nullable_indexes, variant_lanes,
+            variant_indexes, shape_steps, visited_sites, site_axes,
           )
         end
       else
@@ -302,34 +538,55 @@ module CrystalClick
       lanes : Array(SizeLane),
       indexes : Hash(String, Int32),
       role : String,
-      parent_role : String?,
-    ) : Nil
+      parent_axis : String,
+    ) : Bool
       if index = indexes[role]?
-        unless lanes[index].parent_role == parent_role
+        unless lanes[index].parent_axis == parent_axis
           raise CorruptPartError.new("static QBit size lane has conflicting parent domains")
         end
-        return nil
+        return false
       end
       indexes[String.new(role.to_slice)] = lanes.size.to_i32
-      lanes << SizeLane.new(role, parent_role)
-      nil
+      lanes << SizeLane.new(role, parent_axis)
+      true
     end
 
     private def self.add_nullable_lane!(
       lanes : Array(NullableLane),
       indexes : Hash(String, Int32),
       role : String,
-      parent_role : String?,
+      parent_axis : String,
     ) : Nil
       if index = indexes[role]?
-        unless lanes[index].parent_role == parent_role
+        unless lanes[index].parent_axis == parent_axis
           raise CorruptPartError.new("static QBit nullable map has conflicting parent domains")
         end
         return nil
       end
       indexes[String.new(role.to_slice)] = lanes.size.to_i32
-      lanes << NullableLane.new(role, parent_role)
+      lanes << NullableLane.new(role, parent_axis)
       nil
+    end
+
+    private def self.add_variant_lane!(
+      lanes : Array(VariantLane),
+      indexes : Hash(String, Int32),
+      role : String,
+      parent_axis : String,
+      arm_count : Int,
+      qbit_arms : Array(VariantArmAxis),
+    ) : Bool
+      if index = indexes[role]?
+        existing = lanes[index]
+        unless existing.parent_axis == parent_axis && existing.arm_count == arm_count &&
+               existing.qbit_arms.map(&.path) == qbit_arms.map(&.path)
+          raise CorruptPartError.new("static QBit Variant lane has conflicting parent or arm axes")
+        end
+        return false
+      end
+      indexes[String.new(role.to_slice)] = lanes.size.to_i32
+      lanes << VariantLane.new(role, parent_axis, arm_count, qbit_arms)
+      true
     end
 
     private def self.validate_parent_grid!(

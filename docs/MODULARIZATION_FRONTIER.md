@@ -9,7 +9,31 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility reuse — W231
+## Current responsibility reuse — W232
+
+Static QBit-bearing Variant alternatives reuse the existing leaf code and
+recursive visitors. The existing single-file `BinaryQBitRecursiveAdmission`
+owner enumerates canonical arm paths; `BinaryQBitStaticOccurrenceSchedule`
+adds parent-first discriminator census and sparse per-arm occurrence axes.
+Array/Map size axes and Tuple/Nullable axis preservation compose with those
+axes. Complete shape validation, shared consumptive transport bounds and
+retained count-vector preflight belong to that schedule owner. No serializer
+class is added for each container product, and staged publication/typed
+consumers reuse existing physical plans. Private schedule value structs remain
+with their cohesive owner; one file per responsibility does not mean one file
+per private counter or role tuple.
+
+Status: VERIFIED, scoped ROBUST for the finite Wide/BASIC Variant profiles.
+The same 66 affected spec files pass 470 examples per mode; three native
+profiles and independent raw audits pass in both modes. All 130 generated
+files reconcile by actual bytes. Sparse late-shape, unique-lane/workspace and
+coherent raw-CHECK/status controls are discriminating. This does not close
+runtime dictionaries/JSON paths, alternate physical versions or broad facade
+decomposition, and is not evidence of improved allocation/RSS/throughput.
+Details: [RECURSIVE_QBIT_FRONTIER.md](RECURSIVE_QBIT_FRONTIER.md),
+[W232 evidence packet](../.landmark/evidence/recursive-qbit-variant-w232.json).
+
+## Previous responsibility reuse — W231
 
 Static QBit products reuse the existing scalar/bit-plane leaf codec and generic
 descriptor/bulk visitors, rather than adding classes for every wrapper product.

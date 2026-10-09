@@ -209,7 +209,11 @@ describe "W225 AggregateFunction Variant core" do
     inner = CrystalClick::BinaryDataType.variant([string, CrystalClick::BinaryDataType.primitive("UInt8")] of CrystalClick::BinaryDataType)
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.variant([inner, count] of CrystalClick::BinaryDataType) }
     qbit = CrystalClick::BinaryDataType.qbit(CrystalClick::QBitType.new("Int8", 2_u64))
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.variant([count, qbit] of CrystalClick::BinaryDataType) }
+    count_qbit_variant = CrystalClick::BinaryDataType.variant([count, qbit] of CrystalClick::BinaryDataType)
+    count_qbit_variant.children.map(&.name).should eq(["AggregateFunction(count)", "QBit(Int8, 2)"] of String)
+    CrystalClick::BinaryDataTypeCodec.decode(CrystalClick::BinaryDataTypeCodec.encode(count_qbit_variant))
+      .should eq(count_qbit_variant)
+    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.aggregate_count(qbit) }
 
     dynamic = CrystalClick::BinaryDataType.dynamic
     state = CrystalClick::BinaryValue.variant(

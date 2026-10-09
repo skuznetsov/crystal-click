@@ -62,16 +62,20 @@ describe "W147 generic Variant adversarial boundaries" do
     end
 
     # W179 admits the QBitWithStride tag. Missing element/dimension/stride
-    # metadata is corrupt; the Variant-QBit product remains unqualified.
+    # metadata remains corrupt, while a singleton QBit Variant has a canonical
+    # normal-form descriptor.
     expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x37_u8])
     end
     expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x2a_u8, 0x01_u8, 0x37_u8])
     end
-    expect_raises(CrystalClick::CorruptPartError) do
-      CrystalClick::BinaryDataTypeCodec.decode(Bytes[0x2a_u8, 0x01, 0x36, 0x07, 0x03])
-    end
+    singleton_qbit = CrystalClick::BinaryDataType.variant([
+      CrystalClick::BinaryDataType.qbit(CrystalClick::QBitType.new("Int8", 3_u64)),
+    ] of CrystalClick::BinaryDataType)
+    singleton_qbit_descriptor = Bytes[0x2a_u8, 0x01, 0x36_u8, 0x07, 0x03]
+    CrystalClick::BinaryDataTypeCodec.decode(singleton_qbit_descriptor).should eq(singleton_qbit)
+    CrystalClick::BinaryDataTypeCodec.encode(singleton_qbit).should eq(singleton_qbit_descriptor)
 
     descriptor = Bytes[0x2a_u8, 0x02_u8, 0x15_u8, 0x04_u8]
     (0...descriptor.size).each do |length|

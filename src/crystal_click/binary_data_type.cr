@@ -242,8 +242,10 @@ module CrystalClick
     end
 
     # QBit leaf admission for static recursive owners. Runtime-owned wrappers
-    # (Dynamic/JSON/Object/LowCardinality/Variant/custom state) remain outside
-    # this grammar and keep their independent admission policies.
+    # (Dynamic/JSON/Object/LowCardinality/custom state) remain outside this
+    # grammar and keep their independent admission policies. Variant nodes are
+    # traversed only when their QBit-bearing arm paths stay in this grammar;
+    # direct Variant arms retain their separate roster restrictions.
     def self.admitted_array_qbit_child?(child : BinaryDataType) : Bool
       !child.contains_qbit? ||
         admitted_qbit_static_composition?(child)
@@ -251,7 +253,8 @@ module CrystalClick
 
     # Iterative so public constructor checks do not recurse on a caller-owned
     # descriptor before the bounded codec traversal. The same law is shared by
-    # Array, Tuple, Map, Nested and the eligible Nullable(Tuple) wrapper.
+    # Array, Tuple, Map, Nested, static Variant arms and the eligible
+    # Nullable(Tuple) wrapper.
     def self.admitted_qbit_static_composition?(type : BinaryDataType) : Bool
       return true unless type.contains_qbit?
 
@@ -276,6 +279,11 @@ module CrystalClick
           value = current.child_at(1)
           stack << value if value.contains_qbit?
           stack << key if key.contains_qbit?
+        when TAG_VARIANT
+          current.child_count.times do |index|
+            child = current.child_at(index)
+            stack << child if child.contains_qbit?
+          end
         when TAG_NULLABLE
           child = current.child_at(0)
           unless child.tag == TAG_QBIT || child.tag == TAG_UNNAMED_TUPLE || child.tag == TAG_NAMED_TUPLE
@@ -464,7 +472,9 @@ module CrystalClick
     ) : BinaryDataType
       arms.each do |arm|
         if arm.contains_qbit?
-          context.corrupt!("QBit is not admitted in a Variant arm")
+          unless admitted_qbit_static_composition?(arm)
+            context.corrupt!("QBit is outside the admitted static Variant composition path")
+          end
         end
         unless BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(arm)
           context.corrupt!("AggregateFunction is outside the admitted static Variant composition path")

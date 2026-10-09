@@ -1,6 +1,35 @@
 # CrystalClick project status
 
-Current recursive QBit static-product slice (W231, 2026-10-08): VERIFIED within
+Current static Variant/QBit composition (W232, 2026-10-08): VERIFIED within
+finite quiescent Wide/LZ4/Default/plain-mrk2 profiles with BASIC Variant/Map/
+Nullable serialization (scoped verdict: ROBUST). Existing leaf serde, generic
+recursive visitors, physical binding, staged writer and typed consumers are
+reused. A Variant adds discriminator-derived sparse child axes to the existing
+complete occurrence schedule; no per-product codec is introduced.
+
+The same 66 affected spec files pass 470 examples per mode; the focused DEBUG
+gate passes 16. Both fresh native modes and separate raw audits qualify three
+fixed profiles and 54 raw process records per mode. Stock reads, library part
+publication, native ATTACH/CHECK and independent full/middle/zero RowBinary
+agree, including typed EOF preflight. All 130 generated files match by actual
+bytes across modes. An omitted-schedule seed fails four late discriminator/
+plane/size corruption controls; exact restoration passes. Each audit rejects
+six coherent CHECK/status-label forgeries and passes after every restoration.
+Final formatting, Ruby 2.6 syntax and selected-input/helper hash checks pass.
+
+This is static recursive reuse, not all combinations or physical versions.
+Neutral descriptor acceptance does not admit mixed runtime-owned sibling
+persistence. Dynamic/JSON/Object QBit products, LC(QBit), aggregate arguments,
+Nullable(Array/Map/Nested), Compact/sparse/custom and unqualified versions
+retain their narrower guards. Shape checks are not unselected-payload
+authentication; logical work bounds are not RSS/throughput guarantees. Source
+and runtime remain separately pinned. Memory/performance, general MV/projection
+execution/writing and broad facade decomposition remain deferred/open; the
+overall goal remains active. Details:
+[RECURSIVE_QBIT_FRONTIER.md](RECURSIVE_QBIT_FRONTIER.md),
+[W232 evidence packet](../.landmark/evidence/recursive-qbit-variant-w232.json).
+
+Previous recursive QBit static-product slice (W231, 2026-10-08): VERIFIED within
 finite quiescent Wide/LZ4/Default/plain-mrk2 profiles with BASIC Map/Nullable
 serialization (scoped verdict: ROBUST). Array, Tuple, Map keys/values, nominal
 Nested and eligible Nullable(Tuple) reuse existing QBit leaf serde through one

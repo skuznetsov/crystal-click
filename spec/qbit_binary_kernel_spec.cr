@@ -237,7 +237,10 @@ describe "QBit binary descriptor and scalar kernel" do
     tuple.name.should eq("Tuple(QBit(Int8, 3))")
     map = CrystalClick::BinaryDataType.map(CrystalClick::BinaryDataType.primitive("UInt8"), qbit)
     map.name.should eq("Map(UInt8, QBit(Int8, 3))")
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.variant([qbit]) }
+    qbit_variant = CrystalClick::BinaryDataType.variant([
+      qbit, CrystalClick::BinaryDataType.primitive("UInt8"),
+    ] of CrystalClick::BinaryDataType)
+    qbit_variant.contains_qbit?.should be_true
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.low_cardinality(qbit) }
     expect_raises(ArgumentError) { CrystalClick::BinaryDataType.simple_aggregate(CrystalClick::BinarySimpleAggregateType::Function::Sum, qbit) }
 

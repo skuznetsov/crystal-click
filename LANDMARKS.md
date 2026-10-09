@@ -1,5 +1,51 @@
 # Crystal Click landmarks
 
+## Static Variant/QBit composition — W232
+
+- Active objective remains CH-compatible read/write types and MV/projection
+  inspection before optimization. The overall goal is not complete.
+- Baseline: `c39fe85527e01217df15924510a7aac1efebeb89`. Scoped result:
+  VERIFIED finite quiescent Wide/LZ4/Default/plain-mrk2 static Variant/QBit
+  composition with BASIC discriminator/Map/Nullable serialization; ROBUST.
+  Shared leaf serde and recursive visitors are reused. The existing admission
+  owner enumerates canonical arms; the single-file complete schedule adds
+  sparse arm axes and unique discriminator/size census. Writer and typed
+  full/window/owned-value consumers keep existing owners.
+- Evidence: the same 66 affected files pass 470 examples per mode; focused
+  DEBUG passes 16. Fresh paired native captures and separate raw audits pass
+  three fixed profiles and 54 raw process records per mode (26 stock + 28
+  helper/native). All 130 generated files match across modes by actual bytes,
+  names, size and SHA-256 (17,808 bytes/mode). Formatting passes for 15 owned
+  Crystal paths; both scripts pass Ruby 2.6 syntax. Final selected 88-input
+  and helper hashes match. Source and runtime are distinct pins.
+- Refuted route: root-row cardinality is not Variant-arm cardinality. A
+  schedule-omission seed fails four late discriminator/plane/Array/Map shape
+  controls; exact restoration passes. Unique shape lanes share one open-time
+  transport budget. Known count vectors are preflighted before shape reads.
+  Each raw audit rejects six coherent CHECK-zero/message/status-label attacks
+  with green summary metadata; exact restoration passes each time.
+- Inconclusive test/harness errors were repaired, not converted into CH
+  compatibility claims: invalid zero-row API, stale admission assertion,
+  helper JSON iterator/root-prefix/Map-key mismatches and recorder finalization
+  reading a path from a status-only record. Final native roots are fresh.
+- Boundary: neutral descriptor/scalar acceptance does not grant runtime or
+  physical admission. Source-valid mixed JSON/Dynamic siblings remain
+  unqualified; existing Dynamic/Object/borrowed/LC(QBit)/aggregate-argument and
+  Compact/sparse/custom/version guards remain. Complete shape is not unseen
+  payload authentication; logical caps are not allocator/RSS guarantees. No
+  whole-suite, all-depth/parameter/layout or performance claim.
+- Return pointer: [W232 frontier](docs/RECURSIVE_QBIT_FRONTIER.md),
+  [evidence index](.landmark/evidence/recursive-qbit-variant-w232.json).
+- Next discriminator: one concrete runtime dictionary/JSON path/version
+  boundary, reusing admitted child serde; do not enumerate a codec per product.
+  General MV/projection execution/writing and large-facade decomposition stay
+  open. Standing authority: bounded local work and atomic local commits; no
+  push, production mutation or resumed performance work.
+- Decay: refresh after owner/consumer, fixture/helper/auditor, source/runtime or
+  profile changes. Temporary raw roots are regenerable caches, not proof when
+  absent. Selected hashes are not all transitive compiler inputs. Luna review
+  is correlated; root independently executed the checks and adversary controls.
+
 ## Recursive QBit static products — W231
 
 - Active objective remains CH-compatible read/write types and MV/projection

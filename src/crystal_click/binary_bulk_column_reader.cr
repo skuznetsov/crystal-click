@@ -176,9 +176,9 @@ module CrystalClick
       end
 
       # Validate every mark's complete static QBit occurrence schedule before
-      # publishing the reader. Shared Array/Map size lanes are read once;
-      # nullable-ancestor and QBit plane grid deltas are checked, while their
-      # unselected payloads stay unread.
+      # publishing the reader. Shared Array/Map size and Variant discriminator
+      # lanes are read once in parent-first order; sparse QBit arm axes drive
+      # plane-grid checks. Nullable maps and QBit plane payload stay unread.
       qbit_sites = static_plan.qbit_static_sites
       unless qbit_sites.empty?
         BinaryQBitStaticOccurrenceSchedule.validate!(

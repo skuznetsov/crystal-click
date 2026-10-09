@@ -1,5 +1,165 @@
 # Recursive QBit storage frontier
 
+## Static Variant composition — W232
+
+Document status: VERIFIED within the finite W232 scope (2026-10-08).
+Scoped adversary verdict: ROBUST; not an all-product/layout qualification.
+Production baseline is the clean W231 commit
+`c39fe85527e01217df15924510a7aac1efebeb89`. The active compatibility objective
+is unchanged. Memory/performance work remains deferred.
+
+Problem at baseline: leaf serde is already reusable, but the complete-part QBit
+schedule expressed only root and Array/Map occurrence axes. A Variant arm has
+one physical child occurrence per selecting discriminator, not per parent row.
+Removing the constructor guard alone would let plane shape checks use the
+wrong row domain. This is a missing composition boundary, not a missing QBit
+codec or a requirement to implement every type product separately.
+
+### Implemented admission and invariants
+
+- Admit source-valid static Variant alternatives containing the existing QBit
+  static grammar, including ordinary Array/Tuple/BASIC Map/Nested and eligible
+  Nullable(Tuple) composition. Preserve canonical arm ordering and NULL's
+  `0xff` discriminator. Direct Nullable, Variant and Dynamic alternatives keep
+  their existing ClickHouse constructor restrictions.
+- Reuse the existing normalized Variant roster, descriptor/scalar/RowBinary
+  visitors, physical binder, bulk encoder/decoder, staged writer and typed
+  consumers. Extend only the static leaf-site roster and one complete-part
+  occurrence scheduler; do not introduce a codec for each product.
+- A Variant adds a discriminator-derived sparse axis. Tuple and Nullable
+  preserve the incoming axis; Array and BASIC Map derive a child axis from
+  sizes. Empty selected containers are not NULL. All-null and unused-arm marks
+  still require complete grids and zero child payload.
+- Validate every relevant discriminator byte across the complete part before
+  reader publication, then validate all QBit plane, size and nullable grids
+  against their actual axes. A late unselected shape defect must reject early
+  and EOF selections before callbacks. Shape checks do not authenticate all
+  unselected value payloads.
+- Preflight the retained per-mark axis/count workspace before allocating it.
+  Read each relevant discriminator or shared size lane once in parent-first
+  order, consuming the existing shared inspection/shape transport budget.
+  Existing LC replay is a separate operation-scoped phase; this slice does not
+  claim a unified LC/QBit census or an RSS/throughput guarantee.
+- Preserve narrower Dynamic actual-product, JSON/Object, LowCardinality(QBit),
+  aggregate-argument, Compact/sparse/custom and unqualified-version guards.
+  Neutral descriptor acceptance does not grant those consumers admission.
+
+### Definition of Done and execution plan
+
+Risk: CAUTION (serialization and complete recursive physical schedules).
+Rollback: exact owned local diff from the clean baseline; one atomic local
+commit only after the relevant checks pass, with no remote push.
+Source and runtime remain independently pinned as recorded by W231.
+
+1. Execute a bounded stock-only persistence probe for root Variant(QBit),
+   Array(Variant(QBit)) and Variant alternatives with Array/Tuple/Map QBit.
+   Require Wide/BASIC persistence, exact CHECK success and independently
+   authored literal RowBinary. Source constructor acceptance alone is not DoD.
+2. Before production changes, root executes new
+   `spec/variant_qbit_recursive_composition_spec.cr`,
+   `spec/recursive_qbit_variant_parts_w232_spec.cr` and
+   `spec/recursive_qbit_variant_transport_w232_spec.cr` against the baseline.
+   Expected RED is missing-capability assertion failures, not build errors.
+3. Luna owns disjoint kernel/admission, physical-schedule/part tests and native
+   helper/harness surfaces. Root owns all serial guarded jobs and independent
+   review. Widen shared normal/wire admission and sites, then add the sparse
+   Variant axis to the existing complete scheduler. Touch other consumers only
+   if an executed RED exposes a concrete missing route.
+4. Run the new and affected recursive/QBit/Variant/owner-guard specs in DEBUG
+   and RELEASE. Expected GREEN: nonzero examples, zero failures/errors/pending.
+   Retain nominal identity, limits, LC/Dynamic/JSON/Object and projection controls.
+5. Execute paired stock-authored and library-written native profiles in both
+   modes. Require exact declarations, full/middle/zero/EOF typed reads, native
+   ATTACH/CHECK and independent literal RowBinary, followed by a separate raw
+   audit. Attack unselected late discriminators, sparse plane and size deltas,
+   shared-lane replay, workspace bounds and CHECK-record acceptance.
+6. Inspect final hashes/diff and evidence scope, reconcile current status and
+   frontier, then commit only exact relevant paths. The overall goal stays open.
+
+The strongest failure mode is a plane schedule using root rows for a sparse
+Variant arm. The cheapest discriminators are an unused arm in a late mark and
+an independently malformed late shape lane, while the first selected window
+remains intact. Stop and narrow the proposal if stock persistence contradicts
+the source contract; do not relabel metadata or relax guards to force a pass.
+
+### Observed anchors before production changes
+
+The fresh stock-only probe persists all three proposed profiles with six rows
+each, three logical two-row marks and four physical marks including the
+terminal mark. They have 11, 12 and 30 plain-mrk2 physical lanes respectively.
+Exact CHECK output and independently authored full/per-mark RowBinary agree.
+Root separately inspected all 29 raw process-success statuses. An earlier
+capture stopped at a harness-only inaccessible-method error and is retained
+as inconclusive; it is not edited into passing qualification.
+
+The kernel-only unchanged-production RED executes three examples with three
+missing-admission assertion failures and zero errors/pending. Its initial
+test-helper overload compile error was corrected before this behavioral RED.
+The part/transport RED executes seven examples with seven missing-admission
+assertion failures and zero errors/pending after repairing the fixture's
+constructor-initialization boundary. Production changes begin only after both
+behavioral RED signals. This does not yet qualify the library's new storage path.
+
+### Executed results and qualification boundary
+
+The same 66 affected spec files pass 470 examples in each of DEBUG and RELEASE,
+partitioned into six serial cohorts per mode. The three new specs pass a
+16-example focused DEBUG gate and are included in both final cohort rosters.
+The final 15 owned Crystal paths pass formatting; both native scripts pass
+host Ruby 2.6 syntax checks. This is an affected roster, not the whole suite.
+
+Fresh native captures and separate raw audits pass three fixed profiles in
+each mode: `Variant(QBit(Int8, 9), UInt64)`, its Array wrapper, and
+`Variant(Array(QBit(Int8, 9)), Map(String, QBit(Int8, 9)),
+Tuple(q QBit(Int8, 9), n UInt8))`. Each mode has 26 stock and 28 helper/native
+raw process records. Stock parts are read through public typed full, middle,
+zero-selected-mark and EOF APIs; library parts are written through the existing
+staged publisher, read back, and directly attached to fresh native tables.
+Exact nominal declarations, independent literal RowBinary, complete grids and
+exact successful CHECK output agree. All 130 generated files match by actual
+bytes, names, size and SHA-256 across modes (17,808 bytes per mode).
+
+The four late-corruption controls cover an invalid unselected discriminator,
+wrong sparse plane cardinality, and Array/Map-arm size deltas. Omitting the
+complete schedule produces four assertion failures, not build errors; exact
+reader restoration passes the same four controls. Counting-source and workspace
+controls require unique shape lanes to consume the shared transport budget
+once and reject the extra per-arm count workspace before shape reads.
+Each final raw audit rejects six coherent stock/native CHECK-zero,
+CHECK-with-message and status-label forgeries despite green top-level metadata;
+exact raw-file restoration recovers PASS after every attack.
+
+Neutral static descriptor/scalar acceptance is not runtime or physical
+admission. The pinned Variant constructor permits source-valid QBit and JSON
+siblings, but mixed runtime-owned sibling persistence is not qualified here.
+Existing Dynamic actual-product, Object typed/shared, borrowed-envelope,
+LowCardinality(QBit), aggregate-argument and unsupported physical-layout guards
+remain separate. Count/QBit sibling alternatives reuse their existing owners;
+QBit as a Count argument remains rejected. Basic child codecs are reused;
+wrapper state, discriminator mode and versioned physical paths still need
+their own qualification. Shape checks do not authenticate unselected payloads,
+and logical workspace caps are not an RSS/performance result.
+
+Inconclusive attempts remain separate: a zero-row test used an invalid
+`max_rows: 0` API before switching to zero selected marks; an old admission
+assertion retained the superseded Array/Variant guard; the native helper had
+an iterator-to-JSON compile error, basename/root-prefix mismatch and bare Map
+key fixture mismatch. The first complete native invocation set then stopped
+at finalization because recorder collections hold status-only records, not
+the returned invocation path. These isolated test/capture defects were fixed
+without widening production guards, and final captures used fresh roots.
+Earlier failures were not relabelled as passing compatibility evidence.
+
+The evidence index retains exact guarded commands, both helper hashes, 88
+selected input hashes, independently pinned source/runtime identities and
+regenerable temporary raw roots:
+[W232 evidence packet](../.landmark/evidence/recursive-qbit-variant-w232.json).
+These are selected owner/spec/helper/harness inputs, not every transitive
+compiler input. Refresh after owner/consumer, fixture/auditor, source/runtime or
+profile changes. The packet is an index to executed evidence, not proof by
+JSON structure. General MV/projection execution/writing, broad facade
+decomposition and the overall compatibility objective remain open.
+
 ## Static product composition — W231
 
 Document status: VERIFIED within the finite W231 scope (2026-10-08).

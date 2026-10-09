@@ -170,6 +170,27 @@ module CrystalClick
           )
         end
         with_role(combined, size_bytes)
+      when BinaryDataType::TAG_VARIANT
+        discriminator_bytes = checked_add(path_bytes, ".discriminators".bytesize.to_u64)
+        combined = empty_metadata
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_qbit?
+          child_path_bytes = checked_add(path_bytes, ".arm.".bytesize.to_u64)
+          child_path_bytes = checked_add(child_path_bytes, digit_count(index.to_u64))
+          combined = combine_metadata(
+            combined,
+            measure(
+              child,
+              child_path_bytes,
+              ancestor_size_bytes,
+              ancestor_size_count,
+              ancestor_nullable_bytes,
+              ancestor_nullable_count,
+            ),
+          )
+        end
+        with_role(combined, discriminator_bytes)
       else
         raise UnsupportedFormatError.new("QBit is outside the admitted static product composition")
       end
@@ -254,6 +275,21 @@ module CrystalClick
           )
         end
         size_roles.pop
+      when BinaryDataType::TAG_VARIANT
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_qbit?
+          append_sites(
+            child,
+            "#{path}.arm.#{index}",
+            size_roles,
+            nullable_roles,
+            nil,
+            sites,
+            limits,
+            writing,
+          )
+        end
       else
         fail_type!(writing, "QBit is outside the admitted static product composition")
       end

@@ -1,0 +1,1350 @@
+{
+  "format": "crystal_click_recursive_qbit_variant_evidence_v1",
+  "slice": "W232 static QBit-in-Variant composition",
+  "created_at_utc": "2026-10-09T00:25:59Z",
+  "baseline_revision": "c39fe85527e01217df15924510a7aac1efebeb89",
+  "claim_level": "VERIFIED",
+  "adversary_verdict": "ROBUST within the declared finite scope",
+  "active_objective": "CH-compatible read/write types and MV/projection inspection before memory/performance optimization; overall goal remains active",
+  "claim": {
+    "admitted": "Source-valid static QBit-bearing Variant arm paths through the existing Array/Tuple/BASIC Map/Nested/eligible Nullable(Tuple) grammar, within descriptor/role/work limits",
+    "context": "Quiescent Wide/LZ4/Default/plain-mrk2 parts; BASIC Variant discriminator, Map and Nullable serialization; exact nominal declarations; finite fixtures, not every depth/parameter",
+    "reuse": "Existing QBit leaf scalar/raw-bit/bit-plane codecs, canonical Variant roster, recursive value/bulk visitors, physical binder, staged writer and typed full/window/owned-value consumers",
+    "occurrence_axes": "Tuple/Nullable preserve the incoming axis; Array/Map derive counts from sizes; Variant derives sparse child counts from every relevant discriminator",
+    "complete_shape": "Every relevant discriminator byte and admitted QBit plane/size/null grid is checked before publication and callbacks, including early and EOF scans; selected empty containers are not NULL",
+    "work_bounds": "Unique relevant discriminator/size lanes are read once in parent-first order, sharing the open-time inspection/shape transport budget; retained UInt64 count vectors preflighted as (unique_sizes + relevant_qbit_arm_axes + 2) * mark_count * 8 when axes exist",
+    "descriptor_boundary": "Neutral descriptor/scalar acceptance does not imply physical/runtime admission; source-valid JSON/Dynamic siblings remain physically unqualified in this slice"
+  },
+  "exclusions": [
+    "No all-type-product, all-depth/parameter/layout/version or whole-suite qualification",
+    "No runtime Dynamic/JSON/Object QBit product widening, mixed runtime-owned sibling persistence, LowCardinality(QBit) or QBit aggregate-argument widening",
+    "Existing source constructor restrictions on direct Nullable/Variant/Dynamic alternatives remain; source-valid unsupported products are library guards, not ClickHouse-invalidity claims",
+    "Compact/sparse/custom serializers and alternate unqualified physical versions remain guarded",
+    "Shape checks do not authenticate unselected QBit/NULL/value payloads",
+    "Logical byte/workspace caps do not bound all allocations, temporary copies or RSS",
+    "No performance, full facade decomposition or general MV/projection execution/writing closure"
+  ],
+  "pins": {
+    "clickhouse_source": {
+      "root": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+      "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "files": [
+        {
+          "path": "src/DataTypes/DataTypeVariant.cpp",
+          "sha256": "10cf25b1ad0c1fd00eec3637bca21756207122d45ef09f97518c5748d6ae300d"
+        },
+        {
+          "path": "src/DataTypes/DataTypeVariant.h",
+          "sha256": "2ebdfa5ebb1c1d1d682c52902b7cae8cb8d3b70d0cce98e75710013ecd994bb0"
+        },
+        {
+          "path": "src/DataTypes/DataTypeQBit.cpp",
+          "sha256": "9713cd968e6a8252bba54aaf9dd49cbe2e31edc9af7e4e1d473d74d435ce87d9"
+        },
+        {
+          "path": "src/DataTypes/DataTypeArray.h",
+          "sha256": "660e6f37210922c200a7cbba5f25a0f01d579f79a51611768de72d1a3002be37"
+        },
+        {
+          "path": "src/DataTypes/DataTypeMap.cpp",
+          "sha256": "dfc839fd14ad6f0b726d65cdc266622cc62912cc48adfb60e61bdb0b49752c73"
+        },
+        {
+          "path": "src/DataTypes/DataTypeTuple.cpp",
+          "sha256": "350d50a6d0c5cefbf8b31bad1106f7e2200cc69ada1bac50704723d66edde2a0"
+        },
+        {
+          "path": "src/DataTypes/Serializations/ISerialization.cpp",
+          "sha256": "87ca6647aeb0dd4022e3437a155f923f817d4447c547eff9ec29ab6876d16dd2"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationArray.cpp",
+          "sha256": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationMap.cpp",
+          "sha256": "191c35c896507f303b06b2527277148d748ba5b8c62ffbefbdab739b1a6a8056"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationQBit.cpp",
+          "sha256": "64a1638077a5807512dff9fb25ad310f5a8da80eb76d39d9c76d083d980fc5da"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationTuple.cpp",
+          "sha256": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationVariant.cpp",
+          "sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022"
+        },
+        {
+          "path": "src/Storages/MergeTree/MergeTreeSettings.cpp",
+          "sha256": "b8bdea86a07f61481c747517b56035855fa9726217d5b7183f292a5432b9b515"
+        }
+      ]
+    },
+    "clickhouse_runtime": {
+      "binary": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "version": "26.10.1.1201",
+      "build_hash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "source_correlation": "Runtime and pinned shallow source are different builds; no latest-master/runtime identity claim"
+    },
+    "compiler": "Crystal 1.21.0 on macOS arm64",
+    "ruby": "Host /usr/bin/ruby 2.6; no Ruby 3-only syntax",
+    "helpers": [
+      {
+        "path": "/private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug",
+        "sha256": "90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release",
+        "sha256": "3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a"
+      }
+    ]
+  },
+  "executed_guard": {
+    "prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "serialization": "Root executed compiler/native/Ruby/format and mutating Git jobs serially; workers ran no jobs",
+    "minimum_free_memory_percent": 50,
+    "compiler_native_limits": {
+      "seconds": 600,
+      "mebibytes": 12288
+    },
+    "ruby_git_limits": {
+      "seconds": 120,
+      "mebibytes": 512
+    },
+    "format_limits": {
+      "seconds": 120,
+      "mebibytes": 4096
+    },
+    "one_compiler_worker": true
+  },
+  "frozen_inputs": {
+    "format": "w232_selected_frozen_inputs_v1",
+    "files": [
+      {
+        "path": "scripts/check_recursive_qbit_static_evidence_w231.rb",
+        "sha256": "6bd49a17afcd1d0a3a7fba8aac371735fdac4a10328b42ab397d418c0f13cebe"
+      },
+      {
+        "path": "scripts/check_recursive_qbit_static_w231.cr",
+        "sha256": "91583205d0d6d8bee62128dbeb9b0fbee821ba89935247f1289e104191e8fdb4"
+      },
+      {
+        "path": "scripts/check_recursive_qbit_variant_evidence_w232.rb",
+        "sha256": "fd668d0bfbf8f0a2882c99832337b52bd8522d2c7286da5758ff6eae8c323ffc"
+      },
+      {
+        "path": "scripts/check_recursive_qbit_variant_w232.cr",
+        "sha256": "92b074fd6c4e39b81a432994f85d81bf045eab6437b6ab71fda9aee414904a17"
+      },
+      {
+        "path": "scripts/recheck_aggregate_recursive_w224.rb",
+        "sha256": "d1b7ad1c63ad265fce05a6d9b0b241e1d659f60eb1b533215a78f944a28f0831"
+      },
+      {
+        "path": "scripts/recheck_recursive_qbit_static_w231.rb",
+        "sha256": "522243dc0c912a13e7aa53ffa5125db69a37d601be764ee76479064b35c11fd8"
+      },
+      {
+        "path": "scripts/recheck_recursive_qbit_variant_w232.rb",
+        "sha256": "6340da5eb357cc2b2b9bcf5b37afceef3a6754913bfceb2ddd4cf2afc4239bf2"
+      },
+      {
+        "path": "spec/aggregate_avg_w227_adversary_spec.cr",
+        "sha256": "32b404974cec761354025f48d270299251b65f333474c1541b6ec4174ff23424"
+      },
+      {
+        "path": "spec/aggregate_avg_w227_consumers_spec.cr",
+        "sha256": "8f1befe9fe910d6a5878b9d20bb2ea10b45dc77e4dca130f59786d8d3d9cb157"
+      },
+      {
+        "path": "spec/aggregate_avg_w227_core_spec.cr",
+        "sha256": "9b6c7b70caeb36541d2b30246d2edcb1d1c52dbc6c2ce95a71cb3e44b1656e49"
+      },
+      {
+        "path": "spec/aggregate_count_arguments_w178_admission_spec.cr",
+        "sha256": "c27a628d2ac706997d777eb04e869912b3b726f62c0fcb3bef7c67a9d0c5e4a1"
+      },
+      {
+        "path": "spec/aggregate_count_arguments_w178_core_spec.cr",
+        "sha256": "ad49563fcc717abc8c7070743157393748e5177043dec3353f73dfc3d90a18d1"
+      },
+      {
+        "path": "spec/aggregate_count_arguments_w178_parser_spec.cr",
+        "sha256": "80db37cb3c2758abeb25b6da54d0b900c0dad9f1c96bde4221a3f455d945660a"
+      },
+      {
+        "path": "spec/aggregate_count_arguments_w178_plan_spec.cr",
+        "sha256": "2991664d1a53d0386dd471c76905191ddc4ad543b0a5dd49abcab022dcd63d2d"
+      },
+      {
+        "path": "spec/aggregate_count_physical_names_w219_spec.cr",
+        "sha256": "afaec7aaf626e50d056b2b335c1bf69e43b7c37fdc827a90b8330a32a1b2a2e1"
+      },
+      {
+        "path": "spec/aggregate_recursive_w224_part_spec.cr",
+        "sha256": "f4bcc21db190a4c9f87b202741120800beb51b98d71dff47878515c669465044"
+      },
+      {
+        "path": "spec/aggregate_sum_w223_bulk_spec.cr",
+        "sha256": "5752edd90e800217cded0259bdada7641996b66c3e7fc7101f6b7966768deddd"
+      },
+      {
+        "path": "spec/aggregate_variant_w225_core_spec.cr",
+        "sha256": "8565227207ea4ddeb9ab37946473c1d381483a12bb37b3204cfafbac746d3936"
+      },
+      {
+        "path": "spec/array_object_column_core_w185_spec.cr",
+        "sha256": "efb351e3bb5a2ca30c26085709cd8d0d68d405026903d2608b0db2c5c2e27e8d"
+      },
+      {
+        "path": "spec/array_object_part_w185_spec.cr",
+        "sha256": "768093ae44b0ff6459edbcf61d5ce4367c7904133ab6a780895f4c925f9e4c46"
+      },
+      {
+        "path": "spec/binary_bulk_physical_prefix_w151_spec.cr",
+        "sha256": "f2ea9b1a97308e8633c018a9cb9b7efca89bbd87360befc7115a891714b53f7c"
+      },
+      {
+        "path": "spec/binary_bulk_w122_spec.cr",
+        "sha256": "ffbb607f96fa020426150e284972b6daa951b6da5d8e8f7400cb7c1a1d112e8d"
+      },
+      {
+        "path": "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+        "sha256": "d1e820c41fdc1feb970fee698a5faed4156d36a03b316944c80b67800538df03"
+      },
+      {
+        "path": "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+        "sha256": "59024958928a4a54dcaf683b00af963a6a720884002ec304b8f6084620a7cc99"
+      },
+      {
+        "path": "spec/binary_dynamic_qbit_w199_spec.cr",
+        "sha256": "400254ae0369e158a0814425e4c9742d2aebf275d003c65e009377e00ac7961b"
+      },
+      {
+        "path": "spec/binary_low_cardinality_bulk_w143_spec.cr",
+        "sha256": "04a8195bdb9ba13fc67dac0069a4e45e511e7a497048ee92c03571b9484c2f84"
+      },
+      {
+        "path": "spec/binary_low_cardinality_physical_w145_spec.cr",
+        "sha256": "213cd1c49bf560a746d45050de039fb98a80bd771a9d7107fa2961f23cb97617"
+      },
+      {
+        "path": "spec/binary_low_cardinality_storage_w142_spec.cr",
+        "sha256": "5f6a48dd61a6d5e1bca4ac38232be795edd06388d8c7be9a435fd4259462a3cf"
+      },
+      {
+        "path": "spec/binary_nested_specialized_w201_spec.cr",
+        "sha256": "26870cb10877a8061a902b1e684e9df3c68f9f72b34471ad2ec34d08b87570c9"
+      },
+      {
+        "path": "spec/binary_value_codec_w117_spec.cr",
+        "sha256": "3fa55111e64449d893468ac7ab59d1d756a92057d0c60827427d66e196ce3c37"
+      },
+      {
+        "path": "spec/binary_variant_bulk_w148_spec.cr",
+        "sha256": "9b97cb22a8b25acd07f98a53836552eecdb7cb944f3c655eb28d34d298fe916e"
+      },
+      {
+        "path": "spec/binary_variant_value_w147_adversary_spec.cr",
+        "sha256": "4d904e90ef73aa48254e8656d9f878455ece56dbb633af3ed0f61e3edcb61ec7"
+      },
+      {
+        "path": "spec/bulk_budget_w122_adversary_spec.cr",
+        "sha256": "ca9793501f201e7ef633b8da6a5f7b631add9ee98bd262ae3154db40ca8c228d"
+      },
+      {
+        "path": "spec/bulk_nominal_w122_spec.cr",
+        "sha256": "9ecbf4600b119bcffbf86427c0521a87873c0b2b9af91ecfb025555ee39a64db"
+      },
+      {
+        "path": "spec/bulk_string_size_w122_spec.cr",
+        "sha256": "d366a006ecb9f6b9be4729105d7282e2e92cf0160e165e6447fcfcd859de026c"
+      },
+      {
+        "path": "spec/json_recursive_scalar_w181_guards_spec.cr",
+        "sha256": "118e18cc3866b605182d747550dfd2b2580bc2927dcac3d112db46abb30df169"
+      },
+      {
+        "path": "spec/nested_bulk_part_w202_spec.cr",
+        "sha256": "f7a095efd7cb8334a10e37d3f016693e90d52fa6841c6bf20b00d237758c8a1a"
+      },
+      {
+        "path": "spec/object_shared_path_qbit_w199_spec.cr",
+        "sha256": "c7ca670d42c70846247e4e3c54e0bf7e46f41b2574e0c2a9a2c3f5b4f7e3d3a7"
+      },
+      {
+        "path": "spec/object_shared_qbit_parts_w200_spec.cr",
+        "sha256": "791821657146c00bf8bbb10e26fbc45789af853f936835ba05d0c0ab1e6107e1"
+      },
+      {
+        "path": "spec/offline_projection_window_w229_spec.cr",
+        "sha256": "81a72d008280d877e6e7dddb6b578939e736604336775c5b920c41a02c195c6b"
+      },
+      {
+        "path": "spec/physical_stream_plan_w125_spec.cr",
+        "sha256": "1bd75781a69fd7aafaed9af1224f9f12b9728e6c5ff5b22b5f15a3dcf93efbe5"
+      },
+      {
+        "path": "spec/projection_specialized_consumers_w217_spec.cr",
+        "sha256": "3a3ffa837f4195f55c90aad80906a6c2facc022d06277b38467c5ad4175bd6f5"
+      },
+      {
+        "path": "spec/qbit_admission_spec.cr",
+        "sha256": "18422d8f68f8995fb92bee7b4352dcadce6807a691ea9a6bd53f5837308b7470"
+      },
+      {
+        "path": "spec/qbit_binary_kernel_object_boundary_spec.cr",
+        "sha256": "28c48fed365b47affb1916323c0574e9b7c322fce0ef8a0982d189411394ff39"
+      },
+      {
+        "path": "spec/qbit_binary_kernel_parts_spec.cr",
+        "sha256": "1b074563ce867ce03e0d997a0e8690c14cc6e49117bf9c43a086d8cbf96faa42"
+      },
+      {
+        "path": "spec/qbit_binary_kernel_spec.cr",
+        "sha256": "e5928e9e1ef5d5dd37c02514e17626726b28261373e5e2b46ccc304a8a5e8045"
+      },
+      {
+        "path": "spec/qbit_binary_kernel_w179_admission_spec.cr",
+        "sha256": "a80b2620248931c0a3a579efd1badb292cb022b10a044c11c752a8b25912ced3"
+      },
+      {
+        "path": "spec/qbit_hostile_spec.cr",
+        "sha256": "0df6ca3b77e45713052ca782be15987e8081de0df70ce3581f95ca179f950f49"
+      },
+      {
+        "path": "spec/qbit_reader_consumers_w103_spec.cr",
+        "sha256": "801a7ac9efced327bbcd166af25644f24441e4ce78990d2045b494e53df5cb20"
+      },
+      {
+        "path": "spec/qbit_writer_w103_spec.cr",
+        "sha256": "0a918a2596270566fac001b06b423dd15a267deb3731de886256427a3d2306b9"
+      },
+      {
+        "path": "spec/recursive_array_schema_w187_spec.cr",
+        "sha256": "6e42977546986d159159d44ba4f78c1c574cdadddb42b81ceca5b33a85568699"
+      },
+      {
+        "path": "spec/recursive_array_table_w187_spec.cr",
+        "sha256": "7218a020de9209588f975e14c8373dd7e162ff46d5095107af69a43f0bccfc2b"
+      },
+      {
+        "path": "spec/recursive_qbit_owner_guards_w230_spec.cr",
+        "sha256": "2e95292413314baa3adab90d835ffb22f1297039c0e1c9a002067f3647f9ff99"
+      },
+      {
+        "path": "spec/recursive_qbit_parts_w230_spec.cr",
+        "sha256": "9e268870f893cec02be639024027186a3bcbc8ad67d51555ea4faa3998a7777f"
+      },
+      {
+        "path": "spec/recursive_qbit_size_transport_w230_spec.cr",
+        "sha256": "4cc978f276b82876033b9a7419a3ef1318d802935b53c8779f585c9d10ce7c9c"
+      },
+      {
+        "path": "spec/recursive_qbit_static_parts_w231_spec.cr",
+        "sha256": "bf1f4e409ff4234be9751ef2334068f1da165bd5da55f5e0d56c83216997b8a8"
+      },
+      {
+        "path": "spec/recursive_qbit_static_products_w231_spec.cr",
+        "sha256": "0fce6bcc4adc3bac506a2a1f4e152f42421c8b9b3292c19c257f9ac3b7867203"
+      },
+      {
+        "path": "spec/recursive_qbit_static_transport_w231_spec.cr",
+        "sha256": "fb09a259a9398860c95e85e8a3183c21df46d9497983a011432626dfe2aa20b9"
+      },
+      {
+        "path": "spec/recursive_qbit_variant_parts_w232_spec.cr",
+        "sha256": "abeb4a2ab3231ab2f4a38c0d3b328af5d3bcfb5ae8be26059a266bfe94b4652a"
+      },
+      {
+        "path": "spec/recursive_qbit_variant_transport_w232_spec.cr",
+        "sha256": "d45738ea690e76ce7b17124ff7d119008816b8d7356c9da1b697a7043c77401d"
+      },
+      {
+        "path": "spec/recursive_qbit_w230_spec.cr",
+        "sha256": "cd8d468c07bdf25855c14fdbcbc29e30018a20117fa21bf2c315d7de30fa1a57"
+      },
+      {
+        "path": "spec/recursive_storage_array_w187_spec.cr",
+        "sha256": "9d7b6e6e0ea9dbd85d69de92fff49d9437f6aae259d0db9886f520fac5937e2f"
+      },
+      {
+        "path": "spec/simple_aggregate_bulk_part_w221_spec.cr",
+        "sha256": "97238536d74be0b7bf2967759a217343103944c7a402b832af06d75991e72f8f"
+      },
+      {
+        "path": "spec/simple_aggregate_recursive_w222_core_spec.cr",
+        "sha256": "8b0ae4302342725b967487b567d117a6bb31714ee3f98a6b660231dcce498fc2"
+      },
+      {
+        "path": "spec/simple_aggregate_recursive_w222_part_spec.cr",
+        "sha256": "35cf6d260a3ff284d2e46b3a77deab90354861d54476dbcd79ac192e9c4a98c0"
+      },
+      {
+        "path": "spec/variant_qbit_recursive_composition_spec.cr",
+        "sha256": "586f81907050569af87abfa11d478e67999b50a7721fe371af56de9348bee6e1"
+      },
+      {
+        "path": "spec/wide_array_tuple_w107_admission_spec.cr",
+        "sha256": "69993bc994a0ed1088119db679c68331b34fd0e017d0dce9016221bd2c5e0f9e"
+      },
+      {
+        "path": "spec/wide_array_tuple_w107_consumer_spec.cr",
+        "sha256": "33250af48d5341f2abe4f978dbe76efb7ca9dba4d2ca5adb955d4faf6dbbdc23"
+      },
+      {
+        "path": "spec/wide_array_tuple_w107_model_spec.cr",
+        "sha256": "23b031ecb977faaaa87f2daa6eab39eee15a8c9c5f76a8e84642f845367487d9"
+      },
+      {
+        "path": "spec/wide_array_tuple_w107_reader_spec.cr",
+        "sha256": "6b669e19b0ab9443b5819b4fee01a5cdaff56f0e962958afdc483aca0bd6f260"
+      },
+      {
+        "path": "spec/wide_part_reader_w46_spec.cr",
+        "sha256": "93f864b2c6de6c1ec739a2a32cfedc0448e0d9405c852084d46d757bf06cf52f"
+      },
+      {
+        "path": "spec/wide_part_writer_array_tuple_w107_spec.cr",
+        "sha256": "079be641677948a8bbd39ce564589fa0b2b568172b3f69ab2d523e333a99b94c"
+      },
+      {
+        "path": "spec/wide_part_writer_nullable_tuple_w105_spec.cr",
+        "sha256": "c967e6c539381466a2b798b3a0da5e199dd5f0416584d75bd49d0f80cda252f1"
+      },
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "a79e9b7c4f083a5121437f2d6593832edf6cd7fb29c391d76c797594a04dd9cc"
+      },
+      {
+        "path": "src/crystal_click/binary_aggregate_count_argument_policy.cr",
+        "sha256": "f838ebe6c2775422dcc7c5b9d7b89e3e70352df99047f718aabc7741d69d90ac"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_column_reader.cr",
+        "sha256": "565fb66cd01691480ba600782a961994ef065f7099c3d2f1612e47f0625e1dab"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_decoder.cr",
+        "sha256": "d9bbfb73210dc6badf81d39924a962333dc5f186317228753c0da132ae76f725"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_encoder.cr",
+        "sha256": "1b557f8cdd9203528be015819f4ced3a4297bd7c66a94d2de3f01aefc54bab5d"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_type_plan.cr",
+        "sha256": "779349567397de8cb4e6dca923e5d0881d032f3e25fd57fe1714354a280b5971"
+      },
+      {
+        "path": "src/crystal_click/binary_data_type.cr",
+        "sha256": "8126de8490d1efdfd205ab3d477943babc9e77774ca174e14172c15cb3fc660d"
+      },
+      {
+        "path": "src/crystal_click/binary_data_type_codec.cr",
+        "sha256": "0959087934270b81850dc3d8caec4e3e460393f97eff73cce410f3e106960362"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_bulk_column_declaration.cr",
+        "sha256": "49cfafd6acbdbeb1624404dcbe0dd467603b65772161403e13ff70750acecda0"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_recursive_admission.cr",
+        "sha256": "4378bfc7981afe3aac983690d5338a9f75351201b072813abc049a2e0972b299"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_recursive_admission/static_site.cr",
+        "sha256": "87ef0fec541b43117ddcde89eba17c135ea97dcb7ff73f40cffc8884325ef932"
+      },
+      {
+        "path": "src/crystal_click/binary_qbit_static_occurrence_schedule.cr",
+        "sha256": "57b2e54c11e3d9676c181168d34351a932eff1cd1ae9f7a62477c2f86a6f32b7"
+      },
+      {
+        "path": "src/crystal_click/binary_value.cr",
+        "sha256": "2cd443b7619593fc669f73862e9d90ba58df347d37d49990677509a1028060e6"
+      },
+      {
+        "path": "src/crystal_click/binary_variant_roster.cr",
+        "sha256": "23cc8acac65c85ccb7a88e3339900157053ab52f40bcd336bb109ae0dd4167f5"
+      },
+      {
+        "path": "src/crystal_click/offline_table/static_bulk_values_materializer.cr",
+        "sha256": "e0276dcb01fb8755b2dd262a5fdc2fba3b297c6a65497db675724337d77e2172"
+      }
+    ],
+    "scope": "Eighty-eight selected owners, affected specs, helper and harness files, not every transitive compiler input",
+    "lineage": "Final production/spec state is unchanged from the passing cohort state; subsequent isolated helper/capture corrections were rebuilt and qualified in fresh native roots"
+  },
+  "observed_definition_of_done": {
+    "preproduction_stock_probe": {
+      "root": "/private/tmp/crystal-click-w232-probe.WjP65k",
+      "raw_processes": 29,
+      "profile_count": 3,
+      "anchor": "Stock-only persisted profiles with exact CHECK and independent full/per-mark RowBinary before production changes",
+      "earlier_harness_failure": "Inaccessible helper-module method attempt retained as inconclusive"
+    },
+    "behavioral_red": {
+      "kernel": {
+        "exit_code": 1,
+        "examples": 3,
+        "failures": 3,
+        "errors": 0,
+        "pending": 0,
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/variant_qbit_recursive_composition_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "baseline": "c39fe85527e01217df15924510a7aac1efebeb89"
+      },
+      "parts_transport": {
+        "exit_code": 1,
+        "examples": 7,
+        "failures": 7,
+        "errors": 0,
+        "pending": 0,
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_variant_transport_w232_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "baseline": "c39fe85527e01217df15924510a7aac1efebeb89"
+      },
+      "scope": "Missing-admission assertion failures on unchanged production, not compilation/infrastructure errors"
+    },
+    "focused_debug": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/variant_qbit_recursive_composition_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_variant_transport_w232_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/focused-green-debug-after-helper-fix.log 2>&1",
+      "log": "/private/tmp/crystal-click-w232.unH3Ee/focused-green-debug-after-helper-fix.log",
+      "exit_code": 0,
+      "examples": 16,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "kernel_green": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/variant_qbit_recursive_composition_spec.cr spec/qbit_binary_kernel_spec.cr spec/recursive_qbit_static_products_w231_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/binary_variant_value_w147_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/kernel-green-debug.log 2>&1",
+      "files": [
+        "spec/variant_qbit_recursive_composition_spec.cr",
+        "spec/qbit_binary_kernel_spec.cr",
+        "spec/recursive_qbit_static_products_w231_spec.cr",
+        "spec/aggregate_variant_w225_core_spec.cr",
+        "spec/binary_variant_value_w147_adversary_spec.cr"
+      ],
+      "log": "/private/tmp/crystal-click-w232.unH3Ee/kernel-green-debug.log",
+      "exit_code": 0,
+      "examples": 51,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "affected_spec_summary": [
+      {
+        "mode": "DEBUG",
+        "cohorts": 6,
+        "unique_spec_files": 66,
+        "examples": 470,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "cohorts": 6,
+        "unique_spec_files": 66,
+        "examples": 470,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      }
+    ],
+    "affected_spec_commands": [
+      {
+        "mode": "DEBUG",
+        "index": 1,
+        "label": "qbit-parts-ordinary-arrays",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_static_parts_w231_spec.cr spec/recursive_qbit_static_transport_w231_spec.cr spec/recursive_qbit_parts_w230_spec.cr spec/qbit_reader_consumers_w103_spec.cr spec/qbit_writer_w103_spec.cr spec/qbit_binary_kernel_parts_spec.cr spec/wide_part_reader_w46_spec.cr spec/wide_array_tuple_w107_admission_spec.cr spec/wide_array_tuple_w107_model_spec.cr spec/wide_array_tuple_w107_consumer_spec.cr spec/wide_array_tuple_w107_reader_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_qbit_size_transport_w230_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_variant_transport_w232_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-qbit-parts-ordinary-arrays-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-qbit-parts-ordinary-arrays-debug.log",
+        "exit_code": 0,
+        "examples": 84,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "DEBUG",
+        "index": 2,
+        "label": "nominal-owner-guards",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_owner_guards_w230_spec.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/binary_dynamic_qbit_w199_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/object_shared_path_qbit_w199_spec.cr spec/object_shared_qbit_parts_w200_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/array_object_part_w185_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-nominal-owner-guards-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-nominal-owner-guards-debug.log",
+        "exit_code": 0,
+        "examples": 66,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "DEBUG",
+        "index": 3,
+        "label": "shared-publisher-consumers",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_bulk_part_w221_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/offline_projection_window_w229_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_variant_bulk_w148_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-shared-publisher-consumers-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-shared-publisher-consumers-debug.log",
+        "exit_code": 0,
+        "examples": 81,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "DEBUG",
+        "index": 4,
+        "label": "canonical-count-argument-guards",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_physical_names_w219_spec.cr spec/array_object_column_core_w185_spec.cr spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-canonical-count-argument-guards-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-canonical-count-argument-guards-debug.log",
+        "exit_code": 0,
+        "examples": 44,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "DEBUG",
+        "index": 5,
+        "label": "ordinary-wrapper-controls",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/nested_bulk_part_w202_spec.cr spec/binary_low_cardinality_storage_w142_spec.cr spec/binary_low_cardinality_bulk_w143_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-ordinary-wrapper-controls-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-ordinary-wrapper-controls-debug.log",
+        "exit_code": 0,
+        "examples": 70,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "DEBUG",
+        "index": 0,
+        "label": "kernel-values",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_static_products_w231_spec.cr spec/recursive_qbit_w230_spec.cr spec/qbit_admission_spec.cr spec/qbit_binary_kernel_spec.cr spec/qbit_binary_kernel_w179_admission_spec.cr spec/qbit_hostile_spec.cr spec/binary_value_codec_w117_spec.cr spec/binary_bulk_w122_spec.cr spec/physical_stream_plan_w125_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/bulk_nominal_w122_spec.cr spec/bulk_string_size_w122_spec.cr spec/variant_qbit_recursive_composition_spec.cr spec/binary_variant_value_w147_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-kernel-values-debug.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-kernel-values-debug.log",
+        "exit_code": 0,
+        "examples": 125,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "index": 0,
+        "label": "kernel-values",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_static_products_w231_spec.cr spec/recursive_qbit_w230_spec.cr spec/qbit_admission_spec.cr spec/qbit_binary_kernel_spec.cr spec/qbit_binary_kernel_w179_admission_spec.cr spec/qbit_hostile_spec.cr spec/binary_value_codec_w117_spec.cr spec/binary_bulk_w122_spec.cr spec/physical_stream_plan_w125_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/bulk_nominal_w122_spec.cr spec/bulk_string_size_w122_spec.cr spec/variant_qbit_recursive_composition_spec.cr spec/binary_variant_value_w147_adversary_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-kernel-values-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-kernel-values-release.log",
+        "exit_code": 0,
+        "examples": 125,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "index": 1,
+        "label": "qbit-parts-ordinary-arrays",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_static_parts_w231_spec.cr spec/recursive_qbit_static_transport_w231_spec.cr spec/recursive_qbit_parts_w230_spec.cr spec/qbit_reader_consumers_w103_spec.cr spec/qbit_writer_w103_spec.cr spec/qbit_binary_kernel_parts_spec.cr spec/wide_part_reader_w46_spec.cr spec/wide_array_tuple_w107_admission_spec.cr spec/wide_array_tuple_w107_model_spec.cr spec/wide_array_tuple_w107_consumer_spec.cr spec/wide_array_tuple_w107_reader_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_qbit_size_transport_w230_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_variant_transport_w232_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-qbit-parts-ordinary-arrays-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-qbit-parts-ordinary-arrays-release.log",
+        "exit_code": 0,
+        "examples": 84,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "index": 2,
+        "label": "nominal-owner-guards",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_owner_guards_w230_spec.cr spec/binary_dynamic_qbit_shared_w200_spec.cr spec/binary_dynamic_qbit_w199_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/object_shared_path_qbit_w199_spec.cr spec/object_shared_qbit_parts_w200_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/array_object_part_w185_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-nominal-owner-guards-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-nominal-owner-guards-release.log",
+        "exit_code": 0,
+        "examples": 66,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "index": 3,
+        "label": "shared-publisher-consumers",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_bulk_part_w221_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/offline_projection_window_w229_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_variant_bulk_w148_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-shared-publisher-consumers-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-shared-publisher-consumers-release.log",
+        "exit_code": 0,
+        "examples": 81,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "index": 4,
+        "label": "canonical-count-argument-guards",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_physical_names_w219_spec.cr spec/array_object_column_core_w185_spec.cr spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-canonical-count-argument-guards-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-canonical-count-argument-guards-release.log",
+        "exit_code": 0,
+        "examples": 44,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "index": 5,
+        "label": "ordinary-wrapper-controls",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/nested_bulk_part_w202_spec.cr spec/binary_low_cardinality_storage_w142_spec.cr spec/binary_low_cardinality_bulk_w143_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/cohort-ordinary-wrapper-controls-release.log 2>&1",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-ordinary-wrapper-controls-release.log",
+        "exit_code": 0,
+        "examples": 70,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      }
+    ],
+    "helper_builds": [
+      {
+        "mode": "DEBUG",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_qbit_variant_w232.cr -o /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/helper-build-debug-after-map-fixture-fix.log 2>&1",
+        "exit_code": 0,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/helper-build-debug-after-map-fixture-fix.log"
+      },
+      {
+        "mode": "RELEASE",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_recursive_qbit_variant_w232.cr -o /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/helper-build-release-after-fixture-fixes.log 2>&1",
+        "exit_code": 0,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/helper-build-release-after-fixture-fixes.log"
+      }
+    ],
+    "native_captures": [
+      {
+        "mode": "DEBUG",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_recursive_qbit_variant_w232.rb --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ > /private/tmp/crystal-click-w232.unH3Ee/native-capture-debug-final.log 2>&1",
+        "exit_code": 0,
+        "source_root": "/private/tmp/crystal-click-w232-stock.tLRRyt",
+        "evidence_root": "/private/tmp/crystal-click-w232-evidence.aufZFZ",
+        "helper": {
+          "path": "/private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug",
+          "sha256": "90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057"
+        },
+        "profiles": 3,
+        "stock_processes": 26,
+        "evidence_processes": 28,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/native-capture-debug-final.log"
+      },
+      {
+        "mode": "RELEASE",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_recursive_qbit_variant_w232.rb --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 > /private/tmp/crystal-click-w232.unH3Ee/native-capture-release-final.log 2>&1",
+        "exit_code": 0,
+        "source_root": "/private/tmp/crystal-click-w232-stock.Y9fTpV",
+        "evidence_root": "/private/tmp/crystal-click-w232-evidence.YzhPI1",
+        "helper": {
+          "path": "/private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release",
+          "sha256": "3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a"
+        },
+        "profiles": 3,
+        "stock_processes": 26,
+        "evidence_processes": 28,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/native-capture-release-final.log"
+      }
+    ],
+    "separate_raw_audits": [
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-initial.log 2>&1",
+        "exit_code": 0,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-initial.log"
+      },
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-initial.log 2>&1",
+        "exit_code": 0,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-initial.log"
+      }
+    ],
+    "actual_generated_mode_comparison": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w232.unH3Ee/compare-generated-parts.rb /private/tmp/crystal-click-w232-evidence.aufZFZ /private/tmp/crystal-click-w232-evidence.YzhPI1",
+      "exit_code": 0,
+      "format": "w232_actual_generated_mode_comparison_v1",
+      "roots": [
+        "/private/tmp/crystal-click-w232-evidence.aufZFZ",
+        "/private/tmp/crystal-click-w232-evidence.YzhPI1"
+      ],
+      "profile_count": 3,
+      "file_count": 130,
+      "bytes_per_mode": 17808,
+      "actual_bytes_equal": true,
+      "profiles": [
+        {
+          "id": "root_variant",
+          "files": 30,
+          "bytes": 3791
+        },
+        {
+          "id": "array_variant",
+          "files": 32,
+          "bytes": 4091
+        },
+        {
+          "id": "variant_array_tuple_map",
+          "files": 68,
+          "bytes": 9926
+        }
+      ],
+      "manifest_scope": "This compact index records actual comparison totals; complete actual file manifests remain in separately audited raw inventories."
+    },
+    "final_format": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 4096 tool format --check src/crystal_click/binary_data_type.cr src/crystal_click/binary_variant_roster.cr src/crystal_click/binary_qbit_recursive_admission.cr src/crystal_click/binary_qbit_bulk_column_declaration.cr src/crystal_click/binary_qbit_static_occurrence_schedule.cr src/crystal_click/binary_bulk_column_reader.cr spec/qbit_binary_kernel_spec.cr spec/recursive_qbit_static_products_w231_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/binary_variant_value_w147_adversary_spec.cr spec/variant_qbit_recursive_composition_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_variant_transport_w232_spec.cr scripts/check_recursive_qbit_variant_w232.cr spec/qbit_admission_spec.cr > /private/tmp/crystal-click-w232.unH3Ee/final-crystal-format.log 2>&1",
+      "exit_code": 0,
+      "paths": [
+        "src/crystal_click/binary_data_type.cr",
+        "src/crystal_click/binary_variant_roster.cr",
+        "src/crystal_click/binary_qbit_recursive_admission.cr",
+        "src/crystal_click/binary_qbit_bulk_column_declaration.cr",
+        "src/crystal_click/binary_qbit_static_occurrence_schedule.cr",
+        "src/crystal_click/binary_bulk_column_reader.cr",
+        "spec/qbit_binary_kernel_spec.cr",
+        "spec/recursive_qbit_static_products_w231_spec.cr",
+        "spec/aggregate_variant_w225_core_spec.cr",
+        "spec/binary_variant_value_w147_adversary_spec.cr",
+        "spec/variant_qbit_recursive_composition_spec.cr",
+        "spec/recursive_qbit_variant_parts_w232_spec.cr",
+        "spec/recursive_qbit_variant_transport_w232_spec.cr",
+        "scripts/check_recursive_qbit_variant_w232.cr",
+        "spec/qbit_admission_spec.cr"
+      ],
+      "log": "/private/tmp/crystal-click-w232.unH3Ee/final-crystal-format.log"
+    },
+    "ruby_syntax": [
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/recheck_recursive_qbit_variant_w232.rb",
+        "exit_code": 0
+      },
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/check_recursive_qbit_variant_evidence_w232.rb",
+        "exit_code": 0
+      }
+    ],
+    "final_hash_verification": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w232.unH3Ee/read-frozen-inputs.rb",
+      "exit_code": 0,
+      "selected_input_count": 88,
+      "selected_inputs_unchanged": true,
+      "helper_pins": [
+        {
+          "path": "/private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug",
+          "sha256": "90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057"
+        },
+        {
+          "path": "/private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release",
+          "sha256": "3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a"
+        }
+      ],
+      "helper_hashes_unchanged": true,
+      "reader_seed_restored_sha256": "565fb66cd01691480ba600782a961994ef065f7099c3d2f1612e47f0625e1dab"
+    },
+    "raw_artifact_hashes": [
+      {
+        "path": "/private/tmp/crystal-click-w232-stock.tLRRyt/source-pin.json",
+        "sha256": "9e77a132ea7ff9a919d75cbbd1d0ee07fd39ac1576305d071e03057839bf3db4"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w232-evidence.aufZFZ/result.json",
+        "sha256": "3b4c0c2f017f2a716bf52d0863e78856c9ffe7018630a05a1bf1a010a8ed1007"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w232-evidence.aufZFZ/generated/helper-output.json",
+        "sha256": "7afea6e7b429524c3d527fae9a4eeb309d754f9e47dac8670ae94ddc5ec5b2fd"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w232-stock.Y9fTpV/source-pin.json",
+        "sha256": "9e77a132ea7ff9a919d75cbbd1d0ee07fd39ac1576305d071e03057839bf3db4"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w232-evidence.YzhPI1/result.json",
+        "sha256": "ba4fcc29241d32dd4b41e2cd2751c7b8f9bb7dec93d83515b458561868d80c95"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w232-evidence.YzhPI1/generated/helper-output.json",
+        "sha256": "7e65a1db3c7140f9f66ac92a9d4def41d9d8ae42eb6d52bef60e5c0b238abf9c"
+      }
+    ],
+    "affected_spec_roster": [
+      "spec/aggregate_avg_w227_adversary_spec.cr",
+      "spec/aggregate_avg_w227_consumers_spec.cr",
+      "spec/aggregate_avg_w227_core_spec.cr",
+      "spec/aggregate_count_arguments_w178_admission_spec.cr",
+      "spec/aggregate_count_arguments_w178_core_spec.cr",
+      "spec/aggregate_count_arguments_w178_parser_spec.cr",
+      "spec/aggregate_count_arguments_w178_plan_spec.cr",
+      "spec/aggregate_count_physical_names_w219_spec.cr",
+      "spec/aggregate_recursive_w224_part_spec.cr",
+      "spec/aggregate_sum_w223_bulk_spec.cr",
+      "spec/aggregate_variant_w225_core_spec.cr",
+      "spec/array_object_column_core_w185_spec.cr",
+      "spec/array_object_part_w185_spec.cr",
+      "spec/binary_bulk_physical_prefix_w151_spec.cr",
+      "spec/binary_bulk_w122_spec.cr",
+      "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+      "spec/binary_dynamic_qbit_shared_w200_spec.cr",
+      "spec/binary_dynamic_qbit_w199_spec.cr",
+      "spec/binary_low_cardinality_bulk_w143_spec.cr",
+      "spec/binary_low_cardinality_physical_w145_spec.cr",
+      "spec/binary_low_cardinality_storage_w142_spec.cr",
+      "spec/binary_nested_specialized_w201_spec.cr",
+      "spec/binary_value_codec_w117_spec.cr",
+      "spec/binary_variant_bulk_w148_spec.cr",
+      "spec/binary_variant_value_w147_adversary_spec.cr",
+      "spec/bulk_budget_w122_adversary_spec.cr",
+      "spec/bulk_nominal_w122_spec.cr",
+      "spec/bulk_string_size_w122_spec.cr",
+      "spec/json_recursive_scalar_w181_guards_spec.cr",
+      "spec/nested_bulk_part_w202_spec.cr",
+      "spec/object_shared_path_qbit_w199_spec.cr",
+      "spec/object_shared_qbit_parts_w200_spec.cr",
+      "spec/offline_projection_window_w229_spec.cr",
+      "spec/physical_stream_plan_w125_spec.cr",
+      "spec/projection_specialized_consumers_w217_spec.cr",
+      "spec/qbit_admission_spec.cr",
+      "spec/qbit_binary_kernel_object_boundary_spec.cr",
+      "spec/qbit_binary_kernel_parts_spec.cr",
+      "spec/qbit_binary_kernel_spec.cr",
+      "spec/qbit_binary_kernel_w179_admission_spec.cr",
+      "spec/qbit_hostile_spec.cr",
+      "spec/qbit_reader_consumers_w103_spec.cr",
+      "spec/qbit_writer_w103_spec.cr",
+      "spec/recursive_array_schema_w187_spec.cr",
+      "spec/recursive_array_table_w187_spec.cr",
+      "spec/recursive_qbit_owner_guards_w230_spec.cr",
+      "spec/recursive_qbit_parts_w230_spec.cr",
+      "spec/recursive_qbit_size_transport_w230_spec.cr",
+      "spec/recursive_qbit_static_parts_w231_spec.cr",
+      "spec/recursive_qbit_static_products_w231_spec.cr",
+      "spec/recursive_qbit_static_transport_w231_spec.cr",
+      "spec/recursive_qbit_variant_parts_w232_spec.cr",
+      "spec/recursive_qbit_variant_transport_w232_spec.cr",
+      "spec/recursive_qbit_w230_spec.cr",
+      "spec/recursive_storage_array_w187_spec.cr",
+      "spec/simple_aggregate_bulk_part_w221_spec.cr",
+      "spec/simple_aggregate_recursive_w222_core_spec.cr",
+      "spec/simple_aggregate_recursive_w222_part_spec.cr",
+      "spec/variant_qbit_recursive_composition_spec.cr",
+      "spec/wide_array_tuple_w107_admission_spec.cr",
+      "spec/wide_array_tuple_w107_consumer_spec.cr",
+      "spec/wide_array_tuple_w107_model_spec.cr",
+      "spec/wide_array_tuple_w107_reader_spec.cr",
+      "spec/wide_part_reader_w46_spec.cr",
+      "spec/wide_part_writer_array_tuple_w107_spec.cr",
+      "spec/wide_part_writer_nullable_tuple_w105_spec.cr"
+    ],
+    "fallback_packet_structure": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 /private/tmp/crystal-click-w232.unH3Ee/check-packet-structure.rb",
+      "exit_code": 0,
+      "scope": "Structural/index checks only"
+    }
+  },
+  "fixed_native_profiles": [
+    {
+      "id": "root_variant",
+      "declared_type": "Variant(QBit(Int8, 9), UInt64)",
+      "rows": 6,
+      "logical_mark_rows": [
+        2,
+        2,
+        2
+      ],
+      "physical_marks_with_terminal": 4
+    },
+    {
+      "id": "array_variant",
+      "declared_type": "Array(Variant(QBit(Int8, 9), UInt64))",
+      "rows": 6,
+      "logical_mark_rows": [
+        2,
+        2,
+        2
+      ],
+      "physical_marks_with_terminal": 4
+    },
+    {
+      "id": "variant_array_tuple_map",
+      "declared_type": "Variant(Array(QBit(Int8, 9)), Map(String, QBit(Int8, 9)), Tuple(q QBit(Int8, 9), n UInt8))",
+      "rows": 6,
+      "logical_mark_rows": [
+        2,
+        2,
+        2
+      ],
+      "physical_marks_with_terminal": 4
+    }
+  ],
+  "adversary": {
+    "strongest_failure": "Sparse Variant arm planes incorrectly bound to root rows, allowing late unselected corruption to escape early/EOF preflight",
+    "executed_controls": [
+      "Invalid late discriminator rejects before early callbacks",
+      "Wrong sparse QBit plane delta rejects EOF scan",
+      "Late Array-arm and Map-arm size deltas reject early/EOF scans",
+      "Four unique shape lanes read once under the existing shared budget",
+      "Extra per-arm count workspace rejected before shape reads",
+      "Canonical arm order, null discriminator, nominal dimension/stride and typed arm envelopes retained",
+      "Dynamic/Object/LC/borrowed/aggregate argument guards remain closed in the enumerated controls"
+    ],
+    "schedule_omission_seed": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_variant_transport_w232_spec.cr --example 'late' --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/schedule-omission-seed-debug.log 2>&1",
+      "exit_code": 1,
+      "log": "/private/tmp/crystal-click-w232.unH3Ee/schedule-omission-seed-debug.log",
+      "examples": 4,
+      "failures": 4,
+      "errors": 0,
+      "pending": 0
+    },
+    "schedule_exact_restoration": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_variant_transport_w232_spec.cr --example 'late' --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/schedule-restored-debug.log 2>&1",
+      "exit_code": 0,
+      "log": "/private/tmp/crystal-click-w232.unH3Ee/schedule-restored-debug.log",
+      "examples": 4,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "restored_reader_sha256": "565fb66cd01691480ba600782a961994ef065f7099c3d2f1612e47f0625e1dab"
+    },
+    "coherent_raw_forgeries": [
+      {
+        "mode": "DEBUG",
+        "side": "stock",
+        "kind": "zero",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-stock-zero.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-stock-zero.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-restored-stock-zero.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-stock.tLRRyt/invocations/0005-stock-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-stock.tLRRyt/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "stock CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "DEBUG",
+        "side": "stock",
+        "kind": "message",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-stock-message.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-stock-message.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-restored-stock-message.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-stock.tLRRyt/invocations/0005-stock-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-stock.tLRRyt/invocations/0005-stock-check-root_variant.status.json",
+          "/private/tmp/crystal-click-w232-stock.tLRRyt/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "stock CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "DEBUG",
+        "side": "stock",
+        "kind": "label",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-stock-label.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-stock-label.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-restored-stock-label.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-stock.tLRRyt/invocations/0005-stock-check-root_variant.status.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "stock-check-root_variant status roster differs"
+      },
+      {
+        "mode": "DEBUG",
+        "side": "native",
+        "kind": "zero",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-native-zero.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-native-zero.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-restored-native-zero.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/invocations/0005-native-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "native CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "DEBUG",
+        "side": "native",
+        "kind": "message",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-native-message.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-native-message.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-restored-native-message.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/invocations/0005-native-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/invocations/0005-native-check-root_variant.status.json",
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "native CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "DEBUG",
+        "side": "native",
+        "kind": "label",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.tLRRyt --evidence-root /private/tmp/crystal-click-w232-evidence.aufZFZ --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-native-label.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-forged-native-label.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-debug-restored-native-label.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-evidence.aufZFZ/invocations/0005-native-check-root_variant.status.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "native-check-root_variant status roster differs"
+      },
+      {
+        "mode": "RELEASE",
+        "side": "stock",
+        "kind": "zero",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-stock-zero.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-stock-zero.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-restored-stock-zero.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-stock.Y9fTpV/invocations/0005-stock-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-stock.Y9fTpV/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "stock CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "RELEASE",
+        "side": "stock",
+        "kind": "message",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-stock-message.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-stock-message.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-restored-stock-message.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-stock.Y9fTpV/invocations/0005-stock-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-stock.Y9fTpV/invocations/0005-stock-check-root_variant.status.json",
+          "/private/tmp/crystal-click-w232-stock.Y9fTpV/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "stock CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "RELEASE",
+        "side": "stock",
+        "kind": "label",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-stock-label.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-stock-label.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-restored-stock-label.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-stock.Y9fTpV/invocations/0005-stock-check-root_variant.status.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "stock-check-root_variant status roster differs"
+      },
+      {
+        "mode": "RELEASE",
+        "side": "native",
+        "kind": "zero",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-native-zero.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-native-zero.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-restored-native-zero.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/invocations/0005-native-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "native CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "RELEASE",
+        "side": "native",
+        "kind": "message",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-native-message.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-native-message.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-restored-native-message.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/invocations/0005-native-check-root_variant.stdout",
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/invocations/0005-native-check-root_variant.status.json",
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/cases/root_variant.json",
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/result.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "native CHECK is not exact success for root_variant"
+      },
+      {
+        "mode": "RELEASE",
+        "side": "native",
+        "kind": "label",
+        "forged_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 scripts/check_recursive_qbit_variant_evidence_w232.rb --source-root /private/tmp/crystal-click-w232-stock.Y9fTpV --evidence-root /private/tmp/crystal-click-w232-evidence.YzhPI1 --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-release --helper-sha256 3175f8f5d469bf3a4271e1f751834f24233509089cf71eb24d185850881f138a > /private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-native-label.log 2>&1",
+        "forged_exit_code": 1,
+        "rejection_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-forged-native-label.log",
+        "expected_rejection": true,
+        "restored_exit_code": 0,
+        "restored_log": "/private/tmp/crystal-click-w232.unH3Ee/raw-audit-release-restored-native-label.log",
+        "original_hashes_restored": true,
+        "changed_paths": [
+          "/private/tmp/crystal-click-w232-evidence.YzhPI1/invocations/0005-native-check-root_variant.status.json"
+        ],
+        "restore_command_relation": "Same guarded auditor argv as forged_command, with stdout/stderr redirected to restored_log",
+        "rejection_signal": "native-check-root_variant status roster differs"
+      }
+    ],
+    "raw_forgery_recipe": "In stock/native root_variant CHECK stdout, change success 1 to 0 or add a nonempty message; coherently update case/result check_output and raw/case/result stdout_bytes while keeping top-level success true. Separately forge the raw status label with green metadata. Require exact semantic/roster refusal, restore original bytes/hashes, then PASS.",
+    "static_source_and_consumer_review": {
+      "source_constructor": "Pinned DataTypeVariant.cpp:26-35 and 46-82 rejects immediate Nullable/LowCardinality(Nullable), Variant and Dynamic, but has no QBit/JSON sibling restriction; constructor evidence is not native persistence qualification",
+      "consumer_boundaries": "Existing reader/writer declaration, Dynamic actual roster, Object typed parser, borrowed envelope and aggregate argument owners retain their independent narrower policies",
+      "correlation": "Luna implementation/review is same-lineage and correlated, not independent replication; root inspected source and independently executed jobs, raw audits and defect controls"
+    },
+    "scoped_verdict": "ROBUST for the declared static profiles and guards; runtime/dictionary/version and global compatibility remain open"
+  },
+  "inconclusive_attempts": {
+    "focused_test_helper": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/variant_qbit_recursive_composition_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_variant_transport_w232_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w232.unH3Ee/focused-green-debug.log 2>&1",
+      "exit_code": 1,
+      "examples": 16,
+      "failures": 0,
+      "errors": 3,
+      "pending": 0,
+      "classification": "inconclusive test-helper API misuse: max_rows zero is explicitly rejected"
+    },
+    "stale_admission_cohort": [
+      {
+        "mode": "DEBUG",
+        "index": 0,
+        "label": "kernel-values",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/cohort-kernel-values-debug.log",
+        "exit_code": 1,
+        "examples": 125,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "reason": "The old Array(Variant(QBit)) constructor test expected the superseded blanket guard; updated to positive admission with nearby retained negatives before final PASS."
+      }
+    ],
+    "helper_build_attempts": [
+      {
+        "mode": "DEBUG",
+        "exit_code": 1,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/helper-build-debug.log",
+        "classification": "inconclusive_helper_compile_error",
+        "reason": "JSON::Any output construction received an Iterator::MapIterator rather than Array(JSON::Any)"
+      },
+      {
+        "mode": "DEBUG",
+        "exit_code": 0,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/helper-build-debug-after-json-fix.log"
+      },
+      {
+        "mode": "RELEASE",
+        "exit_code": 0,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/helper-build-release.log"
+      },
+      {
+        "mode": "DEBUG",
+        "exit_code": 0,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/helper-build-debug-after-path-fix.log"
+      }
+    ],
+    "native_capture_attempts": [
+      {
+        "mode": "DEBUG",
+        "source_root": "/private/tmp/crystal-click-w232-stock.QMASQH",
+        "evidence_root": "/private/tmp/crystal-click-w232-evidence.tsbFfs",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_recursive_qbit_variant_w232.rb --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 8bbf92ee8f4918cbc7aadf138db92d109b0fe24e0bb6b9f28c2389dab643dd1a --source-root /private/tmp/crystal-click-w232-stock.QMASQH --evidence-root /private/tmp/crystal-click-w232-evidence.tsbFfs > /private/tmp/crystal-click-w232.unH3Ee/native-capture-debug.log 2>&1",
+        "exit_code": 1,
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/native-capture-debug.log",
+        "classification": "inconclusive_prebuilt_helper_process_failure",
+        "source_processes": 26,
+        "evidence_processes": 1
+      },
+      {
+        "mode": "DEBUG",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_recursive_qbit_variant_w232.rb --helper /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug --helper-sha256 90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057 --source-root /private/tmp/crystal-click-w232-stock.rfdc9n --evidence-root /private/tmp/crystal-click-w232-evidence.Kj3pOq > /private/tmp/crystal-click-w232.unH3Ee/native-capture-debug-after-fixture-fixes.log 2>&1",
+        "exit_code": 1,
+        "source_root": "/private/tmp/crystal-click-w232-stock.rfdc9n",
+        "evidence_root": "/private/tmp/crystal-click-w232-evidence.Kj3pOq",
+        "helper_sha256": "90d401a7d157bd208ab6006051498d755f2eb3d6eb2dcc053493ce632f5a4057",
+        "log": "/private/tmp/crystal-click-w232.unH3Ee/native-capture-debug-after-fixture-fixes.log",
+        "classification": "capture recorder-schema path lookup error; raw helper success is not a successful paired capture"
+      }
+    ],
+    "direct_helper_probe": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w232.unH3Ee/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w232.unH3Ee/qbit-variant-helper-debug 600 12288 --input /private/tmp/crystal-click-w232-evidence.tsbFfs/generated/helper-input.json > /private/tmp/crystal-click-w232.unH3Ee/direct-helper-after-path-fix.stdout 2> /private/tmp/crystal-click-w232.unH3Ee/direct-helper-after-path-fix.stderr",
+      "exit_code": 1,
+      "stdout": "/private/tmp/crystal-click-w232.unH3Ee/direct-helper-after-path-fix.stdout",
+      "stderr": "/private/tmp/crystal-click-w232.unH3Ee/direct-helper-after-path-fix.stderr",
+      "classification": "After path preflight correction, fixed Map fixture bare String key was passed to a tagged-node parser, causing String-to-Hash TypeCastError; helper fixture repaired without production widening"
+    },
+    "handling": "Failures remain inconclusive/failed attempts, not relabelled CH refusals or passing captures; final native captures use fresh roots"
+  },
+  "architecture": {
+    "owners": [
+      "BinaryQBitRecursiveAdmission owns static sites and role metadata",
+      "BinaryQBitStaticOccurrenceSchedule owns complete parent-first size/discriminator census and sparse arm axes",
+      "BinaryQBitBulkColumnDeclaration preserves exact consumer admission",
+      "Existing generic leaf/bulk/publisher/typed owners are reused"
+    ],
+    "file_policy": "One cohesive owner per file; private schedule value structs remain with their owner. No per-product serializer hierarchy.",
+    "remaining": "Broad facade decomposition and runtime/dictionary/physical-version owners remain open"
+  },
+  "lineage_and_decay": {
+    "assumptions": "Quiescent local parts, finite fixed fixtures, independently pinned source/runtime, unchanged selected code/helper/harness inputs",
+    "consumption": "Bounded W232 qualification and future continuation, not authority to accept arbitrary type products",
+    "decay_triggers": [
+      "Owner/consumer/admission/schedule edits",
+      "Fixture/helper/capture/auditor edits",
+      "Source/runtime change",
+      "Different serialization mode/version/layout or type parameters"
+    ],
+    "refresh": "Rebuild both helpers under current pins, rerun the exact affected cohorts and fresh paired captures, run the separate raw auditor and defect controls, compare actual generated bytes and refresh selected hashes",
+    "failure_policy": "Reopen dependent qualification; temporary raw roots and binaries are regenerable caches and are not proof when absent",
+    "validator_boundary": "No official packet validator/template is available here; fallback checks JSON structure and indexed counts/paths only, not substantive command truth"
+  },
+  "next_signal": "Qualify one concrete runtime dictionary/JSON path/physical-version boundary using existing child serde; do not duplicate codecs per product",
+  "git_scope": {
+    "policy": "One exact atomic local implementation commit after the recorded DoD; no push, history rewrite or unrelated staging",
+    "rollback": "Revert the eventual owned atomic commit or exact owned diff from baseline",
+    "overall_goal": "Remains active; memory/performance deferred"
+  }
+}
