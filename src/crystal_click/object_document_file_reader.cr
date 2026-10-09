@@ -935,6 +935,36 @@ module CrystalClick
                                                      end
       bulk_bindings = collect_bulk_bindings(document_plan, physical_plan, hashed)
       discriminator_bindings = collect_discriminator_bindings(object, physical_plan, hashed)
+      typed_qbit_roles = Hash(String, ObjectRuntimeQBitOccurrenceSchedule::RoleSet).new
+      typed_dynamic_plans.each do |path, plan|
+        roles = ObjectRuntimeQBitOccurrenceSchedule.typed_dynamic_roles(plan)
+        typed_qbit_roles[path] = roles unless roles.empty?
+      end
+      inferred_qbit_roles = Hash(String, Hash(String, ObjectRuntimeQBitOccurrenceSchedule::RoleSet)).new
+      inferred_qbit_paths = Hash(String, Bool).new
+      object.dynamic_path_count.times do |path_index|
+        path = object.dynamic_path_at(path_index)
+        structure = dynamic_structures[path]? ||
+                    raise(CorruptPartError.new("Object Dynamic QBit roster is missing its parsed structure"))
+        arm_roles = Hash(String, ObjectRuntimeQBitOccurrenceSchedule::RoleSet).new
+        structure.type_count.times do |type_index|
+          type = structure.type_at(type_index)
+          next unless type.contains_qbit?
+          arm_name = structure.canonical_variant_names[structure.canonical_index_for(type)]
+          arm_physical = physical_plan.dynamic_arm(path, arm_name)
+          roles = ObjectRuntimeQBitOccurrenceSchedule.static_dynamic_roles(type, arm_physical, limits)
+          next if roles.empty?
+          arm_roles[arm_name] = roles
+        end
+        unless arm_roles.empty?
+          inferred_qbit_roles[path] = arm_roles
+          inferred_qbit_paths[path] = true
+        end
+      end
+      typed_qbit_grids = Hash(String, Hash(String, CompressedMarkGrid)).new
+      inferred_qbit_grids = Hash(String, Hash(String, Hash(String, CompressedMarkGrid))).new
+      inferred_discriminator_grids = Hash(String, CompressedMarkGrid).new
+      qbit_shape_grids = Hash(String, CompressedMarkGrid).new
       selected_wire_bytes = 0_u64
       logical_lane_bytes = 0_u64
       validate_all_value_grids!(
@@ -943,8 +973,39 @@ module CrystalClick
         discriminator_bindings,
         outer_rows,
         transport_budget
-      ) do |grid, prefix, binding_kind, binding_path|
+      ) do |grid, prefix, binding_kind, binding_path, binding_arm, binding_role, binding_data_name|
         logical_lane_bytes = checked_add_u64(logical_lane_bytes, grid.logical_size.to_u64)
+        if binding_kind == :typed_dynamic
+          if roles = typed_qbit_roles[binding_path]?
+            if roles.has_key?(binding_role)
+              path_grids = typed_qbit_grids[binding_path]? || Hash(String, CompressedMarkGrid).new
+              path_grids[binding_role] = grid
+              typed_qbit_grids[binding_path] = path_grids
+              if ObjectRuntimeQBitOccurrenceSchedule.shape_result_role?(binding_role)
+                qbit_shape_grids[String.new(binding_data_name.to_slice)] = grid
+              end
+            end
+          end
+        elsif binding_kind == :dynamic && !binding_arm.empty?
+          if arm_roles = inferred_qbit_roles[binding_path]?
+            if roles = arm_roles[binding_arm]?
+              if roles.has_key?(binding_role)
+                path_grids = inferred_qbit_grids[binding_path]? || Hash(String, Hash(String, CompressedMarkGrid)).new
+                arm_grids = path_grids[binding_arm]? || Hash(String, CompressedMarkGrid).new
+                arm_grids[binding_role] = grid
+                path_grids[binding_arm] = arm_grids
+                inferred_qbit_grids[binding_path] = path_grids
+                if ObjectRuntimeQBitOccurrenceSchedule.shape_result_role?(binding_role)
+                  qbit_shape_grids[String.new(binding_data_name.to_slice)] = grid
+                end
+              end
+            end
+          end
+        elsif binding_kind == :dynamic && binding_arm.empty? && binding_role.empty? &&
+              inferred_qbit_paths.has_key?(binding_path)
+          inferred_discriminator_grids[binding_path] = grid
+          qbit_shape_grids[String.new(binding_data_name.to_slice)] = grid
+        end
         unless build_descriptor
           full_typed_dynamic_json = binding_kind == :typed_dynamic &&
                                     (typed_dynamic_plans[binding_path]?.try(&.has_json_object_bindings?) || false)
@@ -956,6 +1017,33 @@ module CrystalClick
           )
         end
       end
+
+      # The separate typed Dynamic header reads precede the QBit census;
+      # full QBit selector windows include those prefixes again. Include all
+      # header reads, even for unrelated paths, before either result read starts.
+      typed_dynamic_headers = typed_dynamic_header_bindings(bulk_bindings)
+      typed_dynamic_header_result_bytes = 0_u64
+      typed_dynamic_headers.each do |binding|
+        typed_dynamic_header_result_bytes = checked_add_u64(
+          typed_dynamic_header_result_bytes,
+          binding.prefix_size.to_u64,
+        )
+      end
+      ObjectRuntimeQBitOccurrenceSchedule.preflight_shape_results!(
+        qbit_shape_grids,
+        transport_budget,
+        typed_dynamic_header_result_bytes,
+      )
+
+      # All typed and inferred QBit visitors share one per-mark shape-work
+      # scope. The retained counters are preflighted once here; visitors add
+      # their existing size/selector shape costs to this owner instead of
+      # resetting the allowance for each path or arm.
+      qbit_occurrence_totals = if typed_qbit_roles.empty? && inferred_qbit_roles.empty?
+                                 nil
+                               else
+                                 BinaryQBitOccurrenceTotals.new(outer_rows.size, limits, codec_budget)
+                               end
 
       if grid = size_grid
         logical_lane_bytes = checked_add_u64(logical_lane_bytes, grid.logical_size.to_u64)
@@ -972,7 +1060,8 @@ module CrystalClick
       # when selection is empty. Retain it by physical filename for the
       # selected-window TOCTOU check below.
       typed_dynamic_modes = Hash(String, UInt64).new
-      typed_dynamic_header_bindings(bulk_bindings).each do |binding|
+      typed_qbit_modes = Hash(String, Hash(String, UInt64)).new
+      typed_dynamic_headers.each do |binding|
         BinaryBulkPhysicalPrefixAdapter.preflight_read([{binding.role, binding.prefix_size, 1}], codec_budget)
         window = source.read_window(binding.data_name, binding.marks_name, 0, 0, binding.prefix_size, transport_budget)
         mode = BinaryBulkDiscriminatorFramingAdapter.validate_header(
@@ -984,6 +1073,68 @@ module CrystalClick
           raise CorruptPartError.new("typed Dynamic physical discriminator filename is duplicated")
         end
         typed_dynamic_modes[binding.data_name] = mode
+        if roles = typed_qbit_roles[binding.path]?
+          if roles.has_key?(binding.role)
+            path_modes = typed_qbit_modes[binding.path]? || Hash(String, UInt64).new
+            path_modes[binding.role] = mode
+            typed_qbit_modes[binding.path] = path_modes
+          end
+        end
+      end
+
+      # Object's typed Dynamic plan already carries the prepared recursive
+      # QBit site roster; inferred Dynamic plans instead reuse their complete
+      # legacy discriminator schedules to seed each static actual's logical
+      # arm-count axis. Both censuses happen during preparation, before any
+      # selected or EOF callback can observe the part.
+      root_qbit_site_grid = occurrence_grid
+      typed_qbit_roles.each_key do |path|
+        plan = typed_dynamic_plans[path]? ||
+               raise(CorruptPartError.new("typed Dynamic QBit plan is missing from the retained roster"))
+        type = schema_snapshot[path]? ||
+               raise(CorruptPartError.new("typed Dynamic QBit declaration is missing from the typed schema"))
+        physical = physical_plan.typed_dynamic(path)
+        grids = typed_qbit_grids[path]? || Hash(String, CompressedMarkGrid).new
+        modes = typed_qbit_modes[path]? || Hash(String, UInt64).new
+        site_grid = root_qbit_site_grid || StorageOccurrenceGrid.new(outer_rows, outer_rows, codec_budget)
+        root_qbit_site_grid = site_grid
+        ObjectRuntimeQBitOccurrenceSchedule.validate_typed_dynamic!(
+          plan,
+          type,
+          physical,
+          source,
+          grids,
+          modes,
+          outer_rows,
+          site_grid,
+          codec_budget,
+          transport_budget,
+          qbit_occurrence_totals,
+        )
+      end
+      inferred_qbit_roles.each do |path, arm_roles|
+        structure = dynamic_structures[path]? ||
+                    raise(CorruptPartError.new("Object Dynamic QBit roster is missing its parsed structure"))
+        binding = discriminator_bindings.find { |candidate| candidate.path == path } ||
+                  raise(CorruptPartError.new("Object Dynamic QBit discriminator binding is missing"))
+        grid = inferred_discriminator_grids[path]? ||
+               raise(CorruptPartError.new("Object Dynamic QBit discriminator grid is missing"))
+        ObjectRuntimeQBitOccurrenceSchedule.validate_inferred_dynamic!(
+          path,
+          structure,
+          physical_plan,
+          source,
+          binding.data_name,
+          binding.marks_name,
+          grid,
+          inferred_qbit_grids[path]? || Hash(String, Hash(String, CompressedMarkGrid)).new,
+          outer_rows,
+          occurrence_grid,
+          limits,
+          codec_budget,
+          transport_budget,
+          qbit_occurrence_totals,
+        )
       end
 
       metadata_size = metadata_total_size(object_bytes, dynamic_bytes, typed_dynamic_bytes)
@@ -2663,12 +2814,12 @@ module CrystalClick
       discriminator_bindings : Array(DiscriminatorBinding),
       outer_rows : Array(UInt64),
       budget : CompressedStreamBudget,
-      &block : CompressedMarkGrid, Int32, Symbol, String ->
+      &block : CompressedMarkGrid, Int32, Symbol, String, String, String, String ->
     ) : Nil
       bulk_bindings.each do |binding|
         grid = source.inspect_grid(binding.data_name, binding.marks_name, binding.prefix_size, budget)
         validate_same_rows!(grid, outer_rows)
-        yield grid, binding.prefix_size, binding.kind, binding.path
+        yield grid, binding.prefix_size, binding.kind, binding.path, binding.arm, binding.role, binding.data_name
       end
       discriminator_bindings.each do |binding|
         grid = source.inspect_grid(
@@ -2678,7 +2829,7 @@ module CrystalClick
           budget
         )
         validate_same_rows!(grid, outer_rows)
-        yield grid, DynamicDiscriminatorCodec::HEADER_BYTES.to_i, :dynamic, binding.path
+        yield grid, DynamicDiscriminatorCodec::HEADER_BYTES.to_i, :dynamic, binding.path, "", "", binding.data_name
       end
       nil
     end

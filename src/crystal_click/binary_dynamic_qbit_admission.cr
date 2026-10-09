@@ -3,7 +3,10 @@ module CrystalClick
   # It reuses the static-product grammar but keeps Dynamic's root roster law
   # and every runtime-owned sibling boundary independent.
   module BinaryDynamicQBitAdmission
-    def self.admitted_actual_type?(type : BinaryDataType) : Bool
+    def self.admitted_actual_type?(
+      type : BinaryDataType,
+      allow_qbit_variants : Bool = true,
+    ) : Bool
       return true unless type.contains_qbit?
       return true if type.tag == BinaryDataType::TAG_QBIT
 
@@ -19,6 +22,7 @@ module CrystalClick
                       type.contains_low_cardinality? ||
                       type.contains_aggregate_function? ||
                       type.contains_json?
+      return false if !allow_qbit_variants && type.contains_variant?
       return false unless BinaryDataType.admitted_qbit_static_composition?(type)
 
       simple_aggregate_free?(type)

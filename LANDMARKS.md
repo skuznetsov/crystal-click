@@ -1,5 +1,57 @@
 # Crystal Click landmarks
 
+## Recursive Object-runtime/QBit composition — W234
+
+- Active objective remains CH-compatible read/write types and MV/projection
+  inspection before optimization. The overall goal remains active.
+- Baseline: `2d28758be4f5dd6ef8935c1a9fb8847f36b0464f`. Scoped result:
+  VERIFIED finite quiescent Wide/LZ4/Default/plain-mrk2 Object V3 runtime
+  sites; root adversary ROBUST within scope. Reuse QBit leaf serde and existing
+  static/Dynamic visitors for recursive non-Variant actuals under inferred
+  Dynamic, declared typed Dynamic and advanced Shared Copy. New single-file
+  owners adapt Object axes and share per-mark occurrence totals.
+- Evidence: the same 69 files pass 430 examples per mode in 19 serial cohorts;
+  final focused DEBUG passes 18. Fresh helpers and paired native audits pass
+  three fixed profiles, with 29 shared stock and 33 fresh records/mode
+  (95 distinct processes in the final pair). All 226 generated files match
+  across modes by actual bytes, names, sizes and SHA-256: 34,497 bytes/mode.
+  Formatting passes for 16 Crystal paths; three repository harnesses pass
+  Ruby 2.6 syntax. Source/runtime differ; compiler and executed build commands
+  are pinned, not asserted as cryptographic compilation provenance.
+- Refutations: per-visitor caps do not share an Object-wide shape allowance;
+  exact 514 size entries pass and 513 rejects. Shape extents alone omit repeated
+  typed-Dynamic header reads, including unrelated non-QBit siblings: exact
+  metadata+84 bytes passes, +83 rejects before any positive header/shape read.
+  Omitted census/common-owner/prefix-charge seeds produce four/two/one precise
+  assertion failures; exact source restoration precedes final regressions.
+- Native profile fact: Object V3 wire tag is 4, advanced-chunked Shared version
+  is 3. Wide bucket target 2 persists actual buckets 1/1/2 for typed/inferred/
+  forced-shared profiles; empty Shared statistics are not configured buckets.
+  Three data marks and the terminal mark give `system.parts.marks=4`.
+- Evidence pressure: each final audit rejects seven coherent CHECK/status/
+  invented-stream forgeries and passes after exact restoration. The auditor
+  independently parses selected `j` metadata lanes. Extra-profile acceptance
+  was a refuted hypothesis: zip failed closed before diagnostic hardening.
+  Iterator, bucket-oracle, module-call, alias-schema and summary-field plumbing
+  errors are not behavioral RED or successful native evidence.
+- Boundary: static declared Object QBit paths, mixed runtime-owned siblings,
+  borrowed SharedVariant, LC(QBit), aggregate arguments and unqualified physical
+  profiles retain guards. Local recursive composition coverage is not all
+  products/depths/parameters/layouts. Shape checks do not authenticate unseen
+  payload; logical caps are not allocator/RSS/performance guarantees.
+- Return pointer: [W234 frontier](docs/OBJECT_QBIT_RUNTIME_FRONTIER.md),
+  [evidence index](.landmark/evidence/object-runtime-qbit-w234.json).
+  Next discriminator: stock persistence for static declared Object QBit paths,
+  before widening their declaration/parser owner. General MV/projection
+  execution/writing, remaining types/layouts and broad facade decomposition
+  remain open. Standing authority covers bounded local work/atomic commits,
+  not push, production mutation or resumed optimization.
+- Decay: refresh after relevant owners/consumers, fixtures/helpers/auditors,
+  source/runtime/compiler or profile changes. Replay temporary raw roots when
+  absent. Selected hashes do not cover every compiler input; raw audit checks
+  consistency, not cryptographic provenance. Luna review is correlated; root
+  independently ran native, regression and adversary checks.
+
 ## Recursive Dynamic/QBit composition — W233
 
 - Active objective remains CH-compatible read/write types and MV/projection

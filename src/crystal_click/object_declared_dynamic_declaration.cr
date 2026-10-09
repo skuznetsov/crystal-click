@@ -377,7 +377,18 @@ module CrystalClick
       # the shared depth/node/edge budget before these recursive predicates.
       # JSON typed-path metadata remains opaque here and is validated by the
       # existing BinaryJsonType policy.
-      if type.contains_json?
+      if type.contains_qbit?
+        unless BinaryDynamicQBitAdmission.admitted_actual_type?(type) &&
+               object_qbit_actual_type_admitted?(type)
+          raise UnsupportedFormatError.new("QBit is not admitted in this typed Object Dynamic actual arm")
+        end
+        # The legacy Object descriptor measurer has no QBit leaf rule. Use
+        # the shared bounded type-name visitor after the descriptor preflight
+        # above, and retain its temporary-name byte ceiling for QBit products.
+        name_budget = BinaryCodecBudget.new(limits, true)
+        name_bounds = BinaryTypeNameBudget.measure(type, name_budget, root_depth)
+        name_budget.ensure_wire_bytes(name_bounds[1])
+      elsif type.contains_json?
         unless allow_shared_json && shared_json_actual_type_admitted?(type, limits, root_depth)
           raise UnsupportedFormatError.new("JSON is not admitted as a typed Object Dynamic actual arm")
         end
@@ -388,6 +399,65 @@ module CrystalClick
         raise UnsupportedFormatError.new("typed Object Dynamic actual arms exclude Dynamic, Variant, and LowCardinality")
       end
       nil
+    end
+
+    # Object typed Dynamic retains its recursive declaration grammar for
+    # QBit products: String-keyed Maps, canonical Array/Nested/Nullable/Tuple
+    # wrappers, and the existing scalar leaves. This runs only after the
+    # complete descriptor has passed the shared bounded type-tree visit.
+    private def self.object_qbit_actual_type_admitted?(type : BinaryDataType) : Bool
+      frames = [] of Tuple(BinaryDataType, Int32)
+      frames << {type, 0}
+      until frames.empty?
+        frame_index = frames.size - 1
+        current = frames[frame_index][0]
+        next_child = frames[frame_index][1]
+
+        # Validate each descriptor node once when its traversal frame is
+        # entered. Rechecking Tuple field names on every child advance turns
+        # a wide tuple into quadratic admission work.
+        if next_child == 0
+          case current.tag
+          when BinaryDataType::TAG_QBIT
+            return false unless current.child_count == 0
+          when BinaryDataType::TAG_ARRAY
+            return false unless current.child_count == 1
+          when BinaryDataType::TAG_NESTED
+            return false unless current.child_count == 1
+            nested_tuple = current.child_at(0)
+            return false unless nested_tuple.tag == BinaryDataType::TAG_NAMED_TUPLE && nested_tuple.child_count > 0
+          when BinaryDataType::TAG_NULLABLE
+            return false unless current.child_count == 1
+            child_tag = current.child_at(0).tag
+            return false if child_tag == BinaryDataType::TAG_ARRAY ||
+                            child_tag == BinaryDataType::TAG_MAP ||
+                            child_tag == BinaryDataType::TAG_NULLABLE ||
+                            child_tag == BinaryDataType::TAG_LOW_CARDINALITY ||
+                            child_tag == BinaryDataType::TAG_VARIANT ||
+                            child_tag == BinaryDataType::TAG_DYNAMIC
+          when BinaryDataType::TAG_MAP
+            return false unless current.child_count == 2 && current.child_at(0).tag == BinaryDataType::TAG_STRING
+          when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+            named = current.tag == BinaryDataType::TAG_NAMED_TUPLE
+            return false if named && current.child_count == 0
+            if named
+              current.child_count.times do |index|
+                return false if current.field_name_byte_size(index) <= 0
+              end
+            end
+          else
+            return false if ObjectTypedFieldType.leaf_byte_size_for(current).nil?
+          end
+        end
+
+        if next_child < current.child_count
+          frames[frame_index] = {current, next_child + 1}
+          frames << {current.child_at(next_child), 0}
+        else
+          frames.pop
+        end
+      end
+      true
     end
 
     # Object recursive wrappers with JSON treated as a terminal scalar. This

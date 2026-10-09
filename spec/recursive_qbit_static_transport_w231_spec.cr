@@ -246,7 +246,7 @@ describe "W231 static QBit occurrence-schedule transport" do
     end
   end
 
-  it "reads independent sibling size lanes once each and charges aggregate result bytes" do
+  it "rejects over-budget aggregate shape results before reading any sibling lane" do
     fixture = w231_independent_array_tuple_fixture("crystal-click-w231-independent-qbit-sizes-")
     begin
       fixture.sites.size.should eq(2)
@@ -262,9 +262,32 @@ describe "W231 static QBit occurrence-schedule transport" do
       end
       error.message.not_nil!.should contain("result-byte")
       reads = fixture.source.window_reads
-      reads.size.should eq(1)
-      reads[0][1].should eq(0)
-      reads[0][2].should eq(fixture.parent_rows.size)
+      reads.should be_empty
+    ensure
+      fixture.cleanup
+    end
+  end
+
+  it "reads each independent sibling size lane once at the exact aggregate result bound" do
+    fixture = w231_independent_array_tuple_fixture("crystal-click-w231-independent-qbit-sizes-exact-")
+    begin
+      fixture.sites.size.should eq(2)
+      # Each lane has six UInt64 size entries (48 logical bytes); the two
+      # distinct lanes therefore consume exactly 96 result bytes together.
+      fixture.validate!(
+        transport_limits: CrystalClick::CompressedStreamLimits.new(max_result_bytes: 96),
+      )
+
+      reads = fixture.source.window_reads
+      reads.size.should eq(2)
+      reads.map { |read| read[0] }.sort.should eq([
+        fixture.physical.data_file_for("root.field.0.sizes", true),
+        fixture.physical.data_file_for("root.field.1.sizes", true),
+      ].sort)
+      reads.each do |read|
+        read[1].should eq(0)
+        read[2].should eq(fixture.parent_rows.size)
+      end
     ensure
       fixture.cleanup
     end

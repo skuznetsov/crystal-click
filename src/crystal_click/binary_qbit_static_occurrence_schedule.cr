@@ -60,6 +60,42 @@ module CrystalClick
       end
     end
 
+    # A root occurrence axis may be borrowed from an existing parent-row
+    # vector, or computed from an already-decoded Dynamic sparse arm schedule.
+    # The latter keeps Object's logical Q counts distinct from physical P
+    # without retaining a second per-mark count vector.
+    private struct OccurrenceAxis
+      @rows : Array(UInt64)?
+      @reader : Proc(Int32, UInt64)?
+      @mark_count : Int32
+
+      def initialize(rows : Array(UInt64))
+        @rows = rows
+        @reader = nil
+        @mark_count = rows.size.to_i32
+      end
+
+      def initialize(@mark_count : Int32, reader : Proc(Int32, UInt64))
+        @rows = nil
+        @reader = reader
+      end
+
+      def size : Int32
+        @mark_count
+      end
+
+      def [](mark : Int) : UInt64
+        unless mark >= 0 && mark < @mark_count
+          raise IndexError.new("static QBit occurrence axis mark is outside its domain")
+        end
+        if rows = @rows
+          rows[mark]
+        else
+          @reader.not_nil!.call(mark.to_i32)
+        end
+      end
+    end
+
     def self.validate!(
       type : BinaryDataType,
       sites : Array(BinaryQBitRecursiveAdmission::StaticSite),
@@ -69,6 +105,9 @@ module CrystalClick
       parent_rows : Array(UInt64),
       codec_limits : BinaryCodecLimits,
       transport_budget : CompressedStreamBudget,
+      root_count_at : Proc(Int32, UInt64)? = nil,
+      shared_totals : BinaryQBitOccurrenceTotals? = nil,
+      shared_codec_budget : BinaryCodecBudget? = nil,
     ) : Nil
       unless type.contains_qbit? && !sites.empty?
         raise CorruptPartError.new("static QBit schedule has no admitted leaf sites")
@@ -77,7 +116,17 @@ module CrystalClick
       # This entry point is also called directly by tests and other bounded
       # readers, so do not assume a plan already validated the recursive type
       # tree before the shape walk below allocates its role vectors.
-      BinaryCodecContext.new(codec_limits, nil, false).validate_type_tree(type)
+      if shared_totals && shared_codec_budget.nil?
+        raise CorruptPartError.new("static QBit shared occurrence totals require their codec budget")
+      end
+      if budget = shared_codec_budget
+        unless !budget.writing? && same_limits?(codec_limits, budget.limits)
+          raise CorruptPartError.new("static QBit shared logical budget differs from its codec limits")
+        end
+        BinaryCodecContext.new(codec_limits, nil, false, budget: budget).validate_type_tree(type)
+      else
+        BinaryCodecContext.new(codec_limits, nil, false).validate_type_tree(type)
+      end
 
       mark_count = parent_rows.size
       if mark_count == 0 || mark_count > WidePartWriter::MAX_MARKS
@@ -122,11 +171,16 @@ module CrystalClick
       unless visited_sites.size == sites_by_path.size && site_axes.size == sites_by_path.size
         raise CorruptPartError.new("static QBit schedule omits a planned leaf site")
       end
+      if totals = shared_totals
+        unless totals.mark_count == mark_count
+          raise CorruptPartError.new("static QBit shared occurrence totals have the wrong mark domain")
+        end
+      end
 
       # Each unique size lane and each QBit-bearing Variant arm retains one
-      # per-mark count vector. Two additional per-mark codec accumulators are
-      # shared across the parent-first census. Reject from scalar dimensions
-      # before allocating any of those arrays or reading a shape lane.
+      # per-mark count vector. Standalone visits also retain local counters;
+      # Object visits borrow the common counter owner. Reject before allocation
+      # or the first positive shape read.
       vector_count = size_lanes.size.to_u64
       variant_lanes.each do |lane|
         vector_count = checked_add(vector_count, lane.qbit_arms.size.to_u64)
@@ -135,20 +189,47 @@ module CrystalClick
         if vector_count > UInt64::MAX - 2_u64
           raise CorruptPartError.new("static QBit schedule workspace size overflows")
         end
-        schedule_workspace_bytes = checked_multiply(
-          checked_multiply(mark_count.to_u64, vector_count + 2_u64),
-          8_u64,
-        )
-        unless schedule_workspace_bytes <= codec_limits.max_bytes.to_u64
-          raise CorruptPartError.new("static QBit schedule workspace exceeds the configured byte limit")
+        if totals = shared_totals
+          totals.preflight_active_vectors!(vector_count, shared_codec_budget.not_nil!)
+        else
+          schedule_workspace_bytes = checked_multiply(
+            checked_multiply(mark_count.to_u64, vector_count + 2_u64),
+            8_u64,
+          )
+          unless schedule_workspace_bytes <= codec_limits.max_bytes.to_u64
+            raise CorruptPartError.new("static QBit schedule workspace exceeds the configured byte limit")
+          end
         end
       end
 
-      axis_counts = Hash(String, Array(UInt64)).new(initial_capacity: (size_lanes.size + variant_lanes.size + 1))
-      axis_counts["root"] = parent_rows
+      # Admit the complete returned shape census before reading its first
+      # positive lane. A later Variant/size lane must not discover that the
+      # transport result budget is too small after earlier lanes have already
+      # been materialized.
+      shape_result_bytes = 0_u64
+      shape_steps.each do |step|
+        role = if step.kind == SIZE_STEP
+                 size_lanes[step.index].role
+               else
+                 variant_lanes[step.index].role
+               end
+        grid = grids[role]? || raise(CorruptPartError.new("static QBit shape lane has no inspected mark grid"))
+        shape_result_bytes = checked_add(shape_result_bytes, grid.logical_size.to_u64)
+      end
+      if shape_result_bytes > Int64::MAX.to_u64
+        raise CorruptPartError.new("static QBit shape result workspace exceeds the bounded transport domain")
+      end
+      transport_budget.preflight_result_bytes(shape_result_bytes.to_i64)
+
+      axis_counts = Hash(String, OccurrenceAxis).new(initial_capacity: (size_lanes.size + variant_lanes.size + 1))
+      axis_counts["root"] = if reader = root_count_at
+                              OccurrenceAxis.new(mark_count, reader)
+                            else
+                              OccurrenceAxis.new(parent_rows)
+                            end
       shape_has_axes = vector_count > 0_u64
-      mark_element_totals = shape_has_axes ? Array(UInt64).new(mark_count, 0_u64) : nil
-      mark_wire_totals = shape_has_axes ? Array(UInt64).new(mark_count, 0_u64) : nil
+      mark_element_totals = shape_has_axes && shared_totals.nil? ? Array(UInt64).new(mark_count, 0_u64) : nil
+      mark_wire_totals = shape_has_axes && shared_totals.nil? ? Array(UInt64).new(mark_count, 0_u64) : nil
 
       shape_steps.each do |step|
         case step.kind
@@ -169,6 +250,7 @@ module CrystalClick
             mark_element_totals,
             mark_wire_totals,
             axis_counts,
+            shared_totals,
           )
         when VARIANT_STEP
           lane = variant_lanes[step.index]
@@ -187,6 +269,7 @@ module CrystalClick
             mark_element_totals,
             mark_wire_totals,
             axis_counts,
+            shared_totals,
           )
         else
           raise CorruptPartError.new("static QBit shape schedule has an unknown step")
@@ -234,7 +317,7 @@ module CrystalClick
 
     private def self.census_size_lane!(
       lane : SizeLane,
-      parent_counts : Array(UInt64),
+      parent_counts : OccurrenceAxis,
       physical : BinaryBulkPhysicalPlan,
       source : PartStreamSource,
       grids : Hash(String, CompressedMarkGrid),
@@ -244,7 +327,8 @@ module CrystalClick
       transport_budget : CompressedStreamBudget,
       mark_element_totals : Array(UInt64)?,
       mark_wire_totals : Array(UInt64)?,
-      axis_counts : Hash(String, Array(UInt64)),
+      axis_counts : Hash(String, OccurrenceAxis),
+      shared_totals : BinaryQBitOccurrenceTotals? = nil,
     ) : Nil
       unless parent_counts.size == mark_count
         raise CorruptPartError.new("static QBit size lane parent has the wrong mark domain")
@@ -262,19 +346,24 @@ module CrystalClick
           raise CorruptPartError.new("static QBit size mark exceeds its bounded buffer domain")
         end
 
-        if element_totals = mark_element_totals
+        if totals = shared_totals
+          totals.add_elements!(mark, items)
+          totals.add_wire_bytes!(mark, expected_bytes)
+        elsif element_totals = mark_element_totals
           element_limit = codec_limits.max_elements.to_u64
           if element_totals[mark] > element_limit || items > element_limit - element_totals[mark]
             raise CorruptPartError.new("binary codec element limit exceeded")
           end
           element_totals[mark] = checked_add(element_totals[mark], items)
         end
-        if wire_totals = mark_wire_totals
-          wire_limit = codec_limits.max_bytes.to_u64
-          if wire_totals[mark] > wire_limit || expected_bytes > wire_limit - wire_totals[mark]
-            raise CorruptPartError.new("binary codec byte limit exceeded")
+        unless shared_totals
+          if wire_totals = mark_wire_totals
+            wire_limit = codec_limits.max_bytes.to_u64
+            if wire_totals[mark] > wire_limit || expected_bytes > wire_limit - wire_totals[mark]
+              raise CorruptPartError.new("binary codec byte limit exceeded")
+            end
+            wire_totals[mark] = checked_add(wire_totals[mark], expected_bytes)
           end
-          wire_totals[mark] = checked_add(wire_totals[mark], expected_bytes)
         end
         expected_lane_bytes = checked_add(expected_lane_bytes, expected_bytes)
       end
@@ -313,13 +402,13 @@ module CrystalClick
         end
         child_counts[mark] = next_items
       end
-      axis_counts[lane.role] = child_counts
+      axis_counts[lane.role] = OccurrenceAxis.new(child_counts)
       nil
     end
 
     private def self.census_variant_lane!(
       lane : VariantLane,
-      parent_counts : Array(UInt64),
+      parent_counts : OccurrenceAxis,
       physical : BinaryBulkPhysicalPlan,
       source : PartStreamSource,
       grids : Hash(String, CompressedMarkGrid),
@@ -329,7 +418,8 @@ module CrystalClick
       transport_budget : CompressedStreamBudget,
       mark_element_totals : Array(UInt64)?,
       mark_wire_totals : Array(UInt64)?,
-      axis_counts : Hash(String, Array(UInt64)),
+      axis_counts : Hash(String, OccurrenceAxis),
+      shared_totals : BinaryQBitOccurrenceTotals? = nil,
     ) : Nil
       unless parent_counts.size == mark_count && lane.arm_count > 0 && lane.arm_count <= 0xff
         raise CorruptPartError.new("static QBit Variant lane has an invalid parent or arm domain")
@@ -346,19 +436,24 @@ module CrystalClick
           raise CorruptPartError.new("static QBit Variant mark exceeds its bounded buffer domain")
         end
 
-        if element_totals = mark_element_totals
+        if totals = shared_totals
+          totals.add_elements!(mark, items)
+          totals.add_wire_bytes!(mark, items)
+        elsif element_totals = mark_element_totals
           element_limit = codec_limits.max_elements.to_u64
           if element_totals[mark] > element_limit || items > element_limit - element_totals[mark]
             raise CorruptPartError.new("binary codec element limit exceeded")
           end
           element_totals[mark] = checked_add(element_totals[mark], items)
         end
-        if wire_totals = mark_wire_totals
-          wire_limit = codec_limits.max_bytes.to_u64
-          if wire_totals[mark] > wire_limit || items > wire_limit - wire_totals[mark]
-            raise CorruptPartError.new("binary codec byte limit exceeded")
+        unless shared_totals
+          if wire_totals = mark_wire_totals
+            wire_limit = codec_limits.max_bytes.to_u64
+            if wire_totals[mark] > wire_limit || items > wire_limit - wire_totals[mark]
+              raise CorruptPartError.new("binary codec byte limit exceeded")
+            end
+            wire_totals[mark] = checked_add(wire_totals[mark], items)
           end
-          wire_totals[mark] = checked_add(wire_totals[mark], items)
         end
         expected_lane_bytes = checked_add(expected_lane_bytes, items)
       end
@@ -417,7 +512,7 @@ module CrystalClick
 
       lane.qbit_arms.each do |arm|
         counts = qbit_counts[arm.index]? || raise(CorruptPartError.new("static QBit Variant arm counts are missing"))
-        axis_counts[arm.path] = counts
+        axis_counts[arm.path] = OccurrenceAxis.new(counts)
       end
       nil
     end
@@ -687,6 +782,11 @@ module CrystalClick
         raise CorruptPartError.new("static QBit occurrence count overflows UInt64")
       end
       left + right
+    end
+
+    private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
     end
 
     private def self.checked_multiply(left : UInt64, right : UInt64) : UInt64

@@ -75,15 +75,26 @@ module CrystalClick
       allow_json : Bool = false,
       allow_aggregate_function : Bool = false,
       allow_recursive_qbit : Bool = false,
+      allow_qbit_variants : Bool = true,
     ) : Bytes
       unless budget.writing?
         raise ArgumentError.new("Dynamic bulk child encoder requires a write-direction budget")
+      end
+      if allow_recursive_qbit && value.type.contains_qbit? && value.type.tag != BinaryDataType::TAG_QBIT
+        # The recursive admission predicates intentionally operate on the
+        # descriptor tree. Prove its depth, node, and edge bounds against the
+        # caller's shared operation budget before those predicates walk it.
+        type_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
+        type_context.validate_type_tree(value.type, depth)
       end
       unless dynamic_aggregate_actual_allowed?(value.type, allow_aggregate_function)
         raise UnsupportedFormatError.new("AggregateFunction is not admitted as this Dynamic shared actual type")
       end
       if value.type.contains_qbit? && value.type.tag != BinaryDataType::TAG_QBIT
-        unless allow_recursive_qbit && BinaryDynamicQBitAdmission.admitted_actual_type?(value.type)
+        unless allow_recursive_qbit && BinaryDynamicQBitAdmission.admitted_actual_type?(
+                 value.type,
+                 allow_qbit_variants: allow_qbit_variants,
+               )
           raise UnsupportedFormatError.new("recursive QBit is not admitted as this Dynamic shared actual type")
         end
       end
@@ -125,6 +136,7 @@ module CrystalClick
       allow_json : Bool = false,
       allow_aggregate_function : Bool = false,
       allow_recursive_qbit : Bool = false,
+      allow_qbit_variants : Bool = true,
     ) : Tuple(BinaryDataType, BinaryValue?)
       context = BinaryCodecContext.new(
         budget.limits,
@@ -141,7 +153,10 @@ module CrystalClick
         context.unsupported!("AggregateFunction is not admitted as this Dynamic shared actual type")
       end
       if type.contains_qbit? && type.tag != BinaryDataType::TAG_QBIT
-        unless allow_recursive_qbit && BinaryDynamicQBitAdmission.admitted_actual_type?(type)
+        unless allow_recursive_qbit && BinaryDynamicQBitAdmission.admitted_actual_type?(
+                 type,
+                 allow_qbit_variants: allow_qbit_variants,
+               )
           context.unsupported!("recursive QBit is not admitted as this Dynamic shared actual type")
         end
       end

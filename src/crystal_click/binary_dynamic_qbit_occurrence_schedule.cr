@@ -78,6 +78,7 @@ module CrystalClick
       site_grid : StorageOccurrenceGrid,
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
+      shared_totals : BinaryQBitOccurrenceTotals? = nil,
     ) : Nil
       sites = plan.qbit_sites
       return nil if sites.empty?
@@ -89,6 +90,11 @@ module CrystalClick
       mark_count = parent_rows.size
       if mark_count == 0 || mark_count > WidePartWriter::MAX_MARKS || site_grid.mark_count != mark_count
         raise CorruptPartError.new("Dynamic QBit occurrence schedule mark count is outside its bounded domain")
+      end
+      if totals = shared_totals
+        unless totals.mark_count == mark_count
+          raise CorruptPartError.new("Dynamic QBit shared occurrence totals have the wrong mark domain")
+        end
       end
 
       sites_by_path = Hash(String, BinaryDynamicQBitSite).new(initial_capacity: sites.size)
@@ -130,22 +136,26 @@ module CrystalClick
         selector_arm_count = checked_add(selector_arm_count, lane.qbit_arms.size.to_u64)
       end
       vector_count = checked_add(checked_add(1_u64, size_lanes.size.to_u64), selector_arm_count)
-      workspace_vectors = checked_add(vector_count, 2_u64) # per-mark element/wire accumulators
-      workspace_bytes = checked_multiply(checked_multiply(mark_count.to_u64, workspace_vectors), 8_u64)
-      unless workspace_bytes <= codec_budget.limits.max_bytes.to_u64
-        raise CorruptPartError.new("Dynamic QBit occurrence workspace requires #{workspace_bytes} bytes, exceeding the configured byte limit")
+      if totals = shared_totals
+        totals.preflight_active_vectors!(vector_count, codec_budget)
+      else
+        workspace_vectors = checked_add(vector_count, 2_u64) # local per-mark element/wire accumulators
+        workspace_bytes = checked_multiply(checked_multiply(mark_count.to_u64, workspace_vectors), 8_u64)
+        unless workspace_bytes <= codec_budget.limits.max_bytes.to_u64
+          raise CorruptPartError.new("Dynamic QBit occurrence workspace requires #{workspace_bytes} bytes, exceeding the configured byte limit")
+        end
+        workspace_values = checked_multiply(mark_count.to_u64, workspace_vectors)
+        codec_budget.ensure_future_nodes(workspace_values)
+        codec_budget.ensure_future_elements(workspace_values)
       end
-      workspace_values = checked_multiply(mark_count.to_u64, workspace_vectors)
-      codec_budget.ensure_future_nodes(workspace_values)
-      codec_budget.ensure_future_elements(workspace_values)
 
       root_counts = Array(UInt64).new(mark_count) do |mark|
         site_grid.logical_occurrences_at(mark)
       end
       axis_counts = Hash(String, Array(UInt64)).new(initial_capacity: size_lanes.size + selector_arm_count.to_i)
       axis_counts["root"] = root_counts
-      mark_element_totals = Array(UInt64).new(mark_count, 0_u64)
-      mark_wire_totals = Array(UInt64).new(mark_count, 0_u64)
+      mark_element_totals = shared_totals.nil? ? Array(UInt64).new(mark_count, 0_u64) : nil
+      mark_wire_totals = shared_totals.nil? ? Array(UInt64).new(mark_count, 0_u64) : nil
 
       # Reserve the aggregate returned bytes for every distinct size or
       # selector lane before the first positive shape window is requested.
@@ -175,7 +185,7 @@ module CrystalClick
           census_size_lane!(
             lane, parent_counts, physical, source, grids, parent_rows,
             mark_count, codec_budget.limits, transport_budget,
-            mark_element_totals, mark_wire_totals, axis_counts,
+            mark_element_totals, mark_wire_totals, axis_counts, shared_totals,
           )
         when SELECTOR_STEP
           lane = selector_lanes[step.index]
@@ -184,7 +194,7 @@ module CrystalClick
           census_selector_lane!(
             lane, parent_counts, physical, source, grids, dynamic_modes, parent_rows,
             mark_count, codec_budget, transport_budget,
-            mark_element_totals, mark_wire_totals, axis_counts,
+            mark_element_totals, mark_wire_totals, axis_counts, shared_totals,
           )
         else
           raise CorruptPartError.new("Dynamic QBit shape schedule has an unknown step")
@@ -468,9 +478,10 @@ module CrystalClick
       mark_count : Int32,
       limits : BinaryCodecLimits,
       transport_budget : CompressedStreamBudget,
-      mark_element_totals : Array(UInt64),
-      mark_wire_totals : Array(UInt64),
+      mark_element_totals : Array(UInt64)?,
+      mark_wire_totals : Array(UInt64)?,
       axis_counts : Hash(String, Array(UInt64)),
+      shared_totals : BinaryQBitOccurrenceTotals?,
     ) : Nil
       grid = grids[lane.role]? || raise(CorruptPartError.new("Dynamic QBit Array/Map size lane has no inspected mark grid"))
       prefix = physical.prefix_size_for(lane.role)
@@ -485,7 +496,7 @@ module CrystalClick
         end
         charge_mark_totals!(
           mark, items, expected_bytes, limits,
-          mark_element_totals, mark_wire_totals,
+          mark_element_totals, mark_wire_totals, shared_totals,
         )
         expected_total = checked_add(expected_total, expected_bytes)
       end
@@ -530,9 +541,10 @@ module CrystalClick
       mark_count : Int32,
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
-      mark_element_totals : Array(UInt64),
-      mark_wire_totals : Array(UInt64),
+      mark_element_totals : Array(UInt64)?,
+      mark_wire_totals : Array(UInt64)?,
       axis_counts : Hash(String, Array(UInt64)),
+      shared_totals : BinaryQBitOccurrenceTotals?,
     ) : Nil
       unless lane.arm_count > 0 && lane.arm_count <= 0xff
         raise CorruptPartError.new("Dynamic QBit selector has an invalid arm domain")
@@ -562,7 +574,7 @@ module CrystalClick
           require_mark_delta!(grid, mark, parent_counts[mark], "Variant discriminator")
           charge_mark_totals!(
             mark, parent_counts[mark], parent_counts[mark], codec_budget.limits,
-            mark_element_totals, mark_wire_totals,
+            mark_element_totals, mark_wire_totals, shared_totals,
           )
         end
         require_lane_logical_size!(grid, lane.role, prefix, expected_total)
@@ -576,7 +588,7 @@ module CrystalClick
           end
           charge_mark_totals!(
             mark, parent_counts[mark], parent_counts[mark], codec_budget.limits,
-            mark_element_totals, mark_wire_totals,
+            mark_element_totals, mark_wire_totals, shared_totals,
           )
         end
         if dynamic_mode == DynamicDiscriminatorBodyValidator::BASIC_MODE
@@ -675,19 +687,27 @@ module CrystalClick
       elements : UInt64,
       wire_bytes : UInt64,
       limits : BinaryCodecLimits,
-      mark_element_totals : Array(UInt64),
-      mark_wire_totals : Array(UInt64),
+      mark_element_totals : Array(UInt64)?,
+      mark_wire_totals : Array(UInt64)?,
+      shared_totals : BinaryQBitOccurrenceTotals?,
     ) : Nil
+      if totals = shared_totals
+        totals.add_elements!(mark, elements)
+        totals.add_wire_bytes!(mark, wire_bytes)
+        return nil
+      end
+      elements_by_mark = mark_element_totals || raise(CorruptPartError.new("Dynamic QBit element totals are missing"))
+      wire_by_mark = mark_wire_totals || raise(CorruptPartError.new("Dynamic QBit wire totals are missing"))
       element_limit = limits.max_elements.to_u64
       wire_limit = limits.max_bytes.to_u64
-      if mark_element_totals[mark] > element_limit || elements > element_limit - mark_element_totals[mark]
+      if elements_by_mark[mark] > element_limit || elements > element_limit - elements_by_mark[mark]
         raise CorruptPartError.new("binary codec element limit exceeded")
       end
-      if mark_wire_totals[mark] > wire_limit || wire_bytes > wire_limit - mark_wire_totals[mark]
+      if wire_by_mark[mark] > wire_limit || wire_bytes > wire_limit - wire_by_mark[mark]
         raise CorruptPartError.new("binary codec byte limit exceeded")
       end
-      mark_element_totals[mark] = checked_add(mark_element_totals[mark], elements)
-      mark_wire_totals[mark] = checked_add(mark_wire_totals[mark], wire_bytes)
+      elements_by_mark[mark] = checked_add(elements_by_mark[mark], elements)
+      wire_by_mark[mark] = checked_add(wire_by_mark[mark], wire_bytes)
       nil
     end
 

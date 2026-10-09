@@ -305,7 +305,7 @@ describe "W233 recursive QBit Dynamic kernel" do
     w233_dynamic_envelopes(decoded).should eq(w233_dynamic_envelopes(rows))
   end
 
-  it "opts recursive-QBit products into the Dynamic shared-overflow child only" do
+  it "uses explicit recursive-QBit policies for Dynamic shared overflow and Object Copy" do
     types = w233_kernel_types
     dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 8)
     qbit_value = w233_qbit_value(types[:qbit_type])
@@ -316,9 +316,10 @@ describe "W233 recursive QBit Dynamic kernel" do
     structures = {"root" => structure}
 
     # The product is intentionally absent from the exact actual roster, so it
-    # must take the qualified Dynamic shared-child envelope path. This is the
-    # only caller that opts into recursive QBit on the shared scalar helper;
-    # Object Shared Copy and direct helper calls retain the default denial.
+    # must take the qualified Dynamic shared-child envelope path. Dynamic
+    # explicitly opts into the shared scalar helper here; Object Shared Copy
+    # has its own non-Variant owner policy, while direct helper calls retain
+    # the default denial.
     plan = CrystalClick::BinaryDynamicBulkPlan.new(dynamic, structures)
     selection = plan.select_arm("root", types[:array_qbit])
     selection.shared.should be_true
@@ -332,7 +333,7 @@ describe "W233 recursive QBit Dynamic kernel" do
     w233_dynamic_envelopes(decoded).should eq(w233_dynamic_envelopes(rows))
   end
 
-  it "keeps direct-root Variant/Dynamic, direct Nullable, mixed-owner, JSON, LC, and Object boundaries" do
+  it "keeps Dynamic root and foreign-owner guards while admitting qualified Object Copy products" do
     types = w233_kernel_types
     dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 8)
     qbit_value = w233_qbit_value(types[:qbit_type])
@@ -511,8 +512,8 @@ describe "W233 recursive QBit Dynamic kernel" do
       )
     end
 
-    # Object Shared Copy uses the same scalar child envelope but must not gain
-    # the new Dynamic-only recursive-QBit profile through a default change.
+    # Object Shared Copy has a separate qualified non-Variant opt-in. The
+    # shared scalar helper must remain closed by default for recursive QBit.
     object_path = "payload"
     object_value = CrystalClick::BinaryValue.array(types[:array_qbit], [] of CrystalClick::BinaryValue)
     object_row = CrystalClick::ObjectSharedMapRow.new([
@@ -526,28 +527,42 @@ describe "W233 recursive QBit Dynamic kernel" do
       {0_u64, 0_u64},
     )
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectSharedCopyCodec.encode(
-        [object_row] of CrystalClick::ObjectSharedMapRow,
-        [object_structure] of CrystalClick::ObjectSharedChunkStructure,
+      CrystalClick::BinaryValueCodec.encode_dynamic_bulk_child(
+        object_value,
+        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default, true),
+        1,
+      )
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::BinaryValueCodec.decode_dynamic_bulk_child(
+        Bytes[0x1e_u8, 0x36, 0x07, 0x03, 0x00],
+        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default),
+        1,
       )
     end
 
-    envelope = CrystalClick::BinaryValueCodec.encode(object_value)
-    framed = Bytes.new(envelope.size + 1) do |index|
-      if index == 0
-        envelope.size.to_u8
-      else
-        envelope[index - 1]
-      end
-    end
-    sizes = Bytes[0x01_u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectSharedCopyCodec.decode(
-        sizes,
-        Bytes[0x00_u8],
-        framed,
-        [object_structure] of CrystalClick::ObjectSharedChunkStructure,
-      )
-    end
+    encoded_copy = CrystalClick::ObjectSharedCopyCodec.encode(
+      [object_row] of CrystalClick::ObjectSharedMapRow,
+      [object_structure] of CrystalClick::ObjectSharedChunkStructure,
+    )
+    decoded_copy = CrystalClick::ObjectSharedCopyCodec.decode(
+      encoded_copy.sizes,
+      encoded_copy.indexes,
+      encoded_copy.values,
+      [object_structure] of CrystalClick::ObjectSharedChunkStructure,
+    )
+    decoded_copy.size.should eq(1)
+    decoded_copy[0].entry_count.should eq(1)
+    decoded_copy[0].entry_at(0).path.should eq(object_path.to_slice)
+    decoded_value = decoded_copy[0].entry_at(0).value
+    decoded_value.type.should eq(types[:array_qbit])
+    decoded_value.element_count.should eq(0)
+    reencoded_copy = CrystalClick::ObjectSharedCopyCodec.encode(
+      decoded_copy,
+      [object_structure] of CrystalClick::ObjectSharedChunkStructure,
+    )
+    reencoded_copy.sizes.should eq(encoded_copy.sizes)
+    reencoded_copy.indexes.should eq(encoded_copy.indexes)
+    reencoded_copy.values.should eq(encoded_copy.values)
   end
 end

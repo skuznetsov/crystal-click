@@ -108,7 +108,14 @@ module CrystalClick
           pending_after = total_entries - flat_entry_index - 1_u64
           future_minimum = checked_multiply(pending_after, 2_u64, true, "pending value framing")
           reserved = checked_add(1_u64, future_minimum, true, "pending value framing")
-          envelope = BinaryValueCodec.encode_dynamic_bulk_child(entry.value, budget, 1, reserved)
+          envelope = BinaryValueCodec.encode_dynamic_bulk_child(
+            entry.value,
+            budget,
+            1,
+            reserved,
+            allow_recursive_qbit: true,
+            allow_qbit_variants: false,
+          )
           frame_size = var_uint_size(envelope.size.to_u64)
           required = checked_add(
             checked_add(frame_size, envelope.size.to_u64, true, "value frame"),
@@ -211,7 +218,13 @@ module CrystalClick
 
           envelope_size = values_context.read_var_uint
           envelope = values_context.read_slice(envelope_size)
-          type, decoded_value = BinaryValueCodec.decode_dynamic_bulk_child(envelope, budget, 1)
+          type, decoded_value = BinaryValueCodec.decode_dynamic_bulk_child(
+            envelope,
+            budget,
+            1,
+            allow_recursive_qbit: true,
+            allow_qbit_variants: false,
+          )
           value = decoded_value || BinaryValue.null(type)
           entries << dictionary.map_entry(dictionary_index, value)
           previous_index = dictionary_index
