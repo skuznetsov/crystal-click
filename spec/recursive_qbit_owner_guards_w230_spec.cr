@@ -36,15 +36,12 @@ private def w230_owner_count_wire(argument : CrystalClick::BinaryDataType) : Byt
   io.to_slice
 end
 
-private def w230_owner_dynamic_structure_wire(actual_type : CrystalClick::BinaryDataType) : Bytes
-  descriptor = w230_owner_qbit_tree_wire(actual_type)
-  io = IO::Memory.new
-  # Dynamic V3 full structure: little-endian version 4, one ordinary arm,
-  # literal Array(QBit(...)) descriptor, no statistics.
-  io.write(Bytes[0x04_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8, 0x01_u8])
-  io.write(descriptor)
-  io.write(Bytes[0x00_u8])
-  io.to_slice
+private def w230_owner_dynamic_envelopes(
+  rows : Array(Array(CrystalClick::BinaryValue)),
+) : Array(Array(Bytes))
+  rows.map do |row|
+    row.map { |value| CrystalClick::BinaryValueCodec.encode(value) }
+  end
 end
 
 describe "W230 recursive QBit downstream owner guards" do
@@ -82,8 +79,9 @@ describe "W230 recursive QBit downstream owner guards" do
     end
   end
 
-  it "rejects wrapped QBit actuals in complete Dynamic bulk write and read paths" do
-    qbit = CrystalClick::BinaryDataType.qbit(CrystalClick::QBitType.new("Int8", 3_u64))
+  it "admits wrapped QBit actuals in complete Dynamic bulk write and read paths" do
+    qbit_type = CrystalClick::QBitType.new("Int8", 3_u64)
+    qbit = CrystalClick::BinaryDataType.qbit(qbit_type)
     wrapped_actuals = [
       CrystalClick::BinaryDataType.array(qbit),
       CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.nullable(qbit)),
@@ -93,30 +91,25 @@ describe "W230 recursive QBit downstream owner guards" do
     wrapped_actuals.each do |actual_type|
       structure = CrystalClick::DynamicStructure.new([actual_type] of CrystalClick::BinaryDataType)
       structures = {"root" => structure}
-
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDynamicBulkPlan.new(dynamic, structures)
-      end
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDynamicBulkCodec.encode(
-          dynamic,
-          structures,
-          [] of Array(CrystalClick::BinaryValue),
-        )
-      end
-
-      forged = CrystalClick::BinaryDynamicBulkStreams.new(
-        CrystalClick::BinaryDynamicStructureStreams.new({
-          "root" => w230_owner_dynamic_structure_wire(actual_type),
-        }),
-        CrystalClick::BinaryBulkStreams.new(
-          0,
-          {} of String => CrystalClick::BinaryBulkStream,
-        ),
+      qbit_value = CrystalClick::BinaryValue.qbit(
+        qbit,
+        CrystalClick::QBitValue.new(qbit_type, Bytes[0x81_u8, 0x02_u8, 0xff_u8]),
       )
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDynamicBulkCodec.decode(dynamic, forged, [] of UInt64)
-      end
+      child_type = actual_type.child_at(0)
+      child_value = if child_type.tag == CrystalClick::BinaryDataType::TAG_NULLABLE
+                      CrystalClick::BinaryValue.nullable(child_type, qbit_value)
+                    else
+                      qbit_value
+                    end
+      actual_value = CrystalClick::BinaryValue.array(actual_type, [child_value] of CrystalClick::BinaryValue)
+      dynamic_value = CrystalClick::BinaryValue.dynamic(dynamic, actual_value)
+      rows = [[dynamic_value] of CrystalClick::BinaryValue]
+
+      plan = CrystalClick::BinaryDynamicBulkPlan.new(dynamic, structures)
+      plan.qbit_sites.size.should eq(1)
+      streams = CrystalClick::BinaryDynamicBulkCodec.encode(dynamic, structures, rows)
+      decoded = CrystalClick::BinaryDynamicBulkCodec.decode(dynamic, streams, [1_u64])
+      w230_owner_dynamic_envelopes(decoded).should eq(w230_owner_dynamic_envelopes(rows))
     end
   end
 

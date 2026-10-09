@@ -1122,8 +1122,8 @@ module CrystalClick
         if actual_type.contains_json? && !allow_direct_json
           context.unsupported!("JSON in Dynamic actual rosters is outside the admitted bulk profile")
         end
-        if actual_type.contains_qbit? && actual_type.tag != BinaryDataType::TAG_QBIT
-          context.unsupported!("QBit is admitted only as a direct Dynamic actual type")
+        if actual_type.contains_qbit? && !BinaryDynamicQBitAdmission.admitted_actual_type?(actual_type)
+          context.unsupported!("QBit is outside the admitted Dynamic actual profile")
         end
       end
 
@@ -1469,40 +1469,121 @@ module CrystalClick
       context : BinaryCodecContext,
     ) : NamedTuple(sites: UInt64, slots: UInt64, snapshot_bytes: UInt64)
       # Actual rosters are already discovered and their canonical arms are
-      # owned by Site. Counting only direct QBit arms avoids a second generated
-      # path walk (and preserves the pre-W199 budget for all other plans).
+      # owned by Site. This size-only walk follows the same path grammar as
+      # append_type_roles, but materializes no names before the full count and
+      # snapshot preflight below.
       site_count = 0_u64
       slot_count = 0_u64
       snapshot_bytes = 0_u64
       sites.each do |site_path, site|
         site.arms.each_with_index do |arm, index|
-          next unless arm.tag == BinaryDataType::TAG_QBIT
+          next unless arm.contains_qbit?
 
-          qbit = arm.qbit_type || context.unsupported!("Dynamic QBit actual arm is missing its nominal descriptor")
-          begin
-            QBitColumnType.new(qbit)
-          rescue ex : ArgumentError
-            context.unsupported!("Dynamic QBit descriptor exceeds the bounded plane profile")
-          end
-          site_count = checked_role_add(site_count, 1_u64)
-          slot_count = checked_role_add(slot_count, qbit.plane_count.to_u64)
-
-          # BinaryDynamicQBitSite owns snapshots of the actual path and every
-          # numeric-order role. Preflight their total work before constructors
-          # copy any borrowed/generated names.
           path_bytes = checked_role_add(site_path.bytesize.to_u64, ".arm.".bytesize.to_u64)
           path_bytes = checked_role_add(path_bytes, decimal_digits(index).to_u64)
-          snapshot_bytes = checked_role_add(snapshot_bytes, path_bytes)
-          plane = 0
-          while plane < qbit.plane_count
-            role_bytes = checked_role_add(path_bytes, BinaryQBitBulkCodec::ROLE_SUFFIX.bytesize.to_u64)
-            role_bytes = checked_role_add(role_bytes, decimal_digits(plane).to_u64)
-            snapshot_bytes = checked_role_add(snapshot_bytes, role_bytes)
-            plane += 1
-          end
+          measured = measure_qbit_actual_sites(arm, path_bytes, context)
+          site_count = checked_role_add(site_count, measured[:sites])
+          slot_count = checked_role_add(slot_count, measured[:slots])
+          snapshot_bytes = checked_role_add(snapshot_bytes, measured[:snapshot_bytes])
         end
       end
       {sites: site_count, slots: slot_count, snapshot_bytes: snapshot_bytes}
+    end
+
+    private def self.measure_qbit_actual_sites(
+      type : BinaryDataType,
+      path_bytes : UInt64,
+      context : BinaryCodecContext,
+    ) : NamedTuple(sites: UInt64, slots: UInt64, snapshot_bytes: UInt64)
+      return {sites: 0_u64, slots: 0_u64, snapshot_bytes: 0_u64} unless type.contains_qbit?
+
+      case type.tag
+      when BinaryDataType::TAG_QBIT
+        qbit = type.qbit_type || context.unsupported!("Dynamic QBit actual leaf is missing its nominal descriptor")
+        begin
+          QBitColumnType.new(qbit)
+        rescue ex : ArgumentError
+          context.unsupported!("Dynamic QBit descriptor exceeds the bounded plane profile")
+        end
+
+        # BinaryDynamicQBitSite snapshots the leaf path and every numeric
+        # plane role. Preflight all owner-copy bytes before append_type_roles
+        # creates either path strings or retained site objects.
+        snapshot_bytes = path_bytes
+        plane = 0
+        while plane < qbit.plane_count
+          role_bytes = checked_role_add(path_bytes, BinaryQBitBulkCodec::ROLE_SUFFIX.bytesize.to_u64)
+          role_bytes = checked_role_add(role_bytes, decimal_digits(plane).to_u64)
+          snapshot_bytes = checked_role_add(snapshot_bytes, role_bytes)
+          plane += 1
+        end
+        {
+          sites:          1_u64,
+          slots:          qbit.plane_count.to_u64,
+          snapshot_bytes: snapshot_bytes,
+        }
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
+        child_path_bytes = checked_role_add(path_bytes, ".elements".bytesize.to_u64)
+        measure_qbit_actual_sites(type.child_at(0), child_path_bytes, context)
+      when BinaryDataType::TAG_NULLABLE
+        child_path_bytes = checked_role_add(path_bytes, ".nested".bytesize.to_u64)
+        measure_qbit_actual_sites(type.child_at(0), child_path_bytes, context)
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        combined = {sites: 0_u64, slots: 0_u64, snapshot_bytes: 0_u64}
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_qbit?
+
+          child_path_bytes = checked_role_add(path_bytes, ".field.".bytesize.to_u64)
+          child_path_bytes = checked_role_add(child_path_bytes, decimal_digits(index).to_u64)
+          combined = combine_qbit_site_metadata(
+            combined,
+            measure_qbit_actual_sites(child, child_path_bytes, context),
+          )
+        end
+        combined
+      when BinaryDataType::TAG_MAP
+        combined = {sites: 0_u64, slots: 0_u64, snapshot_bytes: 0_u64}
+        2.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_qbit?
+
+          child_path_bytes = checked_role_add(path_bytes, ".elements.field.".bytesize.to_u64)
+          child_path_bytes = checked_role_add(child_path_bytes, decimal_digits(index).to_u64)
+          combined = combine_qbit_site_metadata(
+            combined,
+            measure_qbit_actual_sites(child, child_path_bytes, context),
+          )
+        end
+        combined
+      when BinaryDataType::TAG_VARIANT
+        combined = {sites: 0_u64, slots: 0_u64, snapshot_bytes: 0_u64}
+        type.child_count.times do |index|
+          child = type.child_at(index)
+          next unless child.contains_qbit?
+
+          child_path_bytes = checked_role_add(path_bytes, ".arm.".bytesize.to_u64)
+          child_path_bytes = checked_role_add(child_path_bytes, decimal_digits(index).to_u64)
+          combined = combine_qbit_site_metadata(
+            combined,
+            measure_qbit_actual_sites(child, child_path_bytes, context),
+          )
+        end
+        combined
+      else
+        context.unsupported!("QBit is outside the admitted Dynamic actual profile")
+      end
+    end
+
+    private def self.combine_qbit_site_metadata(
+      left : NamedTuple(sites: UInt64, slots: UInt64, snapshot_bytes: UInt64),
+      right : NamedTuple(sites: UInt64, slots: UInt64, snapshot_bytes: UInt64),
+    ) : NamedTuple(sites: UInt64, slots: UInt64, snapshot_bytes: UInt64)
+      {
+        sites:          checked_role_add(left[:sites], right[:sites]),
+        slots:          checked_role_add(left[:slots], right[:slots]),
+        snapshot_bytes: checked_role_add(left[:snapshot_bytes], right[:snapshot_bytes]),
+      }
     end
 
     private def self.preflight_qbit_site_snapshots(context : BinaryCodecContext, snapshot_bytes : UInt64) : Nil

@@ -654,6 +654,7 @@ module CrystalClick
               reserved_framing,
               allow_json: true,
               allow_aggregate_function: true,
+              allow_recursive_qbit: true,
             )
             framing_bytes = profile.with_size_stream? ? 8_u64 : var_uint_size(envelope.size.to_u64)
             budget.ensure_wire_bytes(checked_add(framing_bytes, envelope.size.to_u64))
@@ -777,6 +778,16 @@ module CrystalClick
       traversal.visit_node(depth)
       case type.tag
       when BinaryDataType::TAG_QBIT
+        if plan = dynamic_plan
+          if site = plan.qbit_site_for(path)
+            scratch_by_type = qbit_site_scratch || raise UnsupportedFormatError.new("Dynamic QBit plane scratch was not preflighted")
+            scratch = scratch_by_type[site.qbit_type]? || raise UnsupportedFormatError.new("Dynamic QBit plane scratch is missing its nominal type")
+            site.append_zero_planes(scratch) do |role, byte|
+              write_byte(lanes, role, byte, budget)
+            end
+            return nil
+          end
+        end
         if site = static_qbit_site_for(path, qbit_static_sites)
           scratch_by_type = qbit_site_scratch || raise UnsupportedFormatError.new("static QBit plane scratch was not preflighted")
           scratch = scratch_by_type[site.qbit_type]? || raise UnsupportedFormatError.new("static QBit plane scratch is missing its nominal type")

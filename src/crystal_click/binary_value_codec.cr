@@ -74,6 +74,7 @@ module CrystalClick
       reserved_wire_bytes : UInt64 = 0_u64,
       allow_json : Bool = false,
       allow_aggregate_function : Bool = false,
+      allow_recursive_qbit : Bool = false,
     ) : Bytes
       unless budget.writing?
         raise ArgumentError.new("Dynamic bulk child encoder requires a write-direction budget")
@@ -82,7 +83,9 @@ module CrystalClick
         raise UnsupportedFormatError.new("AggregateFunction is not admitted as this Dynamic shared actual type")
       end
       if value.type.contains_qbit? && value.type.tag != BinaryDataType::TAG_QBIT
-        raise UnsupportedFormatError.new("QBit is admitted only as a direct Dynamic actual type")
+        unless allow_recursive_qbit && BinaryDynamicQBitAdmission.admitted_actual_type?(value.type)
+          raise UnsupportedFormatError.new("recursive QBit is not admitted as this Dynamic shared actual type")
+        end
       end
       if value.type.contains_json? && !allow_json
         raise UnsupportedFormatError.new("JSON is not admitted as a Dynamic actual type")
@@ -121,6 +124,7 @@ module CrystalClick
       charge_parent_value_edge : Bool = false,
       allow_json : Bool = false,
       allow_aggregate_function : Bool = false,
+      allow_recursive_qbit : Bool = false,
     ) : Tuple(BinaryDataType, BinaryValue?)
       context = BinaryCodecContext.new(
         budget.limits,
@@ -137,7 +141,9 @@ module CrystalClick
         context.unsupported!("AggregateFunction is not admitted as this Dynamic shared actual type")
       end
       if type.contains_qbit? && type.tag != BinaryDataType::TAG_QBIT
-        context.unsupported!("QBit is admitted only as a direct Dynamic actual type")
+        unless allow_recursive_qbit && BinaryDynamicQBitAdmission.admitted_actual_type?(type)
+          context.unsupported!("recursive QBit is not admitted as this Dynamic shared actual type")
+        end
       end
       if type.contains_json? && !allow_json
         context.unsupported!("JSON is not admitted as a Dynamic actual type")

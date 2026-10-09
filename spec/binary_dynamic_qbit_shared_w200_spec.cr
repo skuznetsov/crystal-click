@@ -185,7 +185,7 @@ describe "W200 direct QBit Object shared Copy child" do
     end
   end
 
-  it "keeps wrong nominal payloads and Array(QBit) outside Dynamic child admission" do
+  it "keeps wrong nominal payloads and recursive QBit outside default shared-child admission" do
     qbit_type = w200_shared_copy_qbit_type
     qbit_value = CrystalClick::QBitValue.new(qbit_type, w200_shared_copy_qbit_raw)
     wrong_type = CrystalClick::QBitType.new("Float32", 16_u64, 8_u64)
@@ -225,6 +225,9 @@ describe "W200 direct QBit Object shared Copy child" do
       array_qbit_type,
       [CrystalClick::BinaryValue.qbit(qbit_data_type, qbit_value)] of CrystalClick::BinaryValue,
     )
+    # The shared-child helper remains closed by default; only the separately
+    # qualified Dynamic bulk path opts into the recursive static-product
+    # profile. Object Shared Copy continues to use this default policy.
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryValueCodec.encode_dynamic_bulk_child(
         array_qbit_value,

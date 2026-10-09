@@ -5,9 +5,11 @@ module CrystalClick
     @path : String
     @type : BinaryDataType
     @plane_roles : Array(String)
+    @column : QBitColumnType
 
     def initialize(path : String, @type : BinaryDataType, plane_roles : Array(String))
       qbit = @type.qbit_type || raise(ArgumentError.new("Dynamic QBit site requires a nominal QBit descriptor"))
+      @column = QBitColumnType.new(qbit)
       unless plane_roles.size == qbit.plane_count
         raise ArgumentError.new("Dynamic QBit plane roles do not match the nominal descriptor")
       end
@@ -60,6 +62,12 @@ module CrystalClick
     # visitor to reuse its one caller-owned scratch buffer for every row.
     def append_plane_row(value : QBitValue, scratch : Bytes, &write_byte : String, UInt8 -> Nil) : Nil
       BinaryQBitBulkCodec.append_plane_row(value, @plane_roles, 0, scratch) do |role, byte|
+        yield role, byte
+      end
+    end
+
+    def append_zero_planes(scratch : Bytes, &write_byte : String, UInt8 -> Nil) : Nil
+      BinaryQBitBulkCodec.append_zero_planes(@column, @plane_roles, 0, scratch) do |role, byte|
         yield role, byte
       end
     end

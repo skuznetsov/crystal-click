@@ -1,6 +1,38 @@
 # CrystalClick project status
 
-Current static Variant/QBit composition (W232, 2026-10-08): VERIFIED within
+Current recursive Dynamic/QBit composition (W233, 2026-10-08): VERIFIED within
+finite quiescent Wide/LZ4/Default/plain-mrk2 prepared Dynamic V3/BASIC profiles
+(scoped verdict: ROBUST). Static Array/Tuple/BASIC Map/nominal Nested and legal
+Nullable/Variant descendants reuse QBit leaf serde and recursive visitors.
+Dedicated admission and occurrence-schedule owners bind Dynamic's sparse arms
+to nested element/Variant axes; staged writing and typed full/window consumers
+share exact declarations, including shared scalar overflow and empty values.
+
+The same 52 affected spec files pass 345 examples per mode. Both paired native
+modes and independent raw audits qualify three fixed root/carrier/forced-shared
+profiles: 43 records per mode, comprising 13 reused stock records and 30 fresh
+helper/native records (73 distinct processes across modes). Public reads,
+publication/readback, native ATTACH/CHECK and literal full/middle/zero RowBinary
+agree. All 206 generated part files match by actual bytes across modes.
+Corrected checksum-valid fixtures require semantic diagnostics; omitting the
+new hook fails all six late-corruption controls, and byte-exact restoration
+passes. Both audits reject six coherent CHECK/status-label forgeries apiece
+and pass after each exact restoration. Final formatting, Ruby 2.6 syntax and
+selected source/spec/harness/helper hash checks pass.
+
+This does not admit every product or physical version. JSON/Object QBit paths,
+mixed runtime-owned siblings, LC(QBit), aggregate arguments and unqualified
+Compact/sparse/custom layouts retain guards. Shape validation is not unseen
+payload authentication; logical caps are not RSS/throughput guarantees. The
+source and runtime are separately pinned. Ten JSON controls pass individually;
+their grouped Crystal Proc-alias compilation symptom also reproduces on clean
+W232 and remains open. No whole-suite or compiler-fix claim is made.
+General MV/projection writing/execution and large-facade decomposition remain
+open, memory/performance stays deferred, and the overall goal remains active.
+Details: [DYNAMIC_QBIT_RECURSIVE_FRONTIER.md](DYNAMIC_QBIT_RECURSIVE_FRONTIER.md),
+[W233 evidence packet](../.landmark/evidence/recursive-qbit-dynamic-w233.json).
+
+Previous static Variant/QBit composition (W232, 2026-10-08): VERIFIED within
 finite quiescent Wide/LZ4/Default/plain-mrk2 profiles with BASIC Variant/Map/
 Nullable serialization (scoped verdict: ROBUST). Existing leaf serde, generic
 recursive visitors, physical binding, staged writer and typed consumers are

@@ -630,6 +630,7 @@ module CrystalClick
               true,
               allow_json: true,
               allow_aggregate_function: true,
+              allow_recursive_qbit: true,
             )
             if value = child_value
               BinaryValue.dynamic(type, value)

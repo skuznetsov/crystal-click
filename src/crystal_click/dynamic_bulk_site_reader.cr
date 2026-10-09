@@ -219,6 +219,7 @@ module CrystalClick
         raise CorruptPartError.new("Dynamic site structure roles differ from the parsed actual roster")
       end
 
+      dynamic_discriminator_modes = Hash(String, UInt64).new
       rows = expected_parent_rows
       logical_bytes = structure_logical_bytes
       if json_metadata_logical_bytes > UInt64::MAX - logical_bytes
@@ -258,7 +259,8 @@ module CrystalClick
             transport_budget,
           )
           if dynamic_discriminator_role?(role)
-            BinaryBulkDiscriminatorFramingAdapter.validate_header(role, window.bytes, prefix_size)
+            mode = BinaryBulkDiscriminatorFramingAdapter.validate_header(role, window.bytes, prefix_size)
+            dynamic_discriminator_modes[role] = mode
           else
             BinaryBulkPhysicalPrefixAdapter.preflight_read(
               [{role, prefix_size, 1}], codec_budget
@@ -290,6 +292,10 @@ module CrystalClick
         @site_grid = StorageOccurrenceGrid.new(@mark_row_counts, @mark_row_counts, codec_budget)
       end
       validate_complete_schedule!(codec_budget)
+      BinaryDynamicQBitOccurrenceSchedule.validate!(
+        @plan, @type, @physical, @source, @grids, dynamic_discriminator_modes, @mark_row_counts,
+        @site_grid, codec_budget, transport_budget,
+      )
 
       @plan.site_paths.each do |site_path|
         role = "#{site_path}.dynamic_structure"

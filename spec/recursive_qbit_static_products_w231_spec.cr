@@ -603,7 +603,7 @@ describe "W231 static recursive QBit products" do
     end
   end
 
-  it "does not transfer static product admission to Count, Dynamic, JSON, or Object owners" do
+  it "keeps Count, JSON, Object, and immediate-Nullable gates while admitting recursive Dynamic products" do
     qbit = CrystalClick::BinaryDataType.qbit(w231_qbit_type)
     tuple = CrystalClick::BinaryDataType.tuple([qbit] of CrystalClick::BinaryDataType)
     array_tuple = CrystalClick::BinaryDataType.array(tuple)
@@ -611,7 +611,10 @@ describe "W231 static recursive QBit products" do
     map_value = CrystalClick::BinaryDataType.map(CrystalClick::BinaryDataType.primitive("String"), qbit)
     nested = CrystalClick::BinaryDataType.nested([qbit] of CrystalClick::BinaryDataType, ["embedding"] of String)
     nullable_tuple = CrystalClick::BinaryDataType.nullable(tuple)
-    products = [tuple, array_tuple, map_key, map_value, nested, nullable_tuple] of CrystalClick::BinaryDataType
+    array_nullable_tuple = CrystalClick::BinaryDataType.array(nullable_tuple)
+    products = [
+      tuple, array_tuple, map_key, map_value, nested, nullable_tuple, array_nullable_tuple,
+    ] of CrystalClick::BinaryDataType
 
     products.each do |argument|
       CrystalClick::BinaryAggregateCountArgumentPolicy.admitted?(argument).should be_false
@@ -643,16 +646,17 @@ describe "W231 static recursive QBit products" do
         end
       else
         structure = CrystalClick::DynamicStructure.new([argument] of CrystalClick::BinaryDataType)
-        expect_raises(CrystalClick::UnsupportedFormatError) do
-          CrystalClick::BinaryDynamicBulkPlan.new(dynamic, {"root" => structure})
-        end
-        expect_raises(CrystalClick::UnsupportedFormatError) do
-          CrystalClick::BinaryDynamicBulkCodec.encode(
-            dynamic,
-            {"root" => structure},
-            [] of Array(CrystalClick::BinaryValue),
-          )
-        end
+        plan = CrystalClick::BinaryDynamicBulkPlan.new(dynamic, {"root" => structure})
+        plan.qbit_sites.should_not be_empty
+
+        streams = CrystalClick::BinaryDynamicBulkCodec.encode(
+          dynamic,
+          {"root" => structure},
+          [] of Array(CrystalClick::BinaryValue),
+        )
+        CrystalClick::BinaryDynamicBulkCodec.decode(
+          dynamic, streams, [] of UInt64,
+        ).should eq([] of Array(CrystalClick::BinaryValue))
       end
       forged = CrystalClick::BinaryDynamicBulkStreams.new(
         CrystalClick::BinaryDynamicStructureStreams.new({
@@ -663,8 +667,17 @@ describe "W231 static recursive QBit products" do
           {} of String => CrystalClick::BinaryBulkStream,
         ),
       )
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::BinaryDynamicBulkCodec.decode(dynamic, forged, [] of UInt64)
+      if argument.tag == CrystalClick::BinaryDataType::TAG_NULLABLE
+        expect_raises(CrystalClick::UnsupportedFormatError) do
+          CrystalClick::BinaryDynamicBulkCodec.decode(dynamic, forged, [] of UInt64)
+        end
+      else
+        # The admitted descriptor reaches bulk decoding; its missing planned
+        # plane/ordinary roles are malformed physical data, not an unsupported
+        # Dynamic type.
+        expect_raises(CrystalClick::CorruptPartError) do
+          CrystalClick::BinaryDynamicBulkCodec.decode(dynamic, forged, [] of UInt64)
+        end
       end
     end
 

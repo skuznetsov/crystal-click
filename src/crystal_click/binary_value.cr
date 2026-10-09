@@ -155,7 +155,7 @@ module CrystalClick
          !BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(child.type)
         raise ArgumentError.new("AggregateFunction is outside the admitted static Dynamic actual profile")
       end
-      if child && child.type.contains_qbit? && child.type.tag != BinaryDataType::TAG_QBIT
+      if child && child.type.contains_qbit? && !BinaryDynamicQBitAdmission.admitted_actual_type?(child.type)
         raise ArgumentError.new("QBit is not admitted as a Dynamic actual type")
       end
       if child && child.type.tag == BinaryDataType::TAG_NOTHING

@@ -1,5 +1,54 @@
 # Crystal Click landmarks
 
+## Recursive Dynamic/QBit composition — W233
+
+- Active objective remains CH-compatible read/write types and MV/projection
+  inspection before optimization. The overall goal is not complete.
+- Baseline: `ae2e97f0f0c77a8b4c847b393eeb0697c1af2c47`. Scoped result:
+  VERIFIED finite quiescent Wide/LZ4/Default/plain-mrk2 prepared Dynamic
+  V3/BASIC recursive QBit actuals; root adversary ROBUST within this scope.
+  Reuse existing static-product leaf serde and scalar/bulk visitors; dedicated
+  single-file admission and shape schedule owners bind sparse Dynamic/Variant
+  arms and Array/Map sizes. Default Object shared-child policy remains closed.
+- Evidence: the same 52 affected files pass 345 examples per mode, including
+  67 JSON controls individually. Both paired native modes and separate audits
+  qualify three profiles and 43 records/mode (13 shared stock + 30 fresh;
+  73 distinct processes across modes). All 206 generated files match by actual
+  bytes, names, sizes and SHA-256: 30,770 bytes/mode. Formatting passes for
+  18 owned Crystal files, three harnesses pass Ruby 2.6 syntax, selected hashes
+  and both helper hashes match. Source and runtime are distinct pins.
+- Refuted route: base/site rows cannot replace nested leaf occurrences.
+  A checksum-valid hook-omission seed fails six late mark/selector/Variant/Array
+  controls; exact source restoration passes. An earlier replacement-block
+  fixture omitted frame CityHash, so its Variant/Array failures were not
+  semantic evidence and are superseded. Exact retained count workspace passes
+  at 5120 bytes and rejects at 5119 before positive shape reads. Unique shape
+  lanes share the open-time budget; BASIC deltas preflight before tag reads.
+- Harness pressure: each independent audit rejects six coherent CHECK-zero/
+  message/status-label forgeries and passes after exact restoration. Exact
+  local Atomic directory aliases pass 18 synthetic checks; 162 disallowed
+  alias cases reject. Recorder/NamedTuple/equality/module-call plumbing errors
+  were corrected before fresh captures, not relabelled into native passes.
+- Boundary: neutral descriptors do not admit runtime payload ownership.
+  Mixed runtime siblings, JSON/Object QBit paths, LC(QBit), aggregate arguments
+  and unqualified serializers remain guarded. Shape validation is not unseen
+  payload authentication; logical caps are not RSS/throughput guarantees.
+  No all-depth/parameter/layout, whole-suite or performance claim.
+- Open compiler branch: the ten-file JSON Proc-alias mismatch reproduces on
+  clean W232 and with the new hook omitted. All files pass individually;
+  virtual Proc argument interaction is a hypothesis, not a root-cause closure.
+- Return pointer: [W233 frontier](docs/DYNAMIC_QBIT_RECURSIVE_FRONTIER.md),
+  [evidence index](.landmark/evidence/recursive-qbit-dynamic-w233.json).
+  Next: one concrete JSON/dictionary/layout boundary with native persistence.
+  General MV/projection execution/writing and broad facade decomposition stay
+  open. Standing authority is bounded local work/atomic commits, not push,
+  production mutation or resumed optimization.
+- Decay: refresh after owners/consumers, fixtures/helpers/auditors, source/
+  runtime or profile changes. Temporary raw roots require replay when absent.
+  Selected hashes are not all compiler inputs or reproducible-build proof;
+  raw audits check consistency, not cryptographic provenance. Luna review is
+  correlated; root independently executed native checks and adversary controls.
+
 ## Static Variant/QBit composition — W232
 
 - Active objective remains CH-compatible read/write types and MV/projection
