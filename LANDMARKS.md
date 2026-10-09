@@ -1,5 +1,37 @@
 # Crystal Click landmarks
 
+## Static declared Object/QBit refusal — W235
+
+- Baseline `00cb48cfca26484913a63eb0b5f6e210ea37c8e2`; production unchanged.
+  VERIFIED finite refusal/guard certificate, root hostile verdict ROBUST.
+  Do not promote generic QBit serde or DataTypeFactory constructor acceptance
+  into stock compatibility for static declared JSON paths.
+- Native `26.10.1.1201` build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`
+  returned exact synchronous Code 43 for all 13 isolated QBit CREATE schemas:
+  four element tags, custom stride, Array/Tuple/Map/Nested/Nullable and
+  one-/two-arm Variant plus Array(Variant). A six-row ordinary JSON control
+  passed exact schema, CHECK=1 and independent full/middle/empty RowBinary.
+  Root audited all 23 actual process captures, not witness labels.
+- Source pin `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357` is distinct from
+  runtime. `DataTypeObject.cpp:180-227` eagerly builds JSONExtractTree;
+  `JSONExtractTree.cpp:2655-2833` has no QBit node. Wrapper and every-arm
+  Variant recursion reaches the unsupported-type error before ingestion.
+- Preserved local schema/parser/plan guards and ordinary/runtime controls:
+  25 examples in each mode across 5 files, zero failures/errors/pending.
+  Refusal classifier rejects 14 mutated records, a wrong expected leaf and
+  4 missing-field records; 2 exact genuine forms pass. The earlier wrapper API
+  error and candidate-spec RED are not successful stock type support.
+- Return pointer: [W235 frontier](docs/OBJECT_DECLARED_QBIT_FRONTIER.md),
+  [evidence index](.landmark/evidence/object-declared-qbit-refusal-w235.json).
+  Next candidate: stock ordinary Nested declared paths, not static QBit
+  admission without a changed upstream JSON tree or qualified alternate route.
+  Overall goal remains active: remaining legal types/layouts, MV/projections,
+  broad facade decomposition, then optimization. No push authority.
+- Decay: refresh source/native/compiler/profile pins or after relevant guard,
+  helper or oracle changes. Raw roots are temporary; replay when absent.
+  No all-version/product, paired static-QBit part, whole-suite or performance
+  claim. A refused candidate is progress, not an overall-goal blocker.
+
 ## Recursive Object-runtime/QBit composition — W234
 
 - Active objective remains CH-compatible read/write types and MV/projection

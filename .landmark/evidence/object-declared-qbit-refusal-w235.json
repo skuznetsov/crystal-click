@@ -1,0 +1,218 @@
+{
+  "format": "crystal_click_declared_object_qbit_refusal_evidence_v1",
+  "slice": "W235 stock refusal for statically declared Object QBit paths",
+  "created_at_utc": "2026-10-09T05:37:45Z",
+  "baseline_revision": "00cb48cfca26484913a63eb0b5f6e210ea37c8e2",
+  "claim": {
+    "level": "VERIFIED",
+    "verdict": "ROBUST within the finite native refusal and local guard/control scope",
+    "result": "Preserve guards; no production type admission or serde change",
+    "refuted": "DataTypeFactory acceptance and an existing QBit leaf codec suffice to admit static declared JSON/QBit compositions as stock-compatible",
+    "surviving": "Reuse generic recursive leaf/product serde; qualify each owner's legal grammar, physical context and native persistence separately",
+    "mechanism": "Object JSON serialization eagerly builds JSONExtractTree; missing QBit case is reached through legal static wrappers and every Variant arm before RowBinary ingestion",
+    "native": "13 isolated exact Code 43 CREATE refusals; ordinary JSON control persists 6 rows, 3 data marks plus terminal, CHECK=1 and independent full/middle/empty RowBinary",
+    "local": "14 QBit descriptor candidates reject schema/parser/plan admission; ordinary recursive and existing runtime/static controls pass 25 examples in each mode across 5 files"
+  },
+  "boundaries": {
+    "allowed_paths": [
+      "docs/OBJECT_DECLARED_QBIT_FRONTIER.md",
+      "scripts/recheck_object_declared_qbit_stock_w235.rb",
+      "spec/object_declared_qbit_guards_w235_spec.cr",
+      "LANDMARKS.md",
+      ".landmark/evidence/object-declared-qbit-refusal-w235.json"
+    ],
+    "changed_paths": [
+      "docs/OBJECT_DECLARED_QBIT_FRONTIER.md",
+      "scripts/recheck_object_declared_qbit_stock_w235.rb",
+      "spec/object_declared_qbit_guards_w235_spec.cr",
+      "LANDMARKS.md",
+      ".landmark/evidence/object-declared-qbit-refusal-w235.json"
+    ],
+    "production_changed": false,
+    "remote_changes": false,
+    "overall_goal": "ACTIVE; read/write legal CH types and MV/projection support before optimization"
+  },
+  "pins": {
+    "source": {
+      "root": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+      "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "files": [
+        {
+          "path": "src/DataTypes/DataTypeObject.cpp",
+          "sha256": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7",
+          "lines": "180-227"
+        },
+        {
+          "path": "src/Formats/JSONExtractTree.cpp",
+          "sha256": "0514c6077c73836ee344e1044365257cd87381e10d35e862d83fd578f2604afe",
+          "lines": "2655-2833"
+        }
+      ]
+    },
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build_hash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "source_and_runtime_distinct": true
+    },
+    "compiler": {
+      "version": "Crystal 1.21.0 (2026-07-16)",
+      "llvm": "22.1.8",
+      "target": "aarch64-apple-darwin25.6.0",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/compiler-version.log"
+    },
+    "ruby": {
+      "version": "ruby 2.6.10p210 (2022-04-12 revision 67958) [universal.arm64e-darwin25]",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/ruby-version.log"
+    },
+    "selected_inputs": [
+      {
+        "path": "scripts/recheck_object_declared_qbit_stock_w235.rb",
+        "sha256": "1102cff30bc085e1740fc7d35f94f59526f8b5be3527185ef57382db0e56844c"
+      },
+      {
+        "path": "spec/object_declared_qbit_guards_w235_spec.cr",
+        "sha256": "051aada080c4a12af0f1511c696442e09d0f3ce0ad1441985053f5fb24b4c7ee"
+      }
+    ]
+  },
+  "resource_guard": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+  "verification": [
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_object_declared_qbit_stock_w235.rb --capture-root /private/tmp/crystal-click-w235-stock.ApllVz > /private/tmp/crystal-click-w235.lBAMp1/stock-final.log 2>&1",
+      "root": "/private/tmp/crystal-click-w235-stock.ApllVz",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/stock-final.log",
+      "exit_code": 0,
+      "invocations": 23,
+      "refusals": 13,
+      "positive_windows": 3,
+      "log_sha256": "b414cf0c7db9ae1d6aea91bf6d42254e48375a9b40a7533e2e7363861f563e79",
+      "expected": "13 exact synchronous Code 43 refusals and all control operations pass",
+      "observed": true
+    },
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh crystal 600 12288 spec spec/object_declared_qbit_guards_w235_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/object_runtime_qbit_kernel_w234_spec.cr spec/variant_qbit_recursive_composition_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w235.lBAMp1/guards-debug-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/guards-debug-final.log",
+      "exit_code": 0,
+      "examples": 25,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log_sha256": "02c4971cbac203d0133cf18781e6eb05661037bfed64f6900c7abcd0037ce481",
+      "files": [
+        "spec/object_declared_qbit_guards_w235_spec.cr",
+        "spec/qbit_binary_kernel_object_boundary_spec.cr",
+        "spec/recursive_qbit_owner_guards_w230_spec.cr",
+        "spec/object_runtime_qbit_kernel_w234_spec.cr",
+        "spec/variant_qbit_recursive_composition_spec.cr"
+      ]
+    },
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh crystal 600 12288 spec spec/object_declared_qbit_guards_w235_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/object_runtime_qbit_kernel_w234_spec.cr spec/variant_qbit_recursive_composition_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug > /private/tmp/crystal-click-w235.lBAMp1/guards-release-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/guards-release-final.log",
+      "exit_code": 0,
+      "examples": 25,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "log_sha256": "39a5a7bf3d627af9940b91022d01a2f50c871cb35156ce0d9ecf0c4544ee9584",
+      "files": [
+        "spec/object_declared_qbit_guards_w235_spec.cr",
+        "spec/qbit_binary_kernel_object_boundary_spec.cr",
+        "spec/recursive_qbit_owner_guards_w230_spec.cr",
+        "spec/object_runtime_qbit_kernel_w234_spec.cr",
+        "spec/variant_qbit_recursive_composition_spec.cr"
+      ]
+    },
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e '\nrequire \"json\"\nroot = ARGV.fetch(0)\ninv = File.join(root, \"invocations\")\nstatuses = Dir.glob(File.join(inv, \"*.status.json\")).sort\nraise \"capture count\" unless statuses.length == 23\ncases = [\n [\"direct_int8\",\"QBit(Int8, 9)\",\"QBit(Int8, 9)\"],\n [\"direct_bfloat16\",\"QBit(BFloat16, 9)\",\"QBit(BFloat16, 9)\"],\n [\"direct_float32\",\"QBit(Float32, 9)\",\"QBit(Float32, 9)\"],\n [\"direct_float64\",\"QBit(Float64, 9)\",\"QBit(Float64, 9)\"],\n [\"custom_stride\",\"QBit(Int8, 16, 8)\",\"QBit(Int8, 16, 8)\"],\n [\"array\",\"Array(QBit(Int8, 9))\",\"QBit(Int8, 9)\"],\n [\"tuple\",\"Tuple(q QBit(Int8, 9), n UInt8)\",\"QBit(Int8, 9)\"],\n [\"map\",\"Map(String, QBit(Int8, 9))\",\"QBit(Int8, 9)\"],\n [\"nested\",\"Nested(q QBit(Int8, 9), tag UInt8)\",\"QBit(Int8, 9)\"],\n [\"nullable\",\"Nullable(QBit(Int8, 9))\",\"QBit(Int8, 9)\"],\n [\"variant_one_arm\",\"Variant(QBit(Int8, 9))\",\"QBit(Int8, 9)\"],\n [\"variant_qbit_string\",\"Variant(QBit(Int8, 9), String)\",\"QBit(Int8, 9)\"],\n [\"array_variant_qbit_string\",\"Array(Variant(QBit(Int8, 9), String))\",\"QBit(Int8, 9)\"]\n]\ncases.each_with_index do |(id,type,leaf), index|\n prefix = File.join(inv, \"%04d-%s-create\" % [index+3, id])\n status = JSON.parse(File.binread(prefix+\".status.json\"))\n raise \"bad native exit #{id}\" unless status.fetch(\"exitstatus\") == 43 && status.fetch(\"signaled\") == false && status.fetch(\"termsig\").nil? && status.fetch(\"timed_out\") == false && status.fetch(\"spawn_error\").nil?\n raise \"unexpected stdout #{id}\" unless File.binread(prefix+\".stdout\").empty?\n stderr = File.binread(prefix+\".stderr\")\n expected = \"Code: 43. DB::Exception: JSON serialization doesn'\\''t support the return type schema: #{leaf}. (ILLEGAL_TYPE_OF_ARGUMENT)\\n\"\n raise \"wrong exact native error #{id}\" unless stderr == expected\n sql = File.binread(prefix+\".sql\")\n raise \"wrong native schema #{id}\" unless sql.start_with?(\"CREATE TABLE default.w235_json_qbit_#{id} (id UInt64, j JSON(q #{type})) ENGINE=MergeTree ORDER BY id SETTINGS \")\nend\nstatuses.each_with_index do |path, index|\n next if (2...15).include?(index)\n status = JSON.parse(File.binread(path))\n raise \"control exit\" unless status.fetch(\"exitstatus\") == 0 && !status.fetch(\"signaled\") && !status.fetch(\"timed_out\") && status.fetch(\"spawn_error\").nil?\nend\nraise \"CHECK\" unless File.binread(File.join(inv, \"0018-positive-control-check.stdout\")) == \"all_1_1_0\\t1\\t\\n\"\nraise \"schema\" unless File.binread(File.join(inv, \"0019-positive-control-schema.stdout\")) == \"id\\tUInt64\\nj\\tJSON(q UInt8, xs Array(UInt8))\\n\"\nvalues = [[7,[1,2]],[0,[]],[255,[8]],[0,[3,4,5]],[0,[]],[42,[9,0]]]\nrows = values.each_with_index.map { |(q,xs),i| [i+1].pack(\"Q<\") + [q,xs.length,*xs].pack(\"C*\") }\n{\"full\"=>[21,rows.join],\"middle\"=>[22,rows[2,2].join],\"zero\"=>[23,\"\".b]}.each do |name,(number,expected)|\n prefix = File.join(inv,\"%04d-positive-control-rowbinary-%s\" % [number,name])\n raise \"control literal #{name}\" unless File.binread(prefix+\".stdout\") == expected\nend\nputs JSON.generate({\"raw_native_audit\"=>\"pass\",\"exact_refusals\"=>13,\"actual_records\"=>23,\"independent_control_windows\"=>3,\"source_of_verdict\"=>\"raw status, SQL, stderr, stdout; not witness labels\"})\n' /private/tmp/crystal-click-w235-stock.ApllVz > /private/tmp/crystal-click-w235.lBAMp1/raw-native-audit.log 2>&1",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/raw-native-audit.log",
+      "exit_code": 0,
+      "log_sha256": "04fe8bbe575e0bfc0e93a137930f3bdb6231dc8e9eb5aae598bafd6d04d09697",
+      "expected": "Read actual SQL/status/stderr/stdout for all 23 children and independently pack control bytes, not witness labels",
+      "observed": true
+    },
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e '\nrequire \"./scripts/recheck_object_declared_qbit_stock_w235\"\nroot=ARGV.fetch(0)\nprefix=File.join(root,\"invocations\",\"0003-direct_int8-create\")\nbase=JSON.parse(File.binread(prefix+\".status.json\")).merge(\"stdout\"=>File.binread(prefix+\".stdout\"),\"stderr\"=>File.binread(prefix+\".stderr\"))\nowner=RecheckObjectDeclaredQBitStockW235\nleaf=\"QBit(Int8, 9)\"\nraise \"genuine refusal rejected\" unless owner.expected_qbit_refusal?(base,leaf)\nmutations=[\n {\"classification\"=>\"process_success\"},\n {\"exitstatus\"=>0},\n {\"exitstatus\"=>42},\n {\"signaled\"=>true},\n {\"termsig\"=>15},\n {\"timed_out\"=>true},\n {\"spawn_error\"=>\"synthetic spawn error\"},\n {\"stdout\"=>\"Code: 43\"},\n {\"stderr\"=>\"\"},\n {\"stderr\"=>base.fetch(\"stderr\").sub(\"QBit(Int8, 9)\",\"QBit(Float32, 9)\")},\n {\"stderr\"=>base.fetch(\"stderr\").sub(\"(ILLEGAL_TYPE_OF_ARGUMENT)\",\"(OTHER)\")},\n {\"stderr\"=>\"synthetic prefix\"+base.fetch(\"stderr\")},\n {\"stderr\"=>base.fetch(\"stderr\")+\"\\n\"},\n {\"stderr\"=>\"Code: 43. unrelated exception with QBit(Int8, 9)\"},\n]\nmutations.each_with_index do |mutation,index|\n raise \"forgery accepted #{index}\" if owner.expected_qbit_refusal?(base.merge(mutation),leaf)\nend\nraise \"wrong expected leaf accepted\" if owner.expected_qbit_refusal?(base,\"QBit(Float32, 9)\")\n[\"timed_out\",\"signaled\",\"stdout\",\"stderr\"].each do |key|\n incomplete=base.dup\n incomplete.delete(key)\n begin\n  owner.expected_qbit_refusal?(incomplete,leaf)\n  raise \"missing field did not fail closed #{key}\"\n rescue KeyError\n end\nend\nwithout_newline=base.merge(\"stderr\"=>base.fetch(\"stderr\").chomp)\nraise \"supported no-newline refusal\" unless owner.expected_qbit_refusal?(without_newline,leaf)\nputs JSON.generate({\"classifier_pressure\"=>\"pass\",\"genuine_variants\"=>2,\"mutated_records_rejected\"=>14,\"wrong_leaf_rejected\"=>1,\"missing_fields_fail_closed\"=>4})\n' /private/tmp/crystal-click-w235-stock.ApllVz > /private/tmp/crystal-click-w235.lBAMp1/classifier-pressure.log 2>&1",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/classifier-pressure.log",
+      "exit_code": 0,
+      "log_sha256": "24b36808c9bb57c4f5a8d06ded816cb9469d37cf7ec178dcd79682c98d496fd2",
+      "expected": "2 genuine forms accepted; 14 mutations, wrong expected leaf, 4 missing fields reject/fail closed",
+      "observed": true
+    },
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/recheck_object_declared_qbit_stock_w235.rb > /private/tmp/crystal-click-w235.lBAMp1/ruby-syntax-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/ruby-syntax-final.log",
+      "exit_code": 0,
+      "log_sha256": "f0f4e6bddec76a380d91f5e024a91ae4b938f4ccfcc8ee18a658ce2a12260026",
+      "expected": "Syntax OK",
+      "observed": true
+    },
+    {
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh crystal 120 4096 tool format --check spec/object_declared_qbit_guards_w235_spec.cr > /private/tmp/crystal-click-w235.lBAMp1/format-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w235.lBAMp1/format-final.log",
+      "exit_code": 0,
+      "log_sha256": "3450419680f61f3749da43299f98368fa4c9426149bbfc7e334a2de27afcd22f",
+      "expected": "no format changes required",
+      "observed": true
+    }
+  ],
+  "retained_captures": {
+    "availability": "Temporary local roots observed in this run; replay exact guarded commands if absent",
+    "root": "/private/tmp/crystal-click-w235-stock.ApllVz",
+    "witnesses_sha256": "39f83d02fc50433e25c1ab57dc83c37a102a84d534626fbabb4a5787a38fdd9b",
+    "capture_inventory_sha256": "d5ee4d9dab57b9a1fc9fead73710b4b7d6fcb92192813b3a43e6ec80a8060e90",
+    "part_inventory_sha256": "29fc8d7de81da20fd0b687caa457b8fb691833066c1da1cb1e1ff776e91264ef",
+    "first_harness_error_root": "/private/tmp/crystal-click-w235-stock.hkMiPm",
+    "initial_stock_refusal_root": "/private/tmp/crystal-click-w235-stock.y5i8zm",
+    "superseded_red_logs": [
+      {
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh crystal 600 12288 spec spec/object_declared_qbit_kernel_w235_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w235.lBAMp1/kernel-red.log 2>&1",
+        "log": "/private/tmp/crystal-click-w235.lBAMp1/kernel-red.log",
+        "exit_code": 1,
+        "examples": 7,
+        "errors": 6,
+        "failures": 0,
+        "passing_controls": 1,
+        "semantic": "typed JSON admission refusal and nil unadmitted descriptor metrics; compiled successfully"
+      },
+      {
+        "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w235.lBAMp1/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh crystal 600 12288 spec spec/object_declared_qbit_physical_w235_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w235.lBAMp1/physical-red.log 2>&1",
+        "log": "/private/tmp/crystal-click-w235.lBAMp1/physical-red.log",
+        "exit_code": 1,
+        "examples": 7,
+        "failures": 0,
+        "errors": 7,
+        "semantic": "Typed JSON schema admission refusal; successful compilation"
+      }
+    ],
+    "interpretation": "Candidate RED establishes local refusal; it is not a positive type capability or a reason to manufacture incompatible parts"
+  },
+  "adversary": {
+    "verdict": "ROBUST within scope",
+    "strongest_counterexample": "Source-valid Variant could hide an unsupported QBit arm behind String/NULL",
+    "discriminator": "Every Variant arm is eagerly checked by JSONExtractTree; isolated one-arm/two-arm/Array(Variant) native CREATE refusals confirm the constructor gate",
+    "measurement_attacks": "Exact exit/unsignaled/untimed-out/no-spawn/no-stdout/error bytes required; plausible substrings and forged status fields fail",
+    "review_lineage": "Luna reviews are correlated; root independently inspected source and executed native, raw audit, tests and pressure checks"
+  },
+  "residual_risks": [
+    "No all-version/depth/parameter/product/layout claim; source and runtime are distinct pins",
+    "No paired Crystal static-QBit part or newly admitted type; production remains unchanged",
+    "No whole-repository suite, broad architecture, MV/projection execution/writing or performance closure",
+    "Captured process data is observed evidence, not cryptographic compilation/execution provenance",
+    "Selected file hashes do not cover every dependency or compiler input",
+    "Evidence skill template and graph validator are unavailable; use existing repository packet format and JSON syntax check only, not a substantive graph-verification claim"
+  ],
+  "continuation": {
+    "active_goal": "CH-compatible read/write types and MV/projection support before optimization",
+    "confirmed_frontier": "Preserve refused static Object/QBit guards; W234 runtime support unchanged",
+    "next_falsifier": "Stock persistence for ordinary Nested declared paths with supported scalar children, then Object declaration/parser seam",
+    "authority": "Bounded local reversible work and atomic commits; no push, production mutation or optimization",
+    "decay": "Refresh after relevant source/runtime/compiler/profile/guard/helper/oracle change or loss of raw captures"
+  },
+  "links": [
+    "docs/OBJECT_DECLARED_QBIT_FRONTIER.md",
+    "LANDMARKS.md"
+  ]
+}
