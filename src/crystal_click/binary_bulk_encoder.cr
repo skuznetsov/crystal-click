@@ -12,6 +12,9 @@ module CrystalClick
       shared_value_depth_origin : Int = 1,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
     ) : BinaryBulkStreams
+      if type.geometry_storage_variant?
+        raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be encoded independently")
+      end
       unless budget.writing?
         raise ArgumentError.new("binary bulk encoder requires a write-direction budget")
       end

@@ -14,6 +14,9 @@ module CrystalClick
       shared_value_depth_origin : Int = 1,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
     ) : Array(Array(BinaryValue))
+      if type.geometry_storage_variant?
+        raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be decoded independently")
+      end
       unless !budget.writing?
         raise ArgumentError.new("binary bulk decoder requires a read-direction budget")
       end

@@ -1,7 +1,8 @@
 module CrystalClick
-  # Closed nominal owner for ClickHouse's seven static Custom Geo aliases.
-  # The binary descriptor carries only the alias name; its storage_type is an
-  # implicit recursive child used by the ordinary descriptor/value visitors.
+  # Closed nominal owner for ClickHouse's seven static Custom Geo leaf aliases
+  # plus its fixed-order Geometry alias. The binary descriptor carries only
+  # the name; storage_type is an implicit child used by shared recursive
+  # descriptor/value visitors.
   class BinaryCustomGeoType
     enum Profile
       Point
@@ -11,6 +12,7 @@ module CrystalClick
       MultiLineString
       Polygon
       MultiPolygon
+      Geometry
     end
 
     MAX_NAME_BYTES = 15
@@ -41,6 +43,7 @@ module CrystalClick
       when "MultiLineString" then Profile::MultiLineString
       when "Polygon"         then Profile::Polygon
       when "MultiPolygon"    then Profile::MultiPolygon
+      when "Geometry"        then Profile::Geometry
       else
         nil
       end
@@ -56,10 +59,19 @@ module CrystalClick
       @profile == Profile::Point
     end
 
+    # Geometry retains ClickHouse's Variant TypeId despite its nominal Custom
+    # wire tag. Direct Nullable and Variant-arm policies must see that source
+    # identity rather than only the wrapper tag.
+    def variant_type_id? : Bool
+      @profile == Profile::Geometry
+    end
+
     # Return the one exact implicit storage descriptor. Nested aliases remain
     # nominal Custom nodes; their own name-only wire representation is not
     # replaced by a flattened Array/Tuple spelling.
     def storage_type : BinaryDataType
+      return BinaryGeometryStorageType.storage_type if @profile == Profile::Geometry
+
       case @profile
       when Profile::Point
         coordinates = [
@@ -85,6 +97,11 @@ module CrystalClick
     # root. Hidden edges equal hidden nodes because every admitted profile is
     # a tree with exactly one immediate storage root and no shared subgraphs.
     def preflight_expansion(budget : BinaryCodecBudget, root_depth : Int) : Nil
+      if @profile == Profile::Geometry
+        BinaryGeometryStorageType.preflight_expansion(budget, root_depth)
+        return
+      end
+
       maximum = max_hidden_depth
       budget.ensure_depth(root_depth + maximum)
       budget.preflight_children(hidden_node_count)

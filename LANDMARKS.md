@@ -1,5 +1,52 @@
 # Crystal Click landmarks
 
+## Nominal Geometry recursive composition — W239
+
+- Baseline `8e109848d8d7d280ee2234b0c4f4b0d78fb0a6c7`; VERIFIED finite
+  descriptor/scalar/bulk/part/native certificate, root hostile verdict ROBUST
+  within scope. Closed Geometry owner preserves source-fixed discriminators
+  0..6 and intrinsic null 255; ordinary Variant remains sorted. Custom wire is
+  name-only. Existing recursive child visitors and publisher are reused; no
+  per-product codec or performance rewrite. The new storage owner has its own
+  class file; broad facade decomposition is still open.
+- Same 93 affected files: 492 examples per mode, zero failures/errors/pending.
+  Exact 50-node/49-edge/depth-11 hidden tree and shared bounds hold. Extracted
+  fixed-order storage cannot escape via ordinary wrapper/declaration or public
+  descriptor/scalar/facade/raw bulk roots. Actual RED exposed constructor,
+  declaration, four public serde and two raw serde escapes. A bare metadata RED
+  required exact roster validation plus legacy ordering, not new physical files.
+  Checksum-valid later sparse-size corruption rejects before early/EOF callbacks.
+- Fresh separate shallow source `f25eb93a0b890a3b87df05eb34e2af1f933b4089`
+  (October 9, 08:08:30 UTC); runtime `26.10.1.1201`, build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, has separate lineage. Stock:
+  seven profiles, 35 native records, 30 successes plus five expected refusals.
+  Each final mode adds five native records and a separately captured helper.
+  Stock reads, generated ATTACH/CHECK=1, exact schemas and independent full/
+  middle/empty RowBinary pass; separate raw audits pass. Six wrapper profiles
+  have native public typed scans/windows/EOF; bare Geometry's legacy typed
+  coordinates/topology are independently checked on stock and generated parts.
+- Independently authored semantic trees reject a coherent codec-round-tripping
+  x/y swap. All 446 generated files reconcile by actual bytes: 61,240 bytes per
+  mode. Formatting checks for 25 Crystal files and four Ruby syntax checks pass.
+  Both auditors reject seven in-memory wrong-byte controls and two isolated
+  copied-evidence mutations with passing genuine/clone/restored controls. This
+  is not immutable provenance against fully coordinated all-copy/all-witness
+  alteration. Fixture overflow and mistaken legacy API expectations were
+  plumbing, not type-capability RED. Original archive/evidence roots unchanged.
+- Return pointer: [W239 frontier](docs/GEOMETRY_RECURSIVE_FRONTIER.md),
+  [evidence index](.landmark/evidence/geometry-recursive-w239.json). Next falsifier:
+  one legal JSON/Dynamic/LowCardinality owner intersection with stock bytes,
+  prefix/arm/dictionary schedule, writer ATTACH and selected public consumers.
+  Generic child serde alone does not qualify the enclosing runtime layout.
+  Other state grammars, MV/projection analysis/writing and broad class
+  decomposition remain open. Overall goal ACTIVE; local atomic commit only,
+  no push authority. Memory/performance follows compatibility, not this slice.
+- Decay: refresh after relevant source/runtime/compiler/codec/admission/consumer/
+  helper/auditor/oracle changes or loss of temporary captures. Per-mark transport
+  still reindexes/redecodes and can conservatively exhaust shared work budgets
+  on large parts. No all-layout/version/product, whole-suite, RSS, throughput,
+  <=10% slowdown, live-MV freshness or full-goal closure.
+
 ## Nominal Custom Geo recursive composition — W238
 
 - Baseline `e33eec811840ce24499c3e6438036134977ff7e6`; VERIFIED finite

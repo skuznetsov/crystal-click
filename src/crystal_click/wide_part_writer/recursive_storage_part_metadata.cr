@@ -132,14 +132,20 @@ module CrystalClick
           index += 1
         end
 
-        # Bare Geo aliases keep the legacy typed reader's size-first roster.
-        # The closed alias has at most three sizes and two coordinate lanes;
-        # validate the exact roster before changing only its presentation order.
+        # Bare Geo aliases keep the legacy typed reader's size-first roster;
+        # Geometry keeps its fixed-discriminator arm order. Validate each
+        # exact roster before changing only its presentation order.
         if schema.bulk? && schema.bulk_type.tag == BinaryDataType::TAG_CUSTOM
           if geo = GeoArrayColumnType.for_type(schema.declaration)
             expected = geo.size_streams(value_name) + geo.coordinate_streams(value_name).to_a
             unless expected.sort == names
               raise UnsupportedFormatError.new("bare Geo physical roster differs from its legacy typed plan")
+            end
+            names = expected
+          elsif geometry = GeometryColumnType.for_type(schema.declaration)
+            expected = geometry.physical_streams(value_name).map(&.[0])
+            unless expected.sort == names
+              raise UnsupportedFormatError.new("bare Geometry physical roster differs from its legacy typed plan")
             end
             names = expected
           end

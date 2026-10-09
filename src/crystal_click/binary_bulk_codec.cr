@@ -39,6 +39,9 @@ module CrystalClick
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
       shared_value_depth_origin : Int = 1,
     ) : BinaryBulkStreams
+      if type.geometry_storage_variant?
+        raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be encoded independently")
+      end
       BinaryBulkEncoder.encode(
         type,
         granules,
@@ -89,6 +92,9 @@ module CrystalClick
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
       shared_value_depth_origin : Int = 1,
     ) : Array(Array(BinaryValue))
+      if type.geometry_storage_variant?
+        raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be decoded independently")
+      end
       BinaryBulkDecoder.decode(
         type,
         streams,

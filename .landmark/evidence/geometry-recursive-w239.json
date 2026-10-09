@@ -1,0 +1,1081 @@
+{
+  "format": "crystal_click_geometry_recursive_evidence_v1",
+  "slice": "W239 nominal Geometry recursive composition",
+  "observed_date": "2026-10-09",
+  "baseline_revision": "8e109848d8d7d280ee2234b0c4f4b0d78fb0a6c7",
+  "claim": {
+    "level": "VERIFIED",
+    "verdict": "ROBUST within the seven finite native profiles and tested guard boundaries",
+    "producer": "Root independently reviewed source/diff and executed serialized gates. Same-lineage delegated reviews are correlated support, not independent model agreement."
+  },
+  "boundaries": {
+    "overall_goal": "ACTIVE: legal CH-compatible read/write types and MV/projections before memory/performance; not full-goal or <=10% slowdown closure.",
+    "remote_changes": false,
+    "admitted_profiles": [
+      "Geometry",
+      "Array(Geometry)",
+      "Tuple(label String, geom Geometry)",
+      "Map(String, Geometry)",
+      "Nested(geom Geometry, point Point)",
+      "Nullable(Tuple(geom Geometry))",
+      "Variant(String, Tuple(geom Geometry))"
+    ],
+    "composition": "One closed nominal Geometry storage owner; reuse existing Custom/Variant/Geo and ordinary wrapper visitors, physical plans, census and staged publisher. No per-product serde.",
+    "nominal_descriptor": "0x2c, VarUInt 8, Geometry; hidden fixed-order Variant roster is not separately serialized.",
+    "arm_order": [
+      "LineString",
+      "MultiLineString",
+      "MultiPolygon",
+      "Point",
+      "Polygon",
+      "Ring",
+      "MultiPoint"
+    ],
+    "null_discriminator": 255,
+    "hidden_graph": {
+      "total_nodes": 50,
+      "edges": 49,
+      "maximum_depth": 11,
+      "hidden_nodes": 49,
+      "maximum_hidden_depth": 10
+    },
+    "finite_part_profile": "Quiescent Wide/LZ4/Default/BASIC/plain-mrk2; sorted UInt64 key and one payload. Bare Geometry has ten rows, five data marks [2,2,2,2,2], plus native terminal mark. Six wrappers have five rows, three data marks [2,2,1], plus terminal. Writer nested String version 1 and frame_bytes 4096.",
+    "consumer_boundary": "Direct bulk and independently checked stock/generated reads cover seven profiles. Six recursive forms have public typed full/window/EOF consumers. Bare Geometry preserves native-tested legacy GeometryRow coordinate/topology contracts; owned offline values also have local coverage.",
+    "guards": [
+      "Direct Nullable(Geometry), direct Variant(Geometry, String), and LowCardinality(Geometry) are actual native refusals.",
+      "Extracted fixed-order storage marker rejected by ordinary immediate-child/declaration and public descriptor/scalar/facade/raw bulk wire roots; internal nominal traversal and non-wire planning/default introspection remain available.",
+      "Arbitrary Custom names, JSON/Dynamic/LowCardinality/QBit/SAF/AF intersections, Geo Map keys and unqualified physical versions are not qualified by this slice.",
+      "No Compact/sparse/new physical versions, general multi-column publication, projection/MV execution/writing or live freshness qualification."
+    ],
+    "resource_boundary": "Original shared budgets/depth account hidden expansion, codec, transport and result work. Structural census precedes first/EOF callbacks. No full-column cache or allocator/throughput change.",
+    "residual_resource_risk": "Per-mark transport re-resolves/reindexes paired streams and can repeat cross-mark frame decoding, conservatively exhausting consumptive budgets on large parts.",
+    "evidence_boundary": "Actual sidecars, captured output and file-copy consistency are checked, not immutable cryptographic execution provenance. Coordinated alteration of every raw/generated/attached/snapshot copy and witness can evade an auditor without an independent immutable anchor.",
+    "changed_paths": [
+      ".landmark/evidence/geometry-recursive-w239.json",
+      "LANDMARKS.md",
+      "docs/GEOMETRY_RECURSIVE_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/check_geometry_composition_evidence_w239.rb",
+      "scripts/check_geometry_composition_pressure_w239.rb",
+      "scripts/check_geometry_composition_w239.cr",
+      "scripts/probe_geometry_composition_w239.rb",
+      "scripts/recheck_geometry_composition_w239.rb",
+      "scripts/support/geometry_composition_w239_semantics.cr",
+      "spec/binary_value_codec_w117_spec.cr",
+      "spec/custom_geo_recursive_w238_kernel_spec.cr",
+      "spec/custom_geo_recursive_w238_parts_spec.cr",
+      "spec/geometry_recursive_w239_bulk_spec.cr",
+      "spec/geometry_recursive_w239_consumers_spec.cr",
+      "spec/geometry_recursive_w239_guards_spec.cr",
+      "spec/geometry_recursive_w239_kernel_spec.cr",
+      "spec/geometry_recursive_w239_parts_spec.cr",
+      "spec/geometry_recursive_w239_semantics_spec.cr",
+      "spec/geometry_w114_boundary_spec.cr",
+      "spec/support/geometry_recursive_w239_fixture.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_bulk_codec.cr",
+      "src/crystal_click/binary_bulk_decoder.cr",
+      "src/crystal_click/binary_bulk_encoder.cr",
+      "src/crystal_click/binary_custom_geo_bulk_column_declaration.cr",
+      "src/crystal_click/binary_custom_geo_type.cr",
+      "src/crystal_click/binary_data_type.cr",
+      "src/crystal_click/binary_data_type_codec.cr",
+      "src/crystal_click/binary_geometry_storage_type.cr",
+      "src/crystal_click/binary_value_codec.cr",
+      "src/crystal_click/binary_variant_roster.cr",
+      "src/crystal_click/wide_part_writer/recursive_storage_part_metadata.cr"
+    ]
+  },
+  "pins": {
+    "source": {
+      "checkout": "/private/tmp/crystal-click-w238.4nQqSo/clickhouse",
+      "revision": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+      "runtime_built_from_this_source_not_asserted": true,
+      "source_scope": "separately fetched DataTypes/serialization source snapshot; not runtime provenance",
+      "file_hashes": [
+        {
+          "path": "src/DataTypes/DataTypeArray.cpp",
+          "expected_sha256": "a830a6d44d7bc6424be8053ae6505f3121b4c668a497aa5b1309fadc6bdb3a51",
+          "actual_sha256": "a830a6d44d7bc6424be8053ae6505f3121b4c668a497aa5b1309fadc6bdb3a51",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeCustomGeo.cpp",
+          "expected_sha256": "c143892a4fc3ea684d10da6a703919ced96d5e149eb188fcc270eb15acf02182",
+          "actual_sha256": "c143892a4fc3ea684d10da6a703919ced96d5e149eb188fcc270eb15acf02182",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeFactory.cpp",
+          "expected_sha256": "a1062d44f84afe86082f7a6fbe3110cabf9a050be7cd108e26171fc0eaa5e478",
+          "actual_sha256": "a1062d44f84afe86082f7a6fbe3110cabf9a050be7cd108e26171fc0eaa5e478",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeLowCardinality.cpp",
+          "expected_sha256": "e75ef3196f929ed61313394fe8ba13c0a377446f73fac12f2b2425128d625c5c",
+          "actual_sha256": "e75ef3196f929ed61313394fe8ba13c0a377446f73fac12f2b2425128d625c5c",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeMap.cpp",
+          "expected_sha256": "dfc839fd14ad6f0b726d65cdc266622cc62912cc48adfb60e61bdb0b49752c73",
+          "actual_sha256": "dfc839fd14ad6f0b726d65cdc266622cc62912cc48adfb60e61bdb0b49752c73",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeNested.cpp",
+          "expected_sha256": "bb0cd02e0c94e0bd8520f6c8a83f64c7089fc47e5dc09f9d72e15f81367f16e4",
+          "actual_sha256": "bb0cd02e0c94e0bd8520f6c8a83f64c7089fc47e5dc09f9d72e15f81367f16e4",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeNullable.cpp",
+          "expected_sha256": "68c4e432a0f555712906d796a4db1d950b32abac2d6c2eba4c1117ad39793e64",
+          "actual_sha256": "68c4e432a0f555712906d796a4db1d950b32abac2d6c2eba4c1117ad39793e64",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeVariant.cpp",
+          "expected_sha256": "10cf25b1ad0c1fd00eec3637bca21756207122d45ef09f97518c5748d6ae300d",
+          "actual_sha256": "10cf25b1ad0c1fd00eec3637bca21756207122d45ef09f97518c5748d6ae300d",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeVariant.h",
+          "expected_sha256": "2ebdfa5ebb1c1d1d682c52902b7cae8cb8d3b70d0cce98e75710013ecd994bb0",
+          "actual_sha256": "2ebdfa5ebb1c1d1d682c52902b7cae8cb8d3b70d0cce98e75710013ecd994bb0",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypeTuple.h",
+          "expected_sha256": "9ebb2d555efa56456e4d57d873dcdbf231e48c96fcf87fa41d067f8073e9953b",
+          "actual_sha256": "9ebb2d555efa56456e4d57d873dcdbf231e48c96fcf87fa41d067f8073e9953b",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/DataTypesBinaryEncoding.cpp",
+          "expected_sha256": "78ba394f20ccd2a00f5be6b8c4d470fafb1c91a6f87bb27c301c2d3203f28f87",
+          "actual_sha256": "78ba394f20ccd2a00f5be6b8c4d470fafb1c91a6f87bb27c301c2d3203f28f87",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationArray.cpp",
+          "expected_sha256": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791",
+          "actual_sha256": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationMap.cpp",
+          "expected_sha256": "6bcc6c110c23ca0b0e77aa753aab6757fcfd7050960824b547c71744bc0fd3e1",
+          "actual_sha256": "6bcc6c110c23ca0b0e77aa753aab6757fcfd7050960824b547c71744bc0fd3e1",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationNullable.cpp",
+          "expected_sha256": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f",
+          "actual_sha256": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationVariant.cpp",
+          "expected_sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022",
+          "actual_sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022",
+          "matches": true
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationTuple.cpp",
+          "expected_sha256": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884",
+          "actual_sha256": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884",
+          "matches": true
+        }
+      ],
+      "shallow": true,
+      "commit_time_utc": "2026-10-09 08:08:30",
+      "not_latest_now": true
+    },
+    "runtime": {
+      "version": "26.10.1.1201",
+      "build_hash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "binary": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "source_correlation": "not_asserted"
+    },
+    "compiler": {
+      "version": "Crystal 1.21.0",
+      "llvm": "22.1.8",
+      "target": "aarch64-apple-darwin25.6.0",
+      "observed_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 512 --version",
+      "observed_exit_code": 0,
+      "source_runtime_build_correlation": "not asserted",
+      "flags": [
+        "--single-module",
+        "--threads 1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_extra": [
+        "--release",
+        "--no-debug"
+      ]
+    },
+    "resource_guard": {
+      "command_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "minimum_free_percent": 50,
+      "crystal_workers": 1,
+      "compiler_timeout_seconds": 600,
+      "compiler_group_rss_mib": 12288,
+      "native_and_audit_timeout_seconds": 240,
+      "native_and_audit_group_rss_mib": 1536,
+      "concurrent_heavy_jobs": 1
+    }
+  },
+  "red_lineage": [
+    {
+      "kind": "missing capability on unchanged baseline",
+      "exit": 1,
+      "examples": 6,
+      "errors": 5,
+      "failures": 0,
+      "ordinary_variant_control_passed": true,
+      "baseline": "8e109848d8d7d280ee2234b0c4f4b0d78fb0a6c7",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/geometry_recursive_w239_kernel_spec.cr spec/geometry_recursive_w239_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace"
+    },
+    {
+      "kind": "bare legacy metadata presentation on a W239 candidate",
+      "exit_code": 1,
+      "examples": 42,
+      "failures": 0,
+      "errors": 1,
+      "pending": 0,
+      "label": "bare Geometry legacy physical substream shape",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/geometry_recursive_w239_bulk_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/geometry_recursive_w239_kernel_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/geometry_w114_boundary_spec.cr spec/geometry_w114_charge_delta_spec.cr spec/geometry_w114_consumers_spec.cr spec/geometry_w114_mark_schedule_spec.cr spec/geometry_w114_model_spec.cr spec/geometry_w114_reader_api_spec.cr spec/geometry_w114_reader_charge_spec.cr spec/geometry_w114_reader_hostile_spec.cr spec/geometry_w114_writer_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace"
+    },
+    {
+      "kind": "four public scalar/facade bulk fixed-roster owner escapes on a candidate",
+      "exit_code": 1,
+      "examples": 9,
+      "failures": 4,
+      "errors": 0,
+      "pending": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/geometry_recursive_w239_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace"
+    },
+    {
+      "kind": "two direct raw bulk fixed-roster owner escapes on a candidate",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/geometry_recursive_w239_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+      "exit_code": 1,
+      "examples": 11,
+      "failures": 2,
+      "errors": 0,
+      "pending": 0,
+      "observed_output": "........FF.\n\nFailures:\n\n  1) W239 nominal Geometry type-owner guards refuses direct raw bulk encoding of the extracted Geometry storage Variant root\n     Failure/Error: expect_raises(CrystalClick::UnsupportedFormatError) do\n\n       Expected CrystalClick::UnsupportedFormatError but nothing was raised\n\n     # spec/geometry_recursive_w239_guards_spec.cr:198\n\n  2) W239 nominal Geometry type-owner guards refuses direct raw bulk decoding of the extracted Geometry storage Variant root\n     Failure/Error: expect_raises(CrystalClick::UnsupportedFormatError) do\n\n       Expected CrystalClick::UnsupportedFormatError but nothing was raised\n\n     # spec/geometry_recursive_w239_guards_spec.cr:239\n\nFinished in 3.2 milliseconds\n11 examples, 2 failures, 0 errors, 0 pending\n\nFailed examples:\n\ncrystal spec spec/geometry_recursive_w239_guards_spec.cr:192 # W239 nominal Geometry type-owner guards refuses direct raw bulk encoding of the extracted Geometry storage Variant root\ncrystal spec spec/geometry_recursive_w239_guards_spec.cr:216 # W239 nominal Geometry type-owner guards refuses direct raw bulk decoding of the extracted Geometry storage Variant root\n[EXIT: 1] after ~2s\n"
+    }
+  ],
+  "plumbing_not_capability_red": [
+    "New semantic fixture's checked UInt64-to-UInt8 conversion lacked a byte mask; actual one-example OverflowError fixed before final gates.",
+    "New local consumer tests initially assumed bare Geometry had a generic bulk accessor and inner Geo-array handles changed type_name; production legacy contracts were preserved and expectations corrected.",
+    "Root evidence checks initially assumed a nonexistent stock-matrix hash field and wrong refusal input census; corrected against actual captures without relaxing byte/schema/process checks."
+  ],
+  "semantic_adversary": {
+    "fixture": "scripts/support/geometry_composition_w239_semantics.cr",
+    "constructor_uses_decoder": false,
+    "numeric_float64_bits_include": [
+      "signed zero",
+      "subnormal",
+      "infinity",
+      "distinct NaN payloads"
+    ],
+    "guard_spec": "spec/geometry_recursive_w239_semantics_spec.cr",
+    "result": "A coherent Point x/y swap retains nominal shape and codec round trip but is rejected by independently constructed semantic-tree comparison; native helpers compare coordinate bits and ordered topology on both stock and generated parts."
+  },
+  "stock": {
+    "root": "/private/tmp/crystal-click-w239-stock.oxlrfa",
+    "matrix_sha256": "7ec9e77b8192c71efad41236756319bce73bc31b7bf95b7cf0a7ce4eadd8df5f",
+    "probe_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/probe_geometry_composition_w239.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --source-root /private/tmp/crystal-click-w238.4nQqSo/clickhouse --output-root /private/tmp/crystal-click-w239-stock.oxlrfa",
+    "probe_exit_code": 0,
+    "separate_audit_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/check_geometry_composition_evidence_w239.rb --stock-root /private/tmp/crystal-click-w239-stock.oxlrfa",
+    "separate_audit_exit_code": 0,
+    "native_processes": 35,
+    "status_counts": {
+      "success_exit0": 30,
+      "normal_nonzero_or_signaled": 5,
+      "timeout": 0,
+      "spawn_failure": 0
+    },
+    "refusals": [
+      {
+        "id": "nullable_geometry",
+        "requested_type": "Nullable(Geometry)",
+        "classification": "expected_normal_constructor_refusal",
+        "diagnostic": "Code: 43. DB::Exception: Nested type Geometry cannot be inside Nullable type. (ILLEGAL_TYPE_OF_ARGUMENT)\n",
+        "process": {
+          "label": "constructor-refusal-nullable_geometry",
+          "classification": "process_nonzero_or_signaled_exit",
+          "exitstatus": 43,
+          "signaled": false,
+          "termsig": null,
+          "timed_out": false,
+          "duration_ms": 78,
+          "spawn_error": null,
+          "stdout_bytes": 0,
+          "stderr_bytes": 105
+        }
+      },
+      {
+        "id": "variant_geometry_string",
+        "requested_type": "Variant(Geometry, String)",
+        "classification": "expected_normal_constructor_refusal",
+        "diagnostic": "Code: 36. DB::Exception: Nested Variant types are not allowed. (BAD_ARGUMENTS)\n",
+        "process": {
+          "label": "constructor-refusal-variant_geometry_string",
+          "classification": "process_nonzero_or_signaled_exit",
+          "exitstatus": 36,
+          "signaled": false,
+          "termsig": null,
+          "timed_out": false,
+          "duration_ms": 76,
+          "spawn_error": null,
+          "stdout_bytes": 0,
+          "stderr_bytes": 79
+        }
+      },
+      {
+        "id": "low_cardinality_geometry",
+        "requested_type": "LowCardinality(Geometry)",
+        "classification": "expected_normal_constructor_refusal",
+        "diagnostic": "Code: 43. DB::Exception: DataTypeLowCardinality is supported only for numbers, strings, Date or DateTime, but got Geometry. (ILLEGAL_TYPE_OF_ARGUMENT)\n",
+        "process": {
+          "label": "constructor-refusal-low_cardinality_geometry",
+          "classification": "process_nonzero_or_signaled_exit",
+          "exitstatus": 43,
+          "signaled": false,
+          "termsig": null,
+          "timed_out": false,
+          "duration_ms": 79,
+          "spawn_error": null,
+          "stdout_bytes": 0,
+          "stderr_bytes": 151
+        }
+      },
+      {
+        "id": "unknown_custom_constructor",
+        "requested_type": "CustomGeoW239Unknown",
+        "classification": "expected_normal_constructor_refusal",
+        "diagnostic": "Code: 50. DB::Exception: Unknown data type family: CustomGeoW239Unknown. (UNKNOWN_TYPE)\n",
+        "process": {
+          "label": "constructor-refusal-unknown_custom_constructor",
+          "classification": "process_nonzero_or_signaled_exit",
+          "exitstatus": 50,
+          "signaled": false,
+          "termsig": null,
+          "timed_out": false,
+          "duration_ms": 79,
+          "spawn_error": null,
+          "stdout_bytes": 0,
+          "stderr_bytes": 88
+        }
+      },
+      {
+        "id": "unknown_custom_descriptor",
+        "requested_type": "CustomGeoW239Unknown",
+        "descriptor_hex": "2c14437573746f6d47656f57323339556e6b6e6f776e",
+        "input_path": "/private/tmp/crystal-click-w239-stock.oxlrfa/fixtures/unknown-custom-descriptor.rowbinary-with-names-and-types",
+        "classification": "expected_normal_descriptor_refusal",
+        "diagnostic": "Code: 50. DB::Exception: Code: 50. DB::Exception: Unknown data type family: CustomGeoW239Unknown: (while reading header): (in file/uri (fd = 0)): While executing BinaryRowInputFormat: data for INSERT was parsed from stdin. (UNKNOWN_TYPE) (version 26.10.1.1201 (official build)). (UNKNOWN_TYPE)\n",
+        "process": {
+          "label": "unknown-custom-descriptor-decode",
+          "classification": "process_nonzero_or_signaled_exit",
+          "exitstatus": 50,
+          "signaled": false,
+          "termsig": null,
+          "timed_out": false,
+          "duration_ms": 77,
+          "spawn_error": null,
+          "stdout_bytes": 0,
+          "stderr_bytes": 294
+        }
+      }
+    ],
+    "phase_boundary": "Stock feasibility alone does not claim physical read/write qualification; final paired helpers independently read the captured parts and publish native-compatible generated parts."
+  },
+  "modes": {
+    "debug": {
+      "cohort": {
+        "files": 93,
+        "examples": 492,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_consumers_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w176_admission_spec.cr spec/aggregate_count_w176_reader_spec.cr spec/aggregate_count_w176_writer_spec.cr spec/aggregate_dynamic_w226_adversary_spec.cr spec/aggregate_dynamic_w226_consumers_spec.cr spec/aggregate_dynamic_w226_core_spec.cr spec/aggregate_minmax_w237_adversary_spec.cr spec/aggregate_minmax_w237_core_spec.cr spec/aggregate_minmax_w237_physical_spec.cr spec/aggregate_recursive_w224_admission_red_spec.cr spec/aggregate_recursive_w224_adversary_spec.cr spec/aggregate_recursive_w224_bulk_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_recursive_w224_core_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr spec/aggregate_variant_w225_adversary_spec.cr spec/aggregate_variant_w225_consumers_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_dynamic_value_w153_red_spec.cr spec/binary_dynamic_value_w153_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/binary_nested_w172_guards_spec.cr spec/binary_nested_w172_spec.cr spec/binary_scalar_types_w119_spec.cr spec/binary_value_codec_w117_spec.cr spec/bool_value_codec_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/custom_geo_recursive_w238_bulk_spec.cr spec/custom_geo_recursive_w238_guards_spec.cr spec/custom_geo_recursive_w238_kernel_spec.cr spec/custom_geo_recursive_w238_owner_intersections_spec.cr spec/custom_geo_recursive_w238_parts_spec.cr spec/custom_geo_recursive_w238_shape_spec.cr spec/dynamic_values_w122_adversary_spec.cr spec/dynamic_values_w122_spec.cr spec/geo_array_w111_admission_spec.cr spec/geo_array_w111_consumers_spec.cr spec/geo_array_w111_framing_spec.cr spec/geo_array_w111_hostile_spec.cr spec/geo_array_w111_model_spec.cr spec/geo_array_w111_reader_spec.cr spec/geo_array_w111_writer_spec.cr spec/geometry_recursive_w239_bulk_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/geometry_recursive_w239_guards_spec.cr spec/geometry_recursive_w239_kernel_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/geometry_recursive_w239_semantics_spec.cr spec/geometry_w114_boundary_spec.cr spec/geometry_w114_charge_delta_spec.cr spec/geometry_w114_consumers_spec.cr spec/geometry_w114_mark_schedule_spec.cr spec/geometry_w114_model_spec.cr spec/geometry_w114_reader_api_spec.cr spec/geometry_w114_reader_charge_spec.cr spec/geometry_w114_reader_hostile_spec.cr spec/geometry_w114_writer_spec.cr spec/multipoint_w112_admission_spec.cr spec/multipoint_w112_consumers_spec.cr spec/multipoint_w112_reader_spec.cr spec/multipoint_w112_writer_spec.cr spec/point_w109_admission_spec.cr spec/point_w109_consumers_spec.cr spec/point_w109_hostile_spec.cr spec/point_w109_reader_spec.cr spec/point_w109_writer_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/qbit_binary_kernel_spec.cr spec/recursive_qbit_static_parts_w231_spec.cr spec/recursive_qbit_static_products_w231_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_w230_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr spec/simple_aggregate_bulk_w221_spec.cr spec/simple_aggregate_recursive_w222_admission_red_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "observed_output": "............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n\nFinished in 2.63 seconds\n492 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~56s\n",
+        "exit_code": 0
+      },
+      "helper_build": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_geometry_composition_w239.cr -o /private/tmp/crystal-click-w239.wm8iOu/geometry-helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "exit_code": 0,
+        "sha256": "fb0023bf548fa76893f6902d2fa917ad704769dd1e6a87ebfad1105f30c3deac"
+      },
+      "paired_native": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/recheck_geometry_composition_w239.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --stock-matrix /private/tmp/crystal-click-w239-stock.oxlrfa/stock-matrix.json --output-root /private/tmp/crystal-click-w239-evidence.cDQTbd --generated-root /private/tmp/crystal-click-w239-generated.8yRV0X --helper /private/tmp/crystal-click-w239.wm8iOu/geometry-helper-debug --helper-sha256 fb0023bf548fa76893f6902d2fa917ad704769dd1e6a87ebfad1105f30c3deac",
+        "exit_code": 0,
+        "evidence_root": "/private/tmp/crystal-click-w239-evidence.cDQTbd",
+        "summary_sha256": "92adc4b10b5a8c587a8440c08a71f6591490594708b1f247230a21d8022859cf",
+        "native_processes": 5,
+        "native_successes": 5,
+        "helper_process": {
+          "label": "w239-geometry-library-writer-reader",
+          "classification": "process_success",
+          "exitstatus": 0,
+          "signaled": false,
+          "termsig": null,
+          "timed_out": false,
+          "duration_ms": 1063,
+          "spawn_error": null,
+          "stdout_bytes": 92551,
+          "stderr_bytes": 0,
+          "argv": [
+            "/private/tmp/crystal-click-w239.wm8iOu/geometry-helper-debug",
+            "--stock-matrix",
+            "/private/tmp/crystal-click-w239-stock.oxlrfa/stock-matrix.json",
+            "--output-root",
+            "/private/tmp/crystal-click-w239-generated.8yRV0X"
+          ]
+        },
+        "helper_sha256": "fb0023bf548fa76893f6902d2fa917ad704769dd1e6a87ebfad1105f30c3deac",
+        "helper_stdout_sha256": "95b592731d4fae4b04e0596a06975e0eb4bbfeb47042eedda515182151efd105",
+        "profiles": [
+          {
+            "id": "geometry",
+            "type": "Geometry",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "10",
+              "6",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.cDQTbd/stores/native/store/436/436973c1-fb7f-48d7-88b7-4682da1dd0dc/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "array_geometry",
+            "type": "Array(Geometry)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.cDQTbd/stores/native/store/f26/f264c190-2aad-4c43-8c06-aafa57ce01af/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "tuple_string_geometry",
+            "type": "Tuple(label String, geom Geometry)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.cDQTbd/stores/native/store/3ef/3efe6b94-02aa-4dfb-b647-09275caf1adf/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "map_string_geometry",
+            "type": "Map(String, Geometry)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.cDQTbd/stores/native/store/f25/f25ddda7-219a-4bc9-927c-0c237e7e1fe0/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "nested_geometry_point",
+            "type": "Nested(geom Geometry, point Point)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.cDQTbd/stores/native/store/f8e/f8e73a3d-88b0-4770-8183-c614b6990a1b/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "nullable_tuple_geometry",
+            "type": "Nullable(Tuple(geom Geometry))",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.cDQTbd/stores/native/store/8f5/8f505505-1492-4b8b-b6d7-9f5ac20c5548/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "variant_string_tuple_geometry",
+            "type": "Variant(String, Tuple(geom Geometry))",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.cDQTbd/stores/native/store/305/30578867-58f0-4738-9573-a834b642257b/all_1_1_0/"
+            ]
+          }
+        ],
+        "pressure_root": "/private/tmp/crystal-click-w239-pressure.uiKX8a",
+        "pressure_report_sha256": "bf4ae1b10c3f229dc7c031c4a208c231f2b5e9763d77c59b4fc23d186eb52b57",
+        "pressure_cases": [
+          {
+            "case": "zero-exit wrong literal RowBinary with matching output witness",
+            "result": "rejected",
+            "diagnostic": "W239 evidence audit failed: captured RowBinary differs from independent literal for geometry/full",
+            "expected_diagnostic": "captured RowBinary differs from independent literal for geometry/full",
+            "intended_condition_rejected": true,
+            "probe_error": null,
+            "restore_error": null,
+            "controls": [
+              {
+                "label": "restored_clone",
+                "result": "accepted",
+                "diagnostic": null
+              },
+              {
+                "label": "genuine_input",
+                "result": "accepted",
+                "diagnostic": null
+              }
+            ],
+            "controls_passed": true
+          },
+          {
+            "case": "summary process exit contradicts raw status sidecar",
+            "result": "rejected",
+            "diagnostic": "W238 evidence audit failed: summary status differs from raw status sidecar for native-capture-all",
+            "expected_diagnostic": "summary status differs from raw status sidecar for native-capture-all",
+            "intended_condition_rejected": true,
+            "probe_error": null,
+            "restore_error": null,
+            "controls": [
+              {
+                "label": "restored_clone",
+                "result": "accepted",
+                "diagnostic": null
+              },
+              {
+                "label": "genuine_input",
+                "result": "accepted",
+                "diagnostic": null
+              }
+            ],
+            "controls_passed": true
+          }
+        ],
+        "pressure_baselines": [
+          {
+            "label": "genuine_baseline",
+            "result": "accepted",
+            "diagnostic": null
+          },
+          {
+            "label": "cloned_baseline",
+            "result": "accepted",
+            "diagnostic": null
+          }
+        ]
+      },
+      "separate_raw_audit": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/check_geometry_composition_evidence_w239.rb --stock-root /private/tmp/crystal-click-w239-stock.oxlrfa --evidence-root /private/tmp/crystal-click-w239-evidence.cDQTbd",
+        "exit_code": 0,
+        "observed_output": "W239 stock raw audit passed: 7 literal/schema profiles, 35 captured processes\nW239 paired raw audit passed: 7 parts; 7 zero-exit/wrong-byte controls rejected\nAudit boundary: actual sidecar/file consistency was checked; coordinated rewriting of every matching copy is not execution provenance.\n[EXIT: 0] after ~1s\n"
+      },
+      "copied_evidence_pressure": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/check_geometry_composition_pressure_w239.rb --stock-root /private/tmp/crystal-click-w239-stock.oxlrfa --evidence-root /private/tmp/crystal-click-w239-evidence.cDQTbd --output-root /private/tmp/crystal-click-w239-pressure.uiKX8a",
+        "exit_code": 0,
+        "cases_rejected": 2,
+        "genuine_cloned_restored_controls_pass": true,
+        "native_processes_run": false,
+        "genuine_roots_mutated": false
+      }
+    },
+    "release": {
+      "cohort": {
+        "files": 93,
+        "examples": 492,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_avg_w227_adversary_spec.cr spec/aggregate_avg_w227_consumers_spec.cr spec/aggregate_avg_w227_core_spec.cr spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_consumers_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_plan_spec.cr spec/aggregate_count_w175_core_spec.cr spec/aggregate_count_w176_admission_spec.cr spec/aggregate_count_w176_reader_spec.cr spec/aggregate_count_w176_writer_spec.cr spec/aggregate_dynamic_w226_adversary_spec.cr spec/aggregate_dynamic_w226_consumers_spec.cr spec/aggregate_dynamic_w226_core_spec.cr spec/aggregate_minmax_w237_adversary_spec.cr spec/aggregate_minmax_w237_core_spec.cr spec/aggregate_minmax_w237_physical_spec.cr spec/aggregate_recursive_w224_admission_red_spec.cr spec/aggregate_recursive_w224_adversary_spec.cr spec/aggregate_recursive_w224_bulk_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_recursive_w224_core_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr spec/aggregate_variant_w225_adversary_spec.cr spec/aggregate_variant_w225_consumers_spec.cr spec/aggregate_variant_w225_core_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_dynamic_value_w153_red_spec.cr spec/binary_dynamic_value_w153_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/binary_nested_w172_guards_spec.cr spec/binary_nested_w172_spec.cr spec/binary_scalar_types_w119_spec.cr spec/binary_value_codec_w117_spec.cr spec/bool_value_codec_spec.cr spec/bulk_budget_w122_adversary_spec.cr spec/custom_geo_recursive_w238_bulk_spec.cr spec/custom_geo_recursive_w238_guards_spec.cr spec/custom_geo_recursive_w238_kernel_spec.cr spec/custom_geo_recursive_w238_owner_intersections_spec.cr spec/custom_geo_recursive_w238_parts_spec.cr spec/custom_geo_recursive_w238_shape_spec.cr spec/dynamic_values_w122_adversary_spec.cr spec/dynamic_values_w122_spec.cr spec/geo_array_w111_admission_spec.cr spec/geo_array_w111_consumers_spec.cr spec/geo_array_w111_framing_spec.cr spec/geo_array_w111_hostile_spec.cr spec/geo_array_w111_model_spec.cr spec/geo_array_w111_reader_spec.cr spec/geo_array_w111_writer_spec.cr spec/geometry_recursive_w239_bulk_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/geometry_recursive_w239_guards_spec.cr spec/geometry_recursive_w239_kernel_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/geometry_recursive_w239_semantics_spec.cr spec/geometry_w114_boundary_spec.cr spec/geometry_w114_charge_delta_spec.cr spec/geometry_w114_consumers_spec.cr spec/geometry_w114_mark_schedule_spec.cr spec/geometry_w114_model_spec.cr spec/geometry_w114_reader_api_spec.cr spec/geometry_w114_reader_charge_spec.cr spec/geometry_w114_reader_hostile_spec.cr spec/geometry_w114_writer_spec.cr spec/multipoint_w112_admission_spec.cr spec/multipoint_w112_consumers_spec.cr spec/multipoint_w112_reader_spec.cr spec/multipoint_w112_writer_spec.cr spec/point_w109_admission_spec.cr spec/point_w109_consumers_spec.cr spec/point_w109_hostile_spec.cr spec/point_w109_reader_spec.cr spec/point_w109_writer_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/qbit_binary_kernel_spec.cr spec/recursive_qbit_static_parts_w231_spec.cr spec/recursive_qbit_static_products_w231_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_w230_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr spec/simple_aggregate_bulk_w221_spec.cr spec/simple_aggregate_recursive_w222_admission_red_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "observed_output": "............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n\nFinished in 1.77 seconds\n492 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~207s\n",
+        "exit_code": 0
+      },
+      "helper_build": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_geometry_composition_w239.cr -o /private/tmp/crystal-click-w239.wm8iOu/geometry-helper-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "exit_code": 0,
+        "sha256": "b4c7aeecdfee84b0d30d8113ee2b4619e5c070d1718868ec3aa4b81ef0cf78e0"
+      },
+      "paired_native": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/recheck_geometry_composition_w239.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --stock-matrix /private/tmp/crystal-click-w239-stock.oxlrfa/stock-matrix.json --output-root /private/tmp/crystal-click-w239-evidence.gCj9Sw --generated-root /private/tmp/crystal-click-w239-generated.99qPpy --helper /private/tmp/crystal-click-w239.wm8iOu/geometry-helper-release --helper-sha256 b4c7aeecdfee84b0d30d8113ee2b4619e5c070d1718868ec3aa4b81ef0cf78e0",
+        "exit_code": 0,
+        "evidence_root": "/private/tmp/crystal-click-w239-evidence.gCj9Sw",
+        "summary_sha256": "4eda20f1a0cad7ccadcad84300453231952172e5a0090b1ef99ea7a4372cf832",
+        "native_processes": 5,
+        "native_successes": 5,
+        "helper_process": {
+          "label": "w239-geometry-library-writer-reader",
+          "classification": "process_success",
+          "exitstatus": 0,
+          "signaled": false,
+          "termsig": null,
+          "timed_out": false,
+          "duration_ms": 744,
+          "spawn_error": null,
+          "stdout_bytes": 92551,
+          "stderr_bytes": 0,
+          "argv": [
+            "/private/tmp/crystal-click-w239.wm8iOu/geometry-helper-release",
+            "--stock-matrix",
+            "/private/tmp/crystal-click-w239-stock.oxlrfa/stock-matrix.json",
+            "--output-root",
+            "/private/tmp/crystal-click-w239-generated.99qPpy"
+          ]
+        },
+        "helper_sha256": "b4c7aeecdfee84b0d30d8113ee2b4619e5c070d1718868ec3aa4b81ef0cf78e0",
+        "helper_stdout_sha256": "8bf18342cd1c1edd7a3ea4707f4587dc1d3b25576bb1d053643416d0b731cd49",
+        "profiles": [
+          {
+            "id": "geometry",
+            "type": "Geometry",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "10",
+              "6",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.gCj9Sw/stores/native/store/61e/61e55a1e-256e-49e5-bd22-9668ef43a420/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "array_geometry",
+            "type": "Array(Geometry)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.gCj9Sw/stores/native/store/105/105d6517-8617-48f2-8a8d-257eaabc9431/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "tuple_string_geometry",
+            "type": "Tuple(label String, geom Geometry)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.gCj9Sw/stores/native/store/4c6/4c695264-7d4a-4ae6-8123-176d559a7e31/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "map_string_geometry",
+            "type": "Map(String, Geometry)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.gCj9Sw/stores/native/store/522/5228d2cf-468b-4aa3-85db-d7618be67fb6/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "nested_geometry_point",
+            "type": "Nested(geom Geometry, point Point)",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.gCj9Sw/stores/native/store/869/8698722f-c31b-4c72-8cf4-070add15e31d/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "nullable_tuple_geometry",
+            "type": "Nullable(Tuple(geom Geometry))",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.gCj9Sw/stores/native/store/a82/a82afbec-3e14-423f-a680-509acf0df233/all_1_1_0/"
+            ]
+          },
+          {
+            "id": "variant_string_tuple_geometry",
+            "type": "Variant(String, Tuple(geom Geometry))",
+            "check_output": "all_1_1_0\t1\t\n",
+            "part_census": [
+              "all_1_1_0",
+              "5",
+              "4",
+              "Wide",
+              "/private/tmp/crystal-click-w239-evidence.gCj9Sw/stores/native/store/3c8/3c81bc22-8b04-4bc6-bdd9-1e6d13e02ad3/all_1_1_0/"
+            ]
+          }
+        ],
+        "pressure_root": "/private/tmp/crystal-click-w239-pressure.2EhVxw",
+        "pressure_report_sha256": "65b381c5b478ee7a0b91964a995309ed2b1e38abb47268b63a177ef6f05d0433",
+        "pressure_cases": [
+          {
+            "case": "zero-exit wrong literal RowBinary with matching output witness",
+            "result": "rejected",
+            "diagnostic": "W239 evidence audit failed: captured RowBinary differs from independent literal for geometry/full",
+            "expected_diagnostic": "captured RowBinary differs from independent literal for geometry/full",
+            "intended_condition_rejected": true,
+            "probe_error": null,
+            "restore_error": null,
+            "controls": [
+              {
+                "label": "restored_clone",
+                "result": "accepted",
+                "diagnostic": null
+              },
+              {
+                "label": "genuine_input",
+                "result": "accepted",
+                "diagnostic": null
+              }
+            ],
+            "controls_passed": true
+          },
+          {
+            "case": "summary process exit contradicts raw status sidecar",
+            "result": "rejected",
+            "diagnostic": "W238 evidence audit failed: summary status differs from raw status sidecar for native-capture-all",
+            "expected_diagnostic": "summary status differs from raw status sidecar for native-capture-all",
+            "intended_condition_rejected": true,
+            "probe_error": null,
+            "restore_error": null,
+            "controls": [
+              {
+                "label": "restored_clone",
+                "result": "accepted",
+                "diagnostic": null
+              },
+              {
+                "label": "genuine_input",
+                "result": "accepted",
+                "diagnostic": null
+              }
+            ],
+            "controls_passed": true
+          }
+        ],
+        "pressure_baselines": [
+          {
+            "label": "genuine_baseline",
+            "result": "accepted",
+            "diagnostic": null
+          },
+          {
+            "label": "cloned_baseline",
+            "result": "accepted",
+            "diagnostic": null
+          }
+        ]
+      },
+      "separate_raw_audit": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/check_geometry_composition_evidence_w239.rb --stock-root /private/tmp/crystal-click-w239-stock.oxlrfa --evidence-root /private/tmp/crystal-click-w239-evidence.gCj9Sw",
+        "exit_code": 0,
+        "observed_output": "[PREFLIGHT] System memory free 77% > 50%\nW239 stock raw audit passed: 7 literal/schema profiles, 35 captured processes\nW239 paired raw audit passed: 7 parts; 7 zero-exit/wrong-byte controls rejected\nAudit boundary: actual sidecar/file consistency was checked; coordinated rewriting of every matching copy is not execution provenance.\n[EXIT: 0] after ~1s\n"
+      },
+      "copied_evidence_pressure": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 240 1536 scripts/check_geometry_composition_pressure_w239.rb --stock-root /private/tmp/crystal-click-w239-stock.oxlrfa --evidence-root /private/tmp/crystal-click-w239-evidence.gCj9Sw --output-root /private/tmp/crystal-click-w239-pressure.2EhVxw",
+        "exit_code": 0,
+        "cases_rejected": 2,
+        "genuine_cloned_restored_controls_pass": true,
+        "native_processes_run": false,
+        "genuine_roots_mutated": false
+      }
+    }
+  },
+  "actual_byte_reconciliation": {
+    "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e '\nrequire '\\''json'\\''\nrequire '\\''digest'\\''\nrequire '\\''find'\\''\ndef inventory(root)\n  files={}\n  Find.find(root) do |path|\n    raise \"generated symlink: #{path}\" if File.symlink?(path)\n    next unless File.file?(path)\n    files[path[(root.length+1)..-1]]=File.binread(path)\n  end\n  files\nend\nleft=inventory(ARGV[0]); right=inventory(ARGV[1])\nraise '\\''generated relative file rosters differ'\\'' unless left.keys.sort==right.keys.sort\nleft.each { |path,bytes| raise \"generated bytes differ: #{path}\" unless right.fetch(path)==bytes }\nstock=JSON.parse(File.binread(File.join(ARGV[2],'\\''summary.json'\\'')))\nmatrix=JSON.parse(File.binread(File.join(ARGV[2],'\\''stock-matrix.json'\\'')))\nmodes={}\n%w[debug release].zip(ARGV[3,2],ARGV[5,2]).each do |mode,evidence,pressure|\n summary=JSON.parse(File.binread(File.join(evidence,'\\''summary.json'\\'')))\n report=JSON.parse(File.binread(File.join(pressure,'\\''pressure-report.json'\\'')))\n raise \"#{mode} non-success\" unless summary.fetch('\\''success'\\'') && report.fetch('\\''failures'\\'').empty?\n raise \"#{mode} bad genuine/clone\" unless %w[genuine_baseline cloned_baseline].all? { |key| report.fetch(key).fetch('\\''result'\\'')=='\\''accepted'\\'' }\n raise \"#{mode} mutation escaped\" unless report.fetch('\\''cases'\\'').all? { |row| row.fetch('\\''intended_condition_rejected'\\'') && row.fetch('\\''controls_passed'\\'') && row['\\''probe_error'\\''].nil? && row['\\''restore_error'\\''].nil? }\n modes[mode]={\n  '\\''evidence_root'\\''=>evidence,'\\''summary_sha256'\\''=>Digest::SHA256.file(File.join(evidence,'\\''summary.json'\\'')).hexdigest,\n  '\\''native_processes'\\''=>summary.fetch('\\''processes'\\'').length,'\\''native_successes'\\''=>summary.fetch('\\''processes'\\'').count { |row| row.fetch('\\''classification'\\'')=='\\''process_success'\\'' && row.fetch('\\''exitstatus'\\'')==0 },\n  '\\''helper_process'\\''=>summary.fetch('\\''helper_process'\\''),'\\''helper_sha256'\\''=>summary.fetch('\\''helper_sha256'\\''),\n  '\\''helper_stdout_sha256'\\''=>summary.fetch('\\''helper_stdout_sha256'\\''),\n  '\\''profiles'\\''=>summary.fetch('\\''profiles'\\'').map { |row| { '\\''id'\\''=>row.fetch('\\''id'\\''),'\\''type'\\''=>row.fetch('\\''declared_type'\\''),'\\''check_output'\\''=>row.fetch('\\''native_check_output'\\''),'\\''part_census'\\''=>row.fetch('\\''native_part_census'\\'') } },\n  '\\''pressure_root'\\''=>pressure,'\\''pressure_report_sha256'\\''=>Digest::SHA256.file(File.join(pressure,'\\''pressure-report.json'\\'')).hexdigest,\n  '\\''pressure_cases'\\''=>report.fetch('\\''cases'\\''),'\\''pressure_baselines'\\''=>report.values_at('\\''genuine_baseline'\\'','\\''cloned_baseline'\\'')\n }\nend\nresult={\n '\\''generated_roots'\\''=>ARGV[0,2],'\\''actual_byte_comparison'\\''=>true,'\\''file_count_per_mode'\\''=>left.length,'\\''bytes_per_mode'\\''=>left.values.map(&:bytesize).sum,\n '\\''files_per_profile'\\''=>left.keys.group_by { |path| path.split('\\''/'\\'')[1] }.transform_values(&:length),\n '\\''stock_root'\\''=>ARGV[2],'\\''stock_processes'\\''=>stock.fetch('\\''processes'\\'').length,'\\''stock_status_counts'\\''=>stock.fetch('\\''process_status_counts'\\''),\n '\\''stock_matrix_sha256'\\''=>Digest::SHA256.file(File.join(ARGV[2],'\\''stock-matrix.json'\\'')).hexdigest,\n '\\''stock_refusals'\\''=>matrix.fetch('\\''refusal_observations'\\''),'\\''source_pin'\\''=>matrix.fetch('\\''source_pin'\\''),'\\''runtime_pin'\\''=>matrix.fetch('\\''runtime_pin'\\''),\n '\\''modes'\\''=>modes,'\\''selected_input_hashes'\\''=>ARGV.drop(7).map { |path| { '\\''path'\\''=>path,'\\''sha256'\\''=>Digest::SHA256.file(path).hexdigest } }\n}\nputs '\\''W239_RECONCILE_JSON='\\''+JSON.generate(result)\n' '/private/tmp/crystal-click-w239-generated.8yRV0X' '/private/tmp/crystal-click-w239-generated.99qPpy' '/private/tmp/crystal-click-w239-stock.oxlrfa' '/private/tmp/crystal-click-w239-evidence.cDQTbd' '/private/tmp/crystal-click-w239-evidence.gCj9Sw' '/private/tmp/crystal-click-w239-pressure.uiKX8a' '/private/tmp/crystal-click-w239-pressure.2EhVxw' '/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh' 'scripts/check_custom_geo_recursive_evidence_w238.rb' 'scripts/check_custom_geo_recursive_pressure_w238.rb' 'scripts/check_geometry_composition_evidence_w239.rb' 'scripts/check_geometry_composition_pressure_w239.rb' 'scripts/check_geometry_composition_w239.cr' 'scripts/custom_geo_w238_fixtures.rb' 'scripts/probe_geometry_composition_w239.rb' 'scripts/recheck_aggregate_recursive_w224.rb' 'scripts/recheck_custom_geo_recursive_w238.rb' 'scripts/recheck_geometry_composition_w239.rb' 'scripts/support/geometry_composition_w239_semantics.cr' 'spec/binary_value_codec_w117_spec.cr' 'spec/custom_geo_recursive_w238_kernel_spec.cr' 'spec/custom_geo_recursive_w238_parts_spec.cr' 'spec/geometry_recursive_w239_bulk_spec.cr' 'spec/geometry_recursive_w239_consumers_spec.cr' 'spec/geometry_recursive_w239_guards_spec.cr' 'spec/geometry_recursive_w239_kernel_spec.cr' 'spec/geometry_recursive_w239_parts_spec.cr' 'spec/geometry_recursive_w239_semantics_spec.cr' 'spec/geometry_w114_boundary_spec.cr' 'spec/support/geometry_recursive_w239_fixture.cr' 'src/crystal_click.cr' 'src/crystal_click/binary_bulk_codec.cr' 'src/crystal_click/binary_bulk_column_reader.cr' 'src/crystal_click/binary_bulk_decoder.cr' 'src/crystal_click/binary_bulk_encoder.cr' 'src/crystal_click/binary_bulk_physical_plan.cr' 'src/crystal_click/binary_bulk_type_plan.cr' 'src/crystal_click/binary_custom_geo_bulk_column_declaration.cr' 'src/crystal_click/binary_custom_geo_structural_validator.cr' 'src/crystal_click/binary_custom_geo_type.cr' 'src/crystal_click/binary_data_type.cr' 'src/crystal_click/binary_data_type_codec.cr' 'src/crystal_click/binary_geometry_storage_type.cr' 'src/crystal_click/binary_value_codec.cr' 'src/crystal_click/binary_variant_roster.cr' 'src/crystal_click/wide_part.cr' 'src/crystal_click/wide_part_table.cr' 'src/crystal_click/wide_part_writer/custom_geo_bulk_part_writer.cr' 'src/crystal_click/wide_part_writer/recursive_storage_part_metadata.cr'",
+    "exit_code": 0,
+    "generated_roots": [
+      "/private/tmp/crystal-click-w239-generated.8yRV0X",
+      "/private/tmp/crystal-click-w239-generated.99qPpy"
+    ],
+    "method": "Read and compare actual relative file rosters and every file's binary contents; no hash-only shortcut.",
+    "file_count_per_mode": 446,
+    "bytes_per_mode": 61240,
+    "files_per_profile": {
+      "array_geometry": 62,
+      "geometry": 60,
+      "map_string_geometry": 66,
+      "nested_geometry_point": 66,
+      "nullable_tuple_geometry": 62,
+      "tuple_string_geometry": 64,
+      "variant_string_tuple_geometry": 66
+    }
+  },
+  "hygiene": {
+    "format_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 1536 tool format --check scripts/check_geometry_composition_w239.cr scripts/support/geometry_composition_w239_semantics.cr spec/binary_value_codec_w117_spec.cr spec/custom_geo_recursive_w238_kernel_spec.cr spec/custom_geo_recursive_w238_parts_spec.cr spec/geometry_recursive_w239_bulk_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/geometry_recursive_w239_guards_spec.cr spec/geometry_recursive_w239_kernel_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/geometry_recursive_w239_semantics_spec.cr spec/geometry_w114_boundary_spec.cr spec/support/geometry_recursive_w239_fixture.cr src/crystal_click.cr src/crystal_click/binary_bulk_codec.cr src/crystal_click/binary_bulk_decoder.cr src/crystal_click/binary_bulk_encoder.cr src/crystal_click/binary_custom_geo_bulk_column_declaration.cr src/crystal_click/binary_custom_geo_type.cr src/crystal_click/binary_data_type.cr src/crystal_click/binary_data_type_codec.cr src/crystal_click/binary_geometry_storage_type.cr src/crystal_click/binary_value_codec.cr src/crystal_click/binary_variant_roster.cr src/crystal_click/wide_part_writer/recursive_storage_part_metadata.cr",
+    "format_exit_code": 0,
+    "crystal_file_count": 25,
+    "ruby_syntax": [
+      {
+        "path": "scripts/probe_geometry_composition_w239.rb",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/probe_geometry_composition_w239.rb",
+        "result": {
+          "chunk_id": "d0d30d",
+          "wall_time_seconds": 0.762050042,
+          "exit_code": 0,
+          "original_token_count": 18,
+          "output": "[PREFLIGHT] System memory free 77% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+        }
+      },
+      {
+        "path": "scripts/recheck_geometry_composition_w239.rb",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/recheck_geometry_composition_w239.rb",
+        "result": {
+          "chunk_id": "09a3a6",
+          "wall_time_seconds": 0.772555417,
+          "exit_code": 0,
+          "original_token_count": 18,
+          "output": "[PREFLIGHT] System memory free 77% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+        }
+      },
+      {
+        "path": "scripts/check_geometry_composition_evidence_w239.rb",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/check_geometry_composition_evidence_w239.rb",
+        "result": {
+          "chunk_id": "992332",
+          "wall_time_seconds": 0.773040042,
+          "exit_code": 0,
+          "original_token_count": 18,
+          "output": "[PREFLIGHT] System memory free 77% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+        }
+      },
+      {
+        "path": "scripts/check_geometry_composition_pressure_w239.rb",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w239.wm8iOu/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/check_geometry_composition_pressure_w239.rb",
+        "result": {
+          "chunk_id": "84c6cd",
+          "wall_time_seconds": 0.647227917,
+          "exit_code": 0,
+          "original_token_count": 18,
+          "output": "[PREFLIGHT] System memory free 77% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+        }
+      }
+    ],
+    "git_diff_check_exit_code": 0
+  },
+  "selected_input_hashes": [
+    {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4"
+    },
+    {
+      "path": "scripts/check_custom_geo_recursive_evidence_w238.rb",
+      "sha256": "a4d27b2c5b6c22a70924a45f80c7e8b7b72a033c9e7257939c813543f90209fc"
+    },
+    {
+      "path": "scripts/check_custom_geo_recursive_pressure_w238.rb",
+      "sha256": "2c5c10a5073838b4f1fa9b408cb93acb3e797f7b182ef1b3dc9a5e0160b13269"
+    },
+    {
+      "path": "scripts/check_geometry_composition_evidence_w239.rb",
+      "sha256": "fc27fc70bebbd58527d51c78b433924953818e8076805afa3b569cb45f64a832"
+    },
+    {
+      "path": "scripts/check_geometry_composition_pressure_w239.rb",
+      "sha256": "cb23605b6866e8c36d19f9704544cfe28848f4ca3d25ffd42d80b2bcb33a2ac1"
+    },
+    {
+      "path": "scripts/check_geometry_composition_w239.cr",
+      "sha256": "bd7879a079c2cd27fde8d4de8926a7de6c161a12af5c7903450c53844ac0a5f3"
+    },
+    {
+      "path": "scripts/custom_geo_w238_fixtures.rb",
+      "sha256": "2eed8449a559a934005ca0df64ce45bb640d21b5660d4735dea4fc9fc44f30d8"
+    },
+    {
+      "path": "scripts/probe_geometry_composition_w239.rb",
+      "sha256": "27b48a4599709da8447e16355dcdde5863aecf2a3965b8e1bbe6c9279762f43a"
+    },
+    {
+      "path": "scripts/recheck_aggregate_recursive_w224.rb",
+      "sha256": "d1b7ad1c63ad265fce05a6d9b0b241e1d659f60eb1b533215a78f944a28f0831"
+    },
+    {
+      "path": "scripts/recheck_custom_geo_recursive_w238.rb",
+      "sha256": "2814ce4a00f159eee41d27cd57e0b276912ad8197eccfb3156594b725d1a8d89"
+    },
+    {
+      "path": "scripts/recheck_geometry_composition_w239.rb",
+      "sha256": "c281d6b687316dd5080c021341339cdaaa980e68f215ec3c6faf222ccd5da438"
+    },
+    {
+      "path": "scripts/support/geometry_composition_w239_semantics.cr",
+      "sha256": "abd1e7042ec5c73e2ee4973600ed3c84e338c2b825a74ede3ab2fab5a3aad0cc"
+    },
+    {
+      "path": "spec/binary_value_codec_w117_spec.cr",
+      "sha256": "4a4a72a9e77d2f6427f88901e0eff59c17ff716f5d3c9171a7633fcb28e6a25b"
+    },
+    {
+      "path": "spec/custom_geo_recursive_w238_kernel_spec.cr",
+      "sha256": "948ea0a8a56c1c02fefbb8832e2d6b20abd93f9e1b7de39d8f57ba42930b5e62"
+    },
+    {
+      "path": "spec/custom_geo_recursive_w238_parts_spec.cr",
+      "sha256": "314d2344fbbdd44532eac1a872ec8099a19cfa84221609e43eb363c8fbbde271"
+    },
+    {
+      "path": "spec/geometry_recursive_w239_bulk_spec.cr",
+      "sha256": "7d4907277f6b22fc393a84b783b9af85bad4fcf974958137482e9ae0fe979c11"
+    },
+    {
+      "path": "spec/geometry_recursive_w239_consumers_spec.cr",
+      "sha256": "966448bb5e99b9d6207cfb7dcbaf7aab83a67266c9cdcb3637154b58e15a274a"
+    },
+    {
+      "path": "spec/geometry_recursive_w239_guards_spec.cr",
+      "sha256": "2decd3fb6dc9f54a410ca6bf8768fb9de399fd47bf1c11d7a3e8fd0a2164d246"
+    },
+    {
+      "path": "spec/geometry_recursive_w239_kernel_spec.cr",
+      "sha256": "bd4b3c6fdffc5d035c8ad1d6e454e41a790f3094dc9291a0e9f3deba02925ac1"
+    },
+    {
+      "path": "spec/geometry_recursive_w239_parts_spec.cr",
+      "sha256": "92ea93968337c1cee2b198a52570a6323f47928a8485888ea5e6e66a1f11fff2"
+    },
+    {
+      "path": "spec/geometry_recursive_w239_semantics_spec.cr",
+      "sha256": "0ee419dfca76c4004021351aba609f98d2e681721fd60e0fa0b69a096f4813b3"
+    },
+    {
+      "path": "spec/geometry_w114_boundary_spec.cr",
+      "sha256": "ca2980b2b629ead084d17025173b361c448ce36d3de629b9bc5317f65b51a2c9"
+    },
+    {
+      "path": "spec/support/geometry_recursive_w239_fixture.cr",
+      "sha256": "ebd3f7d29fefb11343f984104d76a0ffac3aa76a46ef16fb24787678d8111698"
+    },
+    {
+      "path": "src/crystal_click.cr",
+      "sha256": "bc9ec15b0114996cccdf670a22108de95d31c6c0b15e1057e9718d9fff8543f1"
+    },
+    {
+      "path": "src/crystal_click/binary_bulk_codec.cr",
+      "sha256": "b6bb0198eabff2c4c318b4f22910f0a1f58005ccd53f71787a3dd22b31540ac9"
+    },
+    {
+      "path": "src/crystal_click/binary_bulk_column_reader.cr",
+      "sha256": "7b08167454c42a95b733193dada2e17e2a0d31a96143ac8b2ba844971e596bc8"
+    },
+    {
+      "path": "src/crystal_click/binary_bulk_decoder.cr",
+      "sha256": "59852f253cb30e554ad46fe8bb7f4802b56a7c6c2d499a2a0f159de751d411cf"
+    },
+    {
+      "path": "src/crystal_click/binary_bulk_encoder.cr",
+      "sha256": "1b78a29a45fcf9e2fef1ff0c0db5b6ef39fbbc901083b9b362e8fea1ed2a4203"
+    },
+    {
+      "path": "src/crystal_click/binary_bulk_physical_plan.cr",
+      "sha256": "174bb0086354ea9e93f3f2e2881b23178f0883b7e4991301a07816e6c5c2f2bc"
+    },
+    {
+      "path": "src/crystal_click/binary_bulk_type_plan.cr",
+      "sha256": "801ca48f6da6ee28a1708527399177d9ff999cd921f985074762a8fe12ce0fb6"
+    },
+    {
+      "path": "src/crystal_click/binary_custom_geo_bulk_column_declaration.cr",
+      "sha256": "b28cb7c5097e63307d7eb1a69864a1931a8a127c39e85f208bff2de74bd3b97f"
+    },
+    {
+      "path": "src/crystal_click/binary_custom_geo_structural_validator.cr",
+      "sha256": "272107c31ab6d25d4af2835c67346a0c6c5ddcd65fc91336b3ccd6a4ab1f35ae"
+    },
+    {
+      "path": "src/crystal_click/binary_custom_geo_type.cr",
+      "sha256": "bca38285dee7396db8a7d4a3be23cbcc8676792006f8a6b74b253b684c1a5816"
+    },
+    {
+      "path": "src/crystal_click/binary_data_type.cr",
+      "sha256": "78ccea7fa453ca70b2047890378e4182501f978e1b4024281da9d5df1da48343"
+    },
+    {
+      "path": "src/crystal_click/binary_data_type_codec.cr",
+      "sha256": "371f16bcf9526207e253e3a40ff0cdd03c3e2b8950e9f4abbf6da1f387807e59"
+    },
+    {
+      "path": "src/crystal_click/binary_geometry_storage_type.cr",
+      "sha256": "389f8a0271c64f91214dc03594024eddcd78938b272ae73edcc45febcf3c63e5"
+    },
+    {
+      "path": "src/crystal_click/binary_value_codec.cr",
+      "sha256": "6cfdce1fefe61c08d8c496560ce233202fe6591c072516e0235bf848b6efeab3"
+    },
+    {
+      "path": "src/crystal_click/binary_variant_roster.cr",
+      "sha256": "a1255f864f614bbfb096f697509df3c4ed520ae038aaf693f52201f53fef223a"
+    },
+    {
+      "path": "src/crystal_click/wide_part.cr",
+      "sha256": "ee9e1e87b109d47ae817480bcf1cd0975052128bfb18e06f14feb86391209121"
+    },
+    {
+      "path": "src/crystal_click/wide_part_table.cr",
+      "sha256": "ecc2ca952c58c4db11f15775e28866bc2a28d171aff22a414d1df569e0f0213c"
+    },
+    {
+      "path": "src/crystal_click/wide_part_writer/custom_geo_bulk_part_writer.cr",
+      "sha256": "79d23ce1d521b194d70ec1d8f81140831303915c2409477e9251415a079f7b32"
+    },
+    {
+      "path": "src/crystal_click/wide_part_writer/recursive_storage_part_metadata.cr",
+      "sha256": "a88bf00eb0c16947b1dacb127c192f18155cdb681b203b47c27ee5da36300c30"
+    }
+  ],
+  "input_hash_boundary": "Selected changed source/spec/helper/oracle and reused plan/reader/writer/auditor/guard files are bound; not a complete compiler/SDK/transitive-dependency or immutable execution attestation.",
+  "continuation": {
+    "next_falsifier": "Qualify one still-legal JSON/Dynamic/LowCardinality runtime owner intersection using independent stock bytes, prefix/arm/dictionary schedule, writer ATTACH and selected public reads.",
+    "open": [
+      "other runtime/layout intersections",
+      "ordinary JSON-bearing shared actuals",
+      "typed Object/Nested runtime seams",
+      "further state grammars",
+      "MV/projection analysis/writing",
+      "broad facade decomposition"
+    ],
+    "deferred": [
+      "memory/RSS optimization",
+      "SIMD/caching/performance work"
+    ],
+    "authority": "Local in-scope reversible work and atomic commit only; no push, destructive history or original archive mutation."
+  },
+  "decay": {
+    "triggers": [
+      "relevant source/runtime/compiler/codec/admission/consumer/helper/auditor/oracle changes",
+      "loss or alteration of temporary captures"
+    ],
+    "refresh": "Repeat the declared cohort and native/audit/pressure gates with new pins and fresh roots.",
+    "failure_policy": "Reopen dependent compatibility claims; a constructor or fail-closed guard does not certify persisted support."
+  },
+  "packet_boundary": "Curated index of observed evidence, not proof by JSON field presence or structural validation."
+}

@@ -9,6 +9,10 @@ module CrystalClick
       @type : BinaryDataType,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
     )
+      if @type.geometry_storage_variant?
+        raise UnsupportedFormatError.new("Geometry storage Variant is not an independently admissible Custom Geo declaration")
+      end
+
       budget = BinaryCodecBudget.new(limits, true)
       bounds = BinaryTypeNameBudget.measure(@type, budget)
       canonical = BinaryTypeNameBudget.materialize(@type, budget, bounds)

@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current nominal Custom Geo recursive composition (W238, 2026-10-09): VERIFIED
+Current nominal Geometry recursive composition (W239, 2026-10-09): VERIFIED
+within seven finite quiescent Wide/LZ4/Default/BASIC/plain-mrk2 profiles (root
+hostile verdict: ROBUST within scope). Geometry is a closed Custom owner over
+the source-fixed seven-arm Variant. Existing descriptor/scalar/bulk/physical
+visitors and writer are reused recursively; no serializer per wrapper product.
+Ordinary Variant sorting and direct Nullable/Variant TypeId restrictions remain
+unchanged. Extracted fixed-order bodies cannot escape through public wire roots.
+
+The same 93 affected spec files pass 492 examples in each of DEBUG and RELEASE,
+zero failures/errors/pending. Both final helpers read seven stock profiles and
+publish parts accepted by native ATTACH/CHECK=1, exact nominal schemas and
+independent full/middle/empty RowBinary; separate raw audits pass. The six
+recursive forms pass public typed scans/windows/EOF, while bare Geometry keeps
+its established GeometryRow API. Independent semantic trees verify coordinate
+bits and array topology, including a coherent x/y-swap falsifier. All 446
+generated files match by actual bytes across modes: 61,240 bytes per mode.
+Formatting checks for 25 changed Crystal files and four Ruby syntax checks pass.
+Both auditors reject two copied-evidence false successes and seven in-memory
+wrong-byte controls each; genuine, cloned and restored controls pass. This is
+consistency qualification, not immutable cryptographic execution provenance.
+
+The fresh separate depth-one October 9 source and native runtime have separate
+pins. The stock capture has 35 native records: 30 successes and five expected
+refusals. Direct Nullable(Geometry), Variant(Geometry, String) and
+LowCardinality(Geometry) are native refusals, not merely missing child codecs.
+
+Remaining: legal JSON/Dynamic/LowCardinality and other owner/layout intersections,
+ordinary JSON-bearing shared actuals, typed Object/Nested seams, further state
+grammars, MV/projection analysis/writing and broad facade decomposition. Per-mark
+transport still repeats indexing/decoding and may conservatively exhaust shared
+budgets on large parts. No all-types/layouts, whole-suite, RSS or speed claim;
+memory/performance stays deferred and the overall goal remains ACTIVE. Details:
+[GEOMETRY_RECURSIVE_FRONTIER.md](GEOMETRY_RECURSIVE_FRONTIER.md),
+[W239 evidence index](../.landmark/evidence/geometry-recursive-w239.json).
+
+Previous nominal Custom Geo recursive composition (W238, 2026-10-09): VERIFIED
 within finite quiescent Wide/LZ4/Default/BASIC/plain-mrk2 profiles (root hostile
 verdict: ROBUST within scope). Seven closed nominal aliases reuse the existing
 Tuple/Array scalar and bulk visitors; a Custom descriptor remains name-only.

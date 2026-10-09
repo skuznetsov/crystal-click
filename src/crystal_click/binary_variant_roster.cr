@@ -101,7 +101,7 @@ module CrystalClick
       if arm.tag == BinaryDataType::TAG_NULLABLE
         raise ArgumentError.new("Variant cannot directly contain Nullable")
       end
-      if arm.tag == BinaryDataType::TAG_VARIANT
+      if arm.variant_type_id?
         raise ArgumentError.new("Variant cannot directly contain Variant")
       end
       if arm.tag == BinaryDataType::TAG_LOW_CARDINALITY && arm.child_at(0).tag == BinaryDataType::TAG_NULLABLE

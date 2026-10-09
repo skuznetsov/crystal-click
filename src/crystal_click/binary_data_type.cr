@@ -78,6 +78,9 @@ module CrystalClick
     getter? qbit_array_chain : Bool
     getter? contains_json : Bool
     getter? contains_custom_geo : Bool
+    # Internal nominal marker for Geometry's fixed-discriminator Variant
+    # body. This is not an independently serializable ordinary Variant.
+    getter? geometry_storage_variant : Bool
     getter custom_geo_type : BinaryCustomGeoType?
     getter dynamic_max_types : UInt8?
 
@@ -111,7 +114,18 @@ module CrystalClick
       @json_type : BinaryJsonType? = nil,
       @aggregate_function_type : BinaryAggregateFunctionType? = nil,
       @custom_geo_type : BinaryCustomGeoType? = nil,
+      @geometry_storage_variant : Bool = false,
     )
+      if children.any?(&.geometry_storage_variant?)
+        allowed_geometry_storage_child =
+          @tag == TAG_CUSTOM &&
+            children.size == 1 &&
+            @custom_geo_type.try(&.profile) == BinaryCustomGeoType::Profile::Geometry
+        unless allowed_geometry_storage_child
+          raise ArgumentError.new("Geometry storage Variant is reserved for the nominal Geometry descriptor")
+        end
+      end
+
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
       @contains_low_cardinality = @tag == TAG_LOW_CARDINALITY || @children.any?(&.contains_low_cardinality?)
@@ -177,13 +191,41 @@ module CrystalClick
     # descriptor remains the name-only Custom tag.
     def self.custom(name : String) : BinaryDataType
       owner = BinaryCustomGeoType.new(name)
+      storage_type = if owner.variant_type_id?
+                       geometry_storage_variant
+                     else
+                       owner.storage_type
+                     end
       new(
         TAG_CUSTOM,
         nil,
-        [owner.storage_type] of BinaryDataType,
+        [storage_type] of BinaryDataType,
         [] of String,
         nil,
         custom_geo_type: owner,
+      )
+    end
+
+    # Closed no-argument constructor for Geometry's source-fixed Variant body.
+    # It intentionally does not accept a roster and must not be replaced by
+    # normal Variant sorting, which would change persisted discriminators.
+    protected def self.geometry_storage_variant : BinaryDataType
+      arms = [
+        BinaryDataType.custom("LineString"),
+        BinaryDataType.custom("MultiLineString"),
+        BinaryDataType.custom("MultiPolygon"),
+        BinaryDataType.custom("Point"),
+        BinaryDataType.custom("Polygon"),
+        BinaryDataType.custom("Ring"),
+        BinaryDataType.custom("MultiPoint"),
+      ] of BinaryDataType
+      new(
+        TAG_VARIANT,
+        nil,
+        arms,
+        [] of String,
+        nil,
+        geometry_storage_variant: true,
       )
     end
 
@@ -478,7 +520,7 @@ module CrystalClick
         reject_aggregate_function_child!(arm)
         reject_qbit_child!(arm)
         reject_json_child!(arm)
-        if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.tag == TAG_VARIANT || arm.tag == TAG_DYNAMIC
+        if arm.tag == TAG_NOTHING || arm.tag == TAG_NULLABLE || arm.variant_type_id? || arm.tag == TAG_DYNAMIC
           raise ArgumentError.new("canonical Object Variant roster has a forbidden direct arm")
         end
         if arm.tag == TAG_LOW_CARDINALITY && arm.child_count == 1 && arm.child_at(0).tag == TAG_NULLABLE
@@ -586,6 +628,15 @@ module CrystalClick
 
     def child_at(index : Int) : BinaryDataType
       @children[index]
+    end
+
+    # ClickHouse checks effective DataType IDs for direct Variant-arm and
+    # Nullable policy. Geometry's nominal Custom descriptor is Variant-backed.
+    def variant_type_id? : Bool
+      return true if @tag == TAG_VARIANT
+      return false unless @tag == TAG_CUSTOM
+
+      @custom_geo_type.try(&.variant_type_id?) || false
     end
 
     def field_names : Array(String)
@@ -825,6 +876,7 @@ module CrystalClick
       return false unless @qbit_type == other.@qbit_type
       return false unless @json_type == other.@json_type
       return false unless @custom_geo_type == other.@custom_geo_type
+      return false unless @geometry_storage_variant == other.@geometry_storage_variant
       return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
@@ -835,7 +887,7 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @aggregate_function_type, @qbit_type, @json_type, @custom_geo_type, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @aggregate_function_type, @qbit_type, @json_type, @custom_geo_type, @geometry_storage_variant, @children, @field_names
 
     private def self.reject_aggregate_function_child!(type : BinaryDataType) : Nil
       if type.contains_aggregate_function?

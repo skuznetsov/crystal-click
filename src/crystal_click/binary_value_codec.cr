@@ -202,6 +202,9 @@ module CrystalClick
     # Descriptor nodes still consume traversal budget though descriptor bytes
     # are omitted, preventing deep type equality/processing from bypassing it.
     def self.encode_value(value : BinaryValue, limits : BinaryCodecLimits = BinaryCodecLimits.default) : Bytes
+      if value.type.geometry_storage_variant?
+        raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be encoded independently")
+      end
       context = BinaryCodecContext.new(limits, nil, true)
       context.validate_type_tree(value.type)
       if value.type.tag == BinaryDataType::TAG_NOTHING
@@ -212,6 +215,9 @@ module CrystalClick
     end
 
     def self.decode_value(type : BinaryDataType, bytes : Bytes, limits : BinaryCodecLimits = BinaryCodecLimits.default) : BinaryValue
+      if type.geometry_storage_variant?
+        raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be decoded independently")
+      end
       context = BinaryCodecContext.new(limits, bytes)
       context.validate_type_tree(type)
       value = read_value(type, context)

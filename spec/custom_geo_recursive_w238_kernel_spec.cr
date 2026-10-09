@@ -385,12 +385,9 @@ describe "W238 nominal Custom Geo recursive scalar codec" do
     end
   end
 
-  it "keeps unknown Custom names, Geometry, invalid Nullable aliases, and LowCardinality guarded" do
+  it "keeps unknown Custom names, invalid Nullable aliases, and LowCardinality guarded" do
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryDataTypeCodec.decode(w238_custom_descriptor("NotAGeoAlias"))
-    end
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDataTypeCodec.decode(w238_custom_descriptor("Geometry"))
     end
 
     nullable_array_alias = w238_join([

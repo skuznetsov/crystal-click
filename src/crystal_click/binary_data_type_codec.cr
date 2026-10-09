@@ -20,6 +20,9 @@ module CrystalClick
     # and scalar visits consume one combined context budget.
     def self.write_to(type : BinaryDataType, context : BinaryCodecContext, depth : Int = 1) : Nil
       context.visit_node(depth)
+      if type.geometry_storage_variant?
+        context.unsupported!("Geometry's fixed-order storage Variant cannot be encoded independently")
+      end
       tag = type.tag
       if type.tag == BinaryDataType::TAG_QBIT
         descriptor = type.qbit_type || context.unsupported!("QBit descriptor metadata is missing")

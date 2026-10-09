@@ -1,18 +1,32 @@
 require "./spec_helper"
 
 describe "W114 exact Geometry admission boundary" do
-  it "admits only the measured declaration without opening generic Variant composition" do
+  it "keeps the bare legacy owner separate from shared recursive static routes" do
     CrystalClick::WidePart.supports_typed_type?("Geometry").should be_true
     {
       "GEOMETRY",
       "Nullable(Geometry)",
       "LowCardinality(Geometry)",
-      "Array(Geometry)",
-      "Tuple(Geometry)",
-      "Variant(Point, MultiPoint)",
-      "Variant(LineString, MultiLineString, MultiPolygon, Point, Polygon, Ring, MultiPoint)",
     }.each do |type_name|
       CrystalClick::WidePart.supports_typed_type?(type_name).should be_false
+      CrystalClick::WideVariantTypePlanDescriptor.for_type(type_name).should be_nil
+    end
+
+    # W239 admits recursive wrappers while preserving the nominal Geometry
+    # wrapper as the visitor's one transparent child.
+    {"Array(Geometry)", "Tuple(Geometry)"}.each do |type_name|
+      CrystalClick::WidePart.supports_typed_type?(type_name).should be_true
+      CrystalClick::WideVariantTypePlanDescriptor.for_type(type_name).should be_nil
+    end
+
+    # W238 already admitted these ordinary static Variant products through the
+    # shared Custom Geo recursion route. The specialized Geometry Variant
+    # descriptor remains unavailable; W239 does not widen that legacy owner.
+    {
+      "Variant(MultiPoint, Point)",
+      "Variant(LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Ring)",
+    }.each do |type_name|
+      CrystalClick::WidePart.supports_typed_type?(type_name).should be_true
       CrystalClick::WideVariantTypePlanDescriptor.for_type(type_name).should be_nil
     end
 

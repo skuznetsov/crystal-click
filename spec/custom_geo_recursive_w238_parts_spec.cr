@@ -44,7 +44,7 @@ describe "W238 Custom Geo public part admission" do
       CrystalClick::WidePart.supports_custom_geo_bulk_type?("Array(#{name})").should be_true
     end
     [
-      "String", "Geometry", "LowCardinality(Point)", "Nullable(LineString)",
+      "String", "Triangle", "LowCardinality(Point)", "Nullable(LineString)",
       "Tuple(Point, LowCardinality(String))", "Tuple(Point, Dynamic)",
       "Tuple(Point, QBit(Float32, 3))", "Tuple(Point, AggregateFunction(count))",
       "Tuple(Point, SimpleAggregateFunction(sum, UInt64))", "Map(Point, String)",
