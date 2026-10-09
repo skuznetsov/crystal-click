@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current recursive Dynamic/QBit composition (W233, 2026-10-08): VERIFIED within
+Current opaque AggregateFunction min/max state slice (W237, 2026-10-09):
+VERIFIED within finite version-zero unary static-argument state and native
+Wide/LZ4/Default/plain-mrk2 profiles (root hostile verdict: ROBUST within scope).
+Dedicated argument-policy/Profile and state-layout owners distinguish original
+fixed carriers, signed-length String states and Generic recursive child bodies.
+Existing scalar/bulk/part consumers reuse that leaf; no serializer per product
+or aggregate-function execution is added. Caller/shared budgets and depth are
+retained, including complete-frame bounds for public raw-state construction.
+
+The same 37 selected spec files pass 208 examples per mode with zero failures,
+errors or pending. Both final paired modes and separate raw audits qualify
+46 persisted min/max profiles (23 argument declarations). Actual stock parts
+read through the library; generated parts pass native ATTACH, exact CHECK=1
+and independent full/middle/zero RowBinary. All 552 generated files match by
+actual bytes across modes (57,234 bytes per mode). Seven in-memory false-success
+probes are rejected by the final auditor; genuine/restored controls pass.
+
+Root constructor-bound RED exposed and closed an over-limit raw String-frame
+acceptance gap. An initial native Code 79 was detached-path harness plumbing,
+not a type refusal; fixing the copy/ATTACH contract did not relax payload or
+oracle checks. Native Dynamic/Variant min/max argument refusals remain closed;
+constructor-only and empty-Tuple source controls are not persisted profiles.
+Source October 7 and runtime are separately pinned, not latest/same-build claims.
+This is not whole-suite, all-type/layout, RSS or performance qualification.
+Remaining legal owner/layout intersections, other aggregate state grammars,
+MV/projection analysis/writing and large-facade decomposition remain open.
+Memory/performance stays deferred and the overall goal remains active.
+Details: [AGGREGATE_FUNCTION_MINMAX_FRONTIER.md](AGGREGATE_FUNCTION_MINMAX_FRONTIER.md),
+[W237 evidence index](../.landmark/evidence/aggregate-minmax-w237.json).
+
+Previous recursive Dynamic/QBit composition (W233, 2026-10-08): VERIFIED within
 finite quiescent Wide/LZ4/Default/plain-mrk2 prepared Dynamic V3/BASIC profiles
 (scoped verdict: ROBUST). Static Array/Tuple/BASIC Map/nominal Nested and legal
 Nullable/Variant descendants reuse QBit leaf serde and recursive visitors.

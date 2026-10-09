@@ -319,7 +319,7 @@ describe "W227 AggregateFunction avg core" do
       CrystalClick::BinaryDataType.aggregate_function("avg", uint8, 1_u8)
     end
     expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.aggregate_function("min", uint8)
+      CrystalClick::BinaryDataType.aggregate_function("any", uint8)
     end
 
     valid_descriptor = Bytes[0x25_u8, 0_u8, 3_u8, 0x61_u8, 0x76_u8, 0x67_u8, 0_u8, 1_u8, 1_u8]

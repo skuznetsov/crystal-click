@@ -172,7 +172,7 @@ describe "W223 AggregateFunction Sum core" do
     CrystalClick::BinaryRecursiveDataTypeNameReader.parse_canonical("AggregateFunction(sumKahan, Decimal(24, 2))").should be_nil
 
     uint8 = CrystalClick::BinaryDataType.primitive("UInt8")
-    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.aggregate_function("min", uint8) }
+    expect_raises(ArgumentError) { CrystalClick::BinaryDataType.aggregate_function("any", uint8) }
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.aggregate_function("sum", uint8, 1_u8)
     end

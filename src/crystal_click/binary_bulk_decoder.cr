@@ -575,7 +575,7 @@ module CrystalClick
           count = BinaryAggregateCountStateCodec.read(context)
           BinaryValue.aggregate_count_state(type, count)
         else
-          BinaryValue.aggregate_function_state(type, BinaryAggregateFunctionStateCodec.read(type, context))
+          BinaryValue.aggregate_function_state_from_context(type, context, depth)
         end
       when BinaryDataType::TAG_VARIANT
         discriminator = context_for(contexts, child_path(path, ".discriminators", nil, traversal.budget, dynamic_plan)).read_byte

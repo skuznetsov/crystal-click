@@ -6,6 +6,11 @@ module CrystalClick
     MAX_FUNCTION_NAME_BYTES = "sumWithOverflow".bytesize
 
     def self.canonical_function_name(function_name : String, argument_type : BinaryDataType) : String
+      if function_name == "min" || function_name == "max"
+        validate_argument!(argument_type, function_name)
+        return function_name
+      end
+
       if function_name == "avg"
         validate_argument!(argument_type, "avg")
         return "avg"
@@ -40,11 +45,20 @@ module CrystalClick
       unless version == 0_u8
         raise ArgumentError.new("AggregateFunction version is outside the admitted profile")
       end
+      if function_name == "min" || function_name == "max"
+        validate_argument!(argument_type, function_name)
+        return function_name
+      end
       validate_argument!(argument_type, function_name == "avg" ? "avg" : "sum")
       canonical_function_name(function_name, argument_type)
     end
 
     def self.validate_argument!(argument_type : BinaryDataType, function_name : String = "sum") : Nil
+      if function_name == "min" || function_name == "max"
+        BinaryAggregateMinMaxArgumentPolicy.require!(argument_type)
+        return nil
+      end
+
       if function_name == "avg"
         validate_avg_argument!(argument_type)
         return nil

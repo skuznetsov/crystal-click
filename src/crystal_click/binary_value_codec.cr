@@ -213,6 +213,19 @@ module CrystalClick
       value
     end
 
+    # Consume one already-described generic min/max argument with the ordinary
+    # recursive value visitor and return an owned copy of its exact wire span.
+    # This narrow adapter lets the enclosing aggregate-state codec retain the
+    # child bytes without resetting the operation budget or parsing twice.
+    def self.consume_minmax_argument(type : BinaryDataType, context : BinaryCodecContext, depth : Int) : Bytes
+      start_offset = context.input_offset
+      read_value(type, context, depth)
+      borrowed = context.consumed_input_slice(start_offset)
+      Bytes.new(borrowed.size) { |index| borrowed[index] }
+    rescue ex : ArgumentError
+      context.corrupt!("invalid generic AggregateFunction min/max argument value: #{ex.message}")
+    end
+
     private def self.write_value(value : BinaryValue, context : BinaryCodecContext, depth : Int = 1) : Nil
       type = value.type
       context.visit_node(depth)
@@ -228,7 +241,7 @@ module CrystalClick
         if type.aggregate_count_type
           BinaryAggregateCountStateCodec.write(value.count_state, context)
         else
-          BinaryAggregateFunctionStateCodec.write(type, value.aggregate_function_state_bytes, context)
+          BinaryAggregateFunctionStateCodec.write(type, value.aggregate_function_state_bytes, context, depth)
         end
       when BinaryDataType::TAG_STRING
         size = value.byte_size
@@ -334,7 +347,7 @@ module CrystalClick
         if type.aggregate_count_type
           BinaryValue.aggregate_count_state(type, BinaryAggregateCountStateCodec.read(context))
         else
-          BinaryValue.aggregate_function_state(type, BinaryAggregateFunctionStateCodec.read(type, context))
+          BinaryValue.aggregate_function_state_from_context(type, context, depth)
         end
       when BinaryDataType::TAG_STRING
         length = context.read_var_uint

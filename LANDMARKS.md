@@ -1,5 +1,54 @@
 # Crystal Click landmarks
 
+## Opaque AggregateFunction min/max state leaves — W237
+
+- Baseline `45eda6bc4f687a53d0648b7caab0dd8a6a96b950`; VERIFIED finite
+  state/composition/native certificate, root hostile verdict ROBUST within
+  scope. Unary parameterless version-zero min/max use original fixed carriers,
+  signed Int32/NUL String framing or a Generic recursive child visitor.
+  Argument policy/Profile and state layout have separate files. Reuse ordinary
+  codecs with exact cursor spans and caller/shared depth/budgets; no product
+  codec, finalized value or aggregate execution is added.
+- Same 37 files: 208 examples per mode, zero failures/errors/pending. Original
+  admission RED had eight errors and two passing earlier-function controls.
+  Root public-constructor RED exposed a complete String frame over the default
+  byte limit; the final pre-copy bound and exact/one-short controls pass.
+  Standalone framed bytes/Generic traversal are bounded, not descriptor-tree
+  work, allocator/RSS or transport output allocation.
+- Separately pinned source `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`
+  (October 7, not latest October 9) and native `26.10.1.1201`, build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Both modes read 46 native
+  profiles and publish 46 parts accepted by ATTACH/CHECK=1 and literal full/
+  middle/zero RowBinary; separate raw audits pass. Stock has 123 actual native
+  records (119 successes, four expected Code 43 refusals); each final mode has
+  five fresh native records plus a separate helper. Three data marks plus the
+  terminal record give native `system.parts.marks=4`.
+- All 552 generated files reconcile by actual bytes: 57,234 bytes per mode.
+  Final formatting and two Ruby 2.6 syntax checks pass. The auditor rejects
+  seven in-memory coherent CHECK/status/signal/timeout/spawn forgeries and
+  passes genuine/restored records. Raw captures are unchanged by that probe;
+  audit consistency and selected hashes are not cryptographic provenance.
+- Refutations: String absence differs from empty; legacy negative/zero/non-NUL
+  spellings canonicalize on read. A present empty Tuple has a lawful zero-byte
+  body. `ATTACH PART ... FROM` accepts syntax but its source denotes a detached
+  directory name, not an absolute import path (Code 79); exact copied detached
+  parts repair harness plumbing without relaxing state or oracle checks.
+  Four LC String constructor controls and twelve empty-Tuple source controls
+  are not persisted native profiles. Dynamic/Variant arguments are upstream
+  refusals, while Nothing/SimpleAggregateFunction and other owners remain
+  policy-unqualified; do not conflate the two reasons.
+- Return pointer: [W237 frontier](docs/AGGREGATE_FUNCTION_MINMAX_FRONTIER.md),
+  [evidence index](.landmark/evidence/aggregate-minmax-w237.json).
+  Next: remaining legal owner/layout intersections and state leaves,
+  MV/projection analysis/writing and large-facade decomposition. Overall goal
+  remains ACTIVE; bounded local work/atomic commits only, no push authority.
+  Memory/performance follows compatibility; no <=10% slowdown claim.
+- Decay: refresh after relevant source/runtime/compiler/profile/codec/policy/
+  consumer/helper/auditor/oracle changes or loss of temporary captures. No
+  all-product/version/layout, whole-suite, aggregate/MV execution or full-goal
+  closure. A generic child codec is reusable but does not prove an enclosing
+  owner's dictionary, prefix, sparse axis or physical-version contract.
+
 ## Ordinary declared Object/Nested composition — W236
 
 - Baseline `cda3ae3c72e61011293f9c272acc806de880f818`; VERIFIED finite

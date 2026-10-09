@@ -123,9 +123,25 @@ module CrystalClick
       if descriptor.function_name == "count" || type.aggregate_count_type
         raise ArgumentError.new("AggregateFunction(count) state requires the Count compatibility carrier")
       end
-      plan = BinaryAggregateFunctionStatePlan.for_type(type)
-      plan.validate_state_bytes(canonical_bytes)
+      BinaryAggregateFunctionStateCodec.validate_owned_state_bytes(type, canonical_bytes)
       new(type, canonical_bytes)
+    end
+
+    # Internal codec factory for one non-Count state read. StateCodec consumes
+    # and validates the state under the caller's context/depth exactly once;
+    # using `new` here copies those validated bytes without reopening them under
+    # a fresh default budget.
+    def self.aggregate_function_state_from_context(
+      type : BinaryDataType,
+      context : BinaryCodecContext,
+      depth : Int,
+    ) : BinaryValue
+      descriptor = type.aggregate_function_type || raise ArgumentError.new("AggregateFunction state requires its nominal type")
+      if descriptor.function_name == "count" || type.aggregate_count_type
+        raise ArgumentError.new("AggregateFunction(count) state requires the Count compatibility carrier")
+      end
+      bytes = BinaryAggregateFunctionStateCodec.read(type, context, depth)
+      new(type, bytes)
     end
 
     def self.float32_bits(bits : UInt32) : BinaryValue

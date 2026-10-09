@@ -1,6 +1,6 @@
 module CrystalClick
   # Immutable state plan for a root non-Count AggregateFunction. Sum-family
-  # states remain fixed-width; Avg owns a separate variable-width layout.
+  # states remain fixed-width; Avg and Min/Max own variable-width layouts.
   # Both are distinct from scalar result validation: accumulator bytes are raw
   # state, and nullable presence is aggregate framing rather than scalar NULL.
   class BinaryAggregateFunctionStatePlan
@@ -10,6 +10,7 @@ module CrystalClick
     getter argument_type : BinaryDataType
     getter input_type : BinaryDataType
     getter avg_layout : BinaryAggregateAvgStateLayout?
+    getter minmax_layout : BinaryAggregateMinMaxStateLayout?
     getter? nullable_argument : Bool
 
     @fixed_state_width : Int32?
@@ -26,16 +27,26 @@ module CrystalClick
       @argument_type = @descriptor.argument_type || raise ArgumentError.new("Sum-family AggregateFunction requires an argument")
       BinaryAggregateFunctionAdmission.validate_argument!(@argument_type, @function_name)
 
-      dispatched = @argument_type
-      dispatched = dispatched.child_at(0) if dispatched.tag == BinaryDataType::TAG_LOW_CARDINALITY
-      @nullable_argument = dispatched.tag == BinaryDataType::TAG_NULLABLE
-      @input_type = @nullable_argument ? dispatched.child_at(0) : dispatched
-      if @function_name == "avg"
-        @avg_layout = BinaryAggregateAvgStateLayout.new(@input_type)
+      if @function_name == "min" || @function_name == "max"
+        profile = BinaryAggregateMinMaxArgumentPolicy.require!(@argument_type)
+        @nullable_argument = profile.nullable_argument?
+        @input_type = profile.input_type
+        @avg_layout = nil
+        @minmax_layout = BinaryAggregateMinMaxStateLayout.new(profile)
         @fixed_state_width = nil
       else
-        @avg_layout = nil
-        @fixed_state_width = state_width_for(@function_name, @input_type)
+        dispatched = @argument_type
+        dispatched = dispatched.child_at(0) if dispatched.tag == BinaryDataType::TAG_LOW_CARDINALITY
+        @nullable_argument = dispatched.tag == BinaryDataType::TAG_NULLABLE
+        @input_type = @nullable_argument ? dispatched.child_at(0) : dispatched
+        @minmax_layout = nil
+        if @function_name == "avg"
+          @avg_layout = BinaryAggregateAvgStateLayout.new(@input_type)
+          @fixed_state_width = nil
+        else
+          @avg_layout = nil
+          @fixed_state_width = state_width_for(@function_name, @input_type)
+        end
       end
     end
 
@@ -44,6 +55,9 @@ module CrystalClick
     end
 
     def minimum_state_bytes : Int32
+      if layout = @minmax_layout
+        return layout.minimum_state_bytes
+      end
       return 1 if @nullable_argument
       if layout = @avg_layout
         layout.minimum_state_bytes
@@ -53,6 +67,9 @@ module CrystalClick
     end
 
     def default_state_bytes : Bytes
+      if layout = @minmax_layout
+        return layout.default_state_bytes
+      end
       if @nullable_argument
         Bytes[0_u8]
       elsif layout = @avg_layout
@@ -63,6 +80,10 @@ module CrystalClick
     end
 
     def validate_state_bytes(bytes : Bytes) : Nil
+      if layout = @minmax_layout
+        layout.validate_state_bytes(bytes)
+        return nil
+      end
       if @nullable_argument
         if bytes.size == 1 && bytes[0] == 0_u8
           return nil
@@ -81,11 +102,13 @@ module CrystalClick
     # Avg has no single state width; returning one would invite fixed-stride
     # row traversal and make adjacent states ambiguous.
     def state_width : Int32
-      @fixed_state_width || raise(ArgumentError.new("AggregateFunction avg state width is variable"))
+      @fixed_state_width || raise(ArgumentError.new("AggregateFunction #{@function_name} state width is variable"))
     end
 
     private def validate_inner_state_bytes(bytes : Bytes) : Nil
-      if layout = @avg_layout
+      if layout = @minmax_layout
+        layout.validate_state_bytes(bytes)
+      elsif layout = @avg_layout
         layout.validate_state_bytes(bytes)
       elsif bytes.size != state_width
         raise ArgumentError.new("AggregateFunction state width does not match its descriptor")

@@ -228,6 +228,17 @@ module CrystalClick
       source[start, size.to_i32]
     end
 
+    # Return a borrowed span that this cursor has already consumed. Internal
+    # state adapters use it to retain an exactly-delimited child value without
+    # rewinding, reparsing, or charging a second budget traversal.
+    def consumed_input_slice(start_offset : Int32) : Bytes
+      source = @input || raise CorruptPartError.new("binary codec has no input")
+      if start_offset < 0 || start_offset > @input_offset
+        raise ArgumentError.new("consumed binary input start is outside the cursor range")
+      end
+      source[start_offset, @input_offset - start_offset]
+    end
+
     def ensure_consumed : Nil
       source = @input || raise CorruptPartError.new("binary codec has no input")
       unless @input_offset == source.size

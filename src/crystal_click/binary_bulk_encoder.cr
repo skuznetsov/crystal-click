@@ -601,7 +601,9 @@ module CrystalClick
             write_byte(lanes, "#{path}.data", byte, budget)
           end
         else
-          BinaryAggregateFunctionStateCodec.write_lane(value.aggregate_function_state_bytes) do |byte|
+          state_bytes = value.aggregate_function_state_bytes
+          BinaryAggregateFunctionStateCodec.validate_lane_state_for_write(type, state_bytes, traversal, depth)
+          BinaryAggregateFunctionStateCodec.write_lane(state_bytes) do |byte|
             write_byte(lanes, "#{path}.data", byte, budget)
           end
         end
