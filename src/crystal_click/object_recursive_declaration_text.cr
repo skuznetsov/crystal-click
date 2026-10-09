@@ -180,7 +180,7 @@ module CrystalClick
         child_after = after - 1
         return nil if child_first >= child_after
         child_tag = tag_for_slice(bytes, child_first, child_after) || return nil
-        return nil if child_tag == BinaryDataType::TAG_ARRAY || child_tag == BinaryDataType::TAG_MAP || child_tag == BinaryDataType::TAG_NULLABLE || child_tag == BinaryDataType::TAG_LOW_CARDINALITY || child_tag == BinaryDataType::TAG_VARIANT || child_tag == BinaryDataType::TAG_DYNAMIC
+        return nil if child_tag == BinaryDataType::TAG_ARRAY || child_tag == BinaryDataType::TAG_MAP || child_tag == BinaryDataType::TAG_NULLABLE || child_tag == BinaryDataType::TAG_LOW_CARDINALITY || child_tag == BinaryDataType::TAG_VARIANT || child_tag == BinaryDataType::TAG_DYNAMIC || child_tag == BinaryDataType::TAG_NESTED
         totals.child_edge(limits)
         child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals, allow_declared_dynamic) || return nil
         return ObjectRecursiveDeclaration.checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
@@ -244,6 +244,39 @@ module CrystalClick
         prefix_size = ObjectRecursiveDeclaration.checked_add("Map(".bytesize.to_u64, key_size)
         middle_size = ObjectRecursiveDeclaration.checked_add(", ".bytesize.to_u64, value_size)
         return ObjectRecursiveDeclaration.checked_add(ObjectRecursiveDeclaration.checked_add(prefix_size, middle_size), 1_u64)
+      end
+
+      if slice_equals?(bytes, first, first + "Nested(".bytesize, "Nested(") &&
+         after > first + "Nested()".bytesize && bytes[after - 1] == ')'.ord.to_u8
+        body_first = first + "Nested(".bytesize
+        body_after = after - 1
+        return nil if body_first >= body_after
+        tuple_depth = depth + 1
+        totals.child_edge(limits)
+        totals.visit_node(tuple_depth, limits)
+        nested_cursor = TopLevelCursor.new(bytes, body_first, body_after)
+        nested_current_range : Range? = nested_cursor.next_range
+        return nil unless nested_current_range
+        total_size = "Nested(".bytesize.to_u64 + 1_u64
+        field_count = 0_u64
+        while nested_field_range = nested_current_range
+          return nil if field_count >= BinaryDataType::MAX_TUPLE_ARITY.to_u64
+          prefix = ObjectTupleFieldName.prefix(bytes, nested_field_range.first, nested_field_range.after) || return nil
+          name_first, name_after, child_first = prefix
+          decoded_size, rendered_size = ObjectTupleFieldName.shape(bytes, name_first, name_after) || return nil
+          return nil if decoded_size == 0_u64 || ObjectTupleFieldName.null?(bytes, name_first, name_after)
+          totals.tuple_metadata(1_u64, decoded_size, tuple_depth, limits)
+          totals.child_edge(limits)
+          child_size = scan_type(bytes, child_first, nested_field_range.after, tuple_depth + 1, limits, totals, false) || return nil
+          total_size = ObjectRecursiveDeclaration.checked_add(total_size, rendered_size)
+          total_size = ObjectRecursiveDeclaration.checked_add(total_size, 1_u64)
+          total_size = ObjectRecursiveDeclaration.checked_add(total_size, child_size)
+          total_size = ObjectRecursiveDeclaration.checked_add(total_size, 2_u64) if field_count > 0_u64
+          field_count += 1_u64
+          nested_current_range = nested_cursor.next_range
+          return nil unless nested_cursor.valid?
+        end
+        return total_size
       end
 
       if slice_equals?(bytes, first, first + "Tuple(".bytesize, "Tuple(") &&
@@ -347,6 +380,15 @@ module CrystalClick
         while variant_arm_range = variant_cursor.next_range
           charge_slice_child(bytes, variant_arm_range.first, variant_arm_range.after, depth, budget)
         end
+      elsif slice_equals?(bytes, first, first + "Nested(".bytesize, "Nested(")
+        tuple_depth = depth + 1
+        budget.visit_node(tuple_depth) # Nested's implicit named Tuple.
+        nested_cursor = TopLevelCursor.new(bytes, first + "Nested(".bytesize, after - 1)
+        while nested_field_range = nested_cursor.next_range
+          prefix = ObjectTupleFieldName.prefix(bytes, nested_field_range.first, nested_field_range.after).not_nil!
+          budget.visit_node(tuple_depth) # Implicit Tuple field-name metadata.
+          charge_slice_child(bytes, prefix[2], nested_field_range.after, tuple_depth, budget)
+        end
       else
         body_first = first + "Tuple(".bytesize
         body_after = after - 1
@@ -402,6 +444,25 @@ module CrystalClick
         variant_cursor = TopLevelCursor.new(bytes, first + "Variant(".bytesize, after - 1)
         while variant_arm_range = variant_cursor.next_range
           validate_tuple_names_admitted(bytes, variant_arm_range.first, variant_arm_range.after, depth + 1, limits)
+        end
+      elsif slice_equals?(bytes, first, first + "Nested(".bytesize, "Nested(")
+        if depth >= limits.max_depth
+          raise UnsupportedFormatError.new("binary codec depth limit exceeded")
+        end
+        tuple_depth = depth + 1
+        if tuple_depth >= limits.max_depth
+          raise UnsupportedFormatError.new("binary codec depth limit exceeded")
+        end
+        nested_cursor = TopLevelCursor.new(bytes, first + "Nested(".bytesize, after - 1)
+        names = Set(String).new
+        while nested_field_range = nested_cursor.next_range
+          prefix = ObjectTupleFieldName.prefix(bytes, nested_field_range.first, nested_field_range.after) || return nil
+          name_first, name_after, child_first = prefix
+          name = ObjectTupleFieldName.decode(bytes, name_first, name_after)
+          raise ArgumentError.new("duplicate Nested field name") if names.includes?(name)
+          names.add(name)
+          validate_tuple_names_admitted(bytes, child_first, nested_field_range.after, tuple_depth + 1, limits)
+          return nil unless nested_cursor.valid?
         end
       else
         body_first = first + "Tuple(".bytesize
@@ -475,6 +536,17 @@ module CrystalClick
         key = materialize_admitted_slice(bytes, body_first, comma, depth + 1, limits, false)
         value = materialize_admitted_slice(bytes, comma + 2, after - 1, depth + 1, limits, allow_declared_dynamic)
         BinaryDataType.map(key, value)
+      elsif slice_equals?(bytes, first, first + "Nested(".bytesize, "Nested(")
+        nested_cursor = TopLevelCursor.new(bytes, first + "Nested(".bytesize, after - 1)
+        children = Array(BinaryDataType).new
+        names = Array(String).new
+        tuple_depth = depth + 1
+        while nested_field_range = nested_cursor.next_range
+          name_first, name_after, child_first = ObjectTupleFieldName.prefix(bytes, nested_field_range.first, nested_field_range.after).not_nil!
+          names << ObjectTupleFieldName.decode(bytes, name_first, name_after)
+          children << materialize_admitted_slice(bytes, child_first, nested_field_range.after, tuple_depth + 1, limits, false)
+        end
+        BinaryDataType.nested(children, names)
       elsif slice_equals?(bytes, first, first + "Variant(".bytesize, "Variant(")
         variant_cursor = TopLevelCursor.new(bytes, first + "Variant(".bytesize, after - 1)
         arms = Array(BinaryDataType).new
@@ -522,6 +594,8 @@ module CrystalClick
         leaf.tag
       elsif slice_equals?(bytes, first, first + "Array(".bytesize, "Array(")
         BinaryDataType::TAG_ARRAY
+      elsif slice_equals?(bytes, first, first + "Nested(".bytesize, "Nested(")
+        BinaryDataType::TAG_NESTED
       elsif slice_equals?(bytes, first, first + "Map(".bytesize, "Map(")
         BinaryDataType::TAG_MAP
       elsif slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")

@@ -1,5 +1,45 @@
 # Crystal Click landmarks
 
+## Ordinary declared Object/Nested composition — W236
+
+- Baseline `cda3ae3c72e61011293f9c272acc806de880f818`; VERIFIED finite
+  declaration/physical certificate, root hostile verdict ROBUST within scope.
+  Extend three existing declaration owners to preserve nominal Nested and its
+  implicit named Tuple. Reuse leaf/value/bulk visitors and stream plans; no
+  product-specific serializer or broad facade refactor is added.
+- Source `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357` and native
+  `26.10.1.1201` build `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are
+  separate pins. Five nominal declared Nested paths (direct/Array/Tuple/Map/
+  Variant) persist in stock and decode through both Crystal readers. Both modes
+  write parts accepted by native ATTACH/CHECK=1 and independent literal full,
+  middle and empty RowBinary: 50 stock processes plus 42 consumer processes
+  per mode. Root audits actual argv/SQL/status/schema/file/RowBinary bytes.
+- The same 21 files pass 114 examples per mode, zero failures/errors/pending.
+  Implicit-Tuple/name budgets, borrowed-source preflight and existing owner
+  guards hold. A local all-empty direct Nested part preserves six parent rows
+  over three marks while its child payload files are empty. All 146 generated
+  part files reconcile by actual names/bytes: 18,859 bytes per mode.
+- Refutations: an empty child is not an empty real parent mark; missing source
+  typed paths become native defaults, not recoverable absence. Native
+  `system.parts.marks=4` includes the terminal record, not four data groups.
+  ATTACH's optional invalidated-column file is an unordered exact two-name set,
+  not an ordered roster. Selected payload validation is not authentication of
+  unselected payloads. Each raw audit rejects eight forged process outcomes
+  and six missing fields; compile/helper/auditor failures remain distinct.
+- Ordinary typed-Object-Dynamic Nested actuals remain guarded; existing
+  qualified QBit/shared-JSON branches are preserved. W235 static declared QBit
+  refusal stays closed. A generic child codec does not prove an owner's legal
+  grammar, dictionary/stateful-prefix or physical-version context.
+- Return pointer: [W236 frontier](docs/OBJECT_DECLARED_NESTED_FRONTIER.md),
+  [evidence index](.landmark/evidence/object-declared-nested-w236.json).
+  Next: remaining legal owner/layout intersections, MV/projection gaps and
+  broad facade decomposition; memory/performance comes afterward. Overall
+  goal remains ACTIVE; no push authority and no <=10% performance claim.
+- Decay: refresh after relevant source/native/compiler/profile/codec/policy/
+  helper/oracle changes or loss of temporary captures. No all-version/product,
+  whole-suite, native all-empty sixth profile, RSS/output-allocation bound,
+  MV/projection or full-goal closure is claimed.
+
 ## Static declared Object/QBit refusal — W235
 
 - Baseline `00cb48cfca26484913a63eb0b5f6e210ea37c8e2`; production unchanged.

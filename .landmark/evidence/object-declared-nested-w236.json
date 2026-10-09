@@ -1,0 +1,622 @@
+{
+  "format": "crystal_click_declared_object_nested_evidence_v1",
+  "slice": "W236 ordinary nominal Nested in declared Object paths",
+  "created_at_utc": "2026-10-09T06:32:50Z",
+  "baseline_revision": "cda3ae3c72e61011293f9c272acc806de880f818",
+  "claim": {
+    "level": "VERIFIED",
+    "verdict": "ROBUST within the finite native and local composition/guard scope",
+    "result": "Admit ordinary nominal Nested with already supported static descendants in declared JSON paths by extending three existing declaration owners, not by adding value/bulk product codecs",
+    "refuted": "Every recursive container product needs a new leaf serializer, or an existing generic leaf serializer alone proves every owner's physical/admission context",
+    "surviving": "Compose existing descriptor, value and physical bulk visitors; preserve nominal metadata, owner grammar, cardinality axes, budgets and stateful stream context",
+    "native": "Five exact nominal Nested declarations, direct or Array/Tuple/Map/Variant wrapped, persist in stock; actual stock parts decode through both Crystal readers; five generated parts per mode ATTACH/CHECK=1 and match independent RowBinary windows",
+    "local": "114 examples across the same 21 selected files per mode; exact implicit-Tuple/name budgets, borrowed-source preflight, all-empty child lanes, corruption and adjacent runtime-owner regressions",
+    "untouched": "No leaf/value/bulk codec, dependency, public facade, MV/projection or performance implementation changed"
+  },
+  "boundaries": {
+    "changed_paths": [
+      "src/crystal_click/object_recursive_declaration.cr",
+      "src/crystal_click/object_recursive_declaration_text.cr",
+      "src/crystal_click/object_declared_dynamic_declaration.cr",
+      "scripts/check_object_declared_nested_parts_w236.cr",
+      "scripts/recheck_object_declared_nested_stock_w236.rb",
+      "scripts/recheck_object_declared_nested_parts_w236.rb",
+      "spec/object_declared_nested_w236_spec.cr",
+      "spec/object_declared_nested_physical_w236_spec.cr",
+      "docs/OBJECT_DECLARED_NESTED_FRONTIER.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/object-declared-nested-w236.json"
+    ],
+    "production_paths": [
+      "src/crystal_click/object_recursive_declaration.cr",
+      "src/crystal_click/object_recursive_declaration_text.cr",
+      "src/crystal_click/object_declared_dynamic_declaration.cr"
+    ],
+    "remote_changes": false,
+    "native_environment": "Quiescent fixed-fixture isolated ClickHouse local stores under fresh canonical /private/tmp roots; no production/shared table mutation",
+    "ordinary_typed_object_dynamic_nested": "Rejected before falling through to the newly extended generic grammar; earlier qualified QBit/shared-JSON branches remain separate",
+    "overall_goal": "ACTIVE; CH-compatible read/write legal types and MV/projections before optimization; original <=10% slowdown objective is not declared achieved"
+  },
+  "pins": {
+    "source": {
+      "root": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+      "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "files": [
+        {
+          "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1/src/DataTypes/DataTypeNested.cpp",
+          "kind": "reference",
+          "bytes": 10541,
+          "sha256": "bb0cd02e0c94e0bd8520f6c8a83f64c7089fc47e5dc09f9d72e15f81367f16e4"
+        },
+        {
+          "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1/src/DataTypes/DataTypeObject.cpp",
+          "kind": "reference",
+          "bytes": 131141,
+          "sha256": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7"
+        },
+        {
+          "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1/src/Formats/JSONExtractTree.cpp",
+          "kind": "reference",
+          "bytes": 120651,
+          "sha256": "0514c6077c73836ee344e1044365257cd87381e10d35e862d83fd578f2604afe"
+        },
+        {
+          "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1/src/DataTypes/Serializations/ISerialization.h",
+          "kind": "reference",
+          "bytes": 43452,
+          "sha256": "cccf4f28ca8de582aef5b95ece64f6761ecdc2c6e8409c390ff85ba235c7cc7e"
+        },
+        {
+          "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1/src/Storages/MergeTree/IMergeTreeDataPart.cpp",
+          "kind": "reference",
+          "bytes": 170567,
+          "sha256": "5dd7c249ac1a79532a0d7d24016a692d5194abd80b904f206f5f7bc9737de935"
+        },
+        {
+          "path": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1/src/Core/Names.h",
+          "kind": "reference",
+          "bytes": 988,
+          "sha256": "759bcd1ddb1000ec89bc82a4f1388512d12d1528defbe93144914ae01367dc93"
+        }
+      ]
+    },
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build_hash": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "source_runtime_lineage": "Distinct pins, not asserted as one build lineage"
+    },
+    "compiler": {
+      "version": "Crystal 1.21.0 (2026-07-16)",
+      "llvm": "22.1.8",
+      "target": "aarch64-apple-darwin25.6.0",
+      "ruby": "2.6.10p210 universal.arm64e-darwin25",
+      "flags": [
+        "--single-module",
+        "--threads 1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_flags": [
+        "--release",
+        "--no-debug"
+      ]
+    },
+    "execution": {
+      "major_job_seconds": 600,
+      "major_job_memory_mib": 12288,
+      "min_free_memory_percent": 50,
+      "crystal_workers": 1,
+      "native_child_timeout_seconds": 90,
+      "native_max_execution_seconds": 30,
+      "native_max_memory_bytes": 1073741824,
+      "jobs": "Serial; root owns compile/Ruby/native/git/format execution",
+      "recorder_output_limit": "No hard stdout/stderr allocation cap is claimed"
+    },
+    "selected_changed_source": [
+      {
+        "path": "src/crystal_click/object_recursive_declaration.cr",
+        "kind": "owned_source",
+        "bytes": 21910,
+        "sha256": "01343f0eb216df1a54c6f32b9d1416e5217746f36b6ee160385e9b73a4529c6b"
+      },
+      {
+        "path": "src/crystal_click/object_recursive_declaration_text.cr",
+        "kind": "owned_source",
+        "bytes": 33615,
+        "sha256": "8c329148dff16f7d1a7c376860ce1e7edbcaa0cfe65de85494426f2220d94e1e"
+      },
+      {
+        "path": "src/crystal_click/object_declared_dynamic_declaration.cr",
+        "kind": "owned_source",
+        "bytes": 32985,
+        "sha256": "5200519dd56a3330e4ab1c8a2916c9668012ffc78c3c86e1a9a9b0c1e6ecf694"
+      },
+      {
+        "path": "scripts/check_object_declared_nested_parts_w236.cr",
+        "kind": "owned_source",
+        "bytes": 57136,
+        "sha256": "fa5939435aab95b33a9acc6f3e04ae1fad73f3863ba7cbcdb3fb0ddc6183cbdb"
+      },
+      {
+        "path": "scripts/recheck_object_declared_nested_stock_w236.rb",
+        "kind": "owned_source",
+        "bytes": 33520,
+        "sha256": "aeeab2175cf61e72c7fbb0a439c33f58328f979f0b1e8b828250b8ec6a7faf27"
+      },
+      {
+        "path": "scripts/recheck_object_declared_nested_parts_w236.rb",
+        "kind": "owned_source",
+        "bytes": 53224,
+        "sha256": "05d2db202a56cfda2d6ecb4379994d863773c5ddccbda7a5ac0538191f80a5fc"
+      },
+      {
+        "path": "spec/object_declared_nested_w236_spec.cr",
+        "kind": "owned_source",
+        "bytes": 16651,
+        "sha256": "8d0b1d5de08082d4d81056d4d9f6ef617252f4ed29fc90e3092ead9f61d0e2e5"
+      },
+      {
+        "path": "spec/object_declared_nested_physical_w236_spec.cr",
+        "kind": "owned_source",
+        "bytes": 24953,
+        "sha256": "26e70518032dece8f666b67fab9aa67a9e2a662067fc9e3fce34f7df86699b5a"
+      },
+      {
+        "path": "docs/OBJECT_DECLARED_NESTED_FRONTIER.md",
+        "kind": "owned_source",
+        "bytes": 9502,
+        "sha256": "4388810b322e47f45d35f8d0bde4fb7f84452fe6d7e171301997fe0644291414"
+      }
+    ],
+    "current_source_scope": "Selected final file hashes, not all transitive dependencies or cryptographic compiler/execution provenance; DEBUG checker precedes formatting-only changes in its script; RELEASE checker is built after formatting, and actual generated bytes reconcile"
+  },
+  "native_profiles": [
+    "direct_nested",
+    "array_nested",
+    "tuple_nested",
+    "map_nested",
+    "variant_nested"
+  ],
+  "storage_context": {
+    "layout": "Wide, LZ4, Default streams, plain mrk2, hashed ordinary substreams",
+    "parent_rows": 6,
+    "library_data_mark_rows": [
+      2,
+      2,
+      2
+    ],
+    "native_system_parts_marks": 4,
+    "terminal_mark": "Independent terminal record; do not equate logical Nested children with parent rows or native marks",
+    "stock_string_profile": "single_stream",
+    "library_string_profile": "with_size_stream",
+    "schema": "Nominal Nested(n UInt8, s String) retained in all exact observed system.columns and attached columns.txt declarations",
+    "source_absence": "Missing source q is materialized as the native typed default. Presence/absence itself is not recoverable or claimed to round-trip",
+    "attached_file_policy": "All original source part files preserved unchanged; only optional invalidated_system_columns.txt with exactly _block_number and _block_offset is added in either unordered-set iteration order"
+  },
+  "definition_of_done": [
+    {
+      "name": "stock_native",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_object_declared_nested_stock_w236.rb --capture-root /private/tmp/crystal-click-w236-stock.L3SNm4 > /private/tmp/crystal-click-w236.P4YPUa/stock-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/stock-final.log",
+      "exit_code": 0,
+      "log_sha256": "c1e3fac35e8343ba6176454927538626f7f5ea9d782d39ff84e87acb1f7f5385",
+      "observed": true,
+      "process_count": 50,
+      "profiles": 6,
+      "controls": 1,
+      "literal_windows": 18
+    },
+    {
+      "name": "stock_raw_audit",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e '\nrequire \"json\"\nrequire \"digest\"\nrequire \"./scripts/recheck_object_declared_nested_stock_w236\"\nroot=ARGV.fetch(0)\ninv=File.join(root,\"invocations\")\npaths=Dir.glob(File.join(inv,\"*.status.json\")).sort\nraise \"capture count\" unless paths.length==50\npaths.each do |p|\n s=JSON.parse(File.binread(p))\n raise \"process outcome #{p}\" unless s.fetch(\"classification\")==\"process_success\" && s.fetch(\"exitstatus\")==0 &&\n s.fetch(\"signaled\")==false && s.fetch(\"termsig\").nil? && s.fetch(\"timed_out\")==false && s.fetch(\"spawn_error\").nil?\n prefix=p.delete_suffix(\".status.json\")\n raise \"capture sizes\" unless s.fetch(\"stdout_bytes\")==File.size(prefix+\".stdout\") && s.fetch(\"stderr_bytes\")==File.size(prefix+\".stderr\")\n raise \"argv bounds\" unless JSON.parse(File.binread(prefix+\".argv.json\")).fetch(\"argv\").include?(\"--max_memory_usage=1073741824\")\nend\ndef str(s); [s.bytesize].pack(\"C\")+s.b; end\ndef nest(rows); [rows.length].pack(\"C\")+rows.map { |n,s| [n].pack(\"C\")+str(s) }.join.b; end\ndef arr(rows); [rows.length].pack(\"C\")+rows.map { |r| nest(r) }.join.b; end\ndef mp(rows); [rows.length].pack(\"C\")+rows.map { |key,r| str(key)+nest(r) }.join.b; end\ncases=[\n [\"direct_nested\",\"w236_json_nested_direct\",\"Nested(n UInt8, s String)\",\n [nest([[1,\"a\"],[2,\"long\"]]),nest([]),nest([]),nest([[255,\"x\"]]),nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]]),nest([])]],\n [\"array_nested\",\"w236_json_nested_array\",\"Array(Nested(n UInt8, s String))\",\n [arr([[[1,\"a\"],[2,\"long\"]],[[3,\"m\"]]]),arr([]),arr([]),arr([[]]),arr([[[0,\"left\"],[17,\"r\"]]]),arr([[[4,\"tail\"],[8,\"x\"]],[[9,\"long\"]]])]],\n [\"tuple_nested\",\"w236_json_nested_tuple\",\"Tuple(items Nested(n UInt8, s String), tag UInt8)\",\n [nest([[1,\"t\"],[2,\"side\"]])+\"\\x07\",nest([])+\"\\x09\",nest([])+\"\\x00\",nest([[255,\"x\"]])+\"\\xff\".b,nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]])+\"\\x05\",nest([])+\"\\x00\"]],\n [\"map_nested\",\"w236_json_nested_map\",\"Map(String, Nested(n UInt8, s String))\",\n [mp([[\"a\",[[1,\"a\"],[2,\"long\"]]],[\"long-key\",[[3,\"m\"]]]]),mp([]),mp([]),mp([[\"x\",[]]]),mp([[\"left\",[[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]]]]),mp([[\"tail\",[[9,\"z\"]]]])]],\n [\"variant_nested\",\"w236_json_nested_variant\",\"Variant(Nested(n UInt8, s String), String)\",\n [\"\\x00\"+nest([[1,\"a\"],[2,\"long\"]]),\"\\x01\"+str(\"v\"),\"\\xff\".b,\"\\x00\"+nest([[255,\"x\"]]),\"\\x01\"+str(\"much-longer\"),\"\\x00\"+nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]])]],\n [\"ordinary_json_control\",\"w236_json_positive_control\",\"UInt8 control\",\n [[7,[1,2]],[0,[]],[255,[8]],[0,[3,4,5]],[0,[]],[42,[9,0]]].map { |n,x| [n,x.length,*x].pack(\"C*\") }]\n]\ndef prefix_for(inv,label)\n files=Dir.glob(File.join(inv,\"*-\"+label+\".status.json\"))\n raise \"nonunique #{label}\" unless files.size==1\n files.first.delete_suffix(\".status.json\")\nend\ncases.each do |id,table,type,bodies|\n control=id==\"ordinary_json_control\"\n label=control ? \"positive-control\" : id\n schema=File.binread(prefix_for(inv,label+\"-schema\")+\".stdout\")\n expected=control ? \"id\\tUInt64\\nj\\tJSON(q UInt8, xs Array(UInt8))\\n\" : \"id\\tUInt64\\nj\\tJSON(q #{type})\\n\"\n raise \"nominal schema #{id}\" unless schema==expected\n raise \"check #{id}\" unless File.binread(prefix_for(inv,label+\"-check\")+\".stdout\")==\"all_1_1_0\\t1\\t\\n\"\n part=File.binread(prefix_for(inv,label+\"-part\")+\".stdout\").chomp.split(\"\\t\",-1)\n raise \"part grid\" unless part[0,4]==[\"all_1_1_0\",\"6\",\"4\",\"Wide\"]\n part_path=File.expand_path(part.fetch(4))\n raise \"part location\" unless File.realpath(part_path)==part_path && part_path.start_with?(File.join(root,\"stores\",id)+\"/\")\n raise \"columns declaration\" unless File.binread(File.join(part_path,\"columns.txt\")).include?(control ? \"JSON(q UInt8, xs Array(UInt8))\" : \"JSON(q #{type})\")\n rows=bodies.each_with_index.map { |body,i| [i+1].pack(\"Q<\")+body.b }\n {\"full\"=>rows.join.b,\"middle\"=>rows[2,2].join.b,\"empty\"=>\"\".b}.each do |window,bytes|\n  prefix=prefix_for(inv,id+\"-rowbinary-\"+window)\n  raise \"native literal #{id}/#{window}\" unless File.binread(prefix+\".stdout\")==bytes\n  raise \"expected file #{id}/#{window}\" unless File.binread(File.join(root,\"literal_rowbinary\",id+\"-\"+window+\"-expected.rowbin\"))==bytes\n  raise \"query #{id}/#{window}\" unless File.binread(prefix+\".sql\").include?(\"FROM default.#{table}\")\n end\nend\nowner=RecheckObjectDeclaredNestedStockW236::Probe.allocate\nbase=JSON.parse(File.binread(paths.first))\nraise \"genuine classification\" unless owner.send(:process_success?,base)\nmutations=[{\"classification\"=>\"process_nonzero_or_signaled_exit\"},{\"exitstatus\"=>1},{\"signaled\"=>true},{\"signaled\"=>nil},{\"timed_out\"=>true},{\"timed_out\"=>nil},{\"termsig\"=>15},{\"spawn_error\"=>\"synthetic\"}]\nmutations.each { |m| raise \"forgery accepted\" if owner.send(:process_success?,base.merge(m)) }\n[\"classification\",\"exitstatus\",\"signaled\",\"timed_out\",\"termsig\",\"spawn_error\"].each do |key|\n malformed=base.dup; malformed.delete(key)\n begin\n  owner.send(:process_success?,malformed)\n  raise \"missing process field accepted\"\n rescue KeyError\n end\nend\nputs JSON.generate(raw_native_audit:\"pass\",records:paths.length,cases:cases.length,literal_windows:18,process_forgeries_rejected:mutations.length,missing_fields_rejected:6,source:\"raw status/argv/sql/columns/stdout and root-packed literals, not witness labels\")\n' /private/tmp/crystal-click-w236-stock.L3SNm4 > /private/tmp/crystal-click-w236.P4YPUa/raw-native-audit-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/raw-native-audit-final.log",
+      "exit_code": 0,
+      "log_sha256": "95408b1c5fe8a14ea26fd76b884f6ac1de9378bf1fbcac62c2c3770bdb35cc67",
+      "observed": true,
+      "process_count": 50,
+      "profiles": 6,
+      "literal_windows": 18,
+      "process_forgeries_rejected": 8,
+      "missing_process_fields_rejected": 6
+    },
+    {
+      "name": "focused_debug",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_declared_nested_w236_spec.cr spec/object_declared_nested_physical_w236_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/focused-debug-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/focused-debug-final.log",
+      "exit_code": 0,
+      "log_sha256": "852aefa13f45652370ca31161ac56cab557cadc2a8e7da88cbd575878e25d9da",
+      "observed": true,
+      "files": [
+        "spec/object_declared_nested_w236_spec.cr",
+        "spec/object_declared_nested_physical_w236_spec.cr"
+      ],
+      "examples": 11,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "name": "regression_a_debug",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_recursive_w140_root_spec.cr spec/object_document_schema_w140_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/object_declared_dynamic_w158_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/binary_nested_w172_spec.cr spec/binary_nested_w172_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/regression-a-debug.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/regression-a-debug.log",
+      "exit_code": 0,
+      "log_sha256": "508d6544335b1f4fa47ffe78b90f64170bb9a59ac575d03d5fb724b254661bb4",
+      "observed": true,
+      "files": [
+        "spec/object_recursive_w140_root_spec.cr",
+        "spec/object_document_schema_w140_spec.cr",
+        "spec/object_recursive_consumers_w140_spec.cr",
+        "spec/object_declared_low_cardinality_w146_spec.cr",
+        "spec/object_declared_variant_w151_spec.cr",
+        "spec/object_declared_dynamic_w158_spec.cr",
+        "spec/object_declared_dynamic_w158_adversary_spec.cr",
+        "spec/object_recursive_dynamic_w159_red_spec.cr",
+        "spec/binary_nested_w172_spec.cr",
+        "spec/binary_nested_w172_guards_spec.cr"
+      ],
+      "examples": 59,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "name": "regression_b_debug",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_path_nested_w197_spec.cr spec/object_shared_nested_parts_w198_spec.cr spec/object_declared_qbit_guards_w235_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/object_runtime_qbit_kernel_w234_spec.cr spec/object_runtime_qbit_parts_w234_spec.cr spec/dynamic_qbit_recursive_kernel_w233_spec.cr spec/variant_qbit_recursive_composition_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/regression-b-debug.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/regression-b-debug.log",
+      "exit_code": 0,
+      "log_sha256": "7e0ab34ffc7bc2b00ce2b5a83d1eeaf63d14534f094c0c1e5fafeae241c2520a",
+      "observed": true,
+      "files": [
+        "spec/object_shared_path_nested_w197_spec.cr",
+        "spec/object_shared_nested_parts_w198_spec.cr",
+        "spec/object_declared_qbit_guards_w235_spec.cr",
+        "spec/qbit_binary_kernel_object_boundary_spec.cr",
+        "spec/recursive_qbit_owner_guards_w230_spec.cr",
+        "spec/object_runtime_qbit_kernel_w234_spec.cr",
+        "spec/object_runtime_qbit_parts_w234_spec.cr",
+        "spec/dynamic_qbit_recursive_kernel_w233_spec.cr",
+        "spec/variant_qbit_recursive_composition_spec.cr"
+      ],
+      "examples": 44,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "name": "focused_release",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_declared_nested_w236_spec.cr spec/object_declared_nested_physical_w236_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/focused-release-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/focused-release-final.log",
+      "exit_code": 0,
+      "log_sha256": "8f5bc4d5c03ad514548080ab0f143355a1605413778357c7227a01c6b3802b62",
+      "observed": true,
+      "files": [
+        "spec/object_declared_nested_w236_spec.cr",
+        "spec/object_declared_nested_physical_w236_spec.cr"
+      ],
+      "examples": 11,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "name": "regression_a_release",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_recursive_w140_root_spec.cr spec/object_document_schema_w140_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/object_declared_dynamic_w158_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr spec/object_recursive_dynamic_w159_red_spec.cr spec/binary_nested_w172_spec.cr spec/binary_nested_w172_guards_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/regression-a-release.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/regression-a-release.log",
+      "exit_code": 0,
+      "log_sha256": "d79f7034cf50efc0916dd5e6006c999a408436857a2648b27f0029cda0db0d7d",
+      "observed": true,
+      "files": [
+        "spec/object_recursive_w140_root_spec.cr",
+        "spec/object_document_schema_w140_spec.cr",
+        "spec/object_recursive_consumers_w140_spec.cr",
+        "spec/object_declared_low_cardinality_w146_spec.cr",
+        "spec/object_declared_variant_w151_spec.cr",
+        "spec/object_declared_dynamic_w158_spec.cr",
+        "spec/object_declared_dynamic_w158_adversary_spec.cr",
+        "spec/object_recursive_dynamic_w159_red_spec.cr",
+        "spec/binary_nested_w172_spec.cr",
+        "spec/binary_nested_w172_guards_spec.cr"
+      ],
+      "examples": 59,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "name": "regression_b_release",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_path_nested_w197_spec.cr spec/object_shared_nested_parts_w198_spec.cr spec/object_declared_qbit_guards_w235_spec.cr spec/qbit_binary_kernel_object_boundary_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/object_runtime_qbit_kernel_w234_spec.cr spec/object_runtime_qbit_parts_w234_spec.cr spec/dynamic_qbit_recursive_kernel_w233_spec.cr spec/variant_qbit_recursive_composition_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/regression-b-release.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/regression-b-release.log",
+      "exit_code": 0,
+      "log_sha256": "938a6d3ae5f4da3d1f9baaa292b110c531791e801d7a1650dfedae6579da422b",
+      "observed": true,
+      "files": [
+        "spec/object_shared_path_nested_w197_spec.cr",
+        "spec/object_shared_nested_parts_w198_spec.cr",
+        "spec/object_declared_qbit_guards_w235_spec.cr",
+        "spec/qbit_binary_kernel_object_boundary_spec.cr",
+        "spec/recursive_qbit_owner_guards_w230_spec.cr",
+        "spec/object_runtime_qbit_kernel_w234_spec.cr",
+        "spec/object_runtime_qbit_parts_w234_spec.cr",
+        "spec/dynamic_qbit_recursive_kernel_w233_spec.cr",
+        "spec/variant_qbit_recursive_composition_spec.cr"
+      ],
+      "examples": 44,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    {
+      "name": "checker_debug_build",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_object_declared_nested_parts_w236.cr -o /private/tmp/crystal-click-w236.P4YPUa/checker-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/checker-build-debug-run4.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/checker-build-debug-run4.log",
+      "exit_code": 0,
+      "log_sha256": "f3df4212034df80bd13fe118696876fd64ae70f39f8e8aacdbad0b89912c0e40",
+      "observed": true
+    },
+    {
+      "name": "checker_debug_run",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w236.P4YPUa/checker-debug 600 12288 --stock-root /private/tmp/crystal-click-w236-stock.L3SNm4 --output-root /private/tmp/crystal-click-w236-generated-debug.ykhsKG > /private/tmp/crystal-click-w236.P4YPUa/checker-debug-run2.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/checker-debug-run2.log",
+      "exit_code": 0,
+      "log_sha256": "e062accb8c08f13ecb0c2363c9ae3c08853305a17e48c51c20b0f19100f62c15",
+      "observed": true
+    },
+    {
+      "name": "consumer_debug",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_object_declared_nested_parts_w236.rb --parts-root /private/tmp/crystal-click-w236-generated-debug.ykhsKG --capture-root /private/tmp/crystal-click-w236-consumer.zyF4f8 > /private/tmp/crystal-click-w236.P4YPUa/native-consumer-debug-run3.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/native-consumer-debug-run3.log",
+      "exit_code": 0,
+      "log_sha256": "8037963eaea074a855792d6d406c535806ca5dc6c1cbaa0b3e406761aab74cb6",
+      "observed": true,
+      "process_count": 42,
+      "profiles": 5,
+      "literal_windows": 15
+    },
+    {
+      "name": "consumer_debug_raw",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e '\nrequire \"json\"\nrequire \"digest\"\nrequire \"find\"\nrequire \"./scripts/recheck_object_declared_nested_parts_w236\"\nroot=ARGV.fetch(0)\ngenerated=ARGV.fetch(1)\ninv=File.join(root,\"invocations\")\npaths=Dir.glob(File.join(inv,\"*.status.json\")).sort\nraise \"capture count\" unless paths.length==42\nbinary=\"/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped\"\nrecords={}\npaths.each do |path|\n s=JSON.parse(File.binread(path)); base=path.delete_suffix(\".status.json\")\n raise \"process outcome\" unless s.fetch(\"classification\")==\"process_success\" && s.fetch(\"exitstatus\")==0 &&\n   s.fetch(\"signaled\")==false && s.fetch(\"termsig\").nil? && s.fetch(\"timed_out\")==false && s.fetch(\"spawn_error\").nil?\n raise \"capture sizes\" unless s.fetch(\"stdout_bytes\")==File.size(base+\".stdout\") && s.fetch(\"stderr_bytes\")==File.size(base+\".stderr\")\n a=JSON.parse(File.binread(base+\".argv.json\")); label=s.fetch(\"label\")\n raise \"duplicate label\" if records.key?(label)\n sql=File.binread(base+\".sql\")\n raise \"sql terminator\" unless sql.end_with?(\"\\n\")\n query=sql.delete_suffix(\"\\n\")\n id=label.start_with?(\"runtime-\") ? \"direct_nested\" : label.split(\"-\").first\n store=File.join(root,\"stores\",id)\n expected=[binary,\"local\",\"--path\",store,\"--session_timezone=UTC\",\"--max_threads=1\",\"--max_insert_threads=1\",\"--max_execution_time=30\",\"--max_memory_usage=1073741824\",\"--print_pretty_type_names=0\",\"--flatten_nested=0\",\"--multiquery\",\"--query\",query]\n raise \"argv\" unless a.fetch(\"label\")==label && a.fetch(\"argv\")==expected && a.fetch(\"environment\")=={\"TZ\"=>\"UTC\"} &&\n   a.fetch(\"timeout_seconds\")==90 && a.fetch(\"stdin_bytes\").nil? && a.fetch(\"stdin_sha256\").nil?\n records[label]={sql:query,stdout:File.binread(base+\".stdout\")}\nend\ndef str(s); [s.bytesize].pack(\"C\")+s.b; end\ndef nest(rows); [rows.length].pack(\"C\")+rows.map { |n,s| [n].pack(\"C\")+str(s) }.join.b; end\ndef arr(rows); [rows.length].pack(\"C\")+rows.map { |r| nest(r) }.join.b; end\ndef mp(rows); [rows.length].pack(\"C\")+rows.map { |key,r| str(key)+nest(r) }.join.b; end\ncases=[\n [\"direct_nested\",\"w236_json_nested_direct\",\"Nested(n UInt8, s String)\",\n [nest([[1,\"a\"],[2,\"long\"]]),nest([]),nest([]),nest([[255,\"x\"]]),nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]]),nest([])]],\n [\"array_nested\",\"w236_json_nested_array\",\"Array(Nested(n UInt8, s String))\",\n [arr([[[1,\"a\"],[2,\"long\"]],[[3,\"m\"]]]),arr([]),arr([]),arr([[]]),arr([[[0,\"left\"],[17,\"r\"]]]),arr([[[4,\"tail\"],[8,\"x\"]],[[9,\"long\"]]])]],\n [\"tuple_nested\",\"w236_json_nested_tuple\",\"Tuple(items Nested(n UInt8, s String), tag UInt8)\",\n [nest([[1,\"t\"],[2,\"side\"]])+\"\\x07\",nest([])+\"\\x09\",nest([])+\"\\x00\",nest([[255,\"x\"]])+\"\\xff\".b,nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]])+\"\\x05\",nest([])+\"\\x00\"]],\n [\"map_nested\",\"w236_json_nested_map\",\"Map(String, Nested(n UInt8, s String))\",\n [mp([[\"a\",[[1,\"a\"],[2,\"long\"]]],[\"long-key\",[[3,\"m\"]]]]),mp([]),mp([]),mp([[\"x\",[]]]),mp([[\"left\",[[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]]]]),mp([[\"tail\",[[9,\"z\"]]]])]],\n [\"variant_nested\",\"w236_json_nested_variant\",\"Variant(Nested(n UInt8, s String), String)\",\n [\"\\x00\"+nest([[1,\"a\"],[2,\"long\"]]),\"\\x01\"+str(\"v\"),\"\\xff\".b,\"\\x00\"+nest([[255,\"x\"]]),\"\\x01\"+str(\"much-longer\"),\"\\x00\"+nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]])]],\n [\"ordinary_json_control\",\"w236_json_positive_control\",\"UInt8 control\",\n [[7,[1,2]],[0,[]],[255,[8]],[0,[3,4,5]],[0,[]],[42,[9,0]]].map { |n,x| [n,x.length,*x].pack(\"C*\") }]\n]\n\ncases=cases.reject { |c| c[0]==\"ordinary_json_control\" }\nraise \"runtime version\" unless records.fetch(\"runtime-version-pin\")=={\n sql:\"SELECT version() FORMAT TSVRaw\",stdout:\"26.10.1.1201\\n\"}\nraise \"runtime build\" unless records.fetch(\"runtime-build-pin\")=={\n sql:\"SELECT concat(name, '\\''='\\'', value) FROM system.build_options WHERE name='\\''VERSION_GITHASH'\\'' FORMAT TSVRaw\",\n stdout:\"VERSION_GITHASH=d9bcb5ab007f0f6299f7f973f2642245bab3d028\\n\"}\nstock=JSON.parse(File.binread(\"/private/tmp/crystal-click-w236-stock.L3SNm4/witnesses.json\"))\ndef inventory(root)\n files=[]\n Find.find(root) do |path|\n  raise \"part symlink\" if File.symlink?(path)\n  next if File.directory?(path)\n  raise \"nonregular part\" unless File.file?(path)\n  files << [path.delete_prefix(root+\"/\"),File.size(path),Digest::SHA256.file(path).hexdigest]\n end\n files.sort\nend\ncases.each do |id,table,type,bodies|\n fetch=->(step) { records.fetch(id+\"-\"+step) }\n create=\"CREATE TABLE default.#{table} (id UInt64, j JSON(q #{type})) ENGINE=MergeTree ORDER BY id SETTINGS #{stock.fetch(\"settings\").join(\", \")}\"\n raise \"CREATE\" unless fetch.call(\"create\")[:sql]==create && fetch.call(\"create\")[:stdout]==\"\"\n raise \"ATTACH\" unless fetch.call(\"attach\")=={sql:\"ALTER TABLE default.#{table} ATTACH PART '\\''all_1_1_0'\\''\",stdout:\"\"}\n raise \"CHECK\" unless fetch.call(\"check\")=={\n  sql:\"CHECK TABLE default.#{table} FORMAT TSVRaw\",stdout:\"all_1_1_0\\t1\\t\\n\"}\n pre=fetch.call(\"pre-attach-schema-and-data-path\")\n schema_sql=\"SELECT concat('\\''__W236_SCHEMA__'\\'', name, '\\''\\\\t'\\'', type) FROM system.columns WHERE database='\\''default'\\'' AND table='\\''#{table}'\\'' ORDER BY position FORMAT TSVRaw\"\n data_sql=\"SELECT concat('\\''__W236_DATA_PATH__'\\'', arrayElement(data_paths, 1)) FROM system.tables WHERE database='\\''default'\\'' AND name='\\''#{table}'\\'' FORMAT TSVRaw\"\n raise \"pre SQL\" unless pre[:sql]==schema_sql+\"; \"+data_sql\n lines=pre[:stdout].lines.map(&:chomp)\n raise \"pre schema\" unless lines[0,2]==[\"__W236_SCHEMA__id\\tUInt64\",\"__W236_SCHEMA__j\\tJSON(q #{type})\"] && lines.length==3 && lines.last.start_with?(\"__W236_DATA_PATH__\")\n data_path=File.expand_path(lines.last.delete_prefix(\"__W236_DATA_PATH__\"))\n raise \"pre path\" unless File.realpath(data_path)==data_path && data_path.start_with?(File.join(root,\"stores\",id,\"store\")+\"/\")\n post=fetch.call(\"post-attach-schema-and-part\")\n parts_sql=\"SELECT concat('\\''__W236_PART__'\\'', name, '\\''\\\\t'\\'', toString(rows), '\\''\\\\t'\\'', toString(marks), '\\''\\\\t'\\'', part_type, '\\''\\\\t'\\'', path) FROM system.parts WHERE database='\\''default'\\'' AND table='\\''#{table}'\\'' AND active ORDER BY name FORMAT TSVRaw\"\n raise \"post SQL\" unless post[:sql]==schema_sql+\"; \"+parts_sql\n plines=post[:stdout].lines.map(&:chomp)\n raise \"post schema\" unless plines[0,2]==lines[0,2] && plines.length==3\n part_fields=plines.last.delete_prefix(\"__W236_PART__\").split(\"\\t\",-1)\n attached=File.join(data_path,\"all_1_1_0\")\n raise \"post part\" unless part_fields[0,4]==[\"all_1_1_0\",\"6\",\"4\",\"Wide\"] && File.expand_path(part_fields.fetch(4))==attached\n source=File.join(generated,\"parts\",id)\n source_files=inventory(source); actual_files=inventory(attached)\n extra=actual_files.reject { |row| source_files.any? { |src| src[0]==row[0] } }\n raise \"source changed/removed\" unless source_files.all? { |row| actual_files.include?(row) }\n raise \"native additions\" unless extra.empty? || extra.map(&:first)==[\"invalidated_system_columns.txt\"]\n if !extra.empty?\n  text=File.binread(File.join(attached,\"invalidated_system_columns.txt\"))\n  raise \"invalidated set\" unless text.lines.map(&:chomp).sort==[\"_block_number\",\"_block_offset\"] && text.lines.length==2 && text.end_with?(\"\\n\")\n end\n columns=\"columns format version: 1\\n2 columns:\\n\"+0x60.chr+\"id\"+0x60.chr+\" UInt64\\n\"+0x60.chr+\"j\"+0x60.chr+\" JSON(q #{type})\\n\"\n raise \"nominal columns\" unless File.binread(File.join(attached,\"columns.txt\"))==columns\n rows=bodies.each_with_index.map { |body,i| [i+1].pack(\"Q<\")+body.b }\n {\"full\"=>rows.join.b,\"middle\"=>rows[2,2].join.b,\"empty\"=>\"\".b}.each do |window,expected|\n  record=fetch.call(\"rowbinary-\"+window)\n  pred={\"full\"=>\"\",\"middle\"=>\" WHERE id BETWEEN 3 AND 4\",\"empty\"=>\" WHERE id=0\"}.fetch(window)\n  raise \"literal SQL\" unless record[:sql]==\"SELECT id, j.q FROM default.#{table}#{pred} ORDER BY id SETTINGS output_format_binary_write_json_as_string=0 FORMAT RowBinary\"\n  raise \"literal stdout\" unless record[:stdout]==expected\n  raise \"capture expected file\" unless File.binread(File.join(root,\"literal_rowbinary\",id+\"-\"+window+\"-expected.rowbin\"))==expected\n end\nend\nowner=RecheckObjectDeclaredNestedPartsW236::Probe.allocate\nbase=JSON.parse(File.binread(paths.first))\nraise \"genuine success rejected\" unless owner.send(:process_success?,base)\nmutations=[{\"classification\"=>\"process_nonzero_or_signaled_exit\"},{\"exitstatus\"=>1},{\"signaled\"=>true},{\"signaled\"=>nil},{\"timed_out\"=>true},{\"timed_out\"=>nil},{\"termsig\"=>15},{\"spawn_error\"=>\"synthetic\"}]\nmutations.each { |m| raise \"forged success\" if owner.send(:process_success?,base.merge(m)) }\n%w[classification exitstatus signaled timed_out termsig spawn_error].each do |key|\n malformed=base.dup; malformed.delete(key)\n begin\n  raise \"missing process field accepted\" if owner.send(:process_success?,malformed)\n rescue KeyError\n end\nend\nputs JSON.generate(raw_native_audit:\"pass\",records:paths.length,cases:cases.length,literal_windows:15,process_forgeries_rejected:mutations.length,missing_fields_rejected:6,source:\"actual status/argv/sql/schema/parts/file bytes and root-packed RowBinary, not witness status labels\")\n' /private/tmp/crystal-click-w236-consumer.zyF4f8 /private/tmp/crystal-click-w236-generated-debug.ykhsKG > /private/tmp/crystal-click-w236.P4YPUa/raw-consumer-audit-debug-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/raw-consumer-audit-debug-final.log",
+      "exit_code": 0,
+      "log_sha256": "93c4bc34845e2d8e4e34d13f6f490f63f2533c1b36e670a2b023d5ef36a28bb3",
+      "observed": true,
+      "process_count": 42,
+      "profiles": 5,
+      "literal_windows": 15,
+      "process_forgeries_rejected": 8,
+      "missing_process_fields_rejected": 6
+    },
+    {
+      "name": "checker_release_build",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_object_declared_nested_parts_w236.cr -o /private/tmp/crystal-click-w236.P4YPUa/checker-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/checker-build-release.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/checker-build-release.log",
+      "exit_code": 0,
+      "log_sha256": "b8f66961121400dfd3b2dc6efd83780497cb6c08d83924b8900f23e1f4f05f15",
+      "observed": true
+    },
+    {
+      "name": "checker_release_run",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w236.P4YPUa/checker-release 600 12288 --stock-root /private/tmp/crystal-click-w236-stock.L3SNm4 --output-root /private/tmp/crystal-click-w236-generated-release.Ur03qh > /private/tmp/crystal-click-w236.P4YPUa/checker-release-run.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/checker-release-run.log",
+      "exit_code": 0,
+      "log_sha256": "f0317d20406297e4223b60be9aca0e3a71cf28c7c26fba5bed52db82821b0be3",
+      "observed": true
+    },
+    {
+      "name": "consumer_release",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/recheck_object_declared_nested_parts_w236.rb --parts-root /private/tmp/crystal-click-w236-generated-release.Ur03qh --capture-root /private/tmp/crystal-click-w236-consumer.KN8HOX > /private/tmp/crystal-click-w236.P4YPUa/native-consumer-release.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/native-consumer-release.log",
+      "exit_code": 0,
+      "log_sha256": "7d7b3c1cde7d8791dd1166f7e0514507b5e6fceb282a288e7d6aa1a4375f2c1a",
+      "observed": true,
+      "process_count": 42,
+      "profiles": 5,
+      "literal_windows": 15
+    },
+    {
+      "name": "consumer_release_raw",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e '\nrequire \"json\"\nrequire \"digest\"\nrequire \"find\"\nrequire \"./scripts/recheck_object_declared_nested_parts_w236\"\nroot=ARGV.fetch(0)\ngenerated=ARGV.fetch(1)\ninv=File.join(root,\"invocations\")\npaths=Dir.glob(File.join(inv,\"*.status.json\")).sort\nraise \"capture count\" unless paths.length==42\nbinary=\"/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped\"\nrecords={}\npaths.each do |path|\n s=JSON.parse(File.binread(path)); base=path.delete_suffix(\".status.json\")\n raise \"process outcome\" unless s.fetch(\"classification\")==\"process_success\" && s.fetch(\"exitstatus\")==0 &&\n   s.fetch(\"signaled\")==false && s.fetch(\"termsig\").nil? && s.fetch(\"timed_out\")==false && s.fetch(\"spawn_error\").nil?\n raise \"capture sizes\" unless s.fetch(\"stdout_bytes\")==File.size(base+\".stdout\") && s.fetch(\"stderr_bytes\")==File.size(base+\".stderr\")\n a=JSON.parse(File.binread(base+\".argv.json\")); label=s.fetch(\"label\")\n raise \"duplicate label\" if records.key?(label)\n sql=File.binread(base+\".sql\")\n raise \"sql terminator\" unless sql.end_with?(\"\\n\")\n query=sql.delete_suffix(\"\\n\")\n id=label.start_with?(\"runtime-\") ? \"direct_nested\" : label.split(\"-\").first\n store=File.join(root,\"stores\",id)\n expected=[binary,\"local\",\"--path\",store,\"--session_timezone=UTC\",\"--max_threads=1\",\"--max_insert_threads=1\",\"--max_execution_time=30\",\"--max_memory_usage=1073741824\",\"--print_pretty_type_names=0\",\"--flatten_nested=0\",\"--multiquery\",\"--query\",query]\n raise \"argv\" unless a.fetch(\"label\")==label && a.fetch(\"argv\")==expected && a.fetch(\"environment\")=={\"TZ\"=>\"UTC\"} &&\n   a.fetch(\"timeout_seconds\")==90 && a.fetch(\"stdin_bytes\").nil? && a.fetch(\"stdin_sha256\").nil?\n records[label]={sql:query,stdout:File.binread(base+\".stdout\")}\nend\ndef str(s); [s.bytesize].pack(\"C\")+s.b; end\ndef nest(rows); [rows.length].pack(\"C\")+rows.map { |n,s| [n].pack(\"C\")+str(s) }.join.b; end\ndef arr(rows); [rows.length].pack(\"C\")+rows.map { |r| nest(r) }.join.b; end\ndef mp(rows); [rows.length].pack(\"C\")+rows.map { |key,r| str(key)+nest(r) }.join.b; end\ncases=[\n [\"direct_nested\",\"w236_json_nested_direct\",\"Nested(n UInt8, s String)\",\n [nest([[1,\"a\"],[2,\"long\"]]),nest([]),nest([]),nest([[255,\"x\"]]),nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]]),nest([])]],\n [\"array_nested\",\"w236_json_nested_array\",\"Array(Nested(n UInt8, s String))\",\n [arr([[[1,\"a\"],[2,\"long\"]],[[3,\"m\"]]]),arr([]),arr([]),arr([[]]),arr([[[0,\"left\"],[17,\"r\"]]]),arr([[[4,\"tail\"],[8,\"x\"]],[[9,\"long\"]]])]],\n [\"tuple_nested\",\"w236_json_nested_tuple\",\"Tuple(items Nested(n UInt8, s String), tag UInt8)\",\n [nest([[1,\"t\"],[2,\"side\"]])+\"\\x07\",nest([])+\"\\x09\",nest([])+\"\\x00\",nest([[255,\"x\"]])+\"\\xff\".b,nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]])+\"\\x05\",nest([])+\"\\x00\"]],\n [\"map_nested\",\"w236_json_nested_map\",\"Map(String, Nested(n UInt8, s String))\",\n [mp([[\"a\",[[1,\"a\"],[2,\"long\"]]],[\"long-key\",[[3,\"m\"]]]]),mp([]),mp([]),mp([[\"x\",[]]]),mp([[\"left\",[[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]]]]),mp([[\"tail\",[[9,\"z\"]]]])]],\n [\"variant_nested\",\"w236_json_nested_variant\",\"Variant(Nested(n UInt8, s String), String)\",\n [\"\\x00\"+nest([[1,\"a\"],[2,\"long\"]]),\"\\x01\"+str(\"v\"),\"\\xff\".b,\"\\x00\"+nest([[255,\"x\"]]),\"\\x01\"+str(\"much-longer\"),\"\\x00\"+nest([[0,\"left\"],[17,\"r\"],[42,\"longer-right\"]])]],\n [\"ordinary_json_control\",\"w236_json_positive_control\",\"UInt8 control\",\n [[7,[1,2]],[0,[]],[255,[8]],[0,[3,4,5]],[0,[]],[42,[9,0]]].map { |n,x| [n,x.length,*x].pack(\"C*\") }]\n]\n\ncases=cases.reject { |c| c[0]==\"ordinary_json_control\" }\nraise \"runtime version\" unless records.fetch(\"runtime-version-pin\")=={\n sql:\"SELECT version() FORMAT TSVRaw\",stdout:\"26.10.1.1201\\n\"}\nraise \"runtime build\" unless records.fetch(\"runtime-build-pin\")=={\n sql:\"SELECT concat(name, '\\''='\\'', value) FROM system.build_options WHERE name='\\''VERSION_GITHASH'\\'' FORMAT TSVRaw\",\n stdout:\"VERSION_GITHASH=d9bcb5ab007f0f6299f7f973f2642245bab3d028\\n\"}\nstock=JSON.parse(File.binread(\"/private/tmp/crystal-click-w236-stock.L3SNm4/witnesses.json\"))\ndef inventory(root)\n files=[]\n Find.find(root) do |path|\n  raise \"part symlink\" if File.symlink?(path)\n  next if File.directory?(path)\n  raise \"nonregular part\" unless File.file?(path)\n  files << [path.delete_prefix(root+\"/\"),File.size(path),Digest::SHA256.file(path).hexdigest]\n end\n files.sort\nend\ncases.each do |id,table,type,bodies|\n fetch=->(step) { records.fetch(id+\"-\"+step) }\n create=\"CREATE TABLE default.#{table} (id UInt64, j JSON(q #{type})) ENGINE=MergeTree ORDER BY id SETTINGS #{stock.fetch(\"settings\").join(\", \")}\"\n raise \"CREATE\" unless fetch.call(\"create\")[:sql]==create && fetch.call(\"create\")[:stdout]==\"\"\n raise \"ATTACH\" unless fetch.call(\"attach\")=={sql:\"ALTER TABLE default.#{table} ATTACH PART '\\''all_1_1_0'\\''\",stdout:\"\"}\n raise \"CHECK\" unless fetch.call(\"check\")=={\n  sql:\"CHECK TABLE default.#{table} FORMAT TSVRaw\",stdout:\"all_1_1_0\\t1\\t\\n\"}\n pre=fetch.call(\"pre-attach-schema-and-data-path\")\n schema_sql=\"SELECT concat('\\''__W236_SCHEMA__'\\'', name, '\\''\\\\t'\\'', type) FROM system.columns WHERE database='\\''default'\\'' AND table='\\''#{table}'\\'' ORDER BY position FORMAT TSVRaw\"\n data_sql=\"SELECT concat('\\''__W236_DATA_PATH__'\\'', arrayElement(data_paths, 1)) FROM system.tables WHERE database='\\''default'\\'' AND name='\\''#{table}'\\'' FORMAT TSVRaw\"\n raise \"pre SQL\" unless pre[:sql]==schema_sql+\"; \"+data_sql\n lines=pre[:stdout].lines.map(&:chomp)\n raise \"pre schema\" unless lines[0,2]==[\"__W236_SCHEMA__id\\tUInt64\",\"__W236_SCHEMA__j\\tJSON(q #{type})\"] && lines.length==3 && lines.last.start_with?(\"__W236_DATA_PATH__\")\n data_path=File.expand_path(lines.last.delete_prefix(\"__W236_DATA_PATH__\"))\n raise \"pre path\" unless File.realpath(data_path)==data_path && data_path.start_with?(File.join(root,\"stores\",id,\"store\")+\"/\")\n post=fetch.call(\"post-attach-schema-and-part\")\n parts_sql=\"SELECT concat('\\''__W236_PART__'\\'', name, '\\''\\\\t'\\'', toString(rows), '\\''\\\\t'\\'', toString(marks), '\\''\\\\t'\\'', part_type, '\\''\\\\t'\\'', path) FROM system.parts WHERE database='\\''default'\\'' AND table='\\''#{table}'\\'' AND active ORDER BY name FORMAT TSVRaw\"\n raise \"post SQL\" unless post[:sql]==schema_sql+\"; \"+parts_sql\n plines=post[:stdout].lines.map(&:chomp)\n raise \"post schema\" unless plines[0,2]==lines[0,2] && plines.length==3\n part_fields=plines.last.delete_prefix(\"__W236_PART__\").split(\"\\t\",-1)\n attached=File.join(data_path,\"all_1_1_0\")\n raise \"post part\" unless part_fields[0,4]==[\"all_1_1_0\",\"6\",\"4\",\"Wide\"] && File.expand_path(part_fields.fetch(4))==attached\n source=File.join(generated,\"parts\",id)\n source_files=inventory(source); actual_files=inventory(attached)\n extra=actual_files.reject { |row| source_files.any? { |src| src[0]==row[0] } }\n raise \"source changed/removed\" unless source_files.all? { |row| actual_files.include?(row) }\n raise \"native additions\" unless extra.empty? || extra.map(&:first)==[\"invalidated_system_columns.txt\"]\n if !extra.empty?\n  text=File.binread(File.join(attached,\"invalidated_system_columns.txt\"))\n  raise \"invalidated set\" unless text.lines.map(&:chomp).sort==[\"_block_number\",\"_block_offset\"] && text.lines.length==2 && text.end_with?(\"\\n\")\n end\n columns=\"columns format version: 1\\n2 columns:\\n\"+0x60.chr+\"id\"+0x60.chr+\" UInt64\\n\"+0x60.chr+\"j\"+0x60.chr+\" JSON(q #{type})\\n\"\n raise \"nominal columns\" unless File.binread(File.join(attached,\"columns.txt\"))==columns\n rows=bodies.each_with_index.map { |body,i| [i+1].pack(\"Q<\")+body.b }\n {\"full\"=>rows.join.b,\"middle\"=>rows[2,2].join.b,\"empty\"=>\"\".b}.each do |window,expected|\n  record=fetch.call(\"rowbinary-\"+window)\n  pred={\"full\"=>\"\",\"middle\"=>\" WHERE id BETWEEN 3 AND 4\",\"empty\"=>\" WHERE id=0\"}.fetch(window)\n  raise \"literal SQL\" unless record[:sql]==\"SELECT id, j.q FROM default.#{table}#{pred} ORDER BY id SETTINGS output_format_binary_write_json_as_string=0 FORMAT RowBinary\"\n  raise \"literal stdout\" unless record[:stdout]==expected\n  raise \"capture expected file\" unless File.binread(File.join(root,\"literal_rowbinary\",id+\"-\"+window+\"-expected.rowbin\"))==expected\n end\nend\nowner=RecheckObjectDeclaredNestedPartsW236::Probe.allocate\nbase=JSON.parse(File.binread(paths.first))\nraise \"genuine success rejected\" unless owner.send(:process_success?,base)\nmutations=[{\"classification\"=>\"process_nonzero_or_signaled_exit\"},{\"exitstatus\"=>1},{\"signaled\"=>true},{\"signaled\"=>nil},{\"timed_out\"=>true},{\"timed_out\"=>nil},{\"termsig\"=>15},{\"spawn_error\"=>\"synthetic\"}]\nmutations.each { |m| raise \"forged success\" if owner.send(:process_success?,base.merge(m)) }\n%w[classification exitstatus signaled timed_out termsig spawn_error].each do |key|\n malformed=base.dup; malformed.delete(key)\n begin\n  raise \"missing process field accepted\" if owner.send(:process_success?,malformed)\n rescue KeyError\n end\nend\nputs JSON.generate(raw_native_audit:\"pass\",records:paths.length,cases:cases.length,literal_windows:15,process_forgeries_rejected:mutations.length,missing_fields_rejected:6,source:\"actual status/argv/sql/schema/parts/file bytes and root-packed RowBinary, not witness status labels\")\n' /private/tmp/crystal-click-w236-consumer.KN8HOX /private/tmp/crystal-click-w236-generated-release.Ur03qh > /private/tmp/crystal-click-w236.P4YPUa/raw-consumer-audit-release.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/raw-consumer-audit-release.log",
+      "exit_code": 0,
+      "log_sha256": "93c4bc34845e2d8e4e34d13f6f490f63f2533c1b36e670a2b023d5ef36a28bb3",
+      "observed": true,
+      "process_count": 42,
+      "profiles": 5,
+      "literal_windows": 15,
+      "process_forgeries_rejected": 8,
+      "missing_process_fields_rejected": 6
+    },
+    {
+      "name": "mode_reconciliation",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -e '\nrequire \"json\"\nrequire \"digest\"\nrequire \"find\"\na,b=ARGV\nids=%w[direct_nested array_nested tuple_nested map_nested variant_nested]\nfiles=0\nbytes=0\nids.each do |id|\n roots=[a,b].map { |root| File.join(root,\"parts\",id) }\n rows=roots.map do |root|\n  current={}\n  Find.find(root) do |path|\n   raise \"symlink\" if File.symlink?(path)\n   next if File.directory?(path)\n   raise \"nonregular\" unless File.file?(path)\n   relative=path.delete_prefix(root+\"/\")\n   current[relative]=File.binread(path)\n  end\n  current\n end\n raise \"roster mismatch #{id}\" unless rows[0].keys.sort==rows[1].keys.sort\n rows[0].each do |path,data|\n  raise \"byte mismatch #{id}/#{path}\" unless rows[1].fetch(path)==data\n  files+=1; bytes+=data.bytesize\n end\nend\nputs JSON.generate(mode_reconciliation:\"pass\",profiles:ids.length,files_per_mode:files,bytes_per_mode:bytes,comparison:\"actual relative file names and byte contents, not manifest flags\")\n' /private/tmp/crystal-click-w236-generated-debug.ykhsKG /private/tmp/crystal-click-w236-generated-release.Ur03qh > /private/tmp/crystal-click-w236.P4YPUa/mode-reconciliation.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/mode-reconciliation.log",
+      "exit_code": 0,
+      "log_sha256": "a5357494d2a686b8cbef4fdd1148f7fcadae93f922b47be74f030c66946a2f0f",
+      "observed": true,
+      "profiles": 5,
+      "files_per_mode": 146,
+      "bytes_per_mode": 18859
+    },
+    {
+      "name": "ruby_stock_syntax",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/recheck_object_declared_nested_stock_w236.rb > /private/tmp/crystal-click-w236.P4YPUa/syntax-stock-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/syntax-stock-final.log",
+      "exit_code": 0,
+      "log_sha256": "8320c4b64f2018fd818cb47606f6ba3ff6e4fd8d46bb8c0b009833f7e26e318b",
+      "observed": true
+    },
+    {
+      "name": "ruby_consumer_syntax",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 512 -c scripts/recheck_object_declared_nested_parts_w236.rb > /private/tmp/crystal-click-w236.P4YPUa/syntax-consumer-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/syntax-consumer-final.log",
+      "exit_code": 0,
+      "log_sha256": "8320c4b64f2018fd818cb47606f6ba3ff6e4fd8d46bb8c0b009833f7e26e318b",
+      "observed": true
+    },
+    {
+      "name": "format",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 4096 tool format --check src/crystal_click/object_recursive_declaration.cr src/crystal_click/object_recursive_declaration_text.cr src/crystal_click/object_declared_dynamic_declaration.cr scripts/check_object_declared_nested_parts_w236.cr spec/object_declared_nested_w236_spec.cr spec/object_declared_nested_physical_w236_spec.cr > /private/tmp/crystal-click-w236.P4YPUa/format-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/format-final.log",
+      "exit_code": 0,
+      "log_sha256": "3450419680f61f3749da43299f98368fa4c9426149bbfc7e334a2de27afcd22f",
+      "observed": true
+    },
+    {
+      "name": "kernel_red",
+      "cmd": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w236.P4YPUa/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_declared_nested_w236_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w236.P4YPUa/kernel-red-final.log 2>&1",
+      "log": "/private/tmp/crystal-click-w236.P4YPUa/kernel-red-final.log",
+      "exit_code": 1,
+      "log_sha256": "92b721b2d0ae27c22c0d61919cc5cc0c2381360738039a0a2963f1a775e1f358",
+      "observed": true,
+      "examples": 5,
+      "failures": 0,
+      "errors": 3,
+      "pending": 0,
+      "passing_controls": 2,
+      "scope": "Compile-valid declaration-admission RED against unchanged production, not a compiler failure"
+    }
+  ],
+  "retained_captures": {
+    "availability": "Observed temporary local roots; replay bounded commands if absent",
+    "stock": "/private/tmp/crystal-click-w236-stock.L3SNm4",
+    "generated_debug": "/private/tmp/crystal-click-w236-generated-debug.ykhsKG",
+    "generated_release": "/private/tmp/crystal-click-w236-generated-release.Ur03qh",
+    "native_consumer_debug": "/private/tmp/crystal-click-w236-consumer.zyF4f8",
+    "native_consumer_release": "/private/tmp/crystal-click-w236-consumer.KN8HOX",
+    "indices": [
+      {
+        "path": "/private/tmp/crystal-click-w236-stock.L3SNm4/capture_inventory.json",
+        "kind": "capture",
+        "bytes": 120810,
+        "sha256": "06b8116bf65ec852a85b6644feb5523febf0b49e0928cc2a8637ca04a9d2d048"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w236-stock.L3SNm4/witnesses.json",
+        "kind": "capture",
+        "bytes": 56978,
+        "sha256": "f0ba5aa2ab581047494c377e9af31cf4d9821eb31578bc737140736e241f360a"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w236-consumer.zyF4f8/capture_inventory.json",
+        "kind": "capture",
+        "bytes": 89119,
+        "sha256": "d892f6cd4c33fd468c00554c80b9d2fa26b68b5b3850f337f5a8c74a94468107"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w236-consumer.zyF4f8/object_declared_nested_parts_consumer_w236.json",
+        "kind": "capture",
+        "bytes": 265799,
+        "sha256": "6a998fa889ac9a231b4974bcc667710788905627956898d9a3653c7970eea987"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w236-consumer.KN8HOX/capture_inventory.json",
+        "kind": "capture",
+        "bytes": 89119,
+        "sha256": "1a192eb2475403d62f40955fa271776e7fa2ec769b6ce0def2f7791e3e38bed6"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w236-consumer.KN8HOX/object_declared_nested_parts_consumer_w236.json",
+        "kind": "capture",
+        "bytes": 265811,
+        "sha256": "a85631399f3867e62ee2b6ab18769ce5dc12c5266cb6313e95978884883988b1"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w236-generated-debug.ykhsKG/object_declared_nested_parts_w236.json",
+        "kind": "manifest",
+        "bytes": 104685,
+        "sha256": "8c2dc89062dec6aabbf8784a5a7ae55cd738542499b6f99ce67f0703ebddc035"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w236-generated-release.Ur03qh/object_declared_nested_parts_w236.json",
+        "kind": "manifest",
+        "bytes": 104697,
+        "sha256": "4b9b0ec10d485a49c3b721e2113aab4bc881e08b7ff481e12055867d1190297c"
+      }
+    ],
+    "failed_or_superseded_attempts": [
+      {
+        "root": "/private/tmp/crystal-click-w236-stock.7zpggm",
+        "kind": "Wrong helper module before native work; plumbing failure, not type refusal"
+      },
+      {
+        "logs": [
+          "/private/tmp/crystal-click-w236.P4YPUa/kernel-green.log",
+          "/private/tmp/crystal-click-w236.P4YPUa/kernel-green-final.log"
+        ],
+        "kind": "Crystal method-scope local collisions in new Nested visitors; distinct binders resolved them"
+      },
+      {
+        "log": "/private/tmp/crystal-click-w236.P4YPUa/kernel-green-run3.log",
+        "kind": "Fixture encoded an empty real parent mark; retained the existing positive-parent guard, used empty child values and explicit zero-parent rejection instead"
+      },
+      {
+        "logs": [
+          "/private/tmp/crystal-click-w236.P4YPUa/checker-build-debug.log",
+          "/private/tmp/crystal-click-w236.P4YPUa/checker-build-debug-final.log"
+        ],
+        "kind": "Checker API/syntax errors corrected without widening production"
+      },
+      {
+        "root": "/private/tmp/crystal-click-w236-generated-debug.Ze0AVh",
+        "log": "/private/tmp/crystal-click-w236.P4YPUa/checker-debug-run.log",
+        "kind": "ClickHouse system.parts directory path has a trailing slash; exact optional terminal separator accepted, not arbitrary path normalization"
+      },
+      {
+        "root": "/private/tmp/crystal-click-w236-consumer-debug.AZM4mZ",
+        "log": "/private/tmp/crystal-click-w236.P4YPUa/native-consumer-debug.log",
+        "kind": "Capture root name failed the required fresh-root namespace before native work"
+      },
+      {
+        "root": "/private/tmp/crystal-click-w236-consumer.3t1fWo",
+        "log": "/private/tmp/crystal-click-w236.P4YPUa/native-consumer-debug-run2.log",
+        "process_count": 7,
+        "kind": "Native ATTACH/CHECK and metadata passed, then test assumed an ordered invalidated-column roster. Upstream NameSet is unordered; allow only the exact two permutations"
+      },
+      {
+        "log": "/private/tmp/crystal-click-w236.P4YPUa/raw-consumer-audit-debug.log",
+        "kind": "Root auditor assumed an extra CHECK setting; corrected to the exact fixed query. This was an auditor failure, not a new native type refusal"
+      }
+    ],
+    "interpretation": "Do not promote failed compile/helper/fixture audits into RED, type refusal or positive compatibility; final observed successful checks are separately listed"
+  },
+  "adversary": {
+    "verdict": "ROBUST within declared scope",
+    "highest_risk": "Generic Nested bulk support does not alone establish Object declared-path compatibility or absence of accidental runtime-owner widening",
+    "discriminators": [
+      "Compile-valid pre-change admission RED",
+      "Actual stock-to-library decoding with exact nominal schemas",
+      "Both-mode native ATTACH/CHECK and root-packed full/middle/empty RowBinary",
+      "All-empty local six-parent three-mark zero-payload lanes",
+      "Exact budget one-short and forged borrowed-source checks",
+      "Late checksum-valid shape corruption, selected payload versus unselected-payload boundary",
+      "Whole mark-metadata corruption rejection even for early selected payload",
+      "Adjacent QBit/shared-Nested/runtime guards",
+      "False-success and missing-status pressure",
+      "Actual-byte mode reconciliation"
+    ],
+    "evidence_failure_policy": "Consumer evidence-index failures propagate instead of being swallowed as a successful run",
+    "review_lineage": "Luna implementation and hostile review are correlated hypotheses; root independently read the diff/source and new falsifier, compiled, executed all listed checks and inspected raw native bytes"
+  },
+  "residual_risks": [
+    "Finite UInt8/String fixture descendants, five wrappers, pinned runtime/settings; not an all-version, all-parameter/depth/product/layout proof",
+    "Local admission composes already supported static descendants; this native matrix does not certify every descendant family",
+    "All-empty payload lanes are locally qualified, not an additional sixth native profile",
+    "Early selection does not authenticate unselected payload bytes; checksum/part SHA values are byte bindings, not signatures",
+    "No whole-repository suite, broad facade refactor, MV/projection or allocator/RSS/throughput closure",
+    "Native execution/time bounds are not a hard output-allocation cap",
+    "Packet is a curated evidence index; JSON syntax/shape checks do not substantively prove its referenced claims"
+  ],
+  "continuation": {
+    "active_goal": "CH-compatible read/write types and MV/projection support before optimization",
+    "confirmed_frontier": "Nominal Nested declared paths reuse existing serde; static declared QBit refusals and ordinary typed-Dynamic Nested guard remain preserved",
+    "next_falsifier": "Inventory the remaining legal owner/layout intersections and qualify their stateful stream context against upstream, rather than adding per-container-product codecs",
+    "authority": "Bounded local reversible work and one coherent atomic local commit; no push, production mutation, remote history rewrite or optimization",
+    "decay": "Refresh after relevant source/runtime/compiler/profile/declaration/codec/helper/oracle changes or loss of raw captures"
+  },
+  "links": [
+    "docs/OBJECT_DECLARED_NESTED_FRONTIER.md",
+    "docs/MODULARIZATION_FRONTIER.md",
+    "LANDMARKS.md"
+  ]
+}

@@ -323,7 +323,8 @@ module CrystalClick
         child = type.child_at(0)
         return nil if child.tag == BinaryDataType::TAG_ARRAY || child.tag == BinaryDataType::TAG_MAP ||
                       child.tag == BinaryDataType::TAG_NULLABLE || child.tag == BinaryDataType::TAG_LOW_CARDINALITY ||
-                      child.tag == BinaryDataType::TAG_VARIANT || child.tag == BinaryDataType::TAG_DYNAMIC
+                      child.tag == BinaryDataType::TAG_VARIANT || child.tag == BinaryDataType::TAG_DYNAMIC ||
+                      child.tag == BinaryDataType::TAG_NESTED
         totals.child_edge(limits)
         child_size = measure_type(child, depth + 1, limits, totals, allow_declared_dynamic) || return nil
         checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
@@ -341,6 +342,18 @@ module CrystalClick
         totals.child_edge(limits)
         value_size = measure_type(type.child_at(1), depth + 1, limits, totals, allow_declared_dynamic) || return nil
         checked_add(checked_add("Map(".bytesize.to_u64, key_size), checked_add(", ".bytesize.to_u64 + value_size, 1_u64))
+      when BinaryDataType::TAG_NESTED
+        return nil unless type.child_count == 1
+        tuple = type.child_at(0)
+        return nil unless tuple.tag == BinaryDataType::TAG_NAMED_TUPLE && tuple.child_count > 0
+        # Nested's implicit named Tuple is a distinct descriptor node and edge.
+        # Its descendants cannot contain Dynamic even when an enclosing Object
+        # JSON path admits Dynamic at other static locations.
+        totals.child_edge(limits)
+        tuple_size = measure_type(tuple, depth + 1, limits, totals, false) || return nil
+        # Nested(field ...) and Tuple(field ...) share the same body; only the
+        # wrapper spelling differs by one byte (Nested vs Tuple).
+        checked_add(tuple_size, 1_u64)
       when BinaryDataType::TAG_VARIANT
         count = type.child_count
         return nil if count == 0 || count > BinaryVariantRoster::MAX_ARMS
@@ -425,6 +438,16 @@ module CrystalClick
       when BinaryDataType::TAG_ARRAY
         io << "Array("
         append_type_name(io, type.child_at(0))
+        io << ')'
+      when BinaryDataType::TAG_NESTED
+        tuple = type.child_at(0)
+        io << "Nested("
+        tuple.child_count.times do |index|
+          io << ", " unless index == 0
+          ObjectTupleFieldName.append(io, tuple, index)
+          io << ' '
+          append_type_name(io, tuple.child_at(index))
+        end
         io << ')'
       when BinaryDataType::TAG_NULLABLE
         io << "Nullable("

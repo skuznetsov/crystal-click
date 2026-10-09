@@ -392,6 +392,8 @@ module CrystalClick
         unless allow_shared_json && shared_json_actual_type_admitted?(type, limits, root_depth)
           raise UnsupportedFormatError.new("JSON is not admitted as a typed Object Dynamic actual arm")
         end
+      elsif type.contains_nested?
+        raise UnsupportedFormatError.new("Nested is not admitted as a typed Object Dynamic actual arm")
       elsif !ObjectRecursiveDeclaration.measure_descriptor(type, limits, root_depth)
         raise UnsupportedFormatError.new("typed Object Dynamic actual arm is outside the recursive declaration grammar")
       end
