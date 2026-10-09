@@ -1,5 +1,53 @@
 # Crystal Click landmarks
 
+## Nominal Custom Geo recursive composition — W238
+
+- Baseline `e33eec811840ce24499c3e6438036134977ff7e6`; VERIFIED finite
+  descriptor/scalar/bulk/part/native certificate, root hostile verdict ROBUST
+  within scope. Closed seven-name Custom owner carries an implicit exact
+  Tuple/Array body. Descriptor wire stays name-only; existing visitors and
+  shared publisher are reused without a codec per product. Four new production
+  owners have separate files; this is not broad facade decomposition.
+- The same 78 files pass 438 examples per mode, zero failures/errors/pending.
+  Hidden alias expansion and cumulative codec/transport/result bounds hold.
+  Three checksum-valid late Array/String/Variant corruptions reject before
+  first/EOF callbacks; restoring exact bytes passes. One-example public gate
+  RED and two mixed AF/QBit owner RED failures exposed real admission gaps.
+  W109's two now-qualified negative forms moved to W238 positive coverage;
+  malformed names and Nullable(Geometry) remain negative.
+- Fresh separate depth-one source `f25eb93a0b890a3b87df05eb34e2af1f933b4089`
+  (October 9, 08:08:30 UTC); the three relevant source files match the October 7
+  snapshot. Native `26.10.1.1201`, build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, has separate lineage.
+  Stock: 13 profiles, 60 actual native records, 54 successes plus four expected
+  Code 43 and two Code 50 refusals. Each final mode has five fresh native records
+  and a separate helper; paired ATTACH/CHECK=1, schema and literal full/middle/
+  empty RowBinary plus independent raw audits pass. Direct BinaryBulk covers 13;
+  public `.values`, scan/window/EOF cover six recursive forms. Bare typed APIs
+  are local controls, not native helper coverage.
+- Actual bytes reconcile all 230 generated part files: 27,478 bytes per mode.
+  Formatting checks for 41 changed Crystal files and five Ruby syntax checks
+  pass. Both auditors reject six in-scope coherent false-success mutations,
+  with genuine/restored controls after each. The coordinated all-copy/all-witness
+  seventh mutation is accepted: no cryptographic execution provenance claim.
+  Copy preflight allows only 14 exact relative root-confined Atomic housekeeping
+  links; audited parts and sidecars still reject symlinks. Earlier compiler/call-
+  site, missing fixture roster and copy failures are plumbing, not certificates.
+- Return pointer: [W238 frontier](docs/CUSTOM_GEO_RECURSIVE_FRONTIER.md),
+  [evidence index](.landmark/evidence/custom-geo-recursive-w238.json).
+  Next falsifier: qualify one still-legal runtime owner/layout intersection
+  against stock descriptors, sparse/dictionary axes and physical prefixes;
+  generic child serde alone cannot admit its enclosing owner. Geometry Custom,
+  ordinary JSON shared actuals, typed Object/Nested runtime seams, remaining
+  state grammars, MV/projection writing and broad class decomposition stay open.
+  Overall goal ACTIVE; local atomic commit only, no push authority. Memory/
+  performance follows compatibility; no <=10% slowdown claim.
+- Decay: refresh after relevant source/runtime/compiler/codec/admission/consumer/
+  helper/auditor/oracle changes or loss of temporary captures. Per-mark transport
+  reindexes paired streams and may repeat frame decoding; large parts can
+  exhaust consumptive budgets conservatively. No all-layout/version/product,
+  whole-suite, RSS, throughput, live-MV freshness or full-goal closure.
+
 ## Opaque AggregateFunction min/max state leaves — W237
 
 - Baseline `45eda6bc4f687a53d0648b7caab0dd8a6a96b950`; VERIFIED finite

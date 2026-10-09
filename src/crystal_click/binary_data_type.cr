@@ -49,6 +49,7 @@ module CrystalClick
     TAG_IPV6             = 0x29_u8
     TAG_VARIANT          = 0x2a_u8
     TAG_DYNAMIC          = 0x2b_u8
+    TAG_CUSTOM           = 0x2c_u8
     TAG_BOOL             = 0x2d_u8
     TAG_SIMPLE_AGGREGATE = 0x2e_u8
     TAG_NESTED           = 0x2f_u8
@@ -76,6 +77,8 @@ module CrystalClick
     getter? contains_qbit : Bool
     getter? qbit_array_chain : Bool
     getter? contains_json : Bool
+    getter? contains_custom_geo : Bool
+    getter custom_geo_type : BinaryCustomGeoType?
     getter dynamic_max_types : UInt8?
 
     @primitive_name : String?
@@ -107,6 +110,7 @@ module CrystalClick
       @qbit_type : QBitType? = nil,
       @json_type : BinaryJsonType? = nil,
       @aggregate_function_type : BinaryAggregateFunctionType? = nil,
+      @custom_geo_type : BinaryCustomGeoType? = nil,
     )
       @children = children.dup
       @field_names = field_names.map { |name| String.new(name.to_slice) }
@@ -132,6 +136,7 @@ module CrystalClick
                             false
                           end
       @contains_json = @tag == TAG_JSON || @children.any?(&.contains_json?)
+      @contains_custom_geo = @tag == TAG_CUSTOM || @children.any?(&.contains_custom_geo?)
     end
 
     def self.primitive(name : String) : BinaryDataType
@@ -165,6 +170,21 @@ module CrystalClick
               raise ArgumentError.new("unsupported binary primitive type")
             end
       new(tag, detached, [] of BinaryDataType, [] of String, nil)
+    end
+
+    # Construct one closed-whitelist nominal Custom Geo descriptor. Its exact
+    # storage descriptor is an implicit recursive child, while its binary
+    # descriptor remains the name-only Custom tag.
+    def self.custom(name : String) : BinaryDataType
+      owner = BinaryCustomGeoType.new(name)
+      new(
+        TAG_CUSTOM,
+        nil,
+        [owner.storage_type] of BinaryDataType,
+        [] of String,
+        nil,
+        custom_geo_type: owner,
+      )
     end
 
     def self.datetime(time_zone : String? = nil) : BinaryDataType
@@ -412,6 +432,12 @@ module CrystalClick
         storage_type = child.simple_aggregate_type.not_nil!.storage_type
         unless BinarySimpleAggregateAdmission.outer_nullable_eligible?(storage_type)
           raise ArgumentError.new("Nullable cannot wrap SimpleAggregateFunction with ineligible storage")
+        end
+      end
+      if child.tag == TAG_CUSTOM
+        custom_geo_type = child.custom_geo_type || raise ArgumentError.new("Custom Geo descriptor metadata is missing")
+        unless custom_geo_type.nullable_eligible?
+          raise ArgumentError.new("Nullable can directly contain only the Tuple-backed Point Custom Geo alias")
         end
       end
       if child.tag == TAG_ARRAY || child.tag == TAG_NESTED || child.tag == TAG_MAP || child.tag == TAG_NULLABLE || child.tag == TAG_LOW_CARDINALITY || child.tag == TAG_VARIANT || child.tag == TAG_DYNAMIC
@@ -705,6 +731,8 @@ module CrystalClick
         @qbit_type.not_nil!.type_name
       when TAG_JSON
         @json_type.not_nil!.type_name
+      when TAG_CUSTOM
+        @custom_geo_type.not_nil!.name
       when TAG_MAP
         "Map(#{@children[0].name}, #{@children[1].name})"
       when TAG_VARIANT
@@ -796,6 +824,7 @@ module CrystalClick
       return false unless @aggregate_function_type == other.@aggregate_function_type
       return false unless @qbit_type == other.@qbit_type
       return false unless @json_type == other.@json_type
+      return false unless @custom_geo_type == other.@custom_geo_type
       return false unless @dynamic_max_types == other.@dynamic_max_types
       return false unless @field_names == other.@field_names
       return false unless @children.size == other.@children.size
@@ -806,7 +835,7 @@ module CrystalClick
       true
     end
 
-    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @aggregate_function_type, @qbit_type, @json_type, @children, @field_names
+    def_hash @tag, @fixed_size, @primitive_name, @temporal_type, @decimal_type, @enum_definition, @dynamic_max_types, @interval_type, @simple_aggregate_type, @aggregate_count_type, @aggregate_function_type, @qbit_type, @json_type, @custom_geo_type, @children, @field_names
 
     private def self.reject_aggregate_function_child!(type : BinaryDataType) : Nil
       if type.contains_aggregate_function?

@@ -73,6 +73,18 @@ module CrystalClick
       new(type, nil, [] of BinaryValue, false, nil, value)
     end
 
+    # Retain one immutable storage-body value beneath a nominal Custom Geo
+    # wrapper. The caller cannot select a different name/body pairing.
+    def self.custom(type : BinaryDataType, body : BinaryValue) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_CUSTOM && !type.custom_geo_type.nil?
+        raise ArgumentError.new("Custom Geo value requires its nominal descriptor")
+      end
+      unless type.child_count == 1 && body.type == type.child_at(0)
+        raise ArgumentError.new("Custom Geo body does not match its exact storage descriptor")
+      end
+      new(type, nil, [body] of BinaryValue)
+    end
+
     # JSON is one nominal scalar with a separately-owned flattened structured
     # row. It is not represented as an ObjectDocument or generic child array.
     def self.json(type : BinaryDataType, row : BinaryJsonRow) : BinaryValue
@@ -166,6 +178,9 @@ module CrystalClick
     def self.dynamic(type : BinaryDataType, child : BinaryValue? = nil) : BinaryValue
       unless type.tag == BinaryDataType::TAG_DYNAMIC
         raise ArgumentError.new("Dynamic value requires Dynamic type")
+      end
+      if child && child.type.contains_custom_geo?
+        raise ArgumentError.new("Custom Geo is outside the admitted Dynamic actual-type profile")
       end
       if child && child.type.contains_aggregate_function? &&
          !BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(child.type)

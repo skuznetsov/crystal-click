@@ -60,6 +60,11 @@ module CrystalClick
         version_text = metadata_version.to_s
         version_text_size = version_text.bytesize.to_u64
         string_version = profile.with_size_stream? ? 1_u8 : 0_u8
+        # Bare Point keeps its legacy typed consumer. Under always-Default
+        # serialization, ClickHouse accepts an empty statistics roster; a
+        # lone key statistic would be an incomplete Point/coordinate roster.
+        omit_statistics = schema.bulk? &&
+                          schema.bulk_type.custom_geo_type.try(&.profile) == BinaryCustomGeoType::Profile::Point
 
         columns_size = checked_add(
           "columns format version: 1\n2 columns:\n".bytesize.to_u64,
@@ -81,10 +86,17 @@ module CrystalClick
           )
         )
         count_size = rows_text_size
-        serialization_size = checked_add(
-          "{\"columns\":[{\"exact_num_defaults\":true,\"kind\":\"Default\",\"name\":\"\",\"num_defaults\":,\"num_rows\":}],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":},\"version\":1}".bytesize.to_u64,
-          checked_add(key_size, checked_add(defaults_text_size, checked_add(rows_text_size, 1_u64)))
-        )
+        serialization_size = if omit_statistics
+                               checked_add(
+                                 "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":},\"version\":1}".bytesize.to_u64,
+                                 1_u64
+                               )
+                             else
+                               checked_add(
+                                 "{\"columns\":[{\"exact_num_defaults\":true,\"kind\":\"Default\",\"name\":\"\",\"num_defaults\":,\"num_rows\":}],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":},\"version\":1}".bytesize.to_u64,
+                                 checked_add(key_size, checked_add(defaults_text_size, checked_add(rows_text_size, 1_u64)))
+                               )
+                             end
         codec_size = CODEC.bytesize.to_u64
         total_output = checked_add(
           columns_size,
@@ -120,6 +132,19 @@ module CrystalClick
           index += 1
         end
 
+        # Bare Geo aliases keep the legacy typed reader's size-first roster.
+        # The closed alias has at most three sizes and two coordinate lanes;
+        # validate the exact roster before changing only its presentation order.
+        if schema.bulk? && schema.bulk_type.tag == BinaryDataType::TAG_CUSTOM
+          if geo = GeoArrayColumnType.for_type(schema.declaration)
+            expected = geo.size_streams(value_name) + geo.coordinate_streams(value_name).to_a
+            unless expected.sort == names
+              raise UnsupportedFormatError.new("bare Geo physical roster differs from its legacy typed plan")
+            end
+            names = expected
+          end
+        end
+
         declaration = schema.declaration
         @columns = String.build do |io|
           io << "columns format version: 1\n2 columns:\n`" << key_name << "` UInt64\n`" << value_name << "` " << declaration << '\n'
@@ -132,9 +157,12 @@ module CrystalClick
         end
         @count = row_count.to_s
         @serialization = String.build do |io|
-          io << "{\"columns\":[{\"exact_num_defaults\":true,\"kind\":\"Default\",\"name\":\""
-          io << key_name << "\",\"num_defaults\":" << defaults << ",\"num_rows\":" << row_count
-          io << "}],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":"
+          io << "{\"columns\":["
+          unless omit_statistics
+            io << "{\"exact_num_defaults\":true,\"kind\":\"Default\",\"name\":\""
+            io << key_name << "\",\"num_defaults\":" << defaults << ",\"num_rows\":" << row_count << '}'
+          end
+          io << "],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":"
           io << string_version
           io << "},\"version\":1}"
         end

@@ -403,6 +403,8 @@ module CrystalClick
       role_bytes = 0_u64
       name_bytes = 0_u64
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        measure_bindings(type.child_at(0), role_length, name_length, array_level, variant_names)
       when BinaryDataType::TAG_JSON
         # The bound root JSON child Object plan owns the JSON leaf lanes.
         {0_u64, 0_u64}
@@ -515,6 +517,8 @@ module CrystalClick
       variant_names : BinaryBulkVariantNamePlan? = nil,
     ) : Nil
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        append_bindings(type.child_at(0), role, prefix, array_level, names, variant_names)
       when BinaryDataType::TAG_JSON
         # The bound root JSON child Object plan owns the JSON leaf lanes.
         nil
@@ -604,6 +608,8 @@ module CrystalClick
       path_length : UInt64,
     ) : {UInt64, UInt64, UInt64}
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        measure_dictionary_prefix_metadata(type.child_at(0), path_length)
       when BinaryDataType::TAG_LOW_CARDINALITY
         {1_u64, path_length, add_size(path_length, 11_u64)}
       when BinaryDataType::TAG_ARRAY
@@ -662,6 +668,8 @@ module CrystalClick
       path_length : UInt64,
     ) : {UInt64, UInt64}
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        measure_discriminator_prefix_metadata(type.child_at(0), path_length)
       when BinaryDataType::TAG_ARRAY
         measure_discriminator_prefix_metadata(type.child_at(0), add_size(path_length, 9_u64))
       when BinaryDataType::TAG_NESTED

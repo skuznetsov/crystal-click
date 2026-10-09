@@ -441,6 +441,8 @@ module CrystalClick
       qbit_site_roles : Hash(String, Tuple(QBitType, Array(String)))? = nil,
     ) : Nil
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        ensure_minimum_count(type.child_at(0), path, count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
       when BinaryDataType::TAG_QBIT
         qbit_type = type.qbit_type || unsupported!("QBit bulk descriptor is missing its nominal type")
         site_entry = qbit_site_roles.try { |entries| entries[path]? }
@@ -551,6 +553,13 @@ module CrystalClick
       traversal.visit_node(depth)
 
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        child_type = type.child_at(0)
+        traversal.preflight_children(1_u64)
+        traversal.ensure_depth(depth + 1)
+        ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        body = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+        BinaryValue.custom(type, body)
       when BinaryDataType::TAG_QBIT
         qbit_type = type.qbit_type || unsupported!("QBit bulk descriptor is missing its nominal type")
         site_entry = qbit_site_roles.try { |entries| entries[path]? }

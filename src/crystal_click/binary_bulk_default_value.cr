@@ -26,6 +26,9 @@ module CrystalClick
       end
 
       cost = case type.tag
+             when BinaryDataType::TAG_CUSTOM
+               child = measure(type.child_at(0), profile, costs, dynamic_plan)
+               Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), child.wire_bytes)
              when BinaryDataType::TAG_STRING
                Cost.new(1_u64, 0_u64, profile.with_size_stream? ? 8_u64 : 1_u64)
              when BinaryDataType::TAG_QBIT
@@ -100,6 +103,9 @@ module CrystalClick
       end
 
       cost = case type.tag
+             when BinaryDataType::TAG_CUSTOM
+               child = measure_excluding_low_cardinality(type.child_at(0), profile, costs, dynamic_plan, allow_bound_json)
+               Cost.new(add(1_u64, child.nodes), add(1_u64, child.edges), child.wire_bytes)
              when BinaryDataType::TAG_LOW_CARDINALITY
                Cost.new(0_u64, 0_u64, 0_u64)
              when BinaryDataType::TAG_STRING
@@ -162,6 +168,8 @@ module CrystalClick
     def self.build(type : BinaryDataType, dynamic_plan : BinaryDynamicBulkPlan? = nil) : BinaryValue
       reject_dynamic_type!(type, dynamic_plan)
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        BinaryValue.custom(type, build(type.child_at(0), dynamic_plan))
       when BinaryDataType::TAG_STRING
         BinaryValue.string("")
       when BinaryDataType::TAG_AGGREGATE_FUNCTION

@@ -205,6 +205,11 @@ module CrystalClick
       edges = 0_u64
       wire_bytes = 0_u64
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        child = minimum_value_cost(type.child_at(0), value.child_at(0), profile, default_costs, dynamic_plan, allow_bound_json)
+        nodes = checked_add(nodes, child[:nodes])
+        edges = checked_add(1_u64, child[:edges])
+        wire_bytes = child[:wire_bytes]
       when BinaryDataType::TAG_LOW_CARDINALITY
         return zero_cost
       when BinaryDataType::TAG_JSON
@@ -334,6 +339,26 @@ module CrystalClick
       edges = 0_u64
       wire_bytes = 0_u64
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        child_type = type.child_at(0)
+        edges = 1_u64
+        child = value_cost(
+          child_type,
+          value.child_at(0),
+          path,
+          profile,
+          budget,
+          add_cost(base, {nodes: nodes, edges: edges, wire_bytes: wire_bytes}),
+          default_costs,
+          dynamic_plan,
+          depth + 1,
+          mark_index,
+          json_object_writer,
+          json_leaf_key.try { |key| key.with_child(0) },
+        )
+        nodes = checked_add(nodes, child[:nodes])
+        edges = checked_add(edges, child[:edges])
+        wire_bytes = checked_add(wire_bytes, child[:wire_bytes])
       when BinaryDataType::TAG_VARIANT
         wire_bytes = 1_u64
         if index = value.variant_index?
@@ -524,6 +549,8 @@ module CrystalClick
       return nil unless type.contains_json?
       key = json_leaf_key || raise(UnsupportedFormatError.new("Nullable JSON default has no exact binding key"))
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        collect_default_json_rows(type.child_at(0), key.with_child(0), writer, mark_index, depth + 1, profile)
       when BinaryDataType::TAG_JSON
         owner = writer || raise(UnsupportedFormatError.new("Nullable JSON default has no paired Object writer"))
         owner.collect_default(key, mark_index, depth, profile)
@@ -571,6 +598,11 @@ module CrystalClick
       traversal.visit_node(depth)
 
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        child_type = type.child_at(0)
+        preflight_child_type(traversal, child_type, 1_u64)
+        traversal.ensure_depth(depth + 1)
+        write_value(child_type, value.child_at(0), path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, qbit_site_scratch, mark_index, json_object_writer, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, qbit_static_sites)
       when BinaryDataType::TAG_QBIT
         if plan = dynamic_plan
           if site = plan.qbit_site_for(path)
@@ -779,6 +811,11 @@ module CrystalClick
       end
       traversal.visit_node(depth)
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        child_type = type.child_at(0)
+        preflight_child_type(traversal, child_type, 1_u64)
+        traversal.ensure_depth(depth + 1)
+        write_default_value(child_type, path, depth + 1, traversal, budget, lanes, profile, dynamic_plan, qbit_roles, qbit_role_offset, qbit_scratch, json_object_writer, mark_index, json_leaf_key.try { |key| key.with_child(0) }, qbit_site_scratch, qbit_static_sites)
       when BinaryDataType::TAG_QBIT
         if plan = dynamic_plan
           if site = plan.qbit_site_for(path)

@@ -32,6 +32,12 @@ module CrystalClick
         BinaryQBitTypeCodec.write(type, context, depth)
       when BinaryDataType::TAG_DYNAMIC
         context.write_byte(type.dynamic_max_types.not_nil!)
+      when BinaryDataType::TAG_CUSTOM
+        descriptor = type.custom_geo_type || context.unsupported!("Custom Geo descriptor metadata is missing")
+        descriptor.preflight_expansion(context.budget, depth)
+        name = descriptor.name.to_slice
+        context.write_var_uint(name.size.to_u64)
+        context.write_slice(name)
       when BinaryDataType::TAG_FIXED_STRING
         context.write_var_uint(type.fixed_size.not_nil!.to_u64)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_LOW_CARDINALITY
@@ -170,6 +176,21 @@ module CrystalClick
           context.corrupt!("Dynamic max_types 255 is outside the local normal-type profile")
         end
         BinaryDataType.dynamic(max_types.to_i)
+      when BinaryDataType::TAG_CUSTOM
+        name_length = context.read_var_uint
+        if name_length == 0_u64 || name_length > BinaryCustomGeoType::MAX_NAME_BYTES.to_u64
+          context.unsupported!("Custom Geo name is outside the admitted alias profile")
+        end
+        name = String.new(context.read_slice(name_length))
+        descriptor = begin
+          BinaryCustomGeoType.new(name)
+        rescue ex : ArgumentError
+          context.unsupported!("Custom Geo name is outside the admitted alias profile")
+        end
+        # A Custom tag is wire-compact: account for its full implicit storage
+        # tree now, under this caller's budget, before constructing that tree.
+        descriptor.preflight_expansion(context.budget, depth)
+        BinaryDataType.custom(descriptor.name)
       when BinaryDataType::TAG_JSON
         BinaryJsonTypeCodec.read(context, depth)
       when BinaryDataType::TAG_ARRAY

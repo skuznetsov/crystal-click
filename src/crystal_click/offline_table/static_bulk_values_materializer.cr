@@ -21,6 +21,8 @@ module CrystalClick
                         BinaryQBitBulkColumnDeclaration.new(type).declaration
                       elsif type.contains_aggregate_function?
                         BinaryAggregateFunctionBulkColumnDeclaration.new(type).declaration
+                      elsif type.contains_custom_geo?
+                        BinaryCustomGeoBulkColumnDeclaration.new(type).declaration
                       else
                         SimpleAggregateBulkColumnDeclaration.new(type).declaration
                       end

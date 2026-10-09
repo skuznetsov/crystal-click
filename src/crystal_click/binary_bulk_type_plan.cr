@@ -191,6 +191,8 @@ module CrystalClick
 
     private def count_roles(type : BinaryDataType) : UInt64
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        count_roles(type.child_at(0))
       when BinaryDataType::TAG_JSON
         0_u64
       when BinaryDataType::TAG_STRING
@@ -235,6 +237,8 @@ module CrystalClick
 
     private def count_ordinary_roles(type : BinaryDataType) : UInt64
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        count_ordinary_roles(type.child_at(0))
       when BinaryDataType::TAG_LOW_CARDINALITY
         0_u64
       when BinaryDataType::TAG_JSON
@@ -281,7 +285,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         1_u64
-      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_SIMPLE_AGGREGATE
+      when BinaryDataType::TAG_CUSTOM, BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_SIMPLE_AGGREGATE
         count_sites(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
         count = 0_u64
@@ -309,7 +313,7 @@ module CrystalClick
         {contains: child[:contains], count: child[:contains] ? checked_role_add(1_u64, child[:count]) : 0_u64}
       when BinaryDataType::TAG_NULLABLE
         count_ancestor_size_roles(type.child_at(0))
-      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE, BinaryDataType::TAG_CUSTOM
         count_ancestor_size_roles(type.child_at(0))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         contains = false
@@ -349,6 +353,8 @@ module CrystalClick
 
     private def append_roles(type : BinaryDataType, path : String, roles : Array(String)) : Nil
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        append_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_JSON
         nil
       when BinaryDataType::TAG_STRING
@@ -401,6 +407,8 @@ module CrystalClick
 
     private def append_ordinary_roles(type : BinaryDataType, path : String, roles : Array(String)) : Nil
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        append_ordinary_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_LOW_CARDINALITY
         nil
       when BinaryDataType::TAG_JSON
@@ -452,6 +460,8 @@ module CrystalClick
 
     private def append_sites(type : BinaryDataType, path : String, sites : Array(LowCardinalitySite)) : Nil
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        append_sites(type.child_at(0), path, sites)
       when BinaryDataType::TAG_LOW_CARDINALITY
         sites << LowCardinalitySite.new(type, path)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
@@ -485,7 +495,7 @@ module CrystalClick
         child_has_site
       when BinaryDataType::TAG_NULLABLE
         append_ancestor_size_roles(type.child_at(0), "#{path}.nested", roles)
-      when BinaryDataType::TAG_SIMPLE_AGGREGATE
+      when BinaryDataType::TAG_SIMPLE_AGGREGATE, BinaryDataType::TAG_CUSTOM
         append_ancestor_size_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         contains_site = false
@@ -516,6 +526,8 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_LOW_CARDINALITY
         {contains: true, shape_roles: 0_u64, grids: 0_u64}
+      when BinaryDataType::TAG_CUSTOM
+        low_cardinality_schedule_metrics(type.child_at(0))
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         child = low_cardinality_schedule_metrics(type.child_at(0))
         {contains:    child[:contains],
@@ -567,6 +579,8 @@ module CrystalClick
 
     private def append_low_cardinality_shape_roles(type : BinaryDataType, path : String, roles : Array(String)) : Bool
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        append_low_cardinality_shape_roles(type.child_at(0), path, roles)
       when BinaryDataType::TAG_LOW_CARDINALITY
         true
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED

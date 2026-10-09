@@ -116,6 +116,8 @@ module CrystalClick
       dynamic_plan : BinaryDynamicBulkPlan?,
     ) : UInt64
       case type.tag
+      when BinaryDataType::TAG_CUSTOM
+        census_type(type.child_at(0), path, counts, streams, budget, occurrences, used_shape_roles, created_grids, traversal, dynamic_plan)
       when BinaryDataType::TAG_LOW_CARDINALITY
         occurrences[path] = counts
         created_grids

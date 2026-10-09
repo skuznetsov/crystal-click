@@ -131,6 +131,8 @@ module CrystalClick
                    total = add(total, add(2_u64, digits(descriptor.stride)))
                  end
                  total
+               when BinaryDataType::TAG_CUSTOM
+                 type.custom_geo_type.not_nil!.name.bytesize.to_u64
                when BinaryDataType::TAG_JSON
                  descriptor = type.json_type.not_nil!
                  total = 6_u64 # "JSON(" and closing parenthesis

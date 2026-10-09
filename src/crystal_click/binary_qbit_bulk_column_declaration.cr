@@ -23,6 +23,9 @@ module CrystalClick
       rescue ex : ArgumentError
         raise UnsupportedFormatError.new(ex.message || "QBit declaration is outside the static bulk profile")
       end
+      if @type.contains_custom_geo?
+        raise UnsupportedFormatError.new("Custom Geo mixtures are outside the recursive QBit part profile")
+      end
       root_qbit = @type.tag == BinaryDataType::TAG_QBIT ||
                   (@type.tag == BinaryDataType::TAG_NULLABLE &&
                    @type.child_at(0).tag == BinaryDataType::TAG_QBIT)

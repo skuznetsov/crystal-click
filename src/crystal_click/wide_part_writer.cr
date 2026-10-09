@@ -146,6 +146,30 @@ module CrystalClick
       )
     end
 
+    # Write nominal Geo aliases, including ordinary static recursive products,
+    # through the shared two-column publisher. Existing bare Geo APIs retain
+    # their specialized value-buffer contracts.
+    def self.write_uint64_custom_geo_bulk_part(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      value_name : String,
+      type : BinaryDataType,
+      granules : Array(Array(BinaryValue)),
+      rows_per_mark : Int32 = 8192,
+      profile : BinaryBulkProfile = BinaryBulkProfile.with_size_stream,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : String
+      CustomGeoBulkPartWriter.write(
+        destination, key_name, keys, value_name, type, granules,
+        rows_per_mark, profile, frame_bytes, metadata_version, limits,
+        transport_limits
+      )
+    end
+
     # Write one nominal SimpleAggregateFunction BinaryBulk column through
     # the shared static lane encoder and two-column staged publisher. An
     # inner Nullable child remains distinct from the optional root Nullable

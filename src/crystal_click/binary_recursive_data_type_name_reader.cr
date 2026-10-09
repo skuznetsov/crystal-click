@@ -49,7 +49,7 @@ module CrystalClick
       type_start = @offset
       name = read_identifier || invalid!("type name is missing")
       skip_whitespace
-      return parse_atom(name) unless consume('(')
+      return parse_atom(name, depth) unless consume('(')
 
       case name
       when "QBit"
@@ -193,11 +193,16 @@ module CrystalClick
       BinaryDataType.qbit(qbit_type)
     end
 
-    private def parse_atom(name : String) : BinaryDataType
+    private def parse_atom(name : String, depth : Int32) : BinaryDataType
       return BinaryDataType.datetime if name == "DateTime"
       return BinaryDataType.dynamic if name == "Dynamic"
       if interval = BinaryIntervalType.parse(name)
         return BinaryDataType.interval(interval.kind)
+      end
+      if BinaryCustomGeoType.admitted_name?(name)
+        descriptor = BinaryCustomGeoType.new(name)
+        descriptor.preflight_expansion(@budget, depth)
+        return BinaryDataType.custom(descriptor.name)
       end
       BinaryDataType.primitive(name)
     end

@@ -26,6 +26,9 @@ module CrystalClick
       budget = BinaryCodecBudget.new(limits, true)
       bounds = BinaryTypeNameBudget.measure(type, budget)
       declaration = BinaryTypeNameBudget.materialize(type, budget, bounds)
+      if type.contains_custom_geo?
+        raise UnsupportedFormatError.new("Custom Geo mixtures are outside the recursive AggregateFunction part profile")
+      end
       unless type.contains_aggregate_function? &&
              BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(type)
         raise UnsupportedFormatError.new("type is outside the recursive AggregateFunction static bulk profile")

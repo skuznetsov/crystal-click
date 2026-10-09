@@ -12,6 +12,7 @@ module CrystalClick
         expected_type = SimpleAggregateBulkColumnDeclaration.parse(source_declaration)
         expected_type ||= BinaryAggregateFunctionBulkColumnDeclaration.parse(source_declaration)
         expected_type ||= BinaryQBitBulkColumnDeclaration.parse(source_declaration)
+        expected_type ||= BinaryCustomGeoBulkColumnDeclaration.parse(source_declaration)
         unless expected_type && WidePart.supports_static_binary_bulk_type?(source_declaration)
           raise UnsupportedFormatError.new("selected declaration is outside the admitted static BinaryBulk profile")
         end

@@ -16,6 +16,7 @@ module CrystalClick
     ) : BinaryDataType?
       type = BinaryRecursiveDataTypeNameReader.parse_canonical(source, limits) || return nil
       return nil if type.contains_aggregate_function?
+      return nil if type.contains_custom_geo?
       legacy_simple_aggregate_tree?(type) ? type : nil
     end
 

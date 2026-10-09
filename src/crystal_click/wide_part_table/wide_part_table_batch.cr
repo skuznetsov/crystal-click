@@ -544,6 +544,11 @@ module CrystalClick
                         else
                           nil
                         end
+      expected_type ||= if WidePart.supports_custom_geo_bulk_type?(column_type)
+                          BinaryCustomGeoBulkColumnDeclaration.parse(column_type)
+                        else
+                          nil
+                        end
       unless expected_type
         raise UnsupportedFormatError.new("Binary bulk accessor requires an admitted static or Dynamic declaration")
       end
@@ -577,6 +582,11 @@ module CrystalClick
                         end
       expected_type ||= if WidePart.supports_qbit_bulk_type?(column_type)
                           BinaryQBitBulkColumnDeclaration.parse(column_type)
+                        else
+                          nil
+                        end
+      expected_type ||= if WidePart.supports_custom_geo_bulk_type?(column_type)
+                          BinaryCustomGeoBulkColumnDeclaration.parse(column_type)
                         else
                           nil
                         end

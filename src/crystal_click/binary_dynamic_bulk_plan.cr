@@ -838,6 +838,9 @@ module CrystalClick
       if type.contains_json?
         context.unsupported!("JSON in the nominal Dynamic bulk descriptor is outside the admitted profile")
       end
+      if type.contains_custom_geo?
+        context.unsupported!("Custom Geo in the nominal Dynamic bulk descriptor is outside the admitted profile")
+      end
       json_object_bindings = build_json_object_bindings(sites, json_object_plans, json_object_leaf_plans, context)
       data_role_count = count_type_roles(type, "root", sites, profile, context)
       ordinary_role_count = count_ordinary_type_roles(type, "root", sites, profile, context)
@@ -921,6 +924,9 @@ module CrystalClick
       context = BinaryCodecContext.new(limits, nil, true, operation_budget, false, account_output_bytes)
       preflight_external_site_count(context, structures.size, "Dynamic structure site count")
       context.validate_type_tree(type)
+      if type.contains_custom_geo?
+        context.unsupported!("Custom Geo in the nominal Dynamic bulk descriptor is outside the admitted profile")
+      end
 
       sites = Hash(String, Site).new
       discover_write_sites(type, "root", 1, structures, context, sites, include_statistics, !json_object_plans.nil? || !json_object_leaf_plans.nil?)
@@ -1119,6 +1125,9 @@ module CrystalClick
       # building their per-mark occurrence schedule.
       structure.type_count.times do |index|
         actual_type = structure.type_at(index)
+        if actual_type.contains_custom_geo?
+          context.unsupported!("Custom Geo in Dynamic actual rosters is outside the admitted bulk profile")
+        end
         if actual_type.contains_json? && !allow_direct_json
           context.unsupported!("JSON in Dynamic actual rosters is outside the admitted bulk profile")
         end

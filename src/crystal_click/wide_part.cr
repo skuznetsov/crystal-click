@@ -1494,7 +1494,7 @@ module CrystalClick
         supports_named_scalar_tuple_type?(type) || supports_nested_type?(type) || supports_named_array_tuple_type?(type) ||
         supports_named_map_tuple_type?(type) ||
         supports_variant_type?(type) || type == "Dynamic" ||
-        supports_aggregate_function_bulk_type?(type)
+        supports_aggregate_function_bulk_type?(type) || supports_custom_geo_bulk_type?(type)
     end
 
     def self.json_type?(type : String) : Bool
@@ -1586,10 +1586,24 @@ module CrystalClick
       false
     end
 
+    # Only new recursive Geo forms take the generic table route. Bare Point
+    # and array-backed Geo aliases keep their existing typed return values.
+    def self.selected_custom_geo_bulk_declaration(part_path : String, column_name : String) : String?
+      selected_static_binary_bulk_declaration(part_path, column_name) do |declaration|
+        supports_custom_geo_bulk_type?(declaration)
+      end
+    end
+
+    def self.supports_custom_geo_bulk_type?(type : String) : Bool
+      parsed = BinaryCustomGeoBulkColumnDeclaration.parse(type) || return false
+      parsed.tag != BinaryDataType::TAG_CUSTOM
+    end
+
     # Single predicate for the static BinaryBulk consumer surface. This does
     # not widen Dynamic admission.
     def self.supports_static_binary_bulk_type?(type : String) : Bool
-      supports_simple_aggregate_bulk_type?(type) || supports_aggregate_function_bulk_type?(type) || supports_qbit_bulk_type?(type)
+      supports_simple_aggregate_bulk_type?(type) || supports_aggregate_function_bulk_type?(type) ||
+        supports_qbit_bulk_type?(type) || supports_custom_geo_bulk_type?(type)
     end
 
     private def self.selected_static_binary_bulk_declaration(

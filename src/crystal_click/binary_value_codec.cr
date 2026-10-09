@@ -80,6 +80,9 @@ module CrystalClick
       unless budget.writing?
         raise ArgumentError.new("Dynamic bulk child encoder requires a write-direction budget")
       end
+      if value.type.contains_custom_geo?
+        raise UnsupportedFormatError.new("Custom Geo is not admitted as a Dynamic shared actual type")
+      end
       if allow_recursive_qbit && value.type.contains_qbit? && value.type.tag != BinaryDataType::TAG_QBIT
         # The recursive admission predicates intentionally operate on the
         # descriptor tree. Prove its depth, node, and edge bounds against the
@@ -149,6 +152,9 @@ module CrystalClick
         allow_aggregate_function,
       )
       type = BinaryDataTypeCodec.read_from(context, depth)
+      if type.contains_custom_geo?
+        context.unsupported!("Custom Geo is not admitted as a Dynamic shared actual type")
+      end
       unless dynamic_aggregate_actual_allowed?(type, allow_aggregate_function)
         context.unsupported!("AggregateFunction is not admitted as this Dynamic shared actual type")
       end
@@ -243,6 +249,10 @@ module CrystalClick
         else
           BinaryAggregateFunctionStateCodec.write(type, value.aggregate_function_state_bytes, context, depth)
         end
+      when BinaryDataType::TAG_CUSTOM
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        write_value(value.child_at(0), context, depth + 1)
       when BinaryDataType::TAG_STRING
         size = value.byte_size
         context.write_var_uint(size.to_u64)
@@ -319,6 +329,9 @@ module CrystalClick
            !dynamic_aggregate_actual_allowed?(value.child_at(0).type, context.allow_dynamic_aggregate_function)
           context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
         end
+        if value.element_count > 0 && value.child_at(0).type.contains_custom_geo?
+          context.unsupported!("Custom Geo is not admitted as a Dynamic actual type")
+        end
         BinaryDynamicEnvelope.write(value, context, depth) do |selected, selected_depth|
           write_value(selected, context, selected_depth)
         end
@@ -348,6 +361,15 @@ module CrystalClick
           BinaryValue.aggregate_count_state(type, BinaryAggregateCountStateCodec.read(context))
         else
           BinaryValue.aggregate_function_state_from_context(type, context, depth)
+        end
+      when BinaryDataType::TAG_CUSTOM
+        context.preflight_children(1_u64)
+        context.ensure_depth(depth + 1)
+        body = read_value(type.child_at(0), context, depth + 1)
+        begin
+          BinaryValue.custom(type, body)
+        rescue ex : ArgumentError
+          context.corrupt!("invalid Custom Geo storage value: #{ex.message}")
         end
       when BinaryDataType::TAG_STRING
         length = context.read_var_uint
@@ -445,6 +467,9 @@ module CrystalClick
         end
       when BinaryDataType::TAG_DYNAMIC
         BinaryDynamicEnvelope.read(type, context, depth) do |selected_type, selected_depth|
+          if selected_type.contains_custom_geo?
+            context.unsupported!("Custom Geo is not admitted as a Dynamic actual type")
+          end
           unless dynamic_aggregate_actual_allowed?(selected_type, context.allow_dynamic_aggregate_function)
             context.unsupported!("AggregateFunction is not admitted as a Dynamic actual type")
           end

@@ -1,6 +1,43 @@
 # CrystalClick project status
 
-Current opaque AggregateFunction min/max state slice (W237, 2026-10-09):
+Current nominal Custom Geo recursive composition (W238, 2026-10-09): VERIFIED
+within finite quiescent Wide/LZ4/Default/BASIC/plain-mrk2 profiles (root hostile
+verdict: ROBUST within scope). Seven closed nominal aliases reuse the existing
+Tuple/Array scalar and bulk visitors; a Custom descriptor remains name-only.
+Separate nominal-owner, declaration, structural-validation and writer-adapter
+classes preserve alias identity, shared bounds and legacy bare typed APIs.
+No serializer per wrapper product or performance rewrite is introduced.
+
+The same 78 affected spec files pass 438 examples in each of DEBUG and RELEASE,
+zero failures/errors/pending. Both final helpers read 13 actual stock profiles
+and publish parts accepted by native ATTACH/CHECK=1, exact nominal schemas and
+independent full/middle/empty RowBinary; separate raw audits pass. Direct bulk
+coverage is 13 profiles; public owned `.values`, typed scans/windows and EOF
+cover six recursive profiles. Bare specialized typed APIs remain local controls.
+All 230 generated part files match by actual bytes: 27,478 bytes per mode.
+Formatting checks pass for 41 changed Crystal files and all five Ruby scripts
+pass syntax checks. Each auditor rejects six in-scope false-success probes and
+passes genuine/restored controls. Coordinated alteration of all copies and all
+matching witnesses is accepted: this is not cryptographic execution provenance.
+
+Root RED checks exposed the public typed gate's missing dispatch, two unrelated
+mixed-owner admission leaks, and three checksum-valid late shape defects. Final
+controls preserve nominal names, budgets and rejection before first/EOF callbacks.
+Native stock has 60 records: 54 successes, four Code 43 and two Code 50 expected
+refusals. In particular LowCardinality(Point) and Nullable(array-backed Geo)
+are upstream-illegal, whereas mixed runtime owners are separately unqualified.
+Source is a fresh separate depth-one October 9 snapshot; runtime has its own pin.
+
+Remaining: Geometry Custom and other legal runtime/layout intersections,
+ordinary JSON-bearing shared actuals, typed Object/Nested seams, further state
+grammars, MV/projection analysis/writing and broad facade decomposition. Per-mark
+transport still repeats indexing/decoding and may conservatively exhaust shared
+budgets on large parts. No all-types/layouts, whole-suite, RSS or speed claim;
+memory/performance stays deferred and the overall goal remains ACTIVE. Details:
+[CUSTOM_GEO_RECURSIVE_FRONTIER.md](CUSTOM_GEO_RECURSIVE_FRONTIER.md),
+[W238 evidence index](../.landmark/evidence/custom-geo-recursive-w238.json).
+
+Previous opaque AggregateFunction min/max state slice (W237, 2026-10-09):
 VERIFIED within finite version-zero unary static-argument state and native
 Wide/LZ4/Default/plain-mrk2 profiles (root hostile verdict: ROBUST within scope).
 Dedicated argument-policy/Profile and state-layout owners distinguish original

@@ -77,6 +77,12 @@ module CrystalClick
       if @type.contains_dynamic?
         raise UnsupportedFormatError.new("Dynamic requires a bound column-specific physical context")
       end
+      if @type.contains_custom_geo?
+        declaration = BinaryCustomGeoBulkColumnDeclaration.new(@type, @limits)
+        unless declaration.declaration == canonical
+          raise CorruptPartError.new("Custom Geo declaration differs from the expected nominal descriptor")
+        end
+      end
       static_plan = BinaryBulkTypePlan.new(
         @type, BinaryBulkProfile.single_stream, nil, @limits, false
       )
@@ -173,6 +179,24 @@ module CrystalClick
       end
       unless total_rows == metadata.row_count
         raise CorruptPartError.new("Binary bulk parent mark grid differs from count.txt")
+      end
+
+      # A nominal Custom Geo body reuses ordinary physical lanes, but its
+      # recursive shape must be censused across the complete part before the
+      # reader can be published or an early/window/EOF callback can run.
+      if @type.contains_custom_geo?
+        BinaryCustomGeoStructuralValidator.validate!(
+          @type,
+          @ordinary_profile,
+          @physical,
+          @source,
+          role_names,
+          grids,
+          rows,
+          @limits,
+          codec_budget,
+          transport_budget,
+        )
       end
 
       # Validate every mark's complete static QBit occurrence schedule before
