@@ -40,12 +40,15 @@ module CrystalClick
         end
 
         value = row.value_at(index)
-        if descriptor.typed_type_for(path).nil?
-          # Runtime paths carry their own nominal scalar/container descriptor;
-          # typed paths inherit the descriptor metadata from JSON itself.
-          BinaryDataTypeCodec.write_to(value.type, context, depth + 1)
+        # A runtime JSON path serializes its nominal descriptor in the row;
+        # both it and the following scalar must remain inside the JSON ancestry
+        # fence. Typed paths are fenced by their descriptor metadata above.
+        context.with_shared_json_payload_scope do
+          if descriptor.typed_type_for(path).nil?
+            BinaryDataTypeCodec.write_to(value.type, context, depth + 1)
+          end
+          yield value, depth + 1
         end
-        yield value, depth + 1
       end
       nil
     end
@@ -87,30 +90,31 @@ module CrystalClick
           context.corrupt!("JSON row contains a duplicate raw path")
         end
 
-        if path_type = descriptor.typed_type_for(path)
-          supplied_typed.add(path)
-          value = yield path_type, depth + 1
-          entries << {path, value}
-        else
-          path_type = BinaryDataTypeCodec.read_from(context, depth + 1)
-          if path_type.tag == BinaryDataType::TAG_NOTHING
-            # Runtime Nothing is the descriptor-only NULL sentinel. The row
-            # owner normalizes it to absence after raw duplicate validation.
-            context.visit_node(depth + 1)
-            entries << {path, BinaryValue.null(path_type)}
+        value = context.with_shared_json_payload_scope do
+          if path_type = descriptor.typed_type_for(path)
+            supplied_typed.add(path)
+            yield path_type, depth + 1
           else
-            if path_type.tag == BinaryDataType::TAG_NULLABLE
-              context.unsupported!("top-level Nullable is outside the admitted JSON runtime-value profile")
+            path_type = BinaryDataTypeCodec.read_from(context, depth + 1)
+            if path_type.tag == BinaryDataType::TAG_NOTHING
+              # Runtime Nothing is the descriptor-only NULL sentinel. The row
+              # owner normalizes it to absence after raw duplicate validation.
+              context.visit_node(depth + 1)
+              BinaryValue.null(path_type)
+            else
+              if path_type.tag == BinaryDataType::TAG_NULLABLE
+                context.unsupported!("top-level Nullable is outside the admitted JSON runtime-value profile")
+              end
+              begin
+                BinaryJsonType.validate_runtime_type!(path_type)
+              rescue ex : ArgumentError
+                context.unsupported!("JSON runtime DataType is outside the admitted scalar/container profile")
+              end
+              yield path_type, depth + 1
             end
-            begin
-              BinaryJsonType.validate_runtime_type!(path_type)
-            rescue ex : ArgumentError
-              context.unsupported!("JSON runtime DataType is outside the admitted scalar/container profile")
-            end
-            value = yield path_type, depth + 1
-            entries << {path, value}
           end
         end
+        entries << {path, value}
       end
 
       descriptor.typed_path_count.times do |index|

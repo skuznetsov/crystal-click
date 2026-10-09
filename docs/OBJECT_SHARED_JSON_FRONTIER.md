@@ -1,6 +1,134 @@
-# Object shared JSON composition frontier — W240
+# Object shared JSON composition frontier — W240/W242
 
-Document status: VERIFIED within the eight finite shared-layout/String profiles
+## Current qualification — W242 recursive Dynamic site ownership
+
+Status: VERIFIED within the finite `Tuple(JSON, Array(Dynamic(max_types=1)))`
+shared-path fixture, eight shared-layout/String profiles, four DEBUG/RELEASE
+x frame32/frame64 points and tested guard boundaries. Root adversary verdict:
+ROBUST within scope. The overall types and MV/projection goal remains ACTIVE;
+memory/performance remains deferred.
+
+### Problem and design boundary
+
+Existing descriptor, scalar and bulk codecs already recurse through admitted
+containers. The missing owner was site-local Dynamic prefix state:
+`ObjectSharedAdvancedChunkCodec` supplied only a root structure, although the
+paired path traversal could discover nested sites. Removing the prepared-plan
+guard alone would not supply that state.
+
+`ObjectSharedDynamicSiteCensus` now owns a generic, budgeted census in its own
+class file. It derives each site's cap from its own descriptor, registers
+canonical ordinary arms and non-JSON SharedVariant overflow, retains
+descriptor-only sites for empty containers, and preserves exact
+`(site, canonical arm, JSON descriptor path)` prepared leaf bindings. Existing
+bulk visitors still own array/tuple/map/null/arm row-domain transformations.
+There is no serializer per type product.
+
+Shared MAP/document scalar envelopes now admit Dynamic siblings outside JSON
+payload ancestry. Scoped, exception-safe context retains the Dynamic fences
+inside JSON typed metadata and runtime-path payloads. Default borrowed APIs,
+Variant/LowCardinality/aggregate/QBit envelope fences, unprepared JSON actuals
+and further JSON-bound Dynamic sites in prepared child Object plans remain
+guarded. Census wrapper branches beyond this finite fixture are not a native
+all-products certificate.
+
+### Executed gates and discriminators
+
+The pre-change guarded focused command at `9ea74d5` ran six examples with three
+expected errors: prepared nested-Dynamic admission, shared MAP value encoding
+and descriptor decoding. The existing paired traversal, missing-descendant
+state negative and specialized Copy/scalar controls passed. This authorized a
+state-owner change, not replacement of recursive serde.
+
+At the final frozen source, the same 99 selected files pass 623 examples in
+each of DEBUG and RELEASE (512 main, 99 in thirteen isolated controls, 12
+focused), with zero failures/errors/pending. Both helper builds and formatting
+checks pass. Grouped Proc-alias compiler symptoms also reproduce on the clean
+baseline; isolated coverage is not a compiler fix or whole-suite claim.
+Focused controls include local-cap-one overflow, populated/mixed-empty/all-empty
+arrays, descriptor-only sites, cap-zero non-JSON spill, cap-zero prepared-JSON
+refusal, incomplete bindings, missing descendant state and shared budgets.
+
+All four native matrix points pass, each with sixteen fresh library-authored
+parts (normal and same-value type-only roles in eight profiles), exact schema,
+one active Wide part, eight rows, five physical marks and CHECK=1. Separate
+fresh processes independently read direct payloads and whole Objects:
+128 direct rows, 96 populated exact-type rows and 128 full rows per point,
+plus middle/last SQL predicate controls. The helper independently reads eight
+physical mark windows per part, including empty interior and zero-count EOF:
+128 windows per point, 512 over the matrix. Native PK predicates are not proof
+of a physical mark seek.
+
+The native oracle distinguishes Int64(7) from UInt8(7) while normalized JSON
+values remain identical. Root's mutation of the actual DEBUG32 raw type witness
+is rejected without changing its value fields. Every final read-only raw audit
+and all six captured-output self-tests pass; these replay authenticated argv,
+SQL, process records, helper output, inventories, active attached files and
+native direct/full/type outputs. Duplicate evidence keys, wrong same-value
+type witnesses and missing/duplicate rows reject. They are in-memory parser
+controls, not native corruption experiments or immutable execution provenance.
+
+Actual generated file bytes agree across modes: sixteen part pairs and
+456 files at each frame size, 276,449 bytes per mode at frame32 and 227,074 at
+frame64. Source parts and attached copies remain unchanged; the only admitted
+native-added file is `invalidated_system_columns.txt` with exactly
+`_block_offset\n_block_number\n`.
+
+Fresh W242 queries also close the retained finite W241 Array(JSON) child-type
+oracle: sixteen copied stock/generated parts, 32 profile/role/path groups,
+256 path rows and 112 populated children. Exact child descriptors, field
+wrappers and Dynamic actual types/values are independently queried. Two deeper
+JSON actual rows are native grammar/persistence controls only, not Crystal
+writer admission for that deeper physical product.
+
+### Retained corrections and boundaries
+
+- The unhinted selected-path library carrier is Dynamic(max_types=254), while
+  native SQL exposes the Object default-cap32 wrapper as Dynamic. Only that
+  outer boundary is projected once; inner cap1 is exact and never normalized.
+  Stored Tuple actuals and Nullable(Tuple) extracted wrappers are distinct.
+- A detached advanced chunk has no authenticated containing-Data coordinates
+  and still refuses. The positive advanced controls go through real physical
+  bucket Data; no provenance guard was weakened.
+- Input payload Nothing NULL is canonically omitted before storage. Row pk6
+  therefore has full doc {} and a missing direct payload, not a preserved
+  explicit outer JSON null.
+- Ruby's ordinary last-key-wins parser accepted a duplicate-key evidence
+  envelope. Strict evidence parsing now rejects duplicate keys; native JSON
+  value payloads retain their separate grammar.
+- Helper compile-only API/return-type/method-name repairs and earlier oracle
+  wrapper/name mismatches are not native format refusals.
+
+Source comparison uses the separate depth-one checkout
+`f25eb93a0b890a3b87df05eb34e2af1f933b4089` fetched on October 9 at 08:08:30 UTC.
+Native runtime `26.10.1.1201`, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, has separate lineage; it is not
+asserted to be a build of that checkout. The
+[W242 evidence index](../.landmark/evidence/object-recursive-dynamic-w242.json)
+records exact local/native/raw commands, external summary pins, frozen sources,
+helper binaries, actual byte checks, counterexamples and refresh policy.
+
+Risk: CAUTION (persistent serialization and recursive state); baseline rollback
+is `9ea74d54073b1408f2d18662e74ea891e7720e3d`. The coherent feature is one local
+atomic commit after these gates; no remote push or history rewrite. Refresh the
+affected gates after source/runtime/compiler/codec/admission/consumer/helper/
+oracle changes or loss/alteration of temporary captures. An infrastructure
+failure is inconclusive, not support or a native format refusal.
+
+Next falsifier: one legal further JSON-bound Dynamic actual inside a prepared
+child Object plan, with exact child metadata state ownership and fresh native
+read/write evidence, before widening the retained guard. Arbitrary wrapper
+products, native cap-zero, general multi-column publication, Compact parts,
+MV/projection execution/writing and broad legacy facade decomposition remain
+open. No RSS, allocation, throughput or <=10% slowdown claim is made.
+
+## Historical W240/W241 qualification
+
+The following certificate is retained at its original scope. Its then-open
+nested Dynamic physical-owner and finite stock child-type-oracle questions are
+addressed above; that does not retroactively widen the W240/W241 certificate.
+
+Retained W240/W241 status: VERIFIED within the eight finite shared-layout/String profiles
 and tested guard boundaries; root adversary verdict ROBUST within scope.
 Baseline at the start of this slice: `d217f75` rejected JSON-bearing values
 in Object shared MAP/Copy envelopes and ordinary JSON per-path Data bodies.
@@ -8,7 +136,7 @@ Recursive JSON descriptor/scalar serde and Dynamic JSON child Object owners
 already exist. This is an owner/layout integration gap, not a new leaf grammar
 or a request for a serializer for every wrapper product.
 
-## Current execution checkpoint
+## Historical W240/W241 execution checkpoint
 
 Local checks at the current production source state pass 611 examples per mode:
 512 in the 85-file main roster and 99 in thirteen isolated JSON/Dynamic control
@@ -89,10 +217,10 @@ coordinator captures predate the final classifier-only coordinator source; all
 four were re-audited with the final auditor. No immutable cryptographic
 execution-provenance claim is made.
 
-Next falsifier: qualify a still-guarded prepared JSON-bearing actual with nested
+Historical next falsifier (finite W242 fixture qualified above): qualify a prepared JSON-bearing actual with nested
 Dynamic sites through an exact physical child binding/occurrence oracle and
 independent native direct/full/bounded reads before widening prepared admission.
-The independent stock nested Dynamic child-type oracle remains a separate gap.
+At that checkpoint the independent stock nested Dynamic child-type oracle remained a separate gap; W242 supplies the finite oracle above.
 No remote push, all-product claim or memory/performance improvement is claimed.
 
 ## Target and retained boundaries

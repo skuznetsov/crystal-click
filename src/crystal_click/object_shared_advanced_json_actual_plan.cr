@@ -14,8 +14,8 @@ module CrystalClick
       budget = BinaryCodecBudget.new(limits, true)
       context = BinaryCodecContext.new(limits, nil, true, budget, false, false)
       context.validate_type_tree(@actual_type)
-      unless @actual_type.contains_json? && !@actual_type.contains_dynamic?
-        raise ArgumentError.new("prepared Dynamic actual must contain JSON and no nested Dynamic site")
+      unless @actual_type.contains_json? && !dynamic_in_json_typed_metadata?(@actual_type)
+        raise ArgumentError.new("prepared Dynamic actual must contain JSON and no Dynamic in JSON typed metadata")
       end
 
       expected = [] of Array(Int32)
@@ -106,6 +106,26 @@ module CrystalClick
         path.pop
       end
       nil
+    end
+
+    # Dynamic siblings beside JSON can use the generic Dynamic site plan. A
+    # Dynamic descriptor declared inside JSON typed metadata remains outside
+    # this shared-envelope slice; runtime JSON paths are fenced by the scoped
+    # BinaryCodecContext ancestry check instead.
+    private def dynamic_in_json_typed_metadata?(type : BinaryDataType) : Bool
+      if type.tag == BinaryDataType::TAG_JSON
+        descriptor = type.json_type || return false
+        descriptor.typed_path_count.times do |index|
+          typed_type = descriptor.typed_type_at(index)
+          return true if typed_type.contains_dynamic?
+          return true if dynamic_in_json_typed_metadata?(typed_type)
+        end
+        return false
+      end
+      type.child_count.times do |index|
+        return true if dynamic_in_json_typed_metadata?(type.child_at(index))
+      end
+      false
     end
   end
 end

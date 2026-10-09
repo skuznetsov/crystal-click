@@ -208,8 +208,32 @@ describe "W240 shared JSON scalar envelopes" do
     qbit_descriptor = CrystalClick::BinaryDataType.qbit(qbit_type)
     qbit = CrystalClick::BinaryValue.qbit(qbit_descriptor, CrystalClick::QBitValue.new(qbit_type, Bytes[0_u8]))
 
+    dynamic_wire = CrystalClick::BinaryValueCodec.encode(dynamic)
+    shared_dynamic_wire = CrystalClick::BinaryValueCodec.encode_shared_json_envelope(
+      dynamic,
+      CrystalClick::BinaryCodecBudget.new(w240e_limits, true),
+    )
+    shared_dynamic_wire.should eq(dynamic_wire)
+    shared_dynamic = CrystalClick::BinaryValueCodec.decode_shared_json_envelope(
+      shared_dynamic_wire,
+      CrystalClick::BinaryCodecBudget.new(w240e_limits),
+    )
+    w240e_assert_value_equal!(shared_dynamic, dynamic)
+
+    expect_raises(CrystalClick::UnsupportedFormatError, "Dynamic") do
+      CrystalClick::BinaryValueCodec.encode_borrowed(
+        dynamic,
+        CrystalClick::BinaryCodecBudget.new(w240e_limits, true),
+      )
+    end
+    expect_raises(CrystalClick::UnsupportedFormatError, "Dynamic") do
+      CrystalClick::BinaryValueCodec.decode_borrowed(
+        dynamic_wire,
+        CrystalClick::BinaryCodecBudget.new(w240e_limits),
+      )
+    end
+
     [
-      {dynamic, "Dynamic"},
       {variant, "Variant"},
       {low_cardinality, "LowCardinality"},
       {aggregate, "AggregateFunction"},

@@ -13,6 +13,7 @@ module CrystalClick
     @account_output_bytes : Bool
     @output_byte_limit : UInt64
     @shared_json_envelope_policy : Bool
+    @shared_json_payload_depth : Int32
 
     # The borrowed/prepaid switches are internal-only plumbing. A caller may
     # disable input charging only after an enclosing owner charged the complete
@@ -37,6 +38,7 @@ module CrystalClick
       @account_output_bytes = account_output_bytes
       @output_byte_limit = output_byte_limit || @limits.max_bytes.to_u64
       @shared_json_envelope_policy = shared_json_envelope_policy
+      @shared_json_payload_depth = 0_i32
       if @output_byte_limit > @limits.max_bytes.to_u64
         raise ArgumentError.new("binary codec context output bound exceeds its limits")
       end
@@ -76,6 +78,27 @@ module CrystalClick
     # ordinary descriptor/value contexts keep this fence disabled by default.
     def shared_json_envelope_policy? : Bool
       @shared_json_envelope_policy
+    end
+
+    # The shared MAP exception admits Dynamic siblings in an envelope, but a
+    # Dynamic descriptor serialized as part of a JSON typed or runtime path is
+    # still outside the admitted JSON value grammar. Keep this ancestry scoped
+    # and exception-safe while the recursive descriptor/value visitor runs.
+    def inside_shared_json_payload? : Bool
+      @shared_json_envelope_policy && @shared_json_payload_depth > 0
+    end
+
+    def with_shared_json_payload_scope(&block : -> T) : T forall T
+      return yield unless @shared_json_envelope_policy
+      if @shared_json_payload_depth == Int32::MAX
+        unsupported!("shared JSON payload nesting exceeds Int32")
+      end
+      @shared_json_payload_depth += 1
+      begin
+        yield
+      ensure
+        @shared_json_payload_depth -= 1
+      end
     end
 
     def visit_node(depth : Int) : Nil

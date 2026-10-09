@@ -30,10 +30,10 @@ module CrystalClick
       encode_in_context(value, context, allow_dynamic: false, allow_low_cardinality: false)
     end
 
-    # Internal bounded path for a shared Object envelope. Unlike the default
-    # borrowed profile, JSON is admitted recursively; all other borrowed
-    # exclusions remain in force, with the context selector applying its
-    # stricter per-DataType-node policy across JSON metadata and runtime paths.
+    # Internal bounded path for a shared Object envelope. JSON and Dynamic
+    # siblings outside JSON payloads are admitted recursively. The context
+    # selector still rejects Dynamic descriptors inside JSON typed metadata or
+    # runtime payloads, and other borrowed exclusions remain in force.
     # Temporary bytes are charged by the caller only when it appends the final
     # framed envelope.
     def self.encode_shared_json_envelope(
@@ -55,7 +55,7 @@ module CrystalClick
         budget.remaining_wire_bytes - reserved_wire_bytes,
         shared_json_envelope_policy: true,
       )
-      encode_in_context(value, context, allow_dynamic: false, allow_low_cardinality: false, allow_json: true)
+      encode_in_context(value, context, allow_dynamic: true, allow_low_cardinality: false, allow_json: true)
     end
 
     private def self.encode_in_context(
@@ -109,7 +109,7 @@ module CrystalClick
         false,
         shared_json_envelope_policy: true,
       )
-      decode_in_context(context, allow_dynamic: false, allow_low_cardinality: false, allow_json: true)
+      decode_in_context(context, allow_dynamic: true, allow_low_cardinality: false, allow_json: true)
     end
 
     # Internal Dynamic bulk envelope path. The enclosing lane owner charges

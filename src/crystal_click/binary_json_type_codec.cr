@@ -30,7 +30,9 @@ module CrystalClick
         context.write_var_uint(path_size.to_u64)
         context.ensure_output_bytes(path_size.to_u64)
         path_size.times { |byte_index| context.write_byte(path.to_slice[byte_index]) }
-        BinaryDataTypeCodec.write_to(type.typed_type_at(index), context, depth + 1)
+        context.with_shared_json_payload_scope do
+          BinaryDataTypeCodec.write_to(type.typed_type_at(index), context, depth + 1)
+        end
       end
       context.write_var_uint(0_u64) # unsupported path-to-skip roster is empty
       context.write_var_uint(0_u64) # unsupported regexp roster is empty
@@ -77,7 +79,9 @@ module CrystalClick
         unless seen_paths.add?(path)
           context.corrupt!("JSON descriptor contains a duplicate typed path")
         end
-        path_type = BinaryDataTypeCodec.read_from(context, depth + 1)
+        path_type = context.with_shared_json_payload_scope do
+          BinaryDataTypeCodec.read_from(context, depth + 1)
+        end
         if path_type.tag == BinaryDataType::TAG_NOTHING
           context.unsupported!("Nothing is not admitted as a declared JSON typed path")
         end

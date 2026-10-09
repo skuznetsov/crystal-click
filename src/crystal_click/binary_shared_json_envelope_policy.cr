@@ -7,6 +7,7 @@ module CrystalClick
     def self.check_data_type_tag!(context : BinaryCodecContext, tag : UInt8) : Nil
       message = case tag
                 when BinaryDataType::TAG_DYNAMIC
+                  return nil unless context.inside_shared_json_payload?
                   "Dynamic is not admitted in a shared JSON Object envelope"
                 when BinaryDataType::TAG_VARIANT
                   "Variant is not admitted in a shared JSON Object envelope"

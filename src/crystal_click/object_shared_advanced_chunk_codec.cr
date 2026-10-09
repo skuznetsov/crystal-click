@@ -246,8 +246,8 @@ module CrystalClick
                     budget.preflight_children(row_count)
                     budget.charge_elements(row_count)
                     path_values = Array(BinaryValue?).new(rows.size)
-                    observed_json_types = [] of BinaryDataType
-                    observed_json_set = Set(BinaryDataType).new
+                    budget.preflight_children(row_count)
+                    observed_json_types = Array(BinaryDataType).new(rows.size)
                     rows.each_with_index do |row, row_index|
                       cursor = cursors[row_index]
                       value : BinaryValue? = nil
@@ -262,14 +262,12 @@ module CrystalClick
                         end
                       end
                       if actual = value
-                        if actual.type.contains_json? && !observed_json_set.includes?(actual.type)
-                          observed_json_set.add(actual.type)
+                        if actual.type.contains_json? && !observed_json_types.any? { |existing| existing == actual.type }
                           observed_json_types << actual.type
                         end
                       end
                       path_values << value
                     end
-                    budget.charge_elements(observed_json_types.size.to_u64)
                     ordinary_types = policy.ordinary_types_for(observed_json_types, budget)
                     if ordinary_types.empty?
                       path_rows = Array(BinaryValue).new(rows.size)
@@ -286,9 +284,12 @@ module CrystalClick
                       )
                     else
                       dynamic_type = BinaryDataType.dynamic(max_types: policy.max_ordinary_types)
-                      structure = DynamicStructure.new(ordinary_types)
-                      structures = {"root" => structure}
-                      bindings = policy.leaf_bindings_for("root", structure, budget)
+                      census = ObjectSharedDynamicSiteCensus.build(
+                        path_values,
+                        ordinary_types,
+                        policy,
+                        budget,
+                      )
                       path_rows = Array(BinaryValue).new(rows.size)
                       path_values.each do |value|
                         path_rows << BinaryValue.dynamic(dynamic_type, value)
@@ -296,10 +297,10 @@ module CrystalClick
                       end
                       ObjectSharedPathCodec.encode_with_json_children_with_budget(
                         dynamic_type,
-                        structures,
+                        census.structures,
                         path_rows,
                         budget,
-                        bindings,
+                        census.leaf_bindings,
                         json_context,
                         profile,
                         policy,

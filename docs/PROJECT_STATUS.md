@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current shared JSON composition (W240/W241, 2026-10-09): VERIFIED within eight
+Current recursive Dynamic ownership (W242, 2026-10-09): VERIFIED for the finite
+`Tuple(JSON, Array(Dynamic(max_types=1)))` shared-path fixture in eight
+shared-layout/String profiles and four DEBUG/RELEASE x frame32/frame64 points;
+root verdict ROBUST within scope. The overall goal remains ACTIVE.
+`ObjectSharedDynamicSiteCensus` reuses existing recursive serde, supplies each
+nested Dynamic site's own cap/registry and exact prepared JSON bindings, and
+retains descriptor-only empty sites. Shared MAP/document Dynamic siblings are
+admitted outside JSON payload ancestry; borrowed APIs and JSON typed/runtime
+Dynamic fences remain guarded. No serializer per container product was added.
+
+The same 99 selected files pass 623 examples per mode (512 main, 99 isolated,
+12 focused), zero failures/errors/pending; both helper builds and formatting
+pass. All four native captures and frozen read-only raw audits pass. Each point
+has sixteen fresh generated parts with exact native ATTACH/CHECK/schema/active
+part checks, separate direct/full processes and exact child Dynamic type
+queries. Same-value Int64(7)/UInt8(7) controls preserve JSON but distinguish
+types; all six captured-output falsifiers reject in every audit. Actual bytes
+of all 456 generated files agree across modes at each frame size (276,449 bytes
+per mode at frame32, 227,074 at frame64).
+
+The retained finite stock/generated Array(JSON) child-type oracle is now
+independently queried in W242, including 112 populated children across sixteen
+parts. Helper physical windows and native PK SQL predicates remain distinct.
+This does not certify every wrapper product, deeper prepared child Object
+Dynamic state, native cap-zero, all storage layouts or the whole test suite.
+MV/projection execution/writing, general publication and broad facade
+decomposition remain open; memory/performance is deferred. No remote push.
+Details: [OBJECT_SHARED_JSON_FRONTIER.md](OBJECT_SHARED_JSON_FRONTIER.md),
+[W242 evidence index](../.landmark/evidence/object-recursive-dynamic-w242.json).
+
+Previous shared JSON composition (W240/W241, 2026-10-09): VERIFIED within eight
 finite shared-layout/String profiles and tested guards; root verdict ROBUST
 within scope. The overall goal remains ACTIVE.
 Existing recursive child serde is reused; new owners compose scalar envelopes,
@@ -38,7 +68,7 @@ Dynamic and LowCardinality within their admitted grammars. Missing intersections
 are physical-owner, occurrence-domain and state-binding seams, not a need for
 one serializer per wrapper product. The current native comparison establishes
 logical values and selected-path actual descriptors/caps. Stock nested Dynamic
-child types inside Array(JSON) are not independently cross-checked against
+child types inside Array(JSON) were not independently cross-checked at that checkpoint against
 native SQL; helper child-type witnesses are not a substitute for that oracle.
 Details: [OBJECT_SHARED_JSON_FRONTIER.md](OBJECT_SHARED_JSON_FRONTIER.md).
 
