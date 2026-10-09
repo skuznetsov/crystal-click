@@ -1,5 +1,59 @@
 # Crystal Click landmarks
 
+## Shared JSON composition — W240/W241
+
+- Active goal: legal read/write type compatibility and MV/projection coverage;
+  memory/performance remains deferred. Baseline `d217f75`; shared JSON is
+  VERIFIED within eight finite shared-layout/String profiles and tested guards,
+  root adversary verdict ROBUST within scope; not full-goal closure.
+- Confirmed local frontier: the same 98 selected files pass 611 examples per
+  DEBUG/RELEASE mode (512 main + 99 isolated). Both current helper builds pass
+  under `/private/tmp/crystal-click-w241-carrier-helpers.jL3VSH`. Production
+  hashes are unchanged since those gates. The grouped Proc-alias symptom also
+  reproduces on clean W239; no whole-suite/compiler-fix claim.
+- All four DEBUG/RELEASE x frame32/frame64 seal captures complete eight
+  coordinator profiles with both negative effects observed. All four complete
+  raw audits and adversarial self-tests pass with final auditor SHA
+  `2751fc87f72522e2ec70821c7c8b7bc646fd03a92dc672ab8df2f25b29635a34`.
+  All 336 generated part files (eight positive and two negative parts)
+  match by actual bytes: 224,893 per mode at frame32, 183,845 at frame64.
+- Return pointer: [W240 frontier](docs/OBJECT_SHARED_JSON_FRONTIER.md).
+  [Evidence index](.landmark/evidence/object-shared-json-w240.json) records exact
+  gates and capture lineage. Next falsifier: qualify a still-guarded prepared
+  JSON-bearing actual containing nested Dynamic sites through a physical
+  binding/occurrence oracle and independent native direct/full/bounded reads.
+  Keep sealed captures immutable; use a fresh empty root for a native rerun.
+- Retained contract corrections: four reader marks versus five physical mrk2
+  tuples including EOF; table-wide pk/doc metadata versus doc-only roles;
+  structural BinaryValue comparison versus ordinary identity; exact
+  role/profile pk schemas (retained s1 UInt8, fresh s0/generated UInt64);
+  explicit JSON String-key to internal Symbol-key projection; and only fields
+  actually emitted by the coordinator's negative inventory. These harness
+  errors do not imply a missing leaf codec or a native type refusal.
+- Root source/capture checks separate the unhinted low-level Dynamic(254)
+  carrier from SQL's default-cap32 wrapper. Project only that outer carrier
+  once; exact selected-path actual descriptors/caps and values remain checked.
+  Stock nested Dynamic child types inside Array(JSON) lack an independent
+  native SQL/descriptor oracle; do not claim complete nested type-tree fidelity.
+- The actual empty-array discriminator is registry versus SharedVariant:
+  stock registers Array(Nullable(String)), while the prepared generated writer
+  leaves that non-JSON actual in SharedVariant. A registered arm can also be
+  unused at one mark and still need zero-row callbacks. Registry, occurrence
+  and callback domains must be joined, never equated.
+- The Copy negative must establish the captured server read exception. Timeout,
+  spawn/I-O failure or an unrelated server error is inconclusive, not successful
+  corruption discrimination. Both negative effects are required for final
+  qualification.
+- Recursive child serde is the design bedrock. Remaining physical owners
+  compose occurrence domains, prefix/body/suffix state and coordinates.
+  The isolated paired-codec `Tuple(JSON, Array(Dynamic))` probe passes, but
+  prepared writer/public physical/native admission remain closed; do not remove
+  that guard based on scalar recursion alone.
+- Standing authority: bounded local implementation/tests and an atomic feature
+  commit after DoD. No push, runtime-guard bypass or broad performance rewrite.
+  Refresh after source/runtime/codec/helper/oracle changes or capture loss.
+  Keep the overall goal ACTIVE.
+
 ## Nominal Geometry recursive composition — W239
 
 - Baseline `8e109848d8d7d280ee2234b0c4f4b0d78fb0a6c7`; VERIFIED finite

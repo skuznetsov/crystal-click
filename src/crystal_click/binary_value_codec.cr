@@ -25,9 +25,37 @@ module CrystalClick
         budget,
         false,
         false,
-        budget.remaining_wire_bytes - reserved_wire_bytes
+        budget.remaining_wire_bytes - reserved_wire_bytes,
       )
       encode_in_context(value, context, allow_dynamic: false, allow_low_cardinality: false)
+    end
+
+    # Internal bounded path for a shared Object envelope. Unlike the default
+    # borrowed profile, JSON is admitted recursively; all other borrowed
+    # exclusions remain in force, with the context selector applying its
+    # stricter per-DataType-node policy across JSON metadata and runtime paths.
+    # Temporary bytes are charged by the caller only when it appends the final
+    # framed envelope.
+    def self.encode_shared_json_envelope(
+      value : BinaryValue,
+      budget : BinaryCodecBudget,
+      reserved_wire_bytes : UInt64 = 0_u64,
+    ) : Bytes
+      unless budget.writing?
+        raise ArgumentError.new("shared JSON envelope encoder requires a write-direction budget")
+      end
+      budget.ensure_wire_bytes(reserved_wire_bytes)
+      context = BinaryCodecContext.new(
+        budget.limits,
+        nil,
+        true,
+        budget,
+        false,
+        false,
+        budget.remaining_wire_bytes - reserved_wire_bytes,
+        shared_json_envelope_policy: true,
+      )
+      encode_in_context(value, context, allow_dynamic: false, allow_low_cardinality: false, allow_json: true)
     end
 
     private def self.encode_in_context(
@@ -35,9 +63,10 @@ module CrystalClick
       context : BinaryCodecContext,
       allow_dynamic : Bool = true,
       allow_low_cardinality : Bool = true,
+      allow_json : Bool = false,
     ) : Bytes
       reject_dynamic_type!(value.type, context) unless allow_dynamic
-      reject_borrowed_type!(value.type, context) unless allow_low_cardinality
+      reject_borrowed_type!(value.type, context, allow_json) unless allow_low_cardinality
       BinaryDataTypeCodec.write_to(value.type, context)
       if value.type.tag == BinaryDataType::TAG_NOTHING
         unless value.is_null?
@@ -58,8 +87,29 @@ module CrystalClick
     # Internal exact-consumption path for a borrowed frame in a block whose
     # caller has already charged all physical input lanes to the shared budget.
     def self.decode_borrowed(bytes : Bytes, budget : BinaryCodecBudget) : BinaryValue
-      context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false)
+      context = BinaryCodecContext.new(
+        budget.limits,
+        bytes,
+        false,
+        budget,
+        false,
+      )
       decode_in_context(context, allow_dynamic: false, allow_low_cardinality: false)
+    end
+
+    # Internal exact-consumption path for a shared Object envelope. Its owner
+    # has already charged the complete physical input lanes to the shared
+    # budget, so only recursive visits are charged here.
+    def self.decode_shared_json_envelope(bytes : Bytes, budget : BinaryCodecBudget) : BinaryValue
+      context = BinaryCodecContext.new(
+        budget.limits,
+        bytes,
+        false,
+        budget,
+        false,
+        shared_json_envelope_policy: true,
+      )
+      decode_in_context(context, allow_dynamic: false, allow_low_cardinality: false, allow_json: true)
     end
 
     # Internal Dynamic bulk envelope path. The enclosing lane owner charges
@@ -184,10 +234,11 @@ module CrystalClick
       context : BinaryCodecContext,
       allow_dynamic : Bool = true,
       allow_low_cardinality : Bool = true,
+      allow_json : Bool = false,
     ) : BinaryValue
       type = BinaryDataTypeCodec.read_from(context)
       reject_dynamic_type!(type, context) unless allow_dynamic
-      reject_borrowed_type!(type, context) unless allow_low_cardinality
+      reject_borrowed_type!(type, context, allow_json) unless allow_low_cardinality
       if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(1)
         value = BinaryValue.null(type)
@@ -499,8 +550,12 @@ module CrystalClick
       allow_aggregate_function && BinaryAggregateFunctionRecursiveAdmission.admitted_static_tree?(type)
     end
 
-    private def self.reject_borrowed_type!(type : BinaryDataType, context : BinaryCodecContext) : Nil
-      if type.contains_json?
+    private def self.reject_borrowed_type!(
+      type : BinaryDataType,
+      context : BinaryCodecContext,
+      allow_json : Bool = false,
+    ) : Nil
+      if type.contains_json? && !allow_json
         context.unsupported!("JSON is outside the borrowed persisted-envelope profile")
       end
       if type.contains_variant?

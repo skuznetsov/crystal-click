@@ -184,6 +184,38 @@ module CrystalClick
       validate_read_sites_plan!(plan, sites, budget, root_depth)
     end
 
+    # Inline Object metadata already parsed each NONE Dynamic prefix while it
+    # consumed the exact callback order. Reuse those structures to construct
+    # the ordinary Dynamic bulk plan without reparsing a statistics-bearing
+    # stream. The same declared-site shape, arm caps, JSON binding coverage,
+    # and inherited-depth checks as the full-stat reader still apply.
+    def self.prepare_read_sites_plan_from_structures(
+      type : BinaryDataType,
+      parsed_structures : Hash(String, DynamicStructure),
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      root_depth : Int = 2,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
+    ) : BinaryDynamicBulkPlan
+      if budget.writing?
+        raise ArgumentError.new("typed Object Dynamic plan requires a reading budget")
+      end
+      sites = prepare_read_site_specs(type, budget, root_depth)
+      plan = begin
+        BinaryDynamicBulkPlan.decode_structure_prefixes_without_statistics_from_structures(
+          type,
+          parsed_structures,
+          budget,
+          profile,
+          root_depth.to_i32,
+          json_object_leaf_plans,
+        )
+      rescue ex : UnsupportedFormatError
+        raise CorruptPartError.new("invalid typed Object Dynamic prefix: #{ex.message}")
+      end
+      validate_read_sites_plan!(plan, sites, budget, root_depth)
+    end
+
     # Physical Object readers discover each Dynamic metadata lane through its
     # owning column namespace. This path preserves that single parse while
     # allowing the generic plan to ask for every exact JSON leaf child plan.

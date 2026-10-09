@@ -3,6 +3,7 @@ module CrystalClick
   # per-path Dynamic columns for one exact logical Object chunk.
   module ObjectSharedAdvancedChunkCodec
     DYNAMIC_TYPE             = BinaryDataType.dynamic(max_types: 0)
+    JSON_DYNAMIC_MAX_TYPES   = DynamicStructure::MAX_ORDINARY_TYPES
     EMPTY_DYNAMIC_STRUCTURE  = DynamicStructure.new([] of BinaryDataType)
     EMPTY_DYNAMIC_STRUCTURES = {"root" => EMPTY_DYNAMIC_STRUCTURE}
 
@@ -23,9 +24,14 @@ module CrystalClick
       bucket_count : Int32,
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = ObjectSharedPathCodec::COMPACT_PROFILE,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      nested_context : ObjectSharedNestedSerializationContext? = nil,
     ) : ObjectSharedAdvancedChunk
       unless budget.writing?
         raise ArgumentError.new("Object shared advanced chunk encode requires a write-direction budget")
+      end
+      if shared_json_policy && (!nested_context || !nested_context.not_nil!.writing?)
+        raise ArgumentError.new("shared JSON path encoding requires an inherited write context")
       end
       unless 1 <= bucket_count <= ObjectSharedBucketLayout::MAX_BUCKET_COUNT.to_i
         raise UnsupportedFormatError.new("Object shared advanced chunk bucket count must be between 1 and 256")
@@ -43,7 +49,16 @@ module CrystalClick
       # Copy is one exact chunk and retains the original per-row path order.
       # The same budget then continues through all full-cardinality path rows.
       copy_streams = ObjectSharedCopyCodec.encode_with_budget(rows, structures, budget)
-      chunks = encode_path_chunks(rows, ordered_paths, bucket_count, row_count, budget, profile)
+      chunks = encode_path_chunks(
+        rows,
+        ordered_paths,
+        bucket_count,
+        row_count,
+        budget,
+        profile,
+        shared_json_policy,
+        nested_context,
+      )
       ObjectSharedAdvancedChunk.new(row_count, copy_streams, chunks)
     end
 
@@ -52,6 +67,7 @@ module CrystalClick
       copy : ObjectSharedCopyStreams,
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = ObjectSharedPathCodec::COMPACT_PROFILE,
+      nested_context : ObjectSharedNestedSerializationContext? = nil,
     ) : Array(ObjectSharedMapRow)
       if budget.writing?
         raise ArgumentError.new("Object shared advanced chunk decode requires a read-direction budget")
@@ -80,7 +96,7 @@ module CrystalClick
       end
 
       ordered_paths = order_physical_paths(bucket_chunks, path_count, path_bytes, budget)
-      verify_path_values(rows, ordered_paths, budget, profile)
+      verify_path_values(rows, ordered_paths, budget, profile, nested_context)
       rows
     end
 
@@ -214,6 +230,8 @@ module CrystalClick
       row_count : UInt64,
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy?,
+      nested_context : ObjectSharedNestedSerializationContext?,
     ) : Array(ObjectSharedPhysicalChunk)
       slots = checked_multiply(paths.size.to_u64, row_count, true, "per-path row slots")
       budget.preflight_children(slots)
@@ -223,30 +241,96 @@ module CrystalClick
       cursors = Array(Int32).new(rows.size, 0)
       path_records = Array(Array(ObjectSharedPhysicalPath)).new(bucket_count) { [] of ObjectSharedPhysicalPath }
       paths.each do |path|
-        path_rows = Array(BinaryValue).new(rows.size)
-        rows.each_with_index do |row, row_index|
-          cursor = cursors[row_index]
-          value : BinaryValue? = nil
-          if cursor < row.entry_count
-            entry = row.entry_at(cursor)
-            comparison = compare_entry_path(entry, path.name, budget)
-            if comparison < 0
-              raise UnsupportedFormatError.new("Object shared path cursor skipped an input entry")
-            elsif comparison == 0
-              value = entry.value
-              cursors[row_index] = cursor + 1
-            end
-          end
-          path_rows << BinaryValue.dynamic(DYNAMIC_TYPE, value)
-          budget.charge_node
-        end
-        streams = ObjectSharedPathCodec.encode_with_budget(
-          DYNAMIC_TYPE,
-          EMPTY_DYNAMIC_STRUCTURES,
-          path_rows,
-          budget,
-          profile: profile,
-        )
+        streams = if policy = shared_json_policy
+                    json_context = nested_context.not_nil!
+                    budget.preflight_children(row_count)
+                    budget.charge_elements(row_count)
+                    path_values = Array(BinaryValue?).new(rows.size)
+                    observed_json_types = [] of BinaryDataType
+                    observed_json_set = Set(BinaryDataType).new
+                    rows.each_with_index do |row, row_index|
+                      cursor = cursors[row_index]
+                      value : BinaryValue? = nil
+                      if cursor < row.entry_count
+                        entry = row.entry_at(cursor)
+                        comparison = compare_entry_path(entry, path.name, budget)
+                        if comparison < 0
+                          raise UnsupportedFormatError.new("Object shared path cursor skipped an input entry")
+                        elsif comparison == 0
+                          value = entry.value
+                          cursors[row_index] = cursor + 1
+                        end
+                      end
+                      if actual = value
+                        if actual.type.contains_json? && !observed_json_set.includes?(actual.type)
+                          observed_json_set.add(actual.type)
+                          observed_json_types << actual.type
+                        end
+                      end
+                      path_values << value
+                    end
+                    budget.charge_elements(observed_json_types.size.to_u64)
+                    ordinary_types = policy.ordinary_types_for(observed_json_types, budget)
+                    if ordinary_types.empty?
+                      path_rows = Array(BinaryValue).new(rows.size)
+                      path_values.each do |value|
+                        path_rows << BinaryValue.dynamic(DYNAMIC_TYPE, value)
+                        budget.charge_node
+                      end
+                      ObjectSharedPathCodec.encode_with_budget(
+                        DYNAMIC_TYPE,
+                        EMPTY_DYNAMIC_STRUCTURES,
+                        path_rows,
+                        budget,
+                        profile: profile,
+                      )
+                    else
+                      dynamic_type = BinaryDataType.dynamic(max_types: policy.max_ordinary_types)
+                      structure = DynamicStructure.new(ordinary_types)
+                      structures = {"root" => structure}
+                      bindings = policy.leaf_bindings_for("root", structure, budget)
+                      path_rows = Array(BinaryValue).new(rows.size)
+                      path_values.each do |value|
+                        path_rows << BinaryValue.dynamic(dynamic_type, value)
+                        budget.charge_node
+                      end
+                      ObjectSharedPathCodec.encode_with_json_children_with_budget(
+                        dynamic_type,
+                        structures,
+                        path_rows,
+                        budget,
+                        bindings,
+                        json_context,
+                        profile,
+                        policy,
+                      )
+                    end
+                  else
+                    path_rows = Array(BinaryValue).new(rows.size)
+                    rows.each_with_index do |row, row_index|
+                      cursor = cursors[row_index]
+                      value : BinaryValue? = nil
+                      if cursor < row.entry_count
+                        entry = row.entry_at(cursor)
+                        comparison = compare_entry_path(entry, path.name, budget)
+                        if comparison < 0
+                          raise UnsupportedFormatError.new("Object shared path cursor skipped an input entry")
+                        elsif comparison == 0
+                          value = entry.value
+                          cursors[row_index] = cursor + 1
+                        end
+                      end
+                      path_rows << BinaryValue.dynamic(DYNAMIC_TYPE, value)
+                      budget.charge_node
+                    end
+                    ObjectSharedPathCodec.encode_with_budget(
+                      DYNAMIC_TYPE,
+                      EMPTY_DYNAMIC_STRUCTURES,
+                      path_rows,
+                      budget,
+                      profile: profile,
+                    )
+                  end
         path_records[path.bucket] << ObjectSharedPhysicalPath.new(path.name, streams)
         budget.charge_node
       end
@@ -415,6 +499,7 @@ module CrystalClick
       paths : Array(ObjectSharedPhysicalPath),
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
+      nested_context : ObjectSharedNestedSerializationContext? = nil,
     ) : Nil
       slots = checked_multiply(rows.size.to_u64, paths.size.to_u64, false, "path value checks")
       budget.preflight_children(slots)
@@ -426,14 +511,27 @@ module CrystalClick
       paths.each do |path|
         budget.ensure_wire_bytes(path.streams.data_size.to_u64)
         budget.ensure_future_elements(path.streams.event_count.to_u64)
-        decoded = ObjectSharedPathCodec.decode_with_budget(
-          path.streams.data,
-          path.streams.events,
-          rows.size,
-          DYNAMIC_TYPE,
-          budget,
-          profile: profile,
-        )
+        decoded = if context = nested_context
+                    ObjectSharedPathCodec.decode_with_json_children_with_budget(
+                      path.streams.data,
+                      path.streams.events,
+                      rows.size,
+                      BinaryDataType.dynamic(max_types: JSON_DYNAMIC_MAX_TYPES),
+                      budget,
+                      context,
+                      profile,
+                      path.streams.coordinate_context,
+                    ).rows
+                  else
+                    ObjectSharedPathCodec.decode_with_budget(
+                      path.streams.data,
+                      path.streams.events,
+                      rows.size,
+                      DYNAMIC_TYPE,
+                      budget,
+                      profile: profile,
+                    )
+                  end
         unless decoded.size == rows.size
           raise CorruptPartError.new("Object shared path Dynamic row count disagrees with Copy")
         end
@@ -490,6 +588,9 @@ module CrystalClick
       if left.type.tag == BinaryDataType::TAG_VARIANT
         return false unless left.variant_index? == right.variant_index?
       end
+      if left.type.tag == BinaryDataType::TAG_JSON
+        return json_rows_equal?(left.json_row, right.json_row, budget, depth + 1)
+      end
       if composite_value?(left.type)
         child_count = left.child_count
         return false unless child_count == right.child_count
@@ -499,9 +600,6 @@ module CrystalClick
         end
         true
       else
-        if left.type.tag == BinaryDataType::TAG_JSON
-          return left == right
-        end
         return false unless left.byte_size == right.byte_size
         budget.charge_elements(left.byte_size.to_u64)
         left.byte_size.times do |index|
@@ -509,6 +607,32 @@ module CrystalClick
         end
         true
       end
+    end
+
+    private def self.json_rows_equal?(
+      left : BinaryJsonRow,
+      right : BinaryJsonRow,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+    ) : Bool
+      path_count = left.path_count
+      return false unless path_count == right.path_count
+      budget.preflight_children(path_count.to_u64)
+      path_count.times do |path_index|
+        left_size = left.path_byte_size(path_index)
+        right_size = right.path_byte_size(path_index)
+        common_size = Math.min(left_size, right_size)
+        budget.charge_elements(common_size.to_u64)
+        common_size.times do |byte_index|
+          return false unless left.path_byte_at(path_index, byte_index) ==
+                                right.path_byte_at(path_index, byte_index)
+        end
+        return false unless left_size == right_size
+        return false unless values_equal?(
+                              left.value_at(path_index), right.value_at(path_index), budget, depth
+                            )
+      end
+      true
     end
 
     private def self.composite_value?(type : BinaryDataType) : Bool

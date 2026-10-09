@@ -113,6 +113,7 @@ module CrystalClick
             budget,
             1,
             reserved,
+            allow_json: true,
             allow_recursive_qbit: true,
             allow_qbit_variants: false,
           )
@@ -222,6 +223,7 @@ module CrystalClick
             envelope,
             budget,
             1,
+            allow_json: true,
             allow_recursive_qbit: true,
             allow_qbit_variants: false,
           )

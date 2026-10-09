@@ -86,11 +86,71 @@ module CrystalClick
       read_with_statistics_offset(context)[0]
     end
 
+    # Reads only the Object V3 header and stops at the statistics flag. Compact
+    # inline Object callbacks use StatisticsMode::NONE, so this exact prefix is
+    # independently useful without fabricating a statistics suffix.
+    def self.read_prefix_without_statistics(
+      context : BinaryCodecContext,
+      structure_depth : Int32 = 1_i32,
+    ) : Tuple(ObjectStructure, Int32)
+      version, paths, shared_data_version, bucket_count, legacy_max_dynamic_paths, statistics_offset =
+        read_header(context, true, structure_depth)
+      begin
+        structure = ObjectStructure.new(
+          paths,
+          version: version,
+          shared_data_version: shared_data_version,
+          bucket_count: bucket_count,
+          legacy_max_dynamic_paths: legacy_max_dynamic_paths,
+          statistics: nil
+        )
+        {structure, statistics_offset}
+      rescue ex : ArgumentError
+        context.corrupt!("invalid Object structure prefix: #{ex.message}")
+      end
+    end
+
     # Reads the complete metadata while exposing the relative start of the
     # statistics suffix (or the V3 statistics flag) for paired mark checks.
     def self.read_with_statistics_offset(context : BinaryCodecContext) : Tuple(ObjectStructure, Int32)
+      version, paths, shared_data_version, bucket_count, legacy_max_dynamic_paths, statistics_offset =
+        read_header(context, false, 1_i32)
+
+      statistics = if version == 4_u64
+                     case context.read_byte
+                     when 0_u8
+                       nil
+                     when 1_u8
+                       StructureStatisticsCodec.read(context, paths.size)
+                     else
+                       context.corrupt!("Object statistics flag must be zero or one")
+                     end
+                   else
+                     StructureStatisticsCodec.read(context, paths.size)
+                   end
+
+      begin
+        structure = ObjectStructure.new(
+          paths,
+          version: version,
+          shared_data_version: shared_data_version,
+          bucket_count: bucket_count,
+          legacy_max_dynamic_paths: legacy_max_dynamic_paths,
+          statistics: statistics
+        )
+        {structure, statistics_offset}
+      rescue ex : ArgumentError
+        context.corrupt!("invalid Object structure metadata: #{ex.message}")
+      end
+    end
+
+    private def self.read_header(
+      context : BinaryCodecContext,
+      prefix_only : Bool,
+      structure_depth : Int32,
+    ) : Tuple(UInt64, Array(String), UInt64, UInt64, UInt64?, Int32)
       parse_start = context.input_offset
-      context.visit_node(1)
+      context.visit_node(structure_depth)
       version = read_u64_le(context)
       case version
       when 0_u64, 2_u64, 4_u64
@@ -99,6 +159,9 @@ module CrystalClick
         context.corrupt!("Object structure version #{version} is Native-only, not a MergeTree part version")
       else
         context.corrupt!("Object structure version #{version} is outside the known part-version domain")
+      end
+      if prefix_only && version != 4_u64
+        context.unsupported!("inline child Object structure prefixes require Object V3 metadata")
       end
 
       legacy_max_dynamic_paths = version == 0_u64 ? context.read_var_uint : nil
@@ -109,7 +172,7 @@ module CrystalClick
         Int32::MAX.to_u64,
         "Object dynamic path declared metadata count"
       )
-      context.visit_metadata_nodes(raw_path_count, 1)
+      context.visit_metadata_nodes(raw_path_count, structure_depth)
       paths = Array(String).new(path_count)
       path_count.times do
         name_size = context.read_var_uint
@@ -132,32 +195,7 @@ module CrystalClick
       end
 
       statistics_offset = (context.input_offset - parse_start).to_i32
-      statistics = if version == 4_u64
-                     case context.read_byte
-                     when 0_u8
-                       nil
-                     when 1_u8
-                       StructureStatisticsCodec.read(context, path_count)
-                     else
-                       context.corrupt!("Object statistics flag must be zero or one")
-                     end
-                   else
-                     StructureStatisticsCodec.read(context, path_count)
-                   end
-
-      begin
-        structure = ObjectStructure.new(
-          paths,
-          version: version,
-          shared_data_version: shared_data_version,
-          bucket_count: bucket_count,
-          legacy_max_dynamic_paths: legacy_max_dynamic_paths,
-          statistics: statistics
-        )
-        {structure, statistics_offset}
-      rescue ex : ArgumentError
-        context.corrupt!("invalid Object structure metadata: #{ex.message}")
-      end
+      {version, paths, shared_data_version, bucket_count, legacy_max_dynamic_paths, statistics_offset}
     end
 
     private def self.read_u64_le(context : BinaryCodecContext) : UInt64

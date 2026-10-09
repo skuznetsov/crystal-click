@@ -118,11 +118,22 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
     ) : BinaryDynamicBulkPlan
       unless budget.writing?
         raise ArgumentError.new("Dynamic prefix plan requires a writing budget")
       end
-      prepared = prepare_from_structures(type, structures, profile, budget.limits, budget, false, false)
+      prepared = prepare_from_structures(
+        type,
+        structures,
+        profile,
+        budget.limits,
+        budget,
+        false,
+        false,
+        nil,
+        json_object_leaf_plans,
+      )
       new(prepared)
     end
 
@@ -905,6 +916,116 @@ module CrystalClick
       decode_structure_streams_internal(type, streams, budget, profile, false)
     end
 
+    # No-statistics counterpart to the metadata-loader path. The leaf loader
+    # runs only after the exact actual rosters have been parsed from the
+    # callback tape; its key and depth are derived from those prefixes.
+    def self.decode_structure_prefix_streams_without_statistics_with_loader(
+      type : BinaryDataType,
+      streams : BinaryDynamicStructureStreams,
+      budget : BinaryCodecBudget,
+      json_object_leaf_plan_loader : Proc(
+        BinaryDynamicJsonLeafKey, Int32, DynamicStructure, Hash(String, DynamicStructure), BinaryCodecBudget,
+        ObjectDocumentPlan,
+      ),
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      initial_depth : Int32 = 1,
+    ) : BinaryDynamicBulkPlan
+      if budget.writing?
+        raise ArgumentError.new("Dynamic structure prefix decode requires a reading budget")
+      end
+
+      preflight_dynamic_descriptor!(type, budget.limits, budget, initial_depth)
+      context = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
+      context.validate_type_tree(type, initial_depth)
+      unless type.contains_dynamic?
+        raise ArgumentError.new("Dynamic bulk plan requires at least one Dynamic site")
+      end
+
+      preflight_external_site_count(context, streams.site_count, "Dynamic structure stream site count")
+      budget.charge_wire_bytes(streams.total_input_byte_size)
+      sites = Hash(String, Site).new
+      parsed_structures = Hash(String, DynamicStructure).new
+      discover_read_sites(
+        type,
+        "root",
+        initial_depth,
+        1,
+        streams,
+        nil,
+        parsed_structures,
+        context,
+        sites,
+        false,
+        true,
+      )
+      leaf_plans = load_json_object_leaf_plans(
+        sites,
+        parsed_structures,
+        json_object_leaf_plan_loader,
+        context,
+        initial_depth,
+      )
+      plan = decoded_plan(type, profile, context, sites, streams.site_count, nil, leaf_plans)
+      plan.validate_inherited_depth!(initial_depth, budget) if plan.has_json_object_bindings?
+      plan
+    end
+
+    # Builds the same no-statistics Dynamic plan from metadata that an inline
+    # Object prefix reader has already parsed. This avoids reparsing a
+    # statistics-bearing physical lane or manufacturing a write-side plan;
+    # descriptor admission, canonical arm construction, binding coverage and
+    # inherited-depth validation still run under the caller's read budget.
+    def self.decode_structure_prefixes_without_statistics_from_structures(
+      type : BinaryDataType,
+      parsed_structures : Hash(String, DynamicStructure),
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      initial_depth : Int32 = 1_i32,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))? = nil,
+    ) : BinaryDynamicBulkPlan
+      if budget.writing?
+        raise ArgumentError.new("parsed Dynamic structure prefix planning requires a reading budget")
+      end
+      preflight_dynamic_descriptor!(type, budget.limits, budget, initial_depth)
+      context = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
+      context.validate_type_tree(type, initial_depth)
+      unless type.contains_dynamic?
+        raise ArgumentError.new("Dynamic bulk plan requires at least one Dynamic site")
+      end
+
+      preflight_external_site_count(context, parsed_structures.size, "parsed Dynamic structure site count")
+      sites = Hash(String, Site).new
+      discovered_structures = Hash(String, DynamicStructure).new
+      discover_read_sites(
+        type,
+        "root",
+        initial_depth,
+        1,
+        nil,
+        nil,
+        discovered_structures,
+        context,
+        sites,
+        false,
+        !json_object_leaf_plans.nil?,
+        parsed_structures,
+      )
+      unless discovered_structures.size == parsed_structures.size
+        context.corrupt!("parsed Dynamic structure site set does not match its descriptor")
+      end
+      plan = decoded_plan(
+        type,
+        profile,
+        context,
+        sites,
+        parsed_structures.size,
+        nil,
+        json_object_leaf_plans,
+      )
+      plan.validate_inherited_depth!(initial_depth, budget) if plan.has_json_object_bindings?
+      plan
+    end
+
     private def self.prepare_from_structures(
       type : BinaryDataType,
       structures : Hash(String, DynamicStructure),
@@ -1042,6 +1163,7 @@ module CrystalClick
       sites : Hash(String, Site),
       include_statistics : Bool,
       allow_direct_json : Bool = false,
+      parsed_structure_source : Hash(String, DynamicStructure)? = nil,
     ) : Nil
       context.ensure_depth(depth)
       case type.tag
@@ -1050,31 +1172,38 @@ module CrystalClick
           context.corrupt!("Dynamic structure stream site path is duplicated")
         end
 
-        bytes = if structure_streams = streams
-                  unless structure_streams.has_site?(path)
-                    context.corrupt!("Dynamic structure stream is missing for site #{path.inspect}")
-                  end
-                  structure_streams.structure_bytes_for(path)
-                else
-                  structure_loader = loader || context.corrupt!("Dynamic structure stream loader is missing")
-                  preflight_external_site_count(context, 1, "Dynamic structure stream site count")
-                  loaded = structure_loader.call(path, parsed_structures, context.budget)
-                  context.budget.ensure_wire_bytes(loaded.size.to_u64)
-                  context.budget.charge_wire_bytes(loaded.size.to_u64)
-                  loaded
-                end
-        structure_context = BinaryCodecContext.new(context.limits, bytes, false, context.budget, false, false)
-        structure, statistics_offset = if include_statistics
-                                         DynamicStructureCodec.read_with_statistics_offset(
-                                           structure_context, depth, depth + 1, true,
-                                         )
-                                       else
-                                         parsed = DynamicStructureCodec.read_prefix_without_statistics(
-                                           structure_context, depth, depth + 1, true,
-                                         )
+        structure, statistics_offset = if parsed_source = parsed_structure_source
+                                         parsed = parsed_source[path]? ||
+                                                  context.corrupt!("parsed Dynamic structure is missing for site #{path.inspect}")
                                          {parsed, -1_i32}
+                                       else
+                                         bytes = if structure_streams = streams
+                                                   unless structure_streams.has_site?(path)
+                                                     context.corrupt!("Dynamic structure stream is missing for site #{path.inspect}")
+                                                   end
+                                                   structure_streams.structure_bytes_for(path)
+                                                 else
+                                                   structure_loader = loader || context.corrupt!("Dynamic structure stream loader is missing")
+                                                   preflight_external_site_count(context, 1, "Dynamic structure stream site count")
+                                                   loaded = structure_loader.call(path, parsed_structures, context.budget)
+                                                   context.budget.ensure_wire_bytes(loaded.size.to_u64)
+                                                   context.budget.charge_wire_bytes(loaded.size.to_u64)
+                                                   loaded
+                                                 end
+                                         structure_context = BinaryCodecContext.new(context.limits, bytes, false, context.budget, false, false)
+                                         parsed, offset = if include_statistics
+                                                            DynamicStructureCodec.read_with_statistics_offset(
+                                                              structure_context, depth, depth + 1, true,
+                                                            )
+                                                          else
+                                                            value = DynamicStructureCodec.read_prefix_without_statistics(
+                                                              structure_context, depth, depth + 1, true,
+                                                            )
+                                                            {value, -1_i32}
+                                                          end
+                                         structure_context.ensure_consumed
+                                         {parsed, offset}
                                        end
-        structure_context.ensure_consumed
         charge_shared_variant_arm(context, depth + 1)
         arms = canonical_arm_types(structure, context, depth + 1, allow_direct_json)
         # Discovery budgets and parses at the inherited absolute depth, while
@@ -1084,28 +1213,28 @@ module CrystalClick
         parsed_structures[path] = structure
         arms.each_with_index do |arm, index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(arm, child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+          discover_read_sites(arm, child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".elements"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
       when BinaryDataType::TAG_NULLABLE
-        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+        discover_read_sites(type.child_at(0), child_path(context, path, ".nested"), depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        discover_read_sites(type.child_at(0), path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+        discover_read_sites(type.child_at(0), path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = child_path(context, path, ".field.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
         end
       when BinaryDataType::TAG_MAP
         key_path = child_path(context, path, ".elements.field.0")
-        discover_read_sites(type.child_at(0), key_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+        discover_read_sites(type.child_at(0), key_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
         value_path = child_path(context, path, ".elements.field.1")
-        discover_read_sites(type.child_at(1), value_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+        discover_read_sites(type.child_at(1), value_path, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
       when BinaryDataType::TAG_VARIANT
         type.child_count.times do |index|
           child = child_path(context, path, ".arm.", index)
-          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json)
+          discover_read_sites(type.child_at(index), child, depth + 1, local_depth + 1, streams, loader, parsed_structures, context, sites, include_statistics, allow_direct_json, parsed_structure_source)
         end
       end
       nil

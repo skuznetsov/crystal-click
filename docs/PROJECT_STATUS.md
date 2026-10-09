@@ -1,6 +1,48 @@
 # CrystalClick project status
 
-Current nominal Geometry recursive composition (W239, 2026-10-09): VERIFIED
+Current shared JSON composition (W240/W241, 2026-10-09): VERIFIED within eight
+finite shared-layout/String profiles and tested guards; root verdict ROBUST
+within scope. The overall goal remains ACTIVE.
+Existing recursive child serde is reused; new owners compose scalar envelopes,
+ordinary per-path Dynamic/JSON bodies, callback schedules and containing-Data
+coordinates. The bounded target is the four shared layouts, Wide/LZ4/plain-mrk2
+and two explicit String profiles. This does not admit every legal type product.
+
+The same 98 selected files pass 611 examples in each of DEBUG and RELEASE,
+zero failures/errors/pending, split into an 85-file main roster and thirteen
+isolated JSON/Dynamic controls. The grouped compiler symptom also reproduces
+on the clean baseline; this is not a whole-suite or compiler-fix claim.
+Both final helper builds pass. All four DEBUG/RELEASE x frame32/frame64
+coordinator captures complete eight profiles with both native negative effects
+observed. All four complete raw audits and adversarial self-tests pass with
+final auditor SHA `2751fc87f72522e2ec70821c7c8b7bc646fd03a92dc672ab8df2f25b29635a34`.
+All 336 files in eight positive and two negative generated parts agree by actual bytes across
+modes at both frame sizes: 224,893 bytes per mode at frame32, 183,845 at frame64.
+
+Root independently calibrated generated CREATE/ATTACH/query/active-PART joins,
+exact attached copies, all sixteen physical layouts and eight advanced
+ordinary-JSON bindings. Failed full audits exposed internal Symbol/String key
+joins and a summary field that the coordinator does not emit; these are
+evidence-reader bugs, not native type refusals. A separate hostile check found
+that an infrastructure failure could masquerade as the Copy read discriminator.
+Qualification requires the actual bounded server read exception, not a timeout
+or spawn failure. Exact compact-summary projections retain the fuller raw
+checks. Captures remain immutable and both negative effects are observed in
+each qualified point. The [W240/W241 evidence index](../.landmark/evidence/object-shared-json-w240.json)
+records source/runtime/helper pins, exact gates, capture lineage and decay.
+No remote push or immutable cryptographic execution provenance is claimed;
+memory/performance remains deferred and the overall goal ACTIVE.
+
+Recursive codecs already compose Array/Nested, Tuple, Map, Nullable, Variant,
+Dynamic and LowCardinality within their admitted grammars. Missing intersections
+are physical-owner, occurrence-domain and state-binding seams, not a need for
+one serializer per wrapper product. The current native comparison establishes
+logical values and selected-path actual descriptors/caps. Stock nested Dynamic
+child types inside Array(JSON) are not independently cross-checked against
+native SQL; helper child-type witnesses are not a substitute for that oracle.
+Details: [OBJECT_SHARED_JSON_FRONTIER.md](OBJECT_SHARED_JSON_FRONTIER.md).
+
+Previous nominal Geometry recursive composition (W239, 2026-10-09): VERIFIED
 within seven finite quiescent Wide/LZ4/Default/BASIC/plain-mrk2 profiles (root
 hostile verdict: ROBUST within scope). Geometry is a closed Custom owner over
 the source-fixed seven-arm Variant. Existing descriptor/scalar/bulk/physical
@@ -26,8 +68,8 @@ pins. The stock capture has 35 native records: 30 successes and five expected
 refusals. Direct Nullable(Geometry), Variant(Geometry, String) and
 LowCardinality(Geometry) are native refusals, not merely missing child codecs.
 
-Remaining: legal JSON/Dynamic/LowCardinality and other owner/layout intersections,
-ordinary JSON-bearing shared actuals, typed Object/Nested seams, further state
+Remaining: unqualified legal JSON/Dynamic/LowCardinality and other owner/layout
+intersections, further JSON-bearing shared actuals, typed Object/Nested seams, further state
 grammars, MV/projection analysis/writing and broad facade decomposition. Per-mark
 transport still repeats indexing/decoding and may conservatively exhaust shared
 budgets on large parts. No all-types/layouts, whole-suite, RSS or speed claim;

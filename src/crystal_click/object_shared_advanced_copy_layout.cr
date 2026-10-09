@@ -86,6 +86,52 @@ module CrystalClick
       files
     end
 
+    # Returns detached raw Copy roles without compressing them independently.
+    # The parent interval table is retained so a containing Data writer can
+    # authenticate each target offset before resolving inline mark fields.
+    def self.materialize_inline_raw(
+      chunks_by_parent : Array(Array(ObjectSharedAdvancedChunk)),
+      physical_rows : Array(UInt64),
+      codec_budget : BinaryCodecBudget,
+    ) : ObjectSharedAdvancedCopyRawLayout
+      unless codec_budget.writing?
+        raise ArgumentError.new("Object shared Copy raw materialization requires a write-direction codec budget")
+      end
+      codec_budget.ensure_depth(1)
+      total_chunks, visit_count = preflight_encode_visits(chunks_by_parent, physical_rows, codec_budget)
+      validate_encode_grid!(chunks_by_parent, physical_rows)
+
+      parent_lane_sizes, lane_totals, total_wire_bytes, measured_chunks = measure_encode_lanes(chunks_by_parent)
+      unless measured_chunks == total_chunks
+        raise UnsupportedFormatError.new("Object shared Copy chunk schedule changed during raw preflight")
+      end
+      codec_budget.ensure_wire_bytes(total_wire_bytes)
+      codec_budget.ensure_future_nodes(visit_count)
+      codec_budget.ensure_future_elements(visit_count)
+
+      if total_wire_bytes > UInt64::MAX // 2_u64
+        raise UnsupportedFormatError.new("Object shared Copy raw materialization size overflows")
+      end
+      codec_budget.ensure_wire_bytes(total_wire_bytes * 2_u64)
+      codec_budget.charge_wire_bytes(total_wire_bytes) if total_wire_bytes > 0_u64
+      visit_count.times { codec_budget.charge_node }
+      codec_budget.charge_elements(visit_count) if visit_count > 0_u64
+
+      lanes = Hash(String, Bytes).new(initial_capacity: COPY_LANES.size)
+      offsets_by_lane = Hash(String, Array(UInt64)).new(initial_capacity: COPY_LANES.size)
+      COPY_LANES.each_with_index do |name, lane_index|
+        raw, offsets = materialize_lane(
+          chunks_by_parent,
+          lane_index.to_i32,
+          parent_lane_sizes,
+          lane_totals[lane_index],
+        )
+        lanes[name] = raw
+        offsets_by_lane[name] = offsets
+      end
+      ObjectSharedAdvancedCopyRawLayout.new(lanes, offsets_by_lane, codec_budget)
+    end
+
     def self.decode(
       copy_inputs : Hash(String, ObjectSharedPhysicalLaneInput),
       bucket_parents : Array(Array(ObjectSharedPhysicalParentMark)),
@@ -144,6 +190,80 @@ module CrystalClick
           values = lane_slice(values_reader, extent.values_start, extent.values_size)
           parent_streams << ObjectSharedCopyStreams.new(sizes, indexes, values)
           codec_budget.charge_node
+        end
+        result << parent_streams
+      end
+      result
+    end
+
+    # Reverses the global Copy callbacks captured from one inline child Data
+    # envelope. The structure-derived parent/chunk schedule supplies the
+    # boundaries; no synthetic per-parent marks are introduced for these
+    # uncompressed callback roles.
+    def self.decode_inline(
+      views : Hash(String, ObjectSharedInlineRoleReadView),
+      bucket_parents : Array(Array(ObjectSharedPhysicalParentMark)),
+      expected_parent_rows : Array(UInt64),
+      budget : BinaryCodecBudget,
+    ) : Array(Array(ObjectSharedCopyStreams))
+      if budget.writing?
+        raise ArgumentError.new("inline Object shared Copy decode requires a read-direction budget")
+      end
+      budget.ensure_depth(1)
+      unless views.size == COPY_LANES.size && COPY_LANES.all? { |name| views.has_key?(name) }
+        raise CorruptPartError.new("inline Object shared Copy role roster is incomplete or has extra roles")
+      end
+      first_context = nil.as(ObjectSharedInlineDataCoordinateContext?)
+      COPY_LANES.each do |name|
+        view = views[name]
+        unless view.role_name == name && view.authenticated_context? && view.segment_count > 0
+          raise CorruptPartError.new("inline Object shared Copy role has invalid provenance")
+        end
+        context = view.segment_at(0).context
+        if existing = first_context
+          unless view.same_context?(existing)
+            raise CorruptPartError.new("inline Object shared Copy roles do not share one authenticated Data path")
+          end
+        else
+          first_context = context
+        end
+      end
+      budget.ensure_future_elements(expected_parent_rows.size.to_u64)
+      budget.ensure_future_nodes(expected_parent_rows.size.to_u64)
+      shapes, total_chunks = measure_decode_shapes(bucket_parents, expected_parent_rows, budget)
+
+      readers = Hash(String, ObjectSharedPhysicalLaneReader).new(initial_capacity: COPY_LANES.size)
+      COPY_LANES.each do |name|
+        readers[name] = ObjectSharedPhysicalLaneReader.new(name, views[name], budget)
+      end
+      sizes_reader = readers["sizes"]
+      indexes_reader = readers["indexes"]
+      values_reader = readers["values"]
+
+      extents = scan_inline_chunk_extents(
+        shapes,
+        sizes_reader,
+        indexes_reader,
+        values_reader,
+        budget,
+      )
+      output_bytes = total_extent_bytes(extents)
+      materialization_work = checked_multiply(output_bytes, 2_u64, false,
+        "inline Copy detached stream materialization")
+      budget.ensure_wire_bytes(materialization_work)
+      budget.charge_wire_bytes(materialization_work) if materialization_work > 0_u64
+      budget.ensure_future_elements(expected_parent_rows.size.to_u64)
+      budget.ensure_future_nodes(total_chunks)
+
+      result = Array(Array(ObjectSharedCopyStreams)).new(expected_parent_rows.size)
+      extents.each do |parent_extents|
+        parent_streams = Array(ObjectSharedCopyStreams).new(parent_extents.size)
+        parent_extents.each do |extent|
+          sizes = lane_slice(sizes_reader, extent.sizes_start, extent.sizes_size)
+          indexes = lane_slice(indexes_reader, extent.indexes_start, extent.indexes_size)
+          values = lane_slice(values_reader, extent.values_start, extent.values_size)
+          parent_streams << ObjectSharedCopyStreams.new(sizes, indexes, values)
+          budget.charge_node
         end
         result << parent_streams
       end
@@ -464,6 +584,120 @@ module CrystalClick
           raise CorruptPartError.new("Object shared Copy parent lanes contain unreferenced trailing bytes")
         end
         all_extents << parent_extents
+      end
+      all_extents
+    end
+
+    # Inline Copy callbacks concatenate all physical parents into one
+    # callback each, so parent boundaries come from the authenticated bucket
+    # chunk schedule and sizes lane rather than fabricated marks. Index/value
+    # cursors remain global and must exactly consume their role extents.
+    private def self.scan_inline_chunk_extents(
+      shapes : Array(Array(ChunkShape)),
+      sizes_reader : ObjectSharedPhysicalLaneReader,
+      indexes_reader : ObjectSharedPhysicalLaneReader,
+      values_reader : ObjectSharedPhysicalLaneReader,
+      budget : BinaryCodecBudget,
+    ) : Array(Array(CopyExtent))
+      all_extents = Array(Array(CopyExtent)).new(shapes.size)
+      sizes_cursor = 0_i32
+      indexes_cursor = 0_i32
+      values_cursor = 0_i32
+
+      shapes.each do |parent_shapes|
+        expected_sizes = 0_u64
+        parent_shapes.each do |shape|
+          expected_sizes = checked_add(
+            expected_sizes,
+            checked_multiply(shape.row_count, 8_u64, false, "inline Copy sizes extent"),
+            false,
+            "inline Copy sizes extent",
+          )
+        end
+        sizes_end = checked_end(
+          sizes_cursor,
+          checked_int32(expected_sizes, false, "inline Copy sizes extent"),
+          sizes_reader.byte_size,
+          "inline Copy sizes parent",
+        )
+        parent_extents = Array(CopyExtent).new(parent_shapes.size)
+
+        parent_shapes.each do |shape|
+          sizes_chunk_start = sizes_cursor
+          sizes_chunk_size = checked_int32(
+            checked_multiply(shape.row_count, 8_u64, false, "inline Copy sizes chunk extent"),
+            false,
+            "inline Copy sizes chunk extent",
+          )
+          entries = 0_u64
+          budget.preflight_children(shape.row_count)
+          shape.row_count.times do
+            count = read_u64_le(sizes_reader, sizes_cursor, sizes_end)
+            if count > Int32::MAX.to_u64
+              raise CorruptPartError.new("Object shared Copy row count exceeds Int32")
+            end
+            entries = checked_add(entries, count, false, "inline Copy entry count")
+            if entries > Int32::MAX.to_u64
+              raise CorruptPartError.new("Object shared Copy total entries exceed Int32")
+            end
+            sizes_cursor += 8
+            budget.charge_node
+          end
+
+          indexes_chunk_start = indexes_cursor
+          indexes_chunk_size = checked_int32(
+            checked_multiply(entries, index_width(shape.dictionary_count).to_u64, false,
+              "inline Copy indexes extent"),
+            false,
+            "inline Copy indexes extent",
+          )
+          indexes_cursor = checked_end(
+            indexes_cursor,
+            indexes_chunk_size,
+            indexes_reader.byte_size,
+            "inline Copy indexes",
+          )
+
+          minimum_values = checked_multiply(entries, 2_u64, false, "inline Copy values minimum extent")
+          if minimum_values > (values_reader.byte_size - values_cursor).to_u64
+            raise CorruptPartError.new("Object shared Copy values lane is too short for declared entries")
+          end
+          budget.preflight_children(entries)
+          values_chunk_start = values_cursor
+          entries.times do
+            envelope_size, prefix_size = read_var_uint(values_reader, values_cursor, values_reader.byte_size)
+            if envelope_size == 0_u64 || envelope_size > Int32::MAX.to_u64
+              raise CorruptPartError.new("Object shared Copy value envelope has an invalid size")
+            end
+            frame_size = checked_add(prefix_size.to_u64, envelope_size, false, "inline Copy value frame")
+            values_cursor = checked_end(
+              values_cursor,
+              checked_int32(frame_size, false, "inline Copy value frame"),
+              values_reader.byte_size,
+              "inline Copy values",
+            )
+            budget.charge_node
+          end
+
+          parent_extents << CopyExtent.new(
+            sizes_chunk_start,
+            sizes_chunk_size,
+            indexes_chunk_start,
+            indexes_chunk_size,
+            values_chunk_start,
+            values_cursor - values_chunk_start,
+          )
+        end
+        unless sizes_cursor == sizes_end
+          raise CorruptPartError.new("Object shared inline Copy sizes parent extent disagrees with chunk rows")
+        end
+        all_extents << parent_extents
+      end
+
+      unless sizes_cursor == sizes_reader.byte_size &&
+             indexes_cursor == indexes_reader.byte_size &&
+             values_cursor == values_reader.byte_size
+        raise CorruptPartError.new("Object shared inline Copy roles contain unreferenced trailing bytes")
       end
       all_extents
     end

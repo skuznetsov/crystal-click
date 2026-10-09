@@ -3,12 +3,203 @@ module CrystalClick
   # logical-chunk records. Coordinate indexes remain private to lane readers;
   # this owner enforces exact contiguous consumption across every parent.
   class ObjectSharedPhysicalBucketDecoder
+    # Decodes the source-native seven Compact callback roles for one inline
+    # physical parent. The enclosing path tape has already authenticated every
+    # role interval; this method supplies that role map to the same chunk/path
+    # validators used by the paired-file decoder without fabricating marks.
+    def self.decode_inline(
+      version : Int,
+      role_views : Hash(String, ObjectSharedInlineRoleReadView),
+      physical_rows : UInt64,
+      expected_logical_rows : UInt64,
+      codec_budget : BinaryCodecBudget,
+    ) : ObjectSharedPhysicalParentMark
+      validate_version!(version)
+      if codec_budget.writing?
+        raise ArgumentError.new("inline Object shared bucket decode requires a read-direction budget")
+      end
+      codec_budget.ensure_depth(1)
+      unless physical_rows > 0_u64 && physical_rows <= Int32::MAX.to_u64
+        raise CorruptPartError.new("inline Object shared physical parent rows must be positive Int32 values")
+      end
+      if expected_logical_rows > Int32::MAX.to_u64
+        raise CorruptPartError.new("inline Object shared logical rows exceed Int32")
+      end
+
+      role_names = ObjectSharedPhysicalBucketRawLayout::LANE_NAMES
+      unless role_views.size == role_names.size && role_names.all? { |name| role_views.has_key?(name) }
+        raise CorruptPartError.new("inline Object shared bucket role roster is incomplete or has extra roles")
+      end
+      role_names.each do |name|
+        view = role_views[name]
+        unless view.role_name == name && view.authenticated_context?
+          raise CorruptPartError.new("inline Object shared bucket role has invalid provenance")
+        end
+      end
+      context = role_views[role_names[0]].segment_at(0).context
+      role_names.each do |name|
+        unless role_views[name].same_context?(context)
+          raise CorruptPartError.new("inline Object shared bucket roles do not share one authenticated Data path")
+        end
+      end
+
+      lanes = Hash(String, ObjectSharedPhysicalLaneReader).new(initial_capacity: role_names.size)
+      role_names.each do |name|
+        lanes[name] = ObjectSharedPhysicalLaneReader.new(name, role_views[name], codec_budget)
+      end
+      prefix_lane = lanes["structure_prefix"]
+      suffix_lane = lanes["structure_suffix"]
+      records = ObjectSharedChunkStructureCodec.read_split_records(
+        prefix_lane.borrowed_bytes_for_decode,
+        suffix_lane.borrowed_bytes_for_decode,
+        codec_budget,
+      )
+      if records.empty?
+        raise CorruptPartError.new("inline Object shared bucket has no logical chunk records")
+      end
+      if version == 2 && records.size != 1
+        raise CorruptPartError.new("ADVANCED v2 inline physical parent must contain exactly one chunk")
+      end
+      if expected_logical_rows == 0_u64
+        unless records.size == 1 && records[0].row_count == 0_u64 && records[0].path_count == 0
+          raise CorruptPartError.new("empty inline Object shared schedules require one pathless zero-row chunk")
+        end
+      end
+
+      observed_rows = 0_u64
+      records.each do |record|
+        if record.row_count == 0_u64 && (records.size != 1 || record.path_count != 0)
+          raise CorruptPartError.new("zero-row inline Object shared chunks must be the sole pathless chunk")
+        end
+        if observed_rows > expected_logical_rows ||
+           record.row_count > expected_logical_rows - observed_rows
+          raise CorruptPartError.new("inline Object shared chunk rows exceed the occurrence grid")
+        end
+        observed_rows += record.row_count
+      end
+      unless observed_rows == expected_logical_rows
+        raise CorruptPartError.new("inline Object shared chunk rows disagree with the occurrence grid")
+      end
+
+      codec_budget.ensure_future_elements(records.size.to_u64)
+      codec_budget.charge_elements(records.size.to_u64)
+      data_lane = lanes["data"]
+      paths_marks_lane = lanes["paths_marks"]
+      substreams_lane = lanes["substreams"]
+      substreams_marks_lane = lanes["substreams_marks"]
+      metadata_lane = lanes["paths_substreams_metadata"]
+      data_bytes = data_lane.borrowed_bytes_for_decode
+      paths_marks_bytes = paths_marks_lane.borrowed_bytes_for_decode
+      substreams_bytes = substreams_lane.borrowed_bytes_for_decode
+      substreams_marks_bytes = substreams_marks_lane.borrowed_bytes_for_decode
+      metadata_bytes = metadata_lane.borrowed_bytes_for_decode
+
+      cursors = ObjectSharedPhysicalLaneCursors.new(0_i64, 0_i64, 0_i64, 0_i64, 0_i64)
+      ends = ObjectSharedPhysicalLaneCursors.new(
+        data_lane.logical_size,
+        paths_marks_lane.logical_size,
+        substreams_lane.logical_size,
+        substreams_marks_lane.logical_size,
+        metadata_lane.logical_size,
+      )
+      chunks = Array(ObjectSharedPhysicalChunk).new(records.size)
+      records.each_with_index do |record, index|
+        next_record = records[index + 1]?
+        chunk_data_end = if following = next_record
+                           coordinate_position(data_lane, following.data_marks, "next inline chunk Data start")
+                         else
+                           ends.data
+                         end
+        chunks << decode_chunk(
+          record,
+          chunk_data_end,
+          cursors,
+          ends,
+          data_lane,
+          paths_marks_lane,
+          substreams_lane,
+          substreams_marks_lane,
+          metadata_lane,
+          data_bytes,
+          paths_marks_bytes,
+          substreams_bytes,
+          substreams_marks_bytes,
+          metadata_bytes,
+          codec_budget,
+          true,
+          nil,
+          true,
+        )
+      end
+      unless cursors.data == ends.data && cursors.paths_marks == ends.paths_marks &&
+             cursors.substreams == ends.substreams && cursors.substreams_marks == ends.substreams_marks &&
+             cursors.metadata == ends.metadata
+        raise CorruptPartError.new("inline Object shared bucket roles contain unreferenced trailing bytes")
+      end
+      ObjectSharedPhysicalParentMark.new(physical_rows, chunks)
+    end
+
     def self.decode(
       version : Int,
       lane_inputs : ObjectSharedPhysicalBucketLaneInputs,
       expected_parent_rows : Array(UInt64),
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
+    ) : Array(ObjectSharedPhysicalParentMark)
+      decode_internal(
+        version,
+        lane_inputs,
+        expected_parent_rows,
+        codec_budget,
+        transport_budget,
+        nil,
+        0,
+        expected_parent_rows.size,
+        true,
+      )
+    end
+
+    # Validates every lane record in the bucket but retains Data only for one
+    # requested path and the selected physical-parent mark window. Passing a
+    # nil path validates the bucket without retaining any path Data.
+    def self.decode_selected_path(
+      version : Int,
+      lane_inputs : ObjectSharedPhysicalBucketLaneInputs,
+      expected_parent_rows : Array(UInt64),
+      path : String?,
+      first_parent_mark : Int32,
+      parent_mark_count : Int32,
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+    ) : Array(ObjectSharedPhysicalParentMark)
+      if first_parent_mark < 0 || parent_mark_count < 0 ||
+         first_parent_mark > expected_parent_rows.size ||
+         parent_mark_count > expected_parent_rows.size - first_parent_mark
+        raise ArgumentError.new("selected Object shared parent marks are outside the physical grid")
+      end
+      decode_internal(
+        version,
+        lane_inputs,
+        expected_parent_rows,
+        codec_budget,
+        transport_budget,
+        path,
+        first_parent_mark,
+        parent_mark_count,
+        false,
+      )
+    end
+
+    private def self.decode_internal(
+      version : Int,
+      lane_inputs : ObjectSharedPhysicalBucketLaneInputs,
+      expected_parent_rows : Array(UInt64),
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+      selected_path : String?,
+      selected_first_parent : Int32,
+      selected_parent_count : Int32,
+      capture_all_paths : Bool,
     ) : Array(ObjectSharedPhysicalParentMark)
       validate_version!(version)
       unless !codec_budget.writing?
@@ -49,7 +240,11 @@ module CrystalClick
           substreams_bytes,
           substreams_marks_bytes,
           metadata_bytes,
-          codec_budget
+          codec_budget,
+          capture_all_paths,
+          selected_path,
+          parent_index >= selected_first_parent &&
+          parent_index < selected_first_parent + selected_parent_count,
         )
         parents << parent
       end
@@ -68,6 +263,9 @@ module CrystalClick
       substreams_marks_bytes : Bytes,
       metadata_bytes : Bytes,
       budget : BinaryCodecBudget,
+      capture_all_paths : Bool,
+      selected_path : String?,
+      capture_this_parent : Bool,
     ) : ObjectSharedPhysicalParentMark
       structure_lane = lanes["structure"]
       data_lane = lanes["data"]
@@ -132,7 +330,10 @@ module CrystalClick
           substreams_bytes,
           substreams_marks_bytes,
           metadata_bytes,
-          budget
+          budget,
+          capture_all_paths,
+          selected_path,
+          capture_this_parent,
         )
         chunks << chunk
         chunk_count += 1
@@ -171,6 +372,9 @@ module CrystalClick
       substreams_marks_bytes : Bytes,
       metadata_bytes : Bytes,
       budget : BinaryCodecBudget,
+      capture_all_paths : Bool,
+      selected_path : String?,
+      capture_this_parent : Bool,
     ) : ObjectSharedPhysicalChunk
       if record.row_count > Int32::MAX.to_u64
         raise CorruptPartError.new("Object shared logical chunk row count exceeds Int32")
@@ -239,8 +443,11 @@ module CrystalClick
           raise CorruptPartError.new("Object shared path substream starts are not contiguous within the parent")
         end
 
+        path_name = record.path_at(path_index)
+        capture_path_data = capture_all_paths ||
+                            (capture_this_parent && selected_path == path_name)
         path = decode_path(
-          record.path_at(path_index),
+          path_name,
           path_data_start,
           path_data_end,
           substreams_start,
@@ -253,9 +460,12 @@ module CrystalClick
           data_bytes,
           substreams_bytes,
           substreams_marks_bytes,
-          budget
+          budget,
+          capture_path_data,
         )
-        paths << path[0]
+        if physical_path = path[0]
+          paths << physical_path
+        end
         cursors.substreams = path[1]
         cursors.substreams_marks = path[2]
       end
@@ -289,7 +499,8 @@ module CrystalClick
       substreams_bytes : Bytes,
       substreams_marks_bytes : Bytes,
       budget : BinaryCodecBudget,
-    ) : Tuple(ObjectSharedPhysicalPath, Int64, Int64)
+      capture_data : Bool,
+    ) : Tuple(ObjectSharedPhysicalPath?, Int64, Int64)
       if substreams_start < 0 || substreams_start > substreams_end || substreams_end > substreams_lane.logical_size
         raise CorruptPartError.new("Object shared substream record is outside its physical parent")
       end
@@ -317,7 +528,7 @@ module CrystalClick
       if path_size < 0 || path_size > data_bytes.size.to_i64 || data_start < 0 || data_end > data_bytes.size
         raise CorruptPartError.new("Object shared path data interval is outside Data")
       end
-      events = Array(ObjectSharedPathSubstreamEvent).new(event_count)
+      events = capture_data ? Array(ObjectSharedPathSubstreamEvent).new(event_count) : [] of ObjectSharedPathSubstreamEvent
       previous_relative = 0_u64
       event_count.times do |event_index|
         name_size = context.read_var_uint
@@ -342,7 +553,8 @@ module CrystalClick
         end
         budget.visit_node(1)
         begin
-          events << ObjectSharedPathSubstreamEvent.new(String.new(name_bytes), relative)
+          event = ObjectSharedPathSubstreamEvent.new(String.new(name_bytes), relative)
+          events << event if capture_data
         rescue ex : ArgumentError
           raise CorruptPartError.new("invalid Object shared callback name: #{ex.message}")
         end
@@ -350,14 +562,29 @@ module CrystalClick
       end
 
       next_substreams = checked_add(substreams_start, context.input_offset.to_i64, "next substream record")
-      data = Bytes.new(path_size.to_i) do |index|
-        data_bytes[data_start.to_i + index]
-      end
-      streams = ObjectSharedPathStreams.new(data, events)
-      begin
-        {ObjectSharedPhysicalPath.new(name, streams), next_substreams, marks_end}
-      rescue ex : ArgumentError
-        raise CorruptPartError.new("invalid Object shared physical path: #{ex.message}")
+      if capture_data
+        data = Bytes.new(path_size.to_i) do |index|
+          data_bytes[data_start.to_i + index]
+        end
+        coordinate_context = ObjectSharedInlineDataCoordinateContext.new(
+          data_lane,
+          data_start,
+          data_end,
+        )
+        streams = ObjectSharedPathStreams.new(
+          data,
+          events,
+          coordinate_context,
+          [] of ObjectSharedInlineCallbackRelocation,
+          budget,
+        )
+        begin
+          {ObjectSharedPhysicalPath.new(name, streams), next_substreams, marks_end}
+        rescue ex : ArgumentError
+          raise CorruptPartError.new("invalid Object shared physical path: #{ex.message}")
+        end
+      else
+        {nil, next_substreams, marks_end}
       end
     end
 

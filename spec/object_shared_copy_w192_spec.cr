@@ -355,15 +355,19 @@ describe "W192 paired Object shared Copy codec" do
     end
   end
 
-  it "rejects unsupported JSON actual values on write while preserving scalar codec admission" do
+  it "round-trips the now-admitted JSON actual envelope without changing its descriptor" do
     json_type = CrystalClick::BinaryDataType.json(max_dynamic_paths: 0, max_dynamic_types: 0)
     json_row = CrystalClick::BinaryJsonRow.new(json_type, [] of Tuple(String, CrystalClick::BinaryValue))
     json_value = CrystalClick::BinaryValue.json(json_type, json_row)
     row = w192_row(["json"] of String, [json_value] of CrystalClick::BinaryValue)
     structures = w192_structures(["json"] of String, 1)
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectSharedCopyCodec.encode([row] of CrystalClick::ObjectSharedMapRow, structures)
-    end
+    streams = CrystalClick::ObjectSharedCopyCodec.encode([row] of CrystalClick::ObjectSharedMapRow, structures)
+    decoded = CrystalClick::ObjectSharedCopyCodec.decode(streams.sizes, streams.indexes, streams.values, structures)
+    decoded[0].entry_at(0).value.type.should eq(json_type)
+    decoded[0].entry_at(0).value.json_row.empty?.should be_true
+    CrystalClick::BinaryValueCodec.encode(decoded[0].entry_at(0).value).should eq(
+      CrystalClick::BinaryValueCodec.encode(json_value),
+    )
   end
 
   it "detaches all stream getters and reconstructed opaque path bytes" do

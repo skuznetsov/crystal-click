@@ -10,6 +10,7 @@ module CrystalClick
     @outer_rows : Array(UInt64)
     @data_size : UInt64
     @index : CompressedFrameIndex?
+    @inline_role_read_view : ObjectSharedInlineRoleReadView?
 
     def initialize(
       name : String,
@@ -20,6 +21,7 @@ module CrystalClick
     )
       budget.ensure_direction(false)
       @name = String.new(name.to_slice)
+      @inline_role_read_view = nil
       @data_size = input.expected_data_size.to_u64
       if expected_parent_rows.empty? || expected_parent_rows.size >= Int32::MAX
         raise CorruptPartError.new("Object shared physical parent grid is empty or oversized")
@@ -86,6 +88,96 @@ module CrystalClick
       end
     end
 
+    # Builds a logical role reader over callback fragments captured from one
+    # authenticated parent Data tape. The caller must provide the parent mark
+    # boundaries derived from that Object's source structure schedule; this
+    # owner validates their complete extent before exposing the lane.
+    def initialize(
+      name : String,
+      role_view : ObjectSharedInlineRoleReadView,
+      outer_positions : Array(Int64),
+      expected_parent_rows : Array(UInt64),
+      codec_budget : BinaryCodecBudget,
+    )
+      if codec_budget.writing?
+        raise ArgumentError.new("inline physical lane read view requires a read-direction codec budget")
+      end
+      codec_budget.ensure_depth(1)
+      unless name == role_view.role_name
+        raise CorruptPartError.new("inline physical lane name differs from its source-scheduled role")
+      end
+      if expected_parent_rows.empty? || expected_parent_rows.size >= Int32::MAX
+        raise CorruptPartError.new("inline physical parent grid is empty or oversized")
+      end
+      unless outer_positions.size == expected_parent_rows.size + 1 && outer_positions[0]? == 0_i64
+        raise CorruptPartError.new("inline physical role mark positions have an invalid extent")
+      end
+      role_size = role_view.byte_size
+      if role_size > Int32::MAX.to_u64 || outer_positions.last? != role_size.to_i64
+        raise CorruptPartError.new("inline physical role terminal differs from its captured extent")
+      end
+      outer_positions.each_cons(2) do |pair|
+        if pair[0] < 0 || pair[1] < pair[0] || pair[1] > role_size
+          raise CorruptPartError.new("inline physical role mark positions are outside its captured extent")
+        end
+      end
+      expected_parent_rows.each do |rows|
+        if rows == 0_u64 || rows > Int32::MAX.to_u64
+          raise CorruptPartError.new("inline physical parent rows must be positive Int32 values")
+        end
+      end
+
+      outer_count = outer_positions.size.to_u64
+      row_count = expected_parent_rows.size.to_u64
+      if row_count > UInt64::MAX - outer_count
+        raise CorruptPartError.new("inline physical mark record count overflows UInt64")
+      end
+      mark_records = outer_count + row_count
+      codec_budget.ensure_future_nodes(mark_records)
+      codec_budget.ensure_future_elements(mark_records)
+      codec_budget.charge_elements(mark_records)
+      mark_records.times { codec_budget.charge_node }
+
+      @name = String.new(name.to_slice)
+      @inline_role_read_view = role_view
+      @data_size = role_size
+      @data = role_view.materialize_bytes(codec_budget)
+      @outer_positions = outer_positions.dup
+      @outer_rows = expected_parent_rows.dup
+      @index = nil
+    end
+
+    # Builds one role-wide logical byte view for the inline advanced decoder.
+    # These two offsets delimit the captured role itself; they are not a
+    # fabricated physical-parent mark grid (outer_rows is intentionally empty).
+    def initialize(
+      name : String,
+      role_view : ObjectSharedInlineRoleReadView,
+      codec_budget : BinaryCodecBudget,
+    )
+      if codec_budget.writing?
+        raise ArgumentError.new("inline physical lane read view requires a read-direction codec budget")
+      end
+      codec_budget.ensure_depth(1)
+      unless name == role_view.role_name
+        raise CorruptPartError.new("inline physical lane name differs from its source-scheduled role")
+      end
+      role_size = role_view.byte_size
+      if role_size > Int32::MAX.to_u64
+        raise CorruptPartError.new("inline physical role exceeds the supported logical byte domain")
+      end
+      codec_budget.ensure_future_nodes(1_u64)
+      codec_budget.charge_node
+
+      @name = String.new(name.to_slice)
+      @inline_role_read_view = role_view
+      @data_size = role_size
+      @data = role_view.materialize_bytes(codec_budget)
+      @outer_positions = [0_i64, role_size.to_i64]
+      @outer_rows = [] of UInt64
+      @index = nil
+    end
+
     private def preflight_input!(
       data_path : String,
       marks_path : String,
@@ -135,6 +227,10 @@ module CrystalClick
       @data.size.to_i64
     end
 
+    def name : String
+      String.new(@name.to_slice)
+    end
+
     def byte_size : Int32
       @data.size
     end
@@ -145,6 +241,13 @@ module CrystalClick
 
     def bytes : Bytes
       @data.dup
+    end
+
+    # Borrowed payload for a decoder that has already charged and retained this
+    # lane through the reader. Callers must treat the returned bytes as
+    # immutable and must not outlive the lane owner.
+    def borrowed_bytes_for_decode : Bytes
+      @data
     end
 
     def outer_position(index : Int) : Int64
@@ -159,6 +262,9 @@ module CrystalClick
     end
 
     def logical_position(compressed_offset : UInt64, decompressed_offset : UInt64) : Int64
+      if role_view = @inline_role_read_view
+        return role_view.logical_position({compressed_offset, decompressed_offset})
+      end
       if @data_size == 0_u64
         unless compressed_offset == 0_u64 && decompressed_offset == 0_u64
           raise CorruptPartError.new("Object shared #{@name} empty lane coordinate is not zero")

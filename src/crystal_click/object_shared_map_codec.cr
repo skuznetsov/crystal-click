@@ -88,7 +88,7 @@ module CrystalClick
 
           value_size = value_context.read_var_uint
           envelope = value_context.read_slice(value_size)
-          value = BinaryValueCodec.decode_borrowed(envelope, budget)
+          value = BinaryValueCodec.decode_shared_json_envelope(envelope, budget)
           entries << ObjectSharedMapEntry.new(path, value)
           previous_path = path
           entry_index += 1
@@ -145,7 +145,7 @@ module CrystalClick
             paths_context.write_byte(entry.path_byte_at(byte_index))
           end
 
-          envelope = BinaryValueCodec.encode_borrowed(entry.value, budget)
+          envelope = BinaryValueCodec.encode_shared_json_envelope(entry.value, budget)
           values_context.write_var_uint(envelope.size.to_u64)
           values_context.write_slice(envelope)
         end

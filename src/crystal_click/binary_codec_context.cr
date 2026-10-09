@@ -12,6 +12,7 @@ module CrystalClick
     @budget : BinaryCodecBudget
     @account_output_bytes : Bool
     @output_byte_limit : UInt64
+    @shared_json_envelope_policy : Bool
 
     # The borrowed/prepaid switches are internal-only plumbing. A caller may
     # disable input charging only after an enclosing owner charged the complete
@@ -27,6 +28,7 @@ module CrystalClick
       account_output_bytes : Bool = true,
       output_byte_limit : UInt64? = nil,
       @allow_dynamic_aggregate_function : Bool = true,
+      shared_json_envelope_policy : Bool = false,
     )
       @input = input
       @output = [] of UInt8
@@ -34,6 +36,7 @@ module CrystalClick
       @budget = budget || BinaryCodecBudget.new(@limits, @writing)
       @account_output_bytes = account_output_bytes
       @output_byte_limit = output_byte_limit || @limits.max_bytes.to_u64
+      @shared_json_envelope_policy = shared_json_envelope_policy
       if @output_byte_limit > @limits.max_bytes.to_u64
         raise ArgumentError.new("binary codec context output bound exceeds its limits")
       end
@@ -67,6 +70,12 @@ module CrystalClick
     # recursive descriptor/value traversal.
     def budget : BinaryCodecBudget
       @budget
+    end
+
+    # Internal opt-in for the narrow shared MAP JSON envelope profile. All
+    # ordinary descriptor/value contexts keep this fence disabled by default.
+    def shared_json_envelope_policy? : Bool
+      @shared_json_envelope_policy
     end
 
     def visit_node(depth : Int) : Nil

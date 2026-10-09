@@ -8,6 +8,7 @@ module CrystalClick
     @data : Bytes
     @events : Array(ObjectSharedPathSubstreamEvent)
     @budget : BinaryCodecBudget
+    @coordinate_context : ObjectSharedInlineDataCoordinateContext?
     @cursor : UInt64
     @event_index : Int32
     @structure_bytes : Hash(String, Bytes)
@@ -20,6 +21,7 @@ module CrystalClick
       @data : Bytes,
       @events : Array(ObjectSharedPathSubstreamEvent),
       @budget : BinaryCodecBudget,
+      @coordinate_context : ObjectSharedInlineDataCoordinateContext? = nil,
     )
       @cursor = 0_u64
       @event_index = 0_i32
@@ -28,6 +30,12 @@ module CrystalClick
       @discriminator_prefixes = Hash(String, Bytes).new
       @low_cardinality_prefixes = Hash(String, Bytes).new
       @lanes = Hash(String, BinaryBulkStream).new
+      if context = @coordinate_context
+        unless context.path_data_size == @data.size
+          raise CorruptPartError.new("Object shared path tape coordinate context does not match its Data extent")
+        end
+        context.validate_path_bytes!(0_u64, @data, @budget)
+      end
 
       previous = 0_u64
       name_work = 0_u64
@@ -83,6 +91,41 @@ module CrystalClick
       @cursor = following
       @event_index += 1
       bytes
+    end
+
+    # Consumes one named inline child Object callback from this same ordered
+    # Data tape. This is deliberately only an alias: inline fragments do not
+    # get a secondary cursor or a relaxed name/offset check.
+    def take_inline_fragment(expected_name : String) : Bytes
+      take(expected_name)
+    end
+
+    # Takes one exact callback event and retains its verified path-relative
+    # interval plus the canonical/raw callback-name pairing. The payload is a
+    # borrowed view into this tape's authenticated Data slice.
+    def take_inline_fragment_slice(
+      canonical_name : String,
+      callback_name : String,
+    ) : ObjectSharedInlineCallbackReadSlice
+      if canonical_name.empty? || callback_name.empty?
+        raise CorruptPartError.new("inline callback slice name is empty")
+      end
+      start = @cursor
+      bytes = take(callback_name)
+      finish = @cursor
+      name_work = canonical_name.bytesize.to_u64 + callback_name.bytesize.to_u64
+      @budget.preflight_children(1_u64)
+      @budget.charge_wire_bytes(name_work)
+      @budget.charge_node
+      ObjectSharedInlineCallbackReadSlice.new(
+        canonical_name,
+        callback_name,
+        start,
+        finish,
+        bytes,
+        @coordinate_context,
+        @budget,
+      )
     end
 
     def add_structure(path : String, bytes : Bytes, structure : DynamicStructure) : Nil

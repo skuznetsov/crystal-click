@@ -38,11 +38,17 @@ module CrystalClick
       metadata_version : Int64 = 0,
       limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      shared_target_chunk_rows : Int32 = 1,
     ) : String
+      unless shared_target_chunk_rows > 0
+        raise ArgumentError.new("Object shared advanced target chunk rows must be positive")
+      end
       ObjectPartWriter.write(
         destination, key_name, keys, value_name, schema, plan, granules,
         rows_per_mark, mode, profile, shared_profile, frame_bytes,
-        metadata_version, limits, transport_limits)
+        metadata_version, limits, transport_limits, shared_json_policy,
+        shared_target_chunk_rows)
     end
 
     # Publishes one bounded Array(JSON) value column over recursively

@@ -1,0 +1,1222 @@
+{
+  "format": "crystal_click_object_shared_json_evidence_v1",
+  "slice": "W240/W241 shared JSON physical-owner composition",
+  "observed_date": "2026-10-09",
+  "baseline_revision": "d217f75cf1c7f7df941740dc6f2290317a01c1a9",
+  "claim": {
+    "level": "VERIFIED",
+    "verdict": "ROBUST within the eight finite native profiles, four mode/frame points and tested guard boundaries; not a whole-goal closure.",
+    "producer": "Root independently executed and reviewed the declared gates and source/capture joins. Luna same-lineage review is correlated support, not independent model agreement.",
+    "root_adjudication": "Root independently reviewed the frozen owner guards and serializer call sites, authenticated current hashes and exact roster, and executed all declared local/native/raw/adversarial gates. Genuine Data/Copy effects, exact schema/coordinate/registry/callback joins and false-success counterexamples pass within the declared scope."
+  },
+  "boundaries": {
+    "overall_goal": "ACTIVE: legal ClickHouse-compatible read/write types and MV/projection coverage before memory/performance.",
+    "admitted_native_profiles": [
+      "map_s0",
+      "map_s1",
+      "map_with_buckets_s0",
+      "map_with_buckets_s1",
+      "advanced_s0",
+      "advanced_s1",
+      "advanced_chunked_s0",
+      "advanced_chunked_s1"
+    ],
+    "finite_fixture": "Eight rows, four real marks [2,2,2,2] and one physical zero-row mrk2 EOF tuple; pk plus JSON(max_dynamic_paths=0), quiescent Wide/LZ4/plain-mrk2. Retained stock s1 has UInt8 pk; fresh stock s0 and generated roles have UInt64 pk.",
+    "physical_profiles": {
+      "object_version": 3,
+      "dynamic_version": 3,
+      "shared_versions": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "string_profiles": [
+        {
+          "id": "s0",
+          "version": 0,
+          "layout": "single_stream"
+        },
+        {
+          "id": "s1",
+          "version": 1,
+          "layout": "with_size_stream"
+        }
+      ],
+      "frame_bytes": [
+        32,
+        64
+      ]
+    },
+    "composition": "Reuse recursive descriptor/value/bulk traversal; typed child Object bindings and narrow layout/context owners compose MAP/Copy envelopes and ordinary advanced per-path Data, zero-occurrence callbacks, inherited profiles and containing-frame coordinates. No serializer per wrapper product.",
+    "selected_path_oracle": "Actual selected-path descriptors/caps and logical values are independently compared with captured native queries. The unhinted outer Dynamic(max_types=254) carrier alone is projected once to the SQL default-cap32 wrapper. Inner child types are never normalized by this carrier projection.",
+    "unclosed_type_oracle": "Stock nested Dynamic actual child types within Array(JSON) are not independently cross-checked against native SQL or a separate physical descriptor parser. Stock helper v Int64 and generated prepared v UInt8 witnesses are not a complete independent nested type-tree oracle.",
+    "retained_guards": [
+      "Default borrowed-value entry points retain existing admission guards.",
+      "Prepared JSON-bearing Dynamic actuals reject nested Dynamic sites and require every JSON leaf binding exactly once.",
+      "Prepared child Object plans with further root or typed JSON-bound Dynamic sites remain rejected.",
+      "Illegal ClickHouse type trees are not implementation gaps."
+    ],
+    "exclusions": [
+      "No all-legal-type-product certificate.",
+      "No Compact MergeTree part qualification; inline nested Compact callback topology is not Compact part admission.",
+      "No arbitrary new serialization versions, live freshness, complete stock nested Dynamic child-type oracle, general multi-column publication or MV/projection execution/writing.",
+      "No whole-suite or Crystal compiler-fix claim.",
+      "No performance, memory/RSS, allocator or <=10% slowdown claim.",
+      "No remote push or history rewrite.",
+      "Broad facade/writer decomposition remains open; new JSON owners have separate class files, but the legacy WidePartWriter facade is not fully decomposed."
+    ],
+    "resource_boundary": "One guarded resource job at a time, native one thread/512 MiB/10s plus 2s grace; all existing shared codec depth/byte/element budgets remain in force.",
+    "residual_resource_risk": "Per-mark transport can repeat indexing/paired-stream decoding and conservatively exhaust consumptive budgets on large parts.",
+    "evidence_boundary": "Captured artifacts, file copies, invocation records, exact SQL and output joins are authenticated for consistency. This is not immutable cryptographic execution provenance; coordinated replacement of all witnesses is outside the certificate."
+  },
+  "pins": {
+    "source": {
+      "checkout": "/private/tmp/crystal-click-w238.4nQqSo/clickhouse",
+      "revision": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+      "shallow": true,
+      "fetched_at_utc": "2026-10-09 08:08:30",
+      "runtime_built_from_this_source_not_asserted": true,
+      "file_hashes": [
+        {
+          "path": "src/DataTypes/DataTypeObject.cpp",
+          "sha256": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7"
+        },
+        {
+          "path": "src/DataTypes/DataTypeDynamic.cpp",
+          "sha256": "fec7e50ab5abee89ce79a953448ca7d7dca0aa9f9430c94a4deb2346dd74d4cc"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationObject.cpp",
+          "sha256": "9ba4b6ff274e56bd90652c32557565569d3b342a03ebbc6e2cafdad983bf17f8"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationObjectSharedData.cpp",
+          "sha256": "2534b49ac9f188696625aea26ecfbdeacea0580e5465091b9ef7f81b1c06b1fe"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationDynamic.cpp",
+          "sha256": "691029f31451f9e7f431922f8764764125ef434c3bd9ddf3868efc7742ba890a"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationVariant.cpp",
+          "sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationObjectHelpers.cpp",
+          "sha256": "df6c1b227cd4035ae208158ec23bf26e7bc326a784c66cc85a78f986b5e8a228"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationNullable.cpp",
+          "sha256": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f",
+          "scope": "Source distinction: scalar NULL skips child; bulk keeps a full nested column plus null-map."
+        }
+      ]
+    },
+    "native": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    },
+    "stock_dependency": {
+      "root": "/private/tmp/crystal-click-w240-stock-rerun.T9COXO",
+      "summary_sha256": "8b0375c94007d123170362a647dc8b95578fc54daf8f66bac2f0ad047c24cf70",
+      "summary_only_binary_sha_enrichment": "The recorder writes invocation JSON before enriching its in-memory summary with binary_sha_before. The auditor allows only this exact pinned W240 summary-only field and authenticates the complete artifact independently."
+    },
+    "compiler": {
+      "crystal": "1.21.0",
+      "llvm": "22.1.8",
+      "architecture": "aarch64",
+      "linker_workaround": "--link-flags=-fuse-ld=ld",
+      "grouped_spec_boundary": "The Proc-alias symptom also reproduces on a clean W239 baseline; thirteen affected controls were run separately rather than counted as a compiler fix.",
+      "target": "aarch64-apple-darwin25.6.0",
+      "ruby": "2.6.10p210",
+      "observed_command": "crystal --version; ruby --version"
+    },
+    "helper_source": {
+      "path": "scripts/check_object_shared_json_interop_w241.cr",
+      "sha256": "e52c85a242582cc2a2dd0b3805704b1c41c76d98224bcaf5a7d4b7d86cb4b7bc"
+    },
+    "final_scripts": [
+      {
+        "path": "scripts/probe_object_shared_json_w240.rb",
+        "sha256": "76aa69aef8510ff9edb2aafba2dd7f940be74c9bd2af1e953fbb125931fdd335"
+      },
+      {
+        "path": "scripts/probe_object_shared_json_interop_w241.rb",
+        "sha256": "6330b660a7d4369f68a8b95e7a57a81bb6434549ee7d61357a60e89921d3aa6d"
+      },
+      {
+        "path": "scripts/reconcile_object_shared_json_interop_w241.rb",
+        "sha256": "2751fc87f72522e2ec70821c7c8b7bc646fd03a92dc672ab8df2f25b29635a34"
+      }
+    ],
+    "producer_lineage": "DEBUG32, DEBUG64 and RELEASE32 coordinator captures predate the final classifier-only coordinator source and were produced at SHA 1f39fa7d4cca7d3d8a3be02ad48af8ae4a4551088de64bae8ac00a5f9426f1d6. RELEASE64 loaded coordinator SHA c47a0b096f45760397e5a2cb9f8e9041533f5ca9723add73c66ec13ffd7eb5ab and the then-current b5a811 reconciler dependency at startup. A post-capture seal removes only one trailing space from the coordinator; its behavioral source is unchanged. All four captures are finally re-audited with the final 2751fc reconciler. Do not imply the final scripts originally produced every capture.",
+    "helper_binaries": [
+      {
+        "mode": "debug",
+        "path": "/private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-debug",
+        "sha256": "e3913456d2e958d1c827a2865684857176ef26ed619342208622b9c8586cea7d",
+        "build_command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "/opt/homebrew/bin/crystal 600 12288 build scripts/check_object_shared_json_interop_w241.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-debug"
+        },
+        "build_exit": 0
+      },
+      {
+        "mode": "release",
+        "path": "/private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-release",
+        "sha256": "3086848e5b0d17d301e789fa4791c3f68ccd5841a481c5694c0f0a87d3b84383",
+        "build_command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "/opt/homebrew/bin/crystal 600 12288 build scripts/check_object_shared_json_interop_w241.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug -o /private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-release"
+        },
+        "build_exit": 0
+      }
+    ]
+  },
+  "local_gates": {
+    "main_roster": [
+      "spec/aggregate_dynamic_w226_adversary_spec.cr",
+      "spec/aggregate_dynamic_w226_core_spec.cr",
+      "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr",
+      "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+      "spec/binary_dynamic_bulk_shared_context_w155_spec.cr",
+      "spec/binary_dynamic_bulk_values_w155_adversary_spec.cr",
+      "spec/binary_dynamic_bulk_values_w155_red_spec.cr",
+      "spec/binary_dynamic_bulk_values_w155_spec.cr",
+      "spec/binary_dynamic_value_w153_spec.cr",
+      "spec/binary_parameter_owners_w119_spec.cr",
+      "spec/binary_scalar_types_w119_spec.cr",
+      "spec/binary_value_codec_w117_spec.cr",
+      "spec/binary_variant_value_w147_adversary_spec.cr",
+      "spec/binary_variant_value_w147_spec.cr",
+      "spec/compressed_literal_position_plan_w240_spec.cr",
+      "spec/dynamic_structure_prefix_w193_adversary_spec.cr",
+      "spec/json_binary_kernel_w180_boundary_spec.cr",
+      "spec/json_binary_kernel_w180_guards_spec.cr",
+      "spec/json_binary_kernel_w180_spec.cr",
+      "spec/json_nested_scalar_w182_guards_spec.cr",
+      "spec/json_nested_scalar_w182_spec.cr",
+      "spec/json_nested_shared_dynamic_w182_spec.cr",
+      "spec/json_recursive_scalar_w181_guards_spec.cr",
+      "spec/json_recursive_scalar_w181_spec.cr",
+      "spec/object_column_lane_binder_refactor_spec.cr",
+      "spec/object_column_reader_w129_spec.cr",
+      "spec/object_column_writer_w127_root_spec.cr",
+      "spec/object_column_writer_w127_spec.cr",
+      "spec/object_document_inline_schedule_w240_adversary_spec.cr",
+      "spec/object_document_schema_w128_spec.cr",
+      "spec/object_document_schema_w131_spec.cr",
+      "spec/object_document_schema_w132_spec.cr",
+      "spec/object_document_schema_w133_spec.cr",
+      "spec/object_document_schema_w135_spec.cr",
+      "spec/object_document_schema_w136_spec.cr",
+      "spec/object_document_schema_w137_spec.cr",
+      "spec/object_document_schema_w138_spec.cr",
+      "spec/object_document_schema_w139_spec.cr",
+      "spec/object_document_schema_w140_spec.cr",
+      "spec/object_documents_w123_adversary_spec.cr",
+      "spec/object_documents_w123_root_spec.cr",
+      "spec/object_documents_w123_spec.cr",
+      "spec/object_dynamic_structure_w120_budget_spec.cr",
+      "spec/object_dynamic_structure_w120_spec.cr",
+      "spec/object_shared_advanced_chunk_w195_adversary_spec.cr",
+      "spec/object_shared_advanced_chunk_w195_spec.cr",
+      "spec/object_shared_advanced_copy_layout_w195_spec.cr",
+      "spec/object_shared_advanced_document_w195_spec.cr",
+      "spec/object_shared_advanced_profile_w195_spec.cr",
+      "spec/object_shared_buckets_w190_adversary_spec.cr",
+      "spec/object_shared_buckets_w190_spec.cr",
+      "spec/object_shared_chunk_structure_w191_spec.cr",
+      "spec/object_shared_copy_w192_adversary_spec.cr",
+      "spec/object_shared_copy_w192_spec.cr",
+      "spec/object_shared_json_envelope_w240_adversary_spec.cr",
+      "spec/object_shared_json_envelope_w240_spec.cr",
+      "spec/object_shared_json_policy_w240_spec.cr",
+      "spec/object_shared_json_prepared_policy_w240_adversary_spec.cr",
+      "spec/object_shared_json_w240_physical_spec.cr",
+      "spec/object_shared_json_w240_red_spec.cr",
+      "spec/object_shared_map_w118_spec.cr",
+      "spec/object_shared_nested_parts_w198_spec.cr",
+      "spec/object_shared_path_json_tape_w240_spec.cr",
+      "spec/object_shared_path_low_cardinality_w196_adversary_spec.cr",
+      "spec/object_shared_path_low_cardinality_w196_spec.cr",
+      "spec/object_shared_path_nested_w197_spec.cr",
+      "spec/object_shared_path_profile_w195_spec.cr",
+      "spec/object_shared_path_qbit_w199_spec.cr",
+      "spec/object_shared_path_w193_adversary_spec.cr",
+      "spec/object_shared_path_w193_spec.cr",
+      "spec/object_shared_physical_w194_adversary_spec.cr",
+      "spec/object_shared_physical_w194_spec.cr",
+      "spec/object_shared_qbit_parts_w200_spec.cr",
+      "spec/object_statistics_w127_spec.cr",
+      "spec/object_structure_inline_prefix_w240_adversary_spec.cr",
+      "spec/object_typed_dynamic_compact_w189_adversary_spec.cr",
+      "spec/object_typed_dynamic_compact_w189_spec.cr",
+      "spec/qbit_binary_kernel_w179_admission_spec.cr",
+      "spec/object_document_inline_depth_w240_adversary_spec.cr",
+      "spec/object_document_inline_framing_w240_spec.cr",
+      "spec/object_shared_json_name_domains_w240_adversary_spec.cr",
+      "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+      "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+      "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+      "spec/object_shared_chunk_structure_split_budget_w240_spec.cr"
+    ],
+    "main": [
+      {
+        "mode": "debug",
+        "examples": 512,
+        "exit_code": 0,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "/opt/homebrew/bin/crystal 900 12288 spec 'spec/aggregate_dynamic_w226_adversary_spec.cr' 'spec/aggregate_dynamic_w226_core_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_spec.cr' 'spec/binary_dynamic_bulk_shared_context_w155_spec.cr' 'spec/binary_dynamic_bulk_values_w155_adversary_spec.cr' 'spec/binary_dynamic_bulk_values_w155_red_spec.cr' 'spec/binary_dynamic_bulk_values_w155_spec.cr' 'spec/binary_dynamic_value_w153_spec.cr' 'spec/binary_parameter_owners_w119_spec.cr' 'spec/binary_scalar_types_w119_spec.cr' 'spec/binary_value_codec_w117_spec.cr' 'spec/binary_variant_value_w147_adversary_spec.cr' 'spec/binary_variant_value_w147_spec.cr' 'spec/compressed_literal_position_plan_w240_spec.cr' 'spec/dynamic_structure_prefix_w193_adversary_spec.cr' 'spec/json_binary_kernel_w180_boundary_spec.cr' 'spec/json_binary_kernel_w180_guards_spec.cr' 'spec/json_binary_kernel_w180_spec.cr' 'spec/json_nested_scalar_w182_guards_spec.cr' 'spec/json_nested_scalar_w182_spec.cr' 'spec/json_nested_shared_dynamic_w182_spec.cr' 'spec/json_recursive_scalar_w181_guards_spec.cr' 'spec/json_recursive_scalar_w181_spec.cr' 'spec/object_column_lane_binder_refactor_spec.cr' 'spec/object_column_reader_w129_spec.cr' 'spec/object_column_writer_w127_root_spec.cr' 'spec/object_column_writer_w127_spec.cr' 'spec/object_document_inline_schedule_w240_adversary_spec.cr' 'spec/object_document_schema_w128_spec.cr' 'spec/object_document_schema_w131_spec.cr' 'spec/object_document_schema_w132_spec.cr' 'spec/object_document_schema_w133_spec.cr' 'spec/object_document_schema_w135_spec.cr' 'spec/object_document_schema_w136_spec.cr' 'spec/object_document_schema_w137_spec.cr' 'spec/object_document_schema_w138_spec.cr' 'spec/object_document_schema_w139_spec.cr' 'spec/object_document_schema_w140_spec.cr' 'spec/object_documents_w123_adversary_spec.cr' 'spec/object_documents_w123_root_spec.cr' 'spec/object_documents_w123_spec.cr' 'spec/object_dynamic_structure_w120_budget_spec.cr' 'spec/object_dynamic_structure_w120_spec.cr' 'spec/object_shared_advanced_chunk_w195_adversary_spec.cr' 'spec/object_shared_advanced_chunk_w195_spec.cr' 'spec/object_shared_advanced_copy_layout_w195_spec.cr' 'spec/object_shared_advanced_document_w195_spec.cr' 'spec/object_shared_advanced_profile_w195_spec.cr' 'spec/object_shared_buckets_w190_adversary_spec.cr' 'spec/object_shared_buckets_w190_spec.cr' 'spec/object_shared_chunk_structure_w191_spec.cr' 'spec/object_shared_copy_w192_adversary_spec.cr' 'spec/object_shared_copy_w192_spec.cr' 'spec/object_shared_json_envelope_w240_adversary_spec.cr' 'spec/object_shared_json_envelope_w240_spec.cr' 'spec/object_shared_json_policy_w240_spec.cr' 'spec/object_shared_json_prepared_policy_w240_adversary_spec.cr' 'spec/object_shared_json_w240_physical_spec.cr' 'spec/object_shared_json_w240_red_spec.cr' 'spec/object_shared_map_w118_spec.cr' 'spec/object_shared_nested_parts_w198_spec.cr' 'spec/object_shared_path_json_tape_w240_spec.cr' 'spec/object_shared_path_low_cardinality_w196_adversary_spec.cr' 'spec/object_shared_path_low_cardinality_w196_spec.cr' 'spec/object_shared_path_nested_w197_spec.cr' 'spec/object_shared_path_profile_w195_spec.cr' 'spec/object_shared_path_qbit_w199_spec.cr' 'spec/object_shared_path_w193_adversary_spec.cr' 'spec/object_shared_path_w193_spec.cr' 'spec/object_shared_physical_w194_adversary_spec.cr' 'spec/object_shared_physical_w194_spec.cr' 'spec/object_shared_qbit_parts_w200_spec.cr' 'spec/object_statistics_w127_spec.cr' 'spec/object_structure_inline_prefix_w240_adversary_spec.cr' 'spec/object_typed_dynamic_compact_w189_adversary_spec.cr' 'spec/object_typed_dynamic_compact_w189_spec.cr' 'spec/qbit_binary_kernel_w179_admission_spec.cr' 'spec/object_document_inline_depth_w240_adversary_spec.cr' 'spec/object_document_inline_framing_w240_spec.cr' 'spec/object_shared_json_name_domains_w240_adversary_spec.cr' 'spec/object_shared_advanced_inline_w240_adversary_spec.cr' 'spec/object_shared_inline_relocation_w240_adversary_spec.cr' 'spec/object_shared_inline_coordinate_w240_adversary_spec.cr' 'spec/object_shared_chunk_structure_split_budget_w240_spec.cr' --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace"
+        }
+      },
+      {
+        "mode": "release",
+        "examples": 512,
+        "exit_code": 0,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "/opt/homebrew/bin/crystal 900 12288 spec 'spec/aggregate_dynamic_w226_adversary_spec.cr' 'spec/aggregate_dynamic_w226_core_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr' 'spec/binary_dynamic_bulk_plan_w154_spec.cr' 'spec/binary_dynamic_bulk_shared_context_w155_spec.cr' 'spec/binary_dynamic_bulk_values_w155_adversary_spec.cr' 'spec/binary_dynamic_bulk_values_w155_red_spec.cr' 'spec/binary_dynamic_bulk_values_w155_spec.cr' 'spec/binary_dynamic_value_w153_spec.cr' 'spec/binary_parameter_owners_w119_spec.cr' 'spec/binary_scalar_types_w119_spec.cr' 'spec/binary_value_codec_w117_spec.cr' 'spec/binary_variant_value_w147_adversary_spec.cr' 'spec/binary_variant_value_w147_spec.cr' 'spec/compressed_literal_position_plan_w240_spec.cr' 'spec/dynamic_structure_prefix_w193_adversary_spec.cr' 'spec/json_binary_kernel_w180_boundary_spec.cr' 'spec/json_binary_kernel_w180_guards_spec.cr' 'spec/json_binary_kernel_w180_spec.cr' 'spec/json_nested_scalar_w182_guards_spec.cr' 'spec/json_nested_scalar_w182_spec.cr' 'spec/json_nested_shared_dynamic_w182_spec.cr' 'spec/json_recursive_scalar_w181_guards_spec.cr' 'spec/json_recursive_scalar_w181_spec.cr' 'spec/object_column_lane_binder_refactor_spec.cr' 'spec/object_column_reader_w129_spec.cr' 'spec/object_column_writer_w127_root_spec.cr' 'spec/object_column_writer_w127_spec.cr' 'spec/object_document_inline_schedule_w240_adversary_spec.cr' 'spec/object_document_schema_w128_spec.cr' 'spec/object_document_schema_w131_spec.cr' 'spec/object_document_schema_w132_spec.cr' 'spec/object_document_schema_w133_spec.cr' 'spec/object_document_schema_w135_spec.cr' 'spec/object_document_schema_w136_spec.cr' 'spec/object_document_schema_w137_spec.cr' 'spec/object_document_schema_w138_spec.cr' 'spec/object_document_schema_w139_spec.cr' 'spec/object_document_schema_w140_spec.cr' 'spec/object_documents_w123_adversary_spec.cr' 'spec/object_documents_w123_root_spec.cr' 'spec/object_documents_w123_spec.cr' 'spec/object_dynamic_structure_w120_budget_spec.cr' 'spec/object_dynamic_structure_w120_spec.cr' 'spec/object_shared_advanced_chunk_w195_adversary_spec.cr' 'spec/object_shared_advanced_chunk_w195_spec.cr' 'spec/object_shared_advanced_copy_layout_w195_spec.cr' 'spec/object_shared_advanced_document_w195_spec.cr' 'spec/object_shared_advanced_profile_w195_spec.cr' 'spec/object_shared_buckets_w190_adversary_spec.cr' 'spec/object_shared_buckets_w190_spec.cr' 'spec/object_shared_chunk_structure_w191_spec.cr' 'spec/object_shared_copy_w192_adversary_spec.cr' 'spec/object_shared_copy_w192_spec.cr' 'spec/object_shared_json_envelope_w240_adversary_spec.cr' 'spec/object_shared_json_envelope_w240_spec.cr' 'spec/object_shared_json_policy_w240_spec.cr' 'spec/object_shared_json_prepared_policy_w240_adversary_spec.cr' 'spec/object_shared_json_w240_physical_spec.cr' 'spec/object_shared_json_w240_red_spec.cr' 'spec/object_shared_map_w118_spec.cr' 'spec/object_shared_nested_parts_w198_spec.cr' 'spec/object_shared_path_json_tape_w240_spec.cr' 'spec/object_shared_path_low_cardinality_w196_adversary_spec.cr' 'spec/object_shared_path_low_cardinality_w196_spec.cr' 'spec/object_shared_path_nested_w197_spec.cr' 'spec/object_shared_path_profile_w195_spec.cr' 'spec/object_shared_path_qbit_w199_spec.cr' 'spec/object_shared_path_w193_adversary_spec.cr' 'spec/object_shared_path_w193_spec.cr' 'spec/object_shared_physical_w194_adversary_spec.cr' 'spec/object_shared_physical_w194_spec.cr' 'spec/object_shared_qbit_parts_w200_spec.cr' 'spec/object_statistics_w127_spec.cr' 'spec/object_structure_inline_prefix_w240_adversary_spec.cr' 'spec/object_typed_dynamic_compact_w189_adversary_spec.cr' 'spec/object_typed_dynamic_compact_w189_spec.cr' 'spec/qbit_binary_kernel_w179_admission_spec.cr' 'spec/object_document_inline_depth_w240_adversary_spec.cr' 'spec/object_document_inline_framing_w240_spec.cr' 'spec/object_shared_json_name_domains_w240_adversary_spec.cr' 'spec/object_shared_advanced_inline_w240_adversary_spec.cr' 'spec/object_shared_inline_relocation_w240_adversary_spec.cr' 'spec/object_shared_inline_coordinate_w240_adversary_spec.cr' 'spec/object_shared_chunk_structure_split_budget_w240_spec.cr' --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug"
+        }
+      }
+    ],
+    "isolated": [
+      {
+        "path": "spec/dynamic_json_bulk_object_w209_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 14,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_bulk_object_w209_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_bulk_object_w209_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 14,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_bulk_object_w209_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_materialization_w207_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 9,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_materialization_w207_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_materialization_w207_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 9,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_materialization_w207_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_metadata_w206_adversary_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 5,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_metadata_w206_adversary_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_metadata_w206_adversary_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 5,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_metadata_w206_adversary_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_metadata_w206_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 5,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_metadata_w206_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_metadata_w206_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 5,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_metadata_w206_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_object_bridge_w208_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 9,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_object_bridge_w208_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_object_bridge_w208_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 9,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_object_bridge_w208_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_physical_w210_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 11,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_physical_w210_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_physical_w210_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 11,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_physical_w210_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_recursive_physical_w212_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 7,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_recursive_physical_w212_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_recursive_physical_w212_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 7,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_recursive_physical_w212_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_recursive_w212_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 10,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_recursive_w212_spec.cr"
+        }
+      },
+      {
+        "path": "spec/dynamic_json_recursive_w212_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 10,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/dynamic_json_recursive_w212_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_json_context_w215_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 6,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_json_context_w215_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_json_context_w215_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 6,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_json_context_w215_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_json_physical_w215_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 4,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_json_physical_w215_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_json_physical_w215_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 4,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_json_physical_w215_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_json_w215_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 8,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_json_w215_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_json_w215_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 8,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_json_w215_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_shared_json_physical_w214_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 1,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_shared_json_physical_w214_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_shared_json_physical_w214_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 1,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_shared_json_physical_w214_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_shared_json_w214_spec.cr",
+        "mode": "debug",
+        "exit_code": 0,
+        "examples": 10,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_shared_json_w214_spec.cr"
+        }
+      },
+      {
+        "path": "spec/object_typed_dynamic_shared_json_w214_spec.cr",
+        "mode": "release",
+        "exit_code": 0,
+        "examples": 10,
+        "command": {
+          "prefix_ref": "resource_guard.command_prefix",
+          "body": "crystal 600 12288 spec --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace spec/object_typed_dynamic_shared_json_w214_spec.cr"
+        }
+      }
+    ],
+    "combined_examples_per_mode": 611,
+    "selected_unique_files": 98,
+    "expected_signal": "Every main and isolated gate exits 0 with zero failures/errors/pending; 512 main plus 99 isolated examples in each mode.",
+    "formatting": {
+      "paths": [
+        "spec/object_column_lane_binder_refactor_spec.cr",
+        "spec/object_shared_copy_w192_adversary_spec.cr",
+        "spec/object_shared_copy_w192_spec.cr",
+        "src/crystal_click.cr",
+        "src/crystal_click/binary_codec_context.cr",
+        "src/crystal_click/binary_data_type_codec.cr",
+        "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr",
+        "src/crystal_click/binary_dynamic_bulk_plan.cr",
+        "src/crystal_click/binary_dynamic_bulk_site_name_resolver.cr",
+        "src/crystal_click/binary_value_codec.cr",
+        "src/crystal_click/compressed_mark_writer.cr",
+        "src/crystal_click/dynamic_json_object_site_coordinates.cr",
+        "src/crystal_click/object_column_reader.cr",
+        "src/crystal_click/object_declared_dynamic_declaration.cr",
+        "src/crystal_click/object_document_codec.cr",
+        "src/crystal_click/object_document_column_lane.cr",
+        "src/crystal_click/object_document_column_writer.cr",
+        "src/crystal_click/object_document_file_reader.cr",
+        "src/crystal_click/object_document_shared_codec.cr",
+        "src/crystal_click/object_shared_advanced_chunk_codec.cr",
+        "src/crystal_click/object_shared_advanced_copy_layout.cr",
+        "src/crystal_click/object_shared_advanced_document_codec.cr",
+        "src/crystal_click/object_shared_chunk_structure_codec.cr",
+        "src/crystal_click/object_shared_copy_codec.cr",
+        "src/crystal_click/object_shared_map_codec.cr",
+        "src/crystal_click/object_shared_path_codec.cr",
+        "src/crystal_click/object_shared_path_streams.cr",
+        "src/crystal_click/object_shared_path_tape_reader.cr",
+        "src/crystal_click/object_shared_physical_bucket_decoder.cr",
+        "src/crystal_click/object_shared_physical_bucket_encoder.cr",
+        "src/crystal_click/object_shared_physical_lane_reader.cr",
+        "src/crystal_click/object_structure_codec.cr",
+        "src/crystal_click/wide_part_writer.cr",
+        "src/crystal_click/wide_part_writer/object_part_writer.cr",
+        "spec/compressed_literal_position_plan_w240_spec.cr",
+        "spec/object_document_inline_depth_w240_adversary_spec.cr",
+        "spec/object_document_inline_framing_w240_spec.cr",
+        "spec/object_document_inline_schedule_w240_adversary_spec.cr",
+        "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+        "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+        "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+        "spec/object_shared_json_envelope_w240_adversary_spec.cr",
+        "spec/object_shared_json_envelope_w240_spec.cr",
+        "spec/object_shared_json_name_domains_w240_adversary_spec.cr",
+        "spec/object_shared_json_policy_w240_spec.cr",
+        "spec/object_shared_json_prepared_policy_w240_adversary_spec.cr",
+        "spec/object_shared_json_w240_physical_spec.cr",
+        "spec/object_shared_json_w240_red_spec.cr",
+        "spec/object_shared_path_json_tape_w240_spec.cr",
+        "spec/object_structure_inline_prefix_w240_adversary_spec.cr",
+        "src/crystal_click/binary_shared_json_envelope_policy.cr",
+        "src/crystal_click/object_document_inline_body_materializer.cr",
+        "src/crystal_click/object_document_inline_callback_order.cr",
+        "src/crystal_click/object_document_inline_plan_reader.cr",
+        "src/crystal_click/object_document_inline_prefix.cr",
+        "src/crystal_click/object_shared_advanced_copy_raw_layout.cr",
+        "src/crystal_click/object_shared_advanced_inline_codec.cr",
+        "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+        "src/crystal_click/object_shared_advanced_inline_raw_layout.cr",
+        "src/crystal_click/object_shared_advanced_json_actual_plan.cr",
+        "src/crystal_click/object_shared_advanced_json_write_policy.cr",
+        "src/crystal_click/object_shared_inline_callback_read_slice.cr",
+        "src/crystal_click/object_shared_inline_callback_relocation.cr",
+        "src/crystal_click/object_shared_inline_data_coordinate_context.cr",
+        "src/crystal_click/object_shared_inline_lane_relocation.cr",
+        "src/crystal_click/object_shared_inline_role_read_view.cr",
+        "src/crystal_click/object_shared_nested_serialization_context.cr",
+        "src/crystal_click/object_shared_path_json_tape_codec.cr",
+        "src/crystal_click/object_shared_physical_bucket_raw_layout.cr",
+        "spec/object_shared_chunk_structure_split_budget_w240_spec.cr",
+        "scripts/check_object_shared_json_interop_w241.cr"
+      ],
+      "command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "/opt/homebrew/bin/crystal 120 512 tool format --check 'spec/object_column_lane_binder_refactor_spec.cr' 'spec/object_shared_copy_w192_adversary_spec.cr' 'spec/object_shared_copy_w192_spec.cr' 'src/crystal_click.cr' 'src/crystal_click/binary_codec_context.cr' 'src/crystal_click/binary_data_type_codec.cr' 'src/crystal_click/binary_dynamic_bulk_json_object_writer.cr' 'src/crystal_click/binary_dynamic_bulk_plan.cr' 'src/crystal_click/binary_dynamic_bulk_site_name_resolver.cr' 'src/crystal_click/binary_value_codec.cr' 'src/crystal_click/compressed_mark_writer.cr' 'src/crystal_click/dynamic_json_object_site_coordinates.cr' 'src/crystal_click/object_column_reader.cr' 'src/crystal_click/object_declared_dynamic_declaration.cr' 'src/crystal_click/object_document_codec.cr' 'src/crystal_click/object_document_column_lane.cr' 'src/crystal_click/object_document_column_writer.cr' 'src/crystal_click/object_document_file_reader.cr' 'src/crystal_click/object_document_shared_codec.cr' 'src/crystal_click/object_shared_advanced_chunk_codec.cr' 'src/crystal_click/object_shared_advanced_copy_layout.cr' 'src/crystal_click/object_shared_advanced_document_codec.cr' 'src/crystal_click/object_shared_chunk_structure_codec.cr' 'src/crystal_click/object_shared_copy_codec.cr' 'src/crystal_click/object_shared_map_codec.cr' 'src/crystal_click/object_shared_path_codec.cr' 'src/crystal_click/object_shared_path_streams.cr' 'src/crystal_click/object_shared_path_tape_reader.cr' 'src/crystal_click/object_shared_physical_bucket_decoder.cr' 'src/crystal_click/object_shared_physical_bucket_encoder.cr' 'src/crystal_click/object_shared_physical_lane_reader.cr' 'src/crystal_click/object_structure_codec.cr' 'src/crystal_click/wide_part_writer.cr' 'src/crystal_click/wide_part_writer/object_part_writer.cr' 'spec/compressed_literal_position_plan_w240_spec.cr' 'spec/object_document_inline_depth_w240_adversary_spec.cr' 'spec/object_document_inline_framing_w240_spec.cr' 'spec/object_document_inline_schedule_w240_adversary_spec.cr' 'spec/object_shared_advanced_inline_w240_adversary_spec.cr' 'spec/object_shared_inline_coordinate_w240_adversary_spec.cr' 'spec/object_shared_inline_relocation_w240_adversary_spec.cr' 'spec/object_shared_json_envelope_w240_adversary_spec.cr' 'spec/object_shared_json_envelope_w240_spec.cr' 'spec/object_shared_json_name_domains_w240_adversary_spec.cr' 'spec/object_shared_json_policy_w240_spec.cr' 'spec/object_shared_json_prepared_policy_w240_adversary_spec.cr' 'spec/object_shared_json_w240_physical_spec.cr' 'spec/object_shared_json_w240_red_spec.cr' 'spec/object_shared_path_json_tape_w240_spec.cr' 'spec/object_structure_inline_prefix_w240_adversary_spec.cr' 'src/crystal_click/binary_shared_json_envelope_policy.cr' 'src/crystal_click/object_document_inline_body_materializer.cr' 'src/crystal_click/object_document_inline_callback_order.cr' 'src/crystal_click/object_document_inline_plan_reader.cr' 'src/crystal_click/object_document_inline_prefix.cr' 'src/crystal_click/object_shared_advanced_copy_raw_layout.cr' 'src/crystal_click/object_shared_advanced_inline_codec.cr' 'src/crystal_click/object_shared_advanced_inline_decoder.cr' 'src/crystal_click/object_shared_advanced_inline_raw_layout.cr' 'src/crystal_click/object_shared_advanced_json_actual_plan.cr' 'src/crystal_click/object_shared_advanced_json_write_policy.cr' 'src/crystal_click/object_shared_inline_callback_read_slice.cr' 'src/crystal_click/object_shared_inline_callback_relocation.cr' 'src/crystal_click/object_shared_inline_data_coordinate_context.cr' 'src/crystal_click/object_shared_inline_lane_relocation.cr' 'src/crystal_click/object_shared_inline_role_read_view.cr' 'src/crystal_click/object_shared_nested_serialization_context.cr' 'src/crystal_click/object_shared_path_json_tape_codec.cr' 'src/crystal_click/object_shared_physical_bucket_raw_layout.cr' 'spec/object_shared_chunk_structure_split_budget_w240_spec.cr' 'scripts/check_object_shared_json_interop_w241.cr'"
+      },
+      "exit_code": 0
+    },
+    "production_file_hashes": [
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "eb5f1e30d430cf0fab5f8a7205ab4eb28313b9024461831b66ca56c270ebd57a"
+      },
+      {
+        "path": "src/crystal_click/binary_codec_context.cr",
+        "sha256": "1416f493ba3ca3213c596493e3bb6f0539b3bd46defa81fc70ff35586ff7e54a"
+      },
+      {
+        "path": "src/crystal_click/binary_data_type_codec.cr",
+        "sha256": "73458e36167641e19e4aba7fe5cb293e12d68eaf8adf4b3fc6b0255fe4874b76"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr",
+        "sha256": "40889a7cfeace6bff6b664e1ec94d81e681b1289c4494c67016a7b5c42760c54"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_plan.cr",
+        "sha256": "6285031d7b989a53364184d472733a3a212c36f8d7a5d40b4a5cc3bb965f6d83"
+      },
+      {
+        "path": "src/crystal_click/binary_dynamic_bulk_site_name_resolver.cr",
+        "sha256": "fb172dadb4909c0e50c0108ace56dc142c0ac4af99f1bd4aa46a5d39d4250af3"
+      },
+      {
+        "path": "src/crystal_click/binary_value_codec.cr",
+        "sha256": "5fc0090c6aca822e67c229f8a89e9f52a35572f0e5caca552efffd57a9a4babd"
+      },
+      {
+        "path": "src/crystal_click/compressed_mark_writer.cr",
+        "sha256": "385c8c9fd376d002c7c6a1c1d5e1334d5cf6fcce42c1b9faea52d3536c1e1f2a"
+      },
+      {
+        "path": "src/crystal_click/dynamic_json_object_site_coordinates.cr",
+        "sha256": "2965afd123b85112bfc9545a399f58216ce6e8a250e1d38f4b506a65e82601e3"
+      },
+      {
+        "path": "src/crystal_click/object_column_reader.cr",
+        "sha256": "d166209781428699e3727763239138da6119878d40036be275cd844b4d08c288"
+      },
+      {
+        "path": "src/crystal_click/object_declared_dynamic_declaration.cr",
+        "sha256": "82be1e5096559c7809ea4c66efe550b3f349a3e537aee5c3175c3869877f7e0f"
+      },
+      {
+        "path": "src/crystal_click/object_document_codec.cr",
+        "sha256": "206166a5220b578a5b3b66d8aebe730504905b0d91a92da233ed7c9f129c5ad0"
+      },
+      {
+        "path": "src/crystal_click/object_document_column_lane.cr",
+        "sha256": "a148fdb5bcb48b170efa39fc20ddc9ffb000b82e96fde8d2c22f11243b2c4428"
+      },
+      {
+        "path": "src/crystal_click/object_document_column_writer.cr",
+        "sha256": "1ca927597d2e1338a2c01939b114671817d6ea132f53940ec80949811d1333c4"
+      },
+      {
+        "path": "src/crystal_click/object_document_file_reader.cr",
+        "sha256": "3e10429942f5fad60c700063ca788b742afccb0ce2dffb54fb155ee326894f62"
+      },
+      {
+        "path": "src/crystal_click/object_document_shared_codec.cr",
+        "sha256": "fd5fda091f73b2d7a55a15a561bd8dbc421f49438afe2ee6269b78750b369c06"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_chunk_codec.cr",
+        "sha256": "66ac24ae490248e027388834cf564891691aefaf75dc6de945b129110d956adb"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_copy_layout.cr",
+        "sha256": "8c34d17797a4a701e3f03a72e8f1d9ea113f18ef60b93a4b8140a33af5ccc25f"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_document_codec.cr",
+        "sha256": "c6269219f7a72d4f187397cd046ef2503b4857fbebce6f34c62fea186008f06b"
+      },
+      {
+        "path": "src/crystal_click/object_shared_chunk_structure_codec.cr",
+        "sha256": "c553bd97bbd85d233419b6c93964c073e096c9cb83d2eaf15cd02626922198d1"
+      },
+      {
+        "path": "src/crystal_click/object_shared_copy_codec.cr",
+        "sha256": "f8c6bb3f2386e3044fc055ca933b3821d75b8e05ef09118e6bba363dcc038a2c"
+      },
+      {
+        "path": "src/crystal_click/object_shared_map_codec.cr",
+        "sha256": "54c4d9d18bd6b75d4db00c777e7dd3f7c85ae017d12b81798eaa868c010f05d7"
+      },
+      {
+        "path": "src/crystal_click/object_shared_path_codec.cr",
+        "sha256": "8b3d8104b5879b6d66df3ede53b68c26ca765bd90fdf9e19b4950c438fe9f509"
+      },
+      {
+        "path": "src/crystal_click/object_shared_path_streams.cr",
+        "sha256": "564a70b5c0393d57902868c791b69e603bb13e989c73505c26bab08076357087"
+      },
+      {
+        "path": "src/crystal_click/object_shared_path_tape_reader.cr",
+        "sha256": "f4af3a72dcdae43908d9959aa3315246c1db24d88ef4316fc85b5a81461ad10d"
+      },
+      {
+        "path": "src/crystal_click/object_shared_physical_bucket_decoder.cr",
+        "sha256": "442c880f192cd222732835003e26f092049b9d05dfaf7c9e8e194221cbe421be"
+      },
+      {
+        "path": "src/crystal_click/object_shared_physical_bucket_encoder.cr",
+        "sha256": "353838f440539c4941b41e14a1fe97e74b5ba093ae98c2e3b3a417ea8ced3bb6"
+      },
+      {
+        "path": "src/crystal_click/object_shared_physical_lane_reader.cr",
+        "sha256": "abf6596c70ad1ef96ffed09409e5045860c510edb18093f4c0d35057e687862a"
+      },
+      {
+        "path": "src/crystal_click/object_structure_codec.cr",
+        "sha256": "19344b3217e234ee41d9dc7f66fa69b9d31d04662db778164e74d9a592c2b1ab"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer.cr",
+        "sha256": "480fbd6f47539faff65235e3109ceab5936ac5fac547f1cbf16ac657db9894b3"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/object_part_writer.cr",
+        "sha256": "42e0f5e1c13809de38b05486b2d8f9c6d0da59d72553519d49487a0927bd36b7"
+      },
+      {
+        "path": "src/crystal_click/binary_shared_json_envelope_policy.cr",
+        "sha256": "cff4161d0a65916f3e9769eb16c40e632af7905df1653d88643cfc7d9ba66d21"
+      },
+      {
+        "path": "src/crystal_click/object_document_inline_body_materializer.cr",
+        "sha256": "932ec30c4e8fa2daba78c5c6e1eb1402b25e5521c588ceac588d3d04ef14290d"
+      },
+      {
+        "path": "src/crystal_click/object_document_inline_callback_order.cr",
+        "sha256": "8ec0b82066a2c06dbaa49895ca63eea09b11131a4fed9e3283dc768b3a622c41"
+      },
+      {
+        "path": "src/crystal_click/object_document_inline_plan_reader.cr",
+        "sha256": "1af499039a5422d05047b7d2944f258c990f3262e986b8ec4de2dbb077ae7d3d"
+      },
+      {
+        "path": "src/crystal_click/object_document_inline_prefix.cr",
+        "sha256": "372dfdcb8474e7ab4a92fecf9d4e79697d047cf2b85a0599c3de0283b65e8001"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_copy_raw_layout.cr",
+        "sha256": "b9a1e3067d23e07dda50eca670ed1c11e68216b58f99710917dd503c93d87a45"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_inline_codec.cr",
+        "sha256": "6e55587b9bbcd6f9daace007e179989bb10f1e4f2a75bb7b5ad6a0cbc1b26594"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+        "sha256": "0fcf2ab857f1ffbdda5cbdc16ad71c3a3ee0ef74e2e336239a433c6c4b73abd7"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_inline_raw_layout.cr",
+        "sha256": "41051c015924b8346dc635650aa1c6fd4a3724170b04745f664f0a2bad81982c"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_json_actual_plan.cr",
+        "sha256": "0b231d30a71f2acccb4c3d36a53a53af4df54ff755878f9681c392866fad7cea"
+      },
+      {
+        "path": "src/crystal_click/object_shared_advanced_json_write_policy.cr",
+        "sha256": "8bdd6855a46bff49c7973987eb3fb44ef7277f5da3a080178f637b4bf4dc82ae"
+      },
+      {
+        "path": "src/crystal_click/object_shared_inline_callback_read_slice.cr",
+        "sha256": "f374d3c5cf6bd6141f849a5e01dc03821be743db49609faa970661de6dd57705"
+      },
+      {
+        "path": "src/crystal_click/object_shared_inline_callback_relocation.cr",
+        "sha256": "7476adf4dbf87c5089ff329bab32f24e4f6ec0e86e8535a40deef6b04a578ef6"
+      },
+      {
+        "path": "src/crystal_click/object_shared_inline_data_coordinate_context.cr",
+        "sha256": "47bba844746ae463976705f68bc67765e0cd8b41e8a6b1a2b482779698ef4cc7"
+      },
+      {
+        "path": "src/crystal_click/object_shared_inline_lane_relocation.cr",
+        "sha256": "2141a44c6d4c3f2e104ba4cebf972ec6eb27000bdfc98b0d8d74345cf08c6ace"
+      },
+      {
+        "path": "src/crystal_click/object_shared_inline_role_read_view.cr",
+        "sha256": "6f7b44431d5011f22bba1d03bbeb7122bae262868ddedddb9989e5764274373f"
+      },
+      {
+        "path": "src/crystal_click/object_shared_nested_serialization_context.cr",
+        "sha256": "9008ef880dac234f8ee902f2d7641a5fee61e5ff54d5e2ab704b5f99ea49f0ab"
+      },
+      {
+        "path": "src/crystal_click/object_shared_path_json_tape_codec.cr",
+        "sha256": "47a42beb05528dd640c5ad2221ac6811fe73071d6667fe12e47e94fec6b51366"
+      },
+      {
+        "path": "src/crystal_click/object_shared_physical_bucket_raw_layout.cr",
+        "sha256": "a0453dc08177e5f8af7f9fb3182cd9f0db09944d723c3e7b448e4748b7a39410"
+      }
+    ]
+  },
+  "native_matrix": [
+    {
+      "id": "debug32",
+      "root": "/private/tmp/crystal-click-w241-debug32-seal.DrQxy7",
+      "summary_bytes": 1927774,
+      "summary_sha256": "a8d8c84788f973012ca34cfd3bfc61adc979e5ddd8b02c8267a48737f5ca56da",
+      "frame_bytes": 32,
+      "profile_ids": [
+        "map_s0",
+        "map_s1",
+        "map_with_buckets_s0",
+        "map_with_buckets_s1",
+        "advanced_s0",
+        "advanced_s1",
+        "advanced_chunked_s0",
+        "advanced_chunked_s1"
+      ],
+      "negative_statuses": [
+        {
+          "kind": "data_corrupt",
+          "status": "negative_control_observed",
+          "effect": "advanced Data late-only payload changed; direct arr/mixed and full Copy stayed original"
+        },
+        {
+          "kind": "copy_truncated",
+          "status": "negative_control_observed",
+          "effect": "direct Data unchanged; full Copy was unreadable or differed"
+        }
+      ],
+      "invocation_records": 257,
+      "invocation_artifacts": 1285,
+      "coordinator_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 240 12288 scripts/probe_object_shared_json_interop_w241.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-debug --frame-bytes 32 --evidence-root /private/tmp/crystal-click-w241-debug32-seal.DrQxy7"
+      },
+      "coordinator_exit": 0,
+      "auditor_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 600 512 scripts/reconcile_object_shared_json_interop_w241.rb --self-test /private/tmp/crystal-click-w241-debug32-seal.DrQxy7/summary.json"
+      },
+      "auditor_exit": 0,
+      "auditor_signal": "W241 audit self-test passed: full capture audit, negative controls [data_corrupt=negative_control_observed,copy_truncated=negative_control_observed], bounded-window and native zero-selection controls, exact W240 summary-only SHA enrichment controls, scoped missing-Data/version normal-guard controls (not full-capture replays), and seeded coordinate parser controls only\n[EXIT: 0] after ~145s"
+    },
+    {
+      "id": "debug64",
+      "root": "/private/tmp/crystal-click-w241-debug64-seal.SkyhDz",
+      "summary_bytes": 1927662,
+      "summary_sha256": "d9657de77bb3787c7a3375142aed7c10e2ad2cb04528972f95361e9a58a33cf3",
+      "frame_bytes": 64,
+      "profile_ids": [
+        "map_s0",
+        "map_s1",
+        "map_with_buckets_s0",
+        "map_with_buckets_s1",
+        "advanced_s0",
+        "advanced_s1",
+        "advanced_chunked_s0",
+        "advanced_chunked_s1"
+      ],
+      "negative_statuses": [
+        {
+          "kind": "data_corrupt",
+          "status": "negative_control_observed",
+          "effect": "advanced Data late-only payload changed; direct arr/mixed and full Copy stayed original"
+        },
+        {
+          "kind": "copy_truncated",
+          "status": "negative_control_observed",
+          "effect": "direct Data unchanged; full Copy was unreadable or differed"
+        }
+      ],
+      "invocation_records": 257,
+      "invocation_artifacts": 1285,
+      "coordinator_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 240 12288 scripts/probe_object_shared_json_interop_w241.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-debug --frame-bytes 64 --evidence-root /private/tmp/crystal-click-w241-debug64-seal.SkyhDz"
+      },
+      "coordinator_exit": 0,
+      "auditor_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 600 512 scripts/reconcile_object_shared_json_interop_w241.rb --self-test /private/tmp/crystal-click-w241-debug64-seal.SkyhDz/summary.json"
+      },
+      "auditor_exit": 0,
+      "auditor_signal": "W241 audit self-test passed: full capture audit, negative controls [data_corrupt=negative_control_observed,copy_truncated=negative_control_observed], bounded-window and native zero-selection controls, exact W240 summary-only SHA enrichment controls, scoped missing-Data/version normal-guard controls (not full-capture replays), and seeded coordinate parser controls only\n[EXIT: 0] after ~140s"
+    },
+    {
+      "id": "release32",
+      "root": "/private/tmp/crystal-click-w241-release32-seal.EY6OWt",
+      "summary_bytes": 1928306,
+      "summary_sha256": "67af95a9a44b490ae2d88646036ee5f1d41b3acbf15d04ce0554f6cbc801e1e3",
+      "frame_bytes": 32,
+      "profile_ids": [
+        "map_s0",
+        "map_s1",
+        "map_with_buckets_s0",
+        "map_with_buckets_s1",
+        "advanced_s0",
+        "advanced_s1",
+        "advanced_chunked_s0",
+        "advanced_chunked_s1"
+      ],
+      "negative_statuses": [
+        {
+          "kind": "data_corrupt",
+          "status": "negative_control_observed",
+          "effect": "advanced Data late-only payload changed; direct arr/mixed and full Copy stayed original"
+        },
+        {
+          "kind": "copy_truncated",
+          "status": "negative_control_observed",
+          "effect": "direct Data unchanged; full Copy was unreadable or differed"
+        }
+      ],
+      "invocation_records": 257,
+      "invocation_artifacts": 1285,
+      "coordinator_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 240 12288 scripts/probe_object_shared_json_interop_w241.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-release --frame-bytes 32 --evidence-root /private/tmp/crystal-click-w241-release32-seal.EY6OWt"
+      },
+      "coordinator_exit": 0,
+      "auditor_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 600 512 scripts/reconcile_object_shared_json_interop_w241.rb --self-test /private/tmp/crystal-click-w241-release32-seal.EY6OWt/summary.json"
+      },
+      "auditor_exit": 0,
+      "auditor_signal": "W241 audit self-test passed: full capture audit, negative controls [data_corrupt=negative_control_observed,copy_truncated=negative_control_observed], bounded-window and native zero-selection controls, exact W240 summary-only SHA enrichment controls, scoped missing-Data/version normal-guard controls (not full-capture replays), and seeded coordinate parser controls only\n[EXIT: 0] after ~131s"
+    },
+    {
+      "id": "release64",
+      "root": "/private/tmp/crystal-click-w241-release64-seal.tuzE7c",
+      "summary_bytes": 1928194,
+      "summary_sha256": "87664434ca59b92169bcb520ec9ca061c154fbb26c697519114870f67bf35f24",
+      "frame_bytes": 64,
+      "profile_ids": [
+        "map_s0",
+        "map_s1",
+        "map_with_buckets_s0",
+        "map_with_buckets_s1",
+        "advanced_s0",
+        "advanced_s1",
+        "advanced_chunked_s0",
+        "advanced_chunked_s1"
+      ],
+      "negative_statuses": [
+        {
+          "kind": "data_corrupt",
+          "status": "negative_control_observed",
+          "effect": "advanced Data late-only payload changed; direct arr/mixed and full Copy stayed original"
+        },
+        {
+          "kind": "copy_truncated",
+          "status": "negative_control_observed",
+          "effect": "direct Data unchanged; full Copy was unreadable or differed"
+        }
+      ],
+      "invocation_records": 257,
+      "invocation_artifacts": 1285,
+      "coordinator_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 240 12288 scripts/probe_object_shared_json_interop_w241.rb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w241-carrier-helpers.jL3VSH/helper-release --frame-bytes 64 --evidence-root /private/tmp/crystal-click-w241-release64-seal.tuzE7c"
+      },
+      "coordinator_exit": 0,
+      "auditor_command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 600 512 scripts/reconcile_object_shared_json_interop_w241.rb --self-test /private/tmp/crystal-click-w241-release64-seal.tuzE7c/summary.json"
+      },
+      "auditor_exit": 0,
+      "auditor_signal": "W241 audit self-test passed: full capture audit, negative controls [data_corrupt=negative_control_observed,copy_truncated=negative_control_observed], bounded-window and native zero-selection controls, exact W240 summary-only SHA enrichment controls, scoped missing-Data/version normal-guard controls (not full-capture replays), and seeded coordinate parser controls only\n[EXIT: 0] after ~131s"
+    }
+  ],
+  "actual_generated_part_byte_equality": [
+    {
+      "frame_bytes": 32,
+      "parts": 10,
+      "positive_parts": 8,
+      "negative_parts": 2,
+      "files": 336,
+      "bytes_per_mode": 224893,
+      "command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 120 512 -e 'a,b=ARGV; profiles=%w[map_s0 map_s1 map_with_buckets_s0 map_with_buckets_s1 advanced_s0 advanced_s1 advanced_chunked_s0 advanced_chunked_s1]; negatives=%w[advanced_chunked_s0_data_corrupt advanced_chunked_s0_copy_truncated]; [a,b].each{|root|raise \"noncanonical root\" unless File.realpath(root)==root;raise \"generated owner roster differs\" unless Dir.children(root).sort==(profiles+%w[negative_controls helper_input.json]).sort;raise \"negative owner roster differs\" unless Dir.children(File.join(root,\"negative_controls\")).sort==negatives.sort}; owners=profiles+negatives.map{|v|\"negative_controls/\"+v}; files=0;bytes=0;owners.each{|owner|aa=File.join(a,owner);bb=File.join(b,owner);[aa,bb].each{|p|raise \"part owner roster differs\" unless Dir.children(p)==[\"all_1_1_0\"]};aa=File.join(aa,\"all_1_1_0\");bb=File.join(bb,\"all_1_1_0\");names=Dir.children(aa).sort;raise \"file roster differs #{owner}\" unless names==Dir.children(bb).sort;names.each{|n|x=File.join(aa,n);y=File.join(bb,n);raise \"nonplain part file\" unless [x,y].all?{|p|File.file?(p)&&!File.symlink?(p)};xx=File.binread(x);yy=File.binread(y);raise \"bytes differ #{owner}/#{n}\" unless xx==yy;files+=1;bytes+=xx.bytesize}};puts \"frame32 generated part bytes: PASS #{owners.size} parts (8 positive + 2 negative); #{files} files; #{bytes} bytes per mode; helper_input.json not a part file\"' '/private/tmp/crystal-click-w241-debug32-seal.DrQxy7/generated' '/private/tmp/crystal-click-w241-release32-seal.EY6OWt/generated'"
+      },
+      "exit_code": 0
+    },
+    {
+      "frame_bytes": 64,
+      "parts": 10,
+      "positive_parts": 8,
+      "negative_parts": 2,
+      "files": 336,
+      "bytes_per_mode": 183845,
+      "command": "ruby -e 'a,b=ARGV; profiles=%w[map_s0 map_s1 map_with_buckets_s0 map_with_buckets_s1 advanced_s0 advanced_s1 advanced_chunked_s0 advanced_chunked_s1]; negatives=%w[advanced_chunked_s0_data_corrupt advanced_chunked_s0_copy_truncated]; [a,b].each{|root|raise \"noncanonical root\" unless File.realpath(root)==root;raise \"generated owner roster differs\" unless Dir.children(root).sort==(profiles+%w[negative_controls helper_input.json]).sort;raise \"negative owner roster differs\" unless Dir.children(File.join(root,\"negative_controls\")).sort==negatives.sort}; owners=profiles+negatives.map{|v|\"negative_controls/\"+v}; files=0;bytes=0;owners.each{|owner|aa=File.join(a,owner);bb=File.join(b,owner);[aa,bb].each{|p|raise \"part owner roster differs\" unless Dir.children(p)==[\"all_1_1_0\"]};aa=File.join(aa,\"all_1_1_0\");bb=File.join(bb,\"all_1_1_0\");names=Dir.children(aa).sort;raise \"file roster differs #{owner}\" unless names==Dir.children(bb).sort;names.each{|n|x=File.join(aa,n);y=File.join(bb,n);raise \"nonplain part file\" unless [x,y].all?{|p|File.file?(p)&&!File.symlink?(p)};xx=File.binread(x);yy=File.binread(y);raise \"bytes differ #{owner}/#{n}\" unless xx==yy;files+=1;bytes+=xx.bytesize}};puts \"frame64 generated part bytes: PASS #{owners.size} parts (8 positive + 2 negative); #{files} files; #{bytes} bytes per mode; helper_input.json not a part file\"' /private/tmp/crystal-click-w241-debug64-seal.SkyhDz/generated /private/tmp/crystal-click-w241-release64-seal.tuzE7c/generated",
+      "exit_code": 0
+    }
+  ],
+  "byte_comparison_boundary": "Actual File.binread equality of exact generated part rosters; helper_input.json is an input envelope with mode-specific absolute paths, not a part file, and is excluded.",
+  "adversary": {
+    "primary_failure_mode": "Native full Copy success could conceal missing or incorrect ordinary per-path Data, or an infrastructure error could falsely satisfy a Copy corruption negative.",
+    "discriminators": [
+      "Independent direct arr/mixed/late queries and selected actual descriptors/caps, full documents, bounded windows and zero-selection checks.",
+      "Checksum-valid later-only Data corruption changes late while direct arr/mixed and full Copy remain original.",
+      "Truncated Copy preserves direct Data but must produce the exact pinned server exception for full Copy; timeout, signal, spawn/I-O failure, wrong SQL/table/part/PIN/exit/kind/stage remain inconclusive.",
+      "Original/generated/copied/attached part bytes and exact active-part/query provenance joins; only the authenticated 28-byte invalidated_system_columns.txt native extra is accepted.",
+      "Sixteen actual physical-layout controls and focused advanced binding/coordinate checks; missing native Data and forged shared_version are normal scoped guard mutations using authenticated context, not complete mutated-capture replays.",
+      "Seeded coordinate parser mismatches are parser-only controls, not on-disk/native negative controls.",
+      "Exact compact-summary part/direct/full projections reject schema, key-domain and value mutations while retaining raw columns/layout/wrapper/bounded/zero checks."
+    ],
+    "negative_projection_root_gate": {
+      "command": "ruby -e 'require \"./scripts/reconcile_object_shared_json_interop_w241\"\nm = ReconcileObjectSharedJSONInteropW241\nm.self_test_negative_part_projection!\nm.self_test_copy_truncation_failure_guard!\nroot = \"/private/tmp/crystal-click-w241-debug32-seal.DrQxy7\"\nsummary = JSON.parse(File.binread(File.join(root, \"summary.json\")))\ncount = 0\nsummary.fetch(\"negative_controls\").each do |control|\n  kind = control.fetch(\"kind\")\n  %w[direct full].each do |stage|\n    item = control.fetch(stage)\n    next unless item.fetch(\"status\") == \"stage_observed\"\n    record = item.fetch(\"invocation\")\n    input = File.binread(File.join(root, \"invocations\", record.fetch(\"stdin_file\")))\n    stdout = File.binread(File.join(root, \"invocations\", record.fetch(\"stdout_file\")))\n    table = m.table_from_sql(input)\n    raw = m.audit_w241_query_output!({input: input, stdout: stdout}, stage,\n      \"advanced_chunked_s0_negative_#{kind}\", table, positive: false)\n    m.self_test_negative_query_observation_projection!(raw, item.fetch(\"observations\"), stage, \"root #{kind} #{stage}\")\n    count += 1\n  end\nend\nraise \"actual artifact roster differs\" unless count == 3\nputs \"root exact part projection and Copy-failure mutant guards: PASS\"\nputs \"root actual negative query projection/schema/value/domain controls: PASS 3/3\"\n'",
+      "exit_code": 0
+    },
+    "actual_negative_root_audit": {
+      "command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 240 512 -e 'require \"./scripts/reconcile_object_shared_json_interop_w241\"\nm = ReconcileObjectSharedJSONInteropW241\nraise \"projection controls failed\" unless m.self_test_negative_part_projection!\nraise \"Copy failure controls failed\" unless m.self_test_copy_truncation_failure_guard!\nroot = \"/private/tmp/crystal-click-w241-debug32-seal.DrQxy7\"\nsummary = JSON.parse(File.binread(File.join(root, \"summary.json\")))\nrecords = summary.fetch(\"invocations\").to_h { |entry| [entry.fetch(\"label\"), entry] }\nhelper_details = m.authenticate_w241_invocation!(root, records.fetch(\"crystal_helper\"), \"root final negative-control helper\")\nhelper = JSON.parse(helper_details.fetch(:stdout))\nm.audit_w241_negative_controls!(root, summary, helper, records, requested_frame_bytes: 32)\nraise \"both targeted effects not observed\" unless summary.fetch(\"negative_controls\").all? { |entry| entry.fetch(\"status\") == \"negative_control_observed\" }\nputs \"root exact 7/9-field projection and Copy process/context mutant guards: PASS\"\nputs \"root normal actual DEBUG32 negative-control audit: PASS data_corrupt/copy_truncated\"\n'"
+      },
+      "exit_code": 0
+    },
+    "retained_coordinator_classification_gate": {
+      "command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 120 512 -I scripts -e 'require \"probe_object_shared_json_interop_w241\"; ProbeObjectSharedJSONInteropW241.calibrate_retained_negative_observations!(\"/private/tmp/crystal-click-w241-debug32-seal.DrQxy7\"); puts \"root retained negative calibration PASS\"'"
+      },
+      "exit_code": 0
+    },
+    "rejected_inferences": [
+      "Coordinator status alone is native raw qualification.",
+      "Registered Dynamic arms equal used occurrences or callback count.",
+      "Compact summary fields equal the full reopened raw-parser record.",
+      "Logical JSON equality proves all nested Dynamic actual types.",
+      "An infrastructure failure demonstrates corrupt-Copy discrimination."
+    ],
+    "harness_repair_boundary": "Evidence-reader Symbol/String namespace, emitted field-roster, exact compact-summary projections and process-failure authentication were repaired without changing the frozen production codecs or immutable captures.",
+    "delegated_review": {
+      "role": "Luna Max scoped read-only review",
+      "verdict": "ROBUST within the stated finite boundary",
+      "evidence_level": "Correlated source-review support; no gate execution and no independent model-provenance claim.",
+      "source_pointers": [
+        "src/crystal_click/object_shared_advanced_json_actual_plan.cr:16",
+        "src/crystal_click/object_shared_advanced_json_write_policy.cr:43",
+        "src/crystal_click/object_document_inline_plan_reader.cr:77",
+        "src/crystal_click/object_document_inline_plan_reader.cr:409",
+        "src/crystal_click/object_shared_path_json_tape_codec.cr:101"
+      ],
+      "strongest_residual": "No complete independent stock nested Dynamic child-type oracle."
+    }
+  },
+  "recovery": {
+    "rollback": "One coherent local feature commit relative to baseline d217f75. No remote/history mutations; a future rollback requires a separately authorized non-destructive revert, not a hard reset.",
+    "reproduction": "Run the exact recorded guard/spec/build commands. Existing summaries are offline-audit inputs only. Native re-capture requires a fresh empty evidence root, preserved pinned native/source binaries and the required W240 stock dependency. Do not overwrite sealed roots.",
+    "refresh": "Repeat affected local gates and both native helper modes/frame sizes after serialization owner, codec, binding, helper/oracle, source/runtime or imported verifier dependency changes.",
+    "decay": "Capture deletion or artifact/hash mismatch, relevant source/runtime/oracle changes, or widening admitted grammar/layout makes the scoped certificate stale.",
+    "failure_policy": "Missing/changed captures or inconclusive negatives fail qualification closed; do not reinterpret them as native format refusals or reaffirm the previous certificate.",
+    "next_falsifier": "Qualify one still-guarded prepared JSON-bearing actual with nested Dynamic sites using a physical binding/occurrence oracle and independent native direct/full/bounded reads before widening prepared admission.",
+    "active_return_pointer": "docs/OBJECT_SHARED_JSON_FRONTIER.md"
+  },
+  "changed_paths": [
+    ".landmark/evidence/object-shared-json-w240.json",
+    "LANDMARKS.md",
+    "docs/OBJECT_SHARED_JSON_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_object_shared_json_interop_w241.cr",
+    "scripts/probe_object_shared_json_interop_w241.rb",
+    "scripts/probe_object_shared_json_w240.rb",
+    "scripts/reconcile_object_shared_json_interop_w241.rb",
+    "spec/compressed_literal_position_plan_w240_spec.cr",
+    "spec/object_column_lane_binder_refactor_spec.cr",
+    "spec/object_document_inline_depth_w240_adversary_spec.cr",
+    "spec/object_document_inline_framing_w240_spec.cr",
+    "spec/object_document_inline_schedule_w240_adversary_spec.cr",
+    "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+    "spec/object_shared_chunk_structure_split_budget_w240_spec.cr",
+    "spec/object_shared_copy_w192_adversary_spec.cr",
+    "spec/object_shared_copy_w192_spec.cr",
+    "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+    "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+    "spec/object_shared_json_envelope_w240_adversary_spec.cr",
+    "spec/object_shared_json_envelope_w240_spec.cr",
+    "spec/object_shared_json_name_domains_w240_adversary_spec.cr",
+    "spec/object_shared_json_policy_w240_spec.cr",
+    "spec/object_shared_json_prepared_policy_w240_adversary_spec.cr",
+    "spec/object_shared_json_w240_physical_spec.cr",
+    "spec/object_shared_json_w240_red_spec.cr",
+    "spec/object_shared_path_json_tape_w240_spec.cr",
+    "spec/object_structure_inline_prefix_w240_adversary_spec.cr",
+    "src/crystal_click.cr",
+    "src/crystal_click/binary_codec_context.cr",
+    "src/crystal_click/binary_data_type_codec.cr",
+    "src/crystal_click/binary_dynamic_bulk_json_object_writer.cr",
+    "src/crystal_click/binary_dynamic_bulk_plan.cr",
+    "src/crystal_click/binary_dynamic_bulk_site_name_resolver.cr",
+    "src/crystal_click/binary_shared_json_envelope_policy.cr",
+    "src/crystal_click/binary_value_codec.cr",
+    "src/crystal_click/compressed_mark_writer.cr",
+    "src/crystal_click/dynamic_json_object_site_coordinates.cr",
+    "src/crystal_click/object_column_reader.cr",
+    "src/crystal_click/object_declared_dynamic_declaration.cr",
+    "src/crystal_click/object_document_codec.cr",
+    "src/crystal_click/object_document_column_lane.cr",
+    "src/crystal_click/object_document_column_writer.cr",
+    "src/crystal_click/object_document_file_reader.cr",
+    "src/crystal_click/object_document_inline_body_materializer.cr",
+    "src/crystal_click/object_document_inline_callback_order.cr",
+    "src/crystal_click/object_document_inline_plan_reader.cr",
+    "src/crystal_click/object_document_inline_prefix.cr",
+    "src/crystal_click/object_document_shared_codec.cr",
+    "src/crystal_click/object_shared_advanced_chunk_codec.cr",
+    "src/crystal_click/object_shared_advanced_copy_layout.cr",
+    "src/crystal_click/object_shared_advanced_copy_raw_layout.cr",
+    "src/crystal_click/object_shared_advanced_document_codec.cr",
+    "src/crystal_click/object_shared_advanced_inline_codec.cr",
+    "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+    "src/crystal_click/object_shared_advanced_inline_raw_layout.cr",
+    "src/crystal_click/object_shared_advanced_json_actual_plan.cr",
+    "src/crystal_click/object_shared_advanced_json_write_policy.cr",
+    "src/crystal_click/object_shared_chunk_structure_codec.cr",
+    "src/crystal_click/object_shared_copy_codec.cr",
+    "src/crystal_click/object_shared_inline_callback_read_slice.cr",
+    "src/crystal_click/object_shared_inline_callback_relocation.cr",
+    "src/crystal_click/object_shared_inline_data_coordinate_context.cr",
+    "src/crystal_click/object_shared_inline_lane_relocation.cr",
+    "src/crystal_click/object_shared_inline_role_read_view.cr",
+    "src/crystal_click/object_shared_map_codec.cr",
+    "src/crystal_click/object_shared_nested_serialization_context.cr",
+    "src/crystal_click/object_shared_path_codec.cr",
+    "src/crystal_click/object_shared_path_json_tape_codec.cr",
+    "src/crystal_click/object_shared_path_streams.cr",
+    "src/crystal_click/object_shared_path_tape_reader.cr",
+    "src/crystal_click/object_shared_physical_bucket_decoder.cr",
+    "src/crystal_click/object_shared_physical_bucket_encoder.cr",
+    "src/crystal_click/object_shared_physical_bucket_raw_layout.cr",
+    "src/crystal_click/object_shared_physical_lane_reader.cr",
+    "src/crystal_click/object_structure_codec.cr",
+    "src/crystal_click/wide_part_writer.cr",
+    "src/crystal_click/wide_part_writer/object_part_writer.cr"
+  ],
+  "resource_guard": {
+    "command_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w240.HS9ANz/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "command_expansion": "A command object expands exactly to command_prefix + one space + body. Plain-string command fields were executed directly as recorded. This is representation compaction, not an execution/attestation check."
+  },
+  "final_checks": {
+    "ruby_syntax": {
+      "paths": [
+        "scripts/probe_object_shared_json_w240.rb",
+        "scripts/probe_object_shared_json_interop_w241.rb",
+        "scripts/reconcile_object_shared_json_interop_w241.rb"
+      ],
+      "command": {
+        "prefix_ref": "resource_guard.command_prefix",
+        "body": "ruby 120 512 -e 'paths = %w[scripts/probe_object_shared_json_w240.rb scripts/probe_object_shared_json_interop_w241.rb scripts/reconcile_object_shared_json_interop_w241.rb]; paths.each { |path| abort(\"Ruby syntax failed: #{path}\") unless system(\"ruby\", \"-c\", path) }; puts \"final Ruby syntax: PASS (3 files)\"'"
+      },
+      "exit_code": 0,
+      "signal": "Syntax OK for all three files"
+    },
+    "frozen_production_hashes": {
+      "exit_code": 0,
+      "checked_files": 50,
+      "unchanged": true
+    },
+    "helper_script_and_binary_hashes": {
+      "exit_code": 0,
+      "signal": "Four script/helper-source hashes and both helper binary hashes match recorded pins."
+    },
+    "capture_source_and_diff_check": {
+      "exit_code": 0,
+      "signal": "All four summary hashes unchanged; shallow source revision and Nullable source hash match; git diff --check passes."
+    },
+    "pre_packet_owned_roster": {
+      "count": 77,
+      "already_staged": false,
+      "exit_code": 0
+    },
+    "packet_validation_boundary": "JSON decoding and roster/hash projection validate structure and consistency only; substantive gate results come from the recorded executed commands.",
+    "artifact_hygiene": {
+      "exit_code": 0,
+      "scope": "New owned files, not all pre-existing source files.",
+      "new_artifacts_over_one_mib": 0,
+      "legacy_large_source": {
+        "path": "src/crystal_click/wide_part_writer.cr",
+        "baseline_bytes": 1263059,
+        "current_bytes": 1263373,
+        "diff_added_lines": 7,
+        "diff_removed_lines": 1,
+        "scope": "Existing facade gained optional prepared shared-JSON policy/chunk parameters; not a generated binary/dataset or broad facade refactor."
+      }
+    }
+  }
+}

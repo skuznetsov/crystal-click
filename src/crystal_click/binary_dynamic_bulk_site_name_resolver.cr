@@ -6,9 +6,10 @@ module CrystalClick
   class BinaryDynamicBulkSiteNameResolver
     private struct DynamicSitePosition
       getter prefix : String
+      getter callback_prefix : String
       getter array_level : UInt64
 
-      def initialize(@prefix : String, @array_level : UInt64)
+      def initialize(@prefix : String, @callback_prefix : String, @array_level : UInt64)
       end
     end
 
@@ -27,6 +28,7 @@ module CrystalClick
 
     @type : BinaryDataType
     @root_prefix : String
+    @callback_root_prefix : String
     @initial_array_level : UInt64
     @initial_descriptor_depth : Int32
     @limits : BinaryCodecLimits
@@ -48,6 +50,7 @@ module CrystalClick
       @context.preflight_name_bytes(escaped_size)
       @root_prefix = PhysicalStreamName.escape(column_name, @context)
       @context.charge_name_bytes(escaped_size)
+      @callback_root_prefix = String.new(@root_prefix.to_slice)
       @initial_array_level = 0_u64
       @initial_descriptor_depth = 1_i32
       # This resolver is used while reading persisted structure lanes. Keep
@@ -68,6 +71,7 @@ module CrystalClick
       codec_budget : BinaryCodecBudget? = nil,
       context : PhysicalStreamPlanContext? = nil,
       initial_descriptor_depth : Int32 = 1,
+      callback_prefix : String? = nil,
     ) : BinaryDynamicBulkSiteNameResolver
       selected_context = context || PhysicalStreamPlanContext.new(limits)
       selected_budget = codec_budget || BinaryCodecBudget.new(limits)
@@ -95,11 +99,14 @@ module CrystalClick
       selected_context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
       PhysicalStreamName.validate_escaped_prefix(escaped_prefix)
       selected_context.charge_name_bytes(escaped_prefix.bytesize.to_u64)
+      selected_callback_prefix = callback_prefix || escaped_prefix
+      selected_context.preflight_name_bytes(selected_callback_prefix.bytesize.to_u64)
+      selected_context.charge_name_bytes(selected_callback_prefix.bytesize.to_u64)
       descriptor_preflight = BinaryDynamicBulkDescriptorPreflight.admit(
         type, selected_budget, initial_descriptor_depth
       )
       new(
-        type, EscapedPrefix.validated(escaped_prefix), initial_array_level,
+        type, EscapedPrefix.validated(escaped_prefix), selected_callback_prefix, initial_array_level,
         initial_descriptor_depth, limits, selected_context, selected_budget,
         descriptor_preflight
       )
@@ -108,6 +115,7 @@ module CrystalClick
     private def initialize(
       type : BinaryDataType,
       escaped_prefix : EscapedPrefix,
+      @callback_root_prefix : String,
       @initial_array_level : UInt64,
       @initial_descriptor_depth : Int32,
       @limits : BinaryCodecLimits,
@@ -120,6 +128,7 @@ module CrystalClick
       end
       # The token already owns the single charged copy made by EscapedPrefix.
       @root_prefix = escaped_prefix.value
+      @callback_root_prefix = String.new(@callback_root_prefix.to_slice)
       @type = type
     end
 
@@ -128,7 +137,7 @@ module CrystalClick
     # in parent-first order; no unknown arm name is guessed.
     def structure_stream_name(target_path : String, structures : Hash(String, DynamicStructure)) : String
       resolved = find_dynamic_site_position(
-        @type, "root", @root_prefix, @initial_array_level, target_path, structures,
+        @type, "root", @root_prefix, @callback_root_prefix, @initial_array_level, target_path, structures,
         @context, @initial_descriptor_depth
       )
       position = resolved || raise(CorruptPartError.new("Dynamic structure site has no physical name"))
@@ -144,7 +153,7 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
     ) : DynamicJsonObjectSiteCoordinates
       resolved = find_dynamic_site_position(
-        @type, "root", @root_prefix, @initial_array_level, target_path, structures,
+        @type, "root", @root_prefix, @callback_root_prefix, @initial_array_level, target_path, structures,
         @context, @initial_descriptor_depth
       )
       position = resolved || raise(CorruptPartError.new("Dynamic JSON site has no physical prefix"))
@@ -162,9 +171,10 @@ module CrystalClick
         raise CorruptPartError.new("Dynamic JSON physical site does not identify a direct JSON actual arm")
       end
       escaped_prefix = append_component(position.prefix, arm[0], @context)
+      callback_prefix = append_raw_component(position.callback_prefix, arm[0], @context)
       @context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
       @context.charge_name_bytes(escaped_prefix.bytesize.to_u64)
-      DynamicJsonObjectSiteCoordinates.new(escaped_prefix, position.array_level, arm[1])
+      DynamicJsonObjectSiteCoordinates.new(escaped_prefix, callback_prefix, position.array_level, arm[1])
     end
 
     # Resolve one JSON leaf inside a Dynamic actual descriptor. The child path
@@ -176,7 +186,7 @@ module CrystalClick
       structures : Hash(String, DynamicStructure),
     ) : DynamicJsonObjectSiteCoordinates
       resolved = find_dynamic_site_position(
-        @type, "root", @root_prefix, @initial_array_level, key.dynamic_site, structures,
+        @type, "root", @root_prefix, @callback_root_prefix, @initial_array_level, key.dynamic_site, structures,
         @context, @initial_descriptor_depth
       )
       position = resolved || raise(CorruptPartError.new("Dynamic JSON leaf has no physical prefix"))
@@ -193,6 +203,7 @@ module CrystalClick
       end
 
       escaped_prefix = append_component(position.prefix, arm[0], @context)
+      callback_prefix = append_raw_component(position.callback_prefix, arm[0], @context)
       leaf_type = arm[1]
       array_level = position.array_level
       key.descriptor_child_path.each do |child_index|
@@ -200,8 +211,8 @@ module CrystalClick
           raise CorruptPartError.new("Dynamic JSON leaf path is outside its actual descriptor")
         end
         child = leaf_type.child_at(child_index)
-        escaped_prefix, array_level = child_site_coordinates(
-          leaf_type, child_index, child, escaped_prefix, array_level
+        escaped_prefix, callback_prefix, array_level = child_site_coordinates(
+          leaf_type, child_index, child, escaped_prefix, callback_prefix, array_level
         )
         leaf_type = child
       end
@@ -210,7 +221,7 @@ module CrystalClick
       end
       @context.preflight_name_bytes(escaped_prefix.bytesize.to_u64)
       @context.charge_name_bytes(escaped_prefix.bytesize.to_u64)
-      DynamicJsonObjectSiteCoordinates.new(escaped_prefix, array_level, leaf_type)
+      DynamicJsonObjectSiteCoordinates.new(escaped_prefix, callback_prefix, array_level, leaf_type)
     rescue ex : ArgumentError | IndexError
       raise CorruptPartError.new("Dynamic JSON leaf descriptor coordinates are invalid")
     end
@@ -220,30 +231,32 @@ module CrystalClick
       child_index : Int32,
       child : BinaryDataType,
       prefix : String,
+      callback_prefix : String,
       array_level : UInt64,
-    ) : Tuple(String, UInt64)
+    ) : Tuple(String, String, UInt64)
       case parent.tag
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         unless child_index == 0
           raise CorruptPartError.new("Dynamic JSON Array leaf path selects an invalid child")
         end
-        {prefix, checked_array_level(array_level)}
+        {prefix, callback_prefix, checked_array_level(array_level)}
       when BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_SIMPLE_AGGREGATE
         unless child_index == 0
           raise CorruptPartError.new("Dynamic JSON wrapper leaf path selects an invalid child")
         end
-        {prefix, array_level}
+        {prefix, callback_prefix, array_level}
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         field = parent.named_tuple? ? parent.field_name_at(child_index) : (child_index + 1).to_s
-        {append_field(prefix, field, @context), array_level}
+        {append_field(prefix, field, @context), append_field(callback_prefix, field, @context), array_level}
       when BinaryDataType::TAG_MAP
         unless child_index == 0 || child_index == 1
           raise CorruptPartError.new("Dynamic JSON Map leaf path selects an invalid child")
         end
         field = child_index == 0 ? "keys" : "values"
-        {append_field(prefix, field, @context), checked_array_level(array_level)}
+        {append_field(prefix, field, @context), append_field(callback_prefix, field, @context), checked_array_level(array_level)}
       when BinaryDataType::TAG_VARIANT
-        {append_component(prefix, type_name(child), @context), array_level}
+        component = type_name(child)
+        {append_component(prefix, component, @context), append_raw_component(callback_prefix, component, @context), array_level}
       when BinaryDataType::TAG_LOW_CARDINALITY
         raise CorruptPartError.new("Dynamic JSON leaf cannot cross a LowCardinality physical stop-site")
       else
@@ -255,6 +268,7 @@ module CrystalClick
       type : BinaryDataType,
       path : String,
       prefix : String,
+      callback_prefix : String,
       array_level : UInt64,
       target_path : String,
       structures : Hash(String, DynamicStructure),
@@ -267,7 +281,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_DYNAMIC
         if path == target_path
-          return DynamicSitePosition.new(prefix, array_level)
+          return DynamicSitePosition.new(prefix, callback_prefix, array_level)
         end
         structure = structures[path]? ||
                     raise CorruptPartError.new("Dynamic ancestor structure is unavailable for site-name discovery")
@@ -281,8 +295,9 @@ module CrystalClick
           child = generated_path(path, ".arm.", index, context)
           next unless path_is_ancestor_or_equal?(target_path, child)
           arm_prefix = append_component(prefix, arm[0], context)
+          callback_arm_prefix = append_raw_component(callback_prefix, arm[0], context)
           if result = find_dynamic_site_position(
-               arm[1], child, arm_prefix, array_level, target_path,
+               arm[1], child, arm_prefix, callback_arm_prefix, array_level, target_path,
                structures, context, depth + 1
              )
             return result
@@ -292,20 +307,20 @@ module CrystalClick
         context.record_elements(1_u64)
         child = generated_path(path, ".elements", nil, context)
         return find_dynamic_site_position(
-          type.child_at(0), child, prefix, checked_array_level(array_level),
+          type.child_at(0), child, prefix, callback_prefix, checked_array_level(array_level),
           target_path, structures, context, depth + 1
         ) if path_is_ancestor_or_equal?(target_path, child)
       when BinaryDataType::TAG_NULLABLE
         context.record_elements(1_u64)
         child = generated_path(path, ".nested", nil, context)
         return find_dynamic_site_position(
-          type.child_at(0), child, prefix, array_level, target_path,
+          type.child_at(0), child, prefix, callback_prefix, array_level, target_path,
           structures, context, depth + 1
         ) if path_is_ancestor_or_equal?(target_path, child)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         context.record_elements(1_u64)
         return find_dynamic_site_position(
-          type.child_at(0), path, prefix, array_level, target_path,
+          type.child_at(0), path, prefix, callback_prefix, array_level, target_path,
           structures, context, depth + 1
         )
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
@@ -315,8 +330,9 @@ module CrystalClick
           next unless path_is_ancestor_or_equal?(target_path, child)
           field = type.named_tuple? ? type.field_name_at(index) : (index + 1).to_s
           field_prefix = append_field(prefix, field, context)
+          callback_field_prefix = append_field(callback_prefix, field, context)
           return find_dynamic_site_position(
-            type.child_at(index), child, field_prefix, array_level,
+            type.child_at(index), child, field_prefix, callback_field_prefix, array_level,
             target_path, structures, context, depth + 1
           )
         end
@@ -328,8 +344,9 @@ module CrystalClick
           child = generated_path(path, suffix, nil, context)
           next unless path_is_ancestor_or_equal?(target_path, child)
           field_prefix = append_field(prefix, field, context)
+          callback_field_prefix = append_field(callback_prefix, field, context)
           return find_dynamic_site_position(
-            type.child_at(child_index), child, field_prefix,
+            type.child_at(child_index), child, field_prefix, callback_field_prefix,
             checked_array_level(array_level), target_path, structures,
             context, depth + 1
           )
@@ -341,8 +358,9 @@ module CrystalClick
           next unless path_is_ancestor_or_equal?(target_path, child)
           component = type_name(type.child_at(index))
           arm_prefix = append_component(prefix, component, context)
+          callback_arm_prefix = append_raw_component(callback_prefix, component, context)
           return find_dynamic_site_position(
-            type.child_at(index), child, arm_prefix, array_level,
+            type.child_at(index), child, arm_prefix, callback_arm_prefix, array_level,
             target_path, structures, context, depth + 1
           )
         end
@@ -424,6 +442,13 @@ module CrystalClick
       context.preflight_name_bytes(size)
       context.charge_name_bytes(size)
       PhysicalStreamName.append_escaped_component(prefix, component)
+    end
+
+    private def append_raw_component(prefix : String, component : String, context : PhysicalStreamPlanContext) : String
+      size = prefix.bytesize.to_u64 + 1_u64 + component.bytesize.to_u64
+      context.preflight_name_bytes(size)
+      context.charge_name_bytes(size)
+      PhysicalStreamName.append_literal(prefix, ".#{component}")
     end
 
     private def append_field(prefix : String, field : String, context : PhysicalStreamPlanContext) : String

@@ -226,6 +226,112 @@ module CrystalClick
       read_prepared(prepared)
     end
 
+    # Reads dense Dynamic rows for one shared Object path. Advanced layouts
+    # avoid the root whole-Object Copy lanes and retain selected-path Data;
+    # MAP0/MAP1 instead decode their ordinary shared lane(s). Every layout
+    # validates complete physical mark grids before projecting the selection.
+    def self.read_shared_path_marks(
+      part_path : String,
+      column_name : String,
+      descriptor : ObjectDocumentFileDescriptor,
+      path : String,
+      first_mark : Int,
+      mark_count : Int,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      hashed : Bool = false,
+      limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+    ) : Array(Array(BinaryValue))
+      if first_mark < 0 || mark_count < 0
+        raise ArgumentError.new("mark selection must be nonnegative")
+      end
+      physical_rows = descriptor.mark_row_counts
+      if first_mark > physical_rows.size || mark_count > physical_rows.size - first_mark
+        raise ArgumentError.new("mark selection is outside the Object grid")
+      end
+      if path.empty?
+        raise ArgumentError.new("selected Object shared path must not be empty")
+      end
+
+      version = descriptor.plan.structures.object.shared_data_version
+      codec_budget = BinaryCodecBudget.new(limits)
+      codec_budget.ensure_wire_bytes(path.bytesize.to_u64)
+      codec_budget.charge_wire_bytes(path.bytesize.to_u64)
+      codec_budget.charge_elements(path.bytesize.to_u64)
+      transport_budget = CompressedStreamBudget.new(transport_limits)
+      physical_plan = ObjectDocumentPhysicalPlan.new(
+        column_name,
+        descriptor.plan,
+        profile,
+        BinaryBulkProfile.single_stream,
+        limits,
+      )
+      bucket_count = physical_plan.shared_bucket_count
+      if bucket_count != ObjectSharedBucketLayout.bucket_count(descriptor.plan.structures.object)
+        raise CorruptPartError.new("selected Object shared bucket count disagrees with its descriptor")
+      end
+      source = PartStreamSource.new(part_path)
+      if version < 2_u64
+        return read_map_shared_path_marks(
+          source,
+          physical_plan,
+          descriptor,
+          path,
+          first_mark,
+          mark_count,
+          hashed,
+          codec_budget,
+          transport_budget,
+        )
+      end
+
+      selected_bucket = ObjectSharedBucketLayout.bucket_for(path, bucket_count)
+
+      lane_count = bucket_count.to_u64 * ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.size.to_u64
+      lane_owner_count = checked_add_u64(lane_count, bucket_count.to_u64)
+      codec_budget.ensure_future_nodes(lane_owner_count)
+      codec_budget.preflight_children(lane_owner_count)
+      bucket_inputs = Array(ObjectSharedPhysicalBucketLaneInputs).new(bucket_count)
+      bucket_count.times do |bucket_index|
+        lanes = Hash(String, ObjectSharedPhysicalLaneInput).new(
+          initial_capacity: ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.size
+        )
+        ObjectSharedPhysicalBucketLaneInputs::LANE_NAMES.each do |lane|
+          logical_name = physical_plan.advanced_bucket_stream_name(bucket_index, lane)
+          data_name, marks_name = file_pair(logical_name, hashed)
+          validate_physical_name!(data_name)
+          validate_physical_name!(marks_name)
+          lanes[String.new(lane.to_slice)] = source.physical_lane_input(data_name, marks_name)
+          codec_budget.charge_node
+        end
+        bucket_inputs << ObjectSharedPhysicalBucketLaneInputs.new(lanes)
+        codec_budget.charge_node
+      end
+      decoded = ObjectSharedAdvancedDocumentCodec.decode_path_only(
+        bucket_inputs,
+        physical_rows,
+        physical_rows,
+        version.to_i,
+        bucket_count,
+        selected_bucket,
+        path,
+        first_mark.to_i32,
+        mark_count.to_i32,
+        codec_budget,
+        transport_budget,
+        profile: profile,
+      )
+      unless decoded.size == mark_count
+        raise CorruptPartError.new("selected Object shared path returned the wrong number of marks")
+      end
+      mark_count.times do |index|
+        unless decoded[index].size.to_u64 == physical_rows[first_mark + index]
+          raise CorruptPartError.new("selected Object shared path rows disagree with the outer grid")
+        end
+      end
+      decoded
+    end
+
     # Child-site value path. Returns one mark of parent rows, each with
     # its own decoded child document list. The complete .size0 schedule is
     # validated during preparation, including for an empty selection.
@@ -2622,6 +2728,192 @@ module CrystalClick
       end
       budget.charge_elements(owner_count)
       {copy_inputs, bucket_inputs}
+    end
+
+    # MAP0/MAP1 do not have the advanced physical Data lanes. Their public
+    # selected-path projection reads the ordinary shared MAP lane(s), validates
+    # every complete physical mark grid, and then projects the requested path.
+    # This is bounded by the selected mark window but is not the advanced
+    # path-only Data reader: MAP1 validates/decodes every shared bucket.
+    private def self.read_map_shared_path_marks(
+      source : PartStreamSource,
+      physical : ObjectDocumentPhysicalPlan,
+      descriptor : ObjectDocumentFileDescriptor,
+      path : String,
+      first_mark : Int,
+      mark_count : Int,
+      hashed : Bool,
+      budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+    ) : Array(Array(BinaryValue))
+      object = descriptor.plan.structures.object
+      version = object.shared_data_version
+      unless version == 0_u64 || version == 1_u64
+        raise UnsupportedFormatError.new("selected Object shared path requires MAP0 or MAP_WITH_BUCKETS metadata")
+      end
+
+      bucket_count = ObjectSharedBucketLayout.bucket_count(object)
+      unless physical.shared_bucket_count == bucket_count
+        raise CorruptPartError.new("selected Object shared bucket count disagrees with its descriptor")
+      end
+      physical.preflight_shared_bucket_bindings!(hashed, budget)
+
+      physical_rows = descriptor.mark_row_counts
+      selected_row_total = 0_u64
+      mark_count.times do |offset|
+        rows = physical_rows[first_mark + offset]
+        if rows > Int32::MAX.to_u64
+          raise CorruptPartError.new("selected Object shared rows exceed the supported in-memory domain")
+        end
+        selected_row_total = checked_add_u64(selected_row_total, rows)
+      end
+
+      # Admit the detached lane maps/streams and the selected-row roster before
+      # constructing any proportional owner. BinaryBulkCodec accounts the
+      # actual selected lane bytes and recursive values on this same budget.
+      role_total = 0_u64
+      bucket_count.times do |bucket_index|
+        lane_plan = version == 0_u64 ? physical.shared : physical.shared_bucket(bucket_index)
+        lane_names = lane_plan.stream_names
+        role_total = checked_add_u64(role_total, lane_names.size.to_u64)
+      end
+      lane_owner_count = checked_add_u64(
+        checked_add_u64(role_total, role_total),
+        checked_add_u64(
+          checked_add_u64(bucket_count.to_u64 * 2_u64, mark_count.to_u64 * 2_u64),
+          1_u64,
+        )
+      )
+      budget.ensure_future_nodes(lane_owner_count)
+      budget.ensure_future_elements(lane_owner_count)
+      budget.preflight_children(lane_owner_count)
+      lane_owner_count.times { budget.charge_node }
+
+      selected_rows = Array(UInt64).new(mark_count)
+      mark_count.times do |offset|
+        selected_rows << physical_rows[first_mark + offset]
+      end
+
+      bucket_streams = Array(BinaryBulkStreams).new(bucket_count)
+      bucket_count.times do |bucket_index|
+        lane_plan = version == 0_u64 ? physical.shared : physical.shared_bucket(bucket_index)
+        lane_names = lane_plan.stream_names
+        lane_roles = Hash(String, BinaryBulkStream).new(initial_capacity: lane_names.size)
+        lane_names.each_key do |role|
+          prefix_size = lane_plan.prefix_size_for(role)
+          data_name = lane_plan.data_file_for(role, hashed)
+          marks_name = lane_plan.marks_file_for(role, hashed)
+          validate_physical_name!(data_name)
+          validate_physical_name!(marks_name)
+
+          grid = source.inspect_grid(data_name, marks_name, prefix_size, transport_budget)
+          unless grid.prefix_size == prefix_size
+            raise CorruptPartError.new("shared MAP lane prefix disagrees with its physical plan")
+          end
+          validate_same_rows!(grid, physical_rows)
+
+          window = source.read_window(
+            data_name,
+            marks_name,
+            first_mark,
+            mark_count,
+            prefix_size,
+            transport_budget,
+          )
+          unless window.first_mark == first_mark && window.prefix_size == prefix_size
+            raise CorruptPartError.new("shared MAP lane returned a different selected window")
+          end
+          rows_in_window = window.rows_per_mark
+          offsets = window.offsets
+          lane_bytes = window.bytes
+          unless rows_in_window.size == mark_count && offsets.size.to_u64 == mark_count.to_u64 + 1_u64 &&
+                 offsets.first? == prefix_size.to_u64 && offsets.last? == lane_bytes.size.to_u64
+            raise CorruptPartError.new("shared MAP lane selected offsets do not span the returned window")
+          end
+          mark_count.times do |offset|
+            unless rows_in_window[offset] == selected_rows[offset] && offsets[offset] <= offsets[offset + 1]
+              raise CorruptPartError.new("shared MAP lane selected rows or offsets disagree with the Object grid")
+            end
+          end
+          lane_roles[String.new(role.to_slice)] = BinaryBulkStream.new(lane_bytes, offsets)
+        end
+        bucket_streams << BinaryBulkStreams.new(mark_count, lane_roles)
+      end
+
+      coordinator_nodes = checked_add_u64(mark_count.to_u64, selected_row_total)
+      budget.ensure_future_nodes(coordinator_nodes)
+      budget.ensure_future_elements(selected_row_total)
+
+      plan = descriptor.plan
+      typed_path_count = plan.typed_path_count.to_u64
+      typed_path_bytes = 0_u64
+      plan.typed_path_count.times do |index|
+        typed_path_bytes = checked_add_u64(typed_path_bytes, plan.typed_path_byte_size_at(index).to_u64)
+      end
+      budget.ensure_future_nodes(typed_path_count)
+      budget.preflight_children(typed_path_count)
+      budget.ensure_wire_bytes(typed_path_bytes)
+      budget.charge_wire_bytes(typed_path_bytes)
+      typed_schema = Hash(String, BinaryDataType).new(initial_capacity: plan.typed_path_count)
+      plan.typed_path_count.times do |index|
+        typed_path = plan.typed_path_at(index)
+        typed_schema[typed_path] = plan.typed_type_for(typed_path)
+        budget.charge_node
+      end
+
+      decoded = if version == 0_u64
+                  ObjectDocumentSharedCodec.decode_with_budget(
+                    bucket_streams[0], selected_rows, object, typed_schema, budget,
+                    0, mark_count, BinaryBulkProfile.single_stream,
+                  )
+                else
+                  # The bucket codec consumes only shared MAP lanes. The empty
+                  # metadata/typed/dynamic owners here are a narrow carrier; no
+                  # root Object or Copy lane is reconstructed by this path.
+                  carrier = ObjectDocumentStreams.new(
+                    ObjectDynamicStructureStreams.new(Bytes.empty, Hash(String, Bytes).new),
+                    selected_rows,
+                    Hash(String, BinaryBulkStreams).new,
+                    Hash(String, DynamicValueStreams).new,
+                    bucket_streams,
+                  )
+                  ObjectDocumentSharedBucketsCodec.decode_with_budget(
+                    carrier, selected_rows, object, typed_schema, budget,
+                    0, mark_count, BinaryBulkProfile.single_stream,
+                  )
+                end
+
+      unless decoded.size == mark_count
+        raise CorruptPartError.new("selected Object shared MAP returned the wrong number of marks")
+      end
+      budget.ensure_future_nodes(coordinator_nodes)
+      budget.ensure_future_elements(selected_row_total)
+      budget.charge_elements(selected_row_total)
+
+      dynamic_type = BinaryDataType.dynamic(max_types: ObjectSharedAdvancedChunkCodec::JSON_DYNAMIC_MAX_TYPES)
+      result = Array(Array(BinaryValue)).new(mark_count)
+      mark_count.times do |mark_index|
+        entries_by_row = decoded[mark_index]
+        unless entries_by_row.size.to_u64 == selected_rows[mark_index]
+          raise CorruptPartError.new("selected Object shared MAP rows disagree with the outer mark grid")
+        end
+        mark_result = Array(BinaryValue).new(selected_rows[mark_index].to_i)
+        entries_by_row.each do |entries|
+          value = nil.as(BinaryValue?)
+          entries.each do |entry|
+            next unless entry[0] == path
+            if value
+              raise CorruptPartError.new("selected Object shared MAP path is duplicated within a row")
+            end
+            value = entry[1]
+          end
+          mark_result << BinaryValue.dynamic(dynamic_type, value)
+          budget.charge_node
+        end
+        result << mark_result
+        budget.charge_node
+      end
+      result
     end
 
     private def self.validate_advanced_shared_rows!(

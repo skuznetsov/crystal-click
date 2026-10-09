@@ -68,7 +68,7 @@ module CrystalClick
             budget.ensure_future_nodes(wrapper_nodes)
             budget.ensure_future_elements(wrapper_edges)
             reserved_wire_bytes = checked_add(fixed_wire_bytes, encoded_payload_bytes, true)
-            envelope = BinaryValueCodec.encode_borrowed(value, budget, reserved_wire_bytes)
+            envelope = BinaryValueCodec.encode_shared_json_envelope(value, budget, reserved_wire_bytes)
             encoded_payload_bytes = checked_add(encoded_payload_bytes, envelope.size.to_u64, true)
             frame_size = profile.with_size_stream? ? 8_u64 : var_uint_size(envelope.size.to_u64)
             minimum_frame = profile.with_size_stream? ? 8_u64 : 1_u64
@@ -148,7 +148,7 @@ module CrystalClick
 
             envelope_string = tuple.element_at(1).as_string
             envelope = envelope_string.to_slice
-            value = BinaryValueCodec.decode_borrowed(envelope, budget)
+            value = BinaryValueCodec.decode_shared_json_envelope(envelope, budget)
             if value.type.tag == BinaryDataType::TAG_NOTHING || value.type.tag == BinaryDataType::TAG_NULLABLE
               raise CorruptPartError.new("top-level Nothing and Nullable shared values are outside the canonical profile")
             end

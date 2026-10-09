@@ -32,6 +32,66 @@ module CrystalClick
       CompressedMarkPositionFiles.new(files, positions.not_nil!)
     end
 
+    # Plans coordinates for this writer's literal-only LZ4 framing without
+    # compressing or allocating paired files. This arithmetic is not valid for
+    # content-dependent compression: keep it coupled to measure_frames and
+    # physical_position, and invalidate it if frame encoding changes.
+    def self.plan_literal_positions(
+      byte_size : Int64,
+      position_queries : Array(UInt64),
+      frame_bytes : Int = 4096,
+      budget : CompressedStreamBudget = CompressedStreamBudget.write_default,
+    ) : Array(Tuple(UInt64, UInt64))
+      budget.ensure_direction(true)
+      validate_frame_bytes(frame_bytes)
+      if byte_size < 0
+        raise ArgumentError.new("negative compressed input size")
+      end
+      if byte_size > Int32::MAX.to_i64
+        raise UnsupportedFormatError.new("compressed input exceeds supported in-memory domain")
+      end
+
+      query_count = position_queries.size.to_i64
+      if query_count > Int64::MAX // 16_i64
+        raise UnsupportedFormatError.new("compressed position result size overflows")
+      end
+      query_result_bytes = query_count * 16_i64
+
+      # Fail capacity checks before traversing or allocating from the caller's
+      # query collection. These are non-consumptive until every query is valid.
+      budget.preflight_records(query_count)
+      budget.preflight_result_bytes(query_result_bytes)
+      position_queries.each do |query|
+        if query > byte_size.to_u64
+          raise ArgumentError.new("compressed position query is outside the logical byte domain")
+        end
+      end
+
+      _frame_count, data_size, full_frame_size = measure_frames(
+        byte_size, frame_bytes.to_i64, budget.limits
+      )
+      ensure_output_domain(data_size, "compressed data")
+
+      # The result array is the only allocated output of planning, so charge
+      # its retained coordinates before constructing it. No file or decoded
+      # bytes are produced by this method.
+      budget.reserve_records(query_count)
+      budget.reserve_result_bytes(query_result_bytes)
+
+      positions = Array(Tuple(UInt64, UInt64)).new(position_queries.size)
+      position_queries.each do |query|
+        compressed_offset, decompressed_offset = physical_position(
+          query.to_i64,
+          byte_size,
+          frame_bytes.to_i64,
+          full_frame_size,
+          data_size,
+        )
+        positions << {compressed_offset.to_u64, decompressed_offset.to_u64}
+      end
+      positions
+    end
+
     private def self.encode_internal(
       bytes : Bytes,
       offsets : Array(UInt64),

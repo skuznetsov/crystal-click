@@ -82,13 +82,15 @@ describe "W192 root-authored Copy adversaries" do
   end
 
   it "distinguishes an unsupported actual type from a corrupt descriptor" do
-    type = CrystalClick::BinaryDataType.json(max_dynamic_paths: 0, max_dynamic_types: 0)
-    json_row = CrystalClick::BinaryJsonRow.new(type, [] of Tuple(String, CrystalClick::BinaryValue))
-    envelope = CrystalClick::BinaryValueCodec.encode(CrystalClick::BinaryValue.json(type, json_row))
+    # JSON is admitted by W240. An aggregate state still belongs to a distinct
+    # owner and must not enter Copy merely because scalar serde can read it.
+    type = CrystalClick::BinaryDataType.aggregate_count
+    value = CrystalClick::BinaryValue.aggregate_count_state(type, 0_u64)
+    envelope = CrystalClick::BinaryValueCodec.encode(value)
     CrystalClick::BinaryValueCodec.decode(envelope).type.should eq(type)
     envelope.size.should be < 128
     values = Bytes.new(envelope.size + 1) { |index| index == 0 ? envelope.size.to_u8 : envelope[index - 1] }
-    expect_raises(CrystalClick::UnsupportedFormatError, /JSON is not admitted/) do
+    expect_raises(CrystalClick::UnsupportedFormatError, /AggregateFunction/) do
       CrystalClick::ObjectSharedCopyCodec.decode(w192_attack_sizes(1_u64), Bytes[0_u8], values, [w192_attack_record(1_u64)])
     end
     expect_raises(CrystalClick::CorruptPartError, /unknown or reserved/) do

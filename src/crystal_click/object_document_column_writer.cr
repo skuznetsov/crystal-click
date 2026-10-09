@@ -15,6 +15,8 @@ module CrystalClick
       frame_bytes : Int = 4096,
       limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      shared_target_chunk_rows : Int32 = 1,
     ) : ObjectDocumentColumnFiles
       if granules.empty?
         raise ArgumentError.new("a physical Object column requires at least one real mark")
@@ -24,6 +26,9 @@ module CrystalClick
       end
       if frame_bytes < DynamicDiscriminatorCodec::HEADER_BYTES.to_i
         raise ArgumentError.new("frame size must contain the complete Dynamic discriminator prefix")
+      end
+      unless shared_target_chunk_rows > 0
+        raise ArgumentError.new("Object shared advanced target chunk rows must be positive")
       end
 
       # The descriptor/value roster is unchanged by fresh statistics, so bind
@@ -70,7 +75,8 @@ module CrystalClick
       end
       append_advanced_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
-        codec_budget, transport_budget, frame_bytes, profile
+        codec_budget, transport_budget, frame_bytes, profile,
+        shared_json_policy, shared_target_chunk_rows
       )
       ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
@@ -328,6 +334,175 @@ module CrystalClick
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
     end
 
+    # Exports the existing child Object lanes as two ordered callback groups
+    # for a Compact parent Data tape. Prefix callbacks must be appended by the
+    # caller's prefix pass; body callbacks follow only after that pass has
+    # completed. The lane binder and framing adapters remain the sole source of
+    # the Object lane grammar. Shared-data v2/v3 are deliberately refused
+    # until their Compact callback/mark-coordinate relocation owner is wired.
+    def self.inline_fragments_at_child_site(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      callback_root_prefix : String? = nil,
+    ) : Tuple(Array(Tuple(String, Bytes)), Array(Tuple(String, Bytes)))
+      unless budget.writing?
+        raise ArgumentError.new("inline child Object fragment export requires a write-direction budget")
+      end
+      version = plan.structures.object.shared_data_version
+      unless version < 2_u64
+        raise UnsupportedFormatError.new("inline child Object shared-data v2/v3 requires Compact coordinate relocation")
+      end
+      inline_fragments_for_child_site_core(
+        physical_plan, plan, streams, grid, budget, profile,
+        callback_root_prefix || ObjectDocumentInlineCallbackOrder.canonical_root_prefix(physical_plan),
+        false,
+      )
+    end
+
+    # Rich counterpart to the legacy callback tuple API. Advanced shared
+    # callbacks are appended only after their seven bucket and three Copy
+    # roles have been materialized without independent compression, and all
+    # unresolved mark coordinates remain explicit in the returned sidecar.
+    def self.inline_raw_layout_at_child_site(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      nested_context : ObjectSharedNestedSerializationContext,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      callback_root_prefix : String? = nil,
+    ) : ObjectSharedAdvancedInlineRawLayout
+      unless budget.writing? && nested_context.writing?
+        raise ArgumentError.new("inline child Object raw export requires write-direction contexts")
+      end
+      version = plan.structures.object.shared_data_version
+      unless nested_context.shared_data_version == version && version <= 3_u64
+        raise UnsupportedFormatError.new("inline child Object raw export context differs from its prepared layout")
+      end
+      root = callback_root_prefix || ObjectDocumentInlineCallbackOrder.canonical_root_prefix(physical_plan)
+      prefixes, ordinary_bodies = inline_fragments_for_child_site_core(
+        physical_plan, plan, streams, grid, budget, nested_context.profile, root,
+        version >= 2_u64,
+      )
+      relocations = [] of ObjectSharedInlineCallbackRelocation
+      bodies = ordinary_bodies
+      if version >= 2_u64
+        target_rows = nested_context.target_chunk_rows ||
+                      raise(ArgumentError.new("advanced inline child Object writer context has no target chunk size"))
+        unless target_rows > 0
+          raise ArgumentError.new("advanced inline child Object target chunk size must be positive")
+        end
+        advanced = ObjectSharedAdvancedInlineCodec.encode_body_callbacks(
+          physical_plan,
+          plan,
+          streams,
+          physical_rows_from_grid(grid, budget),
+          version.to_i,
+          physical_plan.shared_bucket_count,
+          target_rows,
+          nested_context.profile,
+          root,
+          budget,
+          shared_json_policy,
+        )
+        unless advanced.prefix_callback_count == 0
+          raise UnsupportedFormatError.new("advanced inline Object body codec emitted an unexpected prefix callback")
+        end
+        expected_advanced_count = ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
+          physical_plan, plan, nested_context.profile, budget
+        ).count { |binding| binding[1] == :advanced_bucket || binding[1] == :advanced_copy }
+        unless advanced.body_callback_count == expected_advanced_count
+          raise UnsupportedFormatError.new("advanced inline Object callback count differs from its Compact schedule")
+        end
+        budget.ensure_future_nodes(advanced.body_callback_count.to_u64)
+        bodies = Array(Tuple(String, Bytes)).new(ordinary_bodies.size + advanced.body_callback_count)
+        ordinary_bodies.each { |callback| bodies << callback }
+        advanced.body_callback_count.times do |index|
+          bodies << advanced.body_callback_at(index)
+        end
+        relocations = advanced.relocations
+      end
+      ObjectSharedAdvancedInlineRawLayout.new(prefixes, bodies, relocations, budget)
+    end
+
+    private def self.inline_fragments_for_child_site_core(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      streams : ObjectDocumentStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      callback_root : String,
+      allow_advanced : Bool,
+    ) : Tuple(Array(Tuple(String, Bytes)), Array(Tuple(String, Bytes)))
+      grid.validate_for!(streams.mark_count, budget)
+
+      lanes = bind_lanes(physical_plan, plan, streams, budget)
+      if lanes.size > Int32::MAX // 2
+        raise UnsupportedFormatError.new("inline child Object callback roster exceeds the supported domain")
+      end
+      fragment_slots = lanes.size.to_u64 * 2_u64
+      prefix_pairs = ObjectDocumentInlineCallbackOrder.prefix_callback_pairs(
+        physical_plan, plan, callback_root, budget, allow_advanced
+      )
+      body_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
+        physical_plan, plan, profile, callback_root, budget, allow_advanced, false
+      )
+      expected_prefixes = Hash(String, Bool).new(initial_capacity: prefix_pairs.size)
+      expected_bodies = Hash(String, Bool).new(initial_capacity: body_pairs.size)
+      prefix_pairs.each { |pair| expected_prefixes[pair[0]] = true }
+      body_pairs.each { |pair| expected_bodies[pair[0]] = true }
+
+      budget.ensure_future_nodes(fragment_slots)
+      budget.ensure_future_elements(fragment_slots)
+      fragment_slots.times { budget.charge_node }
+      budget.charge_elements(fragment_slots)
+      prefix_fragments = Hash(String, Bytes).new(initial_capacity: prefix_pairs.size)
+      body_fragments = Hash(String, Bytes).new(initial_capacity: body_pairs.size)
+
+      lanes.each do |lane|
+        lane.inline_fragments_for_child_site(grid, budget).each do |fragment|
+          name = fragment[0]
+          target = if expected_prefixes.has_key?(name)
+                     prefix_fragments
+                   elsif expected_bodies.has_key?(name)
+                     body_fragments
+                   else
+                     raise UnsupportedFormatError.new("inline child Object lane emitted an unplanned callback")
+                   end
+          if target.has_key?(name)
+            raise UnsupportedFormatError.new("inline child Object lane emitted a duplicate callback")
+          end
+          target[name] = fragment[1]
+        end
+      end
+
+      unless prefix_fragments.size == prefix_pairs.size && body_fragments.size == body_pairs.size
+        raise UnsupportedFormatError.new("inline child Object lane callbacks do not exactly match the Compact schedule")
+      end
+      total_fragments = prefix_pairs.size.to_u64 + body_pairs.size.to_u64
+      budget.ensure_future_nodes(total_fragments)
+      budget.ensure_future_elements(total_fragments)
+      total_fragments.times { budget.charge_node }
+      budget.charge_elements(total_fragments) if total_fragments > 0_u64
+      prefixes = Array(Tuple(String, Bytes)).new(prefix_pairs.size)
+      prefix_pairs.each do |pair|
+        bytes = prefix_fragments[pair[0]]? || raise(UnsupportedFormatError.new("inline prefix fragment is missing"))
+        prefixes << {pair[1], bytes}
+      end
+      bodies = Array(Tuple(String, Bytes)).new(body_pairs.size)
+      body_pairs.each do |pair|
+        bytes = body_fragments[pair[0]]? || raise(UnsupportedFormatError.new("inline body fragment is missing"))
+        bodies << {pair[1], bytes}
+      end
+      {prefixes, bodies}
+    end
+
     private def self.preflight_file_roster(
       physical_plan : ObjectDocumentPhysicalPlan,
       hashed : Bool,
@@ -372,8 +547,9 @@ module CrystalClick
       physical_plan : ObjectDocumentPhysicalPlan,
       plan : ObjectDocumentPlan,
       streams : ObjectDocumentStreams,
+      codec_budget : BinaryCodecBudget? = nil,
     ) : Array(ObjectDocumentColumnLane)
-      LaneBinder.bind_lanes(physical_plan, plan, streams)
+      LaneBinder.bind_lanes(physical_plan, plan, streams, codec_budget)
     end
 
     private def self.append_advanced_pairs!(
@@ -386,6 +562,8 @@ module CrystalClick
       transport_budget : CompressedStreamBudget,
       frame_bytes : Int,
       profile : BinaryBulkProfile,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      shared_target_chunk_rows : Int32 = 1,
     ) : Nil
       version = plan.structures.object.shared_data_version
       return nil if version < 2_u64
@@ -400,6 +578,8 @@ module CrystalClick
         transport_budget,
         frame_bytes,
         profile: profile,
+        shared_json_policy: shared_json_policy,
+        shared_target_chunk_rows: shared_target_chunk_rows,
       )
       {"sizes", "indexes", "values"}.each do |lane|
         pairs[physical_plan.advanced_copy_stream_name(lane)] = files.copy_lane(lane)

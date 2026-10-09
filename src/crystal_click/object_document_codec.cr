@@ -90,6 +90,41 @@ module CrystalClick
       )
     end
 
+    # W240's explicit shared-path bridge carries all inherited child Object
+    # settings together. The plan's declared Object layout must agree with
+    # the inherited shared-data version; the target remains a scheduling value
+    # for the physical owner, not a reason to synthesize child rows here.
+    def self.encode_child_site_with_nested_context_and_budget(
+      plan : ObjectDocumentPlan,
+      granules : Array(Array(ObjectDocument)),
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      nested_context : ObjectSharedNestedSerializationContext,
+      typed_descriptor_root_depth : Int32 = 2,
+      inferred_actual_root_depth : Int32? = nil,
+    ) : ObjectDocumentStreams
+      unless budget.writing? && nested_context.writing?
+        raise ArgumentError.new("nested Object child encode requires write-direction codec and serialization contexts")
+      end
+      unless plan.structures.object.shared_data_version == nested_context.shared_data_version
+        raise UnsupportedFormatError.new("nested Object plan differs from its inherited shared-data layout")
+      end
+      encode_child_site_with_budget(
+        plan,
+        granules,
+        grid,
+        budget,
+        mode: DynamicDiscriminatorCodec::COMPACT_MODE,
+        profile: nested_context.profile,
+        # ClickHouse's nested SharedData serializer uses default String0 for
+        # its internal MAP paths/values even when ordinary child lanes inherit
+        # String1 from their parent serialization instance.
+        shared_profile: BinaryBulkProfile.single_stream,
+        typed_descriptor_root_depth: typed_descriptor_root_depth,
+        inferred_actual_root_depth: inferred_actual_root_depth,
+      )
+    end
+
     private def self.encode_core_with_budget(
       plan : ObjectDocumentPlan,
       granules : Array(Array(ObjectDocument)),
@@ -473,6 +508,7 @@ module CrystalClick
         inferred_actual_root_depth,
         physical_root_dynamic_json_object_leaf_loader,
         nil,
+        nil,
       )
     end
 
@@ -507,6 +543,61 @@ module CrystalClick
         inferred_actual_root_depth,
         physical_root_dynamic_json_object_leaf_loader,
         grid,
+        nil,
+      )
+    end
+
+    # Decodes an inline JSON child Object using the exact statistics-free
+    # prefix metadata already consumed from its parent Data callback tape.
+    # The caller supplies the occurrence grid after the enclosing Dynamic
+    # schedule census; no writer chunk target is inferred or required.
+    def self.decode_child_site_with_inline_metadata_and_budget(
+      typed_schema : Hash(String, BinaryDataType),
+      streams : ObjectDocumentStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      prefix : ObjectDocumentInlinePrefix,
+      nested_context : ObjectSharedNestedSerializationContext,
+      profile : BinaryBulkProfile,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+    ) : Array(Array(ObjectDocument))
+      unless !budget.writing? && !nested_context.writing?
+        raise ArgumentError.new("inline child Object decode requires read-direction contexts")
+      end
+      unless profile == nested_context.profile
+        raise CorruptPartError.new("inline child Object String profile differs from its inherited context")
+      end
+      unless prefix.nested_context.shared_data_version == nested_context.shared_data_version &&
+             prefix.nested_context.profile == nested_context.profile
+        raise CorruptPartError.new("inline child Object prefix context differs from the decode context")
+      end
+      unless prefix.plan.structures.object.shared_data_version == nested_context.shared_data_version
+        raise CorruptPartError.new("inline child Object prefix layout differs from its inherited context")
+      end
+      unless prefix.typed_descriptor_root_depth >= 2 && prefix.inferred_actual_root_depth > 0
+        raise CorruptPartError.new("inline child Object prefix descriptor depths are invalid")
+      end
+      copied_schema = prefix.typed_schema_for(budget)
+      unless copied_schema == typed_schema
+        raise CorruptPartError.new("inline child Object typed schema differs from its parsed prefix plan")
+      end
+
+      decode_core_with_budget(
+        typed_schema,
+        streams,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        BinaryBulkProfile.single_stream,
+        Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+        prefix.typed_descriptor_root_depth,
+        RootDynamicJsonLeafPlans.new,
+        prefix.inferred_actual_root_depth,
+        nil,
+        grid,
+        prefix,
       )
     end
 
@@ -524,6 +615,7 @@ module CrystalClick
       inferred_actual_root_depth : Int32,
       physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader?,
       occurrence_grid : StorageOccurrenceGrid?,
+      inline_prefix : ObjectDocumentInlinePrefix?,
     ) : Array(Array(ObjectDocument))
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
@@ -582,11 +674,15 @@ module CrystalClick
         end
       end
 
-      structure_set = ObjectDynamicStructureCodec.decode_with_budget(
-        streams.structures,
-        budget,
-        inferred_actual_root_depth: inferred_actual_root_depth,
-      )
+      structure_set = if prefix = inline_prefix
+                        prefix.structures
+                      else
+                        ObjectDynamicStructureCodec.decode_with_budget(
+                          streams.structures,
+                          budget,
+                          inferred_actual_root_depth: inferred_actual_root_depth,
+                        )
+                      end
       validate_read_structure(structure_set)
       object = structure_set.object
       validate_root_json_binding_input!(root_dynamic_json_object_leaf_plans, object, budget)
@@ -684,14 +780,21 @@ module CrystalClick
         next unless type.contains_dynamic?
         dynamic_streams = streams.typed_dynamic_for(path)
         json_leaf_plans = typed_dynamic_json_object_leaf_plans[path]?
-        dynamic_plan = ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan(
-          type,
-          dynamic_streams.structures,
-          budget,
-          profile,
-          typed_descriptor_root_depth,
-          json_leaf_plans,
-        )
+        dynamic_plan = if prefix = inline_prefix
+                         if json_leaf_plans && !json_leaf_plans.empty?
+                           corrupt!("inline typed Dynamic JSON bindings require a nested prefix reader")
+                         end
+                         prefix.typed_dynamic_plan_for(path)
+                       else
+                         ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan(
+                           type,
+                           dynamic_streams.structures,
+                           budget,
+                           profile,
+                           typed_descriptor_root_depth,
+                           json_leaf_plans,
+                         )
+                       end
         typed_dynamic_plans[path] = dynamic_plan
       end
 

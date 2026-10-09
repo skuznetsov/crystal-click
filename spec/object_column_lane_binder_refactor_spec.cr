@@ -86,12 +86,13 @@ module CrystalClick::ObjectDocumentColumnWriter
     physical_plan : ObjectDocumentPhysicalPlan,
     plan : ObjectDocumentPlan,
     streams : ObjectDocumentStreams,
+    codec_budget : BinaryCodecBudget? = nil,
   ) : Array(ObjectDocumentColumnLane)
     if ObjectColumnLaneBinderProbe.enabled
       ObjectColumnLaneBinderProbe.events << "bind"
       ObjectColumnLaneBinderProbe.bind_arguments << {physical_plan, plan, streams}
     end
-    lanes = previous_def
+    lanes = previous_def(physical_plan, plan, streams, codec_budget)
     if ObjectColumnLaneBinderProbe.enabled
       ObjectColumnLaneBinderProbe.bound_lanes << lanes
     end

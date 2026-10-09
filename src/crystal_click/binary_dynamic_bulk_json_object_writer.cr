@@ -304,6 +304,25 @@ module CrystalClick
       profile : BinaryBulkProfile,
       child_shared_profile : BinaryBulkProfile = profile,
     ) : Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams)
+      finish_leaf_streams_internal(profile, child_shared_profile, nil)
+    end
+
+    # Explicit W240 path-Data bridge. The inherited nested settings travel as
+    # one immutable value instead of being reduced to a String profile.
+    def finish_leaf_streams_with_nested_context(
+      nested_context : ObjectSharedNestedSerializationContext,
+    ) : Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams)
+      unless nested_context.writing?
+        raise ArgumentError.new("Dynamic JSON child write requires a write nested-serialization context")
+      end
+      finish_leaf_streams_internal(nested_context.profile, nested_context.profile, nested_context)
+    end
+
+    private def finish_leaf_streams_internal(
+      profile : BinaryBulkProfile,
+      child_shared_profile : BinaryBulkProfile,
+      nested_context : ObjectSharedNestedSerializationContext?,
+    ) : Hash(BinaryDynamicJsonLeafKey, ObjectDocumentStreams)
       ensure_consumed!
       mark_count = @physical_rows.size.to_u64
       binding_count = @documents.size.to_u64
@@ -330,16 +349,28 @@ module CrystalClick
         child_inferred_root_depth64 = json_depth.to_i64 + child_inferred_offset
         @budget.ensure_depth(child_inferred_root_depth64)
         child_inferred_root_depth = child_inferred_root_depth64.to_i32
-        output[key] = ObjectDocumentCodec.encode_child_site_with_budget(
-          binding.plan,
-          granules,
-          grid,
-          @budget,
-          profile: profile,
-          shared_profile: child_shared_profile,
-          typed_descriptor_root_depth: child_root_depth,
-          inferred_actual_root_depth: child_inferred_root_depth,
-        )
+        output[key] = if context = nested_context
+                        ObjectDocumentCodec.encode_child_site_with_nested_context_and_budget(
+                          binding.plan,
+                          granules,
+                          grid,
+                          @budget,
+                          context,
+                          typed_descriptor_root_depth: child_root_depth,
+                          inferred_actual_root_depth: child_inferred_root_depth,
+                        )
+                      else
+                        ObjectDocumentCodec.encode_child_site_with_budget(
+                          binding.plan,
+                          granules,
+                          grid,
+                          @budget,
+                          profile: profile,
+                          shared_profile: child_shared_profile,
+                          typed_descriptor_root_depth: child_root_depth,
+                          inferred_actual_root_depth: child_inferred_root_depth,
+                        )
+                      end
       end
       output
     end

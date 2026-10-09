@@ -53,45 +53,14 @@ module CrystalClick
         raise ArgumentError.new("Object shared chunk decode requires a reading context")
       end
 
+      # The record itself is one logical node at the inherited root depth.
+      # Split input performs this visit in its per-record loop before calling
+      # read_header; keep the interleaved path symmetric and exactly-once.
       context.visit_node(1)
-      row_count = context.read_var_uint
-      raw_path_count = context.read_var_uint
-      path_count = context.preflight_metadata(
-        raw_path_count,
-        maximum_count: Int32::MAX.to_u64,
-        label: "Object shared chunk declared path count"
-      )
-
-      # Every path needs at least its one-byte length prefix, followed by the
-      # complete fixed six-UInt64 suffix. Check the combined lower bound before
-      # retaining the count-derived path array or visiting per-path metadata
-      # nodes.
-      minimum_remaining = raw_path_count + TRANSPORT_SUFFIX_BYTES
-      context.ensure_remaining_input_bytes(minimum_remaining)
-      context.visit_metadata_nodes(raw_path_count, 1)
-
-      # Keep borrowed byte slices until all path extents and the entire fixed
-      # suffix have been proven. In particular, a truncated suffix must not
-      # cause variable path Strings to be retained first.
-      path_slices = Array(Bytes).new(path_count)
-      previous_path : Bytes? = nil
-      path_count.times do
-        path_size = context.read_var_uint
-        path = context.read_slice(path_size)
-        if previous = previous_path
-          unless compare_path_bytes(previous, path) < 0
-            context.corrupt!("Object shared chunk paths are not byte-sorted and unique")
-          end
-        end
-        path_slices << path
-        previous_path = path
-      end
-
-      context.ensure_remaining_input_bytes(TRANSPORT_SUFFIX_BYTES)
+      row_count, paths = read_header(context)
       data_marks = read_pair(context)
       paths_marks = read_pair(context)
       paths_substreams_metadata_marks = read_pair(context)
-      paths = path_slices.map { |path| String.new(path) }
       begin
         ObjectSharedChunkStructure.new(
           row_count,
@@ -105,8 +74,108 @@ module CrystalClick
       end
     end
 
+    # Reads the source-split SharedData representation: all variable record
+    # headers are in StructurePrefix and all fixed coordinate suffixes are in
+    # StructureSuffix. The two inputs are never concatenated, so no synthetic
+    # interleaved Structure bytes or replacement codec budget are introduced.
+    def self.read_split_records(
+      prefix : Bytes,
+      suffix : Bytes,
+      budget : BinaryCodecBudget,
+    ) : Array(ObjectSharedChunkStructure)
+      unless !budget.writing?
+        raise ArgumentError.new("split Object shared structure decode requires a read-direction budget")
+      end
+      unless suffix.size > 0 && suffix.size % TRANSPORT_SUFFIX_BYTES.to_i == 0
+        raise CorruptPartError.new("Object shared StructureSuffix is not a whole record roster")
+      end
+      record_count = suffix.size.to_u64 // TRANSPORT_SUFFIX_BYTES
+      if record_count > Int32::MAX.to_u64
+        raise CorruptPartError.new("Object shared split structure record count exceeds Int32")
+      end
+      budget.ensure_wire_bytes(suffix.size.to_u64)
+      budget.charge_wire_bytes(suffix.size.to_u64)
+      budget.ensure_future_nodes(record_count)
+      budget.ensure_future_elements(record_count)
+
+      context = BinaryCodecContext.new(budget.limits, prefix, false, budget, false)
+      records = Array(ObjectSharedChunkStructure).new(record_count.to_i)
+      record_count.to_i.times do |index|
+        context.visit_node(1)
+        row_count, paths = read_header(context, (record_count - index.to_u64) * TRANSPORT_SUFFIX_BYTES)
+        suffix_offset = index * TRANSPORT_SUFFIX_BYTES.to_i
+        record_end = suffix_offset + TRANSPORT_SUFFIX_BYTES.to_i
+        if record_end > suffix.size
+          raise CorruptPartError.new("Object shared StructureSuffix is truncated")
+        end
+        data_marks = read_pair(suffix, suffix_offset)
+        paths_marks = read_pair(suffix, suffix_offset + 16)
+        metadata_marks = read_pair(suffix, suffix_offset + 32)
+        begin
+          records << ObjectSharedChunkStructure.new(row_count, paths, data_marks, paths_marks, metadata_marks)
+        rescue ex : ArgumentError
+          raise CorruptPartError.new("invalid split Object shared chunk structure: #{ex.message}")
+        end
+      end
+      context.ensure_consumed
+      records
+    end
+
+    private def self.read_header(
+      context : BinaryCodecContext,
+      split_suffix_remaining : UInt64? = nil,
+    ) : Tuple(UInt64, Array(String))
+      row_count = context.read_var_uint
+      raw_path_count = context.read_var_uint
+      path_count = context.preflight_metadata(
+        raw_path_count,
+        maximum_count: Int32::MAX.to_u64,
+        label: "Object shared chunk declared path count"
+      )
+
+      # Keep the original early lower-bound guard: every path needs at least
+      # its one-byte length prefix, and its six-UInt64 coordinate suffix must
+      # be present before path arrays or per-path nodes are retained.
+      if suffix_remaining = split_suffix_remaining
+        context.ensure_remaining_input_bytes(raw_path_count)
+        if suffix_remaining < TRANSPORT_SUFFIX_BYTES
+          context.corrupt!("Object shared StructureSuffix is truncated")
+        end
+      else
+        minimum_remaining = raw_path_count + TRANSPORT_SUFFIX_BYTES
+        context.ensure_remaining_input_bytes(minimum_remaining)
+      end
+      context.visit_metadata_nodes(raw_path_count, 1)
+
+      path_slices = Array(Bytes).new(path_count)
+      previous_path : Bytes? = nil
+      path_count.times do
+        path_size = context.read_var_uint
+        path = context.read_slice(path_size)
+        if previous = previous_path
+          unless compare_path_bytes(previous, path) < 0
+            context.corrupt!("Object shared chunk paths are not byte-sorted and unique")
+          end
+        end
+        path_slices << path
+        previous_path = path
+      end
+      if split_suffix_remaining.nil?
+        context.ensure_remaining_input_bytes(TRANSPORT_SUFFIX_BYTES)
+      end
+      paths = path_slices.map { |path| String.new(path) }
+      {row_count, paths}
+    end
+
     private def self.read_pair(context : BinaryCodecContext) : Tuple(UInt64, UInt64)
       {read_u64_le(context), read_u64_le(context)}
+    end
+
+    private def self.read_pair(bytes : Bytes, offset : Int) : Tuple(UInt64, UInt64)
+      if offset < 0 || offset > bytes.size - 16
+        raise CorruptPartError.new("Object shared split coordinate suffix is truncated")
+      end
+      {read_u64_le(bytes, offset), read_u64_le(bytes, offset + 8)}
     end
 
     private def self.compare_path_bytes(left : Bytes, right : Bytes) : Int32
@@ -127,6 +196,17 @@ module CrystalClick
       value = 0_u64
       8.times do |index|
         value |= context.read_byte.to_u64 << (index * 8)
+      end
+      value
+    end
+
+    private def self.read_u64_le(bytes : Bytes, offset : Int) : UInt64
+      if offset < 0 || offset > bytes.size - 8
+        raise CorruptPartError.new("Object shared split UInt64 coordinate is truncated")
+      end
+      value = 0_u64
+      8.times do |index|
+        value |= bytes[offset + index].to_u64 << (index * 8)
       end
       value
     end

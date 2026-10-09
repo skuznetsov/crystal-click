@@ -1,3 +1,5 @@
+require "./binary_shared_json_envelope_policy"
+
 module CrystalClick
   # Paired codec for the admitted ClickHouse binary DataType descriptor
   # grammar. Decode is exact-consumption and uses a strict minimal VarUInt
@@ -27,6 +29,9 @@ module CrystalClick
       if type.tag == BinaryDataType::TAG_QBIT
         descriptor = type.qbit_type || context.unsupported!("QBit descriptor metadata is missing")
         tag = BinaryDataType::TAG_QBIT_STRIDE if descriptor.stride != descriptor.dimension
+      end
+      if context.shared_json_envelope_policy?
+        BinarySharedJsonEnvelopePolicy.check_data_type_tag!(context, tag)
       end
       context.write_byte(tag)
 
@@ -142,6 +147,9 @@ module CrystalClick
     def self.read_from(context : BinaryCodecContext, depth : Int = 1) : BinaryDataType
       context.visit_node(depth)
       tag = context.read_byte
+      if context.shared_json_envelope_policy?
+        BinarySharedJsonEnvelopePolicy.check_data_type_tag!(context, tag)
+      end
 
       case tag
       when BinaryDataType::TAG_QBIT, BinaryDataType::TAG_QBIT_WITH_STRIDE

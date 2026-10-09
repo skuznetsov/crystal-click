@@ -153,5 +153,43 @@ module CrystalClick
       end
       selected
     end
+
+    # Reads one shared Object path as dense values per physical mark.
+    # Advanced layouts avoid root Copy lanes and reconstructing unrelated
+    # fields; MAP layouts decode their ordinary shared lane(s) instead.
+    def read_shared_path_marks(
+      path : String,
+      first_mark : Int,
+      mark_count : Int,
+    ) : Array(Array(BinaryValue))
+      if first_mark < 0 || mark_count < 0
+        raise ArgumentError.new("mark selection must be nonnegative")
+      end
+      row_counts = @descriptor.mark_row_counts
+      if first_mark > row_counts.size || mark_count > row_counts.size - first_mark
+        raise ArgumentError.new("mark selection is outside the Object grid")
+      end
+      selected = ObjectDocumentFileReader.read_shared_path_marks(
+        @part_path,
+        @column_name,
+        @descriptor,
+        path,
+        first_mark,
+        mark_count,
+        @ordinary_profile,
+        true,
+        @limits,
+        @transport_limits,
+      )
+      unless selected.size == mark_count
+        raise CorruptPartError.new("bounded Object shared-path read returned the wrong number of marks")
+      end
+      mark_count.times do |index|
+        unless selected[index].size.to_u64 == row_counts[first_mark + index]
+          raise CorruptPartError.new("bounded Object shared-path rows disagree with the inspected outer grid")
+        end
+      end
+      selected
+    end
   end
 end
