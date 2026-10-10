@@ -336,7 +336,7 @@ describe "W245 schema-wide part publication" do
     end
   end
 
-  it "fails closed for root Tuple Dynamic and unqualified Nested adapters before publication" do
+  it "admits root Tuple Dynamic with declared field sites and rejects unqualified Nested adapters" do
     dynamic_type = CrystalClick::BinaryDataType.dynamic(max_types: 1)
     tuple_type = CrystalClick::BinaryDataType.tuple(
       [dynamic_type] of CrystalClick::BinaryDataType,
@@ -349,16 +349,25 @@ describe "W245 schema-wide part publication" do
 
     w245_with_parent do |parent|
       destination = File.join(parent, "part")
+      structures = {
+        "root.field.0" => CrystalClick::DynamicStructure.new(
+          [CrystalClick::BinaryDataType.primitive("UInt64")] of CrystalClick::BinaryDataType
+        ),
+      } of String => CrystalClick::DynamicStructure
       columns = [CrystalClick::WidePartColumn.dynamic_bulk(
         "tuple_dynamic",
         tuple_type,
-        Hash(String, CrystalClick::DynamicStructure).new,
+        structures,
         [[tuple_value] of CrystalClick::BinaryValue],
       )]
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        w245_write(destination, columns, [1_u64], rows_per_mark: 1)
-      end
-      w245_assert_no_publication(parent, destination)
+      w245_write(destination, columns, [1_u64], rows_per_mark: 1).should eq(destination)
+
+      reader = CrystalClick::DynamicBulkColumnReader.open(destination, "tuple_dynamic", tuple_type)
+      reader.mark_row_counts.should eq([1_u64])
+      row = reader.read_marks(0, 1)[0][0]
+      row.type.should eq(tuple_type)
+      row.child_count.should eq(1)
+      w245_assert_dynamic(row.child_at(0), "uint64", 7_u64)
     end
 
     nested = CrystalClick::BinaryDataType.nested(

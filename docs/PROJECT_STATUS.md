@@ -1,6 +1,30 @@
 # CrystalClick project status
 
-Latest qualification (W245, 2026-10-10): VERIFIED within the finite schema-wide
+Latest qualification (W246, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite JSON-free root-Tuple Dynamic N-column target. Removed only the W245
+adapter guard; existing recursive serde, registries, physical plans, operation
+budgets and publisher are reused. Named and unnamed Tuple columns coexist in
+one part, including a late populated Array(Dynamic), NULL and shared overflow.
+An omitted selected Tuple serialization entry is legal; a present incomplete
+entry still rejects. No per-product codec or mandatory metadata tree was added.
+
+The same 33 affected files pass 215 examples per mode; both helper builds,
+five-file formatting and Ruby syntax pass. Four final DEBUG/RELEASE x ordinary
+String0/1 native cells and raw audits pass: sixteen stock calls, CHECK=1, exact
+Dynamic actual types, five parent rows and all six ordered Array children.
+Actual bytes of 98 generated files / 14,083 bytes per mode match. Seven root
+authenticated-raw replay mutations reject with restored acceptance. This is
+one-way library-write -> stock-read, not whole-suite, reciprocal or all-product
+qualification. Bulk Dynamic physically remains BASIC; the Object/JSON mode
+option does not switch that owner's discriminator layout. See the
+[publication frontier](SCHEMA_WIDE_PART_WRITER_FRONTIER.md) and
+[W246 evidence index](../.landmark/evidence/multi-column-tuple-dynamic-w246.json).
+
+Overall goal ACTIVE; remaining nominal/layout/state handoffs, general key and
+partition metadata, MV/projection writes and broad facade decomposition remain
+open. Memory/performance stays deferred; no remote push.
+
+Previous qualification (W245, 2026-10-10): VERIFIED within the finite schema-wide
 Wide publication target; root adversary ROBUST within scope. The new
 `WidePartWriter.write_uint64_columns` composes N typed value columns over one
 sorted UInt64 key, common metadata/checksum envelope and exclusive publisher.
@@ -16,7 +40,9 @@ native cells and independent raw audits pass, with 28 auditor controls per
 cell. Each generated part combines all four owners; stock ATTACH/CHECK=1,
 exact schema/values/child types and aggregate=1497 qualify 40 stock calls.
 All 264 generated files / 38,584 bytes per mode agree by actual bytes across
-four profiles. Dynamic COMPACT is not the Compact part layout. Ten additional
+four profiles. Its BASIC/COMPACT axis selects the Object/JSON operation mode;
+W246 inspected the bulk Dynamic owner and corrected the earlier broader label:
+that owner always emits BASIC. Neither mode is the Compact part layout. Ten additional
 root semantic refusals and restored acceptance pass. This is one-way
 library-write -> stock-read, not every admitted product or the whole suite.
 See the [schema-aware publication frontier](SCHEMA_WIDE_PART_WRITER_FRONTIER.md)

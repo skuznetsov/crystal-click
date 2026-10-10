@@ -1,0 +1,515 @@
+{
+  "format": "crystal_click_w246_evidence_index_v1",
+  "date": "2026-10-10",
+  "claim_level": "VERIFIED",
+  "adversary_verdict": "ROBUST within the finite target",
+  "overall_goal": "ACTIVE; memory/performance deferred",
+  "scope": "JSON-free named/unnamed root Tuple Dynamic publication through the existing N-column Wide writer; library-write -> pinned stock-read.",
+  "baseline_commit": "6bcf7e0be1324a7bd385cd421e7fa22731620458",
+  "implementation": {
+    "removed_guard": "W245 root-Tuple rejection only",
+    "production_file": "src/crystal_click/wide_part_writer/dynamic_wide_part_column_input.cr",
+    "reused_owners": [
+      "BinaryDynamicBulkPlan",
+      "BinaryDynamicBulkPhysicalPlan",
+      "DynamicBulkColumnWriter",
+      "common exclusive Wide publisher"
+    ],
+    "no_per_product_codec": true,
+    "risk": "CAUTION: persistent-format admission",
+    "rollback": "One scoped local commit; no history rewrite/push"
+  },
+  "lineage": {
+    "heavy_fixture_harness_work": "Luna Max",
+    "root_verification": "Root executed every final build/spec/native/audit/byte comparison and raw replay attack.",
+    "model_review": "Same lineage is correlated; not independent correctness evidence.",
+    "final_source_sha256": {
+      "/private/tmp/crystal-click-w246.cUsvNl/helper-debug": "220bc41a75d08bc53d7417f3b3f193127089d8318776a2354da546025d2e05f9",
+      "/private/tmp/crystal-click-w246.cUsvNl/helper-release": "665c1fde8f5c5e3874dd7b93f69c9f06fc0d31cf24c3712952d037b1380c66d2",
+      "scripts/audit_multi_column_tuple_dynamic_w246.rb": "ad6f1188b47ad1e3b3b9a6d31556ed58a2b60a18ec948fa06cc7f156882d5465",
+      "scripts/probe_multi_column_tuple_dynamic_w246.rb": "e333fabc7d2817e864e66b37ce4bedd19090510285f86e7a3841ec70e62292a0",
+      "scripts/check_multi_column_tuple_dynamic_w246.cr": "f555cace57c0117923ef5363815c8944c77bbfb80c27285d6a7ab555d169335d",
+      "scripts/support/multi_column_tuple_dynamic_w246_fixture.cr": "136dc4d98dd30d2c35a42e62b8fe42f84bced21afddd1beb987181505deb6093",
+      "src/crystal_click/wide_part_writer/dynamic_wide_part_column_input.cr": "ccccdb3fd4ba6ab74849e6347b05230e25e4aa8fef38a804c780bf5f1deff22f",
+      "spec/multi_column_part_writer_w245_spec.cr": "c9b6d50bde4fab735150db6fc92705b8eb8dcbc46d13e02521659228f0180d14",
+      "spec/multi_column_tuple_dynamic_w246_spec.cr": "ee89158d71251dae695f6b45fe82a259c604176bab45dcacffddf84b7f802889",
+      "/private/tmp/crystal-click-w246.cUsvNl/replay_adversary.rb": "5939a17f024dc21fcc858250b36e2bec36717b48e03c7a084556c730badde157"
+    }
+  },
+  "source_comparison": {
+    "path": "/private/tmp/crystal-click-w238.4nQqSo/clickhouse",
+    "commit": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+    "qualification": "October 9 shallow source snapshot, not latest-at-completion or runtime build",
+    "anchors": [
+      {
+        "file": "src/DataTypes/Serializations/SerializationInfo.cpp",
+        "lines": "432-443",
+        "finding": "An always-Default info map may be empty."
+      },
+      {
+        "file": "src/Core/Block.cpp",
+        "lines": "1132-1144",
+        "finding": "An omitted info entry reconstructs serialization from the declared type."
+      },
+      {
+        "file": "src/DataTypes/DataTypeTuple.cpp",
+        "lines": "334-345",
+        "finding": "Tuple child serializers compose recursively."
+      },
+      {
+        "file": "src/DataTypes/Serializations/SerializationInfoTuple.cpp",
+        "lines": "205-220",
+        "finding": "A present Tuple entry must carry ordered subcolumns of the declared arity."
+      }
+    ]
+  },
+  "runtime": {
+    "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "isolated_store": true,
+    "max_threads": 1,
+    "max_memory_usage_bytes": 4294967296
+  },
+  "falsifiers": {
+    "red": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/multi_column_tuple_dynamic_w246_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 1,
+      "examples": 1,
+      "failures": 0,
+      "errors": 1,
+      "pending": 0,
+      "expectedError": "W245 always-Default metadata does not admit root Tuple Dynamic subcolumns",
+      "beforeGuardRemoval": true
+    },
+    "legacy_baseline": {
+      "single": {
+        "path": "/private/tmp/crystal-click-w246-legacy-single.kuDcGI",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_multi_column_tuple_dynamic_w246.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-baseline --evidence-root /private/tmp/crystal-click-w246-legacy-single.kuDcGI --string-profile single --dynamic-mode basic --write-mode legacy",
+        "exit": 0
+      },
+      "sized": {
+        "path": "/private/tmp/crystal-click-w246-legacy-sized.4a4GDb",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_multi_column_tuple_dynamic_w246.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-baseline --evidence-root /private/tmp/crystal-click-w246-legacy-sized.4a4GDb --string-profile sized --dynamic-mode basic --write-mode legacy",
+        "exit": 0
+      },
+      "probe_sha": "e333fabc7d2817e864e66b37ce4bedd19090510285f86e7a3841ec70e62292a0",
+      "baseline_guard": "intact on 6bcf7e0",
+      "runtime_calls_per_capture": 4,
+      "interpretation": "Two guarded stock ATTACH/CHECK/exact-type falsifiers with the old adapter guard intact. Historical pre-change captures, not live final-source multi-column qualification."
+    },
+    "refutations": [
+      "Omitted selected Tuple statistics do not require a new metadata tree or child serializer; present incomplete statistics still reject.",
+      "The Object/JSON operation mode does not select COMPACT physical bulk Dynamic. W245's broader mode label was corrected in current documentation, not by rewriting historical captures.",
+      "Legacy metadata includes a pk Default entry; an empty entire columns oracle was wrong.",
+      "Ruby 2.6 Array.filter_map is unavailable; map.compact preserved semantics.",
+      "Raw uppercase hex and one canonical trailing directory separator are stock representations, not data-format failures.",
+      "The recovered runtime filesystem location differs from W241's original default path; digest/build/invocation binding remains exact.",
+      "Duplicate-key JSON rejection is preserved; temporary adversary mutations use a plain in-memory copy. Process-record disagreement is rejected at raw-record binding, not evidence of a deeper changed-exit check."
+    ]
+  },
+  "fixture": {
+    "key": "pk UInt64",
+    "value_columns": [
+      "named_tuple Tuple(sequence Dynamic(max_types=1), items Array(Dynamic(max_types=1)))",
+      "unnamed_tuple Tuple(Dynamic(max_types=1), Dynamic(max_types=1))"
+    ],
+    "independent_registered_sites": {
+      "named_tuple": {
+        "root.field.0": [
+          "UInt64"
+        ],
+        "root.field.1.elements": [
+          "String"
+        ]
+      },
+      "unnamed_tuple": {
+        "root.field.0": [
+          "Bool"
+        ],
+        "root.field.1": [
+          "UInt32"
+        ]
+      }
+    },
+    "parent_rows": 5,
+    "mark_rows": [
+      2,
+      2,
+      1
+    ],
+    "eof_rows": 0,
+    "array_child_rows_per_mark": [
+      0,
+      4,
+      2
+    ],
+    "ordered_array_child_count": 6,
+    "frame_bytes": 32,
+    "metadata": "N-column serialization.json columns: []; ordinary String version 0 or 1",
+    "physical_discriminator": "BASIC, checked in actual streams by both mode's focused specs; not inferred from requested operation mode"
+  },
+  "gates": {
+    "resource_guard_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "outer_memory_limit_mib": 12288,
+    "serial_heavy_execution": true,
+    "compiler": "Crystal 1.21.0",
+    "ruby": "system Ruby 2.6.10",
+    "same_roster_per_mode": true,
+    "affected_spec_files": 33,
+    "examples_per_mode": 215,
+    "whole_suite": false,
+    "spec_groups": [
+      {
+        "name": "bulk",
+        "files": [
+          "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+          "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_adversary_spec.cr",
+          "spec/binary_dynamic_bulk_shared_context_w155_spec.cr",
+          "spec/binary_dynamic_physical_w156_spec.cr",
+          "spec/binary_dynamic_physical_w156_adversary_spec.cr",
+          "spec/dynamic_discriminator_w121_budget_spec.cr",
+          "spec/bulk_budget_w122_adversary_spec.cr"
+        ],
+        "examples_per_mode": 66,
+        "runs": [
+          {
+            "mode": "debug",
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr spec/bulk_budget_w122_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+            "exit": 0,
+            "signal": "66 examples, 0 failures, 0 errors, 0 pending"
+          },
+          {
+            "mode": "release",
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_dynamic_bulk_plan_w154_spec.cr spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/dynamic_discriminator_w121_budget_spec.cr spec/bulk_budget_w122_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+            "exit": 0,
+            "signal": "66 examples, 0 failures, 0 errors, 0 pending"
+          }
+        ]
+      },
+      {
+        "name": "focused",
+        "files": [
+          "spec/multi_column_tuple_dynamic_w246_spec.cr",
+          "spec/multi_column_part_writer_w245_spec.cr",
+          "spec/storage_read_budget_w245_spec.cr"
+        ],
+        "examples_per_mode": 8,
+        "runs": [
+          {
+            "mode": "debug",
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/multi_column_tuple_dynamic_w246_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+            "exit": 0,
+            "signal": "8 examples, 0 failures, 0 errors, 0 pending"
+          },
+          {
+            "mode": "release",
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/multi_column_tuple_dynamic_w246_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+            "exit": 0,
+            "signal": "8 examples, 0 failures, 0 errors, 0 pending"
+          }
+        ]
+      },
+      {
+        "name": "legacy",
+        "files": [
+          "spec/wide_part_writer_spec.cr",
+          "spec/wide_part_writer_typed_spec.cr",
+          "spec/wide_part_writer_metadata_w150_spec.cr",
+          "spec/wide_part_writer_plan_owners_w90_spec.cr",
+          "spec/wide_part_writer_compositional_tuple_spec.cr",
+          "spec/wide_part_writer_map_tuple_w108_spec.cr",
+          "spec/wide_part_writer_array_tuple_w107_spec.cr",
+          "spec/wide_part_writer_nullable_tuple_w105_spec.cr",
+          "spec/wide_part_writer_typed_mark_readback_spec.cr",
+          "spec/object_part_writer_w128_spec.cr",
+          "spec/object_part_writer_w128_root_spec.cr",
+          "spec/object_column_reader_w129_spec.cr",
+          "spec/dynamic_bulk_part_w203_spec.cr",
+          "spec/nested_bulk_part_w202_spec.cr",
+          "spec/recursive_storage_column_w186_spec.cr",
+          "spec/recursive_storage_reader_budget_w186_spec.cr",
+          "spec/recursive_storage_values_budget_w186_spec.cr",
+          "spec/recursive_storage_array_w187_spec.cr",
+          "spec/recursive_array_schema_w187_spec.cr",
+          "spec/recursive_array_table_w187_spec.cr",
+          "spec/recursive_tuple_metadata_w218_spec.cr"
+        ],
+        "examples_per_mode": 141,
+        "runs": [
+          {
+            "mode": "debug",
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_spec.cr spec/wide_part_writer_typed_spec.cr spec/wide_part_writer_metadata_w150_spec.cr spec/wide_part_writer_plan_owners_w90_spec.cr spec/wide_part_writer_compositional_tuple_spec.cr spec/wide_part_writer_map_tuple_w108_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/wide_part_writer_typed_mark_readback_spec.cr spec/object_part_writer_w128_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_column_reader_w129_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/nested_bulk_part_w202_spec.cr spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_tuple_metadata_w218_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+            "exit": 0,
+            "signal": "141 examples, 0 failures, 0 errors, 0 pending"
+          },
+          {
+            "mode": "release",
+            "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_spec.cr spec/wide_part_writer_typed_spec.cr spec/wide_part_writer_metadata_w150_spec.cr spec/wide_part_writer_plan_owners_w90_spec.cr spec/wide_part_writer_compositional_tuple_spec.cr spec/wide_part_writer_map_tuple_w108_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/wide_part_writer_typed_mark_readback_spec.cr spec/object_part_writer_w128_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_column_reader_w129_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/nested_bulk_part_w202_spec.cr spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_tuple_metadata_w218_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+            "exit": 0,
+            "signal": "141 examples, 0 failures, 0 errors, 0 pending"
+          }
+        ]
+      }
+    ],
+    "helper_builds": [
+      {
+        "mode": "debug",
+        "path": "/private/tmp/crystal-click-w246.cUsvNl/helper-debug",
+        "sha256": "220bc41a75d08bc53d7417f3b3f193127089d8318776a2354da546025d2e05f9",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_multi_column_tuple_dynamic_w246.cr -o /private/tmp/crystal-click-w246.cUsvNl/helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit": 0
+      },
+      {
+        "mode": "release",
+        "path": "/private/tmp/crystal-click-w246.cUsvNl/helper-release",
+        "sha256": "665c1fde8f5c5e3874dd7b93f69c9f06fc0d31cf24c3712952d037b1380c66d2",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_multi_column_tuple_dynamic_w246.cr -o /private/tmp/crystal-click-w246.cUsvNl/helper-release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+        "exit": 0
+      }
+    ],
+    "format": {
+      "files": [
+        "scripts/check_multi_column_tuple_dynamic_w246.cr",
+        "scripts/support/multi_column_tuple_dynamic_w246_fixture.cr",
+        "spec/multi_column_tuple_dynamic_w246_spec.cr",
+        "spec/multi_column_part_writer_w245_spec.cr",
+        "src/crystal_click/wide_part_writer/dynamic_wide_part_column_input.cr"
+      ],
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 300 8192 tool format --check scripts/check_multi_column_tuple_dynamic_w246.cr scripts/support/multi_column_tuple_dynamic_w246_fixture.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/multi_column_part_writer_w245_spec.cr src/crystal_click/wide_part_writer/dynamic_wide_part_column_input.cr",
+      "exit": 0
+    },
+    "ruby_syntax": [
+      {
+        "command": "/usr/bin/ruby -c scripts/probe_multi_column_tuple_dynamic_w246.rb",
+        "exit": 0
+      },
+      {
+        "command": "/usr/bin/ruby -c scripts/audit_multi_column_tuple_dynamic_w246.rb",
+        "exit": 0
+      }
+    ]
+  },
+  "native_qualification": {
+    "cells": [
+      {
+        "build": "debug",
+        "ordinary_string_profile": "single",
+        "actual_bulk_dynamic_layout": "BASIC",
+        "summary_path": "/private/tmp/crystal-click-w246-multi-debug-single.AJEKyS/summary.json",
+        "summary_sha256": "26af4ac556dd328aa67f5430d81055e8feb96cfec4ad223c6e53c8b2c80a89fc",
+        "generated_files": 44,
+        "generated_bytes": 6281,
+        "native_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_multi_column_tuple_dynamic_w246.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-debug --evidence-root /private/tmp/crystal-click-w246-multi-debug-single.AJEKyS --string-profile single --dynamic-mode basic --write-mode multi",
+        "native_exit": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_multi_column_tuple_dynamic_w246.rb --summary /private/tmp/crystal-click-w246-multi-debug-single.AJEKyS/summary.json --summary-sha256 26af4ac556dd328aa67f5430d81055e8feb96cfec4ad223c6e53c8b2c80a89fc --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-debug --helper-sha256 220bc41a75d08bc53d7417f3b3f193127089d8318776a2354da546025d2e05f9 --probe-source scripts/probe_multi_column_tuple_dynamic_w246.rb --probe-source-sha256 e333fabc7d2817e864e66b37ce4bedd19090510285f86e7a3841ec70e62292a0 --helper-source scripts/check_multi_column_tuple_dynamic_w246.cr --helper-source-sha256 f555cace57c0117923ef5363815c8944c77bbfb80c27285d6a7ab555d169335d --fixture-source scripts/support/multi_column_tuple_dynamic_w246_fixture.cr --fixture-source-sha256 136dc4d98dd30d2c35a42e62b8fe42f84bced21afddd1beb987181505deb6093 --auditor-source scripts/audit_multi_column_tuple_dynamic_w246.rb --auditor-source-sha256 ad6f1188b47ad1e3b3b9a6d31556ed58a2b60a18ec948fa06cc7f156882d5465 --self-test",
+        "audit_exit": 0,
+        "audit_result": {
+          "status": "raw_capture_authenticated",
+          "controls_passed": 7,
+          "all_controls_pass": true
+        }
+      },
+      {
+        "build": "debug",
+        "ordinary_string_profile": "sized",
+        "actual_bulk_dynamic_layout": "BASIC",
+        "summary_path": "/private/tmp/crystal-click-w246-multi-debug-sized.hIUDAH/summary.json",
+        "summary_sha256": "ce5470734fa770498e33d6f74e7702c87eb33c8343e67a98bb2cb770e8d8c6ed",
+        "generated_files": 54,
+        "generated_bytes": 7802,
+        "native_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_multi_column_tuple_dynamic_w246.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-debug --evidence-root /private/tmp/crystal-click-w246-multi-debug-sized.hIUDAH --string-profile sized --dynamic-mode basic --write-mode multi",
+        "native_exit": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_multi_column_tuple_dynamic_w246.rb --summary /private/tmp/crystal-click-w246-multi-debug-sized.hIUDAH/summary.json --summary-sha256 ce5470734fa770498e33d6f74e7702c87eb33c8343e67a98bb2cb770e8d8c6ed --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-debug --helper-sha256 220bc41a75d08bc53d7417f3b3f193127089d8318776a2354da546025d2e05f9 --probe-source scripts/probe_multi_column_tuple_dynamic_w246.rb --probe-source-sha256 e333fabc7d2817e864e66b37ce4bedd19090510285f86e7a3841ec70e62292a0 --helper-source scripts/check_multi_column_tuple_dynamic_w246.cr --helper-source-sha256 f555cace57c0117923ef5363815c8944c77bbfb80c27285d6a7ab555d169335d --fixture-source scripts/support/multi_column_tuple_dynamic_w246_fixture.cr --fixture-source-sha256 136dc4d98dd30d2c35a42e62b8fe42f84bced21afddd1beb987181505deb6093 --auditor-source scripts/audit_multi_column_tuple_dynamic_w246.rb --auditor-source-sha256 ad6f1188b47ad1e3b3b9a6d31556ed58a2b60a18ec948fa06cc7f156882d5465 --self-test",
+        "audit_exit": 0,
+        "audit_result": {
+          "status": "raw_capture_authenticated",
+          "controls_passed": 7,
+          "all_controls_pass": true
+        }
+      },
+      {
+        "build": "release",
+        "ordinary_string_profile": "single",
+        "actual_bulk_dynamic_layout": "BASIC",
+        "summary_path": "/private/tmp/crystal-click-w246-multi-release-single.0jb3Tu/summary.json",
+        "summary_sha256": "ceb7eace15122ff4e7ee5ddd31735b1359591d2af4bc9196ceeaf0b50039fcbe",
+        "generated_files": 44,
+        "generated_bytes": 6281,
+        "native_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_multi_column_tuple_dynamic_w246.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-release --evidence-root /private/tmp/crystal-click-w246-multi-release-single.0jb3Tu --string-profile single --dynamic-mode basic --write-mode multi",
+        "native_exit": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_multi_column_tuple_dynamic_w246.rb --summary /private/tmp/crystal-click-w246-multi-release-single.0jb3Tu/summary.json --summary-sha256 ceb7eace15122ff4e7ee5ddd31735b1359591d2af4bc9196ceeaf0b50039fcbe --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-release --helper-sha256 665c1fde8f5c5e3874dd7b93f69c9f06fc0d31cf24c3712952d037b1380c66d2 --probe-source scripts/probe_multi_column_tuple_dynamic_w246.rb --probe-source-sha256 e333fabc7d2817e864e66b37ce4bedd19090510285f86e7a3841ec70e62292a0 --helper-source scripts/check_multi_column_tuple_dynamic_w246.cr --helper-source-sha256 f555cace57c0117923ef5363815c8944c77bbfb80c27285d6a7ab555d169335d --fixture-source scripts/support/multi_column_tuple_dynamic_w246_fixture.cr --fixture-source-sha256 136dc4d98dd30d2c35a42e62b8fe42f84bced21afddd1beb987181505deb6093 --auditor-source scripts/audit_multi_column_tuple_dynamic_w246.rb --auditor-source-sha256 ad6f1188b47ad1e3b3b9a6d31556ed58a2b60a18ec948fa06cc7f156882d5465 --self-test",
+        "audit_exit": 0,
+        "audit_result": {
+          "status": "raw_capture_authenticated",
+          "controls_passed": 7,
+          "all_controls_pass": true
+        }
+      },
+      {
+        "build": "release",
+        "ordinary_string_profile": "sized",
+        "actual_bulk_dynamic_layout": "BASIC",
+        "summary_path": "/private/tmp/crystal-click-w246-multi-release-sized.GQ4S1M/summary.json",
+        "summary_sha256": "b31d845dfc252384636db1102fdad96c180151bab0ca0d84349b5442ae5f62eb",
+        "generated_files": 54,
+        "generated_bytes": 7802,
+        "native_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w246.cUsvNl/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_multi_column_tuple_dynamic_w246.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-release --evidence-root /private/tmp/crystal-click-w246-multi-release-sized.GQ4S1M --string-profile sized --dynamic-mode basic --write-mode multi",
+        "native_exit": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_multi_column_tuple_dynamic_w246.rb --summary /private/tmp/crystal-click-w246-multi-release-sized.GQ4S1M/summary.json --summary-sha256 b31d845dfc252384636db1102fdad96c180151bab0ca0d84349b5442ae5f62eb --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w246.cUsvNl/helper-release --helper-sha256 665c1fde8f5c5e3874dd7b93f69c9f06fc0d31cf24c3712952d037b1380c66d2 --probe-source scripts/probe_multi_column_tuple_dynamic_w246.rb --probe-source-sha256 e333fabc7d2817e864e66b37ce4bedd19090510285f86e7a3841ec70e62292a0 --helper-source scripts/check_multi_column_tuple_dynamic_w246.cr --helper-source-sha256 f555cace57c0117923ef5363815c8944c77bbfb80c27285d6a7ab555d169335d --fixture-source scripts/support/multi_column_tuple_dynamic_w246_fixture.cr --fixture-source-sha256 136dc4d98dd30d2c35a42e62b8fe42f84bced21afddd1beb987181505deb6093 --auditor-source scripts/audit_multi_column_tuple_dynamic_w246.rb --auditor-source-sha256 ad6f1188b47ad1e3b3b9a6d31556ed58a2b60a18ec948fa06cc7f156882d5465 --self-test",
+        "audit_exit": 0,
+        "audit_result": {
+          "status": "raw_capture_authenticated",
+          "controls_passed": 7,
+          "all_controls_pass": true
+        }
+      }
+    ],
+    "qualified_native_processes": 16,
+    "calls_per_cell": 4,
+    "all_native_processes_exit": 0,
+    "signals": [
+      "ATTACH succeeds",
+      "CHECK TABLE emits all_1_1_0\\t1\\t",
+      "Exact ordered schema and declared child types",
+      "Exact Dynamic actual types and scalar values",
+      "All six Array child row/position/type witnesses",
+      "One active Wide part, five rows, four marks",
+      "Current generated/pre-attach/active file inventories; only exact invalidation metadata added; detached source absent"
+    ],
+    "not_execution_attestation": true,
+    "source_closures": {
+      "ruby_before": {
+        "entries": 11,
+        "sha256": "68031e39774339b544d420c4eaee66a5de6805fac8980a7ce14323900a0b573a"
+      },
+      "ruby_after": {
+        "entries": 11,
+        "sha256": "68031e39774339b544d420c4eaee66a5de6805fac8980a7ce14323900a0b573a"
+      },
+      "crystal_before": {
+        "entries": 514,
+        "sha256": "5454bcb825ecc8e1fb1177c0415da85dbbb23bfa917310d307d182a96ef44321"
+      },
+      "crystal_after": {
+        "entries": 514,
+        "sha256": "5454bcb825ecc8e1fb1177c0415da85dbbb23bfa917310d307d182a96ef44321"
+      }
+    },
+    "same_source_closures_before_after_all_cells": true
+  },
+  "actual_byte_comparison": {
+    "command": "/usr/bin/ruby -rjson -rdigest -e 'counts=[];ARGV.each_slice(2) do |left,right|; a=Dir.children(left).sort;b=Dir.children(right).sort;abort \"file rosters differ\" unless a==b; bytes=0;a.each do |name|;x=File.binread(File.join(left,name));y=File.binread(File.join(right,name));abort \"bytes differ: #{name}\" unless x==y;bytes+=x.bytesize;end;counts << {left:left,right:right,files:a.size,bytes_per_part:bytes,comparison:\"actual_bytes_equal\"};end;puts JSON.generate(counts)' /private/tmp/crystal-click-w246-multi-debug-single.AJEKyS/generated/all_1_1_0 /private/tmp/crystal-click-w246-multi-release-single.0jb3Tu/generated/all_1_1_0 /private/tmp/crystal-click-w246-multi-debug-sized.hIUDAH/generated/all_1_1_0 /private/tmp/crystal-click-w246-multi-release-sized.GQ4S1M/generated/all_1_1_0",
+    "exit": 0,
+    "result": [
+      {
+        "left": "/private/tmp/crystal-click-w246-multi-debug-single.AJEKyS/generated/all_1_1_0",
+        "right": "/private/tmp/crystal-click-w246-multi-release-single.0jb3Tu/generated/all_1_1_0",
+        "files": 44,
+        "bytes_per_part": 6281,
+        "comparison": "actual_bytes_equal"
+      },
+      {
+        "left": "/private/tmp/crystal-click-w246-multi-debug-sized.hIUDAH/generated/all_1_1_0",
+        "right": "/private/tmp/crystal-click-w246-multi-release-sized.GQ4S1M/generated/all_1_1_0",
+        "files": 54,
+        "bytes_per_part": 7802,
+        "comparison": "actual_bytes_equal"
+      }
+    ],
+    "files_per_mode": 98,
+    "bytes_per_mode": 14083
+  },
+  "root_adversary": {
+    "command": "/usr/bin/ruby /private/tmp/crystal-click-w246.cUsvNl/replay_adversary.rb /private/tmp/crystal-click-w246-multi-debug-single.AJEKyS/summary.json /private/tmp/crystal-click-w246.cUsvNl/helper-debug",
+    "driver_path": "/private/tmp/crystal-click-w246.cUsvNl/replay_adversary.rb",
+    "driver_sha256": "5939a17f024dc21fcc858250b36e2bec36717b48e03c7a084556c730badde157",
+    "exit": 0,
+    "scope": "authenticated raw replay mutation evidence; in-memory only; not a complete forged-capture cryptographic audit",
+    "baseline": "raw_capture_authenticated",
+    "cases": [
+      {
+        "case": "same_value_wrong_actual_type",
+        "outcome": "rejected",
+        "exception": "AuditMultiColumnTupleDynamicW246::Failure",
+        "cause": "W246 audit: Dynamic actual type differs; observed \"UInt8\"",
+        "restored_replay": "accepted"
+      },
+      {
+        "case": "omitted_array_child",
+        "outcome": "rejected",
+        "exception": "AuditMultiColumnTupleDynamicW246::Failure",
+        "cause": "W246 audit: Array child occurrence count/order differs; observed 5",
+        "restored_replay": "accepted"
+      },
+      {
+        "case": "swapped_array_child_positions",
+        "outcome": "rejected",
+        "exception": "AuditMultiColumnTupleDynamicW246::Failure",
+        "cause": "W246 audit: Array child row/position/type differs; observed [\"3\", \"2\", \"Dynamic(max_types=1)\"]",
+        "restored_replay": "accepted"
+      },
+      {
+        "case": "check_zero_with_successful_process",
+        "outcome": "rejected",
+        "exception": "AuditMultiColumnTupleDynamicW246::Failure",
+        "cause": "W246 audit: stock ATTACH CHECK=1 differs; observed [\"all_1_1_0\\t0\\t\"]",
+        "restored_replay": "accepted"
+      },
+      {
+        "case": "invalid_null_witness",
+        "outcome": "rejected",
+        "exception": "AuditMultiColumnTupleDynamicW246::Failure",
+        "cause": "W246 audit: NULL Dynamic JSON witness differs; observed \"00\"",
+        "restored_replay": "accepted"
+      },
+      {
+        "case": "incomplete_captured_source_closure",
+        "outcome": "rejected",
+        "exception": "AuditMultiColumnTupleDynamicW246::Failure",
+        "cause": "Captured closure differs from independently recomputed live closure.",
+        "restored_replay": "accepted"
+      },
+      {
+        "case": "native_process_record_disagreement",
+        "outcome": "rejected",
+        "exception": "AuditMultiColumnTupleDynamicW246::Failure",
+        "cause": "W246 audit: raw process validation failed: ReconcileObjectSharedJSONInteropW241::AuditError: W246 native_create_table invocation JSON differs",
+        "restored_replay": "accepted"
+      }
+    ],
+    "final_fresh_run": "raw_capture_authenticated",
+    "capture_files_mutated": false
+  },
+  "preserved_guards": [
+    "JSON stays outside this Dynamic adapter",
+    "Unqualified Nested nominal children reject",
+    "Present incomplete or malformed Tuple metadata rejects",
+    "Mismatched parent grids reject",
+    "Logical/hashed physical collisions reject",
+    "Shared budget exhaustion rejects",
+    "Destination replacement/symlink refuses"
+  ],
+  "exclusions": [
+    "All legal type products or layouts",
+    "COMPACT bulk Dynamic output qualification",
+    "Compact part format",
+    "Arbitrary key/partition metadata",
+    "Projection/MV writing or execution closure",
+    "Reciprocal stock-write -> library-read qualification for this new fixture",
+    "Whole-suite, memory/performance or crash/fsync durability",
+    "Immutable execution provenance or complete forged-capture cryptographic audit"
+  ],
+  "decay": {
+    "triggers": [
+      "Relevant source/codec/consumer/helper/fixture/oracle changes",
+      "Compiler/runtime/profile changes",
+      "Temporary capture loss or changed bytes"
+    ],
+    "refresh": "Run the exact bounded gates and fresh stock captures; audit with new externally supplied pins.",
+    "failure_policy": "Infrastructure or audit failure is inconclusive. Do not widen admission or mark the overall goal complete."
+  }
+}

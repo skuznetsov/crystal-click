@@ -1,5 +1,41 @@
 # Crystal Click landmarks
 
+## Recursive root Tuple Dynamic N-column admission — W246
+
+- Status: VERIFIED / root adversary ROBUST within the finite target over clean
+  baseline `6bcf7e0`. Heavy fixture/harness work delegated to Luna Max; root
+  executes all gates, native captures, audits, byte comparisons and attacks.
+  Same-lineage review is correlated, not independent evidence.
+- The user's recursive composition premise is correct: existing serde already
+  supports these children. W245's root-Tuple guard was an overbroad adapter
+  boundary, not a missing codec. Pinned source `f25eb93` and two legacy stock
+  falsifiers establish that omitted Tuple metadata uses declared serializers;
+  only a present Tuple entry requires correctly ordered `subcolumns`.
+- Remove only that guard. `WidePartColumn.dynamic_bulk` now admits existing
+  JSON-free root Tuple plans without duplicating child serde or publication.
+  JSON, unqualified Nested, explicit incomplete Tuple metadata, collisions,
+  grids, budgets and overwrite refusals remain. Actual bulk Dynamic is BASIC;
+  an Object/JSON operation COMPACT argument does not select a COMPACT bulk layout.
+- Same 33 affected files / 215 examples per mode pass; both final helper builds,
+  five-file formatting and Ruby syntax pass. Four final native cells and raw
+  audits qualify sixteen stock calls, CHECK1, named/unnamed Tuple field order,
+  four independent Dynamic sites, dedicated/shared/NULL values and six Array
+  children after an empty parent mark. P=[2,2,1,EOF0], Q=[0,4,2], frame32.
+  Actual bytes of 98 files / 14,083 bytes per mode agree DEBUG/RELEASE.
+- Seven root authenticated-raw replay mutations reject with restored acceptance
+  and a fresh final audit: same-value wrong-type, missing/swapped child, CHECK0,
+  false NULL witness, incomplete source closure and process-record disagreement.
+  This is not immutable execution provenance or a complete forged-capture audit.
+- Active goal: legal read/write types + MV/projections before memory/performance.
+  Next: remaining nominal/layout/state handoffs, general key/partition metadata
+  and MV/projection writes; broad facade decomposition remains open.
+  Return pointers: [frontier](docs/SCHEMA_WIDE_PART_WRITER_FRONTIER.md),
+  [evidence index](.landmark/evidence/multi-column-tuple-dynamic-w246.json).
+  Standing authority: safe local implementation/tests and one verified atomic
+  feature commit; no push, history rewrite or resource-guard bypass. Refresh
+  after source/runtime/compiler/codec/consumer/helper/fixture/oracle changes or
+  capture loss; infrastructure failure is inconclusive, not wider admission.
+
 ## Schema-aware multi-column Wide publication — W245
 
 - Status: VERIFIED / root adversary ROBUST within the finite four-owner target
@@ -15,8 +51,10 @@
   envelope seam, not every physical owner/state/layout boundary.
 - Same 69 affected files / 414 examples per mode pass; both final helper builds,
   32-file Crystal formatting and Ruby syntax pass. Eight final native cells
-  (DEBUG/RELEASE x ordinary String0/1 x Dynamic BASIC/COMPACT) and raw audits
-  pass; COMPACT is not the part layout. Forty stock calls qualify one five-row
+  (DEBUG/RELEASE x ordinary String0/1 x Object/JSON operation BASIC/COMPACT) and
+  raw audits pass; W246 corrected the former broader Dynamic-mode label because
+  the bulk Dynamic owner always emits BASIC. COMPACT is not the part layout.
+  Forty stock calls qualify one five-row
   key+four-value Wide part per cell, CHECK1, exact schema/values/recursive child
   types, aggregate1497 and one active four-mark part. P=[2,2,1,EOF0], Q=[0,2,3].
   All 264 generated files / 38,584 bytes per mode agree by actual bytes.
@@ -27,7 +65,8 @@
 - Read budgets aggregate value-lane inspections/decoded-checksum passes/typed
   decoding; fixed envelope/key and per-plan/legacy admission work remain outside
   that claim. Recursive shared-MAP stays String0 while ordinary String0/1 is
-  independent. Root Tuple Dynamic and unqualified Nested adapters fail closed.
+  independent. At this checkpoint root Tuple Dynamic and unqualified Nested
+  adapters failed closed; W246 removes only the refuted root-Tuple guard.
   Exception stage cleanup is not SIGKILL/crash recovery or fsync durability.
 - Refutations: stale W230 refusal also fails on archived baseline (W233 already
   admits it); retain the invalid Nullable(Array) guard. Reserved-field parser

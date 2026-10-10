@@ -25,10 +25,6 @@ module CrystalClick
         if type.contains_json?
           raise UnsupportedFormatError.new("JSON is outside the admitted Dynamic bulk profile")
         end
-        if type.tag == BinaryDataType::TAG_NAMED_TUPLE || type.tag == BinaryDataType::TAG_UNNAMED_TUPLE
-          raise UnsupportedFormatError.new("W245 always-Default metadata does not admit root Tuple Dynamic subcolumns")
-        end
-
         parent_rows = preflight_granules!(granules, context.rows_per_mark)
         dynamic_plan = BinaryDynamicBulkPlan.new_with_budget(
           type,

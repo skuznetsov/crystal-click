@@ -1,9 +1,97 @@
 # Schema-aware Wide part writer frontier
 
-Document status: VERIFIED within the finite W245 target; root adversary ROBUST
-within scope (2026-10-10). This is not all-type/layout or whole-goal closure.
-Baseline: `dcb445d6864298e64be22e0dc71b3c5b240e8a65`.
+Document status: W246 VERIFIED / root adversary ROBUST within its finite
+target (2026-10-10); W245 remains historically qualified within its own scope.
+This is not all-type/layout or whole-goal closure.
+W245 baseline: `dcb445d6864298e64be22e0dc71b3c5b240e8a65`.
 Bounded context: synchronous creation of one new quiescent local Wide part.
+
+## Qualified transition: W246 recursive Tuple Dynamic publication
+
+Baseline: `6bcf7e0be1324a7bd385cd421e7fa22731620458`, initially clean.
+The preceding source probe is progress: it refutes the proposed need to invent
+a new child serializer or mandatory Tuple statistics entry before admitting
+the existing JSON-free Dynamic-bearing root Tuple codec in the N-column writer.
+
+The W245 adapter rejected root Tuple before building its existing Dynamic plan.
+Its stated metadata rationale is too strong. In pinned ClickHouse
+`f25eb93a0b890a3b87df05eb34e2af1f933b4089`,
+`SerializationInfo.cpp:432-443` permits an empty always-Default info map;
+`Block.cpp:1132-1144` falls back to the declared type's serializer;
+`DataTypeTuple.cpp:334-345` builds child serializers recursively. Our
+`ObjectColumnPartMetadata` likewise requires `subcolumns` only on a present
+selected Tuple entry, not on an omitted entry. A present incomplete entry must
+continue to reject. Source inspection is not new stock ATTACH qualification.
+
+W246 removes only that root-Tuple guard. Current additional admission:
+the existing JSON-free Dynamic-bearing root Tuple descriptor grammar through
+`WidePartColumn.dynamic_bulk`, using the same recursive codecs, physical plan,
+shared operation budgets, always-Default metadata and exclusive publisher.
+Finite qualification includes named and unnamed root Tuples together,
+independent Dynamic sites, an Array child with empty parent marks and later
+populated occurrences, NULL and overflow/shared values and both ordinary String
+profiles. DynamicBulkColumnWriter uses the existing BASIC physical discriminator
+prefix; the operation's Object/JSON mode option does not select a COMPACT bulk
+Dynamic layout. Qualification inspects the actual prefix and does not infer a
+layout from that option. No serializer per product.
+
+Preserved refusals: JSON in this Dynamic adapter; unsupported nominal children,
+layout/profile combinations, incomplete explicit Tuple metadata, collisions,
+mismatched grids, incompatible or exhausted budgets and target overwrite.
+No broader JSON grammar, Compact parts, arbitrary keys/partitions, MV/projection
+writes, memory/performance or crash-durability claim is introduced.
+
+Risk: CAUTION (persistent-format admission). Rollback: one scoped local commit;
+no push or history rewrite. Strongest failure: child registries or occurrence
+coordinates are exchanged while scalar JSON still looks correct. Guard check:
+compare exact Dynamic actual types, tuple field order, Array child counts and
+selected late granules, not just JSON values or self-roundtrip success.
+
+Executed plan and DoD:
+
+1. Add `spec/multi_column_tuple_dynamic_w246_spec.cr` plus a small shared fixture
+   and `scripts/check_multi_column_tuple_dynamic_w246.cr`. Root runs the focused
+   spec against the baseline and records the exact W245 refusal (RED).
+2. A bounded `scripts/probe_multi_column_tuple_dynamic_w246.rb` uses the existing
+   guarded raw-process capture owner. First exercise the legacy pair publisher
+   with omitted Tuple metadata and stock ATTACH/CHECK/exact types. This is a
+   format falsifier, not N-column admission evidence.
+3. Remove only the refuted root-Tuple guard; reuse existing owners. Replace the
+   old W245 Tuple expected-refusal assertion with admitted readback while
+   retaining its Nested nominal refusal. No new explicit metadata tree is
+   warranted unless the stock probe disproves default reconstruction.
+4. Root runs focused and affected Dynamic/publication regressions in DEBUG and
+   RELEASE under run_safe (50% free-memory gate, one worker, isolated cache).
+   Expected: zero failures/errors/pending. Build both helpers and execute the
+   native String0/String1 BASIC-bulk matrix in both build modes. Expected:
+   ATTACH, CHECK=1, exact schema/values/actual types and complete-part inventories.
+5. A separately run read-only audit and hostile output/type/metadata controls
+   must reject wrong-type/same-value, missing/swapped children, CHECK0 and
+   incomplete provenance. Record source/helper/runtime pins and exact commands;
+   synchronize this frontier, project status and landmarks before one atomic
+   local commit. Whole-goal completion remains unproven and ACTIVE.
+
+Observed seal: RED rejects at the original W245 root-Tuple guard. With that
+guard intact, the legacy pair publisher passes stock ATTACH/CHECK=1 in both
+String profiles while omitting the selected Tuple entry. These are historical
+pre-change falsifiers, not live-source N-column qualification.
+
+After removal, the same 33 affected spec files pass 215 examples per mode,
+zero failures/errors/pending; both helper builds, five-file formatting and
+Ruby syntax pass. Four final N-column cells (DEBUG/RELEASE x ordinary String0/1,
+actual BASIC bulk Dynamic, frame32) and their independently executed raw audits
+pass. Sixteen stock calls establish CHECK=1, exact schema, Dynamic actual types,
+five parent rows, six ordered Array children and one active four-mark Wide part.
+All 98 generated files / 14,083 bytes per mode agree by actual bytes. Seven
+root in-memory authenticated-raw replay mutations reject through real guards
+with restored acceptance and a fresh final audit. They are not immutable
+execution provenance or a complete forged-capture cryptographic audit.
+See the [W246 evidence index](../.landmark/evidence/multi-column-tuple-dynamic-w246.json).
+
+Stop rules: preserve the refusal if stock behavior disproves the omitted-entry
+path; do not weaken metadata, nominal-type, budget or publication guards to get
+green. Requalify after relevant source, compiler, profile, fixture/helper,
+runtime or capture changes.
 
 ## Problem and boundary
 
@@ -22,8 +110,10 @@ on `WidePartColumn` select the existing owners:
 - `recursive(name, schema, object_plans, granules, ...)` for the existing
   JSON-bearing Tuple/Array schema and optional occurrence-specific Dynamic plans.
 
-One global `profile`, shared-Object profile, Dynamic discriminator mode, frame
-bound and operation limit set belong to the writer call. LZ4 is fixed. Factories
+One global `profile`, shared-Object profile, Object/JSON discriminator mode,
+frame bound and operation limit set belong to the writer call. Dynamic bulk
+retains its existing BASIC discriminator layout independently of the Object
+mode option; passing COMPACT is not evidence of a COMPACT bulk output. LZ4 is fixed. Factories
 do not admit arbitrary
 raw files, opaque unknown aggregate states, or an unvalidated nominal type.
 Root Object inputs may override the advanced shared-JSON policy and target
@@ -59,10 +149,11 @@ Rejected: duplicate key/value names, cross-column logical or physical stream
 collisions (including hashed filenames), mismatched parent grids, unsorted or
 empty keys, unsupported descriptors/layouts, mixed global String versions,
 out-of-budget operations, existing destinations and symlinks.
-Root Tuple Dynamic inputs are also refused by this envelope: the existing
-root Tuple reader requires selected-subcolumn metadata, whereas W245 emits
-always-Default `columns: []`. The recursive site owner remains separate;
-this is not a missing child serializer or a change to the old pair writer.
+Root Tuple Dynamic inputs now reuse the existing Dynamic plan through the
+W246 adapter with always-Default `columns: []`. The earlier explanation that
+the reader requires an explicit selected-subcolumn entry was refuted: only a
+present selected Tuple entry requires child metadata. The named/unnamed finite
+qualification above removes that conservative guard, not a missing serializer.
 Recursive BinaryBulk leaves containing Nested must also pass the existing
 WideNestedTypePlan nominal owner. A JSON-bearing parent does not admit an
 otherwise unqualified Nested child layout.
@@ -177,9 +268,12 @@ seven focused), zero failures/errors/pending. Final formatting covers all 32
 changed Crystal files. Both final helper builds and both Ruby syntax checks
 pass. This is an affected-surface gate, not execution of the entire suite.
 
-All eight final-source DEBUG/RELEASE x String0/String1 x Dynamic BASIC/COMPACT
-captures and their separately executed raw audits pass. COMPACT here is the
-Dynamic discriminator mode, not the Compact part layout. Each capture has one
+All eight final-source DEBUG/RELEASE x String0/String1 x Object/JSON mode
+BASIC/COMPACT captures and their separately executed raw audits pass. W246
+source inspection corrects the earlier description of this matrix: the mode
+option reaches the Object/JSON owner, but the bulk Dynamic owner emits BASIC
+independently. These cells do not qualify COMPACT bulk Dynamic or Compact part
+publication. Each capture has one
 five-row library-written Wide part with UInt64 key plus:
 
 - static `Tuple(label LowCardinality(String), total AggregateFunction(sum, UInt8))`;
@@ -205,6 +299,13 @@ cryptographic execution provenance or crash-recovery evidence.
 
 Refutations and corrections retained:
 
+- W246 source inspection refutes the mandatory root-Tuple metadata rationale:
+  omitted statistics use recursively declared serializers; only a present Tuple
+  entry requires child metadata. The W245 refusal was conservative admission,
+  not a missing recursive codec. The W246 transition above qualifies its removal.
+- The W245 mode labels describe the operation's Object/JSON option. Its root
+  bulk Dynamic stream remains BASIC, so the historical matrix is not evidence
+  for a COMPACT bulk Dynamic implementation.
 - A W230 expected-refusal test already fails on the unchanged baseline because
   W233 admits that Dynamic actual. Its exact-child positive assertion is
   updated; the invalid Nullable(Array) negative control remains.
