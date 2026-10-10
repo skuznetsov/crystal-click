@@ -9,6 +9,43 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
+## Caller-run materialized-view transform responsibility separation — W257
+
+Five one-class owners separate the bounded transform path: `WidePartSchemaBinding`
+owns the exact ordered target DDL roster; `WidePartTransformOutput` owns
+detached output keys and existing value-column owners;
+`OfflineTypedSelectionAdmission` owns the selected typed-schema boundary;
+`OfflinePartTransformInput` owns the one-shot candidate-scoped source scan;
+and `OfflineMaterializedViewPartTransform` coordinates scan, callback and
+target publication. The existing static BinaryBulk, Dynamic, Object and
+recursive column owners remain the value codecs. Target validation occurs
+before publication input/metadata/staging, and all output columns use the
+existing shared writer operation and budgets. This adds no per-type serializer.
+
+Status: VERIFIED / scoped ROBUST for one caller-run source-part scan, filter /
+compute / rekey and detached Wide publication bound to exact target DDL. The
+sealed ordered 29-spec roster passes 159 examples in each mode; RELEASE ran as
+serial 14/48/25/37/18/15/2-example cohorts, all with zero failures/errors/
+pending. The combined roster and initial 14-file compile hit the unchanged
+12-GiB process-tree guard before tests and are inconclusive. Both sealed helpers
+build. Fresh native DEBUG and RELEASE cells complete all four calls with exit
+0, including ATTACH/CHECK and reciprocal source/target RowBinary. Six protocol
+controls per mode pass; 25 root auditor controls per cell reject, using a
+separately written literal encoder and mutated capture copies;
+24 invocation captures per mode are unchanged. DEBUG and RELEASE output agrees
+by actual bytes (58 files, 7,358 bytes per mode). Stock ATTACH adds only the
+exactly guarded `invalidated_system_columns.txt` marker; all original generated
+files remain unchanged. The W257 source comparison and executed server build
+are separately identified, not asserted to be the same source/runtime.
+
+This is not ClickHouse SELECT execution or proof of SQL equivalence, source
+provenance, triggers, freshness or source-byte immutability. General keys and
+partitions, transform-produced projection children, remaining type/layout/state
+families, parent `.proj` reader authentication, Compact writing and broad
+facade decomposition remain open. Performance is deferred; the overall goal
+remains ACTIVE. Details: [W257 frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md),
+[W257 evidence index](../.landmark/evidence/materialized-view-transform-w257.json).
+
 ## Projection publication responsibility separation — W256
 
 The public `WidePartProjection` has its own file and owns detached caller-
@@ -27,7 +64,9 @@ Root checks raw child summaries, actual projection-use captures and hostile
 acceptance controls. This is cohesive ownership/reuse, not completed broad
 facade decomposition or evidence of reduced allocation/RSS/compiler coupling
 or improved throughput. Parent-summary authentication in selected readers,
-general caller-run MV transformations and remaining physical products are open.
+general key/partition derivation, transform-produced projection children and
+remaining physical products are open; W257 separately qualifies the bounded
+one-source-part caller-run transform path.
 Details: [W256 frontier](PROJECTION_PUBLICATION_FRONTIER.md),
 [W256 evidence index](../.landmark/evidence/projection-publication-w256.json).
 

@@ -246,7 +246,8 @@ module CrystalClick
               source_row_offset &+ part_row_offset,
               @columns,
               part.column_types,
-              slices
+              slices,
+              row_count: mark_rows
             )
           end
           part_row_offset &+= mark_rows
@@ -2881,7 +2882,8 @@ module CrystalClick
                 map_string_numeric_values: numeric_map_string_slices,
                 array_map_string_uint64_values: array_map_string_uint64_slices,
                 array_map_numeric_values: array_map_numeric_slices,
-                tuple_row_values: tuple_row_slices
+                tuple_row_values: tuple_row_slices,
+                row_count: size.to_u64
               )
               part.readers.each do |selected|
                 if values = aggregate_count_slices[selected.name]?
@@ -3154,7 +3156,8 @@ module CrystalClick
               source_row_offset &+ part_row_offset &+ mark_row_offset,
               @columns,
               part.column_types,
-              slices
+              slices,
+              row_count: size.to_u64
             )
             yield batch
             mark_row_offset &+= size.to_u64

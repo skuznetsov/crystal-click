@@ -1,6 +1,40 @@
 # CrystalClick project status
 
-Current qualification (W256, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W257, 2026-10-10): VERIFIED / root adversary ROBUST within
+the bounded caller-run, one-source-part transform and publication path. A
+candidate-scoped typed scan feeds a caller callback; detached output keys and
+existing `WidePartColumn` owners are checked against an exact target DDL roster
+before the shared writer operation publishes a fresh Wide part. Five cohesive
+owners separate target binding, detached transform output, typed selection
+admission, one-shot part input and transform coordination. This reuses the
+existing static BinaryBulk, Dynamic, Object and recursive owners; it does not
+add per-type serializers or execute a ClickHouse query.
+
+The sealed ordered 29-spec roster passes 159 examples in DEBUG and RELEASE,
+with zero failures/errors/pending. The RELEASE run used serial cohorts of
+14/48/25/37/18/15/2 examples; the combined-roster and first-14 compilation
+attempts hit the unchanged 12-GiB process-tree guard before tests and are
+inconclusive, not behavioral passes or failures. Both sealed helpers build. Fresh native
+DEBUG and RELEASE cells complete all four calls with exit 0, including actual
+ATTACH/CHECK and reciprocal source/target RowBinary. Six protocol controls per
+mode pass; 25 negative auditor controls per cell reject. The 24 invocation captures per
+mode remain unchanged. The detached `all_9_9_0` target is attached as fresh
+`all_1_1_0`; the only permitted server-added file is
+`invalidated_system_columns.txt` with exact bytes `_block_offset\n_block_number\n`,
+and all original generated files remain unchanged. DEBUG/RELEASE generated
+output agrees byte-for-byte: 58 files, 7,358 bytes per mode. The source
+comparison at `ed30948f095ecb70679986d7d60e27ad770ae27a` is distinct from the
+executed ClickHouse build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`.
+
+This does not establish SELECT equivalence, provenance, triggers, freshness or
+source-byte immutability. General key/partition derivation, transform-produced
+projection children, remaining type/layout/state products, parent `.proj` reader
+authentication, Compact writing and broad facade decomposition remain open;
+performance is deferred. Overall goal ACTIVE. See the [W257 frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md)
+and [root-owned evidence](../.landmark/evidence/materialized-view-transform-w257.json).
+Memory/performance deferred; local atomic commit only, no push.
+
+Previous qualification (W256, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite precomputed Wide projection publication target. The public
 `WidePartProjection.precomputed` owner carries caller-computed rows, independent
 UInt64 keys and a mark grid; the generic N-column writer accepts `projections:`.
@@ -3338,9 +3372,15 @@ source/runtime identities and executed evidence.
    persisted MV materializer is one explicit-TO identity projection over
    unpartitioned `k UInt64, v String`. W256 adds atomic publication of caller-
    precomputed, non-nested Wide projection children through existing column
-   owners, including the parent checksum summary. SQL projection planning/
-   automatic materialization and arbitrary MV transformations are not implemented;
-   physical validity is not proof of SELECT equivalence or freshness.
+   owners, including the parent checksum summary. W257 adds a candidate-scoped
+   typed scan of one source part, caller-run filtering/computation/rekeying and
+   publication of detached columns bound to an exact target DDL roster. The
+   scan must complete under the one-shot protocol; callbacks cannot reenter or
+   hide failures. This is not SQL query execution, SELECT equivalence, provenance,
+   trigger/freshness propagation or source-byte immutability. General keys and
+   partitions, transform-produced projections, parent `.proj` reader
+   authentication, remaining layouts/types and automatic materialization remain
+   open.
 4. **General table writing.** The detached-part writers and small
    `EmbeddedMergeTreeTable` are not an arbitrary-schema, arbitrary-partition
    MergeTree writer with compound keys and a server lifecycle.
@@ -3490,12 +3530,13 @@ source/runtime identities and executed evidence.
    distinct source laws and native witnesses, not a generic opaque-blob fallback.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
-   W256 now qualifies precomputed projection publication. Next is a selected-part
-   scan through existing DDL/type preflight and caller-run batch transformation
-   into target-schema-bound detached output. Preserve owner-specific recursive
-   values and independent filtered/recomputed keys; do not rename a caller-row
-   writer as execution. Failed callbacks/wrong target schemas must not publish.
-   General key/partition derivation and composable output appenders remain open.
+   W256 qualifies precomputed projection publication; W257 now qualifies a
+   selected one-part scan, caller-run batch transformation and exact target-
+   schema-bound detached publication, reusing the existing typed column owners.
+   Failed callbacks, incomplete/reentrant scans and wrong target schemas must
+   not publish. Next are general key/partition derivation, transform-produced
+   projection children, and composable output appenders. This remains a
+   caller-run physical operation, not SQL execution, provenance or freshness.
 4. Only then reopen memory/performance work. No current claim of stock-reader
    speed parity or a quantified percentage of complete ClickHouse support.
 

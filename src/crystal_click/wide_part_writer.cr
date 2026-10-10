@@ -38,12 +38,13 @@ module CrystalClick
       shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
       shared_target_chunk_rows : Int32 = 1,
       projections : Array(WidePartProjection) = [] of WidePartProjection,
+      schema_binding : WidePartSchemaBinding? = nil,
     ) : String
       WidePartOperation.write_uint64_columns(
         destination, key_name, keys, columns, rows_per_mark, profile,
         shared_profile, mode, frame_bytes, metadata_version, limits,
         transport_limits, shared_json_policy, shared_target_chunk_rows,
-        projections
+        projections, schema_binding
       )
     end
 

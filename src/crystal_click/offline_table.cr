@@ -1668,6 +1668,40 @@ module CrystalClick
       end
     end
 
+    # Open exactly one named candidate from the globally resolved covering
+    # set. Resolution and the ordinary typed DDL/physical checks remain in
+    # force; this seam does not let callers bypass candidate selection with a
+    # raw path. It also rejects selected ALIAS sources only for this
+    # materialized-view transform handoff.
+    def open_typed_candidate_reader(
+      part_name : String,
+      columns : Array(String),
+      batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+    ) : Tuple(OfflinePartCandidate, WidePartTable)
+      raise BoundsError.new("source part name is empty or exceeds limit") if part_name.empty? || part_name.bytesize > WidePartTable::MAX_PART_NAME_BYTES
+      candidates = resolved_scan_parts
+      selected = candidates.select { |candidate| candidate.name == part_name }
+      unless selected.size == 1
+        raise InvalidPartError.new("selected source part is absent or ambiguous in the resolved candidate set")
+      end
+
+      candidate = selected.first
+      columns.each do |column_name|
+        source_name = resolve_typed_ddl_selection(column_name, allow_unsupported_exact: true)[0]
+        source_column = @columns.find { |entry| entry.name == source_name } ||
+                        raise(CorruptPartError.new("selected column disappeared from table DDL"))
+        if source_column.alias_column
+          raise UnsupportedFormatError.new("ALIAS columns cannot be selected by materialized-view transform")
+        end
+      end
+      reader = open_typed_reader(columns, batch_rows, "batch", selected) ||
+               raise(InvalidPartError.new("selected source part is absent from the resolved candidate set"))
+      unless reader.total_row_count == candidate.row_count
+        raise CorruptPartError.new("selected typed source row count differs from its resolved candidate")
+      end
+      {candidate, reader}
+    end
+
     # Scan only exact canonical QBit and Nullable(QBit) columns through the
     # shared typed reader. Table-DDL/part matching is checked before callbacks.
     def scan_qbit(
@@ -1738,7 +1772,12 @@ module CrystalClick
       end
     end
 
-    private def open_typed_reader(columns : Array(String), row_limit : Int, row_limit_label : String) : WidePartTable?
+    private def open_typed_reader(
+      columns : Array(String),
+      row_limit : Int,
+      row_limit_label : String,
+      candidate_scope : Array(OfflinePartCandidate)? = nil,
+    ) : WidePartTable?
       reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
@@ -1759,15 +1798,14 @@ module CrystalClick
         end
 
         source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name)
-        object_root = !json_path && WidePart.json_type?(source_type)
-        unless object_root || WidePart.supports_typed_type?(selected_type) || WidePart.supports_generic_static_binary_bulk_type?(selected_type)
+        unless OfflineTypedSelectionAdmission.admitted?(source_type, selected_type, json_path)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
       end
 
       count_plan = AggregateCountOfflineAdmission.plan_for(self, columns)
-      candidates = resolved_scan_parts
+      candidates = candidate_scope || resolved_scan_parts
       AggregateCountOfflineAdmission.validate_candidates!(count_plan, candidates)
       return nil if candidates.empty?
 
@@ -3925,8 +3963,7 @@ module CrystalClick
         else
           selected_type = WidePart.catalog_type(selected.type) || selected.type
         end
-        unless allow_unsupported_exact || object_root || WidePart.supports_typed_type?(selected_type) ||
-               WidePart.supports_generic_static_binary_bulk_type?(selected_type)
+        unless allow_unsupported_exact || OfflineTypedSelectionAdmission.admitted?(selected.type, selected_type, false)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         return {selected.name, selected.type, selected_type, false}

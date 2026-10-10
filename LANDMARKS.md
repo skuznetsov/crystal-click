@@ -1,5 +1,55 @@
 # Crystal Click landmarks
 
+## Catalog-bound caller-run materialized-view part transform — W257
+
+- VERIFIED / root adversary ROBUST within the bounded target over baseline
+  `84ba802c503f7d9be8fc75e9a7d07cbf8ecfa99c`. One complete selected-source-part
+  scan feeds caller Crystal logic, then exact target-DDL binding and identity
+  refresh precede detached Wide publication through existing column owners.
+  Input, output, coordinator, binding and typed-selection admission each have
+  their own file. No SQL SELECT interpretation, provenance, trigger or freshness
+  guarantee; caller output is independently sorted and nonempty.
+- Baseline W88 identity control passes while non-identity SELECT is refused.
+  A native fixture exposed the offline typed-DDL handoff gap, not missing serde;
+  one shared admission owner now routes exact Dynamic/Object/recursive roots to
+  existing readers while preserving selected ALIAS, canonical and physical
+  identity guards. A separate parser RED showed duplicate CHECK overwriting a
+  raw zero; duplicate completed blocks now reject. Initial fixture/harness
+  diagnostics and two compile-only memory-guard kills are not certificates.
+- Same ordered 29-file roster: 159 examples per DEBUG/RELEASE mode, zero
+  failures/errors/pending. RELEASE uses seven serial nonoverlapping cohorts
+  with unchanged flags/12 GiB ceiling. Both helpers build; two fresh native
+  cells pass actual ATTACH/CHECK=1/exact schema and literal transformed values.
+  Five columns exercise static, Dynamic, typed-only Object and ragged
+  Array(Tuple(JSON, Dynamic)); six source rows become four changed rows.
+- Root's six protocol controls pass each mode, including full-count early break,
+  swallowed violations and post-success retained-handle refusal. Literal native
+  RowBinary agrees (source 257 bytes / target 184 bytes); 25 finite auditor
+  controls reject per mode, then acceptance passes and 24 captures/cell remain
+  unchanged. Generated modes agree in all 58 files / 7,358 bytes. These checks
+  do not qualify unseen layouts or exhaustive production corruption behavior.
+- Detached `all_9_9_0` becomes fresh active `all_1_1_0`; the sole allowed added
+  file is `invalidated_system_columns.txt`, exact `_block_offset\n_block_number\n`
+  (28 bytes). Every original generated file remains unchanged. Block identity
+  is neither key range nor provenance.
+- Return pointers: [W257 frontier](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md),
+  [root evidence](.landmark/evidence/materialized-view-transform-w257.json).
+  Comparison `ed30948f095ecb70679986d7d60e27ad770ae27a` is distinct from executed
+  CH build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Refresh after input/admission/
+  binding/codec/layout/publisher/tool/helper/oracle changes or capture loss.
+  Same-lineage model review is correlated. Caller accumulation is not bounded
+  before owner preparation; concurrent catalog/payload mutations and caller
+  external effects are not transactional.
+- Return frontier: remaining aggregate state laws and common physical-context
+  handoffs, bounded output appenders, transform/projection composition and reader
+  parent-manifest authentication. Local nested Object Compact-like adapters
+  already exist; connect their event/mark semantics to top-level framing rather
+  than inventing serde per wrapper product. Next context falsifier: a stock
+  Compact part with representative static/Array/Tuple/Dynamic/Object values,
+  selected reads and reciprocal value oracle; proposed, not yet implemented.
+  General keys/partitions and broad facade decomposition remain open. Full goal
+  ACTIVE; memory/performance deferred; local commit only, no push or speed claim.
+
 ## Caller-precomputed projection publication through shared column owners — W256
 
 - VERIFIED / root adversary ROBUST within the finite target over clean baseline

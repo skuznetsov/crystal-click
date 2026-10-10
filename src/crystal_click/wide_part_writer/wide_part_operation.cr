@@ -20,6 +20,7 @@ module CrystalClick
         shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
         shared_target_chunk_rows : Int32 = 1,
         projections : Array(WidePartProjection) = [] of WidePartProjection,
+        schema_binding : WidePartSchemaBinding? = nil,
       ) : String
         if projections.size > WidePartWriter::MAX_PROJECTIONS
           raise UnsupportedFormatError.new("projection count exceeds the writer limit")
@@ -36,6 +37,7 @@ module CrystalClick
 
         prepared = Array(WidePartPreparedColumn).new(columns.size)
         columns.each { |column| prepared << column.prepare(context) }
+        schema_binding.try { |binding| binding.validate!(key_name, prepared) }
         projection_names = retained_projections.map(&.name)
 
         input = WidePartPublicationInput.prepare(

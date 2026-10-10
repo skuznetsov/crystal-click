@@ -10,6 +10,9 @@ module CrystalClick
     getter mark_row_offset : UInt64
     getter part_row_offset : UInt64
     getter source_row_offset : UInt64
+    # Exact number of rows represented by the selected value slices when the
+    # reader can provide it. Compatibility batches may leave this unknown.
+    getter row_count : UInt64?
 
     @column_names : Array(String)
     @column_types : Array(String)
@@ -85,7 +88,9 @@ module CrystalClick
       @column_names : Array(String),
       column_types : Array(String),
       @column_values : Array(WidePartNumericSlice),
+      row_count : UInt64? = nil,
     )
+      @row_count = row_count
       @column_types = column_types
       @typed_numeric_values = Hash(String, WidePartNumericSlice).new
       @qbit_values = Hash(String, Slice(QBitValue)).new
@@ -152,7 +157,9 @@ module CrystalClick
       @source_row_offset : UInt64,
       @column_names : Array(String),
       column_values : Array(Slice(UInt64)),
+      row_count : UInt64? = nil,
     )
+      @row_count = row_count
       @column_types = Array(String).new(column_values.size, "UInt64")
       @column_values = column_values.map { |values| values.as(WidePartNumericSlice) }
       @typed_numeric_values = Hash(String, WidePartNumericSlice).new
@@ -224,7 +231,9 @@ module CrystalClick
       @typed_numeric_values : Hash(String, WidePartNumericSlice),
       @string_values : Hash(String, Slice(String)),
       @nullable_values : Hash(String, WidePartNullableSlice),
+      row_count : UInt64? = nil,
     )
+      @row_count = row_count
       @qbit_values = Hash(String, Slice(QBitValue)).new
       @point_values = Hash(String, Slice(WidePointValue)).new
       @nullable_qbit_values = Hash(String, Slice(QBitValue?)).new
@@ -334,7 +343,9 @@ module CrystalClick
       array_map_string_uint64_values : Hash(String, Slice(Array(Array(Tuple(String, UInt64))))) = Hash(String, Slice(Array(Array(Tuple(String, UInt64))))).new,
       @array_map_numeric_values : Hash(String, WidePartArrayMapNumericSliceBase) = Hash(String, WidePartArrayMapNumericSliceBase).new,
       tuple_row_values : Hash(String, Slice(WideTupleRow)) = Hash(String, Slice(WideTupleRow)).new,
+      row_count : UInt64? = nil,
     )
+      @row_count = row_count
       @qbit_values = Hash(String, Slice(QBitValue)).new
       @point_values = Hash(String, Slice(WidePointValue)).new
       @nullable_qbit_values = Hash(String, Slice(QBitValue?)).new

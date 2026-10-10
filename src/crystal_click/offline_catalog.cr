@@ -393,6 +393,292 @@ module CrystalClick
       )
     end
 
+    # Run one caller-owned transformation over a single, catalog-resolved
+    # source part and publish its typed output only below the resolved target's
+    # detached directory. Persisted SELECT text is metadata; it is not run.
+    def transform_materialized_view_part(
+      database : String,
+      view_name : String,
+      source_part_name : String,
+      source_columns : Array(String),
+      output_part_name : String,
+      rows_per_mark : Int32 = 8192,
+      batch_rows : Int32 = WidePartTable::DEFAULT_BATCH_ROWS,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      mode : UInt64 = ObjectDocumentCodec::DEFAULT_MODE,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      shared_target_chunk_rows : Int32 = 1,
+      &callback : OfflinePartTransformInput -> WidePartTransformOutput
+    ) : String
+      if rows_per_mark <= 0 || rows_per_mark > WidePartWriter::MAX_ROWS_PER_MARK
+        raise BoundsError.new("rows_per_mark is out of range")
+      end
+      if batch_rows <= 0 || batch_rows > WidePartTable::MAX_BATCH_ROWS
+        raise BoundsError.new("transform batch_rows is out of range")
+      end
+
+      view = table(database, view_name)
+      unless view.kind == :materialized_view && view.engine == "MaterializedView"
+        raise UnsupportedFormatError.new("selected view is not a persisted MATERIALIZED VIEW")
+      end
+      descriptor = view.materialized_view || raise(UnsupportedFormatError.new("MATERIALIZED VIEW metadata is unavailable"))
+      unless descriptor.source_references_complete? && descriptor.source_references.size == 1
+        raise UnsupportedFormatError.new("transform requires one complete direct MATERIALIZED VIEW source reference")
+      end
+      source_reference = descriptor.source_references.first
+      source_database = source_reference.database
+      source_name = source_reference.name
+
+      # This existing resolver enforces named/INNER UUID identity. Do not
+      # replace it with a table-name lookup from SQL text.
+      target = resolve_materialized_view_target(database, view_name)
+      source = table(source_database, source_name)
+      unless source.kind == :table && source.engine == "MergeTree"
+        raise UnsupportedFormatError.new("transform source must be an ordinary MergeTree table")
+      end
+      source_uuid = source.uuid
+      target_uuid = target.uuid
+      if source_uuid == target_uuid
+        raise UnsupportedFormatError.new("transform source and target must be distinct tables")
+      end
+      source_ddl = source.metadata_ddl || raise(UnsupportedFormatError.new("transform source DDL is unavailable"))
+      target_ddl = target.metadata_ddl || raise(UnsupportedFormatError.new("transform target DDL is unavailable"))
+      view_ddl = view.metadata_ddl || raise(UnsupportedFormatError.new("MATERIALIZED VIEW DDL is unavailable"))
+
+      schema_binding = transform_target_schema_binding(target, rows_per_mark)
+      destination, output_info = transform_validate_destination!(target, output_part_name)
+      target.resolved_scan_parts
+      target.part_candidates.each do |candidate|
+        if candidate.info.overlaps?(output_info)
+          raise InvalidPartError.new("transform output identity overlaps a target part candidate: #{candidate.name}")
+        end
+      end
+
+      source_candidate, source_reader = source.open_typed_candidate_reader(
+        source_part_name,
+        source_columns,
+        batch_rows
+      )
+      input = OfflinePartTransformInput.new(
+        source_reader,
+        source_reader.columns,
+        source_reader.column_types,
+        source_candidate.row_count,
+        batch_rows
+      )
+      operation = OfflineMaterializedViewPartTransform.new(
+        input,
+        destination,
+        schema_binding,
+        schema_binding.key_name,
+        rows_per_mark,
+        profile,
+        shared_profile,
+        mode,
+        frame_bytes,
+        metadata_version,
+        limits,
+        transport_limits,
+        shared_json_policy,
+        shared_target_chunk_rows
+      )
+
+      revalidate = -> do
+        current_view = table(database, view_name)
+        unless current_view.kind == :materialized_view && current_view.engine == "MaterializedView" &&
+               current_view.uuid == view.uuid && current_view.metadata_ddl == view_ddl
+          raise InvalidPartError.new("MATERIALIZED VIEW metadata changed during transform callback")
+        end
+
+        current_descriptor = current_view.materialized_view || raise(InvalidPartError.new("MATERIALIZED VIEW metadata disappeared during transform callback"))
+        unless current_descriptor.source_references_complete? && current_descriptor.source_references.size == 1 &&
+               current_descriptor.source_references.first.database == source_database &&
+               current_descriptor.source_references.first.name == source_name
+          raise InvalidPartError.new("MATERIALIZED VIEW source identity changed during transform callback")
+        end
+
+        current_target = resolve_materialized_view_target(database, view_name)
+        unless current_target.uuid == target_uuid && current_target.metadata_ddl == target_ddl
+          raise InvalidPartError.new("MATERIALIZED VIEW target identity changed during transform callback")
+        end
+        current_target.resolved_scan_parts
+        current_binding = transform_target_schema_binding(current_target, rows_per_mark)
+        unless current_binding.columns == schema_binding.columns
+          raise InvalidPartError.new("MATERIALIZED VIEW target schema changed during transform callback")
+        end
+
+        current_source = table(source_database, source_name)
+        unless current_source.kind == :table && current_source.engine == "MergeTree" &&
+               current_source.uuid == source_uuid && current_source.metadata_ddl == source_ddl
+          raise InvalidPartError.new("MATERIALIZED VIEW source identity changed during transform callback")
+        end
+        current_candidates = current_source.resolved_scan_parts
+        current_selected = current_candidates.select { |candidate| candidate.name == source_part_name }
+        unless current_selected.size == 1 && transform_same_candidate?(current_selected.first, source_candidate)
+          raise InvalidPartError.new("selected source part changed during transform callback")
+        end
+
+        current_destination, current_info = transform_validate_destination!(current_target, output_part_name)
+        unless current_destination == destination && current_info.name == output_info.name
+          raise InvalidPartError.new("transform destination identity changed during callback")
+        end
+        current_target.part_candidates.each do |candidate|
+          if candidate.info.overlaps?(current_info)
+            raise InvalidPartError.new("transform output identity overlaps a target part candidate: #{candidate.name}")
+          end
+        end
+      end
+
+      operation.execute(revalidate) { |transform_input| yield transform_input }
+    end
+
+    private def transform_target_schema_binding(target : OfflineTable, rows_per_mark : Int32) : WidePartSchemaBinding
+      unless target.kind == :table && target.engine == "MergeTree"
+        raise UnsupportedFormatError.new("transform target must be an ordinary MergeTree table")
+      end
+      raise UnsupportedFormatError.new("transform target cannot declare projections") unless target.projections.empty?
+
+      columns = target.columns
+      unless columns.size >= 2 && columns.size <= WidePart::MAX_METADATA_COLUMNS
+        raise UnsupportedFormatError.new("transform target must have a bounded key and value schema")
+      end
+      columns.each do |column|
+        unless !column.alias_column && column.key_candidate_column
+          raise UnsupportedFormatError.new("transform target columns must be plain unmodified columns")
+        end
+        unless transform_output_type_supported?(column.type)
+          raise UnsupportedFormatError.new("transform target column type has no admitted Wide writer owner")
+        end
+      end
+
+      key = columns.first
+      unless key.type == "UInt64"
+        raise UnsupportedFormatError.new("transform target first column must be UInt64")
+      end
+
+      ddl = target.metadata_ddl || raise(UnsupportedFormatError.new("transform target DDL is unavailable"))
+      header = /\A\s*ATTACH\s+TABLE\s+_\s+UUID\s+'([^']+)'\s*\(/i.match(ddl)
+      raise UnsupportedFormatError.new("transform target DDL is not an exact persisted TABLE shape") unless header
+      unless normalize_uuid(header[1]) == target.uuid && metadata_header_identity(ddl)[1] == :table
+        raise InvalidPartError.new("transform target DDL identity differs from its resolved UUID")
+      end
+
+      opening = header.end(0) - 1
+      closing = matching_parenthesis(ddl, opening)
+      suffix = ddl.byte_slice(closing + 1, ddl.bytesize - closing - 1)
+      engine = /\A\s*ENGINE\s*=\s*MergeTree\b/i.match(suffix)
+      raise UnsupportedFormatError.new("transform target must use exact MergeTree engine") unless engine
+      trailing = suffix.byte_slice(engine.end(0), suffix.bytesize - engine.end(0)).strip
+      clauses = split_table_tail_clauses(trailing)
+      raise UnsupportedFormatError.new("transform target layout suffix is not fully recognized") unless clauses
+
+      order_clauses = clauses.not_nil!.select { |keyword, _content| keyword == "ORDER BY" }
+      unless order_clauses.size == 1 && parse_simple_ascending_key_expression(order_clauses.first[1]) == key.name
+        raise UnsupportedFormatError.new("transform target must have one ascending ORDER BY on its first column")
+      end
+      primary_clauses = clauses.not_nil!.select { |keyword, _content| keyword == "PRIMARY KEY" }
+      if primary_clauses.size > 1 || primary_clauses.any? { |clause| parse_simple_ascending_key_expression(clause[1]) != key.name }
+        raise UnsupportedFormatError.new("transform target PRIMARY KEY must match its single ORDER BY key")
+      end
+      unless clauses.not_nil!.all? { |keyword, _content| keyword == "ORDER BY" || keyword == "PRIMARY KEY" || keyword == "SETTINGS" }
+        raise UnsupportedFormatError.new("transform target must be unpartitioned and have no extra layout clauses")
+      end
+
+      if settings = clauses.not_nil!.find { |keyword, _content| keyword == "SETTINGS" }
+        unless transform_supported_settings?(settings[1], rows_per_mark)
+          raise UnsupportedFormatError.new("transform target SETTINGS are outside the admitted Wide layout subset")
+        end
+      elsif rows_per_mark != 8192
+        raise UnsupportedFormatError.new("transform rows_per_mark must match the default target index_granularity of 8192")
+      end
+
+      binding_columns = columns.map { |column| {column.name, column.type} }
+      WidePartSchemaBinding.new(key.name, binding_columns)
+    end
+
+    private def transform_supported_settings?(content : String, rows_per_mark : Int32) : Bool
+      settings = Hash(String, Int64).new
+      content.split(',').each do |entry|
+        match = /\A\s*(index_granularity|min_rows_for_wide_part|min_bytes_for_wide_part)\s*=\s*([0-9]+)\s*\z/i.match(entry)
+        return false unless match
+        name = match[1].downcase
+        return false if settings.has_key?(name)
+        value = match[2].to_i64?
+        return false unless value
+        settings[name] = value.not_nil!
+      end
+
+      return false if settings.empty?
+      if granularity = settings["index_granularity"]?
+        return false unless granularity == rows_per_mark.to_i64
+      else
+        return false unless rows_per_mark == 8192
+      end
+
+      has_min_rows = settings.has_key?("min_rows_for_wide_part")
+      has_min_bytes = settings.has_key?("min_bytes_for_wide_part")
+      return false if has_min_rows != has_min_bytes
+      return false if has_min_rows && (settings["min_rows_for_wide_part"] != 0 || settings["min_bytes_for_wide_part"] != 0)
+
+      true
+    end
+
+    private def transform_output_type_supported?(declaration : String) : Bool
+      if WidePart.json_type?(declaration)
+        ObjectDocumentSchema.parse_declaration(declaration)
+        return true
+      end
+      return true if DynamicBulkColumnDeclaration.parse(declaration)
+      return true if WidePart.supports_typed_type?(declaration) || WidePart.supports_static_binary_bulk_type?(declaration)
+
+      if declaration.starts_with?("Array(") || declaration.starts_with?("Tuple(")
+        StorageColumnSchema.parse(declaration)
+        return true
+      end
+      false
+    rescue ex : ArgumentError | BoundsError | UnsupportedFormatError
+      false
+    end
+
+    private def transform_validate_destination!(target : OfflineTable, part_name : String) : {String, MergeTreePartInfo}
+      if part_name.empty? || part_name.bytesize > WidePartTable::MAX_PART_NAME_BYTES
+        raise BoundsError.new("transform output part name is empty or exceeds limit")
+      end
+      unless /\Aall_(?:0|[1-9][0-9]*)_(?:0|[1-9][0-9]*)_(?:0|[1-9][0-9]*)(?:_(?:0|[1-9][0-9]*))?\z/.matches?(part_name)
+        raise InvalidPartError.new("transform output name must be a canonical unpartitioned all_* part identity")
+      end
+      info = MergeTreePartInfo.parse(part_name)
+      unless info && info.partition_id == "all" && info.name == part_name
+        raise InvalidPartError.new("transform output name is not a canonical unpartitioned all_* part identity")
+      end
+
+      store_path = validate_store_directory(target.uuid)
+      detached_path = File.join(store_path, "detached")
+      validate_directory(detached_path, "target detached directory")
+      output_path = File.join(detached_path, part_name)
+      if output_path.bytesize > WidePartTable::MAX_PART_PATH_BYTES
+        raise BoundsError.new("transform output path exceeds limit")
+      end
+      if File.exists?(output_path) || File.symlink?(output_path)
+        raise InvalidPartError.new("transform output path is already occupied")
+      end
+      {output_path, info}
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot validate transform output destination")
+    end
+
+    private def transform_same_candidate?(left : OfflinePartCandidate, right : OfflinePartCandidate) : Bool
+      left.name == right.name && left.path == right.path && left.row_count == right.row_count &&
+        left.info.partition_id == right.info.partition_id && left.info.min_block == right.info.min_block &&
+        left.info.max_block == right.info.max_block && left.info.level == right.info.level &&
+        left.info.mutation == right.info.mutation && left.info.name == right.info.name
+    end
+
     private def part_candidates_table : OfflineTable
       columns = [
         OfflineColumn.new("database", "String", false, false),
