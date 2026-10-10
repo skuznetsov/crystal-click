@@ -249,15 +249,15 @@ module CrystalClick
 
       object.dynamic_path_count.times do |index|
         unless valid_plan_path_bytes?(object, index)
-          raise ArgumentError.new("Object plan Dynamic path is outside the scalar JSON raw-path grammar")
+          raise ArgumentError.new("Object plan Dynamic path is outside the embedded JSON raw-name bounds")
         end
       end
       nil
     end
 
-    # Reuse BinaryJsonType's single path grammar while reading Object paths
-    # through its byte accessors; this avoids allocating a path String before
-    # admission. The fixed scratch buffer is bounded by BinaryJsonType's cap.
+    # Preserve BinaryJsonType's embedded path-length cap while delegating raw
+    # name identity to the shared SQL path owner. Read Object bytes through a
+    # fixed scratch buffer so admission does not allocate a path String.
     private def valid_plan_path_bytes?(object : ObjectStructure, path_index : Int) : Bool
       size = object.dynamic_path_byte_size(path_index)
       return false if size <= 0 || size > BinaryJsonType::MAX_PATH_BYTES
@@ -266,7 +266,7 @@ module CrystalClick
       size.times do |byte_index|
         bytes[byte_index] = object.dynamic_path_byte_at(path_index, byte_index)
       end
-      BinaryJsonType.valid_path_bytes?(bytes.to_slice[0, size])
+      JsonPathSqlName.valid_raw_bytes?(bytes.to_slice[0, size])
     end
   end
 end

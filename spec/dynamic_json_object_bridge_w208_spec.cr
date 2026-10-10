@@ -148,9 +148,16 @@ describe "W208 Dynamic JSON Object logical binding" do
     end
 
     dotted = w208_plan(json, ["counter.value"] of String, [uint64] of CrystalClick::BinaryDataType)
-    expect_raises(ArgumentError) do
-      CrystalClick::DynamicJsonObjectBinding.new("root", structure, 0, dotted, budget, depth: 1)
-    end
+    dotted_budget = CrystalClick::BinaryCodecBudget.new(w208_limits, true)
+    dotted_binding = CrystalClick::DynamicJsonObjectBinding.new(
+      "root",
+      structure,
+      0,
+      dotted,
+      dotted_budget,
+      depth: 1,
+    )
+    dotted_binding.should_not be_nil
   end
 
   it "bridges borrowed typed NULL and scalar children through the existing Object codec" do
@@ -406,10 +413,10 @@ describe "W208 Dynamic JSON Object logical binding" do
     binding_budget = CrystalClick::BinaryCodecBudget.new(w208_limits)
     binding = CrystalClick::DynamicJsonObjectBinding.new("root", structure, 0, plan, binding_budget, depth: 1)
     wrong_path = CrystalClick::ObjectDocument.new({
-      "id"       => CrystalClick::BinaryValue.fixed(CrystalClick::BinaryDataType.primitive("UInt8"), Bytes[1_u8]),
-      "label"    => CrystalClick::BinaryValue.string("x"),
-      "maybe"    => CrystalClick::BinaryValue.null(w208_typed_paths["maybe"]),
-      "bad.path" => CrystalClick::BinaryValue.uint64(2_u64),
+      "id"        => CrystalClick::BinaryValue.fixed(CrystalClick::BinaryDataType.primitive("UInt8"), Bytes[1_u8]),
+      "label"     => CrystalClick::BinaryValue.string("x"),
+      "maybe"     => CrystalClick::BinaryValue.null(w208_typed_paths["maybe"]),
+      ("x" * 257) => CrystalClick::BinaryValue.uint64(2_u64),
     } of String => CrystalClick::BinaryValue)
     expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::BinaryJsonObjectAdapter.to_json_row(wrong_path, binding, binding_budget, depth: 1)

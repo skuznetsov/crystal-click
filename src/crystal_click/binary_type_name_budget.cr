@@ -148,7 +148,11 @@ module CrystalClick
                  end
                  descriptor.typed_path_count.times do |index|
                    total = add(total, 2_u64) unless first
-                   total = add(total, descriptor.typed_path_byte_size(index).to_u64)
+                   path_size = descriptor.typed_path_byte_size(index)
+                   rendered_path_size = JsonPathSqlName.canonical_size(path_size) do |byte_index|
+                     descriptor.typed_path_byte_at(index, byte_index)
+                   end
+                   total = add(total, rendered_path_size)
                    total = add(total, 1_u64) # path/type separator
                    total = add(total, json_path_bounds[index][0])
                    first = false

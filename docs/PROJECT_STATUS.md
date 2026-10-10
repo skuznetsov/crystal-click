@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current qualification (W251, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W252, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite shared raw
+JSON-path identity target. `JsonPathSqlName` is the one-file presentation owner
+for nonempty raw names, canonical SQL quoting/escaping, output measurement and
+bounded token decoding. Embedded JSON descriptors, root Object declarations
+and their Dynamic binding reuse it. Wire names and physical stream escaping
+remain distinct; no per-product value serializer or new storage layout was
+added. Embedded raw names retain their 256-byte cap; root Object names retain
+their existing operation-budget limits. SKIP/REGEXP stays refused.
+
+The same ordered 43-file affected roster passes 107 + 179 = 286 examples in
+each DEBUG/RELEASE mode, zero failures/errors/pending. Both final helpers build.
+Four reciprocal native cells qualify V1/single and V2/sized profiles in both
+modes for root Dynamic, Array(Dynamic), and typed-only root Object. Eight native
+and four helper calls establish ATTACH/CHECK=1/exact schemas/typed values and
+stock-part direct/public/owned Dynamic reads or Object offline `.values`.
+Root reconciles 40 raw Dynamic structures, statistics and mark coordinates,
+typed/null/parent lanes and Array row sizes. Object structure metadata is
+presence/snapshot-bound, not fully independently decoded. All 392 generated
+files / 78,185 bytes per mode match by actual bytes. Six in-memory forged
+identity/value/statistics/coordinate reports reject at their intended guards;
+baseline and final four-cell acceptance pass, captures unchanged.
+
+This does not certify arbitrary layouts, invalid-UTF-8 physical names, all
+products, general JSON text normalization, SKIP/REGEXP, MV/projection writes,
+server Active state, or memory/performance parity. See the
+[W252 frontier](JSON_PATH_IDENTITY_FRONTIER.md) and
+[root-owned evidence index](../.landmark/evidence/json-path-identity-w252.json).
+Overall goal ACTIVE; memory/performance deferred; no push.
+
+Previous qualification (W251, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite canonical JSON SQL-name and legacy Dynamic physical-handoff target.
 One cohesive shared-parser method connects existing JSON descriptors and
 recursive physical owners; no value codec per type combination was added.
@@ -20,7 +50,9 @@ reject unused-child corruption even on empty selections/EOF before callbacks.
 
 This is not full JSON, all version/profile products, native Compact, stock
 re-emission, stock-root discovery, server Active state or a performance claim.
-Quoted/dotted JSON paths and SKIP/RE2 need real descriptor/physical semantics.
+At that checkpoint, quoted/dotted JSON paths and SKIP/RE2 needed real
+descriptor/physical semantics; W252 above qualifies finite raw-path identity,
+while SKIP/RE2 remains open.
 The legacy roster borrows one aggregate budget; pre-existing standalone parsing
 and canonical rendering have separate bounded budgets. Broader facade
 decomposition, remaining layouts/state families and native MV/projection
@@ -3069,7 +3101,11 @@ source/runtime identities and executed evidence.
    v0 descriptor and structured scalar RowBinary row, with a closed child grammar
    and seven paired witnesses; it does not widen these physical Object owners.
    See [JSON_BINARY_KERNEL_FRONTIER.md](JSON_BINARY_KERNEL_FRONTIER.md).
-   Neither adapter implies arbitrary
+   W252 unifies nonempty raw typed-path identity and SQL quoting across embedded
+   descriptors, root Object schemas and existing Dynamic bindings, with finite
+   reciprocal physical evidence for dotted/percent/backtick/equals names.
+   It does not implement SKIP/REGEXP, JSON text normalization, invalid-UTF-8
+   physical names or all enclosing products. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required. W217 now qualifies selected whole-Object projection child reads
    in its finite schema-bound profile; freshness/provenance is not implied. See
@@ -3142,18 +3178,24 @@ source/runtime identities and executed evidence.
    normalized bulk and generic physical composition plus independently authored
    scalar/Nullable whole parts. Recursive and LC Interval codec admission is
    not a public whole-part certificate for every composition.
-   W172 pairs the nominal Nested descriptor and ordinary logical value/bulk
-   kernel; specialized Nested LC/Variant/Dynamic products remain refused.
+   W172 initially paired the nominal Nested descriptor and ordinary logical
+   value/bulk kernel with specialized products refused. W248/W249 later reuse
+   the static and Dynamic physical owners for finite LC/Variant and recursive
+   Dynamic-bearing Nested profiles. Their explicit handoff and native matrices,
+   not the historical W172 refusal, define current admitted products.
    The general descriptor kernel admits W178's ordinary Count canonical
    arguments, W223's finite sum/sumWithOverflow/sumKahan state families and
    W227's source-valid avg argument family.
    W224 adds source-eligible static composition, W225 adds static Variant
    alternatives, and W226 adds generic Dynamic scalar/V3 known/shared state
    routes. Other aggregate families/versions and Custom remain outside it;
-   logical admission does not qualify every physical product. W180 admits
-   root JSON v0 descriptors and structured
-   scalar RowBinary values, not parent products, SKIP/regexp or general persisted
-   JSON. Its finite native witnesses do not qualify every recursive child type.
+   logical admission does not qualify every physical product. W180 initially
+   admitted root JSON v0 descriptors and structured scalar RowBinary values;
+   W181/W182 then reuse recursive child laws and later physical owners bind
+   finite persisted products. W250/W251 connect legacy Dynamic metadata and
+   canonical JSON names to those owners. W252 widens shared raw-path identity,
+   with native qualification still pending. None of these certificates implies
+   SKIP/regexp, arbitrary persisted JSON layouts or every recursive child type.
    W179 now pairs QBit/QBitWithStride tags,
    scalar RowBinary and normalized bulk for root/direct Nullable only; its
    finite native matrix does not admit container, borrowed Object or arbitrary

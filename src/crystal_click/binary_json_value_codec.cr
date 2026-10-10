@@ -79,11 +79,11 @@ module CrystalClick
       count.times do
         raw_path_size = context.read_var_uint
         if raw_path_size == 0_u64 || raw_path_size > BinaryJsonType::MAX_PATH_BYTES.to_u64
-          context.unsupported!("JSON row path is outside the admitted identifier profile")
+          context.unsupported!("JSON row path is empty or exceeds the embedded raw-name byte limit")
         end
         raw_path = context.read_slice(raw_path_size)
         unless BinaryJsonType.valid_path_bytes?(raw_path)
-          context.unsupported!("JSON row path is outside the admitted identifier profile")
+          context.unsupported!("JSON row path is empty or exceeds the embedded raw-name byte limit")
         end
         path = String.new(raw_path)
         unless seen_paths.add?(path)

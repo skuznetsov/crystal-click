@@ -33,6 +33,10 @@ describe "W129 Object catalog schema declaration" do
     schema = CrystalClick::ObjectDocumentSchema.parse_declaration("  JSON(`a.b` String) \n")
     schema.declaration.should eq("JSON(`a.b` String)")
 
+    opaque = CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(`a..b` String)")
+    opaque.typed_paths.should eq({"a..b" => w129_type("String")})
+    opaque.declaration.should eq("JSON(`a..b` String)")
+
     ["JSON(select UInt64)", "JSON(SKIP String)", "JSON(a.b UInt64)"].each do |declaration|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
@@ -56,7 +60,6 @@ describe "W129 Object catalog schema declaration" do
   it "rejects unsupported typed scalar types, malformed paths, and out-of-range capacities" do
     [
       "JSON(t BFloat16)",
-      "JSON(`a..b` String)",
       "JSON(a.b String)",
       "JSON(max_dynamic_paths=10001)",
       "JSON(max_dynamic_types=255)",

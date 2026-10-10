@@ -135,7 +135,8 @@ module CrystalClick
         end
         @typed_paths.each do |path, type|
           io << ", " unless first
-          io << path << ' ' << type.name
+          JsonPathSqlName.write_canonical(io, path.to_slice)
+          io << ' ' << type.name
           first = false
         end
         io << ')'
@@ -161,36 +162,12 @@ module CrystalClick
 
     def self.validate_path!(path : String) : Nil
       unless valid_path_bytes?(path.to_slice)
-        raise ArgumentError.new("JSON paths must use the admitted plain ASCII identifier profile")
+        raise ArgumentError.new("JSON path is empty or exceeds the embedded byte limit")
       end
     end
 
     def self.valid_path_bytes?(bytes : Bytes) : Bool
-      if bytes.empty? || bytes.size > MAX_PATH_BYTES
-        return false
-      end
-      first = bytes[0]
-      unless identifier_start?(first)
-        return false
-      end
-      bytes.each_with_index do |byte, index|
-        unless index == 0 ? identifier_start?(byte) : identifier_continue?(byte)
-          return false
-        end
-      end
-      if ascii_case_equal?(bytes, "SKIP".to_slice)
-        return false
-      end
-      true
-    end
-
-    private def self.ascii_case_equal?(left : Bytes, right : Bytes) : Bool
-      return false unless left.size == right.size
-      left.each_with_index do |byte, index|
-        normalized = byte >= 0x61_u8 && byte <= 0x7a_u8 ? byte - 0x20_u8 : byte
-        return false unless normalized == right[index]
-      end
-      true
+      bytes.size <= MAX_PATH_BYTES && JsonPathSqlName.valid_raw_bytes?(bytes)
     end
 
     def self.path_wire_size(path_bytes : UInt64) : UInt64

@@ -108,9 +108,7 @@ module CrystalClick
           declaration_bytes = checked_add(declaration_bytes, 2_u64)
         end
         rendered_entry_count += 1_u64
-        quoted = quoted_path?(path)
-        rendered_path_bytes = path.bytesize.to_u64
-        rendered_path_bytes = checked_add(rendered_path_bytes, 2_u64) if quoted
+        rendered_path_bytes = JsonPathSqlName.canonical_size(path.to_slice)
         declaration_bytes = checked_add(declaration_bytes, rendered_path_bytes)
         declaration_bytes = checked_add(declaration_bytes, checked_add(1_u64, type_bytes))
         raw_key_bytes = checked_add(raw_key_bytes, path.bytesize.to_u64)
@@ -282,11 +280,7 @@ module CrystalClick
           else
             io << ", "
           end
-          if quoted_path?(path)
-            io << '`' << path << '`'
-          else
-            io << path
-          end
+          JsonPathSqlName.write_canonical(io, path.to_slice)
           io << ' '
           ObjectTypedFieldType.append_name(io, typed_types[path], limits, inherited_depth + 1)
           first = false
@@ -306,38 +300,8 @@ module CrystalClick
       count
     end
 
-    private def quoted_path?(path : String) : Bool
-      return true if path.includes?('.')
-      return true if ascii_case_equal?(path, "SKIP")
-      return true if ascii_case_equal?(path, "null")
-      return true if {
-                       "inf", "infinity", "nan", "true", "false", "distinct", "all", "some",
-                       "table", "select", "cube", "rollup", "recursive", "from", "top", "values",
-                     }.any? { |word| ascii_case_equal?(path, word) }
-      false
-    end
-
     private def validate_path!(path : String) : Nil
-      bytes = path.to_slice
-      raise ArgumentError.new("typed JSON path cannot be empty") if bytes.empty?
-      segment_start = true
-      bytes.each do |byte|
-        if byte == '.'.ord.to_u8
-          if segment_start
-            raise ArgumentError.new("typed JSON paths must be dotted ASCII identifiers")
-          end
-          segment_start = true
-        elsif segment_start
-          unless ascii_letter?(byte) || byte == '_'.ord.to_u8
-            raise ArgumentError.new("typed JSON paths must be dotted ASCII identifiers")
-          end
-          segment_start = false
-        elsif !(ascii_letter?(byte) || ascii_digit?(byte) || byte == '_'.ord.to_u8)
-          raise ArgumentError.new("typed JSON paths must be dotted ASCII identifiers")
-        end
-      end
-      raise ArgumentError.new("typed JSON paths must be dotted ASCII identifiers") if segment_start
-      nil
+      JsonPathSqlName.validate_raw_bytes!(path.to_slice)
     end
 
     private def same_path_bytes?(expected : String, plan : ObjectDocumentPlan, index : Int, actual_size : Int32) : Bool
@@ -346,28 +310,6 @@ module CrystalClick
         return false unless expected.to_slice[byte_index] == plan.typed_path_byte_at(index, byte_index)
       end
       true
-    end
-
-    private def ascii_case_equal?(value : String, expected : String) : Bool
-      return false unless value.bytesize == expected.bytesize
-      value.to_slice.each_with_index do |byte, index|
-        left = ascii_lower(byte)
-        right = ascii_lower(expected.to_slice[index])
-        return false unless left == right
-      end
-      true
-    end
-
-    private def ascii_lower(byte : UInt8) : UInt8
-      byte >= 'A'.ord.to_u8 && byte <= 'Z'.ord.to_u8 ? byte + 32_u8 : byte
-    end
-
-    private def ascii_letter?(byte : UInt8) : Bool
-      (byte >= 'a'.ord.to_u8 && byte <= 'z'.ord.to_u8) || (byte >= 'A'.ord.to_u8 && byte <= 'Z'.ord.to_u8)
-    end
-
-    private def ascii_digit?(byte : UInt8) : Bool
-      byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8
     end
 
     private def digits(value : UInt64) : UInt64

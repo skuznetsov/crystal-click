@@ -206,14 +206,14 @@ describe "W251 canonical JSON SQL type names in Dynamic V1/V2" do
     end
 
     uint8 = CrystalClick::BinaryDataType.primitive("UInt8")
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.json(typed_paths: {"SKIP" => uint8})
-    end
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.json(typed_paths: {"with.dot" => uint8})
-    end
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.json(typed_paths: {"quoted`path" => uint8})
+    {
+      {"SKIP", "JSON(`SKIP` UInt8)"},
+      {"with.dot", "JSON(`with.dot` UInt8)"},
+      {"quoted`path", "JSON(`quoted\\`path` UInt8)"},
+    }.each do |path, expected_name|
+      type = CrystalClick::BinaryDataType.json(typed_paths: {path => uint8})
+      type.name.should eq(expected_name)
+      CrystalClick::BinaryRecursiveDataTypeNameReader.parse_canonical(expected_name).should eq(type)
     end
     expect_raises(ArgumentError) do
       CrystalClick::BinaryDataType.json(

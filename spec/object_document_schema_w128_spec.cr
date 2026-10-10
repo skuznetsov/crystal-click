@@ -52,12 +52,15 @@ describe "W128 ObjectDocumentSchema" do
     schema.typed_paths.should eq({"t" => w128_schema_type("UInt64")})
   end
 
-  it "rejects non-ASCII, malformed, and non-identifier path spellings" do
-    ["", ".a", "a.", "a..b", "a/b", "a\\b", "a b", "a`b", "a'b", "café", "a%2Eb"].each do |path|
-      expect_raises(ArgumentError) do
-        CrystalClick::ObjectDocumentSchema.new({path => w128_schema_type("UInt64")})
-      end
+  it "rejects empty raw paths while accepting nonempty opaque names" do
+    expect_raises(ArgumentError) do
+      CrystalClick::ObjectDocumentSchema.new({"" => w128_schema_type("UInt64")})
     end
+
+    schema = CrystalClick::ObjectDocumentSchema.new({"a..b" => w128_schema_type("UInt64")})
+    schema.typed_paths.should eq({"a..b" => w128_schema_type("UInt64")})
+    CrystalClick::ObjectDocumentSchema.parse_declaration(schema.declaration).typed_paths
+      .should eq({"a..b" => w128_schema_type("UInt64")})
   end
 
   it "rejects unsupported leaves and admits recursive wrappers around supported leaves" do

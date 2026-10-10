@@ -31,9 +31,9 @@ describe "W180 JSON binary profile guards and malformed boundaries" do
     end
     skip_typed_paths = Hash(String, CrystalClick::BinaryDataType).new
     skip_typed_paths["SKIP"] = CrystalClick::BinaryDataType.primitive("UInt8")
-    expect_raises(ArgumentError) do
-      CrystalClick::BinaryDataType.json(typed_paths: skip_typed_paths)
-    end
+    skip_as_raw_typed_path = CrystalClick::BinaryDataType.json(typed_paths: skip_typed_paths)
+    skip_as_raw_typed_path.json_type.not_nil!.typed_path_at(0).should eq("SKIP")
+    skip_as_raw_typed_path.name.should eq("JSON(`SKIP` UInt8)")
 
     # Version 1 and limits above ClickHouse's current JSON v0 domain are
     # malformed descriptors, not silently widened local support.

@@ -177,6 +177,11 @@ module CrystalClick
 
     private def parse_option(argument : Range) : {Symbol, Int32}?
       first, after = trim(argument.first, argument.after)
+      # A quoted option-like name is always a field path, never capacity
+      # syntax. In particular, `max_dynamic_paths=...` inside backticks must
+      # not be split at its equals sign.
+      return nil if first >= after || @bytes[first] == '`'.ord.to_u8
+
       key_first = first
       key_after = first
       while key_after < after && !whitespace?(@bytes[key_after]) && @bytes[key_after] != '='.ord.to_u8
@@ -193,7 +198,8 @@ module CrystalClick
             elsif slice_equals?(key_first, key_after, "max_dynamic_types")
               :max_dynamic_types
             else
-              unsupported!("unsupported Object JSON capacity option")
+              # An equals sign is also an ordinary byte in a raw path name.
+              return nil
             end
       value_first, value_after = trim(cursor + 1, after)
       value = parse_decimal(value_first, value_after)
@@ -204,27 +210,8 @@ module CrystalClick
       first, after = trim(argument.first, argument.after)
       unsupported!("empty Object JSON typed field") if first >= after
 
-      quoted = @bytes[first] == '`'.ord.to_u8
-      path_first = first
-      path_after = first
-      cursor = first
-      if quoted
-        path_first += 1
-        cursor = path_first
-        while cursor < after && @bytes[cursor] != '`'.ord.to_u8
-          cursor += 1
-        end
-        unsupported!("unterminated backtick path") if cursor >= after
-        path_after = cursor
-        cursor += 1
-      else
-        while cursor < after && !whitespace?(@bytes[cursor])
-          unsupported!("unexpected backtick in Object JSON path") if @bytes[cursor] == '`'.ord.to_u8
-          cursor += 1
-        end
-        path_after = cursor
-      end
-      unsupported!("empty Object JSON typed path") if path_first >= path_after
+      measure = JsonPathSqlName.scan_token(@bytes, first) || unsupported!("invalid Object JSON path")
+      cursor = measure.token_after
 
       had_separator = false
       while cursor < after && whitespace?(@bytes[cursor])
@@ -241,9 +228,11 @@ module CrystalClick
                    unsupported!("typed Object JSON fields admit only supported Object recursive types")
       resolution.account(budget)
 
-      budget.charge_wire_bytes((path_after - path_first).to_u64)
-      path = String.new(@bytes[path_first, path_after - path_first])
-      validate_path_spelling!(path, quoted)
+      path = JsonPathSqlName.decode_token(@bytes, measure, budget)
+      JsonPathSqlName.validate_raw_bytes!(path.to_slice)
+      unless measure.quoted || JsonPathSqlName.canonical_size(path.to_slice) == path.bytesize.to_u64
+        unsupported!("noncanonical Object JSON path must be backtick quoted")
+      end
       ParsedField.new(path, resolution)
     end
 
@@ -263,8 +252,7 @@ module CrystalClick
       end
       fields.each do |path, type|
         size = checked_add(size, 2_u64) if argument_count > 0_u64
-        size = checked_add(size, path.bytesize.to_u64)
-        size = checked_add(size, 2_u64) if path.includes?('.') || reserved_path?(path)
+        size = checked_add(size, JsonPathSqlName.canonical_size(path.to_slice))
         type_bytes = ObjectTypedFieldType.byte_size_for(type, @limits, 2) || unsupported!("unsupported Object JSON typed field type")
         size = checked_add(size, checked_add(1_u64, type_bytes))
         argument_count += 1_u64
@@ -273,37 +261,6 @@ module CrystalClick
         size = checked_add(size, 2_u64)
       end
       size
-    end
-
-    private def validate_path_spelling!(path : String, quoted : Bool) : Nil
-      bytes = path.to_slice
-      unsupported!("typed JSON paths must be dotted ASCII identifiers") if bytes.empty?
-      segment_start = true
-      bytes.each do |byte|
-        if byte == '.'.ord.to_u8
-          unsupported!("typed JSON paths must be dotted ASCII identifiers") if segment_start
-          segment_start = true
-        elsif segment_start
-          unless ascii_letter?(byte) || byte == '_'.ord.to_u8
-            unsupported!("typed JSON paths must be dotted ASCII identifiers")
-          end
-          segment_start = false
-        elsif !(ascii_letter?(byte) || ascii_digit?(byte) || byte == '_'.ord.to_u8)
-          unsupported!("typed JSON paths must be dotted ASCII identifiers")
-        end
-      end
-      unsupported!("typed JSON paths must be dotted ASCII identifiers") if segment_start
-
-      requires_quotes = path.includes?('.') || reserved_path?(path)
-      unsupported!("dotted and reserved JSON paths must be backtick quoted") if requires_quotes && !quoted
-      nil
-    end
-
-    private def reserved_path?(path : String) : Bool
-      {
-        "SKIP", "null", "inf", "infinity", "nan", "true", "false", "distinct", "all", "some",
-        "table", "select", "cube", "rollup", "recursive", "from", "top", "values",
-      }.any? { |word| ascii_case_equal?(path, word) }
     end
 
     private def parse_decimal(first : Int32, after : Int32) : Int32
@@ -374,28 +331,6 @@ module CrystalClick
         return false unless @bytes[first + index] == expected_bytes[index]
       end
       true
-    end
-
-    private def ascii_case_equal?(value : String, expected : String) : Bool
-      return false unless value.bytesize == expected.bytesize
-      left = value.to_slice
-      right = expected.to_slice
-      left.size.times do |index|
-        return false unless ascii_lower(left[index]) == ascii_lower(right[index])
-      end
-      true
-    end
-
-    private def ascii_letter?(byte : UInt8) : Bool
-      byte >= 'a'.ord.to_u8 && byte <= 'z'.ord.to_u8 || byte >= 'A'.ord.to_u8 && byte <= 'Z'.ord.to_u8
-    end
-
-    private def ascii_digit?(byte : UInt8) : Bool
-      byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8
-    end
-
-    private def ascii_lower(byte : UInt8) : UInt8
-      byte >= 'A'.ord.to_u8 && byte <= 'Z'.ord.to_u8 ? byte + 32_u8 : byte
     end
 
     private def unsupported!(message : String) : NoReturn

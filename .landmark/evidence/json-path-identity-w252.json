@@ -1,0 +1,871 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W252",
+  "title": "Shared raw JSON path identity through existing recursive descriptor and physical owners",
+  "recorded_date": "2026-10-10",
+  "baseline_commit": "40a347f9ebf966b7cbf74832e721ee5b52483581",
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within the finite declared target",
+    "global_goal": "ACTIVE; memory/performance deferred",
+    "meaning": "A curated index to root-observed commands and raw evidence, not substantive proof from structural fields or model agreement."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Raw JSON path identity across SQL spelling, descriptors, schemas, budgets and Dynamic-to-Object bindings",
+    "rollback": "One scoped atomic local commit; no push or history rewrite."
+  },
+  "production": {
+    "changed_files": [
+      "src/crystal_click.cr",
+      "src/crystal_click/json_path_sql_name.cr",
+      "src/crystal_click/binary_json_type.cr",
+      "src/crystal_click/binary_json_type_codec.cr",
+      "src/crystal_click/binary_json_value_codec.cr",
+      "src/crystal_click/binary_recursive_data_type_name_reader.cr",
+      "src/crystal_click/binary_type_name_budget.cr",
+      "src/crystal_click/dynamic_json_object_binding.cr",
+      "src/crystal_click/object_document_schema.cr",
+      "src/crystal_click/object_document_schema_parser.cr"
+    ],
+    "change": "One own-file JsonPathSqlName provides nonempty raw-byte identity, canonical SQL quoting/escaping, measured bounded token decoding and escaped-output preflight. Existing embedded JSON/root Object/Dynamic adapters reuse it.",
+    "unchanged": "Existing recursive leaf/container value serializers, physical escaping/collision owner, layout defaults, custom parser override, dependencies and SKIP/REGEXP refusal remain; no per-product serializer or new physical layout.",
+    "budget_scope": "Embedded raw paths retain the existing 256-byte cap; root Object paths retain operation-budget limits. Measure escaped output and charge decoded raw copies before materializing. Borrowed legacy rosters retain their shared budget/depth; standalone canonical parsing/rendering remain separately bounded.",
+    "admission": [
+      "unique nonempty raw paths within existing byte/type/budget bounds",
+      "canonical quoting for dotted, percent, reserved-word, backtick, backslash, punctuation, Unicode and represented control-byte names",
+      "separate SQL spelling, raw wire identity, physical-component escaping and caller-owned JSON input normalization"
+    ],
+    "rejection": [
+      "empty/over-cap embedded paths and operation-budget overflow",
+      "malformed/noncanonical recursive SQL names and duplicate wire paths",
+      "SKIP and SKIP REGEXP policies",
+      "previously illegal/unbound physical constructors or unsupported layouts",
+      "invalid-UTF-8 legacy Dynamic SQL-name physical promotion"
+    ]
+  },
+  "source_comparison": {
+    "checkout": "/private/tmp/clickhouse-w249-upstream-P7bxRQ",
+    "revision": "fe0f91b6c3de9e1efa33a1bce4ca9bcbfb4c509d",
+    "commit_time_utc": "2026-10-10T09:01:51Z",
+    "shallow": true,
+    "identity_boundary": "Official shallow sparse source comparison, not the native runtime build source or a latest-at-completion claim. Original archive is not updated.",
+    "anchors": [
+      {
+        "path": "src/DataTypes/DataTypeObject.cpp",
+        "ranges": "236-297; 809-890",
+        "sha256": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7"
+      },
+      {
+        "path": "src/DataTypes/DataTypesBinaryEncoding.cpp",
+        "ranges": "514-541; 810-871",
+        "sha256": "78ba394f20ccd2a00f5be6b8c4d470fafb1c91a6f87bb27c301c2d3203f28f87"
+      },
+      {
+        "path": "src/IO/WriteHelpers.cpp",
+        "ranges": "95-159",
+        "sha256": "6be831ef87bdd4bdb3240b0a91a16a13d50912030b62681215f449fee6eb4053"
+      },
+      {
+        "path": "src/IO/WriteHelpers.h",
+        "ranges": "340-408",
+        "sha256": "2a0ee2b0b04ab04009dc0d229aff82254b66ddc4e92256c0c50a9c5b00bfbab7"
+      },
+      {
+        "path": "src/Parsers/ParserDataType.cpp",
+        "ranges": "155-232",
+        "sha256": "5a29ecfff7ea76afe4480bb986211394aaa42a3bf975b9e9399f5a2e2224f82a"
+      },
+      {
+        "path": "src/Parsers/ExpressionElementParsers.cpp",
+        "ranges": "344-379",
+        "sha256": "f1d07b5fe76fe4141237ee68f51fb31e69eb6ca9ee43fe2362fb58ed5fd347b1"
+      },
+      {
+        "path": "src/Parsers/ASTIdentifier.cpp",
+        "ranges": "283-288",
+        "sha256": "85bbf322abeccf86b49a674c07dc7ed9e89091b5718ff7e2fd17b7337dda1655"
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationArray.cpp",
+        "ranges": "153-177; 329-349",
+        "sha256": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791"
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationVariant.cpp",
+        "ranges": "199-225",
+        "sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022"
+      }
+    ]
+  },
+  "runtime": {
+    "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "native_process_memory_limit_bytes": 536870912,
+    "threads": 1
+  },
+  "toolchain": {
+    "crystal": "1.21.0 (2026-07-16)",
+    "llvm": "22.1.8",
+    "target": "aarch64-apple-darwin25.6.0",
+    "compiler": {
+      "path": "/opt/homebrew/bin/crystal",
+      "sha256": "40cffa1b29b572c064b4a397c6b82c7a84c55a146685d0971dab816f855eb836"
+    },
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "seconds": 600,
+      "max_rss_mib": 12288,
+      "min_free_percent": 50,
+      "root_serial_workloads": true
+    },
+    "helpers": [
+      {
+        "mode": "debug",
+        "path": "/private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-debug",
+        "sha256": "2951cce93d682e1ae4b171c75fbd1a90d8d5128cb7f935a457b6cab121b0304a"
+      },
+      {
+        "mode": "release",
+        "path": "/private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-release",
+        "sha256": "72d566963e152234212c915e77e30e52bb7f692d8820f55460fb1fdcb5ef5d63"
+      }
+    ],
+    "raw_lz4_decoder": {
+      "path": "/opt/homebrew/opt/lz4/lib/liblz4.1.10.0.dylib",
+      "sha256": "db6063b0815362b2152012e549797ca86e7bbd00c080f3e6dd642334f838bb01"
+    },
+    "provenance_limit": "Root guarded final builds and frozen observed input closures bind the named helpers; not arbitrary binary provenance, a full child environment attestation or immutable compiler/link execution closure."
+  },
+  "inputs": {
+    "pin_document": {
+      "path": "/private/tmp/crystal-click-w252.FU1rs2/root-pins.json",
+      "sha256": "821ef540a7ea2d540d806d591a2636dc2ce75be14098175757d60f736d7cb030"
+    },
+    "source_pins": [
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_json_path_identity_w252.rb",
+        "sha256": "ce30f78072b35a3935e50c025663187b5266f7a7420f14ddd37c24659ea5cf8b"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_json_path_identity_w252.cr",
+        "sha256": "ef30a4dd7c46b9ca5531db923ad73a81ff87119bcf8d2a98cc7d4a7196a7a1ea"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_json_sql_type_name_w251.rb",
+        "sha256": "ccf0649bf1246085eb2618cda236611c2eeeebe13a8ea9d55d6c170522244ca8"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_json_sql_type_name_w251.cr",
+        "sha256": "3d1f83740103a9f44bb7789b08b17efce3c24c0aa837d29e1fe83f703cc7a15d"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_dynamic_json_physical_w210.cr",
+        "sha256": "05c3144e9c250aa6e46c763353b0e0e9fab0e6928c4ce1ef7874c0dbaecfe24e"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_dynamic_json_physical_w210.rb",
+        "sha256": "d724adbbf79045aaeaafdde255fd35ace81b3eaf175b64247f8de8119ca2a819"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_nested_bulk_part_w202.rb",
+        "sha256": "99ecb359e2b4b2efb48e57bd2c9d9674c377766b79700642553930fa73c1db7a"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_array_json_parts_w185.rb",
+        "sha256": "a71366bf4e87ed7649373c0c251b865e75ac6cbe67263605a6ceb576ec4b1451"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_json_array_storage_w183.rb",
+        "sha256": "ba628aa7037bb4421a0e7456d282e359b6ff2ae1aab9a4667776742237697adf"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_json_binary_kernel_w180.rb",
+        "sha256": "f4da2177f787fd1dc5a511cb6de8c47d7a44538efda4d26a25c4af1fb47b0c05"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/support/dynamic_owned_values_w220.cr",
+        "sha256": "24dd376ec0cc6a1158667ed0c7eedbc3de0bcf966b81097bff07507514ab54c2"
+      }
+    ],
+    "source_closures": {
+      "ruby": {
+        "count": 7,
+        "json_ordered_entries_sha256": "175bb486918f425e68a4827d52175687022352fcb9cc7e87182bb4eafb36e025"
+      },
+      "crystal": {
+        "count": 516,
+        "json_ordered_entries_sha256": "9b3bee38d266130a5d59cff55ae7212f753eed12cc824585cad87872a000576c"
+      }
+    },
+    "source_closure_semantics": "Ordered observed recursive source/require-file digests, not an immutable build manifest or full system dependency closure.",
+    "affected_spec_pins": [
+      {
+        "path": "spec/json_path_identity_w252_spec.cr",
+        "sha256": "b99bf2802e847d33e3a2f992329ca1c161c1732675e2846054ee860d666149af"
+      },
+      {
+        "path": "spec/json_path_physical_w252_spec.cr",
+        "sha256": "980d984aac762a9031b0b2bba786c09f1be1c94034e7dab6842bfc626b1c7653"
+      },
+      {
+        "path": "spec/json_sql_type_name_w251_spec.cr",
+        "sha256": "ca2b752c832468567006b9b616b85a687ce5429c569f260edf07159a7f0b655c"
+      },
+      {
+        "path": "spec/dynamic_structure_versions_w250_spec.cr",
+        "sha256": "f5ab42512ef0eaa1485bed1fdb86f992c185fec2328512675c74f3441dd3d9b5"
+      },
+      {
+        "path": "spec/aggregate_count_arguments_w178_parser_spec.cr",
+        "sha256": "6bc03aadcb9387d7424aae2da38a93ca506ca11200289c02356a6b35652a212a"
+      },
+      {
+        "path": "spec/aggregate_count_arguments_w178_admission_spec.cr",
+        "sha256": "c27a628d2ac706997d777eb04e869912b3b726f62c0fcb3bef7c67a9d0c5e4a1"
+      },
+      {
+        "path": "spec/aggregate_count_arguments_w178_core_spec.cr",
+        "sha256": "ad49563fcc717abc8c7070743157393748e5177043dec3353f73dfc3d90a18d1"
+      },
+      {
+        "path": "spec/json_binary_kernel_w180_spec.cr",
+        "sha256": "c14b8eecd293c28da1018b286ed90b18fed3943a921e8739b1e8554463823142"
+      },
+      {
+        "path": "spec/json_binary_kernel_w180_guards_spec.cr",
+        "sha256": "6c95a277536a5c0b7fac6a05bb212fcfe9908973f0daf0ec57b116de9b57d40c"
+      },
+      {
+        "path": "spec/json_binary_kernel_w180_boundary_spec.cr",
+        "sha256": "dbb75971f3b8ea8d65a7385d6059bb2e63a08d85c17fe332355018342c5d685c"
+      },
+      {
+        "path": "spec/json_binary_kernel_w180_red_spec.cr",
+        "sha256": "850e732a08d421067249720691cc0d11995278ed30c534d824dbdf082d4ef4ef"
+      },
+      {
+        "path": "spec/dynamic_json_metadata_w206_spec.cr",
+        "sha256": "bbed9429ad4ae722e3153b58e935ca7b6c24bcde239d8a1f77f965db9fc45ec9"
+      },
+      {
+        "path": "spec/dynamic_json_metadata_w206_adversary_spec.cr",
+        "sha256": "9f1c4beba4aad4352c6b122208e51643932e2a5d32cdbe0317c303068d06c87d"
+      },
+      {
+        "path": "spec/dynamic_structure_prefix_w193_adversary_spec.cr",
+        "sha256": "bf38176cc31ab2352d52cc245650de994a54ad87b4f4e5035e4d9647e5b246c3"
+      },
+      {
+        "path": "spec/json_recursive_scalar_w181_spec.cr",
+        "sha256": "6d2c7cf8ed1df4bed875ed872a8507502ac2e86200becf897a7987a7174d6a93"
+      },
+      {
+        "path": "spec/json_recursive_scalar_w181_guards_spec.cr",
+        "sha256": "118e18cc3866b605182d747550dfd2b2580bc2927dcac3d112db46abb30df169"
+      },
+      {
+        "path": "spec/json_nested_scalar_w182_spec.cr",
+        "sha256": "0cbf511408fa1dc14ebbc23a2ef3a2f5b16dcbeb50563ef954b41014f9522fe4"
+      },
+      {
+        "path": "spec/json_nested_scalar_w182_guards_spec.cr",
+        "sha256": "e3a3f002314c53ecb3a0d7266288d0118b538e1634c64b86f2be3e3a66003362"
+      },
+      {
+        "path": "spec/json_nested_shared_dynamic_w182_spec.cr",
+        "sha256": "d582301bceba6832bb5c07f3f6415eebc72a4e93b3bbbfaf9a4db194220f122f"
+      },
+      {
+        "path": "spec/dynamic_json_physical_w210_spec.cr",
+        "sha256": "3402452a813cac6eeac70aab46c3130081e515cce314b276a3af2d6d05933bc4"
+      },
+      {
+        "path": "spec/dynamic_json_recursive_w212_spec.cr",
+        "sha256": "91a44d918e782de82fd003db936f1397bdcb9452cbfa67f2cf7c798ec5bc2bc1"
+      },
+      {
+        "path": "spec/dynamic_json_recursive_physical_w212_spec.cr",
+        "sha256": "33d9c9b0102e9b9dafd75fd5439da97659e2a9a96ed829700c9d7ba05e0d80b1"
+      },
+      {
+        "path": "spec/dynamic_recursive_handoff_w249_spec.cr",
+        "sha256": "85bff1a6d5d9d06701f5d628d60960217698e4ed9832a45ce531a0e8b6678015"
+      },
+      {
+        "path": "spec/dynamic_table_consumer_w211_spec.cr",
+        "sha256": "0d9fb83126c7ee53c67020c35b65c2d427393476f2227d7f4f76a7881447ec1d"
+      },
+      {
+        "path": "spec/dynamic_table_budget_w211_spec.cr",
+        "sha256": "b4748002e0f3301dd506cf1751916aecf8e1e9f60e2765bbaaaef206f04f303b"
+      },
+      {
+        "path": "spec/object_shared_nested_dynamic_json_w244_spec.cr",
+        "sha256": "263f2851f2d1b8f2806f203881ece8614c20b3c0484e1344b2f8f21c4de6b975"
+      },
+      {
+        "path": "spec/object_typed_dynamic_json_context_w215_spec.cr",
+        "sha256": "03244c99c70019c92222aa9de2e7fda0613e6abadd15fef96afebe0cd94b8a87"
+      },
+      {
+        "path": "spec/object_recursive_consumers_w140_spec.cr",
+        "sha256": "28b340bb046a60561a40d526044d0fd387b0e4a198f640298ba070282cd61b4f"
+      },
+      {
+        "path": "spec/json_dynamic_legacy_handoff_w251_spec.cr",
+        "sha256": "9506a2b7ff34cc550fa10bb08e4495b9fe2209c68220a2df4e6c5b0f0e952b57"
+      },
+      {
+        "path": "spec/dynamic_json_object_bridge_w208_spec.cr",
+        "sha256": "4b6e82bc8ffef9ec7783b20444d051d21855c342ae54e5bc0af6decbe35388da"
+      },
+      {
+        "path": "spec/object_document_schema_w128_spec.cr",
+        "sha256": "323d66ca68142d9fdb6252fa208c71b542155216ab4aa4ee766e0bd6034595cc"
+      },
+      {
+        "path": "spec/object_catalog_w129_spec.cr",
+        "sha256": "15fc77753cc1e6adb3fda3d0de99a9864cdd8f596408ee7dc03c28662cbfd907"
+      },
+      {
+        "path": "spec/object_document_schema_w131_spec.cr",
+        "sha256": "02938f1fe2e14c988881ab0b24d9ec7e70d99cb65100ff5c47bc551f149dded1"
+      },
+      {
+        "path": "spec/object_document_schema_w132_spec.cr",
+        "sha256": "0b53b94b15ce3bff3d5d47390308641004bc36f382391452b74e81495d9f9938"
+      },
+      {
+        "path": "spec/object_document_schema_w133_spec.cr",
+        "sha256": "b5d7733be470282b901fe4f146e9431068406f0afaf336f83a1bcf5de1a1e413"
+      },
+      {
+        "path": "spec/object_document_schema_w135_spec.cr",
+        "sha256": "0577f5feaaad1f56b3970cafbbf04a0a91ff60ff6b1d1af2df3385066dc6dea5"
+      },
+      {
+        "path": "spec/object_document_schema_w136_spec.cr",
+        "sha256": "2214f51a1f6efd74b4ded9ab831b549e10edc0432d3dbd2ba4618dd4dc742f92"
+      },
+      {
+        "path": "spec/object_document_schema_w137_spec.cr",
+        "sha256": "2195b6975165a0c0532fb404c6227f601eae319198c7aa7c85d01a25839fddee"
+      },
+      {
+        "path": "spec/object_document_schema_w138_spec.cr",
+        "sha256": "da2276aa43cadba56e52ac4974e14ab2d67f112b537a7570ca08d236109b7019"
+      },
+      {
+        "path": "spec/object_document_schema_w139_spec.cr",
+        "sha256": "77bd82905811c5a8ecf16375d38c78f742ebe335201ca3e2fdb33da45581167a"
+      },
+      {
+        "path": "spec/object_document_schema_w140_spec.cr",
+        "sha256": "48335963da80757a4674c0e96eabd5a56bf212afb731c3e984f449b228a8ecee"
+      },
+      {
+        "path": "spec/physical_stream_plan_w125_spec.cr",
+        "sha256": "1bd75781a69fd7aafaed9af1224f9f12b9728e6c5ff5b22b5f15a3dcf93efbe5"
+      },
+      {
+        "path": "spec/object_table_w130_root_spec.cr",
+        "sha256": "d0d754e2879e2c1ad254c5c24eada76952e33557cf30fc191c1ed3d5ebad43a0"
+      }
+    ]
+  },
+  "qualification": {
+    "behavioral_red": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/json_path_identity_w252_spec.cr spec/json_path_physical_w252_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "observed_exit": 1,
+      "examples": 5,
+      "failures": 0,
+      "errors": 3,
+      "pending": 0,
+      "meaning": "Existing path/constructor admission rejects authored valid names before production unlock; not compilation failure."
+    },
+    "affected_specs": {
+      "ordered_groups": [
+        [
+          "spec/json_path_identity_w252_spec.cr",
+          "spec/json_path_physical_w252_spec.cr",
+          "spec/json_sql_type_name_w251_spec.cr",
+          "spec/dynamic_structure_versions_w250_spec.cr",
+          "spec/aggregate_count_arguments_w178_parser_spec.cr",
+          "spec/aggregate_count_arguments_w178_admission_spec.cr",
+          "spec/aggregate_count_arguments_w178_core_spec.cr",
+          "spec/json_binary_kernel_w180_spec.cr",
+          "spec/json_binary_kernel_w180_guards_spec.cr",
+          "spec/json_binary_kernel_w180_boundary_spec.cr",
+          "spec/json_binary_kernel_w180_red_spec.cr",
+          "spec/dynamic_json_metadata_w206_spec.cr",
+          "spec/dynamic_json_metadata_w206_adversary_spec.cr",
+          "spec/dynamic_structure_prefix_w193_adversary_spec.cr",
+          "spec/json_recursive_scalar_w181_spec.cr",
+          "spec/json_recursive_scalar_w181_guards_spec.cr",
+          "spec/json_nested_scalar_w182_spec.cr",
+          "spec/json_nested_scalar_w182_guards_spec.cr",
+          "spec/json_nested_shared_dynamic_w182_spec.cr"
+        ],
+        [
+          "spec/dynamic_json_physical_w210_spec.cr",
+          "spec/dynamic_json_recursive_w212_spec.cr",
+          "spec/dynamic_json_recursive_physical_w212_spec.cr",
+          "spec/dynamic_recursive_handoff_w249_spec.cr",
+          "spec/dynamic_table_consumer_w211_spec.cr",
+          "spec/dynamic_table_budget_w211_spec.cr",
+          "spec/object_shared_nested_dynamic_json_w244_spec.cr",
+          "spec/object_typed_dynamic_json_context_w215_spec.cr",
+          "spec/object_recursive_consumers_w140_spec.cr",
+          "spec/json_dynamic_legacy_handoff_w251_spec.cr",
+          "spec/dynamic_json_object_bridge_w208_spec.cr",
+          "spec/object_document_schema_w128_spec.cr",
+          "spec/object_catalog_w129_spec.cr",
+          "spec/object_document_schema_w131_spec.cr",
+          "spec/object_document_schema_w132_spec.cr",
+          "spec/object_document_schema_w133_spec.cr",
+          "spec/object_document_schema_w135_spec.cr",
+          "spec/object_document_schema_w136_spec.cr",
+          "spec/object_document_schema_w137_spec.cr",
+          "spec/object_document_schema_w138_spec.cr",
+          "spec/object_document_schema_w139_spec.cr",
+          "spec/object_document_schema_w140_spec.cr",
+          "spec/physical_stream_plan_w125_spec.cr",
+          "spec/object_table_w130_root_spec.cr"
+        ]
+      ],
+      "unique_files": 43,
+      "per_mode_examples": 286,
+      "group_examples": [
+        107,
+        179
+      ],
+      "modes": [
+        "debug",
+        "release"
+      ],
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "whole_suite": false
+    },
+    "post_format_repeat": {
+      "file": "spec/dynamic_json_object_bridge_w208_spec.cr",
+      "reason": "Whitespace-only hash alignment correction after the full roster. The affected file is rerun in both modes.",
+      "per_mode_examples": 9,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "counted_in_total": false
+    },
+    "native": {
+      "capture_format": "json_path_identity_w252_capture_v1",
+      "cells": [
+        {
+          "mode": "debug",
+          "version": "v1",
+          "profile": "single_stream",
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_json_path_identity_w252.rb --dynamic-version v1 --helper-mode debug --crystal-helper /private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-debug --evidence-root /private/tmp/crystal-click-w252-debug-v1.eBVSUU --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+          "root": "/private/tmp/crystal-click-w252-debug-v1.eBVSUU",
+          "summary_sha256": "142f97d149c9ee637aedf86ffed935b7ba3700bfb6ba23ed0d3a08dfb8a7a241",
+          "status": "bounded_cell_observed",
+          "invocations": [
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "a454326c01b3eda561bd70421773f05ac158dabfe68ae0ece83c632726afae72",
+              "stdin_sha256": "f12f18b0956e765421a5b218837123e0abd1bcbaaae4b2ee2545a06ee6b9bb1d"
+            },
+            {
+              "kind": "prebuilt W252 Crystal helper",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "ad23797b9f1e50d969927090175c0163846f2cd5eb9244375901c4719007ea85",
+              "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "2f340427dfa17de524e02e78ee7c9f62990335e85f263a12d8cb34b51a4c5fa0",
+              "stdin_sha256": "9ca2a3b56baf6ba453ad7c97018f99d24731d95fd24bbb29fd0ca8461a6aa661"
+            }
+          ]
+        },
+        {
+          "mode": "debug",
+          "version": "v2",
+          "profile": "with_size_stream",
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_json_path_identity_w252.rb --dynamic-version v2 --helper-mode debug --crystal-helper /private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-debug --evidence-root /private/tmp/crystal-click-w252-debug-v2.ui0oZQ --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+          "root": "/private/tmp/crystal-click-w252-debug-v2.ui0oZQ",
+          "summary_sha256": "17447cff1b8a0c1041814d69d51e2399102bbafdf798341855731641a8064ad7",
+          "status": "bounded_cell_observed",
+          "invocations": [
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "f1ec4ace920227ee602849d8350ecfab35cee06af9c5063a519cf4ff69e72a67",
+              "stdin_sha256": "6af0c300b125ccc8431a1e9b1af7d50f2c4755f47ef9fb0969769b6cc81b1ae3"
+            },
+            {
+              "kind": "prebuilt W252 Crystal helper",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "fd9f1707b1137b00e350f9e982921eaa22132f796945106469c4ac393e8513b2",
+              "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "e6c6f40e15143f84f007dce50f4561b7c7ca921da86111eccd54500ca5c424e3",
+              "stdin_sha256": "120e073e06ff1357ccf29a90acbdf8bb8e44a4196b137362a3a9c0ec62ab8e1d"
+            }
+          ]
+        },
+        {
+          "mode": "release",
+          "version": "v1",
+          "profile": "single_stream",
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_json_path_identity_w252.rb --dynamic-version v1 --helper-mode release --crystal-helper /private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-release --evidence-root /private/tmp/crystal-click-w252-release-v1.RCzLbe --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+          "root": "/private/tmp/crystal-click-w252-release-v1.RCzLbe",
+          "summary_sha256": "c8cf6c3d691a150614ca2d02ceedde3fe68e18e5c321b165e79ba0593663ad3c",
+          "status": "bounded_cell_observed",
+          "invocations": [
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "54ffee6d659bb14a61305503c2ba51959b84cb3d9e0dade462ff770acf6ea3fb",
+              "stdin_sha256": "f12f18b0956e765421a5b218837123e0abd1bcbaaae4b2ee2545a06ee6b9bb1d"
+            },
+            {
+              "kind": "prebuilt W252 Crystal helper",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "f113e587d38dbacca1dd43cbd23799cdf3edd2dd93308d4726ccf9080db071c5",
+              "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "f69f4ae023eaf83f646f0c63bd7603f4712558187168f8a6b60885730fa482d0",
+              "stdin_sha256": "9ca2a3b56baf6ba453ad7c97018f99d24731d95fd24bbb29fd0ca8461a6aa661"
+            }
+          ]
+        },
+        {
+          "mode": "release",
+          "version": "v2",
+          "profile": "with_size_stream",
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_json_path_identity_w252.rb --dynamic-version v2 --helper-mode release --crystal-helper /private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-release --evidence-root /private/tmp/crystal-click-w252-release-v2.MZ2zLo --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+          "root": "/private/tmp/crystal-click-w252-release-v2.MZ2zLo",
+          "summary_sha256": "007a784715bfdf190b3610f9a96491f95fec9f2e449e021ca463c3a1999177b4",
+          "status": "bounded_cell_observed",
+          "invocations": [
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "018590568869b9668bc07f1c5dbb3b1a213716bb328a9c1b710720d5bc0f8eb8",
+              "stdin_sha256": "6af0c300b125ccc8431a1e9b1af7d50f2c4755f47ef9fb0969769b6cc81b1ae3"
+            },
+            {
+              "kind": "prebuilt W252 Crystal helper",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "495996ddb1e85b31a0360085350a654d9901393f6cddd8ed10bbf925248561d7",
+              "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "kind": "clickhouse local",
+              "exit": 0,
+              "classification": "success",
+              "stdout_sha256": "42857467b7406c2bff46c6c5f48da6f03b526f6b7ce651a7a54c470cec7d072d",
+              "stdin_sha256": "120e073e06ff1357ccf29a90acbdf8bb8e44a4196b137362a3a9c0ec62ab8e1d"
+            }
+          ]
+        }
+      ],
+      "cases": [
+        "root_dynamic",
+        "array_dynamic",
+        "root_object"
+      ],
+      "calls": {
+        "native": 8,
+        "prebuilt_crystal_helper": 4
+      },
+      "all_observed_exit_zero": true,
+      "source_reads": "Direct/public candidate and owned Dynamic values, Object offline .values, both source/library origins.",
+      "library_writes": "Stock ATTACH/CHECK=1, exact schema/type/typed values, separate zero-window begin/end markers with no rows.",
+      "geometry": {
+        "rows": 6,
+        "parent_marks": [
+          2,
+          2,
+          2
+        ],
+        "child_dynamic_occurrences": [
+          0,
+          3,
+          2
+        ],
+        "raw_mark_row_words": [
+          2,
+          2,
+          2,
+          0
+        ],
+        "array_wire_sizes": [
+          0,
+          0,
+          2,
+          1,
+          1,
+          1
+        ],
+        "array_cumulative_offsets": [
+          0,
+          0,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "typed_names": [
+        "a.b",
+        "a%2Eb",
+        "a`b",
+        "id",
+        "maybe",
+        "x=y"
+      ],
+      "normalization_boundary": "json_type_escape_dots_in_keys=0 is explicit. Raw flattened typed path a.b is fed by a nested JSON input object, not a top-level literal dotted input key.",
+      "final_unused_arm_boundary": "Metadata rosters/structures and BASIC discriminator prefix persist with zero selected rows; they are not required to be empty payload files.",
+      "generated_actual_byte_comparison": [
+        {
+          "profile": "single_stream",
+          "files_per_mode": 190,
+          "bytes_per_mode": 37896,
+          "actual_bytes_equal": true
+        },
+        {
+          "profile": "with_size_stream",
+          "files_per_mode": 202,
+          "bytes_per_mode": 40289,
+          "actual_bytes_equal": true
+        }
+      ],
+      "generated_total_per_mode": {
+        "files": 392,
+        "bytes": 78185
+      }
+    },
+    "preimplementation_characterization": [
+      {
+        "path": "/private/tmp/crystal-click-w252.FU1rs2/name-characterization-retry/name-characterization.json",
+        "sha256": "7b3154da1de7ca550f3a6640be23254692093e0e02be4e29c55f24466c907c95",
+        "meaning": "Canonical SQL names across eleven nonempty cases; empty quoted identifier rejects with code 62. Not part-layout qualification."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w252.FU1rs2/name-punctuation/name-characterization.json",
+        "sha256": "933bb053ef5f1df96abbdb0ac870162b6f8bdf60106954e7b2307700294ba919",
+        "meaning": "Five quoted punctuation paths accepted, including equals and argument punctuation; not part-layout qualification."
+      },
+      {
+        "path": "/private/tmp/crystal-click-w252.FU1rs2/value-characterization/value-characterization.json",
+        "sha256": "fba4d4623ae259e3aa229773c64a8301a8a21eaa1ed07ede2f207584c3edc17a",
+        "meaning": "Distinct direct/Dynamic typed values under explicit input-normalization setting; query-only characterization."
+      }
+    ]
+  },
+  "root_audit": {
+    "path": "/private/tmp/crystal-click-w252.FU1rs2/reconcile-w252-root.rb",
+    "sha256": "2ea56d0f79ade33c3d6262b282bc3d3561a2174620ea69f7d05d48578543d0bf",
+    "observed_status": "W252 bounded reconciliation PASS: 4 cells, 3 cases, 10 raw Dynamic structure streams per cell",
+    "checks": [
+      "Bounded plain-file/canonical path and fixed capture/row/resource/version/binary/source-pin rosters",
+      "Exact observed argv, SQL stdin, output byte/hash/status records; native sidecar exact projection omits only summary-added binary_sha_before",
+      "Independent literal native schemas/typed values/actual types/CHECK and helper direct/owned/offline values",
+      "Source/generated/attached raw snapshots, exact invalidated_system_columns.txt exception and physical typed-path/SipHash2/4 file rosters",
+      "Bounded LZ4 and minimally framed UInt64/VarUInt/StringBinary, exact consumption of 40 Dynamic structures",
+      "Ordinary/unused actual rosters, mandatory positional statistics, statistics prefix, physical P mark words and terminal EOF coordinates",
+      "Independently read JSON typed UInt8/null maps, parent UInt8 values and position-independent Array row sizes",
+      "Unused JSON payload lanes empty except mandatory Object/Dynamic metadata and exact eight-byte BASIC Variant header",
+      "Actual DEBUG/RELEASE generated file byte equality independently executed outside the hash-based snapshot comparison"
+    ],
+    "raw_object_boundary": "Object structure metadata is file-roster/presence/snapshot-bound and consumed by library/native readers, not fully decoded independently by this raw auditor.",
+    "checksum_boundary": "Native CHECK=1 is the part checksum acceptance. The raw auditor binds filenames/snapshots and inflates data, not a full independent ClickHouse checksum implementation.",
+    "raw_environment_boundary": "Records do not attest the complete child environment; native UTC is explicit argv. Observed process safety fields are scoped, not a hermetic execution claim.",
+    "controls": {
+      "path": "/private/tmp/crystal-click-w252.FU1rs2/controls-w252-root.rb",
+      "sha256": "1db22547d393a535e3b010a1a85495a79f510aa318d38e5d35907567e452eb80",
+      "valid_baseline_accepted": true,
+      "final_four_cell_acceptance": true,
+      "in_memory_report_forgery_rejections": [
+        "raw dot/percent physical identity alias",
+        "native dot/percent typed-value swap",
+        "statistics count",
+        "statistics prefix offset",
+        "nonterminal mark coordinate",
+        "terminal EOF coordinate"
+      ],
+      "control_cell": "DEBUG V1 single-stream; full four-cell baseline before and after. No all-mode forgery matrix claim.",
+      "intended_guard_messages_verified": true,
+      "qualified_captures_mutated": false
+    },
+    "physical_spec_guards": [
+      "Unused unbound/missing child rejected before destination/staging publication or on open",
+      "Corrupt unused child rejected before callbacks on empty candidate/EOF windows"
+    ],
+    "review": "Same-lineage Luna review is correlated. Root inspected production and harness code and independently ran spec/build/native gates, raw reconciliation and intended-guard controls."
+  },
+  "commands": {
+    "behavioral_red": {
+      "label": "Behavioral RED before production unlock",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/json_path_identity_w252_spec.cr spec/json_path_physical_w252_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "observed_exit": 1,
+      "output_tail": "in'\n       \n\nFinished in 1.07 milliseconds\n5 examples, 0 failures, 3 errors, 0 pending\n\nFailed examples:\n\ncrystal spec spec/json_path_identity_w252_spec.cr:43 # W252 embedded JSON raw path identity keeps canonical SQL quoting separate from raw descriptor and typed-row bytes\ncrystal spec spec/json_path_identity_w252_spec.cr:133 # W252 embedded JSON raw path identity charges escaped canonical-name output and keeps raw length and malformed-name fences\ncrystal spec spec/json_path_physical_w252_spec.cr:39 # W252 root Object path identity and physical names roundtrips canonical declarations without changing raw typed-path bytes\n[EXIT: 1] after ~2s\n"
+    },
+    "affected_specs": [
+      {
+        "label": "DEBUG group 1: 107 examples",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/json_path_identity_w252_spec.cr spec/json_path_physical_w252_spec.cr spec/json_sql_type_name_w251_spec.cr spec/dynamic_structure_versions_w250_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/json_binary_kernel_w180_spec.cr spec/json_binary_kernel_w180_guards_spec.cr spec/json_binary_kernel_w180_boundary_spec.cr spec/json_binary_kernel_w180_red_spec.cr spec/dynamic_json_metadata_w206_spec.cr spec/dynamic_json_metadata_w206_adversary_spec.cr spec/dynamic_structure_prefix_w193_adversary_spec.cr spec/json_recursive_scalar_w181_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/json_nested_scalar_w182_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_nested_shared_dynamic_w182_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "observed_exit": 0,
+        "output_tail": "alue recursion in the enclosing shared budget\n  rejects malformed nested path boundaries and exact nominal mismatches\r  rejects malformed nested path boundaries and exact nominal mismatches\n  keeps JSON-containing products out of physical, borrowed, and DynamicBulk envelopes\r  keeps JSON-containing products out of physical, borrowed, and DynamicBulk envelopes\nW182 shared Dynamic selected JSON recursion\n  charges one shared JSON/Dynamic owner at each typed sibling occurrence\r  charges one shared JSON/Dynamic owner at each typed sibling occurrence\n\nFinished in 54.47 milliseconds\n107 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~5s\n"
+      },
+      {
+        "label": "DEBUG group 2: 179 examples",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_physical_w210_spec.cr spec/dynamic_json_recursive_w212_spec.cr spec/dynamic_json_recursive_physical_w212_spec.cr spec/dynamic_recursive_handoff_w249_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/object_shared_nested_dynamic_json_w244_spec.cr spec/object_typed_dynamic_json_context_w215_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/json_dynamic_legacy_handoff_w251_spec.cr spec/dynamic_json_object_bridge_w208_spec.cr spec/object_document_schema_w128_spec.cr spec/object_catalog_w129_spec.cr spec/object_document_schema_w131_spec.cr spec/object_document_schema_w132_spec.cr spec/object_document_schema_w133_spec.cr spec/object_document_schema_w135_spec.cr spec/object_document_schema_w136_spec.cr spec/object_document_schema_w137_spec.cr spec/object_document_schema_w138_spec.cr spec/object_document_schema_w139_spec.cr spec/object_document_schema_w140_spec.cr spec/physical_stream_plan_w125_spec.cr spec/object_table_w130_root_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "observed_exit": 0,
+        "output_tail": " parent identity\r  reads whole-Object projection child values and preserves parent identity\n  does not reinterpret a callback exception as an Object read failure\r  does not reinterpret a callback exception as an Object read failure\n  rejects Object selections through scalar-only scan APIs before any callback\r  rejects Object selections through scalar-only scan APIs before any callback\n  binds canonical whole-Object catalog schemas without changing candidate semantics\r  binds canonical whole-Object catalog schemas without changing candidate semantics\n\nFinished in 26.28 seconds\n179 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~70s\n"
+      },
+      {
+        "label": "RELEASE group 1: 107 examples",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/json_path_identity_w252_spec.cr spec/json_path_physical_w252_spec.cr spec/json_sql_type_name_w251_spec.cr spec/dynamic_structure_versions_w250_spec.cr spec/aggregate_count_arguments_w178_parser_spec.cr spec/aggregate_count_arguments_w178_admission_spec.cr spec/aggregate_count_arguments_w178_core_spec.cr spec/json_binary_kernel_w180_spec.cr spec/json_binary_kernel_w180_guards_spec.cr spec/json_binary_kernel_w180_boundary_spec.cr spec/json_binary_kernel_w180_red_spec.cr spec/dynamic_json_metadata_w206_spec.cr spec/dynamic_json_metadata_w206_adversary_spec.cr spec/dynamic_structure_prefix_w193_adversary_spec.cr spec/json_recursive_scalar_w181_spec.cr spec/json_recursive_scalar_w181_guards_spec.cr spec/json_nested_scalar_w182_spec.cr spec/json_nested_scalar_w182_guards_spec.cr spec/json_nested_shared_dynamic_w182_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug --verbose",
+        "observed_exit": 0,
+        "output_tail": "lue recursion in the enclosing shared budget\n  rejects malformed nested path boundaries and exact nominal mismatches\r  rejects malformed nested path boundaries and exact nominal mismatches\n  keeps JSON-containing products out of physical, borrowed, and DynamicBulk envelopes\r  keeps JSON-containing products out of physical, borrowed, and DynamicBulk envelopes\nW182 shared Dynamic selected JSON recursion\n  charges one shared JSON/Dynamic owner at each typed sibling occurrence\r  charges one shared JSON/Dynamic owner at each typed sibling occurrence\n\nFinished in 30.41 milliseconds\n107 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~24s\n"
+      },
+      {
+        "label": "RELEASE group 2: 179 examples",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_physical_w210_spec.cr spec/dynamic_json_recursive_w212_spec.cr spec/dynamic_json_recursive_physical_w212_spec.cr spec/dynamic_recursive_handoff_w249_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/object_shared_nested_dynamic_json_w244_spec.cr spec/object_typed_dynamic_json_context_w215_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/json_dynamic_legacy_handoff_w251_spec.cr spec/dynamic_json_object_bridge_w208_spec.cr spec/object_document_schema_w128_spec.cr spec/object_catalog_w129_spec.cr spec/object_document_schema_w131_spec.cr spec/object_document_schema_w132_spec.cr spec/object_document_schema_w133_spec.cr spec/object_document_schema_w135_spec.cr spec/object_document_schema_w136_spec.cr spec/object_document_schema_w137_spec.cr spec/object_document_schema_w138_spec.cr spec/object_document_schema_w139_spec.cr spec/object_document_schema_w140_spec.cr spec/physical_stream_plan_w125_spec.cr spec/object_table_w130_root_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug --verbose",
+        "observed_exit": 0,
+        "output_tail": " parent identity\r  reads whole-Object projection child values and preserves parent identity\n  does not reinterpret a callback exception as an Object read failure\r  does not reinterpret a callback exception as an Object read failure\n  rejects Object selections through scalar-only scan APIs before any callback\r  rejects Object selections through scalar-only scan APIs before any callback\n  binds canonical whole-Object catalog schemas without changing candidate semantics\r  binds canonical whole-Object catalog schemas without changing candidate semantics\n\nFinished in 3.91 seconds\n179 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~172s\n"
+      }
+    ],
+    "post_format": [
+      {
+        "label": "DEBUG affected file after whitespace correction",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "observed_exit": 0,
+        "output_tail": "9 examples, 0 failures, 0 errors, 0 pending; [EXIT: 0] after ~2s"
+      },
+      {
+        "label": "RELEASE affected file after whitespace correction",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_json_object_bridge_w208_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "observed_exit": 0,
+        "output_tail": ".........\n\nFinished in 4.32 milliseconds\n9 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~12s\n"
+      }
+    ],
+    "helper_builds": [
+      {
+        "label": "Final DEBUG helper build",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_json_path_identity_w252.cr -o /private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "observed_exit": 0,
+        "output_tail": "[EXIT: 0] after ~39s\n"
+      },
+      {
+        "label": "Final RELEASE helper build",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_json_path_identity_w252.cr -o /private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "observed_exit": 0,
+        "output_tail": "[EXIT: 0] after ~78s\n"
+      }
+    ],
+    "raw_audit": {
+      "label": "Final independent raw four-cell reconciliation",
+      "command": "ruby /private/tmp/crystal-click-w252.FU1rs2/reconcile-w252-root.rb /Users/sergey/Projects/Crystal/crystal-click /private/tmp/crystal-click-w252.FU1rs2/root-pins.json /private/tmp/crystal-click-w252-debug-v1.eBVSUU /private/tmp/crystal-click-w252-debug-v2.ui0oZQ /private/tmp/crystal-click-w252-release-v1.RCzLbe /private/tmp/crystal-click-w252-release-v2.MZ2zLo",
+      "observed_exit": 0,
+      "output_tail": "W252 bounded reconciliation PASS: 4 cells, 3 cases, 10 raw Dynamic structure streams per cell\n"
+    },
+    "adversary": {
+      "label": "Root intended-guard controls and restored acceptance",
+      "command": "ruby /private/tmp/crystal-click-w252.FU1rs2/controls-w252-root.rb /Users/sergey/Projects/Crystal/crystal-click /private/tmp/crystal-click-w252.FU1rs2/root-pins.json /private/tmp/crystal-click-w252-debug-v1.eBVSUU /private/tmp/crystal-click-w252-debug-v2.ui0oZQ /private/tmp/crystal-click-w252-release-v1.RCzLbe /private/tmp/crystal-click-w252-release-v2.MZ2zLo",
+      "observed_exit": 0,
+      "output_tail": "to raw structure bytes/mark coordinates\nW252 control REJECTED statistics-prefix: payload.dynamic_structure: helper report is not bound to raw structure bytes/mark coordinates\nW252 control REJECTED nonterminal-mark-coordinate: payload.dynamic_structure: helper report is not bound to raw structure bytes/mark coordinates\nW252 control REJECTED terminal-eof-coordinate: payload.dynamic_structure: helper report is not bound to raw structure bytes/mark coordinates\nW252 bounded reconciliation PASS: 4 cells, 3 cases, 10 raw Dynamic structure streams per cell\nW252 root adversary PASS: 6 intended guard rejections; baseline and final four-cell acceptance\n"
+    },
+    "generated_byte_comparison": {
+      "label": "Actual generated file bytes across modes",
+      "command": "ruby -rjson -rdigest -e 'roots=ARGV.map { |p| JSON.parse(File.binread(File.join(p,\"summary.json\"))) }; out=2.times.map do |i| a=roots[i]; b=roots[i+2]; raise \"cell profile mismatch\" unless a.fetch(\"scope\").fetch(\"string_profile\")==b.fetch(\"scope\").fetch(\"string_profile\"); paths_a=a.fetch(\"parts\").fetch(\"library_paths\"); paths_b=b.fetch(\"parts\").fetch(\"library_paths\"); raise \"case roster mismatch\" unless paths_a.keys==paths_b.keys; count=0; size=0; paths_a.each do |id,pa| pb=paths_b.fetch(id); na=Dir.children(pa).sort; nb=Dir.children(pb).sort; raise \"file roster differs\" unless na==nb && na.size<=1024; na.each do |n| x=File.join(pa,n); y=File.join(pb,n); raise \"not bounded plain files\" unless [x,y].all? { |p| s=File.lstat(p); s.file? && !s.symlink? && s.size<=67108864 }; xx=File.binread(x); yy=File.binread(y); raise \"generated bytes differ: #{id}/#{n}\" unless xx==yy; count+=1; size+=xx.bytesize; end; end; {\"profile\"=>a.fetch(\"scope\").fetch(\"string_profile\"),\"files_per_mode\"=>count,\"bytes_per_mode\"=>size,\"actual_bytes_equal\"=>true}; end; puts JSON.generate(out)' /private/tmp/crystal-click-w252-debug-v1.eBVSUU /private/tmp/crystal-click-w252-debug-v2.ui0oZQ /private/tmp/crystal-click-w252-release-v1.RCzLbe /private/tmp/crystal-click-w252-release-v2.MZ2zLo",
+      "observed_exit": 0,
+      "output_tail": "[{\"profile\":\"single_stream\",\"files_per_mode\":190,\"bytes_per_mode\":37896,\"actual_bytes_equal\":true},{\"profile\":\"with_size_stream\",\"files_per_mode\":202,\"bytes_per_mode\":40289,\"actual_bytes_equal\":true}]\n"
+    },
+    "frozen_refresh": {
+      "label": "Final observed input pins/closure refresh",
+      "command": "ruby -Iscripts -rprobe_json_path_identity_w252 -rprobe_static_nested_handoff_w248 -rjson -rdigest -e 'r=Dir.pwd; m=ProbeJSONPathIdentityW252; h=ProbeStaticNestedHandoffW248; rb=h.ruby_closure(File.join(r,\"scripts/probe_json_path_identity_w252.rb\")); cr=h.crystal_closure([File.join(r,\"scripts/check_json_path_identity_w252.cr\")],r); cs={\"ruby\"=>rb,\"crystal\"=>cr}.transform_values { |ps| es=ps.map { |p| {\"path\"=>p,\"sha256\"=>Digest::SHA256.file(p).hexdigest} }; {\"count\"=>es.size,\"json_ordered_entries_sha256\"=>Digest::SHA256.hexdigest(JSON.generate(es))} }; runtime=\"/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped\"; puts JSON.generate({\"source_closures\"=>cs,\"source_pins\"=>m::SOURCE_FILES.map { |p| {\"path\"=>p,\"sha256\"=>Digest::SHA256.file(p).hexdigest} },\"runtime\"=>{\"path\"=>runtime,\"sha256\"=>Digest::SHA256.file(runtime).hexdigest,\"version\"=>m::W210::VERSION,\"build\"=>m::W210::BUILD},\"outer_limit\"=>m::W210::OUTER_RUN_SAFE_LIMIT,\"helper_binaries\"=>%w[debug release].to_h { |mode| p=\"/private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-#{mode}\"; [mode,{\"path\"=>p,\"sha256\"=>Digest::SHA256.file(p).hexdigest}] }})'",
+      "observed_exit": 0,
+      "output_tail": "ff07507514ab54c2\"}],\"runtime\":{\"path\":\"/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped\",\"sha256\":\"bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2\",\"version\":\"26.10.1.1201\",\"build\":\"d9bcb5ab007f0f6299f7f973f2642245bab3d028\"},\"outer_limit\":12884901888,\"helper_binaries\":{\"debug\":{\"path\":\"/private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-debug\",\"sha256\":\"2951cce93d682e1ae4b171c75fbd1a90d8d5128cb7f935a457b6cab121b0304a\"},\"release\":{\"path\":\"/private/tmp/crystal-click-w252.FU1rs2/check-json-path-identity-release\",\"sha256\":\"72d566963e152234212c915e77e30e52bb7f692d8820f55460fb1fdcb5ef5d63\"}}}\n"
+    },
+    "formatting": {
+      "label": "18-file Crystal format check",
+      "command": "/opt/homebrew/bin/crystal tool format --check src/crystal_click.cr src/crystal_click/json_path_sql_name.cr src/crystal_click/binary_json_type.cr src/crystal_click/binary_json_type_codec.cr src/crystal_click/binary_json_value_codec.cr src/crystal_click/binary_recursive_data_type_name_reader.cr src/crystal_click/binary_type_name_budget.cr src/crystal_click/dynamic_json_object_binding.cr src/crystal_click/object_document_schema.cr src/crystal_click/object_document_schema_parser.cr spec/json_path_identity_w252_spec.cr spec/json_path_physical_w252_spec.cr spec/dynamic_json_object_bridge_w208_spec.cr spec/json_binary_kernel_w180_guards_spec.cr spec/json_sql_type_name_w251_spec.cr spec/object_catalog_w129_spec.cr spec/object_document_schema_w128_spec.cr scripts/check_json_path_identity_w252.cr",
+      "observed_exit": 0,
+      "output_tail": ""
+    },
+    "ruby_syntax": {
+      "label": "Final runner Ruby syntax",
+      "command": "ruby -c scripts/probe_json_path_identity_w252.rb",
+      "observed_exit": 0,
+      "output_tail": "Syntax OK\n"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "observed_exit": 0
+    },
+    "punctuation_characterization": {
+      "label": "Native punctuation characterization",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh ruby 180 12288 /private/tmp/crystal-click-w252.FU1rs2/characterize_path_punctuation.rb",
+      "observed_exit": 0,
+      "output_tail": "{\"label\":\"argument_punctuation\",\"canonical_name\":\"JSON(max_dynamic_types=1, max_dynamic_paths=1, `a,b(c)` UInt8)\",\"exit_status\":0}\n[EXIT: 0] after ~1s\n"
+    },
+    "value_characterization": {
+      "label": "Native direct/Dynamic path values characterization",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w252.FU1rs2/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh ruby 180 12288 /private/tmp/crystal-click-w252.FU1rs2/characterize_path_values.rb",
+      "observed_exit": 0,
+      "output_tail": "[EXIT: 0] after ~1s\n"
+    }
+  },
+  "excluded_diagnostics": [
+    "Initial native characterization Ruby UTF-8 result-display failure; later separate capture supersedes it.",
+    "Old bad.path rejection expectation corrected to the retained actual overlength limit; punctuation is now admitted.",
+    "Helper guard argument invocation mistake, Slice(String)/Array(String) helper compile mismatch, and stale absent W144 default runtime during initial pin collection; no valid native layout rejection.",
+    "First helper cell rejected unsorted expected case keys before reading data; helper-only .sort correction is rebuilt in both modes and recaptured with final hashes.",
+    "Final Crystal formatting found four hash-alignment spaces; formatted file reruns nine examples in each mode.",
+    "Scratch oracle fixes: table-group/value arithmetic, Ruby backtick replacement semantics, native summary-versus-persisted-sidecar projection, no Dynamic descriptors for typed-only Object, nonempty metadata/BASIC prefixes for unused arms, and raw Array sizes rather than cumulative offsets. These are not producer-format rejection evidence."
+  ],
+  "residuals": [
+    "No whole-suite or all layouts/type/version/profile Cartesian-product qualification.",
+    "Invalid-UTF-8 raw identity local tests do not widen legacy physical SQL-name fences.",
+    "SKIP/REGEXP, RE2 binding and general JSON text normalization/ingestion remain outside this slice.",
+    "No fresh-master-built native runtime, native Compact writing, stock physical re-emission or immutable compiler/link provenance claim.",
+    "Remaining physical layouts/aggregate state families, general keys/partitions, MV/projection writes and broad facade decomposition remain open.",
+    "Offline candidates/owned values do not certify server Active state or freshness/provenance.",
+    "No heap/RSS, memory optimization, performance comparison or speed-parity conclusion."
+  ],
+  "refresh": {
+    "decay_triggers": [
+      "Relevant raw-path/parser/descriptor/budget/binding/stream owner changes",
+      "Fixture/helper/oracle/compiler/runtime/source changes",
+      "Loss or mutation of referenced captures/private auditor/control artifacts"
+    ],
+    "operation": "Rebuild pinned helpers, execute the affected gates, recapture the declared reciprocal cells and independently reconcile raw evidence/controls before renewing the certificate.",
+    "failure_policy": "Reopen dependent claims. A safe refusal preserves a guard but does not qualify a missing compatible layout."
+  }
+}

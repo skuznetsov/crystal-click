@@ -233,17 +233,17 @@ module CrystalClick
 
       loop do
         skip_whitespace
-        token = read_identifier(BinaryJsonType::MAX_PATH_BYTES) ||
-                invalid!("JSON path or capacity setting is missing")
+        measure = JsonPathSqlName.scan_token(@bytes, @offset, BinaryJsonType::MAX_PATH_BYTES) ||
+                  invalid!("JSON path or capacity setting is missing")
+        @offset = measure.token_after
         skip_whitespace
 
-        if consume('=')
-          case token
-          when "max_dynamic_paths"
+        if !measure.quoted && consume('=')
+          if json_token_equals?(measure, "max_dynamic_paths")
             invalid!("JSON max_dynamic_paths is repeated") if saw_max_dynamic_paths
             saw_max_dynamic_paths = true
             max_dynamic_paths = read_unsigned(BinaryJsonType::MAX_DYNAMIC_PATHS.to_u64).to_i32
-          when "max_dynamic_types"
+          elsif json_token_equals?(measure, "max_dynamic_types")
             invalid!("JSON max_dynamic_types is repeated") if saw_max_dynamic_types
             saw_max_dynamic_types = true
             max_dynamic_types = read_unsigned(BinaryJsonType::MAX_DYNAMIC_TYPES.to_u64).to_i32
@@ -252,8 +252,6 @@ module CrystalClick
           end
         else
           invalid!("JSON typed path count exceeds its supported limit") if typed_paths.size >= BinaryJsonType::MAX_TYPED_PATHS
-          invalid!("JSON typed path is outside the admitted profile") unless BinaryJsonType.valid_path?(token)
-          invalid!("JSON typed path is repeated") if typed_paths.has_key?(token)
 
           # A typed path contributes a declaration edge/node at this JSON
           # depth and a separate descriptor edge whose type starts one level
@@ -262,6 +260,8 @@ module CrystalClick
           @budget.visit_node(depth)
           @budget.preflight_children(1_u64)
           @budget.ensure_depth(depth + 1)
+          token = JsonPathSqlName.decode_token(@bytes, measure, @budget)
+          invalid!("JSON typed path is repeated") if typed_paths.has_key?(token)
           declared_type = parse_type(depth + 1)
           typed_paths[token] = declared_type
         end
@@ -272,6 +272,16 @@ module CrystalClick
       end
 
       BinaryDataType.json(max_dynamic_paths, max_dynamic_types, typed_paths)
+    end
+
+    private def json_token_equals?(measure : JsonPathSqlName::TokenMeasure, expected : String) : Bool
+      return false if measure.quoted
+      return false unless measure.content_after - measure.content_start == expected.bytesize
+      expected_bytes = expected.to_slice
+      expected_bytes.size.times do |index|
+        return false unless @bytes[measure.content_start + index] == expected_bytes[index]
+      end
+      true
     end
 
     private def parse_atom(name : String, depth : Int32) : BinaryDataType
