@@ -1,9 +1,9 @@
 module CrystalClick
   class OfflineTable
-    # Owns the public .values result for admitted static SimpleAggregate and
-    # AggregateFunction trees using the generic BinaryBulk reader. The
-    # shared budget accounts retained BinaryValue trees plus known reader/grid
-    # workspace; it is logical ownership accounting, not an RSS bound.
+    # Owns the public .values result for admitted static BinaryBulk families
+    # using the generic reader while preserving their nominal declaration
+    # owners. The shared budget accounts retained BinaryValue trees plus known
+    # reader/grid workspace; it is logical ownership accounting, not an RSS bound.
     private class StaticBulkValuesMaterializer
       def self.materialize(
         table : OfflineTable,
@@ -23,8 +23,16 @@ module CrystalClick
                         BinaryAggregateFunctionBulkColumnDeclaration.new(type).declaration
                       elsif type.contains_custom_geo?
                         BinaryCustomGeoBulkColumnDeclaration.new(type).declaration
+                      elsif type.tag == BinaryDataType::TAG_SIMPLE_AGGREGATE ||
+                            (type.tag == BinaryDataType::TAG_NULLABLE && type.child_at(0).tag == BinaryDataType::TAG_SIMPLE_AGGREGATE)
+                        simple_aggregate_declaration = SimpleAggregateBulkColumnDeclaration.new(type).declaration
+                        unless SimpleAggregateBulkColumnDeclaration.parse(simple_aggregate_declaration) &&
+                               WidePart.supports_simple_aggregate_bulk_type?(simple_aggregate_declaration)
+                          raise UnsupportedFormatError.new("static bulk materializer requires an admitted recursive SimpleAggregate declaration")
+                        end
+                        simple_aggregate_declaration
                       else
-                        SimpleAggregateBulkColumnDeclaration.new(type).declaration
+                        StaticBinaryBulkColumnDeclaration.new(type).declaration
                       end
         unless WidePart.supports_static_binary_bulk_type?(declaration)
           raise UnsupportedFormatError.new("static bulk materializer requires an admitted nominal BinaryBulk profile")

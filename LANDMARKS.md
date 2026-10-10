@@ -1,5 +1,53 @@
 # Crystal Click landmarks
 
+## Static recursive BinaryBulk public consumer handoff — W247
+
+- Status: VERIFIED / root adversary ROBUST within the finite target over clean
+  baseline `f0bcff4`. Heavy production/fixture/harness work delegated to Luna
+  Max; root executes final gates, raw audits, actual-byte comparisons and
+  attacks. Same-lineage review is correlated, not independent evidence.
+- Existing recursive serde already composes the selected types. The missing
+  surface was generic public consumer dispatch, not leaf codecs. One own-file
+  `StaticBinaryBulkColumnDeclaration` composes the existing canonical parser
+  and type/physical plans; static table batches, owned offline values and
+  declared projection children share that admission. Legacy carriers and
+  JSON/Dynamic/Nested/aggregate/QBit/nominal Geo owners are not bypassed.
+  `WidePart.open_typed` retains its stricter representation contract.
+- Exact root String supports existing profiles 0/1 without widening unknown
+  versions. Single-stream payload-byte accounting excludes length prefixes;
+  root String roster equality uses unique names and preserves the legacy
+  size-first order. Other type rosters remain order-strict. Logical retained
+  budgets do not bound transient allocations/RSS; empty selections validate
+  complete grids, not every unrequested payload checksum.
+- Focused 17 + affected 108 examples pass per DEBUG/RELEASE, no pending cases;
+  both helper builds, twelve-file formatting, three Ruby syntax checks and
+  twelve auditor self-tests pass. Four reciprocal native cells qualify sixteen
+  stock SQL calls, CHECK1, schema/values/actual nested Variant types and stock
+  re-emission followed by direct/public/offline library reads. All 108 generated
+  files / 16,293 bytes per mode agree by actual bytes. Six raw mutations reject
+  with exact typed file/link restoration and successful final baseline audit.
+- Refutations: stale W95 unsupported-type expectation must become nominal
+  mismatch for admitted Array(String); complete column descriptor is not its
+  inner Variant site; escaped Tuple field names and uppercase stock hex matter.
+  Re-emission disables default INSERT statistics to keep the exact part roster.
+  Atomic catalog has exactly two data aliases plus metadata/default: bind
+  contained UUID targets and exact metadata SQL, preserve raw typed link
+  inventory, reject all other links and every link in a part tree. Capture and
+  native-store-relative alias coordinates must not be conflated.
+- Native projection interop and stock-root offline discovery are not tested.
+  Physical helper windows are not native SQL pruning; raw replay controls do
+  not establish immutable execution provenance or a fully forged-capture audit.
+  Recursive admission is generic, but the stock qualification is finite.
+- Active goal remains legal types + MV/projections before memory/performance.
+  Next: contextual/layout/nominal/state handoffs, general key/partition metadata
+  and MV/projection writes; broad facade decomposition remains open.
+  Return pointers: [frontier](docs/STATIC_BINARY_BULK_CONSUMER_FRONTIER.md),
+  [evidence index](.landmark/evidence/static-binary-bulk-consumer-w247.json).
+  Standing authority: safe local implementation/tests and one verified atomic
+  feature commit; no push, history rewrite or resource-guard bypass. Refresh
+  after relevant source/runtime/compiler/codec/consumer/helper/fixture/oracle
+  changes or capture loss; infrastructure failure is inconclusive, not admission.
+
 ## Recursive root Tuple Dynamic N-column admission — W246
 
 - Status: VERIFIED / root adversary ROBUST within the finite target over clean

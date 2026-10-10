@@ -189,9 +189,15 @@ module CrystalClick
                              else
                                nil
                              end
+      generic_static_bulk_type = if !json_path && source_name == column_name &&
+                                    WidePart.supports_generic_static_binary_bulk_type?(selected_type)
+                                   StaticBinaryBulkColumnDeclaration.parse(selected_type)
+                                 else
+                                   nil
+                                 end
       object_root = WidePart.json_type?(selected_type)
       unless object_root || dynamic_type || simple_aggregate_bulk_type || aggregate_function_bulk_type || qbit_bulk_type || custom_geo_bulk_type ||
-             WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
+             generic_static_bulk_type || WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
         raise UnsupportedFormatError.new("selected table column type is unsupported")
       end
       source_column = @columns.find { |entry| entry.name == source_name } || raise(CorruptPartError.new("selected column disappeared from table DDL"))
@@ -234,7 +240,7 @@ module CrystalClick
         )
       end
 
-      if type = (qbit_bulk_type || simple_aggregate_bulk_type || aggregate_function_bulk_type || custom_geo_bulk_type)
+      if type = (qbit_bulk_type || simple_aggregate_bulk_type || aggregate_function_bulk_type || custom_geo_bulk_type || generic_static_bulk_type)
         return StaticBulkValuesMaterializer.materialize(
           self,
           candidates,
@@ -1754,7 +1760,7 @@ module CrystalClick
 
         source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name)
         object_root = !json_path && WidePart.json_type?(source_type)
-        unless object_root || WidePart.supports_typed_type?(selected_type)
+        unless object_root || WidePart.supports_typed_type?(selected_type) || WidePart.supports_generic_static_binary_bulk_type?(selected_type)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         expected_sources[column_name] = {source_name, source_type, selected_type, json_path}
@@ -3919,7 +3925,8 @@ module CrystalClick
         else
           selected_type = WidePart.catalog_type(selected.type) || selected.type
         end
-        unless allow_unsupported_exact || object_root || WidePart.supports_typed_type?(selected_type)
+        unless allow_unsupported_exact || object_root || WidePart.supports_typed_type?(selected_type) ||
+               WidePart.supports_generic_static_binary_bulk_type?(selected_type)
           raise UnsupportedFormatError.new("selected table column type is unsupported")
         end
         return {selected.name, selected.type, selected_type, false}

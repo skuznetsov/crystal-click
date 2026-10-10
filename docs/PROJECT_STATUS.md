@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Latest qualification (W246, 2026-10-10): VERIFIED / root adversary ROBUST within
+Latest qualification (W247, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite static recursive public-consumer target. Existing BinaryBulk serde
+already composes the selected types; a new own-file canonical declaration owner
+connects the generic static fallback to table batches, owned offline `.values`
+and declared selected projection reads. Specialized carriers/owners stay first;
+the legacy strict `WidePart.open_typed` facade is not generically widened.
+Exact root String0/1 keeps its legacy carrier, with bounded single-stream byte
+accounting and unique-name roster matching only for exact root String.
+
+125 selected examples pass per mode (17 focused + 108 affected), both helpers
+build, formatting and Ruby syntax pass. Four DEBUG/RELEASE x String0/1 fresh
+reciprocal native cells and externally pinned raw audits pass: sixteen stock
+SQL calls, generated ATTACH/CHECK=1/exact values and nested Variant types, stock
+re-emission/CHECK=1, then library direct/table/offline reads of the stock part.
+Actual bytes of 108 generated files / 16,293 bytes per mode match. Six raw
+capture mutations reject at intended guards with byte-exact restored acceptance.
+This is not whole-suite/all-product qualification, native projection interop,
+stock-root offline discovery or a performance/RSS claim. See the
+[consumer frontier](STATIC_BINARY_BULK_CONSUMER_FRONTIER.md) and
+[W247 evidence index](../.landmark/evidence/static-binary-bulk-consumer-w247.json).
+
+Overall goal ACTIVE; JSON/Dynamic/Nested contexts, remaining layout/nominal/state
+handoffs, general key/partition metadata, MV/projection writes and broad facade
+decomposition remain open. Recursive composition does not need a serializer
+per wrapper product; the remaining seams are context, state, stream ownership
+and qualification. Memory/performance stays deferred; no remote push.
+
+Previous qualification (W246, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite JSON-free root-Tuple Dynamic N-column target. Removed only the W245
 adapter guard; existing recursive serde, registries, physical plans, operation
 budgets and publisher are reused. Named and unnamed Tuple columns coexist in

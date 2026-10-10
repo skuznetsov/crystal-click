@@ -1594,6 +1594,15 @@ module CrystalClick
       end
     end
 
+    # Return an exact selected declaration only for static recursive types
+    # that need the generic BinaryBulk table fallback. Existing typed and
+    # nominal-family routes keep their established return representations.
+    def self.selected_generic_static_binary_bulk_declaration(part_path : String, column_name : String) : String?
+      selected_static_binary_bulk_declaration(part_path, column_name) do |declaration|
+        supports_generic_static_binary_bulk_type?(declaration)
+      end
+    end
+
     def self.supports_custom_geo_bulk_type?(type : String) : Bool
       parsed = BinaryCustomGeoBulkColumnDeclaration.parse(type) || return false
       parsed.tag != BinaryDataType::TAG_CUSTOM
@@ -1603,7 +1612,16 @@ module CrystalClick
     # not widen Dynamic admission.
     def self.supports_static_binary_bulk_type?(type : String) : Bool
       supports_simple_aggregate_bulk_type?(type) || supports_aggregate_function_bulk_type?(type) ||
-        supports_qbit_bulk_type?(type) || supports_custom_geo_bulk_type?(type)
+        supports_qbit_bulk_type?(type) || supports_custom_geo_bulk_type?(type) ||
+        supports_generic_static_binary_bulk_type?(type)
+    end
+
+    # Generic static BinaryBulk is only a fallback when the legacy typed
+    # reader cannot preserve its existing value contract. Keep this predicate
+    # separate from supports_typed_type? so WidePart.open_typed remains strict.
+    def self.supports_generic_static_binary_bulk_type?(type : String) : Bool
+      return false unless StaticBinaryBulkColumnDeclaration.parse(type)
+      !supports_typed_type?(type)
     end
 
     private def self.selected_static_binary_bulk_declaration(
@@ -2975,12 +2993,28 @@ module CrystalClick
       read_nullable_fixed_width_mark_range(column, first_mark, mark_count, 8, Int64)
     end
 
-    # Return the raw-byte sum for an exact String mark range without
-    # materializing its String values. WidePartTable uses this to preflight an
-    # aggregate bound across selected String columns before reading raw streams.
+    # Return the payload-byte sum for an exact String mark range. WidePartTable
+    # uses this to preflight an aggregate retained-String bound across selected
+    # columns. The sized lane counts its size stream directly; the single-stream
+    # lane must bounded-decode values to exclude per-value length prefixes.
     def string_mark_range_raw_bytes(column : String, first_mark : Int, mark_count : Int) : UInt64
       ensure_column(column)
       raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_type == "String"
+      if @single_stream_string
+        # The single-stream lane contains per-value length prefixes, so count
+        # decoded payload bytes rather than charging those framing bytes as
+        # retained String data. BinaryBulkColumnReader bounds this transient
+        # decode; the table still checks its aggregate limit before callbacks.
+        total_bytes = 0_u64
+        read_single_stream_string_mark_range(column, first_mark, mark_count).each do |value|
+          value_bytes = value.bytesize.to_u64
+          if value_bytes > MAX_STRING_RANGE_BYTES.to_u64 - total_bytes
+            raise CorruptPartError.new("String read range exceeds materialization limit")
+          end
+          total_bytes += value_bytes
+        end
+        return total_bytes
+      end
       _, total_bytes = read_string_sizes(column, first_mark, mark_count)
       total_bytes
     end
@@ -10007,6 +10041,8 @@ module CrystalClick
     def read_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String)
       ensure_column(column)
       raise UnsupportedFormatError.new("String accessor requires an exact String column") unless @column_type == "String"
+      return read_single_stream_string_mark_range(column, first_mark, mark_count) if @single_stream_string
+
       string_stream = @streams[column]
       sizes, total_bytes = read_string_sizes(column, first_mark, mark_count)
       raw_start, raw_end, raw_rows = checked_stream_mark_range(string_stream, first_mark, mark_count)
@@ -10016,6 +10052,21 @@ module CrystalClick
       StringPayloadDecoder.each(sizes, raw_bytes, "String") do |string_value, _index|
         values << string_value
         nil
+      end
+      values
+    end
+
+    private def read_single_stream_string_mark_range(column : String, first_mark : Int, mark_count : Int) : Array(String)
+      marks = BinaryBulkColumnReader.open(
+        @path,
+        column,
+        BinaryDataType.primitive("String"),
+      ).read_marks(first_mark, mark_count)
+      values = Array(String).new
+      marks.each do |mark_values|
+        mark_values.each do |value|
+          values << value.as_string
+        end
       end
       values
     end
@@ -11374,6 +11425,7 @@ module CrystalClick
     @marks : Array(Mark)
     @sentinel : Mark
     @streams : Hash(String, PhysicalStream)
+    @single_stream_string : Bool
     @low_cardinality_string_state : LowCardinalityStringState?
 
     private struct PhysicalStream
@@ -11542,6 +11594,7 @@ module CrystalClick
       @flattened_nested_context = flattened_nested_context
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
+      @single_stream_string = false
       @low_cardinality_string_state = nil
       @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_name, physical_streams = parse_metadata(requested_column, mode)
       @streams = Hash(String, PhysicalStream).new
@@ -12109,7 +12162,21 @@ module CrystalClick
               raise UnsupportedFormatError.new("Dynamic physical substreams do not match a supported arm subset") unless valid_dynamic_substream_inventory?(column, streams)
             else
               expected_streams = expected_physical_streams(column, selected_type, escape_simple_uint64_column: true)
-              raise UnsupportedFormatError.new("selected physical substreams do not match exact serialization shape") unless streams == expected_streams
+              if selected_type == "String"
+                # BinaryBulk metadata may present the exact String roster in
+                # sorted name order, while the legacy String reader keeps the
+                # stock size-first order for its internal stream bindings.
+                # Names are unique-checked above; retain exact identity and
+                # return the canonical reader order after comparison.
+                unless streams.sort == expected_streams.sort
+                  raise UnsupportedFormatError.new(physical_stream_shape_mismatch(column, selected_type, streams, expected_streams))
+                end
+                streams = expected_streams
+              else
+                unless streams == expected_streams
+                  raise UnsupportedFormatError.new(physical_stream_shape_mismatch(column, selected_type, streams, expected_streams))
+                end
+              end
             end
             selected_streams = streams
           else
@@ -12171,6 +12238,28 @@ module CrystalClick
       end
       raise UnsupportedFormatError.new("trailing columns_substreams.txt data") unless cursor == bytes.size
       selected_streams || raise UnsupportedFormatError.new("selected column substreams are missing")
+    end
+
+    private def physical_stream_shape_mismatch(
+      column : String,
+      type : String,
+      actual : Array(String),
+      expected : Array(String),
+    ) : String
+      "selected physical substreams do not match exact serialization shape for column #{column.inspect} type #{type.inspect}: actual #{physical_stream_roster_summary(actual)}, expected #{physical_stream_roster_summary(expected)}"
+    end
+
+    private def physical_stream_roster_summary(streams : Array(String)) : String
+      String.build do |io|
+        io << streams.size << " ["
+        visible = streams.size < 4 ? streams.size : 4
+        visible.times do |index|
+          io << ", " unless index == 0
+          io << streams[index].inspect
+        end
+        io << ", ..." if streams.size > visible
+        io << ']'
+      end
     end
 
     protected def flattened_nested_key_name : String
@@ -12287,7 +12376,7 @@ module CrystalClick
       elsif WidePart.supports_map_string_nullable_string_type?(type)
         ["#{column}.size0", "#{column}%2Ekeys.size", "#{column}%2Ekeys", "#{column}%2Evalues.null", "#{column}%2Evalues.size", "#{column}%2Evalues"]
       elsif type == "String"
-        ["#{column}.size", column]
+        @single_stream_string ? [column] : ["#{column}.size", column]
       elsif WidePart.supports_nullable_string_type?(type)
         ["#{column}.null", "#{column}.size", column]
       elsif WidePart.supports_nullable_uuid_type?(type)
@@ -13243,7 +13332,10 @@ module CrystalClick
 
       if type == "String"
         string_version = versions["string"]?.try(&.as_i) || 0_i64
-        raise UnsupportedFormatError.new("only String WITH_SIZE_STREAM version 1 is supported") unless string_version == 1
+        unless string_version == 0 || string_version == 1
+          raise UnsupportedFormatError.new("String serialization version must be 0 or 1")
+        end
+        @single_stream_string = string_version == 0
       elsif !WidePart.fixed_string_width(type).nil?
         string_version = versions["string"]?.try(&.as_i) || 0_i64
         raise UnsupportedFormatError.new("unsupported String serialization version") unless string_version == 0 || string_version == 1

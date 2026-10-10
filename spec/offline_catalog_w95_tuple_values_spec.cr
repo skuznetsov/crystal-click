@@ -256,7 +256,19 @@ describe "W95 offline catalog named Tuple values" do
       error.message.should eq("table DDL and selected part column types differ")
     end
 
-    w95_with_offline_tuple_catalog([7_u64], columns, "Tuple(s Array(String))") do |root, _part|
+    admitted_array_tuple = "Tuple(s Array(String))"
+    CrystalClick::StaticBinaryBulkColumnDeclaration.parse(admitted_array_tuple).should_not be_nil
+    CrystalClick::WidePart.supports_generic_static_binary_bulk_type?(admitted_array_tuple).should be_true
+    w95_with_offline_tuple_catalog([7_u64], columns, admitted_array_tuple) do |root, _part|
+      selection = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"]
+      error = expect_raises(CrystalClick::CorruptPartError) { selection.values }
+      error.message.should eq("Binary bulk source declaration differs from the expected nominal descriptor")
+    end
+
+    illegal_nullable_array_tuple = "Tuple(s Nullable(Array(String)))"
+    CrystalClick::StaticBinaryBulkColumnDeclaration.parse(illegal_nullable_array_tuple).should be_nil
+    CrystalClick::WidePart.supports_generic_static_binary_bulk_type?(illegal_nullable_array_tuple).should be_false
+    w95_with_offline_tuple_catalog([7_u64], columns, illegal_nullable_array_tuple) do |root, _part|
       selection = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"]
       error = expect_raises(CrystalClick::UnsupportedFormatError) { selection.values }
       error.message.should eq("selected table column type is unsupported")
