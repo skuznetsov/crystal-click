@@ -1,5 +1,31 @@
 # Crystal Click landmarks
 
+## Complete legacy JSON MAP admission through existing owners — W254
+
+- VERIFIED / root adversary ROBUST within the finite complete root Object
+  V1/V2 Wide/MAP target, baseline `e33f4c0453e4ccb2feb54d20599b692ae61f34eb`.
+  Behavioral RED locates a shared admission fence, not missing recursive serde.
+  Existing codecs/owners are reused; statistics rebuilding preserves wire 0/2
+  and canonicalizes fresh V1 capacity to actual path count. Exact decoded V1
+  legacy identity survives. Legacy inline roots/descendants remain refused
+  before prefix export; no new codec, class, dependency or default is added.
+- Ordered 48-file affected gate: 321 examples per DEBUG/RELEASE mode, zero
+  failures/errors/pending; both helpers build. Four reciprocal native cells
+  establish direct/table/offline reads and ATTACH/CHECK=1/schema/literal values.
+  Root independently audits 16 complete Object/Dynamic streams and marks in
+  eight parts; generated modes agree in all 76 files / 10,713 bytes. Thirty-six
+  raw controls and eight successful-exit CHECK=0 controls reject, baseline
+  acceptance passes again, and 12 retained part snapshots remain unchanged.
+- Return pointers: [W254 frontier](docs/JSON_LEGACY_MAP_LAYOUT_FRONTIER.md),
+  [root-owned evidence](.landmark/evidence/json-legacy-map-layout-w254.json).
+  Fresh shallow comparison `ed30948f095ecb70679986d7d60e27ad770ae27a` is not the
+  executed CH 26.10.1.1201/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`.
+  Refresh after serialization/admission/statistics/inline/stream/tool/helper/
+  oracle/runtime changes or capture loss. Same-lineage review is correlated.
+  Legacy inline/Compact/remaining products/states/RE2/native MV and projection
+  writes and broader facade decomposition stay open. Full goal ACTIVE;
+  memory/performance deferred; no push and no speed-parity claim.
+
 ## Shared JSON SKIP-path policy through recursive owners — W253
 
 - Status: VERIFIED / root adversary ROBUST within the finite target over clean

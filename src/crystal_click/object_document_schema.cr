@@ -299,7 +299,7 @@ module CrystalClick
     end
 
     # Parse the bounded canonical Object JSON declaration subset accepted by
-    # the current normalized Object V3 writer. This deliberately is not a
+    # the current normalized Object writer. This deliberately is not a
     # general ClickHouse type parser.
     def self.parse_declaration(type : String, limits : BinaryCodecLimits = DEFAULT_LIMITS) : ObjectDocumentSchema
       ObjectDocumentSchemaParser.parse(type, limits)
@@ -318,7 +318,7 @@ module CrystalClick
     ) : Nil
       object = plan.structures.object
       unless ObjectSharedBucketLayout.supported?(object)
-        raise ArgumentError.new("schema supports only Object V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or CHUNKED with 1..256 buckets")
+        raise ArgumentError.new("schema supports Object V1/V2 MAP and Object V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or CHUNKED layouts")
       end
       if object.dynamic_path_count > @max_dynamic_paths
         raise ArgumentError.new("Object plan exceeds JSON max_dynamic_paths")

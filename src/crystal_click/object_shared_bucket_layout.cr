@@ -1,19 +1,23 @@
 module CrystalClick
-  # Shared MAP layout laws for the finite Object V3 profiles admitted by the
-  # normalized document codec. The bucket ordinal is deliberately separate
-  # from Array nesting levels and from physical stream-name hashing.
+  # Shared MAP layout laws for the finite Object V1/V2 MAP and V3 profiles
+  # admitted by the normalized document codec. The bucket ordinal is
+  # deliberately separate from Array nesting levels and physical name hashing.
   module ObjectSharedBucketLayout
     MAX_BUCKET_COUNT = 256_u64
 
     def self.supported?(object : ObjectStructure) : Bool
-      return false unless object.version == 4_u64
-      case object.shared_data_version
-      when 0_u64
-        object.bucket_count == 1_u64
-      when 1_u64
-        1_u64 <= object.bucket_count <= MAX_BUCKET_COUNT
-      when 2_u64, 3_u64
-        1_u64 <= object.bucket_count <= MAX_BUCKET_COUNT
+      case object.version
+      when 0_u64, 2_u64
+        object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
+      when 4_u64
+        case object.shared_data_version
+        when 0_u64
+          object.bucket_count == 1_u64
+        when 1_u64, 2_u64, 3_u64
+          1_u64 <= object.bucket_count <= MAX_BUCKET_COUNT
+        else
+          false
+        end
       else
         false
       end
@@ -22,7 +26,7 @@ module CrystalClick
     def self.validate!(object : ObjectStructure) : Nil
       unless supported?(object)
         raise UnsupportedFormatError.new(
-          "Object composition supports only Object V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or CHUNKED with 1..256 buckets"
+          "Object V1/V2 composition supports only MAP with one bucket; Object V3 supports MAP, MAP_WITH_BUCKETS, ADVANCED, or CHUNKED with 1..256 buckets"
         )
       end
       nil

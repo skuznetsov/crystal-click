@@ -224,11 +224,15 @@ module CrystalClick
         fresh_dynamics[dynamic_paths[index]] = rebuild_dynamic(routing, stats, budget)
       end
 
+      legacy_max_dynamic_paths = if object.version == 0_u64
+                                   dynamic_paths.size.to_u64
+                                 end
       fresh_object = ObjectStructure.new(
         dynamic_paths,
-        4_u64,
+        object.version,
         object.shared_data_version,
         object.bucket_count,
+        legacy_max_dynamic_paths: legacy_max_dynamic_paths,
         statistics: object_stats
       )
       fresh_set = ObjectDynamicStructureSet.new(fresh_object, fresh_dynamics)

@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current qualification (W253, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W254, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite complete root JSON Object V1/V2 Wide/MAP target. Existing recursive
+value codecs and stream owners are reused. One shared layout gate admits wire
+versions 0/2 with MAP/one bucket, while statistics reconstruction preserves
+the chosen version. Decoded V1 legacy fields retain exact identity; fresh V1
+writes use the actual path count. Both public inline exporters and descendant
+preflight retain the local V3-only prefix boundary. No new value codec,
+production class, dependency, version selector or layout default was added.
+
+The same ordered 48-file affected roster passes 170 + 81 + 70 = 321 examples
+in each DEBUG/RELEASE mode, zero failures/errors/pending; both helpers build.
+Four reciprocal V1/V2 x DEBUG/RELEASE cells establish stock-part direct/table/
+offline `.values` reads and library-part ATTACH/CHECK=1/exact schema/literal
+values. Root independently parses 16 complete Object/Dynamic structures,
+statistics and marks across eight parts. All 76 generated files / 10,713 bytes
+per mode agree by actual bytes. Thirty-six in-memory raw controls and eight
+CHECK=0 report controls reject at intended guards; unmodified acceptance and
+12 capture snapshots remain unchanged.
+
+This does not close legacy inline framing, recursive child layout products,
+Compact writing, remaining aggregate families, RE2/SKIP REGEXP, native MV/
+projection writes, broader facade decomposition or performance parity. Source
+comparison is fresh shallow `ed30948f095ecb70679986d7d60e27ad770ae27a`, distinct
+from the pinned executed runtime. See the [W254 frontier](JSON_LEGACY_MAP_LAYOUT_FRONTIER.md)
+and [root-owned evidence index](../.landmark/evidence/json-legacy-map-layout-w254.json).
+Overall goal ACTIVE; memory/performance deferred; no push.
+
+Previous qualification (W253, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite JSON SKIP-path target. One own-file `JsonSkipPaths` preserves detached,
 sorted/deduplicated raw policy identity through descriptors, SQL names, shared
 budgets, root Object schemas and existing Dynamic bindings. Existing recursive
@@ -3403,12 +3430,14 @@ source/runtime identities and executed evidence.
 
 ## Source reference
 
-The current pinned comparison checkout is
-`/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1`, revision
-`0ca8150d9b1d0886edb2e3b4ab65eebb768d0357` (2026-10-07), rechecked clean and
-shallow with one reachable commit. This is not a continuing upstream freshness
-claim. [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records
-the previous six-directory comparison and earlier identities. In that prior
+The current bounded comparison checkout is
+`/private/tmp/clickhouse-w254-upstream.AqeqyC`, revision
+`ed30948f095ecb70679986d7d60e27ad770ae27a` (2026-10-10), rechecked clean and
+shallow after the official depth-1 sparse fetch. W254 compares selected
+Object/MAP/statistics/settings owners, not every upstream change. This is not
+a continuing upstream freshness claim.
+[CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records
+the previous snapshots, six-directory comparison and earlier identities. In that prior
 October 5 inventory, root independently
 hash-checks 24 decisive JSON/Dynamic/QBit/Count/descriptor owners against
 `29e0e201`; all are content-identical. Aggregate state-version propagation and

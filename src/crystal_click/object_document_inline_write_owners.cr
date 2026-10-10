@@ -15,6 +15,7 @@ module CrystalClick
     @nested_context : ObjectSharedNestedSerializationContext
 
     def initialize(root_owner : Owner, nested_context : ObjectSharedNestedSerializationContext, budget : BinaryCodecBudget)
+      validate_inline_object_version!(root_owner[3])
       @owners = [root_owner] of Owner
       @nested_context = nested_context
       validate_inline_owner_grid!(root_owner, budget)
@@ -43,6 +44,13 @@ module CrystalClick
         result << {owner[0], owner[1], owner[2], owner[3]}
       end
       result
+    end
+
+    private def validate_inline_object_version!(plan : ObjectDocumentPlan) : Nil
+      unless plan.structures.object.version == 4_u64
+        raise UnsupportedFormatError.new("inline child Object prefixes require Object V3 metadata")
+      end
+      nil
     end
 
     private def validate_inline_owner_grid!(owner : Owner, budget : BinaryCodecBudget) : Nil
@@ -263,6 +271,7 @@ module CrystalClick
       typed_scope : Bool,
       budget : BinaryCodecBudget,
     ) : Nil
+      validate_inline_object_version!(child_plan)
       expected_canonical = ObjectDocumentInlineCallbackOrder.canonical_root_prefix(child_physical)
       unless expected_canonical == canonical_root && child_physical.initial_array_level == array_level
         raise UnsupportedFormatError.new("inline JSON child physical root differs from its inherited site coordinates")

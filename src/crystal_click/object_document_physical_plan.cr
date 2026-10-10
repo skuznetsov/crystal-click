@@ -363,7 +363,7 @@ module CrystalClick
       end
       object = plan.structures.object
       unless ObjectSharedBucketLayout.supported?(object)
-        raise UnsupportedFormatError.new("physical Object planning admits only V3 MAP or MAP_WITH_BUCKETS with 1..256 buckets")
+        raise UnsupportedFormatError.new("physical Object planning admits V1/V2 MAP or V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or CHUNKED layouts")
       end
 
       context = provided_context || PhysicalStreamPlanContext.new(limits)

@@ -189,16 +189,18 @@ describe "W125 generic physical stream plans" do
     expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::ObjectDocumentPhysicalPlan.new("doc", logical, limits: limits) }
   end
 
-  it "retains legacy Object V2 rejection and binds advanced lanes separately from MAP" do
+  it "admits legacy Object V2 MAP and binds advanced lanes separately" do
     stats = CrystalClick::StructureStatistics.new([] of UInt64, [] of CrystalClick::StructureStatistic)
     legacy = CrystalClick::ObjectStructure.new([] of String, version: 2_u64, statistics: stats)
     legacy_plan = CrystalClick::ObjectDocumentPlan.new(
       CrystalClick::ObjectDynamicStructureSet.new(legacy, {} of String => CrystalClick::DynamicStructure),
       {} of String => CrystalClick::BinaryDataType,
     )
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::ObjectDocumentPhysicalPlan.new("doc", legacy_plan)
-    end
+    legacy_physical = CrystalClick::ObjectDocumentPhysicalPlan.new("doc", legacy_plan)
+    legacy_physical.shared_bucket_count.should eq(1)
+    legacy_physical.stream_names.should contain("doc.object_shared_data.size0")
+    legacy_physical.stream_names.should contain("doc.object_shared_data%2Epaths")
+    legacy_physical.stream_names.should contain("doc.object_shared_data%2Evalues")
 
     {2_u64, 3_u64}.each do |shared_version|
       advanced = CrystalClick::ObjectStructure.new([] of String, shared_data_version: shared_version, bucket_count: 2_u64)

@@ -388,6 +388,9 @@ module CrystalClick
       unless budget.writing?
         raise ArgumentError.new("inline child Object fragment export requires a write-direction budget")
       end
+      unless plan.structures.object.version == 4_u64
+        raise UnsupportedFormatError.new("inline child Object prefixes require Object V3 metadata")
+      end
       version = plan.structures.object.shared_data_version
       unless version < 2_u64
         raise UnsupportedFormatError.new("inline child Object shared-data v2/v3 requires Compact coordinate relocation")
@@ -415,6 +418,9 @@ module CrystalClick
     ) : ObjectSharedAdvancedInlineRawLayout
       unless budget.writing? && nested_context.writing?
         raise ArgumentError.new("inline child Object raw export requires write-direction contexts")
+      end
+      unless plan.structures.object.version == 4_u64
+        raise UnsupportedFormatError.new("inline child Object prefixes require Object V3 metadata")
       end
       version = plan.structures.object.shared_data_version
       unless nested_context.shared_data_version == version && version <= 3_u64
@@ -583,6 +589,9 @@ module CrystalClick
       event_context : ObjectDocumentInlineCallbackOrder::EventScheduleContext? = nil,
       local_only : Bool = false,
     ) : Tuple(Array(Tuple(String, Bytes)), Array(Tuple(String, Bytes)))
+      unless plan.structures.object.version == 4_u64
+        raise UnsupportedFormatError.new("inline child Object prefixes require Object V3 metadata")
+      end
       grid.validate_for!(streams.mark_count, budget)
 
       lanes = bind_lanes(physical_plan, plan, streams, budget)

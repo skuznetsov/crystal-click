@@ -1,6 +1,24 @@
 # ClickHouse Source Reference
 
-## Current comparison snapshot (2026-10-07)
+## Current bounded comparison snapshot (W254, 2026-10-10)
+
+Root fetched the official ClickHouse repository into the separate shallow,
+filtered sparse checkout `/private/tmp/clickhouse-w254-upstream.AqeqyC` with
+`git clone --depth 1 --filter=blob:none --sparse`. The fetched HEAD is
+`ed30948f095ecb70679986d7d60e27ad770ae27a`, committer timestamp
+`2026-10-10T15:09:48Z`. Root rechecked HEAD, shallow state and a clean worktree.
+The original source archive and previous comparison snapshots are untouched.
+Freshness applies to this fetch, not to future upstream commits.
+
+The W254 comparison covers Object structure versions, complete statistics,
+shared MAP framing and MergeTree settings in `src/DataTypes/Serializations`
+and `src/Storages/MergeTree`. It is not a whole-upstream change audit or a
+fresh-source executable qualification. See
+[JSON_LEGACY_MAP_LAYOUT_FRONTIER.md](JSON_LEGACY_MAP_LAYOUT_FRONTIER.md).
+The independently pinned native oracle remains `26.10.1.1201`, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, not a build of this checkout.
+
+## Previous comparison snapshot (2026-10-07)
 
 The recursive Object/Dynamic composition work uses the separate checkout
 `/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1`, revision
